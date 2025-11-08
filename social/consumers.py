@@ -1,5 +1,4 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
-from social.models import Channel, ChannelMessage
 from channels.db import database_sync_to_async 
 from django.contrib.humanize.templatetags.humanize import naturaltime
 from django.utils import timezone
@@ -8,6 +7,7 @@ import json
 
 class ChannelConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        from social.models import Channel, ChannelMessage
         self.user = self.scope['user']
         if not self.user:
             return
