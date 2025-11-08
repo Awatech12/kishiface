@@ -5,9 +5,15 @@ from django.utils import timezone
 import json
 
 
+def get_social_models():
+    from social.models import Channel, ChannelMessage
+    return Channel, ChannelMessage
+def get_user_model_func():
+    from django.contrib.auth import get_user_model
+    return get_user_model()
 class ChannelConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        from social.models import Channel, ChannelMessage
+        
         self.user = self.scope['user']
         if not self.user:
             return
@@ -61,6 +67,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(text_data))
     @database_sync_to_async
     def save_message(self, username, message, image, pictureUrl):
+        Channel, ChannelMessage = get_social_models()
         channel=Channel.objects.get(channel_id=self.channel_id)
         ChannelMessage.objects.create(
             channel=channel,
