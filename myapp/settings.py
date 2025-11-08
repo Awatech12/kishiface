@@ -50,9 +50,12 @@ INSTALLED_APPS = [
 ASGI_APPLICATION = 'myapp.asgi.application'
 
 CHANNEL_LAYERS = {
-    'default':{
-        'BACKEND': 'channels.layers.InMemoryChannelLayer'
-    }
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [os.environ.get("REDIS_URL", "redis://red-d3uim9ali9vc73c5a3i0:6379")],
+        },
+    },
 }
 
 MIDDLEWARE = [
