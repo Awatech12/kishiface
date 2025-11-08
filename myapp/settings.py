@@ -35,7 +35,9 @@ MEDIA_URL = '/media/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-
+CSRF_TRUSTED_ORIGINS = [
+    'https://kishiface.onrender.com',
+]
 # Application definition
 
 INSTALLED_APPS = [
