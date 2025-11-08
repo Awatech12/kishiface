@@ -1,0 +1,163 @@
+{% load humanize %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KishiFace - Home</title>
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="{% static 'css/home.css' %}">
+  <style>
+   
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>KishiFace</h1>
+  <div class="icon-group">
+    <a href="{% url 'notification_list' %}" style="text-decoration: none; position: relative;">
+        <i class="fa-regular fa-bell" style="cursor:pointer;"></i>
+        {% if notifications.count > 0 %}
+            <sup style="color: red; font-weight: bold; position: absolute; top: 0; right: -5px; font-size: 10px;">{{notifications.count}}</sup>
+        {% endif %}
+    </a>
+    <a href="{% url 'inbox' %}"><i class="fa-regular fa-paper-plane" style="cursor:pointer;"></i></a>
+  </div>
+</header>
+
+<main class="container">
+    
+    <!-- ============================================== -->
+    <!-- 1. LEFT SIDEBAR (Desktop Only: Profile, Settings, etc.) -->
+    <!-- Uses desktop-only class -->
+    <!-- ============================================== -->
+    <div class="left-sidebar desktop-only">
+        <div class="card">
+            <div class="sidebar-content">
+                <h4 class="sidebar-title">My Account</h4>
+                
+                <a href="{% url 'profile' request.user.username %}" class="sidebar-link">
+                    <i class="fa-solid fa-user-circle"></i> Profile
+                </a>
+                <a href="" class="sidebar-link">
+                    <i class="fa-solid fa-cog"></i> Settings
+                </a>
+                <a href="{% url 'channel_create' %}" class="sidebar-link">
+                    <i class="fa-solid fa-cog"></i> Channels
+                </a>
+                <a href="{% url 'post' %}" class="sidebar-link">
+                <i><svg fill="none" stroke="currentColor" height="20" width="20" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                  <line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/>
+                  <line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/>
+                </svg></i> Post
+              </a>
+                <hr class="sidebar-divider">
+                <a href="{% url 'logout' %}" class="sidebar-link logout">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- 2. MAIN FEED (Center Column) -->
+    <!-- ============================================== -->
+    <div class="main-feed">
+
+        
+        <!-- Face You May Know (MOBILE/TABLET VIEW) -->
+        <div class="member-suggest-card mobile-only" id="mobile-member-section">
+            <h4>Faces You May Know</h4>
+            <div class="member-list-horizontal">
+                {% for member in members %}
+                    {% if request.user != member %}
+                        <div class="member-item">
+                            <a href="{% url 'profile' member.username %}" style="text-decoration: none;">
+                                <div class="member-pic-wrapper">
+                                    <img src="{{member.profile.picture.url}}" 
+                                         
+                                         alt="{{member.username}}" 
+                                         class="member-pic">
+                                </div>
+                                <span class="member-username">{% if user.profile.full_name %} {{user.profile.full_name}} {% else %}{{member.username}} {% endif %}</span>
+                            </a>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        <!-- End Mobile Member Section -->
+
+
+         <h2>Welcome {{user.username}}</h2>
+    <h2></h2>
+    <form action="{% url 'channel_create' %}" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <label for="name">Channel Name:</label><br>
+        <input type="text" name="name" id="name" placeholder="Channel Name"><br>
+        <label for="about">About</label><br>
+        <textarea name="about" id="about" placeholder="About you Channel"></textarea><br>
+        <label for="icon">Channel Icon:</label><br>
+        <input type="file" name="icon" id="icon"><br>
+        <button type="submit">Create Channel</button>
+    </form>
+
+    <h2>Availabel Channels</h2>
+    {% for channel in channels %}
+       
+        <div id="channel_list">
+           <a href="{% url 'channel' channel.channel_id %}">{{channel.channel_name}}</a> <br>
+        </div>
+         {% empty %}
+        <h5>No Channel Yet</h5>
+    {% endfor %}
+       
+    </div> <!-- End main-feed -->
+
+    <!-- ============================================== -->
+    <!-- 3. RIGHT SIDEBAR (Desktop Only: Channel List) -->
+    <!-- Uses desktop-only class -->
+    <!-- ============================================== -->
+    <div class="right-sidebar desktop-only">
+        <div class="card">
+            <div class="sidebar-content">
+                <h4 class="desktop-member-title">Channels</h4>
+                <div class="desktop-member-list">
+                    {% for channel in channels %}
+                            <div class="desktop-member-item">
+                                <a href="{% url 'channel' channel.channel_id %}">
+                                    <div class="member-pic-wrapper" style="background: var(--border-color); padding: 0;">
+                                        <img src="{{channel.image.url}}" 
+                                             
+                                             alt="{{member.username}}" 
+                                             class="member-pic">
+                                    </div>
+                                    <div>
+                                        <span class="member-username block">{{member.first_name}} {{member.last_name}}</span>
+                                        <span class="member-title block">@{{member.username}}</span>
+                                    </div>
+                                </a>
+                                <!-- Placeholder follow button -->
+                                <button class="btn btn-blue btn-follow">Follow</button>
+                            </div>
+                        
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div> <!-- End right-sidebar -->
+
+</main>
+
+<!-- MOBILE-ONLY FOOTER (Uses mobile-only class) -->
+<footer class="mobile-only">
+    {% include 'footer.html' %}
+</footer>
+
+</body>
+</html>
+

@@ -1,0 +1,115 @@
+{% include 'header.html' %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+
+    <style>
+        #image{
+            display: none;
+        }
+        #video{
+            display: none;
+        }
+    </style>
+</head>
+<body>
+   
+    
+    <div>Channel_ID: {{channel.channel_id}}</div>
+    <div>Channel Name: {{channel.channel_name}}</div>
+    
+    <div id="messageOutput">
+        {% for message in messages %}
+            {% if message.image and message.message %}
+            <img src="{{message.pictureUrl}}" height="20", width="20">{{message.author}} @ {{message.created_at|naturaltime}}: <br> {{message.message}} <br>
+            <img src="{{message.image}}" height="150", width="150"> <br>
+            {% elif message.image %}
+             <img src="{{message.pictureUrl}}" height="20", width="20">{{message.author}} @ {{message.created_at|naturaltime}}: <br> 
+            <img src="{{message.image}}" height="150", width="150"> <br>
+            {% elif message.message %}
+                 <img src="{{message.pictureUrl}}" height="20", width="20">{{message.author}} @ {{message.created_at|naturaltime}}: <br> 
+                  {{message.message}} <br>
+            {% endif %}
+        {% endfor %}
+    </div>
+    <input type="file" name="image" id="image"><br>
+    <label for="message">Message:</label><br>
+    <input type="text" name="message" id="message"><br>
+    <button id="sendBtn">Send</button>  <label for="image" class="file-label">
+          <i class="fa-solid fa-camera"></i>
+        </label>
+    <script>
+        const pictureUrl = '{{user.profile.picture.url}}';
+        const user = '{{user}}';
+        const channel_owner = '{{channel.channel_owner}}';
+        const channel_id = '{{channel.channel_id}}';
+        const image = document.getElementById('image');
+        const message = document.getElementById('message');
+        const sendBtn = document.getElementById('sendBtn');
+        const messageOutput = document.getElementById('messageOutput');
+        const socket = new WebSocket(`wss://${window.location.host}/ws/${channel_id}/`);
+    
+        console.log(user)
+        console.log(channel_owner)
+        socket.addEventListener('message',function(e){
+           
+            const p = document.createElement('p');
+            const data = JSON.parse(e.data);
+            if(data.image && data.message){
+                p.innerHTML=`<img src="${data.pictureUrl}" height="20", width="20">${data.username} @ ${data.time}:${data.message} <br><img src="${data.image}" height="150", width="150">`
+                messageOutput.appendChild(p);
+           
+            }
+           if(data.message){
+            p.innerHTML=`<img src="${data.pictureUrl}" height="20", width="20"> ${data.username} @ ${data.time}:${data.message}`
+            messageOutput.appendChild(p);
+          
+           }
+           if(data.image){
+            p.innerHTML=`<img src="${data.pictureUrl}" height="20", width="20">${data.username} @ ${data.time}: <br><img src="${data.image}" height="150", width="150">`
+                messageOutput.appendChild(p);
+               
+           }
+
+             messageOutput.scrollTop = messageOutput.scrollHeight;
+        })
+
+        sendBtn.addEventListener('click', function(){
+            const inputMessage = message.value;
+            const imageInput = image.files[0];
+            if(!inputMessage && !imageInput) return;
+            if(imageInput){
+                const reader = new FileReader();
+                reader.onload = ()=>{
+                    socket.send(JSON.stringify({
+                        'message': inputMessage,
+                        'image':reader.result,
+                        'pictureUrl':pictureUrl
+                    }))
+                    message.value ='';
+                    image.value = '';
+                }
+                reader.readAsDataURL(imageInput);
+            }else{
+                    socket.send(JSON.stringify({
+                        'message': inputMessage,
+                        'pictureUrl':pictureUrl,
+                        'image': null
+                    }))
+                    message.value='';
+
+            }
+            
+         })
+
+        
+        
+        
+    </script>
+</body>
+</html>
+{% include 'footer.html' %}

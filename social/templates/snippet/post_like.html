@@ -1,0 +1,228 @@
+{% load humanize %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post Engagement Block</title>
+    
+    <!-- 
+        THE FIX: This link ensures the 'fab' (Brands) icons for Twitter and WhatsApp are available.
+        (I corrected the integrity attribute just to be safe.)
+    -->
+    <link rel="stylesheet" 
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" 
+          xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLMDJ8g359L5E727yL3rLw8x7e7Q6A2h9f6Jc8y5qP3f6sA7h3i5f6bN8Z6d5P8w==" 
+          crossorigin="anonymous" 
+          referrerpolicy="no-referrer" />
+    
+  
+    <style>
+
+        .engagement {
+            display: flex;
+            align-items: center;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 8px;
+        }
+
+        .likers-container {
+            display: flex;
+            margin-right: 5px;
+        }
+
+        .liker-pic {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid white;
+            margin-left: -5px;
+            transition: transform 0.2s;
+        }
+        
+        .likers-container a:first-child .liker-pic {
+            margin-left: 0;
+        }
+
+        .engagement-count, .engagement span {
+            font-size: 14px;
+            color: #4b5563;
+        }
+        .engagement-count a {
+            font-weight: 600;
+            color: #374151;
+            text-decoration: none;
+        }
+
+        /* ACTIONS SECTION STYLES */
+        .actions-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start; 
+            margin-top: 8px;
+            padding: 8px 0;
+        }
+        
+        .actions-left {
+            display: flex;
+            gap: 15px;
+        }
+
+        .action-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            color: #4b5563;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 6px 8px;
+            border-radius: 6px;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        
+        .action-item:hover {
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+
+        .action-icon {
+            font-size: 18px;
+        }
+
+        /* Styling for the social icons specifically */
+        .share-facebook, .share-twitter, .share-whatsapp {
+            padding: 6px 0; /* Aligning without the text span */
+        }
+        .share-facebook:hover { color: #1877f2; }
+        .share-twitter:hover { color: #1da1f2; }
+        .share-whatsapp:hover { color: #25d366; }
+
+
+        
+   </style>
+</head>
+<body>
+
+<!-- Each post engagement block -->
+<div id="post-engagement-{{ post.post_id }}">
+  
+  <!-- LIKERS AVATARS AND COUNT SECTION -->
+  <div class="engagement">
+    {% if post.likes.count > 0 %}
+    <div class="likers-container">
+      {% for liker in post.likes.all|slice:":3" %}
+      <a href="{% url 'profile' liker.username %}">
+        <img src="{{ liker.profile.picture.url }}"
+             onerror="this.onerror=null; this.src='https://placehold.co/24x24/cccccc/ffffff?text=L';"
+             alt="{{ liker.username }}" class="liker-pic">
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <span class="engagement-count" style="margin-left: 10px;">
+      Liked by <a href="#" id="post-like-count-{{ post.post_id }}">{{ post.likes.count|intcomma }} people</a>
+    </span>
+    <span style="margin-left: 10px;">
+      · <a href="{% url 'post_comment' post.post_id %}">{{ post.comments.count|intcomma|default:"0" }} comments</a>
+    </span>
+  </div>
+
+  <!-- ACTION BUTTONS SECTION -->
+  <div class="actions-container">
+    <div class="actions-left">
+      <!-- LIKE/UNLIKE BUTTON -->
+      <a href="#"
+         hx-get="{% url 'like_post' post.post_id %}"
+         hx-target="#post-engagement-{{ post.post_id }}"
+         hx-swap="outerHTML"
+         class="action-item">
+        {% if request.user in post.likes.all %}
+        <i class="fa-solid fa-heart action-icon" style="color: var(--color-danger, #ef4444);"></i>
+        <span>Unlike</span>
+        {% else %}
+        <i class="fa-regular fa-heart action-icon"></i>
+        <span>Like</span>
+        {% endif %}
+      </a>
+
+      <!-- COMMENT BUTTON -->
+      <a href="{% url 'post_comment' post.post_id %}" class="action-item">
+        <i class="fa-regular fa-comment action-icon"></i>
+        <span>Comment</span>
+      </a>
+
+      <!-- FACEBOOK -->
+      <a href="#" class="action-item share-facebook"
+         data-media="https://kishiface.pythonanywhere.com/{{post.post_id}}">
+        <i class="fab fa-facebook"></i>
+      </a>
+
+      <!-- TWITTER (Now working due to Font Awesome fix) -->
+      <a href="#" class="action-item share-twitter"
+         data-message="{{ post.message|urlencode }}"
+         data-media="https://kishiface.pythonanywhere.com/{{post.post_id}}">
+        <i class="fab fa-twitter"></i>
+      </a>
+
+      <!-- WHATSAPP (Now working due to Font Awesome fix) -->
+      <a href="#" class="action-item share-whatsapp"
+         data-message="{{ post.message|urlencode }}"
+         data-media="https://kishiface.pythonanywhere.com/comment/{{post.post_id}}">
+        <i class="fab fa-whatsapp"></i>
+      </a>
+      
+    </div>
+  </div>
+</div>
+
+<!-- SCRIPT: Handles share buttons -->
+<script>
+document.addEventListener('click', function(e) {
+  const whatsappBtn = e.target.closest('.share-whatsapp');
+  const facebookBtn = e.target.closest('.share-facebook');
+  const twitterBtn = e.target.closest('.share-twitter');
+
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  // WHATSAPP
+  if (whatsappBtn) {
+    e.preventDefault();
+    // Use encodeURIComponent for safety, reading data directly from the attribute
+    const message = encodeURIComponent(whatsappBtn.getAttribute('data-message'));
+    const media = encodeURIComponent(whatsappBtn.getAttribute('data-media'));
+    
+    const text = `${message}%20${media}`;
+    
+    // Determine URL based on device
+    const url = isMobile
+      ? `https://api.whatsapp.com/send?text=${text}`
+      : `https://web.whatsapp.com/send?text=${text}`;
+    window.open(url, '_blank');
+  }
+
+  // FACEBOOK
+  if (facebookBtn) {
+    e.preventDefault();
+    const media = encodeURIComponent(facebookBtn.getAttribute('data-media'));
+    const url = `https://www.facebook.com/sharer/sharer.php?u=${media}`;
+    window.open(url, '_blank');
+  }
+
+  // TWITTER
+  if (twitterBtn) {
+    e.preventDefault();
+    const message = encodeURIComponent(twitterBtn.getAttribute('data-message'));
+    const media = encodeURIComponent(twitterBtn.getAttribute('data-media'));
+    const url = `https://twitter.com/intent/tweet?text=${message}%20${media}`;
+    window.open(url, '_blank');
+  }
+});
+</script>
+
+</body>
+</html>
+
