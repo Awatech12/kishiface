@@ -9,7 +9,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-y6p1od$soj&7wuuv8cz&4$t!n98(uun_f5621%bx5%#5t=ft=m'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True # ✅ Must be False for production
+DEBUG = False # ✅ Must be False for production
+USE_CLOUDINARY = False # Set to True for production
+
 
 ALLOWED_HOSTS = [
     '127.0.0.1',
@@ -34,6 +36,19 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'social',
 ]
+
+if USE_CLOUDINARY:
+    INSTALLED_APPS += [
+        "cloudinary",
+        "cloudiary_storage",
+    ]
+    CLOUDINARY_STORAGE = {
+        "CLOUD_NAME": "ddhnafl8r",
+        "API_KEY": "672358675689981",
+        "API_SECRET": "b2Ej9ndjX3tfMTz8PoAMe0RgfJs",
+    }
+
+    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
