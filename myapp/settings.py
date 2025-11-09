@@ -40,7 +40,7 @@ INSTALLED_APPS = [
 if USE_CLOUDINARY:
     INSTALLED_APPS += [
         "cloudinary",
-        "cloudiary_storage",
+        "cloudinary_storage",
     ]
     CLOUDINARY_STORAGE = {
         "CLOUD_NAME": "ddhnafl8r",
