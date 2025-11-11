@@ -30,7 +30,6 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'social',
 ]
-
 # ✅ Cloudinary Config (Environment Variables on Render)
 if USE_CLOUDINARY:
     INSTALLED_APPS += [
@@ -53,6 +52,14 @@ if USE_CLOUDINARY:
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
+
+    # ✅ Add this block to correctly configure Cloudinary
+    cloudinary.config(
+        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+        api_key=os.getenv("CLOUDINARY_API_KEY"),
+        api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+        secure=True,
+    )
 
     
 
