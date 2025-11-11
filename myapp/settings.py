@@ -38,20 +38,40 @@ INSTALLED_APPS = [
 ]
 
 # ✅ Cloudinary using Environment Variables
+# --- Cloudinary Settings ---
+
+# Assuming 'USE_CLOUDINARY' is defined as a boolean (True for Render, False for local)
 if USE_CLOUDINARY:
+    # 1. Add Cloudinary Apps
     INSTALLED_APPS += [
-        "cloudinary",
-        "cloudinary_storage",
+        'cloudinary',
+        'cloudinary_storage',
     ]
 
+    # 2. Define Credentials Dictionary
     CLOUDINARY_STORAGE = {
+        # These variables must match the Render dashboard names EXACTLY
         "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME"),
         "API_KEY": os.environ.get("CLOUDINARY_API_KEY"),
         "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET"),
     }
 
-    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
-
+    # 3. Define Modern Storage Backends (Django 4.2+ STORAGES)
+    STORAGES = {
+        # 'default' is for MEDIA (User-uploaded files) -> Set this to Cloudinary
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        },
+        # 'staticfiles' is for STATIC (CSS/JS/etc.) -> Kept as standard Django storage
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        }
+    }
+    
+    # 4. Set MEDIA_URL
+    MEDIA_URL = '/media/'
+    
+# --- End Cloudinary Settings ---
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
