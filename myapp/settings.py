@@ -53,10 +53,10 @@ if USE_CLOUDINARY:
 
     # 2. Define Credentials Dictionary
     CLOUDINARY_STORAGE = {
-        # These variables must match the Render dashboard names EXACTLY
-        "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME"),
-        "API_KEY": os.environ.get("CLOUDINARY_API_KEY"),
-        "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET"),
+        'CLOUD_NAME': os.environ['CLOUDINARY_CLOUD_NAME'],
+        'API_KEY': os.environ['CLOUDINARY_API_KEY'],
+        'API_SECRET': os.environ['CLOUDINARY_API_SECRET'],
+        'SECURE': True,
     }
 
     # 3. Define Modern Storage Backends (Django 4.2+ STORAGES)
