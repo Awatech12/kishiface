@@ -1,16 +1,14 @@
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 import dj_database_url
 import cloudinary
-import cloudinary.uploader
-import cloudinary.api
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-SECRET_KEY = 'django-insecure-y6p1od$soj&7wuuv8cz&4$t!n98(uun_f5621%bx5%#5t=ft=m'
-
-DEBUG = False
-USE_CLOUDINARY = True  # Set True on Render
+load_dotenv(os.path.join(BASE_DIR, '.env'))
+SECRET_KEY = os.getenv("SECRET_KEY")
+DEBUG = os.getenv("DEBUG")
+USE_CLOUDINARY =False # Set True on Render
 
 ALLOWED_HOSTS = [
     '127.0.0.1',
@@ -103,18 +101,25 @@ TEMPLATES = [
 WSGI_APPLICATION = 'myapp.wsgi.application'
 ASGI_APPLICATION = 'myapp.asgi.application'
 
-CHANNEL_LAYERS = {
+if DEBUG:
+    CHANNEL_LAYERS = {
+        'default':{
+            'BACKEND':'channels.layers.InMemoryChannelLayer',
+        }
+    }
+else:
+    CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [os.environ.get("REDIS_URL", "redis://localhost:6379")],
+            "hosts": [os.environ.get("REDIS_URL")],
         },
     },
 }
 
 DATABASES = {
     'default': dj_database_url.config(
-        default='sqlite:///db.sqlite3',  # fallback for local development
+        default=os.getenv("DATABASE"),  # fallback for local development
         conn_max_age=600,
         env='DATABASE_URL'
     )
