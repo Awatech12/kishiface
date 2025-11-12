@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 #load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG")
-USE_CLOUDINARY =True # Set True on Render
+USE_CLOUDINARY =False # Set True on Render
 
 ALLOWED_HOSTS = [
     '127.0.0.1',
