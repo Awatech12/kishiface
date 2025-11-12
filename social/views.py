@@ -83,10 +83,19 @@ def post(request):
     if request.method =='POST':
         content = request.POST.get('content','').strip()
         images = request.FILES.getlist('images')
-        if not content and not images:
-            return redirect(request.META.get('HTTP_REFERER'))
-        post=Post.objects.create(author=request.user, content=content)
-        if images:
+        audio = request.FILES.get('audio_file')
+        if not content and not images and not audio:
+            return 
+        if content and not images and not audio:
+            post=Post.objects.create(author=request.user, content=content)
+        if content and images:
+            post=Post.objects.create(author=request.user, content=content)
+            for image in images:
+                PostImage.objects.create(post=post, image=image)
+        if audio:
+            post = Post.objects.create(author=request.user, content='', file=audio)
+        if images and not content and not audio:
+            post=Post.objects.create(author=request.user, content='')
             for image in images:
                 PostImage.objects.create(post=post, image=image)
         return redirect('home')

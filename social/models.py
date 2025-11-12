@@ -38,6 +38,10 @@ class Post(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     likes = models.ManyToManyField(User, related_name='like_post', blank=True)
     content = models.TextField()
+    if settings.USE_CLOUDINARY:
+        file = CloudinaryField('audio', resource_type='video',folder='post_files',blank=True)
+    else:
+        file = models.FileField(upload_to='post_file', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

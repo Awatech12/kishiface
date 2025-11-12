@@ -51,6 +51,54 @@
     }
     .file-label:hover { background-color: #f0f8ff; border-color: #b0d8f0; }
     input[type=file] { display: none; }
+
+    /* for audio record */
+      #icon{
+  margin:0 10px;
+}
+
+audio{
+  width: 100%;
+  outline: none;
+  background-color: #eef2f7;
+}
+audio::-webkit-media-controls-pannel{
+  background-color: #eef2f7;
+}
+
+button{
+  font-size: 24px;
+  border: none;
+  cursor: pointer;
+  margin: 8px;
+  background-color: #ffffff;
+  transform: color 0.3s ease;
+}
+button:hover{
+  color: #007bff;
+}
+
+     .recording{
+      position: relative;
+      font-size: 20px;
+      color: #ff3b30;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse{
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      50%{
+        transform: scale(1.3);
+        opacity: 0.5;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
 </style>
 </head>
 <body>
@@ -71,12 +119,60 @@
           <i class="fa-solid fa-camera"></i>
           Add Photo(s)
         </label>
+         <button id="startBtn" type="button"><i class="fa-solid fa-microphone"></i></button> <span id="status"></span> <button id="stopBtn" type="button" hidden><i class="fa-solid fa-circle-stop"></i></button>
+        <input type="file" name="audio_file" id="audio_file" hidden>
         <input type="file" id="images" name="images" multiple >
         <button type="submit" class="btn btn-blue">Share</button>
       </div>
     </form>
   </div>
   </main>
+
+  <script>
+    
+  /*** Recording Code */
+  let mediaRecord;
+  let audioChucks = [];
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const audio_file = document.getElementById('audio_file');
+  const status = document.getElementById('status');
+  startBtn.addEventListener('click', async function(){
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({
+      audio:true
+    });
+    mediaRecord = new MediaRecorder(stream);
+    audioChucks = [];
+    mediaRecord.ondataavailable = event =>audioChucks.push(event.data);
+    mediaRecord.onstop = async () =>{
+      const bob = new Blob(audioChucks, {
+        type: 'audio/webm'
+      });
+      const file = new File([bob], 'recorded_audio.webm',{
+        type: 'audio/webm'
+      });
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      audio_file.files = dataTransfer.files;
+    };
+    mediaRecord.start();
+    status.innerHTML = `<i class="fa-solid fa-circle recording"></i>`;
+    startBtn.hidden = true;
+    stopBtn.hidden = false;
+    }catch(err){
+      alert('MicroPhone acess denied')
+    }
+
+  })
+
+  stopBtn.onclick = () =>{
+    mediaRecord.stop();
+    status.textContent = 'Recording Stoped';
+    startBtn.hidden = false;
+    stopBtn.hidden = true;
+  }
+  </script>
 </body>
 </html>
 {% include 'footer.html' %}
