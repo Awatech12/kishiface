@@ -1,14 +1,14 @@
 from pathlib import Path
 import os
-from dotenv import load_dotenv
+
 import dj_database_url
 import cloudinary
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(os.path.join(BASE_DIR, '.env'))
+
 SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG")
-USE_CLOUDINARY =False # Set True on Render
+USE_CLOUDINARY =True # Set True on Render
 
 ALLOWED_HOSTS = [
     '127.0.0.1',
