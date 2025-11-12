@@ -1,6 +1,7 @@
 from django.db import models
 from cloudinary.models import CloudinaryField
 from django.contrib.auth.models import User
+from django.conf import settings
 import uuid
 
 # Create your models here.
@@ -53,7 +54,10 @@ class PostComment(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     comment = models.TextField()
     image = models.ImageField(upload_to='comment_image/', blank=True)
-    file = CloudinaryField('audio', resource_type='video',folder='comment_files',blank=True)
+    if settings.USE_CLOUDINARY:
+        file = CloudinaryField('audio', resource_type='video',folder='comment_files',blank=True)
+    else:
+        file = models.FileField(upload_to='comment_file', blank=True)
     like = models.ManyToManyField(User, related_name='comment_likes', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
