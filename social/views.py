@@ -64,7 +64,7 @@ def register(request):
 def home(request):
     page_number = request.GET.get('page', 1)
     post_list = Post.objects.all().order_by('?')
-    paginator = Paginator(post_list, 5)
+    paginator = Paginator(post_list, 20)
     try:
         page_obj = paginator.page(page_number)
     except Exception:
