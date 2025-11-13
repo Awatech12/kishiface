@@ -335,6 +335,16 @@ def channel_create(request):
     }
     return render(request, 'channel_create.html', context)
 
+def follow_channel(request, channel_id):
+    channel = get_object_or_404(Channel, channel_id=channel_id)
+    if request.user not in channel.subscriber.all():
+        channel.subscriber.add(request.user)
+    else:
+        channel.subscriber.remove(request.user)
+    return redirect(request.META.get('HTTP_REFERER'))
+    
+    
+
 login_required(login_url='/')
 def channel(request, channel_id):
     channel = get_object_or_404(Channel, channel_id=channel_id)

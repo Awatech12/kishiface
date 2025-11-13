@@ -2,6 +2,7 @@ from django.db import models
 from cloudinary.models import CloudinaryField
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.templatetags.static import static
 import uuid
 
 # Create your models here.
@@ -12,12 +13,12 @@ class Profile(models.Model):
     followings = models.ManyToManyField(User, related_name='following', blank=True)
     phone = models.CharField(max_length=20)
     full_name = models.CharField(max_length=200, blank=True)
+    is_verify = models.BooleanField(default=False)
     address = models.TextField()
     bio = models.CharField(max_length=300)
     location = models.TextField()
     picture = models.ImageField(upload_to='profile_image/', default='male.png')
     created_at = models.DateTimeField(auto_now_add=True)
-
     def save(self, *args, **kwargs):
         self.address = self.address.title()
         self.user.first_name=self.user.first_name.capitalize()

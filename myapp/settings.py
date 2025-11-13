@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 #load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG")
-USE_CLOUDINARY =False # Set True on Render
+USE_CLOUDINARY =True # Set True on Render
 
 ALLOWED_HOSTS = [
     '127.0.0.1',
@@ -29,7 +29,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
-    'social',
+    'social.apps.SocialConfig',
+    #'social',
 ]
 # ✅ Cloudinary Config (Environment Variables on Render)
 if USE_CLOUDINARY:
