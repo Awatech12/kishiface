@@ -40,13 +40,15 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         message = data.get('message')
         image = data.get('image')
         pictureUrl=data.get('pictureUrl')
+        now = timezone.now()
+        formatted_time = now.strftime("%I:%M %p")
         group_data = {
             'type':'chat_message',
             'username': username,
             'message': message,
             'image':image,
              'pictureUrl':pictureUrl,
-             'time': str(naturaltime(timezone.now()))
+             'time': formatted_time
         }
         await self.save_message(self.username, message, image, pictureUrl)
         await self.channel_layer.group_send(
@@ -74,5 +76,6 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             author=username,
             message=message,
             pictureUrl=pictureUrl,
-            image = image
+            image = image,
+            
         ) 
