@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from social.models import Profile, Post, PostImage, PostComment, Message, Notification, ChannelMessage, Channel
 from django.db.models import Q
 from django.core.paginator import Paginator
+from itertools import groupby
 import time
 
 # Create your views here.
@@ -349,11 +350,14 @@ login_required(login_url='/')
 def channel(request, channel_id):
     channel = get_object_or_404(Channel, channel_id=channel_id)
     messages = ChannelMessage.objects.filter(channel=channel)
+    grouped_messages = {}
+    for label, msgs in groupby(messages, key=lambda m: m.chat_date_label):
+        grouped_messages[label] = list(msgs)
 
     context = {
         'channel': channel,
         'channel_id': channel_id,
-        'messages': messages
+        'grouped_messages': grouped_messages
     }
     return render(request, 'channel.html', context)
 
