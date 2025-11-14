@@ -3,6 +3,7 @@ from cloudinary.models import CloudinaryField
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.templatetags.static import static
+from datetime import date, timedelta
 import uuid
 
 # Create your models here.
@@ -102,6 +103,21 @@ class ChannelMessage(models.Model):
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
     image = models.ImageField(upload_to='comment_image', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    @property
+    def chat_date_label(self):
+        message_date = self.created_at.date()
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        if message_date == today:
+            return "Today"
+        elif message_date == yesterday:
+            return "Yesterday"
+        else:
+            return self.created_at.strftime("%b %d")
+    @property
+    def chat_time(self):
+        return self.created_at.strftime("%I:%M %p")
+
 
     def like_count(self):
         return self.like.count()
