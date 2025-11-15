@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.conf import settings
 from django.templatetags.static import static
 from datetime import date, timedelta
+import calendar
 import uuid
 
 # Create your models here.
@@ -112,8 +113,10 @@ class ChannelMessage(models.Model):
             return "Today"
         elif message_date == yesterday:
             return "Yesterday"
+        elif today - message_date < timedelta(days=7):
+            return calendar.day_name[message_date.weekday()]
         else:
-            return self.created_at.strftime("%b %d")
+            return self.created_at.strftime("%B %d, %Y")
     @property
     def chat_time(self):
         return self.created_at.strftime("%I:%M %p")
