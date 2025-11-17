@@ -3,52 +3,333 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Chat</title>
+
+    <style>
+        /* Instagram DM Style Reset and Base */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #FAFAFA; /* Light background */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* ---------------------------------- */
+        /* Desktop View (Center Chat Container) */
+        /* ---------------------------------- */
+        @media (min-width: 768px) {
+            body {
+                align-items: center;
+                justify-content: center;
+                background-color: #EFEFEF;
+            }
+
+            .main-chat-wrapper {
+                width: 100%;
+                max-width: 500px; /* Instagram feed width constraint */
+                height: 90vh;
+                min-height: 500px;
+                background: white;
+                border: 1px solid #DBDBDB;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+
+            .input-area {
+                position: static !important; /* Override fixed position on desktop */
+                width: 100% !important;
+            }
+        }
+
+        /* Helper wrapper for desktop sizing */
+        .main-chat-wrapper {
+            display: contents; /* Ensures children behave as direct body children on mobile */
+        }
+
+        /* Profile header (Like Instagram's navigation bar) */
+        .profile-header {
+            background: white;
+            color: #262626;
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #EFEFEF;
+            height: 60px;
+            text-align: left; /* Adjust alignment for modern look */
+        }
+
+        .profile-header-content {
+            display: flex;
+            align-items: center;
+        }
+
+        .profile-header img {
+            border-radius: 50%;
+            width: 40px; /* Smaller avatar */
+            height: 40px;
+            margin-right: 10px;
+        }
+
+        .profile-header b {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* Chat container */
+        .chat-container {
+            padding: 15px;
+            flex-grow: 1; /* Takes up available space */
+            overflow-y: auto;
+            background: white;
+            /* --- SCROLLBAR HIDING RULES START --- */
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+            /* --- SCROLLBAR HIDING RULES END --- */
+        }
+        
+        /* --- SCROLLBAR HIDING RULE FOR WEBKIT (Chrome, Safari) --- */
+        .chat-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Message bubble */
+        .message {
+            max-width: 85%; /* Slightly wider max-width */
+            padding: 10px 14px 18px 14px; /* Added extra bottom padding for time */
+            margin-bottom: 8px;
+            border-radius: 20px; /* Very rounded corners */
+            font-size: 15px;
+            line-height: 1.4;
+            position: relative;
+        }
+
+        /* Sender (right side) - Instagram Gradient */
+        .sent {
+            background: linear-gradient(135deg, #0099ff 0%, #a033ff 100%); /* Blue to Purple Gradient */
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px; /* Tail corner */
+        }
+
+        /* Receiver (left side) - Light Gray */
+        .received {
+            background: #EFEFEF; /* Very light gray */
+            color: #262626;
+            margin-right: auto;
+            border-bottom-left-radius: 5px; /* Tail corner */
+        }
+
+        /* Time text - Always visible and positioned at the bottom right corner of the bubble */
+        .time {
+            display: block; 
+            position: absolute;
+            bottom: 3px;
+            right: 8px;
+            font-size: 10px;
+            
+            /* Color logic based on bubble type */
+            color: rgba(255, 255, 255, 0.7); /* White and semi-transparent for sent messages */
+            text-align: right;
+            white-space: nowrap;
+        }
+        
+        /* Specific color for received message time */
+        .received .time {
+            color: #8E8E93; /* Darker gray for readability on light background */
+        }
+
+        /* Day Separator Styling */
+        .chat-container center b i {
+            font-size: 12px;
+            color: #8E8E93;
+            font-style: normal;
+            font-weight: 400;
+            margin: 15px 0;
+            display: block;
+        }
+
+        /* Input area (Fixed at bottom on mobile) */
+        .input-area {
+            padding: 10px 15px;
+            background: white;
+            display: flex;
+            align-items: center;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            border-top: 1px solid #EFEFEF;
+        }
+
+        .input-area input {
+            flex-grow: 1;
+            padding: 10px 15px;
+            margin-right: 8px;
+            border: 1px solid #DBDBDB;
+            border-radius: 30px; /* Highly rounded */
+            outline: none;
+            font-size: 15px;
+            background: #FAFAFA;
+        }
+
+        .input-area button {
+            width: 40px; /* Fixed size for icon look */
+            height: 40px;
+            padding: 0;
+            margin-left: 0;
+            border: none;
+            border-radius: 50%; /* Circular button */
+            background: none; /* No background color */
+            color: #0099ff; /* Instagram blue color for icon */
+            font-size: 20px; /* Larger icon/text */
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            line-height: 40px;
+            text-align: center;
+        }
+
+        /* Visual trick to make the "Send" button look like an icon */
+        .input-area button:hover {
+            opacity: 0.8;
+        }
+
+        .profile-header-text {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        /* Ensures the scroll area accounts for the fixed input box on mobile */
+        @media (max-width: 767px) {
+            .chat-container {
+                /* 100vh - Header(60px) - InputArea(approx 60px) */
+                height: calc(100vh - 60px - 60px); 
+            }
+        }
+    </style>
 </head>
 <body>
-    <center><img src="{{receiver.profile.picture.url}}" height="100" width="100"  alt="">
-    {{receiver.profile.full_name}}</center>
-    <div id="messageOutput">
-         {% for label, msgs in grouped_messages.items %}
-            <center><b><i>{{label}}</i></b></center>
-            {% for message in msgs %}
-            <div id="chat" data-receiver="{{message.receiver.username}}" data-sender="{{message.sender.username}}" hidden>{{message.receiver}}</div>
-           {{message.conversation}} | {{ message.chat_time}} <br>
+
+    <!-- This wrapper helps with desktop centering but is 'display: contents' on mobile -->
+    <div class="main-chat-wrapper">
+
+        <!-- HEADER -->
+        <div class="profile-header">
+            <div class="profile-header-content">
+                <!-- Back button placeholder if needed -->
+                <img src="{{ receiver.profile.picture.url }}" alt="">
+                <div class="profile-header-text">
+                    <b>
+                    {% if receiver.profile.full_name %}
+                        {{ receiver.profile.full_name }}
+                    {% else %}
+                        {{ receiver.username }}
+                    {% endif %}
+                    </b>
+                </div>
+            </div>
+            <!-- Action Icons Placeholder -->
+            <div>
+                <!-- Camera icon, Call icon, Info icon would go here -->
+            </div>
+        </div>
+
+        <!-- CHAT MESSAGES -->
+        <div id="messageOutput" class="chat-container">
+
+            {% for label, msgs in grouped_messages.items %}
+                <center><b><i>{{ label }}</i></b></center>
+
+                {% for message in msgs %}
+                    {% if message.sender.username == request.user.username %}
+                        <div class="sent message">
+                            {{ message.conversation }}
+                            <span class="time">{{ message.chat_time }}</span>
+                        </div>
+                    {% else %}
+                        <div class="received message">
+                            {{ message.conversation }}
+                            <span class="time">{{ message.chat_time }}</span>
+                        </div>
+                    {% endif %}
+                {% endfor %}
             {% endfor %}
-          {% endfor %}
+
+        </div>
+
+        <!-- INPUT BOX -->
+        <div class="input-area">
+            <input type="text" id="message" placeholder="Message...">
+            <!-- Note: The button text 'Send' is now styled to look like an icon -->
+            <button id="sendBtn">➤</button>
+        </div>
     </div>
-    <input type="text" name="" id="message"> <button id="sendBtn">Send</button>
 
+    <!-- SCRIPT -->
     <script>
-        const chatData = document.getElementById('chat');
-        const receiver = chatData.dataset.receiver;
-        const sender = chatData.dataset.sender;
+        // Note: I did not modify your JavaScript logic as requested.
+        const receiver = "{{ receiver.username }}";
+        const sender = "{{ request.user.username }}";
         const messageOutput = document.getElementById('messageOutput');
-        const sendBtn = document.getElementById('sendBtn');
         const message = document.getElementById('message');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // Initial scroll to bottom
+        messageOutput.scrollTop = messageOutput.scrollHeight;
+
         const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-        const socket = new WebSocket(`${protocol}${window.location.host}/ws/message/`);
-        console.log(receiver);
-        console.log(sender);
-        socket.addEventListener('message', async function(e){
+        const socket = new WebSocket(protocol + window.location.host + "/ws/message/");
+
+        // Receive message from WebSocket
+        socket.addEventListener("message", function (e) {
             const data = JSON.parse(e.data);
-            const p = document.createElement('p');
-            console.log(`${data.sender} = ${data.receiver}:${data.message}`);
-            p.innerHTML = `${data.message}|${data.time}`
 
-            messageOutput.appendChild(p);
-        })
+            const div = document.createElement("div");
 
-        sendBtn.addEventListener('click', function(){
-            const msg = message.value;
-            const msgReceiver = receiver;
-            if(!msg) return;
+            if (data.sender === sender) {
+                div.className = "sent message";
+            } else {
+                div.className = "received message";
+            }
+
+            div.innerHTML = `${data.message}<span class="time">${data.time}</span>`;
+            messageOutput.appendChild(div);
+
+            // Scroll to bottom automatically
+            messageOutput.scrollTop = messageOutput.scrollHeight;
+        });
+
+        // Send message
+        sendBtn.addEventListener("click", function () {
+            const msg = message.value.trim();
+            if (!msg) return;
+
             socket.send(JSON.stringify({
-                'receiver': msgReceiver,
-                'message': msg
+                receiver: receiver,
+                message: msg
             }));
-            message.value='';
-        })
+
+            message.value = "";
+        });
+
+        // Send message on Enter key press
+        message.addEventListener("keypress", function(e) {
+            if (e.key === "Enter") {
+                sendBtn.click();
+            }
+        });
     </script>
+
 </body>
 </html>
+

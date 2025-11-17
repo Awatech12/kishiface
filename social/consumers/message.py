@@ -67,4 +67,4 @@ class MessageChannel(AsyncWebsocketConsumer):
             sender=sender,
             receiver=msgReceiver,
             conversation = message
-        )
+        ) 

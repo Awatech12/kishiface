@@ -279,19 +279,19 @@ def message(request, username):
     for msg in unread_message:
         msg.is_read = True
         msg.save()
-    if request.method =='POST':
-        conversation = request.POST.get('conversation')
-        if message:
-            Message.objects.create(sender=sender, receiver= receiver, conversation=conversation)
-            messages.info(request, 'Message Sent')
-            return redirect(request.META.get('HTTP_REFERER'))
-        else:
-            messages.info(request, 'You can not send empty Message')
-            return redirect(request.META.get('HTTP_REFERER'))
+   
     conversations = Message.objects.filter(
-        Q(sender=sender) & Q(receiver=receiver) | Q(sender=receiver) & Q(receiver=sender)
-    ).order_by('-created_at')
-    return render(request, 'message.html', {'conversations':conversations})
+        Q(sender=sender, receiver=receiver) | Q(sender=receiver, receiver=sender)
+    ).order_by('created_at')
+    grouped_messages = {}
+    for label, msgs in groupby(conversations, key=lambda m: m.chat_date_label):
+        grouped_messages[label] = list(msgs)
+
+    context = {
+        'grouped_messages':grouped_messages,
+        'receiver': receiver
+        }
+    return render(request, 'message.html', context )
 
 @login_required(login_url='/')
 def open_notification(request, pk):
@@ -345,7 +345,6 @@ def follow_channel(request, channel_id):
     return redirect(request.META.get('HTTP_REFERER'))
     
     
-
 login_required(login_url='/')
 def channel(request, channel_id):
     channel = get_object_or_404(Channel, channel_id=channel_id)
