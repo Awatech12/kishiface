@@ -85,6 +85,22 @@ class Message(models.Model):
     conversation = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+    @property
+    def chat_date_label(self):
+        message_date = self.created_at.date()
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        if message_date == today:
+            return "Today"
+        elif message_date == yesterday:
+            return "Yesterday"
+        elif today - message_date < timedelta(days=7):
+            return calendar.day_name[message_date.weekday()]
+        else:
+            return self.created_at.strftime("%B %d, %Y")
+    @property
+    def chat_time(self):
+        return self.created_at.strftime("%I:%M %p")
 
 
 class Channel(models.Model):
