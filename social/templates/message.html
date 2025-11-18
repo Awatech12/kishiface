@@ -71,7 +71,6 @@ body {
 <body>
 
 <div class="main-chat-wrapper">
-    <!-- HEADER -->
     <div class="profile-header">
         <div class="profile-header-content">
             <img src="{{ receiver.profile.picture.url }}" alt="">
@@ -82,7 +81,6 @@ body {
         <div></div>
     </div>
 
-    <!-- CHAT MESSAGES -->
     <div id="messageOutput" class="chat-container">
         {% for label, msgs in grouped_messages.items %}
             <center><b><i>{{ label }}</i></b></center>
@@ -126,7 +124,6 @@ body {
         {% endfor %}
     </div>
 
-    <!-- INPUT BOX -->
     <div class="input-area">
         <input type="text" id="message" placeholder="Message...">
         <button id="startBtn" type="button"><i class="fa-solid fa-microphone"></i></button>
@@ -186,7 +183,8 @@ startBtn.addEventListener('click', async () => {
         mediaRecorder.ondataavailable = e => chunks.push(e.data);
         mediaRecorder.onstop = () => {
             const blob = new Blob(chunks, { type: 'audio/webm' });
-            audioFile = new File([blob], 'recorded_audio.webm', { type: 'audio/webm' });
+            // Use a unique name for file consistency
+            audioFile = new File([blob], `audio_${Date.now()}.webm`, { type: 'audio/webm' }); 
             status.textContent = 'Audio ready to send';
         };
         mediaRecorder.start();
@@ -198,27 +196,40 @@ startBtn.addEventListener('click', async () => {
 
 stopBtn.addEventListener('click', () => { if (mediaRecorder) mediaRecorder.stop(); startBtn.hidden = false; stopBtn.hidden = true; });
 
+// --- Sending Message Logic (Refactored to send metadata first) ---
 sendBtn.addEventListener('click', () => {
     const msg = message.value.trim();
+    
+    // 1. Send Audio First (if available)
     if (audioFile) {
         const reader = new FileReader();
         reader.onload = () => {
             const bytes = new Uint8Array(reader.result);
+            
+            // Step 1: Send metadata (JSON)
             socket.send(JSON.stringify({
-                 type: 'audio_message',
-                  receiver: receiver, 
-                  file_name: audioFile.name }));
+                 type: 'audio_metadata', // Renamed type for clarity
+                 receiver: receiver, 
+                 file_name: audioFile.name }));
+                 
+            // Step 2: Send binary data (bytes)
             socket.send(bytes);
+            
+            // Clear state
             audioFile = null;
             status.textContent = '';
         };
         reader.readAsArrayBuffer(audioFile);
     }
-    if (msg) socket.send(JSON.stringify({ 
-        type: 'text_message', 
-        receiver: receiver,
-        message: msg }));
-    message.value = '';
+    
+    // 2. Send Text Message (if available)
+    if (msg) {
+        socket.send(JSON.stringify({ 
+            type: 'text_message', 
+            receiver: receiver,
+            message: msg }));
+        message.value = '';
+    }
 });
 
 message.addEventListener("keypress", e => { if (e.key === "Enter") sendBtn.click(); });
@@ -238,6 +249,14 @@ function initAudioControls(container) {
 
     audio.addEventListener('play', () => playBtn.textContent = '⏸');
     audio.addEventListener('pause', () => playBtn.textContent = '▶');
+
+    audio.addEventListener('loadedmetadata', () => {
+        // Ensure duration is calculated only once
+        if (isNaN(audio.duration)) return;
+        const mins = Math.floor(audio.duration / 60);
+        const secs = Math.floor(audio.duration % 60);
+        durationSpan.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    });
 
     audio.addEventListener('timeupdate', () => {
         const percent = (audio.currentTime / audio.duration) * 100;
