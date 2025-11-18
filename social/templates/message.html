@@ -1,337 +1,254 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<title>Chat</title>
 
-    <title>Chat</title>
+<style>
+/* Reset and Base */
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #FAFAFA;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
 
-    <style>
-        /* Instagram DM Style Reset and Base */
-        * {
-            box-sizing: border-box;
-        }
+/* Desktop */
+@media (min-width: 768px) {
+    body { align-items: center; justify-content: center; background-color: #EFEFEF; }
+    .main-chat-wrapper { width: 100%; height: 90vh; background: white; border: 1px solid #DBDBDB; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; }
+    .input-area { position: static !important; width: 100% !important; }
+}
 
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #FAFAFA; /* Light background */
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
+.main-chat-wrapper { display: contents; }
 
-        /* ---------------------------------- */
-        /* Desktop View (Center Chat Container) */
-        /* ---------------------------------- */
-        @media (min-width: 768px) {
-            body {
-                align-items: center;
-                justify-content: center;
-                background-color: #EFEFEF;
-            }
+/* Profile Header */
+.profile-header { background: white; color: #262626; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #EFEFEF; height: 60px; text-align: left; }
+.profile-header-content { display: flex; align-items: center; }
+.profile-header img { border-radius: 50%; width: 40px; height: 40px; margin-right: 10px; }
+.profile-header b { font-size: 16px; font-weight: 600; }
 
-            .main-chat-wrapper {
-                width: 100%;
-                 
-                height: 90vh;
-                
-                background: white;
-                border: 1px solid #DBDBDB;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-            }
+/* Chat container */
+.chat-container { padding: 15px; flex-grow: 1; overflow-y: auto; scroll-behavior: smooth; background: white; margin-bottom: 40px; }
+.chat-container::-webkit-scrollbar { display: none; }
 
-            .input-area {
-                position: static !important; /* Override fixed position on desktop */
-                width: 100% !important;
-            }
-        }
+.message { max-width: 85%; padding: 10px 14px 18px 14px; margin-bottom: 8px; border-radius: 20px; font-size: 15px; line-height: 1.4; position: relative; }
 
-        /* Helper wrapper for desktop sizing */
-        .main-chat-wrapper {
-            display: contents; /* Ensures children behave as direct body children on mobile */
-        }
+.sent { background: linear-gradient(135deg, #0099ff 0%, #a033ff 100%); color: white; margin-left: auto; border-bottom-right-radius: 5px; }
+.received { background: #EFEFEF; color: #262626; margin-right: auto; border-bottom-left-radius: 5px; }
 
-        /* Profile header (Like Instagram's navigation bar) */
-        .profile-header {
-            background: white;
-            color: #262626;
-            padding: 10px 15px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid #EFEFEF;
-            height: 60px;
-            text-align: left; /* Adjust alignment for modern look */
-        }
+.time { display: block; position: absolute; bottom: 3px; right: 8px; font-size: 10px; color: rgba(255, 255, 255, 0.7); text-align: right; white-space: nowrap; }
+.received .time { color: #8E8E93; }
 
-        .profile-header-content {
-            display: flex;
-            align-items: center;
-        }
+.chat-container center b i { font-size: 12px; color: #8E8E93; font-style: normal; font-weight: 400; margin: 15px 0; display: block; }
 
-        .profile-header img {
-            border-radius: 50%;
-            width: 40px; /* Smaller avatar */
-            height: 40px;
-            margin-right: 10px;
-        }
+/* Input area */
+.input-area { padding: 10px 15px; background: white; display: flex; align-items: center; position: fixed; bottom: 0; width: 100%; border-top: 1px solid #EFEFEF; }
+.input-area input { flex-grow: 1; padding: 10px 15px; margin-right: 8px; border: 1px solid #DBDBDB; border-radius: 30px; outline: none; font-size: 15px; background: #FAFAFA; }
+.input-area button { width: 40px; height: 40px; padding: 0; margin-left: 0; border: none; border-radius: 50%; background: none; color: #0099ff; font-size: 20px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; line-height: 40px; text-align: center; }
+.input-area button:hover { opacity: 0.8; }
 
-        .profile-header b {
-            font-size: 16px;
-            font-weight: 600;
-        }
+.profile-header-text { display: flex; flex-direction: column; align-items: flex-start; }
+.recording { position: relative; font-size: 20px; color: #ff3b30; animation: pulse 1s infinite; }
 
-        /* Chat container */
-        .chat-container {
-            padding: 15px;
-            flex-grow: 1; /* Takes up available space */
-            overflow-y: auto;
-            scroll-behavior: smooth; /* Smooth scrolling */
-            background: white;
-            margin-bottom:40px;
-            /* --- SCROLLBAR HIDING RULES START --- */
-            -ms-overflow-style: none;  /* IE and Edge */
-            scrollbar-width: none;  /* Firefox */
-            /* --- SCROLLBAR HIDING RULES END --- */
-        }
-        
-        /* --- SCROLLBAR HIDING RULE FOR WEBKIT (Chrome, Safari) --- */
-        .chat-container::-webkit-scrollbar {
-            display: none;
-        }
+@media (max-width: 767px) { .chat-container { height: calc(100vh - 60px - 60px); } }
 
-        /* Message bubble */
-        .message {
-            max-width: 85%; /* Slightly wider max-width */
-            padding: 10px 14px 18px 14px; /* Added extra bottom padding for time */
-            margin-bottom: 8px;
-            border-radius: 20px; /* Very rounded corners */
-            font-size: 15px;
-            line-height: 1.4;
-            position: relative;
-        }
-
-        /* Sender (right side) - Instagram Gradient */
-        .sent {
-            background: linear-gradient(135deg, #0099ff 0%, #a033ff 100%); /* Blue to Purple Gradient */
-            color: white;
-            margin-left: auto;
-            border-bottom-right-radius: 5px; /* Tail corner */
-        }
-
-        /* Receiver (left side) - Light Gray */
-        .received {
-            background: #EFEFEF; /* Very light gray */
-            color: #262626;
-            margin-right: auto;
-            border-bottom-left-radius: 5px; /* Tail corner */
-        }
-
-        /* Time text - Always visible and positioned at the bottom right corner of the bubble */
-        .time {
-            display: block; 
-            position: absolute;
-            bottom: 3px;
-            right: 8px;
-            font-size: 10px;
-            
-            /* Color logic based on bubble type */
-            color: rgba(255, 255, 255, 0.7); /* White and semi-transparent for sent messages */
-            text-align: right;
-            white-space: nowrap;
-        }
-        
-        /* Specific color for received message time */
-        .received .time {
-            color: #8E8E93; /* Darker gray for readability on light background */
-        }
-
-        /* Day Separator Styling */
-        .chat-container center b i {
-            font-size: 12px;
-            color: #8E8E93;
-            font-style: normal;
-            font-weight: 400;
-            margin: 15px 0;
-            display: block;
-        }
-
-        /* Input area (Fixed at bottom on mobile) */
-        .input-area {
-            padding: 10px 15px;
-            background: white;
-            display: flex;
-            align-items: center;
-            position: fixed;
-            bottom: 0;
-            width: 100%;
-            border-top: 1px solid #EFEFEF;
-        }
-
-        .input-area input {
-            flex-grow: 1;
-            padding: 10px 15px;
-            margin-right: 8px;
-            border: 1px solid #DBDBDB;
-            border-radius: 30px; /* Highly rounded */
-            outline: none;
-            font-size: 15px;
-            background: #FAFAFA;
-        }
-
-        .input-area button {
-            width: 40px; /* Fixed size for icon look */
-            height: 40px;
-            padding: 0;
-            margin-left: 0;
-            border: none;
-            border-radius: 50%; /* Circular button */
-            background: none; /* No background color */
-            color: #0099ff; /* Instagram blue color for icon */
-            font-size: 20px; /* Larger icon/text */
-            font-weight: bold;
-            cursor: pointer;
-            transition: opacity 0.2s;
-            line-height: 40px;
-            text-align: center;
-        }
-
-        /* Visual trick to make the "Send" button look like an icon */
-        .input-area button:hover {
-            opacity: 0.8;
-        }
-
-        .profile-header-text {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-        }
-        
-        /* Ensures the scroll area accounts for the fixed input box on mobile */
-        @media (max-width: 767px) {
-            .chat-container {
-                /* 100vh - Header(60px) - InputArea(approx 60px) */
-                height: calc(100vh - 60px - 60px); 
-            }
-        }
-    </style>
+/* Custom Facebook-like audio control */
+.audio-player { display: flex; align-items: center; background: #E4E6EB; border-radius: 18px; padding: 5px 10px; margin: 5px 0; width: 250px; }
+.audio-player button { border: none; background: none; font-size: 16px; margin-right: 10px; cursor: pointer; }
+.audio-player input[type=range] { width: 100%; cursor: pointer; background: transparent; }
+.audio-player input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #0099ff; cursor: pointer; margin-top: -4px; }
+.audio-player input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: #CCC; }
+.audio-player span.duration { font-size: 10px; margin-left: 5px; color: #4B4B4B; }
+</style>
 </head>
 <body>
 
-    <div class="main-chat-wrapper">
-
-        <!-- HEADER -->
-        <div class="profile-header">
-            <div class="profile-header-content">
-                <img src="{{ receiver.profile.picture.url }}" alt="">
-                <div class="profile-header-text">
-                    <b>
-                    {% if receiver.profile.full_name %}
-                        {{ receiver.profile.full_name }}
-                    {% else %}
-                        {{ receiver.username }}
-                    {% endif %}
-                    </b>
-                </div>
-            </div>
-            <div>
-                <!-- Action Icons Placeholder -->
+<div class="main-chat-wrapper">
+    <!-- HEADER -->
+    <div class="profile-header">
+        <div class="profile-header-content">
+            <img src="{{ receiver.profile.picture.url }}" alt="">
+            <div class="profile-header-text">
+                <b>{% if receiver.profile.full_name %}{{ receiver.profile.full_name }}{% else %}{{ receiver.username }}{% endif %}</b>
             </div>
         </div>
-
-        <!-- CHAT MESSAGES -->
-        <div id="messageOutput" class="chat-container">
-
-            {% for label, msgs in grouped_messages.items %}
-                <center><b><i>{{ label }}</i></b></center>
-
-                {% for message in msgs %}
-                    {% if message.sender.username == request.user.username %}
-                        <div class="sent message">
-                            {{ message.conversation }}
-                            <span class="time">{{ message.chat_time }}</span>
-                        </div>
-                    {% else %}
-                        <div class="received message">
-                            {{ message.conversation }}
-                            <span class="time">{{ message.chat_time }}</span>
-                        </div>
-                    {% endif %}
-                {% endfor %}
-            {% endfor %}
-
-        </div>
-
-        <!-- INPUT BOX -->
-        <div class="input-area">
-            <input type="text" id="message" placeholder="Message...">
-            <button id="startBtn" type="button"><i class="fa-solid fa-microphone"></i></button> <span id="status"></span> <button id="stopBtn" type="button" hidden><i class="fa-solid fa-circle-stop"></i></button>
-            <input type="file" name="audio_file" id="audio_file" hidden>
-            <button id="sendBtn">➤</button>
-        </div>
+        <div></div>
     </div>
 
-    <!-- SCRIPT -->
-    <script>
-        const receiver = "{{ receiver.username }}";
-        const sender = "{{ request.user.username }}";
-        const messageOutput = document.getElementById('messageOutput');
-        const message = document.getElementById('message');
-        const sendBtn = document.getElementById('sendBtn');
+    <!-- CHAT MESSAGES -->
+    <div id="messageOutput" class="chat-container">
+        {% for label, msgs in grouped_messages.items %}
+            <center><b><i>{{ label }}</i></b></center>
+            {% for message in msgs %}
+                {% if message.sender.username == request.user.username %}
+                    {% if message.conversation %}
+                    <div class="sent message">
+                        {{ message.conversation }}
+                        <span class="time">{{ message.chat_time }}</span>
+                    </div>
+                    {% elif message.file %}
+                    <div class="sent message">
+                        <div class="audio-player">
+                            <button class="play-btn">▶</button>
+                            <input type="range" min="0" max="100" value="0" class="progress">
+                            <span class="duration">0:00</span>
+                        </div>
+                        <audio class="audio-source" src="{{ message.file.url }}"></audio>
+                        <span class="time">{{ message.chat_time }}</span>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    {% if message.conversation %}
+                    <div class="received message">
+                        {{ message.conversation }}
+                        <span class="time">{{ message.chat_time }}</span>
+                    </div>
+                    {% elif message.file %}
+                    <div class="received message">
+                        <div class="audio-player">
+                            <button class="play-btn">▶</button>
+                            <input type="range" min="0" max="100" value="0" class="progress">
+                            <span class="duration">0:00</span>
+                        </div>
+                        <audio class="audio-source" src="{{ message.file.url }}"></audio>
+                        <span class="time">{{ message.chat_time }}</span>
+                    </div>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    </div>
 
-        // Scroll to bottom smoothly on page load
-        messageOutput.scrollTo({ top: messageOutput.scrollHeight, behavior: 'smooth' });
+    <!-- INPUT BOX -->
+    <div class="input-area">
+        <input type="text" id="message" placeholder="Message...">
+        <button id="startBtn" type="button"><i class="fa-solid fa-microphone"></i></button>
+        <span id="status"></span>
+        <button id="stopBtn" type="button" hidden><i class="fa-solid fa-circle-stop"></i></button>
+        <button id="sendBtn">➤</button>
+    </div>
+</div>
 
-        const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-        const socket = new WebSocket(protocol + window.location.host + "/ws/message/");
+<script>
+const receiver = "{{ receiver.username }}";
+const sender = "{{ request.user.username }}";
+const messageOutput = document.getElementById('messageOutput');
+const message = document.getElementById('message');
+const sendBtn = document.getElementById('sendBtn');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const status = document.getElementById('status');
 
-        // Receive message from WebSocket
-        socket.addEventListener("message", function (e) {
-            const data = JSON.parse(e.data);
+let mediaRecorder;
+let audioFile = null;
 
-            const div = document.createElement("div");
+const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+const socket = new WebSocket(protocol + window.location.host + "/ws/message/");
 
-            if (data.sender === sender) {
-                div.className = "sent message";
-            } else {
-                div.className = "received message";
-            }
+messageOutput.scrollTo({ top: messageOutput.scrollHeight, behavior: 'smooth' });
 
-            div.innerHTML = `${data.message}<span class="time">${data.time}</span>`;
-            messageOutput.appendChild(div);
+socket.addEventListener("message", function (e) {
+    const data = JSON.parse(e.data);
+    const div = document.createElement("div");
 
-            // Smooth scroll to bottom
-            messageOutput.scrollTo({ top: messageOutput.scrollHeight, behavior: 'smooth' });
-        });
+    if (data.sender === sender) div.className = "sent message";
+    else div.className = "received message";
 
-        // Send message
-        sendBtn.addEventListener("click", function () {
-            const msg = message.value.trim();
-            if (!msg) return;
+    if (data.type === "text_response") {
+        div.innerHTML = `${data.message}<span class="time">${data.time}</span>`;
+    } else if (data.type === "sound_response") {
+        div.innerHTML = `<div class="audio-player">
+            <button class="play-btn">▶</button>
+            <input type="range" min="0" max="100" value="0" class="progress">
+            <span class="duration">0:00</span>
+        </div>
+        <audio class="audio-source" src="${data.file_url}"></audio>
+        <span class="time">${data.time}</span>`;
+    }
+    messageOutput.appendChild(div);
+    initAudioControls(div);
+    messageOutput.scrollTo({ top: messageOutput.scrollHeight, behavior: 'smooth' });
+});
 
-            socket.send(JSON.stringify({
-                receiver: receiver,
-                message: msg
-            }));
+// --- Recording ---
+startBtn.addEventListener('click', async () => {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        const chunks = [];
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            audioFile = new File([blob], 'recorded_audio.webm', { type: 'audio/webm' });
+            status.textContent = 'Audio ready to send';
+        };
+        mediaRecorder.start();
+        status.innerHTML = `<i class="fa-solid fa-circle recording"></i> Recording...`;
+        startBtn.hidden = true;
+        stopBtn.hidden = false;
+    } catch (err) { alert('Microphone access denied'); console.error(err); }
+});
 
-            message.value = "";
-        });
+stopBtn.addEventListener('click', () => { if (mediaRecorder) mediaRecorder.stop(); startBtn.hidden = false; stopBtn.hidden = true; });
 
-        // Send message on Enter key press
-        message.addEventListener("keypress", function(e) {
-            if (e.key === "Enter") {
-                sendBtn.click();
-            }
-        });
-    </script>
+sendBtn.addEventListener('click', () => {
+    const msg = message.value.trim();
+    if (audioFile) {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const bytes = new Uint8Array(reader.result);
+            socket.send(JSON.stringify({ type: 'audio_message', receiver: receiver, file_name: audioFile.name }));
+            socket.send(bytes);
+            audioFile = null;
+            status.textContent = '';
+        };
+        reader.readAsArrayBuffer(audioFile);
+    }
+    if (msg) socket.send(JSON.stringify({ type: 'text_message', receiver: receiver, message: msg }));
+    message.value = '';
+});
+
+message.addEventListener("keypress", e => { if (e.key === "Enter") sendBtn.click(); });
+
+/* --- Initialize custom audio controls like Facebook Messenger --- */
+function initAudioControls(container) {
+    const player = container.querySelector('.audio-player');
+    if (!player) return;
+    const audio = container.querySelector('.audio-source');
+    const playBtn = player.querySelector('.play-btn');
+    const progress = player.querySelector('.progress');
+    const durationSpan = player.querySelector('.duration');
+
+    playBtn.addEventListener('click', () => {
+        if (audio.paused) audio.play(); else audio.pause();
+    });
+
+    audio.addEventListener('play', () => playBtn.textContent = '⏸');
+    audio.addEventListener('pause', () => playBtn.textContent = '▶');
+
+    audio.addEventListener('timeupdate', () => {
+        const percent = (audio.currentTime / audio.duration) * 100;
+        progress.value = percent;
+        const mins = Math.floor(audio.currentTime / 60);
+        const secs = Math.floor(audio.currentTime % 60);
+        durationSpan.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    });
+
+    progress.addEventListener('input', () => {
+        audio.currentTime = (progress.value / 100) * audio.duration;
+    });
+}
+
+// Initialize existing audio messages on page load
+document.querySelectorAll('.message').forEach(initAudioControls);
+</script>
 
 </body>
 </html>
-
