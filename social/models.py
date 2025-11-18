@@ -84,7 +84,7 @@ class Message(models.Model):
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver')
     conversation = models.TextField()
     if settings.USE_CLOUDINARY:
-        file = CloudinaryField('audio', resource_type='video',folder='comment_files',blank=True)
+        file = CloudinaryField('audio', resource_type='video',folder='message_files',blank=True)
     else:
         file = models.FileField(upload_to='comment_file/', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
