@@ -6,19 +6,18 @@ from django.utils import timezone
 from django.core.files.base import ContentFile
 from django.conf import settings
 import logging
-
-if not settings.DEBUG:
-    import cloudinary.uploader
-    from django.core.files.uploadedfile import InMemoryUploadedFile
-    import io
+import uuid
 
 logger = logging.getLogger(__name__)
 
+# Import Cloudinary only if needed
+if getattr(settings, "USE_CLOUDINARY", False):
+    import cloudinary.uploader
+    from cloudinary.models import CloudinaryField
 
 def get_models():
-    from social.models import Message 
+    from social.models import Message
     return Message
-
 
 class MessageChannel(AsyncWebsocketConsumer):
 
@@ -31,11 +30,10 @@ class MessageChannel(AsyncWebsocketConsumer):
             return
 
         self.username = self.user.username
-        self.group_name = 'message' 
-
-        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        self.group_name = 'message'
         self.audio_buffer = None
 
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
         logger.info(f"WebSocket connected: {self.username}")
 
@@ -44,7 +42,7 @@ class MessageChannel(AsyncWebsocketConsumer):
         logger.info(f"WebSocket disconnected: {self.username}")
 
     async def receive(self, text_data=None, bytes_data=None):
-
+        # -------------------------- TEXT MESSAGE --------------------------
         if text_data:
             data = json.loads(text_data)
             msg_type = data.get("type")
@@ -69,6 +67,7 @@ class MessageChannel(AsyncWebsocketConsumer):
                 return
 
             elif msg_type == "audio_message":
+                # Prepare to receive audio bytes
                 self.audio_buffer = {
                     "receiver": data.get("receiver"),
                     "file_name": data.get("file_name"),
@@ -76,8 +75,8 @@ class MessageChannel(AsyncWebsocketConsumer):
                 logger.info(f"Audio metadata received: {self.audio_buffer}")
                 return
 
+        # -------------------------- AUDIO BYTES --------------------------
         if bytes_data and self.audio_buffer:
-
             receiver = self.audio_buffer["receiver"]
             file_name = self.audio_buffer["file_name"]
 
@@ -99,21 +98,22 @@ class MessageChannel(AsyncWebsocketConsumer):
                         "type": "chat_sound",
                         "sender": self.username,
                         "receiver": receiver,
-                        "file_url": msg_instance.file.url, 
+                        "file_url": msg_instance.file.url,
                         "time": now
                     }
                 )
-
             except Exception as e:
                 logger.error(f"Error saving audio: {e}", exc_info=True)
 
             self.audio_buffer = None
             return
 
+        # Unexpected audio bytes
         if bytes_data and not self.audio_buffer:
             logger.warning("Received bytes without audio metadata.")
             return
 
+    # -------------------------- SEND TEXT --------------------------
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
             "type": "text_response",
@@ -123,6 +123,7 @@ class MessageChannel(AsyncWebsocketConsumer):
             "time": event["time"]
         }))
 
+    # -------------------------- SEND AUDIO --------------------------
     async def chat_sound(self, event):
         await self.send(text_data=json.dumps({
             "type": "sound_response",
@@ -132,6 +133,7 @@ class MessageChannel(AsyncWebsocketConsumer):
             "time": event["time"]
         }))
 
+    # -------------------------- SAVE TEXT TO DB --------------------------
     @database_sync_to_async
     def save_message(self, sender, receiver_username, message):
         Message = get_models()
@@ -143,48 +145,24 @@ class MessageChannel(AsyncWebsocketConsumer):
             conversation=message
         )
 
+    # -------------------------- SAVE AUDIO --------------------------
     @database_sync_to_async
     def save_sound(self, sender, receiver_username, file_bytes, file_name):
         Message = get_models()
         receiver_user = get_user_model().objects.get(username=receiver_username)
 
-        message = Message.objects.create(
-            sender=sender,
-            receiver=receiver_user
-        )
+        # Generate unique filename
+        unique_file_name = f"{uuid.uuid4().hex}_{file_name}"
 
-        file_content = ContentFile(file_bytes)
+        message = Message.objects.create(sender=sender, receiver=receiver_user)
 
-        if settings.DEBUG:
-            message.file.save(file_name, file_content)
-            return message
-
-        try:
-            message.file.save(file_name, file_content)
-        except Exception as e:
-            logger.error(f"Failed to save file using Django storage wrapper: {e}", exc_info=True)
+        if settings.USE_CLOUDINARY:
+            # Save directly to CloudinaryField
             file_obj = ContentFile(file_bytes, name=file_name)
-            file_stream = io.BytesIO(file_bytes)
-            file_stream.name = file_name
-            upload_file = InMemoryUploadedFile(
-                file=file_stream, 
-                field_name=None, 
-                name=file_name, 
-                content_type='audio/webm', 
-                size=len(file_bytes), 
-                charset=None
-            )
+            message.file.save(unique_file_name, file_obj)
+        else:
+            # Local file storage for development
+            file_obj = ContentFile(file_bytes, name=file_name)
+            message.file.save(unique_file_name, file_obj)
 
-            result = cloudinary.uploader.upload(
-                upload_file,
-                resource_type="auto",
-                folder="comment_files",
-                public_id=f"audio_{message.pk}_{timezone.now().timestamp()}" 
-            )
-
-            file_url = result["secure_url"]
-            message.file = file_url
-            message.save()
-            return message
-        
         return message
