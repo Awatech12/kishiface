@@ -1,3 +1,4 @@
+
 from channels.generic.websocket import AsyncWebsocketConsumer
 import json
 from channels.db import database_sync_to_async
@@ -7,7 +8,7 @@ from django.core.files.base import ContentFile
 from django.conf import settings
 import logging
 
-# Cloudinary is imported safely
+# Cloudinary is imported only in production
 if not settings.DEBUG:
     import cloudinary.uploader
 
@@ -69,11 +70,11 @@ class MessageChannel(AsyncWebsocketConsumer):
                 )
                 return
 
-            # PREPARE FOR AUDIO BYTES
+            # PREPARE TO RECEIVE AUDIO BYTES
             elif msg_type == "audio_message":
                 self.audio_buffer = {
                     "receiver": data.get("receiver"),
-                    "file_name": data.get("file_name")
+                    "file_name": data.get("file_name"),
                 }
                 logger.info(f"Audio metadata received: {self.audio_buffer}")
                 return
@@ -102,7 +103,7 @@ class MessageChannel(AsyncWebsocketConsumer):
                         "type": "chat_sound",
                         "sender": self.username,
                         "receiver": receiver,
-                        "file_url": msg_instance.file.url,
+                        "file_url": msg_instance.file.url if settings.DEBUG else msg_instance.file,
                         "time": now
                     }
                 )
@@ -113,7 +114,7 @@ class MessageChannel(AsyncWebsocketConsumer):
             self.audio_buffer = None
             return
 
-        # UNEXPECTED RAW BYTES
+        # Unexpected audio bytes
         if bytes_data and not self.audio_buffer:
             logger.warning("Received bytes without audio metadata.")
             return
@@ -150,13 +151,13 @@ class MessageChannel(AsyncWebsocketConsumer):
             conversation=message
         )
 
-    # -------------------------- SAVE AUDIO FILE --------------------------
+    # -------------------------- SAVE AUDIO --------------------------
     @database_sync_to_async
     def save_sound(self, sender, receiver_username, file_bytes, file_name):
         Message = get_models()
         receiver_user = get_user_model().objects.get(username=receiver_username)
 
-        # =========== LOCAL MODE (DEBUG=True) ===========
+        # -------------------------- DEBUG MODE --------------------------
         if settings.DEBUG:
             message = Message.objects.create(
                 sender=sender,
@@ -165,9 +166,12 @@ class MessageChannel(AsyncWebsocketConsumer):
             message.file.save(file_name, ContentFile(file_bytes))
             return message
 
-        # =========== PRODUCTION MODE (DEBUG=False) ===========
+        # -------------------------- PRODUCTION MODE --------------------------
+        # Convert bytes to file-like object
+        file_obj = ContentFile(file_bytes, name=file_name)
+
         result = cloudinary.uploader.upload(
-            file_bytes,
+            file_obj,
             resource_type="auto",
             folder="comment_files",
             public_id=file_name
@@ -175,8 +179,11 @@ class MessageChannel(AsyncWebsocketConsumer):
 
         file_url = result["secure_url"]
 
-        return Message.objects.create(
+        message = Message.objects.create(
             sender=sender,
-            receiver=receiver_user,
-            file=file_url
+            receiver=receiver_user
         )
+        message.file = file_url
+        message.save()
+
+        return message
