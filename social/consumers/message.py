@@ -1,4 +1,3 @@
-
 from channels.generic.websocket import AsyncWebsocketConsumer
 import json
 from channels.db import database_sync_to_async
@@ -8,15 +7,16 @@ from django.core.files.base import ContentFile
 from django.conf import settings
 import logging
 
-# Cloudinary is imported only in production
 if not settings.DEBUG:
     import cloudinary.uploader
+    from django.core.files.uploadedfile import InMemoryUploadedFile
+    import io
 
 logger = logging.getLogger(__name__)
 
 
 def get_models():
-    from social.models import Message
+    from social.models import Message 
     return Message
 
 
@@ -31,7 +31,7 @@ class MessageChannel(AsyncWebsocketConsumer):
             return
 
         self.username = self.user.username
-        self.group_name = 'message'
+        self.group_name = 'message' 
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         self.audio_buffer = None
@@ -45,12 +45,10 @@ class MessageChannel(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None):
 
-        # -------------------------- TEXT MESSAGE --------------------------
         if text_data:
             data = json.loads(text_data)
             msg_type = data.get("type")
 
-            # SEND TEXT
             if msg_type == "text_message":
                 message = data.get("message")
                 receiver = data.get("receiver")
@@ -70,7 +68,6 @@ class MessageChannel(AsyncWebsocketConsumer):
                 )
                 return
 
-            # PREPARE TO RECEIVE AUDIO BYTES
             elif msg_type == "audio_message":
                 self.audio_buffer = {
                     "receiver": data.get("receiver"),
@@ -79,7 +76,6 @@ class MessageChannel(AsyncWebsocketConsumer):
                 logger.info(f"Audio metadata received: {self.audio_buffer}")
                 return
 
-        # -------------------------- AUDIO BYTES --------------------------
         if bytes_data and self.audio_buffer:
 
             receiver = self.audio_buffer["receiver"]
@@ -103,7 +99,7 @@ class MessageChannel(AsyncWebsocketConsumer):
                         "type": "chat_sound",
                         "sender": self.username,
                         "receiver": receiver,
-                        "file_url": msg_instance.file.url if settings.DEBUG else msg_instance.file,
+                        "file_url": msg_instance.file.url, 
                         "time": now
                     }
                 )
@@ -114,12 +110,10 @@ class MessageChannel(AsyncWebsocketConsumer):
             self.audio_buffer = None
             return
 
-        # Unexpected audio bytes
         if bytes_data and not self.audio_buffer:
             logger.warning("Received bytes without audio metadata.")
             return
 
-    # -------------------------- SEND TEXT --------------------------
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
             "type": "text_response",
@@ -129,7 +123,6 @@ class MessageChannel(AsyncWebsocketConsumer):
             "time": event["time"]
         }))
 
-    # -------------------------- SEND AUDIO --------------------------
     async def chat_sound(self, event):
         await self.send(text_data=json.dumps({
             "type": "sound_response",
@@ -139,7 +132,6 @@ class MessageChannel(AsyncWebsocketConsumer):
             "time": event["time"]
         }))
 
-    # -------------------------- SAVE TEXT TO DB --------------------------
     @database_sync_to_async
     def save_message(self, sender, receiver_username, message):
         Message = get_models()
@@ -151,39 +143,48 @@ class MessageChannel(AsyncWebsocketConsumer):
             conversation=message
         )
 
-    # -------------------------- SAVE AUDIO --------------------------
     @database_sync_to_async
     def save_sound(self, sender, receiver_username, file_bytes, file_name):
         Message = get_models()
         receiver_user = get_user_model().objects.get(username=receiver_username)
 
-        # -------------------------- DEBUG MODE --------------------------
-        if settings.DEBUG:
-            message = Message.objects.create(
-                sender=sender,
-                receiver=receiver_user
-            )
-            message.file.save(file_name, ContentFile(file_bytes))
-            return message
-
-        # -------------------------- PRODUCTION MODE --------------------------
-        # Convert bytes to file-like object
-        file_obj = ContentFile(file_bytes, name=file_name)
-
-        result = cloudinary.uploader.upload(
-            file_obj,
-            resource_type="auto",
-            folder="comment_files",
-            public_id=file_name
-        )
-
-        file_url = result["secure_url"]
-
         message = Message.objects.create(
             sender=sender,
             receiver=receiver_user
         )
-        message.file = file_url
-        message.save()
 
+        file_content = ContentFile(file_bytes)
+
+        if settings.DEBUG:
+            message.file.save(file_name, file_content)
+            return message
+
+        try:
+            message.file.save(file_name, file_content)
+        except Exception as e:
+            logger.error(f"Failed to save file using Django storage wrapper: {e}", exc_info=True)
+            file_obj = ContentFile(file_bytes, name=file_name)
+            file_stream = io.BytesIO(file_bytes)
+            file_stream.name = file_name
+            upload_file = InMemoryUploadedFile(
+                file=file_stream, 
+                field_name=None, 
+                name=file_name, 
+                content_type='audio/webm', 
+                size=len(file_bytes), 
+                charset=None
+            )
+
+            result = cloudinary.uploader.upload(
+                upload_file,
+                resource_type="auto",
+                folder="comment_files",
+                public_id=f"audio_{message.pk}_{timezone.now().timestamp()}" 
+            )
+
+            file_url = result["secure_url"]
+            message.file = file_url
+            message.save()
+            return message
+        
         return message
