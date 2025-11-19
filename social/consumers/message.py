@@ -125,12 +125,9 @@ class MessageChannel(AsyncWebsocketConsumer):
     @database_sync_to_async
     def save_sound(self, sender, receiver_username, file_bytes, file_name):
         from django.core.files.base import ContentFile 
-        
         file_content = ContentFile(file_bytes, name=file_name)
-        
         Message = get_models()
         receiver_user = get_user_model().objects.get(username=receiver_username)
-        
         return Message.objects.create(
             sender=sender,
             receiver=receiver_user,
