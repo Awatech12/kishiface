@@ -122,7 +122,7 @@ class MessageChannel(AsyncWebsocketConsumer):
                 result = cloudinary.uploader.upload(
                     ContentFile(audio_bytes, name=file_name),
                     resource_type="auto",
-                    folder="comment_files",
+                    folder="message_files",
                     public_id=file_name
                 )
                 message.file = result["secure_url"]
