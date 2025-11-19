@@ -1,168 +1,136 @@
-from channels.generic.websocket import AsyncWebsocketConsumer
 import json
+import uuid
+import base64
+import logging
+from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from django.contrib.auth import get_user_model
-from django.utils import timezone
 from django.core.files.base import ContentFile
 from django.conf import settings
-import logging
-import uuid
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
-
-# Import Cloudinary only if needed
-if getattr(settings, "USE_CLOUDINARY", False):
-    import cloudinary.uploader
-    from cloudinary.models import CloudinaryField
 
 def get_models():
     from social.models import Message
     return Message
 
+def get_user_model_func():
+    from django.contrib.auth import get_user_model
+    return get_user_model()
+
 class MessageChannel(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for group chat supporting text and audio.
+    Audio is sent as base64 and saved to either local storage (DEBUG)
+    or Cloudinary (production).
+    """
 
     async def connect(self):
         self.user = self.scope['user']
-
-        if not self.user.is_authenticated:
-            logger.warning("Unauthenticated websocket attempt.")
+        if not self.user or not self.user.is_authenticated:
             await self.close()
             return
 
-        self.username = self.user.username
+        # All users join the same group
         self.group_name = 'message'
-        self.audio_buffer = None
-
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
-        logger.info(f"WebSocket connected: {self.username}")
+        logger.info(f"WebSocket connected: {self.user.username}")
 
-    async def disconnect(self, close_code):
+    async def disconnect(self, code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
-        logger.info(f"WebSocket disconnected: {self.username}")
+        logger.info(f"WebSocket disconnected: {self.user.username}")
 
-    async def receive(self, text_data=None, bytes_data=None):
-        # -------------------------- TEXT MESSAGE --------------------------
-        if text_data:
-            data = json.loads(text_data)
-            msg_type = data.get("type")
-
-            if msg_type == "text_message":
-                message = data.get("message")
-                receiver = data.get("receiver")
-                now = timezone.now().strftime("%I:%M %p")
-
-                await self.save_message(self.user, receiver, message)
-
-                await self.channel_layer.group_send(
-                    self.group_name,
-                    {
-                        "type": "chat_message",
-                        "sender": self.username,
-                        "receiver": receiver,
-                        "message": message,
-                        "time": now
-                    }
-                )
-                return
-
-            elif msg_type == "audio_message":
-                # Prepare to receive audio bytes
-                self.audio_buffer = {
-                    "receiver": data.get("receiver"),
-                    "file_name": data.get("file_name"),
-                }
-                logger.info(f"Audio metadata received: {self.audio_buffer}")
-                return
-
-        # -------------------------- AUDIO BYTES --------------------------
-        if bytes_data and self.audio_buffer:
-            receiver = self.audio_buffer["receiver"]
-            file_name = self.audio_buffer["file_name"]
-
-            logger.info(f"Received {len(bytes_data)} audio bytes for: {file_name}")
-
-            try:
-                msg_instance = await self.save_sound(
-                    self.user,
-                    receiver,
-                    bytes_data,
-                    file_name
-                )
-
-                now = timezone.now().strftime("%I:%M %p")
-
-                await self.channel_layer.group_send(
-                    self.group_name,
-                    {
-                        "type": "chat_sound",
-                        "sender": self.username,
-                        "receiver": receiver,
-                        "file_url": msg_instance.file.url,
-                        "time": now
-                    }
-                )
-            except Exception as e:
-                logger.error(f"Error saving audio: {e}", exc_info=True)
-
-            self.audio_buffer = None
+    async def receive(self, text_data=None):
+        """
+        Handle incoming messages:
+        - text messages: "message"
+        - audio messages: "audio" (base64 string)
+        """
+        if not text_data:
             return
 
-        # Unexpected audio bytes
-        if bytes_data and not self.audio_buffer:
-            logger.warning("Received bytes without audio metadata.")
-            return
+        data = json.loads(text_data)
+        message_text = data.get("message")
+        audio_base64 = data.get("audio")
+        receiver_username = data.get("receiver")
 
-    # -------------------------- SEND TEXT --------------------------
-    async def chat_message(self, event):
-        await self.send(text_data=json.dumps({
-            "type": "text_response",
-            "sender": event["sender"],
-            "receiver": event["receiver"],
-            "message": event["message"],
-            "time": event["time"]
-        }))
+        file_url = None
 
-    # -------------------------- SEND AUDIO --------------------------
-    async def chat_sound(self, event):
-        await self.send(text_data=json.dumps({
-            "type": "sound_response",
-            "sender": event["sender"],
-            "receiver": event["receiver"],
-            "file_url": event["file_url"],
-            "time": event["time"]
-        }))
+        if audio_base64:
+            file_url = await self.save_audio(self.user, receiver_username, audio_base64)
 
-    # -------------------------- SAVE TEXT TO DB --------------------------
-    @database_sync_to_async
-    def save_message(self, sender, receiver_username, message):
-        Message = get_models()
-        receiver_user = get_user_model().objects.get(username=receiver_username)
+        if message_text:
+            await self.save_message(self.user, receiver_username, message_text)
 
-        return Message.objects.create(
-            sender=sender,
-            receiver=receiver_user,
-            conversation=message
+        # Broadcast to all members of the group
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type": "chat_message",
+                "sender": self.user.username,
+                "receiver": receiver_username,
+                "message": message_text,
+                "audio_url": file_url,
+                "time": timezone.now().strftime("%I:%M %p")
+            }
         )
 
-    # -------------------------- SAVE AUDIO --------------------------
-    @database_sync_to_async
-    def save_sound(self, sender, receiver_username, file_bytes, file_name):
-        Message = get_models()
-        receiver_user = get_user_model().objects.get(username=receiver_username)
+    async def chat_message(self, event):
+        """
+        Send message to WebSocket client.
+        """
+        await self.send(text_data=json.dumps({
+            "type": "chat_response",
+            "sender": event["sender"],
+            "receiver": event["receiver"],
+            "message": event.get("message", ""),
+            "audio_url": event.get("audio_url", ""),
+            "time": event["time"]
+        }))
 
-        # Generate unique filename
-        unique_file_name = f"{uuid.uuid4().hex}_{file_name}"
+    # -------------------------- Database Operations --------------------------
+
+    @database_sync_to_async
+    def save_message(self, sender, receiver_username, message_text):
+        Message = get_models()
+        receiver_user = get_user_model_func().objects.get(username=receiver_username)
+        return Message.objects.create(sender=sender, receiver=receiver_user, conversation=message_text)
+
+    @database_sync_to_async
+    def save_audio(self, sender, receiver_username, audio_base64):
+        """
+        Save base64 audio to either local FileField (DEBUG) or Cloudinary (production)
+        """
+        Message = get_models()
+        receiver_user = get_user_model_func().objects.get(username=receiver_username)
+
+        try:
+            header, audio_str = audio_base64.split(";base64,")
+            ext = header.split("/")[-1]
+            audio_bytes = base64.b64decode(audio_str)
+            file_name = f"{uuid.uuid4()}.{ext}"
+        except Exception as e:
+            logger.error(f"Audio decode error: {e}")
+            return None
 
         message = Message.objects.create(sender=sender, receiver=receiver_user)
 
-        if settings.USE_CLOUDINARY:
-            # Save directly to CloudinaryField
-            file_obj = ContentFile(file_bytes, name=file_name)
-            message.file.save(unique_file_name, file_obj)
+        if getattr(settings, "USE_CLOUDINARY", False):
+            import cloudinary.uploader
+            try:
+                result = cloudinary.uploader.upload(
+                    ContentFile(audio_bytes, name=file_name),
+                    resource_type="auto",
+                    folder="comment_files",
+                    public_id=file_name
+                )
+                message.file = result["secure_url"]
+                message.save()
+                return result["secure_url"]
+            except Exception as e:
+                logger.error(f"Cloudinary upload failed: {e}", exc_info=True)
+                return None
         else:
-            # Local file storage for development
-            file_obj = ContentFile(file_bytes, name=file_name)
-            message.file.save(unique_file_name, file_obj)
-
-        return message
+            message.file.save(file_name, ContentFile(audio_bytes))
+            return message.file.url
