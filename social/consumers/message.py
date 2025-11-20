@@ -153,7 +153,7 @@ class MessageChannel(AsyncWebsocketConsumer):
             logger.error(f"Audio decode error → {e}")
             return None
 
-        # Generate UUID and Filename separately
+        # Generate separate ID and Filename
         file_uuid = str(uuid.uuid4())
         filename = f"{file_uuid}.{ext}"
 
@@ -170,19 +170,25 @@ class MessageChannel(AsyncWebsocketConsumer):
             try:
                 import cloudinary.uploader
 
+                # Upload to Cloudinary
                 result = cloudinary.uploader.upload(
                     ContentFile(audio_bytes, name=filename),
-                    resource_type="video",   # REQUIRED for audio upload
-                    type="upload",           # ensures public URL
+                    resource_type="video",   # REQUIRED for audio
+                    type="upload",
                     folder="chat_audio",
-                    public_id=file_uuid,     # FIX: Use ID without extension
-                    format=ext,              # FIX: Explicitly set format
+                    public_id=file_uuid,     # No extension in public_id
+                    format=ext,              # Extension set here
                     overwrite=True
                 )
 
-                msg.file = result
+                # FIX: Save only the filename string to the Django DB
+                # This ensures msg.file.url works correctly in templates
+                # result['public_id'] is like "chat_audio/uuid"
+                # we append the format to make it "chat_audio/uuid.webm"
+                msg.file = f"{result['public_id']}.{result['format']}"
                 msg.save()
 
+                # Return the secure HTTPS URL for the WebSocket immediate playback
                 return result["secure_url"]
 
             except Exception as e:
