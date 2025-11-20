@@ -59,68 +59,18 @@ class MessageChannel(AsyncWebsocketConsumer):
         if message_text:
             await self.save_message(self.user, receiver_username, message_text)
 
-                await self.channel_layer.group_send(
-                    self.group_name,
-                    {
-                        "type": "chat_message",
-                        "sender": self.username,
-                        "receiver": receiver,
-                        "message": message,
-                        "time": now
-                    }
-                )
-                return
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type": "chat_message",
+                "sender": self.user.username,
+                "receiver": receiver_username,
+                "message": message_text,
+                "audio_url": audio_url,
+                "time": timezone.now().strftime("%I:%M %p"),
+            },
+        )
 
-            # PREPARE FOR AUDIO BYTES
-            elif msg_type == "audio_message":
-                self.audio_buffer = {
-                    "receiver": data.get("receiver"),
-                    "file_name": data.get("file_name")
-                }
-                logger.info(f"Audio metadata received: {self.audio_buffer}")
-                return
-
-        # -------------------------- AUDIO BYTES --------------------------
-        if bytes_data and self.audio_buffer:
-
-            receiver = self.audio_buffer["receiver"]
-            file_name = self.audio_buffer["file_name"]
-
-            logger.info(f"Received {len(bytes_data)} audio bytes for: {file_name}")
-
-            try:
-                msg_instance = await self.save_sound(
-                    self.user,
-                    receiver,
-                    bytes_data,
-                    file_name
-                )
-
-                now = timezone.now().strftime("%I:%M %p")
-
-                await self.channel_layer.group_send(
-                    self.group_name,
-                    {
-                        "type": "chat_sound",
-                        "sender": self.username,
-                        "receiver": receiver,
-                        "file_url": msg_instance.file.url,
-                        "time": now
-                    }
-                )
-
-            except Exception as e:
-                logger.error(f"Error saving audio: {e}", exc_info=True)
-
-            self.audio_buffer = None
-            return
-
-        # UNEXPECTED RAW BYTES
-        if bytes_data and not self.audio_buffer:
-            logger.warning("Received bytes without audio metadata.")
-            return
-
-    # -------------------------- SEND TEXT --------------------------
     async def chat_message(self, event):
         await self.send(
             text_data=json.dumps({
@@ -143,7 +93,6 @@ class MessageChannel(AsyncWebsocketConsumer):
         receiver = get_user_model_func().objects.get(username=receiver_username)
         return Message.objects.create(sender=sender, receiver=receiver, conversation=text)
 
-    # -------------------------- SAVE AUDIO FILE --------------------------
     @database_sync_to_async
     def save_audio(self, sender, receiver_username, audio_base64):
         """
@@ -154,27 +103,46 @@ class MessageChannel(AsyncWebsocketConsumer):
         Message = get_Message_model()
         receiver = get_user_model_func().objects.get(username=receiver_username)
 
-        # =========== LOCAL MODE (DEBUG=True) ===========
-        if settings.DEBUG:
-            message = Message.objects.create(
-                sender=sender,
-                receiver=receiver_user
-            )
-            message.file.save(file_name, ContentFile(file_bytes))
-            return message
+        # Decode base64
+        try:
+            header, audio_str = audio_base64.split(";base64,")
+            ext = header.split("/")[-1]  # webm, ogg, mp3, etc.
+            audio_bytes = base64.b64decode(audio_str)
+            filename = f"{uuid.uuid4()}.{ext}"
+        except Exception as e:
+            logger.error(f"Audio decode error: {e}")
+            return None
 
-        # =========== PRODUCTION MODE (DEBUG=False) ===========
-        result = cloudinary.uploader.upload(
-            file_bytes,
-            resource_type="auto",
-            folder="comment_files",
-            public_id=file_name
-        )
+        # Create initial message
+        message = Message.objects.create(sender=sender, receiver=receiver)
 
-        file_url = result["secure_url"]
+        # ---------------------- PRODUCTION MODE ----------------------
+        if getattr(settings, "USE_CLOUDINARY", False):
+            try:
+                import cloudinary.uploader
 
-        return Message.objects.create(
-            sender=sender,
-            receiver=receiver_user,
-            file=file_url
-        )
+                # Force Cloudinary to return a direct-play URL
+                result = cloudinary.uploader.upload(
+                    ContentFile(audio_bytes, name=filename),
+                    resource_type="video",  # IMPORTANT: audio is treated as video
+                    type="upload",          # IMPORTANT: avoid authenticated/private asset URLs
+                    folder="message_files",
+                    public_id=filename,
+                    overwrite=True
+                )
+
+                # Save CloudinaryField correctly
+                message.file = result
+                message.save()
+
+                # Return direct URL to frontend
+                return result["secure_url"]
+
+            except Exception as e:
+                logger.error("Cloudinary upload failed", exc_info=True)
+                return None
+
+        # ----------------------- DEBUG MODE -------------------------
+        # Save locally
+        message.file.save(filename, ContentFile(audio_bytes))
+        return message.file.url
