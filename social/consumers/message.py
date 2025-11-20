@@ -5,13 +5,13 @@ import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.core.files.base import ContentFile
-from django.conf import settings
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
 
 def get_message_model():
+    # Make sure your 'social' app and Message model are accessible here
     from social.models import Message
     return Message
 
@@ -24,8 +24,7 @@ def get_user_model_func():
 class MessageChannel(AsyncWebsocketConsumer):
     """
     FULL TEXT + AUDIO CHAT CONSUMER
-    Works in Debug + Production.
-    Cloudinary audio upload is fully supported.
+    Works in Debug + Production by relying on Django's file storage settings.
     """
 
     # ---------------------------------------------------
@@ -133,7 +132,7 @@ class MessageChannel(AsyncWebsocketConsumer):
         )
 
     # ---------------------------------------------------
-    # SAVE AUDIO MESSAGE (DEBUG + PRODUCTION)
+    # SAVE AUDIO MESSAGE (FIXED FOR URL RELOAD)
     # ---------------------------------------------------
     @database_sync_to_async
     def save_audio(self, sender, receiver_username, audio_base64):
@@ -153,7 +152,7 @@ class MessageChannel(AsyncWebsocketConsumer):
             logger.error(f"Audio decode error → {e}")
             return None
 
-        # Generate separate ID and Filename
+        # Generate unique Filename
         file_uuid = str(uuid.uuid4())
         filename = f"{file_uuid}.{ext}"
 
@@ -164,39 +163,11 @@ class MessageChannel(AsyncWebsocketConsumer):
         )
 
         # -----------------------------
-        # PRODUCTION → CLOUDINARY UPLOAD
+        # SAVE FILE using Django Storage
         # -----------------------------
-        if getattr(settings, "USE_CLOUDINARY", False):
-            try:
-                import cloudinary.uploader
-
-                # Upload to Cloudinary
-                result = cloudinary.uploader.upload(
-                    ContentFile(audio_bytes, name=filename),
-                    resource_type="video",   # REQUIRED for audio
-                    type="upload",
-                    folder="chat_audio",
-                    public_id=file_uuid,     # No extension in public_id
-                    format=ext,              # Extension set here
-                    overwrite=True
-                )
-
-                # FIX: Save only the filename string to the Django DB
-                # This ensures msg.file.url works correctly in templates
-                # result['public_id'] is like "chat_audio/uuid"
-                # we append the format to make it "chat_audio/uuid.webm"
-                msg.file = f"{result['public_id']}.{result['format']}"
-                msg.save()
-
-                # Return the secure HTTPS URL for the WebSocket immediate playback
-                return result["secure_url"]
-
-            except Exception as e:
-                logger.error("CLOUDINARY AUDIO UPLOAD ERROR", exc_info=True)
-                return None
-
-        # -----------------------------
-        # DEBUG → LOCAL FILE SAVE
-        # -----------------------------
+        # This single line handles the upload (local or cloud)
+        # and correctly sets the database reference for URL generation.
         msg.file.save(filename, ContentFile(audio_bytes))
+
+        # Return the URL, which now works correctly on page reload
         return msg.file.url
