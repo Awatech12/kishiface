@@ -5,13 +5,13 @@ import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.core.files.base import ContentFile
+# Removed: from django.conf import settings (No longer needed for manual check)
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
 
 def get_message_model():
-    # Make sure your 'social' app and Message model are accessible here
     from social.models import Message
     return Message
 
@@ -132,7 +132,7 @@ class MessageChannel(AsyncWebsocketConsumer):
         )
 
     # ---------------------------------------------------
-    # SAVE AUDIO MESSAGE (FIXED FOR URL RELOAD)
+    # SAVE AUDIO MESSAGE (FIXED: RELIES ON DJANGO STORAGE)
     # ---------------------------------------------------
     @database_sync_to_async
     def save_audio(self, sender, receiver_username, audio_base64):
@@ -145,6 +145,7 @@ class MessageChannel(AsyncWebsocketConsumer):
         # Decode Base64
         # -----------------------------
         try:
+            # Decode the base64 string from the browser
             header, audio_str = audio_base64.split(";base64,")
             ext = header.split("/")[-1]        # webm / ogg / mp3
             audio_bytes = base64.b64decode(audio_str)
@@ -154,7 +155,8 @@ class MessageChannel(AsyncWebsocketConsumer):
 
         # Generate unique Filename
         file_uuid = str(uuid.uuid4())
-        filename = f"{file_uuid}.{ext}"
+        # The 'chat_audio/' prefix ensures files are grouped in storage (e.g., Cloudinary)
+        filename = f"chat_audio/{file_uuid}.{ext}"
 
         # Create message row BEFORE saving file
         msg = Message.objects.create(
@@ -165,9 +167,9 @@ class MessageChannel(AsyncWebsocketConsumer):
         # -----------------------------
         # SAVE FILE using Django Storage
         # -----------------------------
-        # This single line handles the upload (local or cloud)
-        # and correctly sets the database reference for URL generation.
+        # This uses the DEFAULT_FILE_STORAGE setting (e.g., Cloudinary)
+        # and correctly sets the database reference, fixing the URL issue on reload.
         msg.file.save(filename, ContentFile(audio_bytes))
 
-        # Return the URL, which now works correctly on page reload
+        # Return the final URL for the immediate WebSocket response
         return msg.file.url
