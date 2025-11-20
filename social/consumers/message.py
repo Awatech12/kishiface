@@ -10,21 +10,18 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-
 def get_Message_model():
     from social.models import Message
     return Message
-
 
 def get_user_model_func():
     from django.contrib.auth import get_user_model
     return get_user_model()
 
-
 class MessageChannel(AsyncWebsocketConsumer):
     """
     Production-ready WebSocket consumer for text & audio chat.
-    Audio is saved to Cloudinary (production) or local storage (development).
+    Cloudinary audio upload fully compatible with <audio> tag.
     """
 
     async def connect(self):
@@ -56,15 +53,12 @@ class MessageChannel(AsyncWebsocketConsumer):
 
         audio_url = None
 
-        # Save audio file (if provided)
         if audio_base64:
             audio_url = await self.save_audio(self.user, receiver_username, audio_base64)
 
-        # Save text message (if provided)
         if message_text:
             await self.save_message(self.user, receiver_username, message_text)
 
-        # Broadcast to group
         await self.channel_layer.group_send(
             self.group_name,
             {
@@ -79,21 +73,19 @@ class MessageChannel(AsyncWebsocketConsumer):
 
     async def chat_message(self, event):
         await self.send(
-            text_data=json.dumps(
-                {
-                    "type": "chat_response",
-                    "sender": event["sender"],
-                    "receiver": event["receiver"],
-                    "message": event.get("message"),
-                    "audio_url": event.get("audio_url"),
-                    "time": event["time"],
-                }
-            )
+            text_data=json.dumps({
+                "type": "chat_response",
+                "sender": event["sender"],
+                "receiver": event["receiver"],
+                "message": event.get("message"),
+                "audio_url": event.get("audio_url"),
+                "time": event["time"],
+            })
         )
 
-    # -------------------------------------------------------------------------
+    # ---------------------------------------------------------------------
     # DATABASE OPERATIONS
-    # -------------------------------------------------------------------------
+    # ---------------------------------------------------------------------
 
     @database_sync_to_async
     def save_message(self, sender, receiver_username, text):
@@ -104,8 +96,8 @@ class MessageChannel(AsyncWebsocketConsumer):
     @database_sync_to_async
     def save_audio(self, sender, receiver_username, audio_base64):
         """
-        Save audio to local storage (DEBUG) or Cloudinary (production).
-        Works perfectly with CloudinaryField.
+        Upload audio to Cloudinary (production) or local filesystem (debug).
+        Ensures Cloudinary returns a direct URL usable in <audio>.
         """
 
         Message = get_Message_model()
@@ -114,38 +106,43 @@ class MessageChannel(AsyncWebsocketConsumer):
         # Decode base64
         try:
             header, audio_str = audio_base64.split(";base64,")
-            ext = header.split("/")[-1]
+            ext = header.split("/")[-1]  # webm, ogg, mp3, etc.
             audio_bytes = base64.b64decode(audio_str)
             filename = f"{uuid.uuid4()}.{ext}"
         except Exception as e:
             logger.error(f"Audio decode error: {e}")
             return None
 
-        # Create empty message first
+        # Create initial message
         message = Message.objects.create(sender=sender, receiver=receiver)
 
-        # ------------------ PRODUCTION: CLOUDINARY ------------------
+        # ---------------------- PRODUCTION MODE ----------------------
         if getattr(settings, "USE_CLOUDINARY", False):
             try:
                 import cloudinary.uploader
 
+                # Force Cloudinary to return a direct-play URL
                 result = cloudinary.uploader.upload(
                     ContentFile(audio_bytes, name=filename),
-                    resource_type="video",
+                    resource_type="video",  # IMPORTANT: audio is treated as video
+                    type="upload",          # IMPORTANT: avoid authenticated/private asset URLs
                     folder="message_files",
                     public_id=filename,
+                    overwrite=True
                 )
 
-                # Correct Cloudinary assignment
+                # Save CloudinaryField correctly
                 message.file = result
                 message.save()
 
-                return result.get("secure_url")  # returned to WebSocket frontend
+                # Return direct URL to frontend
+                return result["secure_url"]
 
             except Exception as e:
                 logger.error("Cloudinary upload failed", exc_info=True)
                 return None
 
-        # ------------------ LOCAL DEVELOPMENT ------------------
+        # ----------------------- DEBUG MODE -------------------------
+        # Save locally
         message.file.save(filename, ContentFile(audio_bytes))
         return message.file.url
