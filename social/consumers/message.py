@@ -153,7 +153,9 @@ class MessageChannel(AsyncWebsocketConsumer):
             logger.error(f"Audio decode error → {e}")
             return None
 
-        filename = f"{uuid.uuid4()}.{ext}"
+        # Generate UUID and Filename separately
+        file_uuid = str(uuid.uuid4())
+        filename = f"{file_uuid}.{ext}"
 
         # Create message row BEFORE saving file
         msg = Message.objects.create(
@@ -173,7 +175,8 @@ class MessageChannel(AsyncWebsocketConsumer):
                     resource_type="video",   # REQUIRED for audio upload
                     type="upload",           # ensures public URL
                     folder="chat_audio",
-                    public_id=filename,
+                    public_id=file_uuid,     # FIX: Use ID without extension
+                    format=ext,              # FIX: Explicitly set format
                     overwrite=True
                 )
 
