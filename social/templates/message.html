@@ -8,52 +8,30 @@
 <title>Chat</title>
 
 <style>
+/* --- Styles are unchanged from your original code --- */
 * { box-sizing: border-box; }
-body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: #FAFAFA;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-}
-
-@media (min-width: 768px) {
-    body { align-items: center; justify-content: center; background-color: #EFEFEF; }
-    .main-chat-wrapper { width: 100%; height: 90vh; background: white; border: 1px solid #DBDBDB; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; }
-    .input-area { position: static !important; width: 100% !important; }
-}
-
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #FAFAFA; display: flex; flex-direction: column; height: 100vh; }
+@media (min-width: 768px) { body { align-items: center; justify-content: center; background-color: #EFEFEF; } .main-chat-wrapper { width: 100%; height: 90vh; background: white; border: 1px solid #DBDBDB; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; } .input-area { position: static !important; width: 100% !important; } }
 .main-chat-wrapper { display: contents; }
-
 .profile-header { background: white; color: #262626; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #EFEFEF; height: 60px; text-align: left; }
 .profile-header-content { display: flex; align-items: center; }
 .profile-header img { border-radius: 50%; width: 40px; height: 40px; margin-right: 10px; }
 .profile-header b { font-size: 16px; font-weight: 600; }
-
 .chat-container { padding: 15px; flex-grow: 1; overflow-y: auto; scroll-behavior: smooth; background: white; margin-bottom: 40px; }
 .chat-container::-webkit-scrollbar { display: none; }
-
 .message { max-width: 85%; padding: 10px 14px 18px 14px; margin-bottom: 8px; border-radius: 20px; font-size: 15px; line-height: 1.4; position: relative; }
-
 .sent { background: linear-gradient(135deg, #0099ff 0%, #a033ff 100%); color: white; margin-left: auto; border-bottom-right-radius: 5px; }
 .received { background: #EFEFEF; color: #262626; margin-right: auto; border-bottom-left-radius: 5px; }
-
 .time { display: block; position: absolute; bottom: 3px; right: 8px; font-size: 10px; color: rgba(255, 255, 255, 0.7); text-align: right; white-space: nowrap; }
 .received .time { color: #8E8E93; }
-
 .chat-container center b i { font-size: 12px; color: #8E8E93; font-style: normal; font-weight: 400; margin: 15px 0; display: block; }
-
 .input-area { padding: 10px 15px; background: white; display: flex; align-items: center; position: fixed; bottom: 0; width: 100%; border-top: 1px solid #EFEFEF; }
 .input-area input { flex-grow: 1; padding: 10px 15px; margin-right: 8px; border: 1px solid #DBDBDB; border-radius: 30px; outline: none; font-size: 15px; background: #FAFAFA; }
 .input-area button { width: 40px; height: 40px; padding: 0; margin-left: 0; border: none; border-radius: 50%; background: none; color: #0099ff; font-size: 20px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; line-height: 40px; text-align: center; }
 .input-area button:hover { opacity: 0.8; }
-
 .profile-header-text { display: flex; flex-direction: column; align-items: flex-start; }
 .recording { position: relative; font-size: 20px; color: #ff3b30; animation: pulse 1s infinite; }
-
 @media (max-width: 767px) { .chat-container { height: calc(100vh - 60px - 60px); } }
-
 .audio-player { display: flex; align-items: center; background: #E4E6EB; border-radius: 18px; padding: 5px 10px; margin: 5px 0; width: 250px; }
 .audio-player button { border: none; background: none; font-size: 16px; margin-right: 10px; cursor: pointer; }
 .audio-player input[type=range] { width: 100%; cursor: pointer; background: transparent; }
@@ -152,33 +130,46 @@ socket.addEventListener("message", function (e) {
     if (data.sender === sender) div.className = "sent message";
     else div.className = "received message";
 
-    if (data.type === "text_response") {
+    if (data.message) {
         div.innerHTML = `${data.message}<span class="time">${data.time}</span>`;
-    } else if (data.type === "sound_response") {
+    } else if (data.audio_url) {
         div.innerHTML = `<div class="audio-player">
             <button class="play-btn">▶</button>
             <input type="range" min="0" max="100" value="0" class="progress">
             <span class="duration">0:00</span>
         </div>
-        <audio class="audio-source" src="${data.file_url}"></audio>
+        <audio class="audio-source" src="${data.audio_url}"></audio>
         <span class="time">${data.time}</span>`;
     }
+
     messageOutput.appendChild(div);
     initAudioControls(div);
     messageOutput.scrollTo({ top: messageOutput.scrollHeight, behavior: 'smooth' });
 });
 
+// --- Audio recording using base64 ---
 startBtn.addEventListener('click', async () => {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
         const chunks = [];
+
         mediaRecorder.ondataavailable = e => chunks.push(e.data);
         mediaRecorder.onstop = () => {
             const blob = new Blob(chunks, { type: 'audio/webm' });
-            audioFile = new File([blob], `audio_${Date.now()}.webm`, { type: 'audio/webm' }); 
-            status.textContent = 'Send';
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64Audio = reader.result; // data:audio/webm;base64,...
+                socket.send(JSON.stringify({
+                    type: 'audio',
+                    receiver: receiver,
+                    audio: base64Audio
+                }));
+            };
+            reader.readAsDataURL(blob);
+            status.textContent = '';
         };
+
         mediaRecorder.start();
         status.innerHTML = `<i class="fa-solid fa-circle recording"></i> Recording...`;
         startBtn.hidden = true;
@@ -186,30 +177,17 @@ startBtn.addEventListener('click', async () => {
     } catch (err) { alert('Microphone access denied'); }
 });
 
-stopBtn.addEventListener('click', () => { if (mediaRecorder) mediaRecorder.stop(); startBtn.hidden = false; stopBtn.hidden = true; });
+stopBtn.addEventListener('click', () => {
+    if (mediaRecorder) mediaRecorder.stop();
+    startBtn.hidden = false;
+    stopBtn.hidden = true;
+});
 
 sendBtn.addEventListener('click', () => {
     const msg = message.value.trim();
-    if (audioFile) {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const bytes = new Uint8Array(reader.result);
-            socket.send(JSON.stringify({
-                 type: 'audio_message',
-                 receiver: receiver, 
-                 file_name: audioFile.name 
-            }));
-            socket.send(bytes);
-            audioFile = null;
-            status.textContent = '';
-        };
-        reader.readAsArrayBuffer(audioFile);
+    if (msg) {
+        socket.send(JSON.stringify({ type: 'text', receiver: receiver, message: msg }));
     }
-    if (msg) socket.send(JSON.stringify({ 
-        type: 'text_message', 
-        receiver: receiver,
-        message: msg 
-    }));
     message.value = '';
 });
 
@@ -254,4 +232,4 @@ document.querySelectorAll('.message').forEach(initAudioControls);
 </script>
 
 </body>
-</html>
+    </html>

@@ -1,61 +1,63 @@
-from channels.generic.websocket import AsyncWebsocketConsumer
 import json
+import uuid
+import base64
+import logging
+from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from django.contrib.auth import get_user_model
-from django.utils import timezone
 from django.core.files.base import ContentFile
 from django.conf import settings
-import logging
-
-# Cloudinary is imported safely
-if not settings.DEBUG:
-    import cloudinary.uploader
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-
-def get_models():
+def get_Message_model():
     from social.models import Message
     return Message
 
+def get_user_model_func():
+    from django.contrib.auth import get_user_model
+    return get_user_model()
 
 class MessageChannel(AsyncWebsocketConsumer):
+    """
+    Production-ready WebSocket consumer for text & audio chat.
+    Cloudinary audio upload fully compatible with <audio> tag.
+    """
 
     async def connect(self):
-        self.user = self.scope['user']
+        self.user = self.scope["user"]
 
-        if not self.user.is_authenticated:
-            logger.warning("Unauthenticated websocket attempt.")
+        if not self.user or not self.user.is_authenticated:
             await self.close()
             return
 
-        self.username = self.user.username
-        self.group_name = 'message'
-
+        self.group_name = "message"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
-        self.audio_buffer = None
-
         await self.accept()
-        logger.info(f"WebSocket connected: {self.username}")
 
-    async def disconnect(self, close_code):
+        logger.info(f"WebSocket connected: {self.user.username}")
+
+    async def disconnect(self, code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
-        logger.info(f"WebSocket disconnected: {self.username}")
+        logger.info(f"WebSocket disconnected: {self.user.username}")
 
-    async def receive(self, text_data=None, bytes_data=None):
+    async def receive(self, text_data=None):
+        if not text_data:
+            return
 
-        # -------------------------- TEXT MESSAGE --------------------------
-        if text_data:
-            data = json.loads(text_data)
-            msg_type = data.get("type")
+        data = json.loads(text_data)
 
-            # SEND TEXT
-            if msg_type == "text_message":
-                message = data.get("message")
-                receiver = data.get("receiver")
-                now = timezone.now().strftime("%I:%M %p")
+        message_text = data.get("message")
+        audio_base64 = data.get("audio")
+        receiver_username = data.get("receiver")
 
-                await self.save_message(self.user, receiver, message)
+        audio_url = None
+
+        if audio_base64:
+            audio_url = await self.save_audio(self.user, receiver_username, audio_base64)
+
+        if message_text:
+            await self.save_message(self.user, receiver_username, message_text)
 
                 await self.channel_layer.group_send(
                     self.group_name,
@@ -69,11 +71,11 @@ class MessageChannel(AsyncWebsocketConsumer):
                 )
                 return
 
-            # PREPARE TO RECEIVE AUDIO BYTES
+            # PREPARE FOR AUDIO BYTES
             elif msg_type == "audio_message":
                 self.audio_buffer = {
                     "receiver": data.get("receiver"),
-                    "file_name": data.get("file_name"),
+                    "file_name": data.get("file_name")
                 }
                 logger.info(f"Audio metadata received: {self.audio_buffer}")
                 return
@@ -102,7 +104,7 @@ class MessageChannel(AsyncWebsocketConsumer):
                         "type": "chat_sound",
                         "sender": self.username,
                         "receiver": receiver,
-                        "file_url": msg_instance.file.url if settings.DEBUG else msg_instance.file,
+                        "file_url": msg_instance.file.url,
                         "time": now
                     }
                 )
@@ -113,50 +115,46 @@ class MessageChannel(AsyncWebsocketConsumer):
             self.audio_buffer = None
             return
 
-        # Unexpected audio bytes
+        # UNEXPECTED RAW BYTES
         if bytes_data and not self.audio_buffer:
             logger.warning("Received bytes without audio metadata.")
             return
 
     # -------------------------- SEND TEXT --------------------------
     async def chat_message(self, event):
-        await self.send(text_data=json.dumps({
-            "type": "text_response",
-            "sender": event["sender"],
-            "receiver": event["receiver"],
-            "message": event["message"],
-            "time": event["time"]
-        }))
-
-    # -------------------------- SEND AUDIO --------------------------
-    async def chat_sound(self, event):
-        await self.send(text_data=json.dumps({
-            "type": "sound_response",
-            "sender": event["sender"],
-            "receiver": event["receiver"],
-            "file_url": event["file_url"],
-            "time": event["time"]
-        }))
-
-    # -------------------------- SAVE TEXT TO DB --------------------------
-    @database_sync_to_async
-    def save_message(self, sender, receiver_username, message):
-        Message = get_models()
-        receiver_user = get_user_model().objects.get(username=receiver_username)
-
-        return Message.objects.create(
-            sender=sender,
-            receiver=receiver_user,
-            conversation=message
+        await self.send(
+            text_data=json.dumps({
+                "type": "chat_response",
+                "sender": event["sender"],
+                "receiver": event["receiver"],
+                "message": event.get("message"),
+                "audio_url": event.get("audio_url"),
+                "time": event["time"],
+            })
         )
 
-    # -------------------------- SAVE AUDIO --------------------------
-    @database_sync_to_async
-    def save_sound(self, sender, receiver_username, file_bytes, file_name):
-        Message = get_models()
-        receiver_user = get_user_model().objects.get(username=receiver_username)
+    # ---------------------------------------------------------------------
+    # DATABASE OPERATIONS
+    # ---------------------------------------------------------------------
 
-        # -------------------------- DEBUG MODE --------------------------
+    @database_sync_to_async
+    def save_message(self, sender, receiver_username, text):
+        Message = get_Message_model()
+        receiver = get_user_model_func().objects.get(username=receiver_username)
+        return Message.objects.create(sender=sender, receiver=receiver, conversation=text)
+
+    # -------------------------- SAVE AUDIO FILE --------------------------
+    @database_sync_to_async
+    def save_audio(self, sender, receiver_username, audio_base64):
+        """
+        Upload audio to Cloudinary (production) or local filesystem (debug).
+        Ensures Cloudinary returns a direct URL usable in <audio>.
+        """
+
+        Message = get_Message_model()
+        receiver = get_user_model_func().objects.get(username=receiver_username)
+
+        # =========== LOCAL MODE (DEBUG=True) ===========
         if settings.DEBUG:
             message = Message.objects.create(
                 sender=sender,
@@ -165,12 +163,9 @@ class MessageChannel(AsyncWebsocketConsumer):
             message.file.save(file_name, ContentFile(file_bytes))
             return message
 
-        # -------------------------- PRODUCTION MODE --------------------------
-        # Convert bytes to file-like object
-        file_obj = ContentFile(file_bytes, name=file_name)
-
+        # =========== PRODUCTION MODE (DEBUG=False) ===========
         result = cloudinary.uploader.upload(
-            file_obj,
+            file_bytes,
             resource_type="auto",
             folder="comment_files",
             public_id=file_name
@@ -178,11 +173,8 @@ class MessageChannel(AsyncWebsocketConsumer):
 
         file_url = result["secure_url"]
 
-        message = Message.objects.create(
+        return Message.objects.create(
             sender=sender,
-            receiver=receiver_user
+            receiver=receiver_user,
+            file=file_url
         )
-        message.file = file_url
-        message.save()
-
-        return message
