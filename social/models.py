@@ -50,11 +50,10 @@ class Post(models.Model):
             'post_file',
             resource_type='video',
             folder='post_files',
-            blank=True,
-            null=True
+            blank=True
         )
     else:
-        file = models.FileField(upload_to='post_file', blank=True, null=True)
+        file = models.FileField(upload_to='post_file', blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
