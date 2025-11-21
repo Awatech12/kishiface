@@ -114,15 +114,12 @@ class Message(models.Model):
             'message_audio',
             resource_type='auto',   # VERY IMPORTANT
             folder='message_files',
-            blank=True,
-            null=True
+            blank=True
         )
     else:
         file = models.FileField(
             upload_to='message_files/',
-            blank=True,
-            null=True
-        )
+            blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
