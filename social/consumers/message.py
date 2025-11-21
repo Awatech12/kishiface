@@ -22,23 +22,16 @@ def get_user_model_func():
 
 
 class MessageChannel(AsyncWebsocketConsumer):
-    """
-    FULL TEXT + AUDIO CHAT CONSUMER
-    Works in Debug + Production.
-    Cloudinary audio upload is fully supported.
-    """
 
-    # ---------------------------------------------------
-    # CONNECT
-    # ---------------------------------------------------
     async def connect(self):
 
         self.user = self.scope["user"]
+
         if not self.user or not self.user.is_authenticated:
             await self.close()
             return
 
-        # Single group for your chat
+        # Single chat group for your messaging system
         self.group_name = "message_group"
 
         await self.channel_layer.group_add(
@@ -49,9 +42,6 @@ class MessageChannel(AsyncWebsocketConsumer):
         await self.accept()
         logger.info(f"WebSocket CONNECTED: {self.user.username}")
 
-    # ---------------------------------------------------
-    # DISCONNECT
-    # ---------------------------------------------------
     async def disconnect(self, code):
         await self.channel_layer.group_discard(
             self.group_name,
@@ -59,10 +49,8 @@ class MessageChannel(AsyncWebsocketConsumer):
         )
         logger.info(f"WebSocket DISCONNECTED: {self.user.username}")
 
-    # ---------------------------------------------------
-    # RECEIVE MESSAGE FROM BROWSER
-    # ---------------------------------------------------
     async def receive(self, text_data=None):
+
         if not text_data:
             return
 
@@ -74,7 +62,7 @@ class MessageChannel(AsyncWebsocketConsumer):
 
         audio_url = None
 
-        # ----- SAVE AUDIO -----
+        # Save audio if provided
         if audio_base64:
             audio_url = await self.save_audio(
                 self.user,
@@ -82,7 +70,7 @@ class MessageChannel(AsyncWebsocketConsumer):
                 audio_base64
             )
 
-        # ----- SAVE TEXT -----
+        # Save text message
         if msg_text:
             await self.save_text_message(
                 self.user,
@@ -90,7 +78,7 @@ class MessageChannel(AsyncWebsocketConsumer):
                 msg_text
             )
 
-        # ----- SEND TO GROUP -----
+        # Broadcast to group
         await self.channel_layer.group_send(
             self.group_name,
             {
@@ -103,9 +91,6 @@ class MessageChannel(AsyncWebsocketConsumer):
             }
         )
 
-    # ---------------------------------------------------
-    # SEND MESSAGE TO BROWSER
-    # ---------------------------------------------------
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
             "type": "chat_response",
@@ -116,9 +101,9 @@ class MessageChannel(AsyncWebsocketConsumer):
             "time": event["time"],
         }))
 
-    # ---------------------------------------------------
+    # ----------------------------------------------------------------
     # SAVE TEXT MESSAGE
-    # ---------------------------------------------------
+    # ----------------------------------------------------------------
     @database_sync_to_async
     def save_text_message(self, sender, receiver_username, text):
 
@@ -132,9 +117,9 @@ class MessageChannel(AsyncWebsocketConsumer):
             conversation=text
         )
 
-    # ---------------------------------------------------
+    # ----------------------------------------------------------------
     # SAVE AUDIO MESSAGE (DEBUG + PRODUCTION)
-    # ---------------------------------------------------
+    # ----------------------------------------------------------------
     @database_sync_to_async
     def save_audio(self, sender, receiver_username, audio_base64):
 
@@ -142,61 +127,54 @@ class MessageChannel(AsyncWebsocketConsumer):
         User = get_user_model_func()
         receiver = User.objects.get(username=receiver_username)
 
-        # -----------------------------
         # Decode Base64
-        # -----------------------------
         try:
             header, audio_str = audio_base64.split(";base64,")
-            ext = header.split("/")[-1]        # webm / ogg / mp3
+            ext = header.split("/")[-1]  # webm / ogg / mp3
             audio_bytes = base64.b64decode(audio_str)
         except Exception as e:
-            logger.error(f"Audio decode error → {e}")
+            logger.error(f"AUDIO DECODE ERROR → {e}")
             return None
 
-        # Generate separate ID and Filename
         file_uuid = str(uuid.uuid4())
         filename = f"{file_uuid}.{ext}"
 
-        # Create message row BEFORE saving file
+        # Create message row before file save
         msg = Message.objects.create(
             sender=sender,
             receiver=receiver
         )
 
-        # -----------------------------
-        # PRODUCTION → CLOUDINARY UPLOAD
-        # -----------------------------
+        # ------------------------------
+        # PRODUCTION → CLOUDINARY
+        # ------------------------------
         if getattr(settings, "USE_CLOUDINARY", False):
+
             try:
                 import cloudinary.uploader
 
-                # Upload to Cloudinary
                 result = cloudinary.uploader.upload(
                     ContentFile(audio_bytes, name=filename),
-                    resource_type="video",   # REQUIRED for audio
-                    type="upload",
-                    folder="chat_audio",
-                    public_id=file_uuid,     # No extension in public_id
-                    format=ext,              # Extension set here
+                    resource_type="video",          # required for audio
+                    folder="message_files",
+                    public_id=file_uuid,            # Cloudinary public_id
+                    format=ext,
                     overwrite=True
                 )
 
-                # FIX: Save only the filename string to the Django DB
-                # This ensures msg.file.url works correctly in templates
-                # result['public_id'] is like "chat_audio/uuid"
-                # we append the format to make it "chat_audio/uuid.webm"
-                msg.file = f"{result['public_id']}.{result['format']}"
+                # Save ONLY public_id — CloudinaryField generates proper URL
+                msg.file = result["public_id"]
                 msg.save()
 
-                # Return the secure HTTPS URL for the WebSocket immediate playback
+                # Return secure_url for immediate WebSocket playback
                 return result["secure_url"]
 
-            except Exception as e:
+            except Exception:
                 logger.error("CLOUDINARY AUDIO UPLOAD ERROR", exc_info=True)
                 return None
 
-        # -----------------------------
-        # DEBUG → LOCAL FILE SAVE
-        # -----------------------------
+        # ------------------------------
+        # DEBUG → LOCAL STORAGE
+        # ------------------------------
         msg.file.save(filename, ContentFile(audio_bytes))
         return msg.file.url
