@@ -1,5 +1,6 @@
 {% load humanize %}
 {% load static %}
+{% load custom_filters %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,6 +12,47 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="{% static 'css/home.css' %}">
   <style>
+    /* New/Updated Audio Styles for Cover Image Design */
+    .audio-post-container {
+        /* Main container for the cover and controls */
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--divider-color);
+        border-radius: 8px;
+        overflow: hidden; 
+        margin-top: 10px;
+    }
+    
+    .audio-cover-area {
+        /* Styles for the background poster image */
+        width: 100%;
+        height: 250px; 
+        background-size: cover;
+        background-position: center;
+        background-color: var(--text-dark); /* Fallback dark color */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4);
+        filter: blur(8px);
+        transform: scale(1.05);
+        transition: filter 0.3s ease-in-out;
+    }
+    
+    .audio-control {
+        /* Styles for the standard HTML audio player */
+        width: 100%;
+        outline: none;
+        border-radius: 0;
+        background-color: var(--white);
+        padding: 0; 
+        border: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+    }
+    
+    /* Existing styles from the original file (kept for compatibility) */
     .cover{
         width: 100%;
         height: 250px;
@@ -37,10 +79,6 @@
 
 <main class="container">
     
-    <!-- ============================================== -->
-    <!-- 1. LEFT SIDEBAR (Desktop Only: Profile, Settings, etc.) -->
-    <!-- Uses desktop-only class -->
-    <!-- ============================================== -->
     <div class="left-sidebar desktop-only">
         <div class="card">
             <div class="sidebar-content">
@@ -70,12 +108,8 @@
         </div>
     </div>
 
-    <!-- ============================================== -->
-    <!-- 2. MAIN FEED (Center Column) -->
-    <!-- ============================================== -->
     <div class="main-feed">
 
-        <!-- Face You May Know (MOBILE/TABLET VIEW) -->
         <div class="member-suggest-card mobile-only" id="mobile-member-section">
             <h4>Faces You May Know</h4>
             <div class="member-list-horizontal">
@@ -96,10 +130,6 @@
                 {% endfor %}
             </div>
         </div>
-        <!-- End Mobile Member Section -->
-
-
-        <!-- POST FEED -->
         {% for post in page_obj.object_list %}
         <article class="card">
             <div class="post-header">
@@ -110,12 +140,11 @@
                           {% if post.author.profile.is_verify and post.author.first_name %} <img src="{% static 'images/verify1.jpg' %}" height="20" width="20" alt="">{% endif %}
                         </a>
                         <div class="post-meta">
-                            @{{post.author.username}}· {{post.created_at|timesince}} ago
+                            @{{post.author.username}}· {{post.created_at|insta_timesince}}
                         </div>
                     </div>
                 </div>
                  
-                <!-- Post Action Icons (Now using pure CSS classes) -->
                 <div class="action-buttons">
                     {% if request.user == post.author %}
                     <a href="{% url 'editpost' post.post_id %}" 
@@ -133,18 +162,20 @@
                        style="cursor:pointer;"></i>
                     {% endif %}
                 </div>
-                <!-- END EDITED SECTION -->
-
-            </div>
+                </div>
             <b class="post-title" style="color: var(--text-dark);">{{post.content|urlize|linebreaksbr}}</b>
-             {% if post.file %}
-              <div class="cover" style="background-image: url('{{post.author.profile.picture.url}}'); background-size: cover; background-position: center;">
-                 <i class="fa-solid fa-music"></i>
-                  <audio controls>
-                <source src="{{ post.file.url }}" type="audio/webm">
-                </audio>
+            
+            {% if post.file %}
+              <div class="audio-post-container">
+                  <div class="audio-cover-area" 
+                       style="background-image: url('{% if post.images.first %}{{post.images.first.image.url}}{% else %}{{post.author.profile.picture.url}}{% endif %}');">
+                      </div>
+                  <audio controls class="audio-control">
+                    <source src="{{ post.file.url }}" type="audio/webm">
+                  </audio>
               </div>
-                {% endif %} <br>
+              {% endif %}
+
             {% if post.images.all %}
             <div class="post-image-carousel" id="carousel-{{ post.post_id }}" data-current-slide="0" data-total-slides="{{ post.images.all|length }}">
                 <div class="slider-track" id="track-{{ post.post_id }}">
@@ -170,7 +201,6 @@
             </div>
             {% endif %}
 
-            <!-- Post Like Snippet -->
             {% include 'snippet/post_like.html' %}
         </article>
         {% empty %}
@@ -180,7 +210,6 @@
         </div>
         {% endfor %}
 
-        <!-- HTMX Load More -->
         {% if page_obj.has_next %}
         <a id="load-more-container"
             href="?page={{page_obj.next_page_number}}"
@@ -188,13 +217,7 @@
             see more
           </a>
         {% endif %}
-    </div> <!-- End main-feed -->
-
-    <!-- ============================================== -->
-    <!-- 3. RIGHT SIDEBAR (Desktop Only: Faces You May Know) -->
-    <!-- Uses desktop-only class -->
-    <!-- ============================================== -->
-    <div class="right-sidebar desktop-only">
+    </div> <div class="right-sidebar desktop-only">
         <div class="card">
             <div class="sidebar-content">
                 <h4 class="desktop-member-title">Faces You May Know</h4>
@@ -214,7 +237,6 @@
                                         <br><span class="member-title block">@{{member.username}}</span>
                                     </div>
                                 </a>
-                                <!-- Placeholder follow button -->
                                 <button class="btn btn-blue btn-follow">Follow</button>
                             </div>
                         {% endif %}
@@ -222,11 +244,8 @@
                 </div>
             </div>
         </div>
-    </div> <!-- End right-sidebar -->
+    </div> </main>
 
-</main>
-
-<!-- MOBILE-ONLY FOOTER (Uses mobile-only class) -->
 <footer class="mobile-only">
     {% include 'footer.html' %}
 </footer>
@@ -311,4 +330,3 @@
 </script>
 </body>
 </html>
-
