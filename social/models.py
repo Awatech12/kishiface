@@ -88,7 +88,7 @@ class Message(models.Model):
     is_read = models.BooleanField(default=False)
     @property
     def chat_date_label(self):
-        message_date = self.created_at.date()
+        message_date = self.created_at.date() 
         today = date.today()
         yesterday = today - timedelta(days=1)
         if message_date == today:
