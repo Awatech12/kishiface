@@ -78,12 +78,23 @@ class Notification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
-
+# --- START MESSAGE MODEL CORRECTION ---
 class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sender')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver')
     conversation = models.TextField()
-    file = models.FileField(upload_to='comment_file', blank=True)
+    
+    # Use CloudinaryField if USE_CLOUDINARY is True, matching the folder in message.py
+    if settings.USE_CLOUDINARY:
+        file = CloudinaryField(
+            'audio_message',
+            resource_type='video', # Cloudinary requires 'video' for audio files
+            folder='message_files', 
+            blank=True
+        )
+    else:
+        file = models.FileField(upload_to='message_file', blank=True) # Changed to 'message_file' for clarity
+        
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
     @property
@@ -102,6 +113,7 @@ class Message(models.Model):
     @property
     def chat_time(self):
         return self.created_at.strftime("%I:%M %p")
+# --- END MESSAGE MODEL CORRECTION ---
 
 
 class Channel(models.Model):
@@ -141,7 +153,3 @@ class ChannelMessage(models.Model):
 
     def like_count(self):
         return self.like.count()
-
-
-
-
