@@ -83,7 +83,22 @@ class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sender')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver')
     conversation = models.TextField()
-    file = models.FileField(upload_to='comment_file', blank=True)
+    if settings.USE_CLOUDINARY and CloudinaryField:
+        # resource_type="auto" lets Cloudinary handle audio properly
+        file = CloudinaryField(
+            'message_audio',
+            resource_type='auto',
+            folder='message_files',
+            blank=True,
+            null=True
+        )
+    else:
+        # Local storage when not using Cloudinary
+        file = models.FileField(
+            upload_to='message_files/',
+            blank=True,
+            null=True
+        )
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
     @property
