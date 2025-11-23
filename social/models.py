@@ -24,10 +24,10 @@ class Profile(models.Model):
     bio = models.CharField(max_length=300)
     location = models.TextField()
     if settings.USE_CLOUDINARY:
-        picture = CloudinaryField('picture', folder='profile_image', default='male_rzf6mv')
+        picture = CloudinaryField('picture', folder='profile_image', default='v1763882783/male_rzf6mv.png')
     else:
         picture = models.ImageField(
-            upload_to='profile_image',
+            upload_to='profile_image/',
             default='male.png'
         )
     created_at = models.DateTimeField(auto_now_add=True)
