@@ -76,7 +76,11 @@ def home(request):
         return render(request, 'snippet/scrolling.html', {'page_obj':page_obj})
     
     members = User.objects.all().order_by('?')
-    return render(request, 'home.html', {'page_obj':page_obj, 'members': members})
+    context = {
+        'page_obj':page_obj,
+        'members': members,
+        'user': request.user}
+    return render(request, 'home.html', context)
 
 
     
@@ -202,14 +206,13 @@ def comment_reply(request, comment_id):
 def profile(request, username):
     user = get_object_or_404(User, username=username)
     posts = Post.objects.filter(author=user)
-    profile = Profile.objects.get(user=user)
-    following =profile.followings.count()
+    profile = user.profile
 
     context={
         'user':user,
         'posts':posts,
         'profile':profile,
-        'following': following
+        'current_profile': request.user.profile
     }
     
     return render(request, 'profile.html', context)
@@ -247,18 +250,48 @@ def update_profile(request, username):
     return render(request, 'update_profile.html', {'profile':profile})
 
 def follow(request, username):
-    user = get_object_or_404(User, username=username)
-    profile= Profile.objects.get(user=user)
-    if request.user not in profile.followers.all():
-        profile.followers.add(request.user)
-        profile.followings.add(user)
+    other_user = get_object_or_404(User, username=username)
+    current_profile=request.user.profile
+    other_profile = other_user.profile
+
+    if other_profile not in current_profile.followings.all():
+        current_profile.followings.add(other_profile)
         messages.info(request, 'Following')
         return redirect(request.META.get('HTTP_REFERER'))
     else:
-        profile.followers.remove(request.user)
-        profile.followings.remove(user)
+        current_profile.followings.remove(other_profile)
         messages.info(request, 'unFollowing')
         return redirect(request.META.get('HTTP_REFERER'))
+    
+@login_required(login_url='/')
+def follower_list(request, username):
+    user = get_object_or_404(User, username=username)
+    profile=user.profile
+    followers = profile.followers.all()
+
+    context = {
+        'user':user,
+        'profile': profile,
+        'followers': followers
+    }
+
+
+    return render(request, 'followers_list.html', context)
+
+@login_required(login_url='/')
+def following_list(request, username):
+    user = get_object_or_404(User, username=username)
+    profile = user.profile
+    followings = profile.followings.all()
+
+    context = {
+        'user': user,
+        'profile': profile,
+        'followings': followings
+    }
+
+
+    return render(request, 'following_list.html', context)
 @login_required(login_url='/')
 def search(request):
     quary = request.GET.get('q')

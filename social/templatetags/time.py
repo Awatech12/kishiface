@@ -7,7 +7,7 @@ register = template.Library()
 @register.filter
 def insta_timesince(d):
     """
-    Returns time since d in a concise, Instagram-like format (e.g., 1m, 2h, 3d).
+    Returns time since d in a concise  (e.g., 1m, 2h, 3d).
     Assumes d is a datetime object in the past.
     """
     now = timezone.now()

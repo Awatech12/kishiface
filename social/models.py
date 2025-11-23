@@ -7,20 +7,25 @@ from datetime import date, timedelta
 import calendar
 import uuid
 
+def get_default_profile_image():
+    if settings.DEBUG:  # Local development
+        return 'male.png'  # Make sure this file exists in MEDIA_ROOT
+    else:  # Production
+        return 'https://res.cloudinary.com/ddhnafl8r/image/upload/v1/male_rzf6mv.png'
 # Create your models here.
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    followers = models.ManyToManyField(User, related_name='follower', blank=True)
-    followings = models.ManyToManyField(User, related_name='following', blank=True)
+    followings = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
     phone = models.CharField(max_length=20)
     full_name = models.CharField(max_length=200, blank=True)
     is_verify = models.BooleanField(default=False)
     address = models.TextField()
     bio = models.CharField(max_length=300)
     location = models.TextField()
-    picture = models.ImageField(upload_to='profile_image/', default='male.png')
+    picture = models.ImageField(upload_to='profile_image/', default=get_default_profile_image)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Helper for follower 
     def save(self, *args, **kwargs):
         self.address = self.address.title()
         self.user.first_name=self.user.first_name.capitalize()
