@@ -11,7 +11,7 @@ def get_default_profile_image():
     if settings.DEBUG:  # Local development
         return 'male.png'  # Make sure this file exists in MEDIA_ROOT
     else:  # Production
-        return 'male_rzf6mv.png'
+        return 'male_rzf6mv'
 # Create your models here.
 
 class Profile(models.Model):
