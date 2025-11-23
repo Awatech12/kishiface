@@ -23,7 +23,13 @@ class Profile(models.Model):
     address = models.TextField()
     bio = models.CharField(max_length=300)
     location = models.TextField()
-    picture = models.ImageField(upload_to='profile_image/', default=get_default_profile_image)
+    if settings.USE_CLOUDINARY:
+        picture = CloudinaryField('picture', folder='profile_image', default='media/male_rzf6mv')
+    else:
+        picture = models.ImageField(
+            upload_to='profile_image',
+            default='male.png'
+        )
     created_at = models.DateTimeField(auto_now_add=True)
     # Helper for follower 
     def save(self, *args, **kwargs):

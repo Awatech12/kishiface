@@ -29,8 +29,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
-    #'social.apps.SocialConfig',
-    'social',
+    'social.apps.SocialConfig',
+    #'social',
 ]
 # ✅ Cloudinary Config (Environment Variables on Render)
 if USE_CLOUDINARY:
