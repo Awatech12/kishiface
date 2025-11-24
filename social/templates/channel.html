@@ -256,6 +256,38 @@
       color: #555;
       cursor: pointer;
     }
+/* ========================= */
+/* CHAT SECTION ADDITION */
+/* ========================= */
+.like-container {
+  display: flex;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.like-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-right: 5px;
+  font-size: 14px;
+  color: #777;
+}
+
+.like-button:focus {
+  outline: none;
+}
+
+.like-count {
+  font-size: 12px;
+  color: #777;
+  font-weight: bold;
+}
+
+.liked {
+  color: #e74c3c; /* Red for liked state */
+}
 
     #image { display: none; }
 
@@ -349,7 +381,8 @@
                 {% if message.author != user %}
                 <img src="{{ message.pictureUrl }}" class="avatar">
                 {% endif %}
-                <div class="bubble {% if message.author == user %}bubble-right{% else %}bubble-left{% endif %}">
+                <div class="bubble {% if message.author == user %}bubble-right{% else %}bubble-left{% endif %}"
+                     id="msg-{{ message.channemessage_id }}">
                    {% if message.author != user %}
                     <a  style="text-decoration: none; color: #333;" href="{% url 'profile' message.author %}"><strong>{{ message.author }}</strong></a>
                     {% endif %}
@@ -359,12 +392,23 @@
                     {% if message.image %}
                     <img src="{{ message.image.url }}" alt="">
                     {% endif %}
+                    <div class="like-container">
+                        <button class="like-button {% if user in message.like.all %}liked{% endif %}"
+                                data-msg-id="{{ message.channemessage_id }}"
+                                onclick="sendLikeAction(this)">
+                            <i class="fa-solid fa-heart"></i>
+                        </button>
+                        <span class="like-count" id="like-count-{{ message.channemessage_id }}">
+                            {{ message.like_count }}
+                        </span>
+                    </div>
                     <div class="msg-time">{{ message.chat_time}}</div>
                 </div>
             </div>
             {% endfor %}
           {% endfor %}
         </div>
+
 
         <!-- MESSAGE INPUT -->
         <div id="chatInputWrapper">
@@ -412,6 +456,9 @@
 <!-- ========================= -->
 <!-- WEBSOCKET CHAT SCRIPT -->
 <!-- ========================= -->
+// =========================
+// WEBSOCKET CHAT SCRIPT
+// =========================
 <script>
 const pictureUrl = "{{ user.profile.picture.url }}";
 const user = "{{ user }}";
@@ -426,32 +473,74 @@ const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
 const socket = new WebSocket(`${protocol}${window.location.host}/ws/${channel_id}/`);
 
 function scrollToBottom(){
-  messageOutput.scrollTop = messageOutput.scrollHeight;
+  // Only scroll if the user is near the bottom
+  if (messageOutput.scrollHeight - messageOutput.clientHeight < messageOutput.scrollTop + 200) {
+      messageOutput.scrollTop = messageOutput.scrollHeight;
+  }
+}
+
+// New function to handle like/unlike action
+function sendLikeAction(buttonElement) {
+    const messageId = buttonElement.getAttribute('data-msg-id');
+    socket.send(JSON.stringify({
+        'action': 'like_unlike',
+        'message_id': messageId,
+        'username': user
+    }));
 }
 
 socket.addEventListener('message', function(e) {
-  scrollToBottom();
   const data = JSON.parse(e.data);
-  const wrapper = document.createElement('div');
-  let side = (data.username === user) ? "chat-right" : "chat-left";
- 
 
-  wrapper.className = `chat-message ${side}`;
-  wrapper.innerHTML = `
-        ${ side === "chat-left" ? `<img src="${data.pictureUrl}" class="avatar"> ` : "" }
-        <div class="bubble ${ side === "chat-right" ? "bubble-right" : "bubble-left" }">
-            ${side == "chat-left" ? `<strong>${data.username}</strong>` : ""}
-            ${data.message ? `<div class="message-text">${data.message}</div>` : ""}
-            ${data.image ? `<img src="${data.image}">` : ""}
-            <div class="msg-time">${data.time}</div>
-        </div>
-    `;
-  messageOutput.appendChild(wrapper);
+  if (data.type === 'Response') {
+      scrollToBottom();
+      let side = (data.username === user) ? "chat-right" : "chat-left";
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = `chat-message ${side}`;
+      wrapper.innerHTML = `
+          ${ side === "chat-left" ? `<img src="${data.pictureUrl}" class="avatar"> ` : "" }
+          <div class="bubble ${ side === "chat-right" ? "bubble-right" : "bubble-left" }"
+               id="msg-${data.message_id}">
+              ${side == "chat-left" ? `<a style="text-decoration: none; color: #333;" href="/profile/${data.username}"><strong>${data.username}</strong></a>` : ""}
+              ${data.message ? `<div class="message-text">${data.message}</div>` : ""}
+              ${data.image ? `<img src="${data.image}">` : ""}
+              <div class="like-container">
+                  <button class="like-button"
+                          data-msg-id="${data.message_id}"
+                          onclick="sendLikeAction(this)">
+                      <i class="fa-solid fa-heart"></i>
+                  </button>
+                  <span class="like-count" id="like-count-${data.message_id}">
+                      0
+                  </span>
+              </div>
+              <div class="msg-time">${data.time}</div>
+          </div>
+      `;
+      messageOutput.appendChild(wrapper);
+
+  } else if (data.type === 'like_response') {
+      const likeCountElement = document.getElementById(`like-count-${data.message_id}`);
+      const likeButtonElement = document.querySelector(`[data-msg-id='${data.message_id}']`);
+
+      if (likeCountElement) {
+          likeCountElement.textContent = data.like_count;
+      }
+      
+      if (likeButtonElement) {
+          if (data.user_liked) {
+              likeButtonElement.classList.add('liked');
+          } else {
+              likeButtonElement.classList.remove('liked');
+          }
+      }
+  }
 
 });
 
 sendBtn.addEventListener('click', function() {
-  scrollToBottom();
+  // ... (existing sendBtn logic remains the same)
   const typedMessage = message.value;
   const imageFile = image.files[0];
 
@@ -481,6 +570,7 @@ sendBtn.addEventListener('click', function() {
   image.value = '';
 });
 </script>
+
 
 </body>
 </html>

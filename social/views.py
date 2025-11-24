@@ -217,6 +217,21 @@ def profile(request, username):
     
     return render(request, 'profile.html', context)
 
+def profile_popup(request, username):
+    user = get_object_or_404(User, username=username)
+    posts = Post.objects.filter(author=user)
+    profile = user.profile
+
+    context={
+        'user':user,
+        'posts':posts,
+        'profile':profile,
+        'current_profile': request.user.profile
+    }
+
+    return render(request, 'popup_profile.html', context)
+
+
 
 @login_required(login_url='/')
 def update_profile(request, username):
