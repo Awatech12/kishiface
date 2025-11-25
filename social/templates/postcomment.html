@@ -404,7 +404,6 @@ button:hover{
 <h2>No comment yet</h2>
 {% endfor %}
   </span>
-
 <div class="card post-form" id="myForm">
     <h3 style="margin-bottom:10px; font-size: 16px; font-weight: 600; color: var(--text-dark);">Comment:</h3>
     <form id="postForm"
@@ -433,6 +432,47 @@ button:hover{
 
 
 <script>
+  /** socket Code */
+
+  const postId = "{{post.post_id}}";
+  const currentUserId = '{{post.author.id}}';
+  const protocol = window.location.protocol === 'https://' ? 'wss://' : 'ws://';
+  const socket = new WebSocket(`${protocol}${window.location.host}/ws/comment/${postId}/`);
+  const commentList = document.getElementById('comment_list');
+
+  socket.addEventListener('message', async function(e){
+    const data = JSON.parse(e.data);
+   if(data.user_id == currentUserId){
+    return;
+   }
+    const newComment=document.createElement('p');
+    console.log(`${data.author_username}:${data.comment}`);
+    newComment.innerHTML = `
+    <div class="comment">
+        <img src="${data.profile_pic}" class="avatar">
+
+        <div class="comment-body">
+            <a href="/${data.author_username}" class="username">
+                ${data.author_first} ${data.author_last}
+                ${data.is_verify ? '<img src="/static/images/verify1.jpg" width="20">' : ""}
+            </a>
+
+            <p class="text">${data.comment}</p>
+
+            ${data.image_url ? `<img src="${data.image_url}" width="200" style="border-radius:8px;">` : ""}
+            ${data.file_url ? `<audio controls src="${data.file_url}"></audio>` : ""}
+
+            <p class="channel-name">
+                <i class="far fa-clock"></i> ${data.created_at}  
+                <a href="comment_repy/${data.comment_id}"> <i id="icon" class="fa-regular fa-comment action-icon"></i></a>
+            </p>
+        </div>
+    </div>
+    `;
+
+    commentList.insertBefore(newComment, saheed.firstChild);
+  })
+
 
   /*** Recording Code */
   let mediaRecord;

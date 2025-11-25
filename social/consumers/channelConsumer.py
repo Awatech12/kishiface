@@ -178,3 +178,4 @@ class ChannelConsumer(AsyncWebsocketConsumer):
 
         # Return the message instance
         return msg
+ 

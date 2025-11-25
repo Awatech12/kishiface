@@ -6,7 +6,10 @@ from django.contrib.auth.decorators import login_required
 from social.models import Profile, Post, PostImage, PostComment, Message, Notification, ChannelMessage, Channel
 from django.db.models import Q
 from django.core.paginator import Paginator
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from itertools import groupby
+from django.contrib.humanize.templatetags.humanize import naturaltime
 import time
 
 # Create your views here.
@@ -167,16 +170,34 @@ def postcomment(request, post_id):
         audio = request.FILES.get('audio_file')
         if not content and not image and not audio:
             return
-        if content and not image and not audio:
-            comment=PostComment.objects.create(post=post, author=request.user, comment=content)
-        if image and content:
-            comment = PostComment.objects.create(post=post, author=request.user, comment=content, image=image)
-        if not content and not image:
-            comment = PostComment.objects.create(post=post, author=request.user, file=audio)
-        if image and not content and not audio:
-            comment = PostComment.objects.create(post=post, author=request.user, image=image)
-        if image and audio:
-             comment = PostComment.objects.create(post=post, author=request.user, comment=content, image=image, file=audio )
+        comment = PostComment.objects.create(
+            post=post,
+            author=request.user,
+            comment=content if content else "",
+            image=image if image else None,
+            file=audio if audio else None
+        )
+        # send Real-time update
+        created_at = naturaltime(comment.created_at)
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'post_{post_id}',
+            {
+            'type': 'new_comment',
+            'comment_id': str(comment.comment_id),
+            'author_username': comment.author.username,
+            'author_first':str( comment.author.first_name),
+            'author_last': str(comment.author.last_name),
+            'is_verify': comment.author.profile.is_verify,
+            'profile_pic': comment.author.profile.picture.url,
+            'comment': comment.comment if comment.comment else '',
+            'image_url': comment.image.url if comment.image else '',
+            'file_url': comment.file.url if comment.file else '',
+            'post_id': str(post_id),
+            'created_at': str(created_at),
+            'user_id': str(comment.author.id)
+            }
+        )
         if post.author != request.user:
             Notification.objects.create(
                 recipient=post.author,
