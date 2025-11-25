@@ -31,7 +31,9 @@ class CommentConsumer(AsyncWebsocketConsumer):
             'image_url': event['image_url'],
             'file_url':event['file_url'],
             'post_id': str(event['post_id']),
-            'created_at': event['created_at']
+            'created_at': event['created_at'],
+            'user_id': event['user_id']
+            
 
         }
         await self.send(text_data=json.dumps(text_data))

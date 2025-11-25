@@ -194,7 +194,8 @@ def postcomment(request, post_id):
             'image_url': comment.image.url if comment.image else '',
             'file_url': comment.file.url if comment.file else '',
             'post_id': str(post_id),
-            'created_at': str(created_at)
+            'created_at': str(created_at),
+            'user_id': comment.author.id
             }
         )
         if post.author != request.user:

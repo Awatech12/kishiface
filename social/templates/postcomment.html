@@ -435,18 +435,25 @@ button:hover{
   /** socket Code */
 
   const postId = "{{post.post_id}}";
-  const currentUserId = '{{post.author.id}}';
-  const protocol = window.location.protocol === 'https://' ? 'wss://' : 'ws://';
+  const currentUserId = '{{request.user.id}}';
+  const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
   const socket = new WebSocket(`${protocol}${window.location.host}/ws/comment/${postId}/`);
-  const saheed = document.getElementById('comment_list');
-
+  const commentList = document.getElementById('comment_list');
+  socket.onopen = ()=>{
+    console.log(currentUserId);
+  }
   socket.addEventListener('message', async function(e){
+    
     const data = JSON.parse(e.data);
     const newComment=document.createElement('p');
+    console.log(data.user_id);
     console.log(`${data.author_username}:${data.comment}`);
+   if(data.user_id == currentUserId){
+    return;
+   }
     newComment.innerHTML = `
     <div class="comment">
-        <img src="${data.profile_pic}" class="avatar">
+        <img src="${data.profile_pic}" class="avatar"> 
 
         <div class="comment-body">
             <a href="/${data.author_username}" class="username">
@@ -467,7 +474,7 @@ button:hover{
     </div>
     `;
 
-    saheed.insertBefore(newComment, saheed.firstChild);
+    commentList.insertBefore(newComment, saheed.firstChild);
   })
 
 
