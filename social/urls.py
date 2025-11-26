@@ -20,7 +20,10 @@ urlpatterns = [
     path('list', views.notification_list, name='notification_list'),
     path('comment_reply/<uuid:comment_id>', views.comment_reply, name='comment_reply'),
     #path('posts', views.post_content, name='post_content'),
+    # path for pop profile
     path('popup/<str:username>/', views.profile_popup, name='popup_profile'),
+    # pop for comment
+     path('commentpopup/<uuid:post_id>/', views.commentpopup, name='commentpopup'),
     path('followChannel/<uuid:channel_id>', views.follow_channel, name='follow_channel'),
     path('channel/<uuid:channel_id>/', views.channel, name='channel'),
     path('create_channel', views.channel_create, name='channel_create'),

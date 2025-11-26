@@ -159,6 +159,14 @@ def post_comment(request, post_id):
     
     comments=PostComment.objects.filter(post=post).order_by('-created_at')
     return render(request, 'postcomment.html', {'post':post, 'comments': comments})
+
+
+@login_required(login_url='/')
+def commentpopup(request, post_id):
+    post=get_object_or_404(Post, post_id=post_id)
+    
+    comments=PostComment.objects.filter(post=post).order_by('-created_at')
+    return render(request, 'commentpopup.html', {'post':post, 'comments': comments})
 @login_required(login_url='/')
 def postcomment(request, post_id):
     post=get_object_or_404(Post, post_id=post_id)
