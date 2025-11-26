@@ -153,8 +153,6 @@ def like_post(request, post_id):
     return render(request, 'snippet/post_like.html', {'post':post, 'post_id':post_id})  
        
 
-
-
 @login_required(login_url='/')
 def post_comment(request, post_id):
     post=get_object_or_404(Post, post_id=post_id)

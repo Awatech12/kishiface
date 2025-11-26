@@ -1,5 +1,6 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 import json
+from django.template.loader import render_to_string
 
 class CommentConsumer(AsyncWebsocketConsumer):
     async def connect(self):
