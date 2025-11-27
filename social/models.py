@@ -53,6 +53,10 @@ class Post(models.Model):
     likes = models.ManyToManyField(User, related_name='like_post', blank=True)
     content = models.TextField()
     if settings.USE_CLOUDINARY:
+        video_file = CloudinaryField('video', resource_type='video',folder='post_files',blank=True)
+    else:
+        video_file = models.FileField(upload_to='post_file', blank=True)
+    if settings.USE_CLOUDINARY:
         file = CloudinaryField('audio', resource_type='video',folder='post_files',blank=True)
     else:
         file = models.FileField(upload_to='post_file', blank=True)

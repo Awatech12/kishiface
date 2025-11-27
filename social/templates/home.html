@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="{% static 'css/home.css' %}">
   <style>
     
-    /* New/Updated Audio Styles for Cover Image Design */
+    /* ---------------- INSTAGRAM-STYLE AUDIO DESIGN (UPDATED) ---------------- */
     .audio-post-container {
         /* Main container for the cover and controls */
         display: flex;
@@ -25,7 +25,7 @@
     }
     
     .audio-cover-area {
-        /* Styles for the background poster image */
+        /* Styles for the background poster image - now clickable */
         width: 100%;
         height: 250px; 
         background-size: cover;
@@ -35,24 +35,25 @@
         justify-content: center;
         align-items: center;
         box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4);
-        filter: blur(8px);
-        transform: scale(1.05);
-        transition: filter 0.3s ease-in-out;
+        cursor: pointer;
+        position: relative;
     }
     
-    .audio-control {
-        /* Styles for the standard HTML audio player */
-        width: 100%;
-        outline: none;
-        border-radius: 0;
-        background-color: var(--white);
-        padding: 0; 
-        border: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        appearance: none;
+    /* Play/Pause icon over the audio cover */
+    .audio-play-icon {
+        font-size: 3em;
+        color: white;
+        text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+        z-index: 5;
+        transition: opacity 0.3s ease;
     }
-    
+
+    /* Hide the native audio element */
+    .audio-hidden {
+        display: none; 
+    }
+    /* ---------------- END AUDIO DESIGN ---------------- */
+
     /* Existing styles from the original file (kept for compatibility) */
     .cover{
         width: 100%;
@@ -72,6 +73,67 @@
         width: 100%;
         outline: none;
     }
+
+    /* ---------------- Instagram Video Styles ---------------- */
+    .instagram-video-container {
+        position: relative; 
+        width: 100%;
+        padding-top: 100%; /* 1:1 Aspect Ratio. Use 125% for 4:5 */
+        overflow: hidden;
+        margin-top: 10px;
+        background-color: black;
+    }
+
+    .instagram-video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover; 
+    }
+
+    /* Styling for the Play/Pause Icon */
+    .play-pause-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 4em; 
+        color: white;
+        background: rgba(0, 0, 0, 0.4);
+        border-radius: 50%;
+        padding: 15px 20px 15px 23px;
+        pointer-events: none;
+        opacity: 0; /* Hidden when playing */
+        transition: opacity 0.3s ease;
+    }
+
+    /* Styling for the Mute/Unmute Icon */
+    .mute-icon {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        font-size: 1.2em;
+        color: white;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        pointer-events: auto;
+        opacity: 0.5; /* Default subtle opacity */
+        transition: opacity 0.3s ease;
+    }
+
+    /* State Class: Show Play icon when video is paused */
+    .instagram-video-container.paused .play-pause-icon {
+        opacity: 1;
+    }
+    /* ---------------- End Instagram Video Styles ---------------- */
     
      /* Pop up design */
 
@@ -209,16 +271,41 @@
             <b class="post-title" style="color: var(--text-dark);">{{post.content|urlize|linebreaksbr}}</b>
             
             {% if post.file %}
-              <div class="audio-post-container">
+              <div class="audio-post-container" id="audio-container-{{ post.post_id }}">
                   <div class="audio-cover-area" 
-                       style="background-image: url('{% if post.images.first %}{{post.images.first.image.url}}{% else %}{{post.author.profile.picture.url}}{% endif %}');">
-                      </div>
-                  <audio controls class="audio-control">
+                       style="background-image: url('{% if post.images.first %}{{post.images.first.image.url}}{% else %}{{post.author.profile.picture.url}}{% endif %}');"
+                       onclick="toggleAudioPlay('audio-{{ post.post_id }}')">
+                        <i class="fa-solid fa-play audio-play-icon" id="audio-icon-{{ post.post_id }}"></i>
+                  </div>
+                  <audio id="audio-{{ post.post_id }}" class="audio-hidden">
                     <source src="{{ post.file.url }}" type="audio/webm">
                   </audio>
               </div>
-              {% endif %}
+            {% endif %}
 
+              {% if post.video_file %}
+              <div class="instagram-video-container paused" id="container-{{ post.post_id }}">
+                  <video class="instagram-video" 
+                         id="post-video-{{ post.post_id }}" 
+                         preload="metadata" 
+                         autoplay 
+                         loop 
+                         muted
+                         onclick="togglePlayPause('post-video-{{ post.post_id }}')"> 
+                      
+                      <source src="{{ post.video_file.url }}" type="video/mp4">
+                      Your browser does not support HTML5 video.
+                  </video>
+                  
+                  <i class="fa-solid fa-play play-pause-icon" id="play-icon-{{ post.post_id }}"></i>
+                  
+                  <i class="fa-solid mute-icon" 
+                     id="mute-icon-{{ post.post_id }}" 
+                     onclick="event.stopPropagation(); toggleMute('post-video-{{ post.post_id }}')"></i>
+                  
+              </div>
+              {% endif %}
+              
             {% if post.images.all %}
             <div class="post-image-carousel" id="carousel-{{ post.post_id }}" data-current-slide="0" data-total-slides="{{ post.images.all|length }}">
                 <div class="slider-track" id="track-{{ post.post_id }}">
@@ -305,6 +392,113 @@
 </footer>
 
 <script>
+
+    /** * Video Player Controls 
+     */
+
+    function togglePlayPause(videoId) {
+        const video = document.getElementById(videoId);
+        const container = video.closest('.instagram-video-container');
+        const icon = document.getElementById('play-icon-' + videoId);
+
+        if (video.paused || video.ended) {
+            // Play the video and hide the overlay icon
+            video.play().catch(e => console.error("Video Play Error:", e));
+            container.classList.remove('paused');
+            // Hide the play icon by making it transparent/small
+            icon.style.opacity = '0'; 
+
+        } else {
+            // Pause the video and show the overlay icon
+            video.pause();
+            container.classList.add('paused');
+            icon.style.opacity = '1'; // Show the play icon
+        }
+    }
+
+    function toggleMute(videoId) {
+        const video = document.getElementById(videoId);
+        const icon = document.getElementById('mute-icon-' + videoId);
+        
+        video.muted = !video.muted;
+
+        if (video.muted) {
+            icon.classList.remove('fa-volume-high');
+            icon.classList.add('fa-volume-xmark');
+        } else {
+            icon.classList.remove('fa-volume-xmark');
+            icon.classList.add('fa-volume-high');
+        }
+
+        // Briefly show the volume icon for feedback
+        icon.style.opacity = '1';
+        setTimeout(() => {
+            icon.style.opacity = '0.5'; 
+        }, 800);
+    }
+    
+    /** * Audio Player Controls (NEW)
+     */
+    function toggleAudioPlay(audioId) {
+        const audio = document.getElementById(audioId);
+        const icon = document.getElementById('audio-icon-' + audioId);
+        
+        if (audio.paused || audio.ended) {
+            audio.play().catch(e => console.error("Audio Play Error:", e));
+            icon.classList.remove('fa-play');
+            icon.classList.add('fa-pause');
+        } else {
+            audio.pause();
+            icon.classList.remove('fa-pause');
+            icon.classList.add('fa-play');
+        }
+    }
+
+
+    // Set initial state for media elements (Muted/Paused/Icons)
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Video Initialization ---
+        document.querySelectorAll('.instagram-video-container').forEach(container => {
+            const video = container.querySelector('.instagram-video');
+            const playIcon = container.querySelector('.play-pause-icon');
+            const muteIcon = container.querySelector('.mute-icon');
+
+            // Autoplay is set in HTML, but browsers often block it unless muted.
+            // Start state should reflect if it's paused or playing.
+            video.addEventListener('playing', () => {
+                container.classList.remove('paused');
+                playIcon.style.opacity = '0';
+            });
+            video.addEventListener('pause', () => {
+                container.classList.add('paused');
+                playIcon.style.opacity = '1';
+            });
+            
+            // Set initial mute icon class based on HTML attribute
+            if (video.muted) {
+                muteIcon.classList.add('fa-volume-xmark'); // Muted icon
+            } else {
+                muteIcon.classList.add('fa-volume-high'); // Unmuted icon
+            }
+        });
+        
+        // --- Audio Initialization ---
+        document.querySelectorAll('.audio-post-container').forEach(container => {
+            const audio = container.querySelector('.audio-hidden');
+            const icon = container.querySelector('.audio-play-icon');
+            
+            // Sync icon state with audio state
+            audio.addEventListener('play', () => {
+                icon.classList.remove('fa-play');
+                icon.classList.add('fa-pause');
+            });
+            audio.addEventListener('pause', () => {
+                icon.classList.remove('fa-pause');
+                icon.classList.add('fa-play');
+            });
+        });
+    });
+
 
     /** pop for profile modal code */
 
