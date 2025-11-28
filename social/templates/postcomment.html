@@ -173,15 +173,14 @@ button{
 }
 button:hover{
   color: #007bff;
-}
-/* --- Global Comment Container: Uses Flexbox for three-column layout (Avatar, Text, Actions) --- */
+}/* --- Global Comment Container --- */
 .comment {
     display: flex;
     align-items: flex-start; /* Aligns content to the top */
-    padding: 8px 0; 
+    padding: 8px 10px; 
 }
 
-/* --- 1. Avatar Styling (Applies to both the actual image and the letter placeholder) --- */
+/* --- 1. Avatar Styling --- */
 /* Actual Profile Picture Styling */
 .avatar-img {
     width: 28px; 
@@ -189,18 +188,16 @@ button:hover{
     border-radius: 50%; /* Makes the image round */
     margin-right: 12px;
     flex-shrink: 0; 
-    object-fit: cover; /* Ensures the image fills the circle */
+    object-fit: cover; 
 }
 
 /* Letter Placeholder Styling */
 .avatar-letter {
-    width: 38px; 
-    height: 38px;
+    width: 28px; 
+    height: 28px;
     border-radius: 50%; 
     margin-right: 12px;
     flex-shrink: 0; 
-    
-    /* Style for the Initial/Letter Placeholder */
     background-color: #555; /* Dark gray for the circle background */
     color: white;
     display: flex;
@@ -212,7 +209,7 @@ button:hover{
 
 /* --- 2. Comment Body Styling (Content Area) --- */
 .comment-body {
-    flex-grow: 1; /* Takes up all available space */
+    flex-grow: 1; 
     display: flex;
     flex-direction: column;
 }
@@ -220,7 +217,7 @@ button:hover{
 /* Username/Author Name */
 .username {
     font-weight: bold; 
-    color: #222; /* Very dark text */
+    color: #222; 
     text-decoration: none; 
     font-size: 14px; 
     margin-bottom: 2px;
@@ -240,35 +237,83 @@ button:hover{
     margin-top: 5px;
 }
 
-/* 🎧 Audio Player Styling */
-.comment-audio-player {
-    width: 100%; 
+/* 🎧 WhatsApp-Style Audio Player Styling */
+.hidden-audio {
+    display: none;
+}
+.audio-container {
+    display: flex;
+    align-items: center;
+    background-color: whitesmoke; 
+    padding: 6px 10px;
+    border-radius: 18px; 
+    width: 100%;
     max-width: 300px; 
     margin-top: 8px; 
-    margin-bottom: 2px; 
-    
-    background-color: #f7f7f7; /* Light gray background */
-    border-radius: 4px; 
-    border: 1px solid #e0e0e0; 
-    height: 35px; 
+    margin-bottom: 2px;
 }
 
-/* Styling the internal controls for webkit browsers (Chrome, Safari) */
-.comment-audio-player::-webkit-media-controls-panel {
-    background-color: #f7f7f7;
-    color: #404040;
+.play-pause-btn {
+    background-color: #666; 
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0; 
+    margin-right: 10px;
 }
-.comment-audio-player::-webkit-media-controls-play-button {
-    color: #606060; 
+
+.progress-wrapper {
+    flex-grow: 1; 
+    display: flex;
+    align-items: center;
 }
-.comment-audio-player::-webkit-media-controls-current-time-display,
-.comment-audio-player::-webkit-media-controls-time-remaining-display {
-    color: #606060;
+
+.progress-bar {
+    position: relative;
+    height: 3px;
+    background-color: #666; 
+    flex-grow: 1;
+    cursor: pointer;
+    margin-right: 8px;
+}
+
+.progress-filled {
+    height: 100%;
+    width: 0%; 
+    background-color: wheat; 
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: 1px;
+}
+
+.progress-thumb {
+    width: 8px;
+    height: 8px;
+    background-color: #128C7E;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 0%; 
+    transform: translate(-50%, -50%);
+    pointer-events: none; 
+}
+
+.time-display {
     font-size: 12px;
+    color: #606060;
+    font-weight: 500;
+    flex-shrink: 0;
 }
 
-
-/* Time and Reply Action Sub-line */
+/* --- Time and Reply Action Sub-line --- */
 .channel-name {
     margin-top: 4px;
     font-size: 12px; 
@@ -277,7 +322,6 @@ button:hover{
     align-items: center;
 }
 
-/* Reply Link Styling */
 .channel-name a {
     color: #606060; 
     text-decoration: none; 
@@ -285,11 +329,10 @@ button:hover{
     margin-left: 5px; 
 }
 
-
 /* --- 3. Heart/Like Action Styling (Far Right) --- */
 .comment-actions {
     display: flex;
-    flex-direction: column; /* Stacks the number and icon vertically */
+    flex-direction: column; 
     align-items: center; 
     margin-left: 15px; 
     flex-shrink: 0; 
@@ -302,6 +345,7 @@ button:hover{
     margin-top: 2px;
     font-size: 14px;
 }
+
     .recording{
       position: relative;
       font-size: 20px;
@@ -741,6 +785,103 @@ button:hover{
     startBtn.hidden = false;
     stopBtn.hidden = true;
   }
+
+
+  /** Comment list Audio Javascript **/
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const audioContainers = document.querySelectorAll('.audio-container');
+    const allAudioElements = document.querySelectorAll('.hidden-audio');
+
+    // Utility function to format seconds into m:ss
+    const formatTime = (seconds) => {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    };
+
+    // Function to pause all other audio elements (Ensures single playback)
+    const pauseOthers = (currentAudio) => {
+        allAudioElements.forEach(audio => {
+            if (audio !== currentAudio && !audio.paused) {
+                audio.pause();
+                const container = audio.closest('.audio-container');
+                const btn = container.querySelector('.play-pause-btn');
+                const icon = btn.querySelector('i');
+                
+                // Reset UI for the paused audio
+                icon.className = 'fas fa-play';
+                btn.setAttribute('data-state', 'paused');
+            }
+        });
+    };
+
+    audioContainers.forEach(container => {
+        const audio = container.querySelector('.hidden-audio');
+        const playPauseBtn = container.querySelector('.play-pause-btn');
+        const icon = playPauseBtn.querySelector('i');
+        const progressBar = container.querySelector('.progress-bar');
+        const progressFilled = container.querySelector('.progress-filled');
+        const progressThumb = container.querySelector('.progress-thumb');
+        const timeDisplay = container.querySelector('.time-display');
+
+        // Initial duration load
+        audio.onloadedmetadata = () => {
+            timeDisplay.textContent = formatTime(audio.duration);
+        };
+
+        // --- 1. Playback Toggling ---
+        playPauseBtn.addEventListener('click', () => {
+            if (audio.paused || audio.ended) {
+                pauseOthers(audio); 
+                audio.play();
+                icon.className = 'fas fa-pause'; // Change icon to pause
+                playPauseBtn.setAttribute('data-state', 'playing');
+            } else {
+                audio.pause();
+                icon.className = 'fas fa-play'; // Change icon back to play
+                playPauseBtn.setAttribute('data-state', 'paused');
+            }
+        });
+
+        // --- 2. Time/Progress Update ---
+        audio.addEventListener('timeupdate', () => {
+            const progress = (audio.currentTime / audio.duration) * 100;
+            progressFilled.style.width = `${progress}%`;
+            progressThumb.style.left = `${progress}%`;
+            timeDisplay.textContent = formatTime(audio.currentTime); 
+        });
+
+        // --- 3. Finished Playback ---
+        audio.addEventListener('ended', () => {
+            audio.currentTime = 0;
+            icon.className = 'fas fa-play';
+            playPauseBtn.setAttribute('data-state', 'paused');
+            progressFilled.style.width = '0%';
+            progressThumb.style.left = '0%';
+            timeDisplay.textContent = formatTime(audio.duration); // Reset to full duration
+        });
+
+        // --- 4. Scrubbing (Jumping to a time by clicking the bar) ---
+        progressBar.addEventListener('click', (e) => {
+            const rect = progressBar.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percentage = clickX / rect.width;
+            
+            // Set audio time
+            audio.currentTime = audio.duration * percentage;
+            
+            // If the audio was paused, clicking the bar should usually start it
+            if (audio.paused) {
+                 pauseOthers(audio);
+                 audio.play();
+                 icon.className = 'fas fa-pause';
+                 playPauseBtn.setAttribute('data-state', 'playing');
+            }
+        });
+    });
+});
+
 </script>
 </body>
 </html>
