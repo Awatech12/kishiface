@@ -30,10 +30,10 @@ def index(request):
         if user is not None:
             login(request, user)
             request.session.set_expiry(None)
-            messages.info(request, f"Welcome back {user.username}")
+            messages.success(request, f"Welcome back {user.username}")
             return redirect(request.GET.get('next', 'home'))
         else:
-            messages.info(request,'Invalid Login details')
+            messages.error(request,'Invalid Login details')
             return redirect('/')
     return render(request, 'index.html')
 
@@ -45,21 +45,21 @@ def register(request):
         password = request.POST.get('pass1')
         password2 = request.POST.get('pass2')
         if (len(username) < 5):
-            messages.info(request, 'Username must contain atleast 5 Characters')
+            messages.error(request, 'Username must contain atleast 5 Characters')
             return redirect('register')
         elif User.objects.filter(username=username):
-            messages.info(request, ' Username is taken Already')
+            messages.error(request, ' Username is taken Already')
             return redirect('register')
         elif User.objects.filter(email=email):
-            messages.info(request, 'Email is taken Already')
+            messages.error(request, 'Email is taken Already')
             return redirect('register')
         elif (password != password2):
-            messages.info(request, 'Password are not the Same')
+            messages.error(request, 'Password are not the Same')
             return redirect('register')
         else:
             user=User.objects.create_user(username=username, email=email, password=password)
             Profile.objects.create(user=user)
-            messages.info(request, f'Welcome {username}, You can now Login')
+            messages.success(request, f'Welcome {username}, You can now Login')
             return redirect('/')
 
 
@@ -103,6 +103,8 @@ def post(request):
         )
         for image in images:
             PostImage.objects.create(post=post, image=image)
+        
+        messages.success(request, 'Post Successfully Shared')
         return redirect('home')
     
 
