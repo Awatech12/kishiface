@@ -11,9 +11,10 @@
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="{% static 'css/home.css' %}">
+  <script src="{% static 'js/home.js' %}"></script>
   <style>
     
-    /* ---------------- INSTAGRAM-STYLE AUDIO DESIGN (UPDATED) ---------------- */
+    /* ---------------- INSTAGRAM-STYLE AUDIO DESIGN ---------------- */
     .audio-post-container {
         /* Main container for the cover and controls */
         display: flex;
@@ -74,23 +75,24 @@
         outline: none;
     }
 
-    /* ---------------- Instagram Video Styles ---------------- */
+    /* ---------------- Instagram Video Styles (CLEANED) ---------------- */
     .instagram-video-container {
         position: relative; 
         width: 100%;
-        padding-top: 100%; /* 1:1 Aspect Ratio. Use 125% for 4:5 */
         overflow: hidden;
         margin-top: 10px;
         background-color: black;
+        min-height: 200px; 
+        display: flex; 
+        justify-content: center;
+        align-items: center;
     }
 
     .instagram-video {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover; 
+        max-width: 100%; 
+        height: auto; 
+        object-fit: contain; 
+        display: block; 
     }
 
     /* Styling for the Play/Pause Icon */
@@ -105,27 +107,7 @@
         border-radius: 50%;
         padding: 15px 20px 15px 23px;
         pointer-events: none;
-        opacity: 0; /* Hidden when playing */
-        transition: opacity 0.3s ease;
-    }
-
-    /* Styling for the Mute/Unmute Icon */
-    .mute-icon {
-        position: absolute;
-        bottom: 10px;
-        right: 10px;
-        font-size: 1.2em;
-        color: white;
-        background: rgba(0, 0, 0, 0.5);
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        cursor: pointer;
-        pointer-events: auto;
-        opacity: 0.5; /* Default subtle opacity */
+        opacity: 0; 
         transition: opacity 0.3s ease;
     }
 
@@ -134,6 +116,44 @@
         opacity: 1;
     }
     /* ---------------- End Instagram Video Styles ---------------- */
+    
+    /* ---------------- NEW OVERLAY SEEK ICONS ---------------- */
+    .seek-overlay-btn {
+        position: absolute;
+        bottom: 10px; 
+        background: rgba(0, 0, 0, 0.4);
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 8px 10px;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        z-index: 10; 
+        opacity: 0; 
+        transition: opacity 0.3s ease;
+    }
+
+    .seek-overlay-btn:hover {
+        background: rgba(0, 0, 0, 0.6);
+    }
+
+    .backward-btn {
+        left: 10px;
+    }
+
+    .forward-btn {
+        right: 10px; /* Adjusted position */
+    }
+
+    /* State Class: Show controls when paused or hovered */
+    .instagram-video-container.paused .seek-overlay-btn,
+    .instagram-video-container:hover .seek-overlay-btn {
+        opacity: 1;
+    }
+    /* ---------------- END NEW SEEK ICONS ---------------- */
     
      /* Pop up design */
 
@@ -284,14 +304,13 @@
             {% endif %}
 
               {% if post.video_file %}
-              <div class="instagram-video-container paused" id="container-{{ post.post_id }}">
+              <div class="instagram-video-container" id="container-{{ post.post_id }}">
                   <video class="instagram-video" 
                          id="post-video-{{ post.post_id }}" 
                          preload="metadata" 
                          autoplay 
                          loop 
-                         muted
-                         onclick="togglePlayPause('post-video-{{ post.post_id }}')"> 
+                         onclick="togglePlayPause('post-video-{{ post.post_id }}', event)"> 
                       
                       <source src="{{ post.video_file.url }}" type="video/mp4">
                       Your browser does not support HTML5 video.
@@ -299,11 +318,16 @@
                   
                   <i class="fa-solid fa-play play-pause-icon" id="play-icon-{{ post.post_id }}"></i>
                   
-                  <i class="fa-solid mute-icon" 
-                     id="mute-icon-{{ post.post_id }}" 
-                     onclick="event.stopPropagation(); toggleMute('post-video-{{ post.post_id }}')"></i>
-                  
-              </div>
+                  <button class="seek-overlay-btn backward-btn" 
+                          onclick="event.stopPropagation(); seekVideo('post-video-{{ post.post_id }}', -10)">
+                      <i class="fa-solid fa-backward-step"></i> 10s
+                  </button>
+                  <button class="seek-overlay-btn forward-btn" 
+                          onclick="event.stopPropagation(); seekVideo('post-video-{{ post.post_id }}', 10)">
+                      10s <i class="fa-solid fa-forward-step"></i>
+                  </button>
+                  </div>
+              
               {% endif %}
               
             {% if post.images.all %}
@@ -340,13 +364,7 @@
         </div>
         {% endfor %}
 
-        {% if page_obj.has_next %}
-        <a id="load-more-container"
-            href="?page={{page_obj.next_page_number}}"
-           >
-            see more
-          </a>
-        {% endif %}
+     
     </div> <div class="right-sidebar desktop-only">
         <div class="card">
             <div class="sidebar-content scrollable-content">
@@ -391,271 +409,6 @@
     {% include 'footer.html' %}
 </footer>
 
-<script>
 
-    /** * Video Player Controls 
-     */
-
-    function togglePlayPause(videoId) {
-        const video = document.getElementById(videoId);
-        const container = video.closest('.instagram-video-container');
-        const icon = document.getElementById('play-icon-' + videoId);
-
-        if (video.paused || video.ended) {
-            // Play the video and hide the overlay icon
-            video.play().catch(e => console.error("Video Play Error:", e));
-            container.classList.remove('paused');
-            // Hide the play icon by making it transparent/small
-            icon.style.opacity = '0'; 
-
-        } else {
-            // Pause the video and show the overlay icon
-            video.pause();
-            container.classList.add('paused');
-            icon.style.opacity = '1'; // Show the play icon
-        }
-    }
-
-    function toggleMute(videoId) {
-        const video = document.getElementById(videoId);
-        const icon = document.getElementById('mute-icon-' + videoId);
-        
-        video.muted = !video.muted;
-
-        if (video.muted) {
-            icon.classList.remove('fa-volume-high');
-            icon.classList.add('fa-volume-xmark');
-        } else {
-            icon.classList.remove('fa-volume-xmark');
-            icon.classList.add('fa-volume-high');
-        }
-
-        // Briefly show the volume icon for feedback
-        icon.style.opacity = '1';
-        setTimeout(() => {
-            icon.style.opacity = '0.5'; 
-        }, 800);
-    }
-    
-    /** * Audio Player Controls (NEW)
-     */
-    function toggleAudioPlay(audioId) {
-        const audio = document.getElementById(audioId);
-        const icon = document.getElementById('audio-icon-' + audioId);
-        
-        if (audio.paused || audio.ended) {
-            audio.play().catch(e => console.error("Audio Play Error:", e));
-            icon.classList.remove('fa-play');
-            icon.classList.add('fa-pause');
-        } else {
-            audio.pause();
-            icon.classList.remove('fa-pause');
-            icon.classList.add('fa-play');
-        }
-    }
-
-
-    // Set initial state for media elements (Muted/Paused/Icons)
-    document.addEventListener('DOMContentLoaded', () => {
-        // --- Video Initialization ---
-        document.querySelectorAll('.instagram-video-container').forEach(container => {
-            const video = container.querySelector('.instagram-video');
-            const playIcon = container.querySelector('.play-pause-icon');
-            const muteIcon = container.querySelector('.mute-icon');
-
-            // Autoplay is set in HTML, but browsers often block it unless muted.
-            // Start state should reflect if it's paused or playing.
-            video.addEventListener('playing', () => {
-                container.classList.remove('paused');
-                playIcon.style.opacity = '0';
-            });
-            video.addEventListener('pause', () => {
-                container.classList.add('paused');
-                playIcon.style.opacity = '1';
-            });
-            
-            // Set initial mute icon class based on HTML attribute
-            if (video.muted) {
-                muteIcon.classList.add('fa-volume-xmark'); // Muted icon
-            } else {
-                muteIcon.classList.add('fa-volume-high'); // Unmuted icon
-            }
-        });
-        
-        // --- Audio Initialization ---
-        document.querySelectorAll('.audio-post-container').forEach(container => {
-            const audio = container.querySelector('.audio-hidden');
-            const icon = container.querySelector('.audio-play-icon');
-            
-            // Sync icon state with audio state
-            audio.addEventListener('play', () => {
-                icon.classList.remove('fa-play');
-                icon.classList.add('fa-pause');
-            });
-            audio.addEventListener('pause', () => {
-                icon.classList.remove('fa-pause');
-                icon.classList.add('fa-play');
-            });
-        });
-    });
-
-
-    /** pop for profile modal code */
-
-  function setupLinks(){
-      const isMobile = window.matchMedia("(max-width: 668px)").matches;
-    const userLink = document.querySelectorAll(".username-link");
-    userLink.forEach(link =>{
-        link.addEventListener('click', function(e){
-            if(isMobile){
-                return;
-            }
-
-            e.preventDefault();
-
-            const userId = this.getAttribute("data-id");
-            fetch(`/popup/${userId}/`)
-            .then(res =>res.text())
-            .then(html =>{
-                document.getElementById("panelContent").innerHTML = html;
-
-                document.getElementById("sidePanel").style.right=0;
-            });
-        });
-    });
-  }
-    setupLinks();
-    window.matchMedia("(max-width: 668px)").addEventListener('change', setupLinks());
-    function closePanel(){
-        document.getElementById('sidePanel').style.right='-400px';
-    }
-     /* Auto close popup when changing to Mobile */
-     window.addEventListener('resize', function(){
-         setupLinks();
-        const isMobile = window.matchMedia("(max-width: 668px)").matches;
-        if(isMobile){
-            const panel = document.getElementById('sidePanel');
-            panel.style.right = '-400px';
-            panel.innerHTML='';
-        }
-     })
-
-     /* pop for comment */
-
-     function setupLink(){
-      const isMobile = window.matchMedia("(max-width: 668px)").matches;
-    const commentLink = document.querySelectorAll(".action-item");
-    commentLink.forEach(link =>{
-        link.addEventListener('click', function(e){
-            if(isMobile){
-                return;
-            }
-
-            e.preventDefault();
-
-            const commentId = this.getAttribute("data-id");
-            fetch(`/commentpopup/${commentId}/`)
-            .then(res =>res.text())
-            .then(html =>{
-                document.getElementById("panelContent2").innerHTML = html;
-
-                document.getElementById("sidePanel2").style.left=0;
-            });
-        });
-    });
-  }
-    setupLink();
-    
-     /* Auto close popup when changing to Mobile */
-     window.addEventListener('resize', function(){
-         setupLink();
-        const isMobile = window.matchMedia("(max-width: 668px)").matches;
-        if(isMobile){
-            const panel2 = document.getElementById('sidePanel2');
-            panel2.style.left = '-400px';
-            panel2.innerHTML='';
-        }
-     })
-function closePanel2(){
-        document.getElementById('sidePanel2').style.left='-400px';
-    }
-    
-  /**
-   * Handles sliding of a post's image carousel.
-   * @param {string} postId - The unique ID of the post.
-   * @param {number} direction - -1 for previous, 1 for next.
-   */
-  function slidePost(postId, direction) {
-    const carousel = document.getElementById(`carousel-${postId}`);
-    const track = document.getElementById(`track-${postId}`);
-    const indicatorsContainer = document.getElementById(`indicators-${postId}`);
-    const prevButton = document.getElementById(`prev-${postId}`);
-    const nextButton = document.getElementById(`next-${postId}`);
-
-    if (!carousel || !track) return;
-
-    let currentSlide = parseInt(carousel.getAttribute('data-current-slide') || '0');
-    const totalSlides = parseInt(carousel.getAttribute('data-total-slides') || '1');
-
-    if (totalSlides <= 1) return;
-
-    let newSlide = currentSlide;
-
-    if (direction !== 0) { // Only update slide index if direction is provided
-        newSlide = currentSlide + direction;
-    }
-
-    // Clamp the new slide index
-    if (newSlide < 0) {
-      newSlide = 0;
-    } else if (newSlide >= totalSlides) {
-      newSlide = totalSlides - 1;
-    }
-
-    // 1. Update the slider position using CSS transform
-    const slideWidth = carousel.clientWidth;
-    const offset = newSlide * slideWidth;
-    track.style.transform = `translateX(-${offset}px)`;
-
-    // 2. Update the state attribute
-    carousel.setAttribute('data-current-slide', newSlide);
-
-    // 3. Update indicators
-    if (indicatorsContainer) {
-      indicatorsContainer.querySelectorAll('.indicator-dot').forEach((dot, index) => {
-        dot.classList.toggle('active', index === newSlide);
-      });
-    }
-
-    // 4. Update navigation buttons visibility
-    if (prevButton) {
-      prevButton.classList.toggle('hidden', newSlide === 0);
-    }
-    if (nextButton) {
-      nextButton.classList.toggle('hidden', newSlide === totalSlides - 1);
-    }
-  }
-
-  /**
-   * Initializes all carousels on the page.
-   */
-  function initCarousels() {
-    // Select all carousels that have more than one slide (checked by total-slides attribute)
-    document.querySelectorAll('.post-image-carousel[data-total-slides]:not([data-total-slides="1"])').forEach(carousel => {
-        const postId = carousel.id.split('-')[1];
-        // Call slidePost with 0 direction to initialize current position and button visibility
-        slidePost(postId, 0);
-    });
-  }
-
-  // Ensure carousels are initialized and responsive on load and resize
-  window.addEventListener('resize', initCarousels);
-  window.addEventListener('load', initCarousels);
-
-  // Fallback for immediate execution if the document is already ready
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      initCarousels();
-  }
-</script>
 </body>
 </html>

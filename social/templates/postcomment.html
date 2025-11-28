@@ -284,6 +284,147 @@ button:hover{
       }
     }
  
+    /* ---------------- INSTAGRAM-STYLE AUDIO DESIGN ---------------- */
+    .audio-post-container {
+        /* Main container for the cover and controls */
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--divider-color);
+        border-radius: 8px;
+        overflow: hidden; 
+        margin-top: 10px;
+    }
+    
+    .audio-cover-area {
+        /* Styles for the background poster image - now clickable */
+        width: 100%;
+        height: 250px; 
+        background-size: cover;
+        background-position: center;
+        background-color: var(--text-dark); /* Fallback dark color */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4);
+        cursor: pointer;
+        position: relative;
+    }
+    
+    /* Play/Pause icon over the audio cover */
+    .audio-play-icon {
+        font-size: 3em;
+        color: white;
+        text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+        z-index: 5;
+        transition: opacity 0.3s ease;
+    }
+
+    /* Hide the native audio element */
+    .audio-hidden {
+        display: none; 
+    }
+    /* ---------------- END AUDIO DESIGN ---------------- */
+
+    /* Existing styles from the original file (kept for compatibility) */
+    .cover{
+        width: 100%;
+        height: 250px;
+        /*background-image: url('https://placehold.co/600x400/999999/ffffff?text=KishiFace+Post');*/
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .cover i{
+        font-size: 50px;
+        color: #bdbdbd;
+        margin-right: 40px;
+    }
+    .audio{
+        width: 100%;
+        outline: none;
+    }
+
+    /* ---------------- Instagram Video Styles (CLEANED) ---------------- */
+    .instagram-video-container {
+        position: relative; 
+        width: 100%;
+        overflow: hidden;
+        margin-top: 10px;
+        background-color: black;
+        min-height: 200px; 
+        display: flex; 
+        justify-content: center;
+        align-items: center;
+    }
+
+    .instagram-video {
+        max-width: 100%; 
+        height: auto; 
+        object-fit: contain; 
+        display: block; 
+    }
+
+    /* Styling for the Play/Pause Icon */
+    .play-pause-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 4em; 
+        color: white;
+        background: rgba(0, 0, 0, 0.4);
+        border-radius: 50%;
+        padding: 15px 20px 15px 23px;
+        pointer-events: none;
+        opacity: 0; 
+        transition: opacity 0.3s ease;
+    }
+
+    /* State Class: Show Play icon when video is paused */
+    .instagram-video-container.paused .play-pause-icon {
+        opacity: 1;
+    }
+    /* ---------------- End Instagram Video Styles ---------------- */
+    
+    /* ---------------- NEW OVERLAY SEEK ICONS ---------------- */
+    .seek-overlay-btn {
+        position: absolute;
+        bottom: 10px; 
+        background: rgba(0, 0, 0, 0.4);
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 8px 10px;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        z-index: 10; 
+        opacity: 0; 
+        transition: opacity 0.3s ease;
+    }
+
+    .seek-overlay-btn:hover {
+        background: rgba(0, 0, 0, 0.6);
+    }
+
+    .backward-btn {
+        left: 10px;
+    }
+
+    .forward-btn {
+        right: 10px; /* Adjusted position */
+    }
+
+    /* State Class: Show controls when paused or hovered */
+    .instagram-video-container.paused .seek-overlay-btn,
+    .instagram-video-container:hover .seek-overlay-btn {
+        opacity: 1;
+    }
+    /* ---------------- END NEW SEEK ICONS ---------------- */
+    
   </style>
 </head>
 <body>
@@ -308,6 +449,47 @@ button:hover{
 <i class="fa-solid fa-ellipsis" style="color:var(--text-muted); cursor:pointer;"></i>
 </div>
 <b class="post-title" style="color: #6a6a6a;">{{post.content|urlize|linebreaksbr}}</b>
+
+ {% if post.file %}
+              <div class="audio-post-container" id="audio-container-{{ post.post_id }}">
+                  <div class="audio-cover-area" 
+                       style="background-image: url('{% if post.images.first %}{{post.images.first.image.url}}{% else %}{{post.author.profile.picture.url}}{% endif %}');"
+                       onclick="toggleAudioPlay('audio-{{ post.post_id }}')">
+                        <i class="fa-solid fa-play audio-play-icon" id="audio-icon-{{ post.post_id }}"></i>
+                  </div>
+                  <audio id="audio-{{ post.post_id }}" class="audio-hidden">
+                    <source src="{{ post.file.url }}" type="audio/webm">
+                  </audio>
+              </div>
+            {% endif %}
+
+              {% if post.video_file %}
+              <div class="instagram-video-container" id="container-{{ post.post_id }}">
+                  <video class="instagram-video" 
+                         id="post-video-{{ post.post_id }}" 
+                         preload="metadata" 
+                         autoplay 
+                         loop 
+                         onclick="togglePlayPause('post-video-{{ post.post_id }}', event)"> 
+                      
+                      <source src="{{ post.video_file.url }}" type="video/mp4">
+                      Your browser does not support HTML5 video.
+                  </video>
+                  
+                  <i class="fa-solid fa-play play-pause-icon" id="play-icon-{{ post.post_id }}"></i>
+                  
+                  <button class="seek-overlay-btn backward-btn" 
+                          onclick="event.stopPropagation(); seekVideo('post-video-{{ post.post_id }}', -10)">
+                      <i class="fa-solid fa-backward-step"></i> 10s
+                  </button>
+                  <button class="seek-overlay-btn forward-btn" 
+                          onclick="event.stopPropagation(); seekVideo('post-video-{{ post.post_id }}', 10)">
+                      10s <i class="fa-solid fa-forward-step"></i>
+                  </button>
+                  </div>
+              
+              {% endif %}
+              
 
 {% if post.images.all %}
 
