@@ -5,457 +5,367 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KishiFace - Home</title>
+  <title>KishiFace - Channel</title>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="{% static 'css/home.css' %}">
   <style>
     /* ========================= */
-    /* GENERAL STYLES */
+    /* GLOBAL STYLES & VARIABLES (WhatsApp/Telegram Channel Base) */
     /* ========================= */
+    :root {
+      --primary-green: #008069; /* WhatsApp Green */
+      --secondary-text: #8696a0;
+      --background-chat: #ece5dd; /* WhatsApp chat background */
+      --message-bg: #fff; /* White background for message card/bubble */
+      --red-liked: #ed4956;
+    }
+
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       margin: 0;
       padding: 0;
-      background: #ffffff;
+      background: var(--background-chat);
+      color: #111b21;
     }
 
+    /* Main Container - Mobile First Focus */
     main.container {
-      display: flex;
-      gap: 20px;
-      padding: 0;
-    }
-
-    .desktop-only { display: block; }
-    .mobile-only { display: none; }
-
-    /* ========================= */
-    /* LEFT SIDEBAR */
-    /* ========================= */
-    .left-sidebar {
-      width: 220px;
-    }
-
-    .left-sidebar .card {
-      background: #fff;
-      padding: 15px;
-      border-radius: 12px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-
-    .sidebar-link {
-      display: block;
-      margin: 10px 0;
-      color: #333;
-      text-decoration: none;
-    }
-
-    .sidebar-link.logout {
-      color: #e74c3c;
-    }
-
-    /* ========================= */
-    /* RIGHT SIDEBAR */
-    /* ========================= */
-    .right-sidebar {
-      width: 260px;
-    }
-
-    .desktop-member-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-
-    .desktop-member-item img {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-
-    .btn-follow {
-      background: #0095f6;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      padding: 4px 10px;
-      cursor: pointer;
-    }
-
-    /* ========================= */
-    /* MAIN FEED */
-    /* ========================= */
-    .main-feed {
-      flex: 1;
+      max-width: 768px; /* Max width to keep it chat-like */
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
+      min-height: 100vh;
+      background: var(--background-chat);
+    }
+    
+    /* Hide all sidebars and unrelated desktop elements */
+    .desktop-only, .right-sidebar, .left-sidebar {
+        display: none !important;
     }
 
     /* ========================= */
-    /* CHANNEL HEADER */
+    /* CHANNEL HEADER (Fixed Top) */
     /* ========================= */
     .channel-header {
         display: flex;
         align-items: center;
-        padding: 15px 0;
-        border-bottom: 1px solid #ddd;
-        background: #fff;
+        padding: 10px 15px;
+        background: var(--primary-green);
+        color: white;
         position: sticky;
         top: 0;
         z-index: 100;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
-
+    .header-icon {
+        color: white;
+        font-size: 1.4rem;
+        margin-right: 15px;
+    }
     .channel-avatar img {
-        width: 100px;
-        height: 100px;
+        width: 40px;
+        height: 40px;
         border-radius: 50%;
         object-fit: cover;
-        border: 2px solid #ddd;
-        margin-right: 20px;
+        margin-right: 10px;
     }
-
-    .channel-info {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .channel-name-row {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 8px;
-    }
-
     .channel-name {
-        font-size: 24px;
+        font-size: 1.1rem;
         font-weight: 600;
         margin: 0;
     }
-
-    .btn-subscribe {
-        background-color: #0095f6;
-        color: white;
-        padding: 6px 16px;
-        border: none;
-        border-radius: 4px;
-        font-weight: bold;
-        cursor: pointer;
-    }
-
-    .btn-subscribe:hover {
-        background-color: #007bb5;
-    }
-
     .channel-stats {
+        font-size: 0.8rem;
+        color: #ddd;
+    }
+    .notification-icon {
+        margin-left: auto;
+        font-size: 1.2rem;
+    }
+
+
+    /* ========================= */
+    /* CHAT MESSAGES (Feed) */
+    /* ========================= */
+    .main-feed {
+        flex: 1;
         display: flex;
-        gap: 20px;
-        font-size: 14px;
-        color: #555;
-        margin-bottom: 4px;
+        flex-direction: column;
+        overflow: hidden; /* Hide main feed overflow */
     }
 
-    .channel-id {
-        font-size: 14px;
-        color: #888;
+    #messageOutput {
+      flex-grow: 1;
+      padding: 0 10px;
+      overflow-y: auto;
+      max-height: calc(100vh - 120px); /* Height between header and input */
     }
-
-    /* ========================= */
-    /* CHAT SECTION */
-    /* ========================= */
 
     .chat-message {
       display: flex;
-      margin: 10px 0;
+      justify-content: center; /* Center the whole message block */
       width: 100%;
+      padding: 8px 0;
+    }
+    
+    .message-block {
+        max-width: 95%; /* Messages don't fill the whole width */
+        background: var(--message-bg);
+        padding: 10px 12px;
+        border-radius: 10px;
+        box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+        position: relative;
+        /* Padding bottom increased to accommodate the time/reaction row */
+        padding-bottom: 35px; 
+    }
+    
+    /* Author name/indicator */
+    .message-author-name {
+        display: block;
+        font-weight: 700;
+        color: #000; /* Author name is bold black/dark */
+        margin-bottom: 5px;
+    }
+    
+    .message-text {
+        font-size: 0.95rem;
+        line-height: 1.35;
+        white-space: pre-wrap;
+        color: #111b21;
+    }
+    
+    .message-block img {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 8px;
+        margin: 5px 0;
     }
 
-    .chat-left { justify-content: flex-start; }
-    .chat-right { justify-content: flex-end; }
-
-    .chat-right .avatar { display: none; }
-
-    .avatar {
-      width: 25px;
-      height: 25px;
-      border-radius: 50%;
-      margin-right: 8px;
-      object-fit: cover;
+    /* **FIX: TIMESTAMPS AND REACTIONS MOVED TO ABSOLUTE BOTTOM RIGHT** */
+    .time-and-reactions-wrapper {
+        position: absolute;
+        bottom: 8px; /* Offset from the very bottom of the message block */
+        right: 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
 
-    .bubble {
-      max-width: 70%;
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 14px;
-      line-height: 1.0;
-      position: relative;
+    /* Reaction/Action Row */
+    .reaction-row {
+        display: flex;
+        align-items: center;
+        font-size: 0.8rem;
+        position: relative; /* Make it a positioning context for the likes bubble */
     }
 
-    .bubble-left {
-      background: #ffffff;
-      border: 1px solid #eee;
-      border-top-left-radius: 1px;
+    .reactions {
+        display: flex;
+        align-items: center;
+        background: #f0f0f0;
+        border-radius: 12px;
+        padding: 2px 6px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        margin-right: 5px;
     }
-
-    .bubble-right {
-      background: #dcf8c6;
-      border-top-right-radius: 1px;
+    
+    .reaction-count {
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--secondary-text);
+        margin-left: 4px;
     }
-
-    .message-text { margin-top: 5px; white-space: pre-wrap; }
-
-    .bubble img {
-      width: 200px;
-      border-radius: 12px;
-      margin-top: 8px;
+    
+    .like-button {
+        background: none;
+        border: none;
+        color: var(--secondary-text);
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0;
+        margin-left: 5px;
     }
-
+    .like-button i {
+        font-size: 0.85rem;
+    }
+    .like-button.liked {
+        color: var(--primary-green); /* Changed to primary green for distinction */
+    }
+    
+    /* Timestamp (Small and contained) */
     .msg-time {
-      font-size: 11px;
-      color: #777;
-      margin-top: 4px;
-      text-align: right;
+        font-size: 0.7rem;
+        color: var(--secondary-text);
+        text-align: right;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
+    
+    /* Date Separator */
+    .date-separator {
+        text-align: center;
+        padding: 10px 0;
+    }
+    .date-separator i {
+        display: inline-block;
+        background: #dde5eb; /* Light grayish blue */
+        color: #4a637a;
+        font-size: 0.7rem;
+        padding: 5px 10px;
+        border-radius: 8px;
+        font-style: normal;
+        font-weight: 600;
+        text-transform: uppercase;
     }
 
     /* ========================= */
-    /* MESSAGE INPUT */
+    /* MESSAGE INPUT (Fixed Bottom) */
     /* ========================= */
     #chatInputWrapper {
       position: sticky;
       bottom: 0;
+      width: 100%;
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 0;
-      background: #fff;
-      border-top: 1px solid #ddd;
+      justify-content: center;
+      padding: 8px 10px;
+      background: var(--background-chat);
+      border-top: 1px solid rgba(0,0,0,0.1);
       z-index: 120;
+    }
+    
+    #chatInputWrapper .inner-wrapper {
+        display: flex;
+        width: 100%;
+        max-width: 600px; /* Constrain input width */
+        gap: 8px;
     }
 
     #message {
       flex: 1;
-      padding: 10px;
-      border-radius: 12px;
-      border: 1px solid #ccc;
+      padding: 10px 15px;
+      border-radius: 20px;
+      border: 1px solid #ddd;
+      font-size: 0.95rem;
+      background-color: #fff;
+    }
+
+    #message:focus {
+        outline: none;
+        box-shadow: 0 0 0 1px var(--primary-green);
     }
 
     #sendBtn {
       padding: 10px 15px;
       border: none;
-      background: #25d366;
-      border-radius: 10px;
+      background: var(--primary-green);
+      border-radius: 20px;
       color: white;
-      font-weight: bold;
+      font-weight: 500;
       cursor: pointer;
+      font-size: 0.95rem;
+      flex-shrink: 0;
     }
-
+    
     .file-label {
-      font-size: 24px;
-      color: #555;
+      font-size: 1.4rem;
+      color: var(--secondary-text);
       cursor: pointer;
+      display: flex;
+      align-items: center;
     }
-/* ========================= */
-/* CHAT SECTION ADDITION */
-/* ========================= */
-.like-container {
-  display: flex;
-  align-items: center;
-  margin-top: 5px;
-}
-
-.like-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  margin-right: 5px;
-  font-size: 14px;
-  color: #777;
-}
-
-.like-button:focus {
-  outline: none;
-}
-
-.like-count {
-  font-size: 12px;
-  color: #777;
-  font-weight: bold;
-}
-
-.liked {
-  color: #e74c3c; /* Red for liked state */
-}
-
+    .file-label:hover {
+        color: #000;
+    }
     #image { display: none; }
-
-    /* ========================= */
-    /* RESPONSIVE */
-    /* ========================= */
-    @media (max-width: 768px) {
-      .desktop-only { display: none; }
-      .mobile-only { display: block; }
-      main.container { flex-direction: column; }
-
-      .channel-stats, .btn-subscribe, .channel-id{
-        display: none;
-      }
-
-      .channel-avatar img{
-        width: 45px;
-        height: 45px;
-      }
-      .channel-name{
-        font-size: 20px;
-      }
-      .channel-header{
-        padding: 10px;
-        gap: 10px;
-      }
+    
+    .read-receipt {
+        color: #4fc3f7; /* Blue ticks for read status */
+        font-size: 0.7rem;
+        margin-left: 2px;
     }
+
   </style>
 </head>
-<body></body>
+<body>
 
 <main class="container">
 
-    <!-- LEFT SIDEBAR -->
-    <div class="left-sidebar desktop-only">
-        <div class="card">
-            <div class="sidebar-content">
-                <h4 class="sidebar-title">My Account</h4>
-                <a href="{% url 'profile' request.user.username %}" class="sidebar-link">
-                    <i class="fa-solid fa-user-circle"></i> Profile
-                </a>
-                <a href="" class="sidebar-link">
-                    <i class="fa-solid fa-cog"></i> Settings
-                </a>
-                <a href="{% url 'channel_create' %}" class="sidebar-link">
-                    <i class="fa-solid fa-cog"></i> Channels
-                </a>
-                <a href="{% url 'post' %}" class="sidebar-link">
-                  <i><svg fill="none" stroke="currentColor" height="20" width="20" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" stroke-width="2"/>
-                    <line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/>
-                    <line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/>
-                  </svg></i> Post
-                </a>
-                <hr class="sidebar-divider">
-                <a href="{% url 'logout' %}" class="sidebar-link logout">
-                    <i class="fa-solid fa-right-from-bracket"></i> Logout
-                </a>
-            </div>
+    <div class="channel-header">
+        <a href="{% url 'channel_create' %}" class="header-icon"><i class="fa-solid fa-arrow-left"></i></a> 
+        <div class="channel-avatar">
+            <img src="{{ channel.image.url }}" alt="{{ channel.channel_name }}">
         </div>
+        <div class="channel-info">
+            <h2 class="channel-name">{{ channel.channel_name }}</h2>
+            <div class="channel-stats">{{ channel.subscriber.count|intcomma }} followers</div>
+        </div>
+        <div class="notification-icon"><i class="fa-regular fa-bell"></i></div>
     </div>
 
-    <!-- MAIN FEED -->
     <div class="main-feed">
-
-        <!-- CHANNEL HEADER -->
-        <div class="channel-header">
-          <a href="{% url 'channel_create' %}" class="header-icon"><i class="fa-solid fa-arrow-left"></i></a> <br>
-            <div class="channel-avatar">
-                <img src="{{ channel.image.url }}" alt="{{ channel.channel_name }}">
-            </div>
-            <div class="channel-info">
-                <div class="channel-name-row">
-                    <h2 class="channel-name">{{ channel.channel_name }}</h2>
-                    <button class="btn-subscribe">Subscribe</button>
-                </div>
-                <div class="channel-stats">
-                    <span><strong>{{ messages.count }}</strong> Posts</span>
-                    <span><strong>{{ channel.subscriber.count }}</strong> Subscribers</span>
-                </div>
-                <div class="channel-id">@{{ channel.channel_id }}</div>
-            </div>
-        </div>
-
-        <!-- CHAT MESSAGES -->
         <div id="messageOutput">
           {% for label, msgs in grouped_messages.items %}
-            <center><b><i>{{label}}</i></b></center>
+            <div class="date-separator"><i>{{label}}</i></div>
             {% for message in msgs %}
-            <div class="chat-message {% if message.author == user %}chat-right{% else %}chat-left{% endif %}">
-                {% if message.author != user %}
-                <img src="{{ message.pictureUrl }}" class="avatar">
-                {% endif %}
-                <div class="bubble {% if message.author == user %}bubble-right{% else %}bubble-left{% endif %}"
-                     id="msg-{{ message.channemessage_id }}">
-                   {% if message.author != user %}
-                    <a  style="text-decoration: none; color: #333;" href="{% url 'profile' message.author %}"><strong>{{ message.author }}</strong></a>
-                    {% endif %}
+            <div class="chat-message">
+                <div class="message-block" id="msg-{{ message.channemessage_id }}">
+                    <span class="message-author-name">
+                        <a style="text-decoration: none; color: #111b21;" href="{% url 'profile' message.author %}">{{ message.author }}</a>
+                    </span>
+
                     {% if message.message %}
                     <div class="message-text">{{ message.message }}</div>
                     {% endif %}
+                    
                     {% if message.image %}
-                    <img src="{{ message.image.url }}" alt="">
+                    <img src="{{ message.image.url }}" alt="Posted Image">
                     {% endif %}
-                    <div class="like-container">
-                        <button class="like-button {% if user in message.like.all %}liked{% endif %}"
-                                data-msg-id="{{ message.channemessage_id }}"
-                                onclick="sendLikeAction(this)">
-                            <i class="fa-solid fa-heart"></i>
-                        </button>
-                        <span class="like-count" id="like-count-{{ message.channemessage_id }}">
-                            {{ message.like_count }}
-                        </span>
+                    
+                    <div class="time-and-reactions-wrapper">
+                        
+                        <div class="reaction-row">
+                            <div class="reactions">
+                                <i class="fa-regular fa-face-grin-squint"></i>
+                                </div>
+                            <span class="reaction-count" id="like-count-{{ message.channemessage_id }}">{{ message.like.count }}</span>
+                            
+                            <button class="like-button {% if user in message.like.all %}liked{% endif %}"
+                                    data-msg-id="{{ message.channemessage_id }}"
+                                    onclick="sendLikeAction(this)">
+                                <i class="{% if user in message.like.all %}fa-solid{% else %}fa-regular{% endif %} fa-thumbs-up"></i>
+                            </button>
+                        </div>
+
+                        <div class="msg-time">
+                            {{ message.chat_time}} 
+                            {% if message.author == user %}
+                            <i class="fa-solid fa-check-double read-receipt"></i>
+                            {% endif %}
+                        </div>
                     </div>
-                    <div class="msg-time">{{ message.chat_time}}</div>
                 </div>
             </div>
             {% endfor %}
           {% endfor %}
+          
+          <div id="scroll-anchor" style="height: 1px;"></div>
         </div>
+    </div> 
 
 
-        <!-- MESSAGE INPUT -->
-        <div id="chatInputWrapper">
-            <input type="text" name="message" id="message" placeholder="Type a message...">
-            <button id="sendBtn">Send</button>
-            <label for="image" class="file-label"><i class="fa-solid fa-camera"></i></label>
+    <div id="chatInputWrapper">
+        <div class="inner-wrapper">
+            <input type="text" name="message" id="message" placeholder="Message {{ channel.channel_name }}...">
+            <label for="image" class="file-label"><i class="fa-regular fa-image"></i></label>
             <input type="file" name="image" id="image">
-        </div>
-
-    </div> <!-- End main-feed -->
-
-    <!-- RIGHT SIDEBAR -->
-    <div class="right-sidebar desktop-only">
-        <div class="card">
-            <div class="sidebar-content">
-                <h4 class="desktop-member-title">Faces You May Know</h4>
-                <div class="desktop-member-list">
-                    {% for member in members %}
-                        {% if request.user != member %}
-                            <div class="desktop-member-item">
-                                <a href="{% url 'profile' member.username %}">
-                                    <div class="member-pic-wrapper" style="background: var(--border-color); padding: 0;">
-                                        <img src="{{ member.profile.picture.url }}" alt="{{ member.username }}" class="member-pic">
-                                    </div>
-                                    <div>
-                                        <span class="member-username block">{{ member.first_name }} {{ member.last_name }}</span>
-                                        <br><span class="member-title block">@{{ member.username }}</span>
-                                    </div>
-                                </a>
-                                <button class="btn btn-blue btn-follow">Follow</button>
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-            </div>
+            <button id="sendBtn">Send</button>
         </div>
     </div>
 
 </main>
-
-<footer class="mobile-only">
-   
-</footer>
-
-<!-- ========================= -->
-<!-- WEBSOCKET CHAT SCRIPT -->
-<!-- ========================= -->
 
 <script>
 const pictureUrl = "{{ user.profile.picture.url }}";
@@ -466,18 +376,17 @@ const image = document.getElementById('image');
 const message = document.getElementById('message');
 const sendBtn = document.getElementById('sendBtn');
 const messageOutput = document.getElementById('messageOutput');
+const scrollAnchor = document.getElementById('scroll-anchor');
 
 const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
 const socket = new WebSocket(`${protocol}${window.location.host}/ws/${channel_id}/`);
 
-function scrollToBottom(){
-  // Only scroll if the user is near the bottom
-  if (messageOutput.scrollHeight - messageOutput.clientHeight < messageOutput.scrollTop + 200) {
-      messageOutput.scrollTop = messageOutput.scrollHeight;
-  }
+function scrollToBottom() {
+  // Use smooth scrolling to the anchor element at the bottom
+  scrollAnchor.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-// New function to handle like/unlike action
+// Function to handle like/unlike action
 function sendLikeAction(buttonElement) {
     const messageId = buttonElement.getAttribute('data-msg-id');
     socket.send(JSON.stringify({
@@ -491,32 +400,50 @@ socket.addEventListener('message', function(e) {
   const data = JSON.parse(e.data);
 
   if (data.type === 'Response') {
-      scrollToBottom();
-      let side = (data.username === user) ? "chat-right" : "chat-left";
       
-      const wrapper = document.createElement('div');
-      wrapper.className = `chat-message ${side}`;
-      wrapper.innerHTML = `
-          ${ side === "chat-left" ? `<img src="${data.pictureUrl}" class="avatar"> ` : "" }
-          <div class="bubble ${ side === "chat-right" ? "bubble-right" : "bubble-left" }"
-               id="msg-${data.message_id}">
-              ${side == "chat-left" ? `<a style="text-decoration: none; color: #333;" href="/profile/${data.username}"><strong>${data.username}</strong></a>` : ""}
-              ${data.message ? `<div class="message-text">${data.message}</div>` : ""}
-              ${data.image ? `<img src="${data.image}">` : ""}
-              <div class="like-container">
-                  <button class="like-button"
-                          data-msg-id="${data.message_id}"
-                          onclick="sendLikeAction(this)">
-                      <i class="fa-solid fa-heart"></i>
-                  </button>
-                  <span class="like-count" id="like-count-${data.message_id}">
-                      0
-                  </span>
-              </div>
-              <div class="msg-time">${data.time}</div>
-          </div>
+      const isUser = (data.username === user);
+      const readReceipt = isUser ? '<i class="fa-solid fa-check-double read-receipt"></i>' : '';
+      
+      const chatMessage = document.createElement('div');
+      chatMessage.className = `chat-message`;
+      
+      const imageHtml = data.image ? `<img src="${data.image}" alt="Channel Post">` : '';
+      
+      chatMessage.innerHTML = `
+        <div class="message-block" id="msg-${data.message_id}">
+            <span class="message-author-name">
+                <a style="text-decoration: none; color: #111b21;" href="/profile/${data.username}">${data.username}</a>
+            </span>
+            
+            ${data.message ? `<div class="message-text">${data.message}</div>` : ''}
+            
+            ${imageHtml}
+            
+            <div class="time-and-reactions-wrapper">
+                
+                <div class="reaction-row">
+                    <div class="reactions">
+                        <i class="fa-regular fa-face-grin-squint"></i>
+                    </div>
+                    <span class="reaction-count" id="like-count-${data.message_id}">0</span>
+                    
+                    <button class="like-button"
+                            data-msg-id="${data.message_id}"
+                            onclick="sendLikeAction(this)">
+                        <i class="fa-regular fa-thumbs-up"></i>
+                    </button>
+                </div>
+
+                <div class="msg-time">
+                    ${data.time}
+                    ${readReceipt}
+                </div>
+            </div>
+        </div>
       `;
-      messageOutput.appendChild(wrapper);
+      
+      messageOutput.appendChild(chatMessage);
+      scrollToBottom(); // Scroll after adding new message
 
   } else if (data.type === 'like_response') {
       const likeCountElement = document.getElementById(`like-count-${data.message_id}`);
@@ -527,10 +454,13 @@ socket.addEventListener('message', function(e) {
       }
       
       if (likeButtonElement) {
+          const thumbIcon = likeButtonElement.querySelector('i');
           if (data.user_liked) {
               likeButtonElement.classList.add('liked');
+              thumbIcon.classList.replace('fa-regular', 'fa-solid');
           } else {
               likeButtonElement.classList.remove('liked');
+              thumbIcon.classList.replace('fa-solid', 'fa-regular');
           }
       }
   }
@@ -538,7 +468,6 @@ socket.addEventListener('message', function(e) {
 });
 
 sendBtn.addEventListener('click', function() {
-  // ... (existing sendBtn logic remains the same)
   const typedMessage = message.value;
   const imageFile = image.files[0];
 
@@ -567,6 +496,13 @@ sendBtn.addEventListener('click', function() {
   message.value = '';
   image.value = '';
 });
+
+// Initial scroll to bottom when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    // Scroll needs a slight delay to ensure all DOM elements and images have rendered
+    setTimeout(scrollToBottom, 100); 
+});
+
 </script>
 
 
