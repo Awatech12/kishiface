@@ -18,6 +18,12 @@ urlpatterns = [
     path('notification', views.notification_partial, name='notification_partial'),
     path('editpost/<uuid:post_id>', views.editpost, name='editpost'),
     path('list', views.notification_list, name='notification_list'),
+    # ======== AI ======== path
+    path("generate_ai_text/", views.generate_ai_text, name="generate_ai_text"),
+    # ===== Market Place Path ======
+    path('market', views.market, name='market'),
+    #====== market form =======
+    path('add', views.marketForm, name='marketform'),
     path('comment_reply/<uuid:comment_id>', views.comment_reply, name='comment_reply'),
     #path('posts', views.post_content, name='post_content'),
     # path for pop profile

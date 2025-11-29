@@ -1,9 +1,9 @@
-from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
+from django.shortcuts import render, redirect, get_object_or_404, HttpResponse 
 from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, PostComment, Message, Notification, ChannelMessage, Channel
+from social.models import Profile, Post, PostImage, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage
 from django.db.models import Q
 from django.core.paginator import Paginator
 from asgiref.sync import async_to_sync
@@ -11,6 +11,10 @@ from channels.layers import get_channel_layer
 from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
 import time
+from django.http import JsonResponse
+from openai import OpenAI
+from django.conf import settings
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 # Create your views here.
 def index(request):
@@ -68,6 +72,7 @@ def register(request):
 def home(request):
     page_number = request.GET.get('page', 1)
     post_list = Post.objects.all().order_by('?')
+    products = Market.objects.all().order_by('?')
     paginator = Paginator(post_list, 20)
     try:
         page_obj = paginator.page(page_number)
@@ -82,7 +87,8 @@ def home(request):
     context = {
         'page_obj':page_obj,
         'members': members,
-        'user': request.user}
+        'user': request.user,
+        'products': products}
     return render(request, 'home.html', context)
 
 
@@ -433,6 +439,66 @@ def channel(request, channel_id):
         'grouped_messages': grouped_messages
     }
     return render(request, 'channel.html', context)
+
+# ======= Market Plce =======
+
+def market(request):
+    products = Market.objects.all()
+
+    print(f'Products no: {products.count()}')
+    context = {
+        'products': products
+    }
+
+    return render(request, 'marketplace.html', context)
+
+# ======= market form ====
+def marketForm(request):
+    if request.method == 'POST':
+        product_owner = request.user
+        product_name = request.POST.get('product_name')
+        product_price = request.POST.get('product_price')
+        product_location = request.POST.get('location')
+        product_description = request.POST.get('description')
+        product_availability = request.POST.get('availability')
+        product_category = request.POST.get('category')
+        images = request.FILES.getlist('images')
+        if not product_name and not product_availability and not product_category and not product_location:
+            return
+        product = Market.objects.create(
+            product_owner=product_owner,
+            product_name=product_name,
+            product_price=product_price,
+            product_location=product_location,
+            product_description=product_description,
+            product_availability=product_availability,
+            product_category=product_category)
+        
+        for image in images:
+            MarketImage.objects.create(product=product, product_image=image)
+        messages.success(request, 'Product Added Successfully')
+        return redirect('market')
+
+    return render(request, 'marketform.html')
+
+
+# ======== AI Mood ======
+@login_required
+def generate_ai_text(request):
+    mood = request.GET.get("mood")
+    if not mood:
+        return JsonResponse({"error": "Mood is required"}, status=400)
+
+    prompt = f"Write a short social media caption based on the mood: {mood}. Make it human-like with emojis."
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    caption = response.choices[0].message["content"].strip()
+    return JsonResponse({"caption": caption})
+    
 
 # ==== for Notification and inbox  updating =====
 def notification_partial(request):

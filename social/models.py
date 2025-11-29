@@ -168,3 +168,19 @@ class ChannelMessage(models.Model):
 
     def like_count(self):
         return self.like.count()
+
+class Market(models.Model):
+    product_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    product_owner = models.ForeignKey(User, related_name='products', on_delete=models.CASCADE)
+    product_name = models.CharField(max_length=100)
+    product_price = models.IntegerField()
+    product_location = models.CharField(max_length=300)
+    product_description = models.TextField()
+    product_availability = models.CharField(max_length=150)
+    product_category = models.CharField(max_length=100)
+    posted_on = models.DateTimeField(auto_now_add=True)
+
+class MarketImage(models.Model):
+    image_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    product = models.ForeignKey(Market, on_delete=models.CASCADE, related_name='images')
+    product_image = models.ImageField(upload_to='product_images/')
