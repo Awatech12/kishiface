@@ -70,22 +70,11 @@ def register(request):
     return render(request, 'register.html')
 @login_required(login_url='/')
 def home(request):
-    page_number = request.GET.get('page', 1)
-    post_list = Post.objects.all().order_by('?')
+    posts = Post.objects.all().order_by('?')
     products = Market.objects.all().order_by('?')
-    paginator = Paginator(post_list, 20)
-    try:
-        page_obj = paginator.page(page_number)
-    except Exception:
-        page_obj = paginator.page(paginator.num_pages)
-
-    if request.headers.get('HX-Request'):
-        time.sleep(2)
-        return render(request, 'snippet/scrolling.html', {'page_obj':page_obj})
-    
     members = User.objects.all().order_by('?')
     context = {
-        'page_obj':page_obj,
+        'posts':posts,
         'members': members,
         'user': request.user,
         'products': products}
