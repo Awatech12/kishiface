@@ -154,6 +154,7 @@
   margin:0 10px;
 }
 
+/* Default audio for posts/comments - kept for old style compatibility */
 audio{
   width: 100%;
   outline: none;
@@ -359,22 +360,24 @@ button:hover{
 .input-wrapper svg {
     position: absolute;
     left: 12px;
-    top: 40%;
+    top: 40%; 
     transform: translateY(-50%);
     fill: #555;
     
 }
 
+    /* FIX: Input area alignment */
     .input-area {
     padding: 10px;
     border-top: 1px solid #ddd;
     display: flex;
-    align-items: center;
+    align-items: center; /* FIX: Center aligns all icons and input/audio vertically */
     gap: 8px;
     background: #fff;
 }
 .message-input {
     width: 100%;
+    height: 30px; /* FIX: Set height for better vertical alignment */
     padding: 10px 12px 10px 38px; /* left padding for image icon */
     border: 1px solid #ccc;
     border-radius: 20px;
@@ -461,10 +464,6 @@ button:hover{
         color: #bdbdbd;
         margin-right: 40px;
     }
-    .audio{
-        width: 100%;
-        outline: none;
-    }
 
     /* ---------------- Instagram Video Styles (CLEANED) ---------------- */
     .instagram-video-container {
@@ -545,6 +544,67 @@ button:hover{
         opacity: 1;
     }
     /* ---------------- END NEW SEEK ICONS ---------------- */
+    
+    
+    /* --- New Styles for Voice Note Preview --- */
+    .form-actions button {
+        margin: 0;
+        padding: 8px;
+        font-size: 20px; 
+        transition: color 0.2s ease;
+    }
+
+    /* New: Hide the microphone icon when recording/audio is present */
+    .record-mode-hidden {
+        display: none !important;
+    }
+
+    /* New: Container for the audio recording/preview */
+    .audio-preview-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-grow: 1;
+        background-color: #f0f0f0; 
+        border-radius: 20px;
+        padding: 4px 10px;
+        height: 40px; /* Keep this height for alignment */
+        box-sizing: border-box;
+        transition: all 0.2s;
+    }
+
+    /* New: Styles for the preview audio player */
+    .preview-audio-player {
+        display: flex;
+        align-items: center;
+        flex-grow: 1;
+        gap: 8px;
+        height: 100%; /* Ensure player uses full container height */
+    }
+
+    /* Target the actual audio element for minimal controls */
+    .preview-audio-player audio {
+        width: 100%;
+        height: 100%; /* Ensure audio element fits player height */
+        background: transparent; 
+        outline: none;
+    }
+    
+    .recording-indicator {
+        font-size: 14px;
+        color: #ff3b30;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    /* New: Delete button for the audio preview */
+    #deleteAudioBtn {
+        background: transparent;
+        border-radius: 50%; 
+        padding: 5px;
+        color: #ff3b30;
+        font-size: 22px;
+    }
     
   </style>
 </head>
@@ -640,10 +700,6 @@ button:hover{
   {% endif %}
 </div>
 
-<!-- 
-  NEW: We now include the single snippet that contains 
-  both the likers/count summary AND the action buttons.
--->
 {% include 'snippet/post_like.html' %}
 
 </article>
@@ -669,27 +725,42 @@ button:hover{
     >
       {% csrf_token %}
       <div class="input-area">
-         <!-- Profile Icon -->
-      <a href="{% url 'profile' user.username %}">
-          <img src="{{user.profile.picture.url}}" alt="Profile" height="30px" width="30px" style="border-radius:50%;">
-      </a> 
-      <div class="input-wrapper">
-       <label for="image" >
-          <svg width="20" height="20" viewBox="0 0 24 24">
-                <path d="M21 19V5H3v14h18zm0-16c1.1 0 2 .9 2 2v14c0 
-                1.1-.9 2-2 2H3c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h18zM8.5 
-                11.5l2.5 3.01L14.5 10l4.5 6H5l3.5-4.5z"/>
-            </svg>
-        </label>
-      <input type="text" name="comment" class="message-input"  placeholder="Write a caption...">
-      </div>
-      <div class="form-actions">
-        <button id="startBtn" type="button"><i class="fa-solid fa-microphone"></i></button> <span id="status"></span> <button id="stopBtn" type="button" hidden><i class="fa-solid fa-circle-stop"></i></button>
-        <input type="file" name="audio_file" id="audio_file" hidden>
-        <input type="file" id="image" name="image" multiple>
-        <button type="submit" > <svg width="24" height="24" viewBox="0 0 24 24">
-                <path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/>
-            </svg></button>
+         <a href="{% url 'profile' user.username %}">
+            <img src="{{user.profile.picture.url}}" alt="Profile" height="30px" width="30px" style="border-radius:50%;">
+        </a> 
+        
+        <div class="input-wrapper" id="textInputWrapper">
+           <label for="image" >
+              <svg width="20" height="20" viewBox="0 0 24 24">
+                    <path d="M21 19V5H3v14h18zm0-16c1.1 0 2 .9 2 2v14c0 
+                    1.1-.9 2-2 2H3c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h18zM8.5 
+                    11.5l2.5 3.01L14.5 10l4.5 6H5l3.5-4.5z"/>
+                </svg>
+            </label>
+            <input type="text" name="comment" id="textInput" class="message-input"  placeholder="Write a caption...">
+        </div>
+
+        <div class="audio-preview-container record-mode-hidden" id="audioPreviewContainer">
+            <button id="deleteAudioBtn" type="button"><i class="fa-solid fa-trash-can"></i></button>
+            <div class="preview-audio-player">
+                <audio id="previewAudio"></audio>
+                <div id="recordingStatus" class="recording-indicator"></div>
+            </div>
+            <input type="file" name="audio_file" id="audio_file" hidden>
+        </div>
+
+
+        <div class="form-actions">
+            <button id="startBtn" type="button" class="mic-btn"><i class="fa-solid fa-microphone"></i></button> 
+            
+            <button id="stopBtn" type="button" class="record-mode-hidden"><i class="fa-solid fa-circle-stop"></i></button>
+            
+            <input type="file" id="image" name="image" multiple>
+            <button type="submit" > 
+                <svg width="24" height="24" viewBox="0 0 24 24">
+                    <path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/>
+                </svg>
+            </button>
         </div>
       </div>
     </form>
@@ -743,51 +814,130 @@ button:hover{
   })
 
 
-  /*** Recording Code */
+  /*** Upgraded Recording Code */
   let mediaRecord;
-  let audioChucks = [];
+  let audioChunks = [];
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
-  const audio_file = document.getElementById('audio_file');
-  const status = document.getElementById('status');
-  startBtn.addEventListener('click', async function(){
-    try{
-      const stream = await navigator.mediaDevices.getUserMedia({
-      audio:true
-    });
-    mediaRecord = new MediaRecorder(stream);
-    audioChucks = [];
-    mediaRecord.ondataavailable = event =>audioChucks.push(event.data);
-    mediaRecord.onstop = async () =>{
-      const bob = new Blob(audioChucks, {
-        type: 'audio/webm'
-      });
-      const file = new File([bob], 'recorded_audio.webm',{
-        type: 'audio/webm'
-      });
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(file);
-      audio_file.files = dataTransfer.files;
-    };
-    mediaRecord.start();
-    status.innerHTML = `<i class="fa-solid fa-circle recording"></i>`;
-    startBtn.hidden = true;
-    stopBtn.hidden = false;
-    }catch(err){
-      alert('MicroPhone acess denied')
-    }
+  const deleteAudioBtn = document.getElementById('deleteAudioBtn');
+  const audio_file_input = document.getElementById('audio_file'); 
+  const textInputWrapper = document.getElementById('textInputWrapper');
+  const audioPreviewContainer = document.getElementById('audioPreviewContainer');
+  const previewAudio = document.getElementById('previewAudio');
+  const recordingStatus = document.getElementById('recordingStatus');
+  const textInput = document.getElementById('textInput');
 
-  })
-
-  stopBtn.onclick = () =>{
-    mediaRecord.stop();
-    status.textContent = 'Send';
-    startBtn.hidden = false;
-    stopBtn.hidden = true;
+  // Helper function to switch UI to recording mode
+  function switchToRecordingUI() {
+    textInputWrapper.classList.add('record-mode-hidden');
+    audioPreviewContainer.classList.remove('record-mode-hidden');
+    startBtn.classList.add('record-mode-hidden');
+    stopBtn.classList.remove('record-mode-hidden');
+    // Clear any existing audio file
+    deleteAudio(false); // Do not reset UI, we are transitioning to record mode
+    // Show status that recording is ON
+    recordingStatus.innerHTML = `<i class="fa-solid fa-circle recording"></i> Recording...`;
+  }
+  
+  // Helper function to switch UI to playback mode
+  function switchToPlaybackUI(audioURL) {
+    stopBtn.classList.add('record-mode-hidden');
+    previewAudio.src = audioURL;
+    previewAudio.load();
+    // FIX: Set controls to true to make the player visible and playable
+    previewAudio.controls = true; 
+    // Hide the recording status, the audio element is now the main control
+    recordingStatus.innerHTML = ``; 
   }
 
+  // Helper function to switch UI back to text input mode
+  function switchToTextInputUI() {
+    textInputWrapper.classList.remove('record-mode-hidden');
+    audioPreviewContainer.classList.add('record-mode-hidden');
+    startBtn.classList.remove('record-mode-hidden');
+    stopBtn.classList.add('record-mode-hidden');
+  }
 
-  /** Comment list Audio Javascript **/
+  // Function to delete the audio file and reset UI
+  function deleteAudio(resetUI = true) {
+      // Clear the file input
+      audio_file_input.files = null;
+      // Remove source from preview player
+      previewAudio.src = '';
+      // FIX: Ensure controls are hidden when deleting/resetting
+      previewAudio.controls = false; 
+      previewAudio.load();
+      // Reset UI to text mode only if requested
+      if (resetUI) {
+          switchToTextInputUI();
+      }
+  }
+
+  // --- Start Recording ---
+  startBtn.addEventListener('click', async function(){
+    // Don't start recording if text input has content
+    if(textInput.value.trim() !== '') {
+        alert('Please clear your text caption or send it before recording a voice note.');
+        return;
+    }
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecord = new MediaRecorder(stream);
+      audioChunks = [];
+      mediaRecord.ondataavailable = event => audioChunks.push(event.data);
+      
+      mediaRecord.onstop = () =>{
+        // Stop all tracks to turn off the microphone light/indicator
+        stream.getTracks().forEach(track => track.stop());
+        
+        const blob = new Blob(audioChunks, {
+          type: 'audio/webm'
+        });
+        const file = new File([blob], 'recorded_audio.webm', {
+          type: 'audio/webm'
+        });
+        
+        // 1. Assign the File to the Hidden Input
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        audio_file_input.files = dataTransfer.files;
+
+        // 2. Set up the audio player for playback
+        const audioURL = URL.createObjectURL(blob);
+        switchToPlaybackUI(audioURL);
+      };
+      
+      mediaRecord.start();
+      switchToRecordingUI(); // Switch UI state to active recording
+      
+    } catch(err) {
+      console.error('Microphone access denied:', err);
+      alert('Microphone access was denied. Please allow access in your browser settings to record voice notes.');
+      switchToTextInputUI(); // Ensure UI is reset if error occurs
+    }
+  });
+
+  // --- Stop Recording ---
+  stopBtn.onclick = () =>{
+    if (mediaRecord && mediaRecord.state !== 'inactive') {
+      mediaRecord.stop();
+      // mediaRecord.onstop handler takes over to update UI to playback state
+    }
+  }
+
+  // --- Delete Audio ---
+  deleteAudioBtn.onclick = () => deleteAudio(true); 
+
+  // --- Clear Text/Audio on Form Submit ---
+  document.getElementById('postForm').addEventListener('submit', () => {
+      // This runs before the HTMX swap and reset
+      // We explicitly reset the audio state after submission if successful
+      setTimeout(() => deleteAudio(true), 500); // Small delay to ensure HTMX completes its request
+  });
+
+
+  /** Comment list Audio Javascript (Kept from original) **/
 
   document.addEventListener('DOMContentLoaded', () => {
     const audioContainers = document.querySelectorAll('.audio-container');
@@ -885,4 +1035,3 @@ button:hover{
 </script>
 </body>
 </html>
-
