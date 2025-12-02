@@ -4,360 +4,210 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta-name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KishiFace - Channel</title>
+
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-  <link rel="stylesheet" href="{% static 'css/home.css' %}">
+
   <style>
-    /* ========================= */
-    /* GLOBAL STYLES & VARIABLES (WhatsApp/Telegram Channel Base) */
-    /* ========================= */
-    :root {
-      --primary-green: #666; 
-      --secondary-text: #8696a0;
-      --background-chat: #ece5dd; 
-      --message-bg: #fff; 
-      --red-liked: #ed4956;
-    }
+:root {
+  --primary: #666; 
+  --text-dark: #111;
+  --text-light: #777;
+  --msg-bg: #f2f2f2;  
+  --white: #fff;
+}
 
-    body {
-      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: var(--background-chat);
-      color: #111b21;
-    }
+body {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background: var(--white);
+  margin: 0;
+  padding: 0;
+  color: var(--text-dark);
+}
 
-    /* Main Container - Mobile First Focus */
-    main.container {
-      max-width: 768px; /* Max width to keep it chat-like */
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      background: var(--background-chat);
-    }
-    
-    /* Hide all sidebars and unrelated desktop elements */
-    .desktop-only, .right-sidebar, .left-sidebar {
-        display: none !important;
-    }
+main.container {
+  max-width: 768px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 
-    /* ========================= */
-    /* CHANNEL HEADER (Fixed Top) */
-    /* ========================= */
-    .channel-header {
-        display: flex;
-        align-items: center;
-        padding: 10px 15px;
-        background: var(--primary-green);
-        color: white;
-        position: sticky;
-        top: 0;
-        z-index: 100;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-    .header-icon {
-        color: white;
-        font-size: 1.4rem;
-        margin-right: 15px;
-    }
-    .channel-avatar img {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        object-fit: cover;
-        margin-right: 10px;
-    }
-    .channel-name {
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin: 0;
-    }
-    .channel-stats {
-        font-size: 0.8rem;
-        color: #ddd;
-    }
-    .notification-icon {
-        margin-left: auto;
-        font-size: 1.2rem;
-    }
+/* HEADER */
+.channel-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #ddd;
+  color: #f2f2f2;
+  background-color: #666;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.header-icon i { font-size: 1.4rem; color: var(--white); }
+.channel-avatar img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; margin: 0 12px; }
+.channel-name { font-size: 1rem; font-weight: 600; }
+.channel-stats { font-size: 0.75rem; color: var(--white); }
 
 
-    /* ========================= */
-    /* CHAT MESSAGES (Feed) */
-    /* ========================= */
-    .main-feed {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden; /* Hide main feed overflow */
-    }
+/* MESSAGE FEED */
+.main-feed { flex: 1; overflow: hidden; }
+#messageOutput {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  max-height: calc(100vh - 115px);
+}
 
-    #messageOutput {
-      flex-grow: 1;
-      padding: 0 10px;
-      overflow-y: auto;
-      max-height: calc(100vh - 120px); /* Height between header and input */
-    }
+/* MESSAGE STRUCTURE */
+.chat-message { width: 100%; display: flex; margin: 6px 0; }
+.message-block {
+  max-width: 80%;
+  background: var(--msg-bg);
+  padding: 10px 14px;
+  border-radius: 18px;
+}
+.message-author-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; }
+.message-text { font-size: 0.95rem; line-height: 1.4; }
+.message-text .emoji-text { font-size: 1.5rem; line-height: 1.2; }
+.message-block img { width: 100%; max-height: 280px; border-radius: 10px; margin-top: 6px; }
 
-    .chat-message {
-      display: flex;
-      justify-content: center; /* Center the whole message block */
-      width: 100%;
-      padding: 8px 0;
-    }
-    
-    .message-block {
-        min-width: 85%;
-        max-width: 95%; /* Messages don't fill the whole width */
-        background: var(--message-bg);
-        padding: 10px 12px;
-        border-radius: 10px;
-        box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
-        position: relative;
-        /* Padding bottom increased to accommodate the time/reaction row */
-        padding-bottom: 35px; 
-    }
-    
-    /* Author name/indicator */
-    .message-author-name {
-        display: block;
-        font-weight: 700;
-        color: #000; /* Author name is bold black/dark */
-        margin-bottom: 5px;
-    }
-    
-    .message-text {
-        font-size: 0.95rem;
-        line-height: 1.35;
-        white-space: pre-wrap;
-        color: #111b21;
-    }
-    
-    .message-block img {
-        max-width: 100%;
-        max-height: 300px;
-        border-radius: 8px;
-        margin: 5px 0;
-    }
+.time-and-reactions-wrapper { margin-top: 6px; display: flex; align-items: center; gap: 10px; }
+.msg-time { font-size: 0.7rem; color: var(--text-light); }
+.like-button { border: none; background: none; color: var(--text-light); cursor: pointer; font-size: 1rem; }
+.like-button.liked { color: var(--primary); }
+.reaction-count { font-size: 0.75rem; color: var(--text-light); }
 
-    /* **FIX: TIMESTAMPS AND REACTIONS MOVED TO ABSOLUTE BOTTOM RIGHT** */
-    .time-and-reactions-wrapper {
-        position: absolute;
-        bottom: 8px; /* Offset from the very bottom of the message block */
-        right: 12px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
+/* DATE SEPARATOR */
+.date-separator { text-align: center; margin: 10px 0; }
+.date-separator i {
+  background: #eee;
+  padding: 5px 12px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  color: var(--text-light);
+}
 
-    /* Reaction/Action Row */
-    .reaction-row {
-        display: flex;
-        align-items: center;
-        font-size: 0.8rem;
-        position: relative; /* Make it a positioning context for the likes bubble */
-    }
+/* INPUT BAR */
+#chatInputWrapper {
+  background: var(--white);
+  border-top: 1px solid #ddd;
+  padding: 10px 12px;
+  position: sticky;
+  width: 85%;
+  bottom: 0;
+  z-index: 30;
+}
+.inner-wrapper { width: 90%; display: flex; gap: 10px; align-items: center; }
 
-   
-    
-    .reaction-count {
-        font-size: 0.8rem;
-        font-weight: 500;
-        color: var(--secondary-text);
-        margin-left: 4px;
-    }
-    
-    .like-button {
-        background: none;
-        border: none;
-        color: var(--secondary-text);
-        cursor: pointer;
-        font-size: 1rem;
-        padding: 0;
-        margin-left: 5px;
-    }
-    .like-button i {
-        font-size: 0.85rem;
-    }
-    .like-button.liked {
-        color: var(--primary-green); /* Changed to primary green for distinction */
-    }
-    
-    /* Timestamp (Small and contained) */
-    .msg-time {
-        font-size: 0.7rem;
-        color: var(--secondary-text);
-        text-align: right;
-        display: flex;
-        align-items: center;
-        gap: 3px;
-    }
-    
-    /* Date Separator */
-    .date-separator {
-        text-align: center;
-        padding: 10px 0;
-    }
-    .date-separator i {
-        display: inline-block;
-        background: #dde5eb; /* Light grayish blue */
-        color: #4a637a;
-        font-size: 0.7rem;
-        padding: 5px 10px;
-        border-radius: 8px;
-        font-style: normal;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
+.input-box { flex: 1; position: relative; }
+#message {
+  width: 90%;
+  border-radius: 22px;
+  border: 1px solid #ccc;
+  padding: 10px 110px 10px 15px;
+  font-size: 0.95rem;
+  background: var(--white);
+}
+#message:focus { outline: none; border-color: var(--primary); }
 
-    /* ========================= */
-    /* MESSAGE INPUT (Fixed Bottom) */
-    /* ========================= */
-    #chatInputWrapper {
-      position: sticky;
-      bottom: 0;
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 8px 10px;
-      background: var(--background-chat);
-      border-top: 1px solid rgba(0,0,0,0.1);
-      z-index: 120;
-    }
-    
-    #chatInputWrapper .inner-wrapper {
-        display: flex;
-        width: 100%;
-        max-width: 600px; /* Constrain input width */
-        gap: 8px;
-    }
+/* BUTTONS INSIDE INPUT */
+.input-box .inside-image-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 1.35rem; color: var(--text-light); cursor: pointer; }
+.input-box .inside-emoji-btn { position: absolute; right: 45px; top: 50%; transform: translateY(-50%); font-size: 1.35rem; color: var(--text-light); cursor: pointer; }
+.input-box .inside-send-btn { position: absolute; right: 80px; top: 50%; transform: translateY(-50%); font-size: 1.25rem; cursor: pointer; color: #ccc; transition: color 0.2s; }
+.input-box .inside-send-btn.active { color: var(--primary); }
 
-    #message {
-      flex: 1;
-      padding: 10px 15px;
-      border-radius: 20px;
-      border: 1px solid #ddd;
-      font-size: 0.95rem;
-      background-color: #fff;
-    }
-
-    #message:focus {
-        outline: none;
-        box-shadow: 0 0 0 1px var(--primary-green);
-    }
-
-    #sendBtn {
-      padding: 10px 15px;
-      border: none;
-      background: var(--primary-green);
-      border-radius: 20px;
-      color: white;
-      font-weight: 500;
-      cursor: pointer;
-      font-size: 0.95rem;
-      flex-shrink: 0;
-    }
-    
-    .file-label {
-      font-size: 1.4rem;
-      color: var(--secondary-text);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-    }
-    .file-label:hover {
-        color: #000;
-    }
-    #image { display: none; }
-    
-    .read-receipt {
-        color: #4fc3f7; /* Blue ticks for read status */
-        font-size: 0.7rem;
-        margin-left: 2px;
-    }
-
+/* EMOJI PICKER */
+#emojiPicker {
+  display: none;
+  position: absolute;
+  bottom: 45px;
+  right: 0;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  max-width: 300px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+}
+#emojiPicker .emoji { cursor: pointer; font-size: 1.2rem; margin: 3px; display: inline-block; }
+#emojiPicker .emoji:hover { background: #eee; border-radius: 5px; }
   </style>
 </head>
-<body>
 
+<body>
 <main class="container">
 
-    <div class="channel-header">
-        <a href="{% url 'channel_create' %}" class="header-icon"><i class="fa-solid fa-arrow-left"></i></a> 
-        <div class="channel-avatar">
-            <img src="{{ channel.image.url }}" alt="{{ channel.channel_name }}">
-        </div>
-        <div class="channel-info">
-            <h2 class="channel-name">{{ channel.channel_name }}</h2>
-            <div class="channel-stats">{{ channel.subscriber.count|intcomma }} followers</div>
-        </div>
-        <div class="notification-icon"><i class="fa-regular fa-bell"></i></div>
+  <!-- HEADER -->
+  <div class="channel-header">
+    <a href="{% url 'channel_create' %}" class="header-icon"><i class="fa-solid fa-arrow-left"></i></a>
+    <div class="channel-avatar"><img src="{{ channel.image.url }}" alt="{{ channel.channel_name }}"></div>
+    <div>
+      <h2 class="channel-name">{{ channel.channel_name }}</h2>
+      <div class="channel-stats">{{ channel.subscriber.count|intcomma }} followers</div>
     </div>
+    
+  </div>
 
-    <div class="main-feed">
-        <div id="messageOutput">
-          {% for label, msgs in grouped_messages.items %}
-            <div class="date-separator"><i>{{label}}</i></div>
-            {% for message in msgs %}
-            <div class="chat-message">
-                <div class="message-block" id="msg-{{ message.channemessage_id }}">
-                    <span class="message-author-name">
-                       {% if message.author != user %}
-                            <a style="text-decoration: none; color: #111b21;" href="{% url 'profile' message.author %}">{{ message.author }}</a>
-                            {% endif %}
-                      
-                    </span>
-
-                    {% if message.message %}
-                    <div class="message-text">{{ message.message }}</div>
-                    {% endif %}
-                    
-                    {% if message.image %}
-                    <img src="{{ message.image.url }}" alt="Posted Image">
-                    {% endif %}
-                    
-                    <div class="time-and-reactions-wrapper">
-                        
-                        <div class="reaction-row">
-                            
-                            <span class="reaction-count" id="like-count-{{ message.channemessage_id }}">{{ message.like.count }}</span>
-                            
-                            <button class="like-button {% if user in message.like.all %}liked{% endif %}"
-                                    data-msg-id="{{ message.channemessage_id }}"
-                                    onclick="sendLikeAction(this)">
-                                <i class="{% if user in message.like.all %}fa-solid{% else %}fa-regular{% endif %} fa-thumbs-up"></i>
-                            </button>
-                        </div>
-
-                        <div class="msg-time">
-                            {{ message.chat_time}} 
-                            {% if message.author == user %}
-                            <i class="fa-solid fa-check-double read-receipt"></i>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
+  <!-- MESSAGE FEED -->
+  <div class="main-feed">
+    <div id="messageOutput">
+      {% for date_label, msgs in grouped_messages.items %}
+        <div class="date-separator"><i>{{ date_label }}</i></div>
+        {% for message in msgs %}
+        <div class="chat-message">
+          <div class="message-block" id="msg-{{ message.channemessage_id }}">
+            <span class="message-author-name">
+              <a href="{% url 'profile' message.author %}" style="text-decoration:none;color:#111;">
+                {{ message.author }}
+              </a>
+            </span>
+            {% if message.message %}
+              <div class="message-text">{{ message.message }}</div>
+            {% endif %}
+            {% if message.image %}
+              <img src="{{ message.image.url }}">
+            {% endif %}
+            <div class="time-and-reactions-wrapper">
+              <span class="reaction-count" id="like-count-{{ message.channemessage_id }}">{{ message.like.count }}</span>
+              <button class="like-button {% if user in message.like.all %}liked{% endif %}" data-msg-id="{{ message.channemessage_id }}" onclick="sendLikeAction(this)">
+                <i class="{% if user in message.like.all %}fa-solid{% else %}fa-regular{% endif %} fa-thumbs-up"></i>
+              </button>
+              <span class="msg-time">{{ message.chat_time }}</span>
             </div>
-            {% endfor %}
-          {% endfor %}
-          
-          <div id="scroll-anchor" style="height: 1px;"></div>
+          </div>
         </div>
-    </div> 
-
-
-    <div id="chatInputWrapper">
-        <div class="inner-wrapper">
-            <input type="text" name="message" id="message" placeholder="Message {{ channel.channel_name }}...">
-            <label for="image" class="file-label"><i class="fa-regular fa-image"></i></label>
-            <input type="file" name="image" id="image">
-            <button id="sendBtn">Send</button>
-        </div>
+        {% endfor %}
+      {% endfor %}
+      <div id="scroll-anchor"></div>
     </div>
+  </div>
+
+  <!-- INPUT BAR -->
+  <div id="chatInputWrapper">
+    <div class="inner-wrapper">
+      <div class="input-box">
+        <input type="text" id="message" placeholder="Message {{ channel.channel_name }}...">
+        <span class="inside-emoji-btn" id="emojiBtn"><i class="fa-regular fa-face-smile"></i></span>
+        <label class="inside-image-btn" for="image"><i class="fa-regular fa-image"></i></label>
+        <input type="file" id="image" hidden>
+        <span class="inside-send-btn" id="sendBtn"><i class="fa-solid fa-paper-plane"></i></span>
+
+        <!-- EMOJI PICKER -->
+        <div id="emojiPicker">
+          <span class="emoji">😀</span><span class="emoji">😂</span><span class="emoji">😍</span>
+          <span class="emoji">😎</span><span class="emoji">😢</span><span class="emoji">👍</span>
+          <span class="emoji">🎉</span><span class="emoji">❤️</span><span class="emoji">🙌</span>
+          <span class="emoji">🤔</span><span class="emoji">👏</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
 </main>
 
@@ -370,135 +220,111 @@ const image = document.getElementById('image');
 const message = document.getElementById('message');
 const sendBtn = document.getElementById('sendBtn');
 const messageOutput = document.getElementById('messageOutput');
-const scrollAnchor = document.getElementById('scroll-anchor');
+const anchor = document.getElementById('scroll-anchor');
 
-const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-const socket = new WebSocket(`${protocol}${window.location.host}/ws/${channel_id}/`);
+const emojiBtn = document.getElementById('emojiBtn');
+const emojiPicker = document.getElementById('emojiPicker');
 
-function scrollToBottom() {
-  // Use smooth scrolling to the anchor element at the bottom
-  scrollAnchor.scrollIntoView({ behavior: 'smooth', block: 'end' });
-}
-
-// Function to handle like/unlike action
-function sendLikeAction(buttonElement) {
-    const messageId = buttonElement.getAttribute('data-msg-id');
-    socket.send(JSON.stringify({
-        'action': 'like_unlike',
-        'message_id': messageId,
-        'username': user
-    }));
-}
-
-socket.addEventListener('message', function(e) {
-  const data = JSON.parse(e.data);
-
-  if (data.type === 'Response') {
-      
-      const isUser = (data.username === user);
-      const readReceipt = isUser ? '<i class="fa-solid fa-check-double read-receipt"></i>' : '';
-      
-      const chatMessage = document.createElement('div');
-      chatMessage.className = `chat-message`;
-      
-      const imageHtml = data.image ? `<img src="${data.image}" alt="Channel Post">` : '';
-      
-      chatMessage.innerHTML = `
-        <div class="message-block" id="msg-${data.message_id}">
-            <span class="message-author-name">
-                <a style="text-decoration: none; color: #111b21;" href="/profile/${data.username}">${data.username}</a>
-            </span>
-            
-            ${data.message ? `<div class="message-text">${data.message}</div>` : ''}
-            
-            ${imageHtml}
-            
-            <div class="time-and-reactions-wrapper">
-                
-                <div class="reaction-row">
-                    <div class="reactions">
-                        <i class="fa-regular fa-face-grin-squint"></i>
-                    </div>
-                    <span class="reaction-count" id="like-count-${data.message_id}">0</span>
-                    
-                    <button class="like-button"
-                            data-msg-id="${data.message_id}"
-                            onclick="sendLikeAction(this)">
-                        <i class="fa-regular fa-thumbs-up"></i>
-                    </button>
-                </div>
-
-                <div class="msg-time">
-                    ${data.time}
-                    ${readReceipt}
-                </div>
-            </div>
-        </div>
-      `;
-      
-      messageOutput.appendChild(chatMessage);
-      scrollToBottom(); // Scroll after adding new message
-
-  } else if (data.type === 'like_response') {
-      const likeCountElement = document.getElementById(`like-count-${data.message_id}`);
-      const likeButtonElement = document.querySelector(`[data-msg-id='${data.message_id}']`);
-
-      if (likeCountElement) {
-          likeCountElement.textContent = data.like_count;
-      }
-      
-      if (likeButtonElement) {
-          const thumbIcon = likeButtonElement.querySelector('i');
-          if (data.user_liked) {
-              likeButtonElement.classList.add('liked');
-              thumbIcon.classList.replace('fa-regular', 'fa-solid');
-          } else {
-              likeButtonElement.classList.remove('liked');
-              thumbIcon.classList.replace('fa-solid', 'fa-regular');
-          }
-      }
-  }
-
+// Toggle emoji picker
+emojiBtn.addEventListener('click', () => {
+  emojiPicker.style.display = emojiPicker.style.display === 'none' ? 'block' : 'none';
 });
 
-sendBtn.addEventListener('click', function() {
-  const typedMessage = message.value;
-  const imageFile = image.files[0];
+// Insert emoji
+emojiPicker.querySelectorAll('.emoji').forEach(emoji => {
+  emoji.addEventListener('click', () => {
+    message.value += emoji.textContent;
+    message.focus();
+    updateSendIconState();
+  });
+});
 
-  if (!typedMessage && !imageFile) return;
+// Close picker on click outside
+document.addEventListener('click', (e) => {
+  if (!emojiPicker.contains(e.target) && !emojiBtn.contains(e.target)) emojiPicker.style.display = 'none';
+});
 
-  if (imageFile) {
+// Scroll to bottom
+function scrollToBottom() { anchor.scrollIntoView({ behavior: 'smooth' }); }
+
+// Render emojis in messages
+function renderEmojis(text) {
+  const emojiRegex = /([\u231A-\u231B]|[\u23E9-\u23EC]|[\u23F0]|[\u23F3]|[\u25FD-\u25FE]|[\u2614-\u2615]|[\u2648-\u2653]|[\u267F]|[\u2693]|[\u26A1]|[\u26AA-\u26AB]|[\u26BD-\u26BE]|[\u26C4-\u26C5]|[\u26CE]|[\u26D4]|[\u26EA]|[\u26F2-\u26F3]|[\u26F5]|[\u26FA]|[\u26FD]|[\u2702]|[\u2705]|[\u2708-\u2709]|[\u270A-\u270B]|[\u2728]|[\u2733-\u2734]|[\u2744]|[\u2747]|[\u2753-\u2755]|[\u2757]|[\u2764]|[\u27A1]|[\u2B05-\u2B07]|[\u2B1B-\u2B1C]|[\u2B50]|[\u2B55]|[\u3030]|[\u303D]|[\u3297]|[\u3299]|[\uD83C-\uDBFF\uDC00-\uDFFF])/g;
+  return text.replace(emojiRegex, '<span class="emoji-text">$1</span>');
+}
+
+// WebSocket
+const protocol = location.protocol === "https:" ? "wss://" : "ws://";
+const socket = new WebSocket(`${protocol}${location.host}/ws/${channel_id}/`);
+
+function sendLikeAction(btn) {
+  socket.send(JSON.stringify({ action: "like_unlike", username: user, message_id: btn.getAttribute("data-msg-id") }));
+}
+
+// Update send icon active state
+function updateSendIconState() {
+  if (message.value.trim() || image.files.length > 0) sendBtn.classList.add('active');
+  else sendBtn.classList.remove('active');
+}
+
+message.addEventListener('input', updateSendIconState);
+image.addEventListener('change', updateSendIconState);
+
+// Receive messages
+socket.addEventListener("message", (e) => {
+  const data = JSON.parse(e.data);
+  if (data.type === "Response") {
+    const block = document.createElement("div");
+    block.className = "chat-message";
+    block.innerHTML = `
+      <div class="message-block" id="msg-${data.message_id}">
+        <span class="message-author-name">
+          <a href="/profile/${data.username}" style="text-decoration:none;color:#111;">${data.username}</a>
+        </span>
+        ${data.message ? `<div class="message-text">${renderEmojis(data.message)}</div>` : ""}
+        ${data.image ? `<img src="${data.image}">` : ""}
+        <div class="time-and-reactions-wrapper">
+          <span class="reaction-count" id="like-count-${data.message_id}">0</span>
+          <button class="like-button" data-msg-id="${data.message_id}" onclick="sendLikeAction(this)">
+            <i class="fa-regular fa-thumbs-up"></i>
+          </button>
+          <span class="msg-time">${data.time}</span>
+        </div>
+      </div>`;
+    messageOutput.appendChild(block);
+    scrollToBottom();
+  }
+  if (data.type === "like_response") {
+    document.getElementById(`like-count-${data.message_id}`).textContent = data.like_count;
+    const btn = document.querySelector(`[data-msg-id='${data.message_id}']`);
+    const icon = btn.querySelector("i");
+    if (data.user_liked) { btn.classList.add("liked"); icon.classList.replace("fa-regular","fa-solid"); }
+    else { btn.classList.remove("liked"); icon.classList.replace("fa-solid","fa-regular"); }
+  }
+});
+
+// Send message
+sendBtn.addEventListener("click", () => {
+  const text = message.value;
+  const file = image.files[0];
+  if (!text && !file) return;
+  sendBtn.classList.remove('active');
+
+  if (file) {
     const reader = new FileReader();
     reader.onload = () => {
-      socket.send(JSON.stringify({
-        'message': typedMessage,
-        'image': reader.result,
-        'pictureUrl': pictureUrl,
-        'username': user
-      }));
+      socket.send(JSON.stringify({ message: text, image: reader.result, username: user, pictureUrl }));
     };
-    reader.readAsDataURL(imageFile);
+    reader.readAsDataURL(file);
   } else {
-    socket.send(JSON.stringify({
-      'message': typedMessage,
-      'image': null,
-      'pictureUrl': pictureUrl,
-      'username': user
-    }));
+    socket.send(JSON.stringify({ message: text, image: null, username: user, pictureUrl }));
   }
 
   message.value = '';
   image.value = '';
 });
 
-// Initial scroll to bottom when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    // Scroll needs a slight delay to ensure all DOM elements and images have rendered
-    setTimeout(scrollToBottom, 100); 
-});
-
+document.addEventListener("DOMContentLoaded", () => setTimeout(scrollToBottom, 200));
 </script>
-
-
 </body>
 </html>
