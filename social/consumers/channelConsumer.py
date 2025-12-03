@@ -7,6 +7,7 @@ import uuid
 import base64
 from django.core.files.base import ContentFile
 from django.contrib.auth import get_user_model
+from django.conf import settings
 
 
 def get_social_models():
@@ -76,6 +77,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         data = json.loads(text_data)
         action = data.get("action")
+        
+        print(f"DEBUG: Received data - Action: {action}")
+        print(f"DEBUG: File data present: {'file' in data}")
+        print(f"DEBUG: File name: {data.get('file_name')}")
 
         if action == "like_unlike":
             # --- LIKE/UNLIKE ACTION ---
@@ -102,15 +107,26 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             now = timezone.now()
             formatted_time = now.strftime("%I:%M %p")
             
+            print(f"DEBUG: File base64 preview: {str(file_base64)[:100] if file_base64 else 'None'}")
+            
             # Save message and get the actual URL of the file 
             message_instance = await self.save_message(self.username, message, file_base64, file_name, pictureUrl)
+
+            # Get the file URL from the instance
+            file_url = None
+            if hasattr(message_instance, 'file_url'):
+                file_url = message_instance.file_url
+            elif message_instance.file:
+                file_url = message_instance.file.url
+                # Ensure HTTPS in production
+                if settings.USE_CLOUDINARY and not settings.DEBUG and file_url.startswith('http://'):
+                    file_url = file_url.replace('http://', 'https://', 1)
 
             group_data = {
                 "type": "chat_message",
                 "username": username,
                 "message": message,
-                # Use .file.url and the file_type/file_name set in save_message
-                "file_url": message_instance.file.url if message_instance.file else None,
+                "file_url": file_url,
                 "file_name": message_instance.file_name, 
                 "file_type": message_instance.file_type, 
                 "message_id": str(message_instance.channemessage_id), 
@@ -126,9 +142,9 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             "type": "Response",
             "username": event["username"],
             "message": event["message"],
-            "file_url": event["file_url"],
-            "file_name": event["file_name"],
-            "file_type": event["file_type"],
+            "file_url": event.get("file_url"),
+            "file_name": event.get("file_name"),
+            "file_type": event.get("file_type"),
             "message_id": event["message_id"], 
             "pictureUrl": event["pictureUrl"],
             "time": event["time"]
@@ -160,27 +176,44 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             author=author_user, 
             message=message,
             pictureUrl=pictureUrl,
-            file_name=file_name, # Initialize file_name from client
         )
 
         # Only process file if it exists
-        if file_data:
+        if file_data and file_data != "null" and file_data != "None":
             try:
-                # file_data looks like: "data:image/png;base64,AAAAAA..."
-                format, filestr = file_data.split(";base64,")
+                # Handle the base64 data
+                if file_data.startswith('data:'):
+                    format, filestr = file_data.split(";base64,")
+                else:
+                    # Sometimes base64 might come without data: prefix
+                    filestr = file_data
+                    format = "application/octet-stream"
                 
-                # Use the original file name if available, otherwise create a UUID name
+                # Generate file name if not provided
                 if not file_name:
-                    # Get the extension from the format (e.g., 'image/png' -> 'png')
-                    ext = format.split("/")[-1]
+                    # Try to get extension from format
+                    if '/' in format:
+                        ext = format.split("/")[-1].split(';')[0]
+                    else:
+                        ext = 'bin'
                     file_name = f"{uuid.uuid4()}.{ext}"
                 
                 decoded_file = base64.b64decode(filestr)
-
-                # Save the file content to the CloudinaryField/FileField
-                msg.file.save(file_name, ContentFile(decoded_file), save=False) 
                 
-                # 👇 CRITICAL FIX: Explicitly set file_type based on the file extension
+                # Check file size (Cloudinary has limits)
+                file_size = len(decoded_file)
+                print(f"DEBUG: File size: {file_size} bytes")
+                
+                # Cloudinary limits: 100MB for video, 20MB for images, 20MB for raw
+                if file_size > 100 * 1024 * 1024:  # 100MB
+                    raise ValueError(f"File too large: {file_size} bytes")
+                
+                content_file = ContentFile(decoded_file, name=file_name)
+                
+                # Save to CloudinaryField - Cloudinary handles the upload
+                msg.file.save(file_name, content_file, save=False)
+                
+                # Determine file type for our frontend
                 name_lower = file_name.lower()
                 if any(ext in name_lower for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']):
                     msg.file_type = 'image'
@@ -191,17 +224,47 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 else:
                     msg.file_type = 'document'
                 
-                # Ensure the final file_name is set on the instance (especially if UUID was generated)
                 msg.file_name = file_name
+                
+                print(f"DEBUG: File saved. Type: {msg.file_type}, Name: {file_name}")
 
             except Exception as e:
-                print("FILE SAVE ERROR:", str(e))
-                # Set file fields to None if saving failed
+                print(f"FILE SAVE ERROR: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 msg.file = None
                 msg.file_type = None
                 msg.file_name = None
+        else:
+            print("DEBUG: No file data received")
+            msg.file = None
+            msg.file_type = None
+            msg.file_name = None
 
+        # Save the instance
         msg.save()
+        
+        # Refresh to ensure we have the latest file data
+        msg.refresh_from_db()
+        
+        # **CRITICAL**: If it's a video/audio, ensure Cloudinary processed it
+        if msg.file and msg.file_type in ['video', 'audio']:
+            print(f"DEBUG: {msg.file_type.upper()} file saved. URL: {msg.file.url}")
+            
+            # Store a secure URL
+            if settings.USE_CLOUDINARY and not settings.DEBUG:
+                # Ensure HTTPS for Cloudinary in production
+                if msg.file.url.startswith('http://'):
+                    msg.file_url = msg.file.url.replace('http://', 'https://', 1)
+                else:
+                    msg.file_url = msg.file.url
+            else:
+                msg.file_url = msg.file.url
+        elif msg.file:
+            msg.file_url = msg.file.url
+        else:
+            msg.file_url = None
+        
+        print(f"DEBUG: Final file URL: {msg.file_url}")
 
-        # Return the message instance (now containing final URL and types)
         return msg

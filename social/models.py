@@ -151,10 +151,17 @@ class ChannelMessage(models.Model):
     if settings.USE_CLOUDINARY:
         file = CloudinaryField(
             'channel_file',
-            resource_type='auto',
+            resource_type='auto',  # This should detect type automatically
             folder='channel_files',
             blank=True,
-            null=True
+            null=True,
+            # Add transformation options for better delivery
+            transformation=[
+                {'quality': 'auto', 'fetch_format': 'auto'}
+            ],
+            use_filename=True,
+            unique_filename=True,
+            overwrite=False
         )
     else:
         file = models.FileField(upload_to='channel_files', blank=True, null=True)
@@ -201,75 +208,10 @@ class ChannelMessage(models.Model):
             return calendar.day_name[message_date.weekday()]
         else:
             return self.created_at.strftime("%B %d, %Y")
+    
     @property
     def chat_time(self):
         return self.created_at.strftime("%I:%M %p")
-
-
-    def like_count(self):
-        return self.like.count()
-
-    channemessage_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name='channel_messages')
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
-    pictureUrl = models.TextField(blank=True)
-    message = models.TextField()
-    like = models.ManyToManyField(User, blank=True, related_name='message_likers')
-    
-    # 👇 UPDATED GENERIC FILE FIELDS (CRITICAL FIX)
-    file = models.FileField(upload_to='channel_files', blank=True, null=True)
-    file_type = models.CharField(max_length=50, blank=True, null=True)
-    file_name = models.CharField(max_length=255, blank=True, null=True)
-    # 👆
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    # Utility methods for file handling and detection (copied from Message model)
-    def get_file_type(self):
-        if self.file:
-            filename = str(self.file.name).lower()
-            if any(ext in filename for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']):
-                return 'image'
-            elif any(ext in filename for ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm']):
-                return 'video'
-            elif any(ext in filename for ext in ['.mp3', '.wav', '.ogg', '.m4a', '.flac']):
-                return 'audio'
-            else:
-                return 'document'
-        return 'text'
-        
-    def save(self, *args, **kwargs):
-        # Auto-detect file type on save
-        if self.file and not self.file_type:
-            self.file_type = self.get_file_type()
-            # Set file_name if the consumer didn't set it (optional fallback)
-            if self.file.name and not self.file_name:
-                self.file_name = os.path.basename(self.file.name)
-        
-        # Ensure file_type is null if no file is present
-        if not self.file:
-            self.file_type = None
-            self.file_name = None
-            
-        super().save(*args, **kwargs)
-        
-    @property
-    def chat_date_label(self):
-        message_date = self.created_at.date()
-        today = date.today()
-        yesterday = today - timedelta(days=1)
-        if message_date == today:
-            return "Today"
-        elif message_date == yesterday:
-            return "Yesterday"
-        elif today - message_date < timedelta(days=7):
-            return calendar.day_name[message_date.weekday()]
-        else:
-            return self.created_at.strftime("%B %d, %Y")
-    @property
-    def chat_time(self):
-        return self.created_at.strftime("%I:%M %p")
-
 
     def like_count(self):
         return self.like.count()

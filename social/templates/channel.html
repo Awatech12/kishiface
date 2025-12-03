@@ -123,11 +123,16 @@ main.container {
   margin-top: 6px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
-.custom-audio-player { max-width: 250px; }
+.custom-audio-player { 
+    max-width: 250px; 
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
 .custom-video-player { 
     flex-direction: column; 
     padding: 10px; 
     max-width: 320px; 
+    background: #000;
 } 
 
 .player-controls {
@@ -161,6 +166,11 @@ main.container {
 .player-play-btn .fa-pause {
     margin-left: 0;
 }
+.custom-audio-player .player-play-btn {
+    background: white;
+    color: #667eea;
+}
+
 .player-progress-bar {
   flex-grow: 1;
   height: 6px;
@@ -175,13 +185,53 @@ main.container {
   background: var(--primary);
   border-radius: 3px;
 }
+.custom-audio-player .player-progress-bar {
+    background: rgba(255,255,255,0.3);
+}
+.custom-audio-player .player-progress {
+    background: white;
+}
+
 .player-time {
   font-size: 0.75rem;
   color: var(--text-light);
   flex-shrink: 0;
   min-width: 30px;
 }
+.custom-audio-player .player-time {
+    color: white;
+}
 
+.player-fullscreen-btn,
+.player-volume-btn {
+    background: none;
+    border: none;
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 5px;
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.custom-audio-player .player-volume-btn {
+    color: white;
+}
+.player-fullscreen-btn:hover,
+.player-volume-btn:hover {
+    background: rgba(0,0,0,0.1);
+}
+
+/* Ensure video has proper aspect ratio */
+.custom-video-player .message-media {
+    width: 100%;
+    max-height: 280px;
+    border-radius: 8px;
+    background: #000;
+}
 
 /* Style for downloadable documents/files & image download container*/
 .message-file-block {
@@ -318,7 +368,7 @@ main.container {
 
             {% if message.file %}
               {% if message.file_type == 'image' %}
-                <img src="{{ message.file.url }}" class="message-media">
+                <img src="{{ message.file.url }}" class="message-media" loading="lazy">
                 <div class="message-file-block">
                   <i class="fa-solid fa-file-image"></i>
                   <div class="message-file-details">
@@ -327,11 +377,21 @@ main.container {
                   </div>
                 </div>
               {% elif message.file_type == 'video' %}
-                <video id="video-{{ message.channemessage_id }}" src="{{ message.file.url }}"></video>
+                <!-- Hidden video element for control -->
+                <video id="video-{{ message.channemessage_id }}" 
+                       src="{{ message.file.url }}"
+                       preload="metadata"></video>
                 
                 <div class="custom-video-player" data-msg-id="{{ message.channemessage_id }}">
-                    <video id="video-display-{{ message.channemessage_id }}" src="{{ message.file.url }}" 
-                           class="message-media" poster="{% static 'default_video_poster.jpg' %}"></video>
+                    <!-- Visible video element -->
+                    <video id="video-display-{{ message.channemessage_id }}" 
+                           src="{{ message.file.url }}" 
+                           class="message-media" 
+                           preload="metadata"
+                           playsinline
+                           webkit-playsinline
+                           controlslist="nodownload"
+                           oncontextmenu="return false;"></video>
                     
                     <div class="player-controls">
                       <button class="player-play-btn" onclick="toggleVideoPlayback(this, '{{ message.channemessage_id }}')">
@@ -341,6 +401,9 @@ main.container {
                         <div id="progress-{{ message.channemessage_id }}" class="player-progress"></div>
                       </div>
                       <span id="time-{{ message.channemessage_id }}" class="player-time">0:00</span>
+                      <button class="player-fullscreen-btn" onclick="toggleFullscreen('{{ message.channemessage_id }}')">
+                        <i class="fa-solid fa-expand"></i>
+                      </button>
                     </div>
                 </div>
 
@@ -352,7 +415,9 @@ main.container {
                   </div>
                 </div>
               {% elif message.file_type == 'audio' %}
-                <audio id="audio-{{ message.channemessage_id }}" src="{{ message.file.url }}"></audio>
+                <audio id="audio-{{ message.channemessage_id }}" 
+                       src="{{ message.file.url }}"
+                       preload="metadata"></audio>
                 
                 <div class="custom-audio-player" data-msg-id="{{ message.channemessage_id }}">
                   <button class="player-play-btn" onclick="toggleAudioPlayback(this, '{{ message.channemessage_id }}')">
@@ -362,6 +427,9 @@ main.container {
                     <div id="progress-{{ message.channemessage_id }}" class="player-progress"></div>
                   </div>
                   <span id="time-{{ message.channemessage_id }}" class="player-time">0:00</span>
+                  <button class="player-volume-btn" onclick="toggleMute('{{ message.channemessage_id }}')">
+                    <i class="fa-solid fa-volume-high"></i>
+                  </button>
                 </div>
 
                 <div class="message-file-block">
@@ -437,6 +505,21 @@ const emojiPicker = document.getElementById('emojiPicker');
 
 let currentPlayingMedia = null; // Stores reference to the current playing <audio> or <video> element
 
+// Browser compatibility check
+function isSafari() {
+    return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+}
+
+function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+// Debug logging
+console.log('Production Debug Info:');
+console.log('Protocol:', window.location.protocol);
+console.log('Host:', window.location.host);
+console.log('User:', user);
+console.log('Picture URL:', pictureUrl);
 
 /* --- UTILITY FUNCTIONS --- */
 
@@ -493,18 +576,24 @@ function handleMediaPlayback(mediaElement, button) {
 
     if (mediaElement.paused || mediaElement.ended) {
         // Start playback
-        mediaElement.play();
-        icon.classList.replace('fa-play', 'fa-pause');
-        icon.style.marginLeft = '0'; 
+        mediaElement.play().then(() => {
+            icon.classList.replace('fa-play', 'fa-pause');
+            icon.style.marginLeft = '0'; 
+            currentPlayingMedia = mediaElement;
 
-        currentPlayingMedia = mediaElement;
-
-        mediaElement.onloadedmetadata = () => { 
-            if (timeSpan.textContent === '0:00') {
-                 timeSpan.textContent = formatTime(mediaElement.duration); 
+            mediaElement.onloadedmetadata = () => { 
+                if (timeSpan.textContent === '0:00') {
+                     timeSpan.textContent = formatTime(mediaElement.duration); 
+                }
+            };
+            updateMediaControls(mediaElement, progressDiv, timeSpan, icon);
+        }).catch(error => {
+            console.log("Playback failed:", error);
+            // Handle autoplay restrictions
+            if (error.name === 'NotAllowedError') {
+                alert('Click the play button to start audio/video playback');
             }
-        };
-        updateMediaControls(mediaElement, progressDiv, timeSpan, icon);
+        });
 
     } else {
         // Pause playback
@@ -526,12 +615,47 @@ function seekMedia(event, mediaElement) {
     }
 }
 
+// Ensure HTTPS for Cloudinary URLs in production
+function ensureSecureUrl(url) {
+    if (!url) return url;
+    
+    // If in production and URL is HTTP, convert to HTTPS
+    if (window.location.protocol === 'https:' && url.startsWith('http://')) {
+        return url.replace('http://', 'https://');
+    }
+    
+    // Specifically for Cloudinary
+    if (url.includes('res.cloudinary.com') && url.startsWith('http://')) {
+        return url.replace('http://', 'https://');
+    }
+    
+    return url;
+}
 
 /* --- AUDIO / VIDEO SPECIFIC FUNCTIONS --- */
 
 function toggleAudioPlayback(button, messageId) {
     const audio = document.getElementById(`audio-${messageId}`);
-    handleMediaPlayback(audio, button);
+    
+    // Handle Safari/IOS restrictions
+    if ((isSafari() || isIOS()) && audio.paused) {
+        // iOS/Safari requires user gesture to play audio
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.log("Autoplay prevented:", error);
+                // Show play button that user must click
+                button.innerHTML = '<i class="fa-solid fa-play"></i>';
+                button.onclick = () => {
+                    audio.play();
+                    button.innerHTML = '<i class="fa-solid fa-pause"></i>';
+                    button.onclick = () => toggleAudioPlayback(button, messageId);
+                };
+            });
+        }
+    } else {
+        handleMediaPlayback(audio, button);
+    }
 }
 
 function seekAudio(event, messageId) {
@@ -540,15 +664,23 @@ function seekAudio(event, messageId) {
 }
 
 function toggleVideoPlayback(button, messageId) {
-    // video is the hidden element for logic/playback/duration
     const video = document.getElementById(`video-${messageId}`);
-    // videoDisplay is the visible element for showing the media
     const videoDisplay = document.getElementById(`video-display-${messageId}`);
     
-    // Use the *hidden* video element for logic
+    // Handle Safari/IOS restrictions
+    if ((isSafari() || isIOS()) && video.paused) {
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.log("Video autoplay prevented:", error);
+                videoDisplay.controls = true; // Show native controls on iOS
+            });
+        }
+    }
+    
     handleMediaPlayback(video, button);
     
-    // Synchronize the display element state
+    // Sync display
     if (video.paused) {
         videoDisplay.pause();
     } else {
@@ -562,6 +694,44 @@ function seekVideo(event, messageId) {
     seekMedia(event, video);
     // Synchronize the display element's time
     videoDisplay.currentTime = video.currentTime;
+}
+
+function toggleMute(messageId) {
+    const audio = document.getElementById(`audio-${messageId}`);
+    const btn = document.querySelector(`[data-msg-id='${messageId}'] .player-volume-btn i`);
+    
+    if (audio.muted) {
+        audio.muted = false;
+        btn.classList.remove('fa-volume-xmark');
+        btn.classList.add('fa-volume-high');
+    } else {
+        audio.muted = true;
+        btn.classList.remove('fa-volume-high');
+        btn.classList.add('fa-volume-xmark');
+    }
+}
+
+// Add fullscreen for video
+function toggleFullscreen(messageId) {
+    const videoDisplay = document.getElementById(`video-display-${messageId}`);
+    
+    if (!document.fullscreenElement) {
+        if (videoDisplay.requestFullscreen) {
+            videoDisplay.requestFullscreen();
+        } else if (videoDisplay.webkitRequestFullscreen) {
+            videoDisplay.webkitRequestFullscreen();
+        } else if (videoDisplay.mozRequestFullScreen) {
+            videoDisplay.mozRequestFullScreen();
+        }
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+        }
+    }
 }
 
 /* --- CHAT FUNCTIONS --- */
@@ -589,52 +759,71 @@ function renderEmojis(text) {
   return text.replace(emojiRegex, '<span class="emoji-text">$1</span>');
 }
 
+function getFileType(fileName) {
+    const name = fileName.toLowerCase();
+    if (name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/)) return 'image';
+    if (name.match(/\.(mp4|mov|avi|mkv|webm)$/)) return 'video';
+    if (name.match(/\.(mp3|wav|ogg|m4a|flac)$/)) return 'audio';
+    return 'document';
+}
+
 // Function to generate the appropriate HTML for the file type 
 function renderFileHtml(fileUrl, fileType, fileName, messageId) {
   if (!fileUrl) return '';
 
+  // Ensure secure URL
+  const secureUrl = ensureSecureUrl(fileUrl);
+  
   let mediaHtml = '';
   let fileIcon = '';
   let downloadLabel = 'Download File';
 
-  // 1. Determine media element and icon
   if (fileType === 'image') {
-    mediaHtml = `<img src="${fileUrl}" class="message-media">`;
+    mediaHtml = `<img src="${secureUrl}" class="message-media" loading="lazy">`;
     fileIcon = 'fa-solid fa-file-image';
     downloadLabel = 'Download Image';
   } else if (fileType === 'video') {
-    // Custom Video Player HTML - using the video functions
     mediaHtml = `
-      <video id="video-${messageId}" src="${fileUrl}"></video>
+      <video id="video-${messageId}" src="${secureUrl}" preload="metadata" crossorigin="anonymous"></video>
       <div class="custom-video-player" data-msg-id="${messageId}">
-          <video id="video-display-${messageId}" src="${fileUrl}" class="message-media" poster="{% static 'default_video_poster.jpg' %}"></video>
+          <video id="video-display-${messageId}" 
+                 src="${secureUrl}" 
+                 class="message-media" 
+                 preload="metadata"
+                 playsinline
+                 webkit-playsinline
+                 crossorigin="anonymous"
+                 oncontextmenu="return false;"></video>
           <div class="player-controls">
               <button class="player-play-btn" onclick="toggleVideoPlayback(this, '${messageId}')">
-                  <i class="fa-solid fa-play" style="margin-left: 2px;"></i>
+                  <i class="fa-solid fa-play"></i>
               </button>
               <div class="player-progress-bar" onclick="seekVideo(event, '${messageId}')">
                   <div id="progress-${messageId}" class="player-progress"></div>
               </div>
               <span id="time-${messageId}" class="player-time">0:00</span>
+              <button class="player-fullscreen-btn" onclick="toggleFullscreen('${messageId}')">
+                  <i class="fa-solid fa-expand"></i>
+              </button>
           </div>
-      </div>
-    `;
+      </div>`;
     fileIcon = 'fa-solid fa-file-video';
     downloadLabel = 'Download Video';
   } else if (fileType === 'audio') {
-    // Custom Audio Player HTML
     mediaHtml = `
-      <audio id="audio-${messageId}" src="${fileUrl}"></audio>
+      <audio id="audio-${messageId}" src="${secureUrl}" preload="metadata" crossorigin="anonymous"></audio>
       <div class="custom-audio-player" data-msg-id="${messageId}">
         <button class="player-play-btn" onclick="toggleAudioPlayback(this, '${messageId}')">
-          <i class="fa-solid fa-play" style="margin-left: 2px;"></i>
+          <i class="fa-solid fa-play"></i>
         </button>
         <div class="player-progress-bar" onclick="seekAudio(event, '${messageId}')">
           <div id="progress-${messageId}" class="player-progress"></div>
         </div>
         <span id="time-${messageId}" class="player-time">0:00</span>
-      </div>
-    `;
+        <button class="player-volume-btn" onclick="toggleMute('${messageId}')">
+          <i class="fa-solid fa-volume-high"></i>
+        </button>
+      </div>`;
     fileIcon = 'fa-solid fa-file-audio';
     downloadLabel = 'Download Audio';
   } else { 
@@ -642,23 +831,47 @@ function renderFileHtml(fileUrl, fileType, fileName, messageId) {
     downloadLabel = 'Download File';
   }
 
-  // 2. Generate the download/info block (for all file types)
   const downloadBlockHtml = `
     <div class="message-file-block">
       <i class="${fileIcon}"></i>
       <div class="message-file-details">
         <span class="file-name" title="${fileName}">${fileName}</span>
-        <a href="${fileUrl}" class="file-download-btn" download="${fileName}">${downloadLabel}</a>
+        <a href="${secureUrl}" class="file-download-btn" download="${fileName}">${downloadLabel}</a>
       </div>
     </div>`;
 
-  // 3. Combine media element and download block
   return mediaHtml + downloadBlockHtml;
 }
 
 
-const protocol = location.protocol === "https:" ? "wss://" : "ws://";
+// WebSocket connection
+function getWebSocketProtocol() {
+    if (window.location.protocol === "https:") {
+        return "wss://";
+    } else {
+        // Check if we're in production (non-localhost)
+        if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+            return "wss://"; // Production should use wss
+        }
+        return "ws://";
+    }
+}
+
+const protocol = getWebSocketProtocol();
 const socket = new WebSocket(`${protocol}${location.host}/ws/${channel_id}/`);
+
+// WebSocket event listeners
+socket.addEventListener("open", () => {
+    console.log("WebSocket connected successfully");
+});
+
+socket.addEventListener("error", (error) => {
+    console.error("WebSocket error:", error);
+});
+
+socket.addEventListener("close", () => {
+    console.log("WebSocket disconnected");
+});
 
 function sendLikeAction(btn) {
   socket.send(JSON.stringify({ action: "like_unlike", username: user, message_id: btn.getAttribute("data-msg-id") }));
@@ -673,8 +886,18 @@ message.addEventListener('input', updateSendIconState);
 fileInput.addEventListener('change', updateSendIconState);
 
 socket.addEventListener("message", (e) => {
+  console.log("WebSocket message received:", e.data);
   const data = JSON.parse(e.data);
+  
   if (data.type === "Response") {
+    console.log("New message data:", {
+        message_id: data.message_id,
+        file_url: data.file_url,
+        file_type: data.file_type,
+        file_name: data.file_name,
+        has_file: !!data.file_url
+    });
+    
     const block = document.createElement("div");
     block.className = "chat-message";
 
@@ -704,7 +927,13 @@ socket.addEventListener("message", (e) => {
         const media = document.getElementById(`${data.file_type}-${data.message_id}`);
         const timeSpan = document.getElementById(`time-${data.message_id}`);
         if (media && timeSpan) {
-            media.onloadedmetadata = () => { timeSpan.textContent = formatTime(media.duration); };
+            media.onloadedmetadata = () => { 
+                console.log(`${data.file_type} metadata loaded:`, media.duration);
+                timeSpan.textContent = formatTime(media.duration); 
+            };
+            media.onerror = (error) => {
+                console.error(`${data.file_type} load error:`, error);
+            };
         }
     }
   }
@@ -726,23 +955,31 @@ sendBtn.addEventListener("click", () => {
   if (file) {
     const reader = new FileReader();
     reader.onload = () => {
+      // CRITICAL: Ensure the base64 data is properly formatted
+      const base64Data = reader.result;
+      console.log("DEBUG: Sending file:", file.name, "Size:", file.size, "Type:", file.type);
+      
       socket.send(JSON.stringify({
         message: text,
-        file: reader.result,       // Base64 file data
-        file_name: file.name,      // Original file name
+        file: base64Data,       // Base64 file data with data: prefix
+        file_name: file.name,   // Original file name
         username: user,
-        pictureUrl
+        pictureUrl: pictureUrl
       }));
     };
-    reader.readAsDataURL(file);
+    reader.onerror = (error) => {
+      console.error("FileReader error:", error);
+      alert("Error reading file. Please try again.");
+    };
+    reader.readAsDataURL(file);  // This creates data: URL
   } else {
-    // CRITICAL FIX: Send null values for file and file_name if no file is present
+    // Send only text message
     socket.send(JSON.stringify({ 
         message: text, 
         file: null, 
         file_name: null, 
         username: user, 
-        pictureUrl 
+        pictureUrl: pictureUrl 
     }));
   }
 
@@ -751,6 +988,38 @@ sendBtn.addEventListener("click", () => {
 });
 
 document.addEventListener("DOMContentLoaded", () => setTimeout(scrollToBottom, 200));
+
+// Test Cloudinary Directly
+function testCloudinaryMedia() {
+    // Test a known Cloudinary video URL
+    const testVideo = document.createElement('video');
+    testVideo.src = 'https://res.cloudinary.com/demo/video/upload/sample.mp4';
+    testVideo.preload = 'metadata';
+    
+    testVideo.onloadedmetadata = () => {
+        console.log('Test video metadata loaded:', testVideo.duration, 'seconds');
+    };
+    
+    testVideo.onerror = (e) => {
+        console.error('Test video error:', e);
+    };
+    
+    // Test a known Cloudinary audio URL
+    const testAudio = document.createElement('audio');
+    testAudio.src = 'https://res.cloudinary.com/demo/video/upload/sample.mp3';
+    testAudio.preload = 'metadata';
+    
+    testAudio.onloadedmetadata = () => {
+        console.log('Test audio metadata loaded:', testAudio.duration, 'seconds');
+    };
+    
+    testAudio.onerror = (e) => {
+        console.error('Test audio error:', e);
+    };
+}
+
+// Run the test on load
+setTimeout(testCloudinaryMedia, 1000);
 </script>
 </body>
 </html>
