@@ -147,8 +147,7 @@ class ChannelMessage(models.Model):
     pictureUrl = models.TextField(blank=True)
     message = models.TextField()
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
-    
-    # 👇 UPDATED GENERIC FILE FIELDS (CRITICAL FIX)
+
     if settings.USE_CLOUDINARY:
         file = CloudinaryField(
             'channel_file',
@@ -159,14 +158,11 @@ class ChannelMessage(models.Model):
         )
     else:
         file = models.FileField(upload_to='channel_files', blank=True, null=True)
-    # 👆
+
     file_type = models.CharField(max_length=50, blank=True, null=True)
     file_name = models.CharField(max_length=255, blank=True, null=True)
-    # 👆
-    
     created_at = models.DateTimeField(auto_now_add=True)
-    
-    # Utility methods for file handling and detection (copied from Message model)
+
     def get_file_type(self):
         if self.file:
             filename = str(self.file.name).lower()
@@ -179,20 +175,17 @@ class ChannelMessage(models.Model):
             else:
                 return 'document'
         return 'text'
-        
+
     def save(self, *args, **kwargs):
-        # Auto-detect file type on save
         if self.file and not self.file_type:
             self.file_type = self.get_file_type()
-            # Set file_name if the consumer didn't set it (optional fallback)
             if self.file.name and not self.file_name:
                 self.file_name = os.path.basename(self.file.name)
-        
-        # Ensure file_type is null if no file is present
+
         if not self.file:
             self.file_type = None
             self.file_name = None
-            
+
         super().save(*args, **kwargs)
         
     @property
@@ -215,6 +208,7 @@ class ChannelMessage(models.Model):
 
     def like_count(self):
         return self.like.count()
+
     channemessage_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name='channel_messages')
     author = models.ForeignKey(User, on_delete=models.CASCADE)

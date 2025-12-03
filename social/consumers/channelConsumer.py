@@ -96,27 +96,23 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             # --- NEW MESSAGE ACTION ---
             username = self.user.username
             message = data.get("message")
-            # 👇 UPDATED: Get generic file data and name
             file_base64 = data.get("file") 
             file_name = data.get("file_name")
-            # 👆
             pictureUrl = data.get("pictureUrl")
             now = timezone.now()
             formatted_time = now.strftime("%I:%M %p")
             
             # Save message and get the actual URL of the file 
-            # 👇 Updated call to save_message
             message_instance = await self.save_message(self.username, message, file_base64, file_name, pictureUrl)
 
             group_data = {
                 "type": "chat_message",
                 "username": username,
                 "message": message,
-                # 👇 UPDATED: Broadcast generic file details
+                # Use .file.url and the file_type/file_name set in save_message
                 "file_url": message_instance.file.url if message_instance.file else None,
-                "file_name": message_instance.file_name,
+                "file_name": message_instance.file_name, 
                 "file_type": message_instance.file_type, 
-                # 👆
                 "message_id": str(message_instance.channemessage_id), 
                 "pictureUrl": pictureUrl,
                 "time": formatted_time
@@ -130,12 +126,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             "type": "Response",
             "username": event["username"],
             "message": event["message"],
-            # 👇 UPDATED: Send generic file details
             "file_url": event["file_url"],
             "file_name": event["file_name"],
             "file_type": event["file_type"],
-            # 👆
-            "message_id": event["message_id"], # Included for real-time liking
+            "message_id": event["message_id"], 
             "pictureUrl": event["pictureUrl"],
             "time": event["time"]
         }
@@ -153,7 +147,6 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(text_data))
 
     @database_sync_to_async
-    # 👇 UPDATED: Receive file_data and file_name
     def save_message(self, username, message, file_data, file_name, pictureUrl): 
         """Saves the message (and file) to the database and returns the instance."""
         Channel, ChannelMessage = get_social_models()
@@ -164,11 +157,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
 
         msg = ChannelMessage(
             channel=channel,
-            author=author_user, # Use the User object
+            author=author_user, 
             message=message,
             pictureUrl=pictureUrl,
-            # 👇 CRITICAL FIX: Set file_name (can be None)
-            file_name=file_name,
+            file_name=file_name, # Initialize file_name from client
         )
 
         # Only process file if it exists
@@ -176,21 +168,40 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             try:
                 # file_data looks like: "data:image/png;base64,AAAAAA..."
                 format, filestr = file_data.split(";base64,")
-                ext = format.split("/")[-1]
-
-                # Use the original file name if available, otherwise use a UUID
+                
+                # Use the original file name if available, otherwise create a UUID name
                 if not file_name:
+                    # Get the extension from the format (e.g., 'image/png' -> 'png')
+                    ext = format.split("/")[-1]
                     file_name = f"{uuid.uuid4()}.{ext}"
                 
                 decoded_file = base64.b64decode(filestr)
 
-                # 👇 Changed from msg.image to msg.file
+                # Save the file content to the CloudinaryField/FileField
                 msg.file.save(file_name, ContentFile(decoded_file), save=False) 
                 
+                # 👇 CRITICAL FIX: Explicitly set file_type based on the file extension
+                name_lower = file_name.lower()
+                if any(ext in name_lower for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']):
+                    msg.file_type = 'image'
+                elif any(ext in name_lower for ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm']):
+                    msg.file_type = 'video'
+                elif any(ext in name_lower for ext in ['.mp3', '.wav', '.ogg', '.m4a', '.flac']):
+                    msg.file_type = 'audio'
+                else:
+                    msg.file_type = 'document'
+                
+                # Ensure the final file_name is set on the instance (especially if UUID was generated)
+                msg.file_name = file_name
+
             except Exception as e:
                 print("FILE SAVE ERROR:", str(e))
+                # Set file fields to None if saving failed
+                msg.file = None
+                msg.file_type = None
+                msg.file_name = None
 
         msg.save()
 
-        # Return the message instance
+        # Return the message instance (now containing final URL and types)
         return msg
