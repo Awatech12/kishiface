@@ -96,21 +96,27 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             # --- NEW MESSAGE ACTION ---
             username = self.user.username
             message = data.get("message")
-            image_base64 = data.get("image")
+            # 👇 UPDATED: Get generic file data and name
+            file_base64 = data.get("file") 
+            file_name = data.get("file_name")
+            # 👆
             pictureUrl = data.get("pictureUrl")
             now = timezone.now()
             formatted_time = now.strftime("%I:%M %p")
             
-            # Save message and get the actual URL of the image file (returns the message instance)
-            message_instance = await self.save_message(self.username, message, image_base64, pictureUrl)
+            # Save message and get the actual URL of the file 
+            # 👇 Updated call to save_message
+            message_instance = await self.save_message(self.username, message, file_base64, file_name, pictureUrl)
 
             group_data = {
                 "type": "chat_message",
                 "username": username,
                 "message": message,
-                # Get image URL from the saved instance
-                "image": message_instance.image.url if message_instance.image else None,   
-                # Include the message ID for client-side updates (like liking)
+                # 👇 UPDATED: Broadcast generic file details
+                "file_url": message_instance.file.url if message_instance.file else None,
+                "file_name": message_instance.file_name,
+                "file_type": message_instance.file_type, 
+                # 👆
                 "message_id": str(message_instance.channemessage_id), 
                 "pictureUrl": pictureUrl,
                 "time": formatted_time
@@ -124,7 +130,11 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             "type": "Response",
             "username": event["username"],
             "message": event["message"],
-            "image": event["image"],
+            # 👇 UPDATED: Send generic file details
+            "file_url": event["file_url"],
+            "file_name": event["file_name"],
+            "file_type": event["file_type"],
+            # 👆
             "message_id": event["message_id"], # Included for real-time liking
             "pictureUrl": event["pictureUrl"],
             "time": event["time"]
@@ -143,10 +153,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(text_data))
 
     @database_sync_to_async
-    def save_message(self, username, message, image_data, pictureUrl):
-        """Saves the message (and image) to the database and returns the instance."""
+    # 👇 UPDATED: Receive file_data and file_name
+    def save_message(self, username, message, file_data, file_name, pictureUrl): 
+        """Saves the message (and file) to the database and returns the instance."""
         Channel, ChannelMessage = get_social_models()
-        # Ensure 'username' is a User object when looking up the channel
         user_model = get_user_model()
         author_user = user_model.objects.get(username=username)
 
@@ -157,25 +167,30 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             author=author_user, # Use the User object
             message=message,
             pictureUrl=pictureUrl,
+            # 👇 CRITICAL FIX: Set file_name (can be None)
+            file_name=file_name,
         )
 
-        # Only process image if it exists
-        if image_data:
-            # image_data looks like: "data:image/png;base64,AAAAAA..."
+        # Only process file if it exists
+        if file_data:
             try:
-                format, imgstr = image_data.split(";base64,")
+                # file_data looks like: "data:image/png;base64,AAAAAA..."
+                format, filestr = file_data.split(";base64,")
                 ext = format.split("/")[-1]
 
-                file_name = f"{uuid.uuid4()}.{ext}"
-                decoded_image = base64.b64decode(imgstr)
+                # Use the original file name if available, otherwise use a UUID
+                if not file_name:
+                    file_name = f"{uuid.uuid4()}.{ext}"
+                
+                decoded_file = base64.b64decode(filestr)
 
-                msg.image.save(file_name, ContentFile(decoded_image), save=False)
-
+                # 👇 Changed from msg.image to msg.file
+                msg.file.save(file_name, ContentFile(decoded_file), save=False) 
+                
             except Exception as e:
-                print("IMAGE SAVE ERROR:", str(e))
+                print("FILE SAVE ERROR:", str(e))
 
         msg.save()
 
         # Return the message instance
         return msg
- 

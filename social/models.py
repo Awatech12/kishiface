@@ -6,7 +6,7 @@ from django.templatetags.static import static
 from datetime import date, timedelta
 import calendar
 import uuid
-
+import os
 def get_default_profile_image():
     if settings.DEBUG:  # Local development
         return 'male.png'  # Make sure this file exists in MEDIA_ROOT
@@ -139,6 +139,7 @@ class Channel(models.Model):
     subscriber = models.ManyToManyField(User, blank=True, related_name='channel_subscriber')
     image=models.ImageField(upload_to='channel_image', default='male.png')
     created_at = models.DateTimeField(auto_now_add=True)
+# --- CRITICAL: CORRECTED ChannelMessage MODEL ---
 class ChannelMessage(models.Model):
     channemessage_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name='channel_messages')
@@ -146,8 +147,44 @@ class ChannelMessage(models.Model):
     pictureUrl = models.TextField(blank=True)
     message = models.TextField()
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
-    image = models.ImageField(upload_to='comment_image', blank=True)
+    
+    # 👇 UPDATED GENERIC FILE FIELDS (CRITICAL FIX)
+    file = models.FileField(upload_to='channel_files', blank=True, null=True)
+    file_type = models.CharField(max_length=50, blank=True, null=True)
+    file_name = models.CharField(max_length=255, blank=True, null=True)
+    # 👆
+    
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Utility methods for file handling and detection (copied from Message model)
+    def get_file_type(self):
+        if self.file:
+            filename = str(self.file.name).lower()
+            if any(ext in filename for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']):
+                return 'image'
+            elif any(ext in filename for ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm']):
+                return 'video'
+            elif any(ext in filename for ext in ['.mp3', '.wav', '.ogg', '.m4a', '.flac']):
+                return 'audio'
+            else:
+                return 'document'
+        return 'text'
+        
+    def save(self, *args, **kwargs):
+        # Auto-detect file type on save
+        if self.file and not self.file_type:
+            self.file_type = self.get_file_type()
+            # Set file_name if the consumer didn't set it (optional fallback)
+            if self.file.name and not self.file_name:
+                self.file_name = os.path.basename(self.file.name)
+        
+        # Ensure file_type is null if no file is present
+        if not self.file:
+            self.file_type = None
+            self.file_name = None
+            
+        super().save(*args, **kwargs)
+        
     @property
     def chat_date_label(self):
         message_date = self.created_at.date()
@@ -168,6 +205,7 @@ class ChannelMessage(models.Model):
 
     def like_count(self):
         return self.like.count()
+# --- END CORRECTED ChannelMessage MODEL ---
 
 class Market(models.Model):
     product_id = models.UUIDField(primary_key=True, default=uuid.uuid4)

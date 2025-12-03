@@ -417,6 +417,26 @@ def follow_channel(request, channel_id):
 login_required(login_url='/')
 def channel(request, channel_id):
     channel = get_object_or_404(Channel, channel_id=channel_id)
+
+    messages = ChannelMessage.objects.filter(channel=channel) \
+                                   .select_related('author') \
+                                   .order_by('created_at')
+
+    grouped_messages = {}
+    message_list = list(messages)
+
+    for label, msgs in groupby(message_list, key=lambda m: m.chat_date_label):
+        grouped_messages[label] = list(msgs)
+
+    context = {
+        'channel': channel,
+        'channel_id': channel_id,
+        'grouped_messages': grouped_messages
+    }
+
+    return render(request, 'channel.html', context)
+
+    channel = get_object_or_404(Channel, channel_id=channel_id)
     messages = ChannelMessage.objects.filter(channel=channel)
     grouped_messages = {}
     for label, msgs in groupby(messages, key=lambda m: m.chat_date_label):
