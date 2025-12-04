@@ -78,7 +78,6 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         })
 
     async def chat_message(self, event):
-        # Send new message to client
         await self.send(text_data=json.dumps({
             "type": "Response",
             "username": event["username"],
@@ -92,7 +91,6 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         }))
 
     async def like_update(self, event):
-        # Send like update to client
         await self.send(text_data=json.dumps({
             "type": "like_response",
             "message_id": event["message_id"],
@@ -114,17 +112,19 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 if ";base64," in base64_file:
                     header, encoded = base64_file.split(";base64,")
                     mime_type = header.split(":")[-1]
-                    ext = mime_type.split("/")[-1] if "/" in mime_type else "bin"
                 else:
                     encoded = base64_file
-                    ext = "bin"
+                    mime_type = "application/octet-stream"
 
+                ext = mime_type.split("/")[-1] if "/" in mime_type else "bin"
                 file_name = file_name or f"{uuid.uuid4()}.{ext}"
                 decoded = base64.b64decode(encoded)
                 content = ContentFile(decoded, name=file_name)
 
                 if settings.USE_CLOUDINARY:
                     from cloudinary.uploader import upload as cloudinary_upload
+
+                    # Determine Cloudinary resource_type
                     resource_type = "raw"
                     if mime_type.startswith("image"):
                         resource_type = "image"
@@ -139,14 +139,18 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                         unique_filename=True,
                         overwrite=False,
                     )
+
                     msg.file_url = upload_result.get("secure_url")
                     msg.file_name = upload_result.get("original_filename")
                     msg.file_type = msg.detect_file_type(msg.file_name)
+
                 else:
+                    # Local storage fallback
                     msg.file.save(file_name, content, save=False)
                     msg.file_name = msg.file.name
                     msg.file_type = msg.detect_file_type(msg.file_name)
                     msg.file_url = msg.file.url
+
             except Exception as e:
                 print("File upload error:", e)
 
