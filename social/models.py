@@ -7,6 +7,7 @@ from datetime import date, timedelta
 import calendar
 import uuid
 import os
+from mimetypes import guess_type
 def get_default_profile_image():
     if settings.DEBUG:  # Local development
         return 'male.png'  # Make sure this file exists in MEDIA_ROOT
@@ -140,15 +141,28 @@ class Channel(models.Model):
     image=models.ImageField(upload_to='channel_image', default='male.png')
     created_at = models.DateTimeField(auto_now_add=True)
 # --- CRITICAL: CORRECTED ChannelMessage MODEL ---
+# In models.py, update the ChannelMessage model
 class ChannelMessage(models.Model):
     channemessage_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    channel = models.ForeignKey("social.Channel", on_delete=models.CASCADE, related_name="channel_messages")
+    channel = models.ForeignKey(
+        "Channel",
+        on_delete=models.CASCADE,
+        related_name="channel_messages"
+    )
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     pictureUrl = models.TextField(blank=True)
     message = models.TextField(blank=True)
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
 
+    # Fields to store file info
+    file_name = models.CharField(max_length=255, blank=True, null=True)
+    file_type = models.CharField(max_length=50, blank=True, null=True)
+    file_url = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Single field to store uploaded file
     if settings.USE_CLOUDINARY:
+        # CloudinaryField can remain 'raw' here; we handle resource_type dynamically in save()
         file = CloudinaryField(
             'channel_file',
             resource_type='raw',
@@ -162,11 +176,12 @@ class ChannelMessage(models.Model):
     else:
         file = models.FileField(upload_to='channel_files', blank=True, null=True)
 
-    file_type = models.CharField(max_length=50, blank=True, null=True)
-    file_name = models.CharField(max_length=255, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    # --- Methods ---
 
     def detect_file_type(self, name):
+        """
+        Detects file type based on file extension
+        """
         name = name.lower()
         if any(x in name for x in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']):
             return "image"
@@ -176,16 +191,54 @@ class ChannelMessage(models.Model):
             return "audio"
         return "document"
 
+    def get_resource_type(self, file_name):
+        """
+        Returns correct Cloudinary resource_type for the file
+        """
+        ftype = self.detect_file_type(file_name)
+        if ftype == "image":
+            return "image"
+        elif ftype in ["video", "audio"]:
+            return "video"
+        else:
+            return "raw"
+
     def save(self, *args, **kwargs):
+        """
+        Overrides save to handle Cloudinary uploads dynamically and set file info
+        """
         if self.file:
+            # Store file name and type
             self.file_name = os.path.basename(self.file.name)
             self.file_type = self.detect_file_type(self.file_name)
 
-            url = str(self.file.url)
-            if settings.USE_CLOUDINARY and not settings.DEBUG and url.startswith("http://"):
-                self.file_url = url.replace("http://", "https://", 1)
+            if settings.USE_CLOUDINARY:
+                from cloudinary.uploader import upload as cloudinary_upload
+
+                # Determine resource_type
+                resource_type = self.get_resource_type(self.file_name)
+
+                # Upload file to Cloudinary
+                upload_result = cloudinary_upload(
+                    file=self.file,
+                    folder='channel_files',
+                    resource_type=resource_type,
+                    use_filename=True,
+                    unique_filename=True,
+                    overwrite=False,
+                )
+
+                # Save Cloudinary secure URL
+                self.file_url = upload_result.get("secure_url")
+                self.file_name = upload_result.get("original_filename")
+
             else:
-                self.file_url = url
+                # Local file fallback
+                url = str(self.file.url)
+                if not settings.DEBUG and url.startswith("http://"):
+                    self.file_url = url.replace("http://", "https://", 1)
+                else:
+                    self.file_url = url
         else:
             self.file_name = None
             self.file_type = None
@@ -193,8 +246,13 @@ class ChannelMessage(models.Model):
 
         super().save(*args, **kwargs)
 
+    # --- Utility Properties ---
+
     @property
     def chat_date_label(self):
+        """
+        Returns "Today", "Yesterday", weekday, or formatted date
+        """
         d = self.created_at.date()
         t = date.today()
         if d == t:
@@ -207,13 +265,16 @@ class ChannelMessage(models.Model):
 
     @property
     def chat_time(self):
+        """
+        Returns time in 12-hour format
+        """
         return self.created_at.strftime("%I:%M %p")
 
     def like_count(self):
+        """
+        Returns total number of likes
+        """
         return self.like.count()
-
-
-
 # --- END CORRECTED ChannelMessage MODEL ---
 
 class Market(models.Model):
