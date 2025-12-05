@@ -1,54 +1,302 @@
 {% load static %}
+{% include 'info.html' %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
-  <title>{{user.username}} followings List</title>
-  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-  <link rel="stylesheet" href="{% static 'css/home.css' %}">
+    <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+    <title>{{user.username}} Following List</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        :root {
+            --kishiface-white: #FFFFFF;
+            --kishiface-gray: #666666;
+            --kishiface-light-gray: #DBDBDB;
+            --kishiface-dark-gray: #8E8E8E;
+            --kishiface-black: #262626;
+            --kishiface-blue: #0095F6;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        
+        body {
+            background-color: var(--kishiface-white);
+            color: var(--kishiface-black);
+            line-height: 1.4;
+        }
+        
+        .kishiface-container {
+            max-width: 935px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .kishiface-header {
+            display: flex;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--kishiface-light-gray);
+            margin-bottom: 20px;
+        }
+        
+        .kishiface-back-btn {
+            margin-right: 20px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: var(--kishiface-black);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+        
+        .kishiface-back-btn:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        .kishiface-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .kishiface-username {
+            font-size: 14px;
+            color: var(--kishiface-dark-gray);
+            margin-top: 2px;
+        }
+        
+        .kishiface-following-list {
+            list-style: none;
+        }
+        
+        .kishiface-following-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            justify-content: space-between;
+        }
+        
+        .kishiface-user-info {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+        }
+        
+        .kishiface-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 12px;
+            border: 1px solid var(--kishiface-light-gray);
+        }
+        
+        .kishiface-text-container {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .kishiface-display-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--kishiface-black);
+            text-decoration: none;
+        }
+        
+        .kishiface-username-text {
+            font-size: 14px;
+            color: var(--kishiface-dark-gray);
+            margin-top: 2px;
+        }
+        
+        .kishiface-follow-btn {
+            background-color: var(--kishiface-gray);
+            color: var(--kishiface-white);
+            border: 1px solid var(--kishiface-gray);
+            padding: 5px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 88px;
+            text-align: center;
+        }
+        
+        .kishiface-follow-btn:hover {
+            background-color: #555555;
+            border-color: #555555;
+        }
+        
+        .kishiface-following-btn {
+            background-color: var(--kishiface-white);
+            color: var(--kishiface-black);
+            border: 1px solid var(--kishiface-light-gray);
+            padding: 5px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 88px;
+            text-align: center;
+        }
+        
+        .kishiface-following-btn:hover {
+            background-color: var(--kishiface-white);
+            border-color: #ED4956;
+            color: #ED4956;
+        }
+        
+        .kishiface-empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .kishiface-empty-icon {
+            font-size: 64px;
+            color: var(--kishiface-light-gray);
+            margin-bottom: 20px;
+        }
+        
+        .kishiface-empty-text {
+            font-size: 20px;
+            font-weight: 300;
+            color: var(--kishiface-dark-gray);
+            margin-bottom: 10px;
+        }
+        
+        .kishiface-empty-subtext {
+            font-size: 14px;
+            color: var(--kishiface-dark-gray);
+        }
+        
+        @media (max-width: 735px) {
+            .kishiface-container {
+                padding: 0;
+            }
+            
+            .kishiface-header {
+                padding: 16px;
+                margin-bottom: 0;
+            }
+            
+            .kishiface-following-item {
+                padding: 8px 16px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h2>{{user.username}} followings List</h2>
-    <div class="card">
-            <div class="sidebar-content">
-                <h4 class="desktop-member-title">{{user.username}} followings List
-                <div class="desktop-member-list">
-                    {% for following in followings %}
-                       
-                            <div class="desktop-member-item">
-                                <a href="{% url 'profile' following.user.username %}">
-                                    <div class="member-pic-wrapper" style="background: var(--border-color); padding: 0;">
-                                        <img src="{{following.user.profile.picture.url}}" 
-                                             
-                                             alt="{{following.user.username}}" 
-                                             class="member-pic">
-                                    </div>
-                                    <div>
-                                        <span class="member-username block">{{following.user.profile.full_name}} </span>
-                                        <br><span class="member-title block">@{{following.user.username}}</span>
-                                    </div>
-                                </a>
-
-                                <a href="{% url 'follow' profile.user.username %}">
-                                    {% if request.user.profile in profile.followings.all %}
-                                    <button type="submit" class="action-button btn-secondary">
-                                    Following
-                                    </button>
-                                    {% else %}
-                                    <button type="submit" class="action-button btn-secondary">
-                                    Follow
-                                    </button>
-                                    {% endif %}
-                                    </a>
-                              
-                            </div>
-                        {% empty %}
-                        <h2>Not Follow anyBody </h2>
-                    {% endfor %}
-                </div>
+    <div class="kishiface-container">
+        <div class="kishiface-header">
+            <button class="kishiface-back-btn" id="kishiface-back-btn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div>
+                <h1 class="kishiface-title">Following</h1>
+                <div class="kishiface-username">{{user.username}}</div>
             </div>
+        </div>
+        
+        <div class="kishiface-following-list">
+            {% for following in followings %}
+                <div class="kishiface-following-item">
+                    <div class="kishiface-user-info">
+                        <a href="{% url 'profile' following.user.username %}">
+                            <img src="{{following.user.profile.picture.url}}" 
+                                 alt="{{following.user.username}}" 
+                                 class="kishiface-avatar">
+                        </a>
+                        <div class="kishiface-text-container">
+                            <a href="{% url 'profile' following.user.username %}" class="kishiface-display-name">
+                                {{following.user.username}}
+                            </a>
+                            {% if following.user.profile.full_name %}
+                                <span class="kishiface-username-text">{{following.user.profile.full_name}}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if following.user != request.user %}
+                        <form method="POST" action="{% url 'follow' following.user.username %}" style="margin: 0;">
+                            {% csrf_token %}
+                            {% if request.user.profile in following.user.profile.followers.all %}
+                                <button type="submit" class="kishiface-following-btn">
+                                    Following
+                                </button>
+                            {% else %}
+                                <button type="submit" class="kishiface-follow-btn">
+                                    Follow
+                                </button>
+                            {% endif %}
+                        </form>
+                    {% endif %}
+                </div>
+            {% empty %}
+                <div class="kishiface-empty-state">
+                    <div class="kishiface-empty-icon">
+                        <i class="fas fa-user-friends"></i>
+                    </div>
+                    <h2 class="kishiface-empty-text">Not following anyone yet</h2>
+                    <p class="kishiface-empty-subtext">When you follow someone, they'll appear here.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <script>
+        // Arrow back function
+        document.addEventListener('DOMContentLoaded', function() {
+            const backButton = document.getElementById('kishiface-back-btn');
+            
+            // Function to go back in history
+            function goBack() {
+                // Check if there's previous page in history
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    // If no history, redirect to home or profile
+                    window.location.href = "{% url 'profile' user.username %}";
+                }
+            }
+            
+            // Add click event to back button
+            backButton.addEventListener('click', goBack);
+            
+            // Optional: Add keyboard shortcut (Esc key)
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                    goBack();
+                }
+            });
+            
+            // Add hover effect for following button
+            const followingButtons = document.querySelectorAll('.kishiface-following-btn');
+            
+            followingButtons.forEach(button => {
+                button.addEventListener('mouseenter', function() {
+                    this.textContent = 'Unfollow';
+                    this.style.color = '#ED4956';
+                    this.style.borderColor = '#ED4956';
+                });
+                
+                button.addEventListener('mouseleave', function() {
+                    this.textContent = 'Following';
+                    this.style.color = '';
+                    this.style.borderColor = '';
+                });
+            });
+        });
+    </script>
 </body>
 </html>
+{% include 'footer.html' %}
