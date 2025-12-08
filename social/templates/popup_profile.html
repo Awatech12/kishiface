@@ -1,0 +1,627 @@
+{% load humanize %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+    <title>{% if profile.full_name %} {{profile.full_name}} {% else %} {{user.username}} {% endif %} / Kishiface</title>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        /* Kishiface Design System */
+        :root {
+            --kishiface-black: #000000;
+            --kishiface-dark-gray: #f7f9f9;
+            --kishiface-gray: #536471;
+            --kishiface-light-gray: #eff3f4;
+            --kishiface-border: #eff3f4;
+            --kishiface-blue: #1d9bf0;
+            --kishiface-hover-blue: #1a8cd8;
+            --kishiface-green: #00ba7c;
+            --kishiface-red: #f91880;
+            --kishiface-yellow: #ffd400;
+            --kishiface-white: #ffffff;
+            --kishiface-background: #ffffff;
+            --kishiface-card-bg: #f7f9f9;
+            --kishiface-button-bg: #666666;
+            --kishiface-button-hover: #555555;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--kishiface-background);
+            color: var(--kishiface-black);
+            line-height: 1.4;
+        }
+
+        /* Kishiface Main Layout */
+        .kishiface-container {
+            display: flex;
+            margin: 0 auto;
+            min-height: 100vh;
+        }
+
+        /* Main Content Area */
+        .kishiface-main {
+            flex: 1;
+            min-height: 100vh;
+            width: 100%;
+            max-width: 100%; /* Ensure it takes full width */
+        }
+
+
+        /* Profile Header - Fixed/Sticky on Mobile */
+        .kishiface-profile-header {
+            position: sticky;
+            top: 0; /* Ensures it sticks to the top of the mobile screen */
+            z-index: 10;
+            background-color: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            padding: 0 16px;
+            border-bottom: 1px solid var(--kishiface-border);
+            width: 100%; /* Satisfies screen size */
+        }
+
+        .kishiface-header-inner {
+            display: flex;
+            align-items: center;
+            height: 53px;
+        }
+
+        .kishiface-header-back {
+            margin-right: 32px;
+            cursor: pointer;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+
+        .kishiface-header-back:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .kishiface-header-back i {
+            font-size: 19px;
+            color: var(--kishiface-black);
+        }
+
+        .kishiface-header-info {
+            flex: 1;
+        }
+
+        .kishiface-header-name {
+            font-weight: 700;
+            font-size: 20px;
+            line-height: 1.2;
+        }
+
+        .kishiface-header-posts {
+            color: var(--kishiface-gray);
+            font-size: 13px;
+        }
+
+        /* Cover Photo - Using Profile Picture */
+        .kishiface-cover {
+            height: 200px;
+            /* background-image is set inline in the HTML */
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            filter: brightness(0.85); 
+        }
+
+        /* Profile Info Section */
+        .kishiface-profile-info {
+            padding: 12px 16px;
+            position: relative;
+        }
+
+        .kishiface-avatar-container {
+            position: absolute;
+            top: -67px;
+            left: 16px;
+        }
+
+        .kishiface-profile-avatar {
+            width: 133px;
+            height: 133px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid var(--kishiface-white);
+            background-color: var(--kishiface-white);
+        }
+
+        .kishiface-profile-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .kishiface-action-btn {
+            padding: 8px 16px;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid var(--kishiface-gray);
+            background-color: transparent;
+            color: var(--kishiface-black);
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .kishiface-action-btn:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        .kishiface-action-btn-primary {
+            background-color: var(--kishiface-button-bg);
+            color: var(--kishiface-white);
+            border: none;
+        }
+
+        .kishiface-action-btn-primary:hover {
+            background-color: var(--kishiface-button-hover);
+        }
+
+        .kishiface-more-actions {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--kishiface-gray);
+            background-color: transparent;
+            color: var(--kishiface-black);
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .kishiface-more-actions:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        /* Profile Details */
+        .kishiface-profile-details {
+            margin-bottom: 16px;
+        }
+
+        .kishiface-profile-name {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .kishiface-profile-username {
+            color: var(--kishiface-gray);
+            font-size: 15px;
+            margin-bottom: 12px;
+        }
+
+        .kishiface-profile-bio {
+            font-size: 15px;
+            margin-bottom: 12px;
+            line-height: 1.4;
+            color: var(--kishiface-black);
+        }
+
+        .kishiface-profile-meta {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 12px;
+            color: var(--kishiface-gray);
+            font-size: 15px;
+        }
+
+        .kishiface-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .kishiface-meta-item i {
+            font-size: 18px;
+        }
+
+        .kishiface-follow-stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 12px;
+        }
+
+        .kishiface-follow-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--kishiface-gray);
+            font-size: 14px;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .kishiface-follow-stat:hover {
+            color: var(--kishiface-black);
+            text-decoration: underline;
+        }
+
+        .kishiface-follow-number {
+            color: var(--kishiface-black);
+            font-weight: 700;
+        }
+
+        /* Profile Tabs */
+        .kishiface-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--kishiface-border);
+        }
+
+        .kishiface-tab {
+            flex: 1;
+            text-align: center;
+            padding: 16px;
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--kishiface-gray);
+            text-decoration: none;
+            transition: background-color 0.2s;
+            position: relative;
+        }
+
+        .kishiface-tab:hover {
+            background-color: rgba(0, 0, 0, 0.03);
+        }
+
+        .kishiface-tab-active {
+            color: var(--kishiface-black);
+        }
+
+        .kishiface-tab-active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 4px;
+            background-color: var(--kishiface-button-bg);
+            border-radius: 9999px;
+        }
+
+        /* Posts Grid Container */
+        .kishiface-posts-container {
+            padding: 0;
+        }
+
+        /* Posts Grid */
+        .kishiface-posts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px;
+            width: 100%;
+        }
+
+        .kishiface-post-item {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            cursor: pointer;
+        }
+
+        .kishiface-post-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .kishiface-post-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 150ms ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            color: white;
+        }
+
+        .kishiface-post-item:hover .kishiface-post-overlay {
+            opacity: 1;
+        }
+
+        .kishiface-post-overlay span {
+            display: flex;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1.125rem;
+        }
+
+        .kishiface-post-overlay span i {
+            margin-right: 0.25rem;
+        }
+
+        /* No Posts Message */
+        .kishiface-no-posts {
+            padding: 48px 32px;
+            text-align: center;
+            border-bottom: 1px solid var(--kishiface-border);
+        }
+
+        .kishiface-no-posts-title {
+            font-size: 31px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--kishiface-black);
+        }
+
+        .kishiface-no-posts-text {
+            color: var(--kishiface-gray);
+            font-size: 15px;
+        }
+
+        /* Mobile-First Adjustments: Ensure no sidebar is ever displayed */
+        .kishiface-sidebar {
+            display: none !important; 
+        }
+        
+        /* Ensure main content is always full width */
+        .kishiface-main {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 768px) {
+            .kishiface-posts-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .kishiface-profile-avatar {
+                width: 100px;
+                height: 100px;
+            }
+            
+            .kishiface-avatar-container {
+                top: -50px;
+            }
+            
+            body {
+                padding-bottom: 56px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .kishiface-posts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .kishiface-profile-avatar {
+                width: 80px;
+                height: 80px;
+            }
+            
+            .kishiface-avatar-container {
+                top: -40px;
+            }
+        }
+
+        /* Verify Badge */
+        .kishiface-verified-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            margin-left: 2px;
+        }
+
+        .kishiface-verified-badge img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Loading Animation */
+        .kishiface-loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--kishiface-button-bg);
+            animation: kishiface-spin 1s ease-in-out infinite;
+        }
+
+        @keyframes kishiface-spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+
+<div class="kishiface-container">
+    
+    <main class="kishiface-main">
+        <header class="kishiface-profile-header">
+            <div class="kishiface-header-inner">
+                <div class="kishiface-header-back">
+                     <button onclick="closePanel()"> <i class="fas fa-arrow-left"></i></button>
+                   
+                </div>
+                <div class="kishiface-header-info">
+                    <div class="kishiface-header-name">{{user.first_name|default:user.username}}</div>
+                    <div class="kishiface-header-posts">{{posts|length}} posts</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="kishiface-cover" style="background-image:url('{{ user.profile.picture.url }}');"></div>
+
+        <section class="kishiface-profile-info">
+            <div class="kishiface-avatar-container">
+                <img src="{{user.profile.picture.url}}" alt="{{user.username}}" class="kishiface-profile-avatar">
+            </div>
+            
+            <div class="kishiface-profile-actions">
+                {% if request.user == user %}
+                <a href="{% url 'update_profile' user.username %}" class="kishiface-action-btn">
+                    Edit profile
+                </a>
+                <button class="kishiface-more-actions">
+                    <i class="fas fa-ellipsis-h"></i>
+                </button>
+                {% else %}
+                {% if current_profile in profile.followers.all %}
+                    <form action="{% url 'follow' profile.user.username %}" method="post" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="kishiface-action-btn">
+                            Following
+                        </button>
+                    </form>
+                {% else %}
+                    <form action="{% url 'follow' profile.user.username %}" method="post" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="kishiface-action-btn kishiface-action-btn-primary">
+                            Follow
+                        </button>
+                    </form>
+                {% endif %}
+                <a href="{% url 'message' user.username %}" class="kishiface-action-btn">
+                    Message
+                </a>
+                <button class="kishiface-more-actions">
+                    <i class="fas fa-ellipsis-h"></i>
+                </button>
+                {% endif %}
+            </div>
+
+            <div class="kishiface-profile-details">
+                <h1 class="kishiface-profile-name">
+                    {{user.first_name}} {{user.last_name}}
+                    {% if user.profile.is_verify %}
+                    <span class="kishiface-verified-badge">
+                        <img src="{% static 'images/verify1.jpg' %}" alt="Verified">
+                    </span>
+                    {% endif %}
+                </h1>
+                <div class="kishiface-profile-username">@{{user.username}}</div>
+                
+                {% if profile.bio %}
+                <div class="kishiface-profile-bio">{{profile.bio}}</div>
+                {% endif %}
+
+                <div class="kishiface-profile-meta">
+                    {% if profile.location %}
+                    <div class="kishiface-meta-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>{{profile.location}}</span>
+                    </div>
+                    {% endif %}
+                    {% if profile.address %}
+                    <div class="kishiface-meta-item">
+                        <i class="fas fa-link"></i>
+                        <span>{{profile.address}}</span>
+                    </div>
+                    {% endif %}
+                    <div class="kishiface-meta-item">
+                        <i class="far fa-calendar"></i>
+                        <span>Joined {{profile.created_at|date:"F Y"}}</span>
+                    </div>
+                </div>
+
+                <div class="kishiface-follow-stats">
+                    <a href="{% url 'following' user.username %}" class="kishiface-follow-stat">
+                        <span class="kishiface-follow-number">{{profile.followings.count}}</span>
+                        <span>Following</span>
+                    </a>
+                    <a href="{% url 'followers' user.username %}" class="kishiface-follow-stat">
+                        <span class="kishiface-follow-number">{{profile.followers.count}}</span>
+                        <span>Followers</span>
+                    </a>
+                </div>
+            </div>
+
+            <nav class="kishiface-tabs">
+                <a href="#" class="kishiface-tab kishiface-tab-active">Posts</a>
+                <a href="#" class="kishiface-tab">Replies</a>
+                <a href="#" class="kishiface-tab">Media</a>
+                <a href="#" class="kishiface-tab">Likes</a>
+            </nav>
+        </section>
+
+        <section class="kishiface-posts-container">
+            {% if posts %}
+            <div class="kishiface-posts-grid">
+                {% for post in posts %}
+                    {% if post.images.all %}
+                    {% with first_image=post.images.all|first %}
+                        <a href="{% url 'post_comment' post.post_id %}" class="kishiface-post-item">
+                            {% if first_image %}
+                                <img src="{{first_image.image.url}}" alt="Post" class="kishiface-post-image">
+                            {% else %}
+                                <div style="width: 100%; height: 100%; background-color: #d1d5db; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 0.75rem;">
+                                    No Image
+                                </div>
+                            {% endif %} 
+                            <div class="kishiface-post-overlay">
+                                <span><i class="fa-solid fa-heart"></i> {{post.likes.count}}</span>
+                                <span><i class="fa-solid fa-comment"></i> {{post.comments.count}}</span>
+                            </div>
+                        </a>
+                    {% endwith %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="kishiface-no-posts">
+                <h2 class="kishiface-no-posts-title">No posts yet</h2>
+                <p class="kishiface-no-posts-text">When they do, their posts will show up here.</p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+</div>
+
+{% include 'footer.html' %}
+
+<script>
+    // Simple interactivity
+    document.addEventListener('DOMContentLoaded', function() {
+      
+
+        // Tab switching
+        document.querySelectorAll('.kishiface-tab').forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.querySelectorAll('.kishiface-tab').forEach(t => {
+                    t.classList.remove('kishiface-tab-active');
+                });
+                this.classList.add('kishiface-tab-active');
+            });
+        });
+    });
+</script>
+
+</body>
+</html>

@@ -241,7 +241,7 @@
     
     window.matchMedia("(max-width: 668px)").addEventListener('change', setupLinks());
     function closePanel(){
-        document.getElementById('sidePanel').style.right='-400px';
+        document.getElementById('sidePanel').style.right='-450px';
     }
      /* Auto close popup when changing to Mobile */
      window.addEventListener('resize', function(){
@@ -249,7 +249,7 @@
         const isMobile = window.matchMedia("(max-width: 668px)").matches;
         if(isMobile){
             const panel = document.getElementById('sidePanel');
-            panel.style.right = '-400px';
+            panel.style.right = '-450px';
             panel.innerHTML='';
         }
      })
