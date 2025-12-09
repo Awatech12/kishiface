@@ -1,668 +1,1085 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-<title>kishiface — Messages</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-<style>
-/* ---------------- BASE ---------------- */
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#FAFAFA;color:#111}
-.main-chat-wrapper{display:flex;flex-direction:column;height:100vh;max-width:900px;margin:0 auto;background:white}
-.profile-header{height:60px;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #EFEFEF;background:white;z-index:3}
-.profile-header .left{display:flex;align-items:center;gap:12px}
-.profile-header img{width:40px;height:40px;border-radius:50%}
-.profile-header b{font-size:16px}
-.chat-container{flex:1;overflow-y:auto;padding:16px;background:white;-webkit-overflow-scrolling:touch}
-.chat-container::-webkit-scrollbar{display:none}
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Classic Messenger</title>
+    <!-- Load Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        /* ======================== VARIABLES & BASE ======================== */
+        :root {
+            --color-primary: #5865F2; /* Deep Indigo/Blue */
+            --color-primary-light: #727de9;
+            --color-background-light: #F9FAFB;
+            --color-background-dark: #E5E7EB;
+            --color-text-dark: #1F2937;
+            --color-text-light: #FFFFFF;
+            --shadow-subtle: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-header: 0 1px 3px rgba(0, 0, 0, 0.05);
+            --border-radius-lg: 1rem;
+            --border-radius-md: 0.75rem;
+            --transition: all 0.2s ease-in-out;
+        }
 
-/* ---------------- MESSAGES ---------------- */
-.message{max-width:78%;padding:10px 14px;margin-bottom:10px;border-radius:20px;font-size:15px;position:relative;line-height:1.3}
-.sent{margin-left:auto;background:linear-gradient(135deg,#0099ff 0%,#a033ff 100%);color:white;border-bottom-right-radius:6px}
-.received{margin-right:auto;background:#F2F2F2;color:#111;border-bottom-left-radius:6px}
-.time{position:absolute;font-size:10px;bottom:4px;right:8px;opacity:.85}
-.received .time{color:#8E8E93}
-.message{padding-bottom:22px}
+        /* Reset and Base Styles */
+        * { box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--color-background-light);
+            color: var(--color-text-dark);
+            -webkit-font-smoothing: antialiased;
+        }
 
-/* ---------------- AUDIO PLAYER ---------------- */
-.ig-audio-player{display:flex;align-items:center;gap:8px;width:210px}
-.ig-play-btn{border:none;background:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;flex-shrink:0}
-.sent .ig-play-btn{background:white;color:#0099ff}
-.received .ig-play-btn{background:#EFEFEF;color:#111}
-.ig-progress{flex:1;height:4px;border-radius:4px;appearance:none;background:rgba(255,255,255,0.25);outline:none}
-.received .ig-progress{background:#ddd}
-.ig-progress::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;height:10px;width:10px;border-radius:50%;background:#fff}
-.ig-ts{font-size:11px;min-width:40px;text-align:right}
+        /* Fix for mobile viewport units (svh for small viewport height) */
+        .main-chat-wrapper {
+            height: 100vh;
+            height: 100svh;
+            display: flex;
+            flex-direction: column;
+            max-width: 42rem; /* Max-w-2xl equivalent */
+            margin: 0 auto;
+            background: var(--color-text-light);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
 
-/* ---------------- INPUT (kishiface DM V2) ---------------- */
-.input-area{position:fixed;left:0;right:0;bottom:0;padding:10px 12px;border-top:1px solid #EFEFEF;background:white;display:flex;align-items:center;gap:10px;z-index:40}
-@media(min-width:768px){.input-area{max-width:900px;margin-left:auto;margin-right:auto;border-left:1px solid #DBDBDB;border-right:1px solid #DBDBDB}}
-.left-camera{font-size:22px;color:#666;cursor:pointer;flex-shrink:0}
+        /* Scrollbar hiding for chat container */
+        .chat-container::-webkit-scrollbar { display: none; }
+        .chat-container { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Input wrapper mimics kishiface: rounded, with icons inside */
-.input-wrapper{flex:1;display:flex;align-items:center;gap:10px;background:#F2F2F2;padding:8px 12px;border-radius:28px;position:relative}
-.icon-btn { background:none;border:0;font-size:20px;color:#666;cursor:pointer;flex-shrink:0 }
-.input-wrapper input[type="text"]{border:0;background:transparent;outline:none;font-size:15px;flex:1;padding:6px 0}
+        /* ======================== HEADER ======================== */
+        .header {
+            position: sticky;
+            top: 0;
+            background: var(--color-text-light);
+            z-index: 20;
+            border-bottom: 1px solid var(--color-background-dark);
+            box-shadow: var(--shadow-header);
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start; /* Removed action icons, align to start */
+        }
 
-/* emoji picker absolute inside wrapper area */
-.emoji-picker {
-    position: absolute;
-    bottom: 56px;
-    left: 8px;
-    width: 320px;
-    height: 260px;
-    background: #ffffff;
-    border: 1px solid #DBDBDB;
-    border-radius: 14px;
-    padding: 10px;
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    grid-gap: 6px;
-    overflow-y: auto;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-    z-index: 9999;
-}
+        .header-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
 
-.emoji-picker span {
-    font-size: 22px;
-    cursor: pointer;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:6px;
-    border-radius:8px;
-}
-.emoji-picker span:hover { background:#f2f2f2; }
+        .header-profile-img {
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--color-primary);
+        }
 
-/* mic and send buttons to the right */
-.controls{display:flex;align-items:center;gap:8px;flex-shrink:0}
-#micBtn, #sendBtn{font-size:22px;color:#666;background:none;border:none;cursor:pointer}
-#sendBtn{color:#0095F6;display:none}
+        .header-status {
+            font-size: 0.75rem;
+            color: #10B981; /* Green-500 equivalent */
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+        }
+        .header-status-dot {
+            width: 0.5rem;
+            height: 0.5rem;
+            background: #10B981;
+            border-radius: 50%;
+            margin-right: 0.25rem;
+        }
 
-/* recording indicator class for red pulsing mic */
-.recording-indicator{color:#ff3b30;animation:pulse 1s infinite}
-@keyframes pulse{0%{opacity:1}50%{opacity:.4}100%{opacity:1}}
+        /* ======================== CHAT AREA ======================== */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem 1rem;
+            padding-bottom: 6rem; /* Space for fixed input area */
+            background: var(--color-text-light);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .message-group-label {
+            text-align: center;
+            margin: 1rem 0;
+        }
+        .message-group-label span {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #6B7280; /* Gray-500 */
+            background: var(--color-background-light);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px; /* Pill shape */
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
 
-/* ---------------- FLOATING RECORD OVERLAY ---------------- */
-.record-overlay{
-  position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:white;padding:10px 14px;border-radius:14px;display:flex;align-items:center;gap:12px;z-index:50;min-width:220px;max-width:90%;
-  transition:opacity .18s,transform .18s;
-}
-.wave-canvas{width:96px;height:36px;display:block;border-radius:6px;background:transparent}
-.rec-text{font-size:13px;color:#fff;opacity:.95}
-.slide-to-cancel{font-size:13px;color:#f7f7f7;opacity:.9;white-space:nowrap}
+        /* ======================== MESSAGES ======================== */
+        .chat-message-row-sent {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .chat-message-row-received {
+            display: flex;
+            justify-content: flex-start;
+        }
 
-/* ---------------- PREVIEW CARD ---------------- */
-.preview-area{position:fixed;left:0;right:0;bottom:72px;padding:10px 12px;display:flex;align-items:center;gap:8px;background:transparent;z-index:45;justify-content:center}
-.preview-card{background:white;border-radius:14px;padding:8px 10px;display:flex;align-items:center;gap:10px;border:1px solid #EDEDED}
-.preview-card audio{display:none}
-.preview-buttons{display:flex;gap:8px}
-.btn-small{border:none;padding:8px 10px;border-radius:8px;font-weight:600;cursor:pointer}
-.btn-send{background:#0095F6;color:white}
-.btn-cancel{background:#fff;border:1px solid #E5E5E5;color:#111}
+        .chat-message {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            line-height: 1.4;
+            position: relative;
+            box-shadow: var(--shadow-subtle);
+        }
 
-/* small helpers & mobile fixes */
-.hint{font-size:12px;color:#8E8E93}
-@supports (-webkit-touch-callout:none){
-  .chat-container{padding-bottom:170px}
-}
-</style>
+        .chat-message-sent {
+            background: var(--color-primary);
+            color: var(--color-text-light);
+            border-radius: var(--border-radius-md) var(--border-radius-md) 0 var(--border-radius-md);
+        }
+
+        .chat-message-received {
+            background: var(--color-background-dark);
+            color: var(--color-text-dark);
+            border-radius: var(--border-radius-md) var(--border-radius-md) var(--border-radius-md) 0;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+            display: block;
+            text-align: right;
+        }
+        .chat-message-sent .message-time { color: rgba(255, 255, 255, 0.8); }
+        .chat-message-received .message-time { color: #6B7280; }
+
+        /* ======================== AUDIO PLAYER STYLES ======================== */
+        .ig-audio-player {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: 100%;
+        }
+
+        .ig-play-btn {
+            border: none;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: var(--transition);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .chat-message-sent .ig-play-btn { background: var(--color-text-light); color: var(--color-primary); }
+        .chat-message-received .ig-play-btn { background: var(--color-text-light); color: var(--color-text-dark); }
+
+        .ig-progress {
+            height: 0.25rem;
+            border-radius: 0.25rem;
+            appearance: none;
+            outline: none;
+            cursor: pointer;
+            flex-grow: 1;
+            margin: 0;
+            padding: 0;
+        }
+        /* Custom progress bar tracks */
+        .chat-message-sent .ig-progress { background: rgba(255, 255, 255, 0.3); }
+        .chat-message-received .ig-progress { background: #9CA3AF; }
+
+        /* Custom progress bar thumb */
+        .ig-progress::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 0.75rem;
+            width: 0.75rem;
+            border-radius: 50%;
+            background: var(--color-text-light);
+            cursor: pointer;
+        }
+        .chat-message-received .ig-progress::-webkit-slider-thumb { background: var(--color-text-dark); }
+
+        .ig-ts {
+            font-size: 0.75rem;
+            min-width: 2.5rem;
+            text-align: right;
+            font-family: monospace;
+        }
+        
+        /* ======================== INPUT AREA ======================== */
+        /* Fixed position container for input, centered on desktop */
+        .input-area-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 30;
+            display: flex;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .input-area {
+            width: 100%;
+            max-width: 42rem; /* Matches main wrapper */
+            background: var(--color-text-light);
+            padding: 0.75rem 1rem;
+            border-top: 1px solid var(--color-background-dark);
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Input Wrapper (Pill shape) */
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--color-background-light);
+            padding: 0.25rem 0.5rem; /* Reduced horizontal padding slightly */
+            border-radius: 2rem; /* Pill */
+            position: relative;
+        }
+
+        .input-wrapper input[type="text"] {
+            flex: 1;
+            border: 0;
+            background: transparent;
+            outline: none;
+            font-size: 1rem;
+            padding: 0.5rem 0;
+        }
+
+        .icon-btn {
+            background: none;
+            border: 0;
+            font-size: 1.25rem;
+            color: #6B7280;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: var(--transition);
+            /* Base padding for all icons in the wrapper */
+            padding: 0.4rem; 
+        }
+        .icon-btn:hover {
+            color: var(--color-primary);
+        }
+        
+        /* Specific styling for the Mic/Send button inside the wrapper */
+        .input-wrapper #micBtn,
+        .input-wrapper #sendBtn {
+            font-size: 1.5rem; /* Slightly larger */
+            /* OVERRIDE: Increase right padding for space against the pill edge */
+            padding-right: 0.8rem;
+        }
+
+        .input-wrapper #sendBtn {
+            color: var(--color-primary);
+        }
+
+        .recording-indicator {
+            color: #EF4444 !important; /* Red */
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        /* ======================== EMOJI PICKER ======================== */
+        .emoji-picker {
+            position: absolute;
+            bottom: 4.5rem; /* Above the input bar */
+            left: 0.5rem;
+            width: 18rem; /* Mobile width */
+            height: 16rem;
+            background: var(--color-text-light);
+            border: 1px solid var(--color-background-dark);
+            border-radius: var(--border-radius-md);
+            padding: 0.75rem;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 0.25rem;
+            overflow-y: auto;
+            box-shadow: var(--shadow-subtle);
+            z-index: 50;
+        }
+        .emoji-picker span {
+            font-size: 1.375rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem;
+            border-radius: 0.5rem;
+        }
+        .emoji-picker span:hover { background: var(--color-background-light); }
+        
+        /* Desktop/Tablet media query for layout adjustments */
+        @media (min-width: 640px) {
+            .main-chat-wrapper {
+                margin-top: 1rem;
+                margin-bottom: 1rem;
+                height: calc(100vh - 2rem);
+                border-radius: var(--border-radius-lg);
+            }
+            .input-area {
+                border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
+            }
+            .emoji-picker {
+                width: 20rem; /* Wider on desktop */
+                grid-template-columns: repeat(8, 1fr);
+            }
+        }
+
+        /* ======================== RECORDING OVERLAY ======================== */
+        .record-overlay {
+            position: fixed;
+            left: 50%;
+            bottom: 6rem; /* Above input area */
+            transform: translateX(-50%) translateY(10px); /* Initial state for animation */
+            background: rgba(0, 0, 0, 0.85);
+            color: var(--color-text-light);
+            padding: 0.75rem 1rem;
+            border-radius: var(--border-radius-md);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 50;
+            min-width: 14rem;
+            max-width: 90%;
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+        }
+        .wave-canvas {
+            width: 6rem;
+            height: 2.25rem;
+            display: block;
+            border-radius: 0.25rem;
+            background: transparent;
+        }
+        .rec-text {
+            font-size: 0.875rem;
+            color: #fff;
+            opacity: 0.95;
+        }
+        .rec-timer {
+            font-weight: 700;
+            color: #EF4444; /* Red for recording time */
+        }
+        .slide-to-cancel {
+            font-size: 0.75rem;
+            color: #f7f7f7;
+            opacity: 0.9;
+            white-space: nowrap;
+        }
+
+        /* ======================== PREVIEW CARD ======================== */
+        .preview-area-container {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 6rem; /* Above input area */
+            z-index: 45;
+            display: flex;
+            justify-content: center;
+            padding: 0.5rem;
+        }
+
+        .preview-card {
+            background: var(--color-text-light);
+            border-radius: var(--border-radius-md);
+            padding: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            border: 1px solid var(--color-background-dark);
+            box-shadow: var(--shadow-subtle);
+            max-width: 95%;
+        }
+        .preview-card audio { display: none; }
+        
+        .preview-audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 15rem; /* Ensure controls are wide enough */
+        }
+        
+        .preview-buttons button {
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .btn-send { background: var(--color-primary); color: var(--color-text-light); }
+        .btn-send:hover { background: var(--color-primary-light); }
+        .btn-cancel { background: #FECACA; /* Red-100 */ color: #DC2626; /* Red-600 */ padding: 0.5rem; border-radius: 50%; width: 2.25rem; height: 2.25rem; }
+        .btn-cancel:hover { background: #FEE2E2; }
+    </style>
 </head>
 <body>
 
 <div class="main-chat-wrapper">
-  <!-- Header -->
-  <div class="profile-header">
-    <div class="left">
-      <img src="{{ receiver.profile.picture.url }}" alt="">
-      <div>
-        <b>{% if receiver.profile.full_name %}{{ receiver.profile.full_name }}{% else %}{{ receiver.username }}{% endif %}</b>
-        <div style="font-size:12px;color:#8E8E93">Active now</div>
-      </div>
-    </div>
-    <div></div>
-  </div>
-
-  <!-- Messages -->
-  <div id="messageOutput" class="chat-container">
-    {% for label, msgs in grouped_messages.items %}
-      <center><b><i>{{ label }}</i></b></center>
-      {% for message in msgs %}
-        {% if message.sender.username == request.user.username %}
-          {% if message.conversation %}
-            <div class="sent message">
-              {{ message.conversation }}
-              <span class="time">{{ message.chat_time }}</span>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-info">
+            <!-- Placeholder Image -->
+            <img 
+                src="{% if receiver.profile.picture %}{{ receiver.profile.picture.url }}{% else %}https://placehold.co/40x40/5865F2/FFFFFF/svg?text={{ receiver.username|slice:":1"|upper }}{% endif %}" 
+                onerror="this.src='https://placehold.co/40x40/5865F2/FFFFFF/svg?text={{ receiver.username|slice:":1"|upper }}'" 
+                alt="Profile Picture of {% if receiver.profile.full_name %}{{ receiver.profile.full_name }}{% else %}{{ receiver.username }}{% endif %}"  class="header-profile-img">
+            <div>
+                <!-- Django Template Variable Placeholders -->
+                <b class="text-lg">{% if receiver.profile.full_name %}{{ receiver.profile.full_name }}{% else %}{{ receiver.username }}{% endif %}</b>
+                <div class="header-status">
+                    <span class="header-status-dot"></span>
+                    Active now
+                </div>
             </div>
-          {% elif message.file %}
-            <div class="sent message">
-              <div class="ig-audio-player">
-                <button class="ig-play-btn"><i class="fa-solid fa-play"></i></button>
-                <input type="range" min="0" max="100" value="0" class="ig-progress">
-                <div class="ig-ts">0:00</div>
-              </div>
-              <audio class="audio-source" src="{{ message.file.url }}"></audio>
-              <span class="time">{{ message.chat_time }}</span>
-            </div>
-          {% endif %}
-        {% else %}
-          {% if message.conversation %}
-            <div class="received message">
-              {{ message.conversation }}
-              <span class="time">{{ message.chat_time }}</span>
-            </div>
-          {% elif message.file %}
-            <div class="received message">
-              <div class="ig-audio-player">
-                <button class="ig-play-btn"><i class="fa-solid fa-play"></i></button>
-                <input type="range" min="0" max="100" value="0" class="ig-progress">
-                <div class="ig-ts">0:00</div>
-              </div>
-              <audio class="audio-source" src="{{ message.file.url }}"></audio>
-              <span class="time">{{ message.chat_time }}</span>
-            </div>
-          {% endif %}
-        {% endif %}
-      {% endfor %}
-    {% endfor %}
-  </div>
-
-  <!-- Input area -->
-  <div class="input-area" id="inputArea">
-
-    <div class="input-wrapper">
-      <button id="emojiBtn" type="button" class="icon-btn" title="Emoji"><i class="fa-regular fa-face-smile"></i></button>
-
-      <input id="message" type="text" placeholder="Message..." autocomplete="off">
-
-      <label for="image" title="Add photo or video"><i class="fa-regular fa-image icon-btn"></i></label>
-      <input id="image" type="file" accept="image/*" hidden>
-
-      <!-- emoji picker container (absolute inside wrapper) -->
-      <div id="emojiPicker" class="emoji-picker" style="display:none"></div>
+        </div>
+        <!-- REMOVED: Call and Video Icons -->
     </div>
 
-    <div class="controls">
-      <button id="micBtn" title="Hold to record" aria-label="Hold to record"><i class="fa-solid fa-microphone"></i></button>
-      <button id="sendBtn" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+    <!-- Messages Container (Scrollable) -->
+    <div id="messageOutput" class="chat-container">
+        <!-- Message Loop (Django Template Logic preserved) -->
+        {% for label, msgs in grouped_messages.items %}
+            <div class="message-group-label">
+                <span>{{ label }}</span>
+            </div>
+            {% for message in msgs %}
+                {% if message.sender.username == request.user.username %}
+                    {% if message.conversation %}
+                        <div class="chat-message-row-sent">
+                            <div class="chat-message chat-message-sent">
+                                {{ message.conversation }}
+                                <span class="message-time">
+                                    {{ message.chat_time }}
+                                    <i class="fa-solid fa-check ml-1 text-xs"></i>
+                                </span>
+                            </div>
+                        </div>
+                    {% elif message.file %}
+                        <div class="chat-message-row-sent">
+                            <div class="chat-message chat-message-sent">
+                                <div class="ig-audio-player">
+                                    <button class="ig-play-btn"><i class="fa-solid fa-play"></i></button>
+                                    <input type="range" min="0" max="100" value="0" class="ig-progress">
+                                    <div class="ig-ts">0:00</div>
+                                </div>
+                                <audio class="audio-source" src="{{ message.file.url }}"></audio>
+                                <span class="message-time">{{ message.chat_time }}</span>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    {% if message.conversation %}
+                        <div class="chat-message-row-received">
+                            <div class="chat-message chat-message-received">
+                                {{ message.conversation }}
+                                <span class="message-time">{{ message.chat_time }}</span>
+                            </div>
+                        </div>
+                    {% elif message.file %}
+                        <div class="chat-message-row-received">
+                            <div class="chat-message chat-message-received">
+                                <div class="ig-audio-player">
+                                    <button class="ig-play-btn"><i class="fa-solid fa-play"></i></button>
+                                    <input type="range" min="0" max="100" value="0" class="ig-progress">
+                                    <div class="ig-ts">0:00</div>
+                                </div>
+                                <audio class="audio-source" src="{{ message.file.url }}"></audio>
+                                <span class="message-time">{{ message.chat_time }}</span>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
     </div>
-  </div>
+
+    <!-- This container is for centering the fixed input on larger screens -->
+    <div class="input-area-container">
+        <!-- Input area -->
+        <div class="input-area">
+
+            <!-- Input Wrapper (Pill Shape) -->
+            <div class="input-wrapper">
+                <button id="emojiBtn" type="button" class="icon-btn" title="Emoji">
+                    <i class="fa-regular fa-face-smile"></i>
+                </button>
+
+                <input id="message" type="text" placeholder="Message..." autocomplete="off">
+
+                <label for="image" title="Add photo or video" class="icon-btn">
+                    <i class="fa-regular fa-image"></i>
+                </label>
+                <input id="image" type="file" accept="image/*" hidden>
+
+                <!-- Mic/Send Buttons -->
+                <button id="micBtn" title="Hold to record" aria-label="Hold to record" class="icon-btn">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+                <button id="sendBtn" title="Send" style="display:none" class="icon-btn">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+
+                <!-- Emoji Picker Container -->
+                <div id="emojiPicker" class="emoji-picker" style="display:none"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Floating record overlay (shown while holding) -->
-<div id="recordOverlay" class="record-overlay" style="display:none;opacity:0;transform:translateX(-50%) translateY(10px)">
-  <canvas id="waveCanvas" class="wave-canvas"></canvas>
-  <div style="display:flex;flex-direction:column">
-    <div class="rec-text" id="recStatus">Recording</div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <div id="recTimer" style="font-weight:700">0:00</div>
-      <div id="slideHint" class="slide-to-cancel">Slide left to cancel</div>
+<div id="recordOverlay" class="record-overlay" style="display:none;opacity:0;">
+    <canvas id="waveCanvas" class="wave-canvas"></canvas>
+    <div style="display:flex;flex-direction:column">
+        <div class="rec-text" id="recStatus">Recording</div>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+            <div id="recTimer" class="rec-timer">0:00</div>
+            <div id="slideHint" class="slide-to-cancel">Slide left to cancel</div>
+        </div>
     </div>
-  </div>
 </div>
 
 <!-- Preview card after recording -->
-<div id="previewArea" class="preview-area" style="display:none">
-  <div class="preview-card">
-    <div style="display:flex;align-items:center;gap:10px">
-      <button id="previewPlay" class="ig-play-btn"><i class="fa-solid fa-play"></i></button>
-      <div style="min-width:160px">
-        <input id="previewProgress" class="ig-progress" type="range" min="0" max="100" value="0">
-      </div>
-      <div class="ig-ts" id="previewTime">0:00</div>
+<div id="previewArea" class="preview-area-container" style="display:none">
+    <div class="preview-card">
+        <div class="preview-audio-controls">
+            <button id="previewPlay" class="ig-play-btn"><i class="fa-solid fa-play"></i></button>
+            <div style="min-width:10rem;">
+                <input id="previewProgress" class="ig-progress" type="range" min="0" max="100" value="0">
+            </div>
+            <div class="ig-ts text-gray-700" id="previewTime">0:00</div>
+        </div>
+        <div class="preview-buttons flex items-center gap-2 ml-2">
+            <button id="btnCancelPreview" class="btn-cancel" title="Delete">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+            <button id="btnSendPreview" class="btn-send" title="Send">Send</button>
+        </div>
     </div>
-    <div class="preview-buttons" style="margin-left:8px">
-      <button id="btnCancelPreview" class="btn-small btn-cancel" title="Delete"><i class="fa-solid fa-trash"></i></button>
-      <button id="btnSendPreview" class="btn-small btn-send" title="Send">Send</button>
-    </div>
-  </div>
 </div>
 
 <script>
-/* ================= WebSocket integration (keep your route) ================= */
-const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-const socket = new WebSocket(protocol + window.location.host + "/ws/message/");
+    /* ================= WebSocket Integration (UNCHANGED LOGIC) ================= */
+    const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+    const socket = new WebSocket(protocol + window.location.host + "/ws/message/");
 
-const receiver = "{{ receiver.username }}";
-const sender = "{{ request.user.username }}";
+    const receiver = "{{ receiver.username }}";
+    const sender = "{{ request.user.username }}";
 
-const messageOutput = document.getElementById('messageOutput');
-const messageInput = document.getElementById('message');
-const imageInput = document.getElementById('image');
-const micBtn = document.getElementById('micBtn');
-const sendBtn = document.getElementById('sendBtn');
+    const messageOutput = document.getElementById('messageOutput');
+    const messageInput = document.getElementById('message');
+    const imageInput = document.getElementById('image');
+    const micBtn = document.getElementById('micBtn');
+    const sendBtn = document.getElementById('sendBtn');
 
-messageOutput.scrollTo({top: messageOutput.scrollHeight, behavior:'smooth'});
+    // Scroll to the bottom on load
+    window.addEventListener('load', () => {
+        messageOutput.scrollTo({top: messageOutput.scrollHeight, behavior:'smooth'});
+    });
 
-/* Initialize audio controls for existing messages */
-function initAudioControls(container) {
-  const player = container.querySelector('.ig-audio-player');
-  if (!player) return;
-  const audio = container.querySelector('.audio-source');
-  const playBtn = player.querySelector('.ig-play-btn');
-  const progress = player.querySelector('.ig-progress');
-  const ts = player.querySelector('.ig-ts');
-
-  playBtn.addEventListener('click', () => {
-    document.querySelectorAll('.audio-source').forEach(a => { if (a !== audio && !a.paused) a.pause(); });
-    if (audio.paused) audio.play(); else audio.pause();
-  });
-  audio.addEventListener('play', ()=> playBtn.innerHTML = '<i class="fa-solid fa-pause"></i>');
-  audio.addEventListener('pause', ()=> playBtn.innerHTML = '<i class="fa-solid fa-play"></i>');
-  audio.addEventListener('timeupdate', ()=> {
-    if (audio.duration) {
-      const p = (audio.currentTime / audio.duration) * 100;
-      progress.value = p;
-      ts.textContent = formatTime(audio.currentTime);
+    /* Utility to format time (M:SS) */
+    function formatTime(sec) {
+      if (!sec || !isFinite(sec)) return '0:00';
+      sec = Math.floor(sec);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m}:${s < 10 ? '0' + s : s}`;
     }
-  });
-  audio.addEventListener('loadedmetadata', ()=> { ts.textContent = formatTime(audio.duration); });
-  progress.addEventListener('input', ()=> { if (audio.duration) audio.currentTime = (progress.value/100)*audio.duration; });
-}
-document.querySelectorAll('.message').forEach(initAudioControls);
 
-/* Handle incoming messages */
-socket.addEventListener('message', function(e){
-  const data = JSON.parse(e.data);
-  const div = document.createElement('div');
-  div.className = data.sender === sender ? 'sent message' : 'received message';
+    /* Initialize audio controls for existing/new messages */
+    function initAudioControls(container) {
+      const player = container.querySelector('.ig-audio-player');
+      if (!player) return;
+      
+      const audio = container.querySelector('.audio-source');
+      const playBtn = player.querySelector('.ig-play-btn');
+      const progress = player.querySelector('.ig-progress');
+      const ts = player.querySelector('.ig-ts');
+      
+      let isPlaying = false;
 
-  if (data.message) {
-    div.innerHTML = `${data.message} <span class="time">${data.time}</span>`;
-  } else if (data.audio_url) {
-    div.innerHTML = `<div class="ig-audio-player">
-        <button class="ig-play-btn"><i class="fa-solid fa-play"></i></button>
-        <input type="range" min="0" max="100" value="0" class="ig-progress">
-        <div class="ig-ts">0:00</div>
-      </div>
-      <audio class="audio-source" src="${data.audio_url}"></audio>
-      <span class="time">${data.time}</span>`;
-  } else if (data.image) {
-    // optional image support: show image if server sends image URL
-    div.innerHTML = `<div class="received message"><img src="${data.image}" style="max-width:200px;border-radius:12px;display:block"/></div>`;
-  }
-  messageOutput.appendChild(div);
-  initAudioControls(div);
-  messageOutput.scrollTo({top:messageOutput.scrollHeight, behavior:'smooth'});
-});
+      playBtn.addEventListener('click', () => {
+        // Pause all other playing audio elements
+        document.querySelectorAll('.audio-source').forEach(a => {
+            if (a !== audio && !a.paused) {
+                a.pause();
+                // Find and reset their buttons to 'play'
+                const otherPlayBtn = a.closest('.ig-audio-player').querySelector('.ig-play-btn');
+                if (otherPlayBtn) otherPlayBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+            }
+        });
 
-/* ================= Text send & send/mic toggle ================= */
-sendBtn.addEventListener('click', ()=> {
-  const text = messageInput.value.trim();
-  const file = imageInput.files[0];
-  if (!text && !file) return;
+        if (audio.paused) audio.play(); else audio.pause();
+      });
 
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = ()=> {
-      socket.send(JSON.stringify({ type:'text', receiver, message:text, image: reader.result }));
-      messageInput.value = ''; imageInput.value = ''; toggleSendMic();
-    };
-    reader.readAsDataURL(file);
-  } else {
-    socket.send(JSON.stringify({ type:'text', receiver, message:text, image: null }));
-    messageInput.value = ''; toggleSendMic();
-  }
-});
+      audio.addEventListener('play', ()=> {
+        playBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+        isPlaying = true;
+      });
+      audio.addEventListener('pause', ()=> {
+        playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+        isPlaying = false;
+      });
+      audio.addEventListener('ended', ()=> {
+        audio.currentTime = 0;
+        progress.value = 0;
+        playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+      });
 
-function toggleSendMic(){
-  if (messageInput.value.trim().length > 0) {
-    sendBtn.style.display = 'inline-block';
-    micBtn.style.display = 'none';
-  } else {
-    sendBtn.style.display = 'none';
-    micBtn.style.display = 'inline-block';
-  }
-}
-messageInput.addEventListener('input', toggleSendMic);
-messageInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendBtn.click(); });
+      audio.addEventListener('timeupdate', ()=> {
+        if (audio.duration) {
+          const p = (audio.currentTime / audio.duration) * 100;
+          progress.value = p;
+          ts.textContent = formatTime(audio.currentTime);
+        }
+      });
+      audio.addEventListener('loadedmetadata', ()=> {
+          ts.textContent = formatTime(audio.duration);
+          progress.value = 0;
+      });
+      
+      progress.addEventListener('input', ()=> {
+          if (audio.duration) {
+              audio.currentTime = (progress.value/100)*audio.duration;
+          }
+      });
+    }
 
-/* ================= Emoji picker (latest emojis 2024) ================= */
-const emojiBtn = document.getElementById("emojiBtn");
-const emojiPicker = document.getElementById("emojiPicker");
-const inputField = document.getElementById("message");
+    // Initialize all existing audio players
+    document.querySelectorAll('.chat-message').forEach(initAudioControls);
 
-// Latest emoji subset (Unicode 15.x style — comprehensive enough for UI)
-const emojiList = [
-  "😀","😁","😂","🤣","😃","😄","😅","😆","😉","😊","😋","😎","😍","😘","🥰","😗","😙","😚",
-  "🙂","🤗","🤩","🤔","🤨","😐","😑","😶","🙄","😏","😣","😥","😮","🤐","😯","😪","😫","🥱",
-  "😴","😌","😛","😜","😝","🤤","😒","😓","😔","😕","🙃","🫠","🫡","🫣","🫥",
-  "😲","🙁","😖","😞","😟","😤","😢","😭","😦","😧","😨","😩","🤯","😬","😰","😱","🥵","🥶",
-  "😳","🤪","😵","🤕","🤒","🤢","🤮","🤧","🥴","😵‍💫","🫨",
-  "❤️","🩷","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❤️‍🔥","❤️‍🩹",
-  "👍","👎","👊","✊","🤛","🤜","👏","🙌","👐","🤲",
-  "🙏","✍️","💅","🤳",
-  "👋","🤝","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","☝️","👇","👆","🫵",
-  "🫶","🤲",
-  "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵",
-  "🔥","✨","🌟","💫","💥","💯","⚡","💢","💤","🎉","🎊",
-  "🍕","🍔","🍟","🌭","🍗","🍖","🍜","🍝","🍣","🍩","🧁",
-  "🚗","🚕","🚙","🚌","🚎","🏎","🚓","🚑","🚒",
-  "⚽","🏀","🏈","🎾","🥊","🥋","🎮","🎧"
-];
+    /* Handle incoming messages */
+    socket.addEventListener('message', function(e){
+      const data = JSON.parse(e.data);
+      const isSender = data.sender === sender;
+      const div = document.createElement('div');
+      div.className = isSender ? 'chat-message-row-sent' : 'chat-message-row-received';
 
-function loadEmojis() {
-  emojiPicker.innerHTML = "";
-  emojiList.forEach(e => {
-    const span = document.createElement("span");
-    span.textContent = e;
-    span.onclick = () => {
-      insertAtCursor(inputField, e);
-      emojiPicker.style.display = 'none';
-      inputField.focus();
-      toggleSendMic();
-    };
-    emojiPicker.appendChild(span);
-  });
-}
-// Insert emoji into input at cursor
-function insertAtCursor(field, emoji) {
-  const start = field.selectionStart || 0;
-  const end = field.selectionEnd || 0;
-  const text = field.value;
-  field.value = text.substring(0, start) + emoji + text.substring(end);
-  const pos = start + emoji.length;
-  field.selectionStart = field.selectionEnd = pos;
-  field.focus();
-}
+      let contentHTML = '';
+      if (data.message) {
+        // Text Message
+        const bubbleClasses = isSender ? 'chat-message-sent' : 'chat-message-received';
+        contentHTML = `<div class="chat-message ${bubbleClasses}">
+            ${data.message}
+            <span class="message-time">
+                ${data.time}
+                ${isSender ? '<i class="fa-solid fa-check ml-1 text-xs"></i>' : ''}
+            </span>
+        </div>`;
+      } else if (data.audio_url) {
+        // Audio Message
+        const bubbleClasses = isSender ? 'chat-message-sent' : 'chat-message-received';
 
-emojiBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  if (emojiPicker.style.display === 'none' || !emojiPicker.style.display) {
-    emojiPicker.style.display = 'grid';
-    loadEmojis();
-  } else {
-    emojiPicker.style.display = 'none';
-  }
-});
-
-// Close emoji picker when clicking outside
-document.addEventListener("click", (e) => {
-  if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
-    emojiPicker.style.display = 'none';
-  }
-});
-
-/* ================= Recording System (V2 – cross-device hold-to-record) ================= */
-
-/* Elements */
-const recordOverlay = document.getElementById('recordOverlay');
-const waveCanvas = document.getElementById('waveCanvas');
-const recTimer = document.getElementById('recTimer');
-const slideHint = document.getElementById('slideHint');
-
-const previewArea = document.getElementById('previewArea');
-const previewPlay = document.getElementById('previewPlay');
-const previewProgress = document.getElementById('previewProgress');
-const previewTime = document.getElementById('previewTime');
-const btnCancelPreview = document.getElementById('btnCancelPreview');
-const btnSendPreview = document.getElementById('btnSendPreview');
-
-let mediaRecorder = null;
-let recordedChunks = [];
-let audioBlob = null;
-let audioContext = null;
-let analyser = null;
-let sourceNode = null;
-let recordingStart = 0;
-let timerInterval = null;
-let activePointerId = null;
-let isCancelled = false;
-let startX = 0;
-const CANCEL_THRESHOLD = 80;
-
-/* Wave canvas setup */
-const ctx = waveCanvas.getContext('2d');
-function resizeCanvas() {
-  waveCanvas.width = Math.floor(waveCanvas.clientWidth * devicePixelRatio);
-  waveCanvas.height = Math.floor(waveCanvas.clientHeight * devicePixelRatio);
-}
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-function drawWave(dataArray, width, height) {
-  ctx.clearRect(0,0,width,height);
-  ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  ctx.fillRect(0,0,width,height);
-
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#ff3b30';
-  ctx.beginPath();
-
-  const step = Math.max(1, Math.floor(dataArray.length / width));
-  let x = 0;
-  for (let i = 0; i < dataArray.length; i += step) {
-    const v = dataArray[i] / 128.0;
-    const y = (v * height) / 2;
-    if (x === 0) ctx.moveTo(x, height/2 + y - height/4);
-    else ctx.lineTo(x, height/2 + y - height/4);
-    x++;
-  }
-  ctx.stroke();
-}
-
-function startAnalyser(stream) {
-  try {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    sourceNode = audioContext.createMediaStreamSource(stream);
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    sourceNode.connect(analyser);
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    const w = waveCanvas.width;
-    const h = waveCanvas.height;
-
-    (function render(){
-      if (!analyser) return;
-      analyser.getByteTimeDomainData(dataArray);
-      drawWave(dataArray, w, h);
-      requestAnimationFrame(render);
-    })();
-  } catch(e){ console.warn('analyser failed', e); }
-}
-
-function stopAnalyser() {
-  try {
-    if (analyser) analyser.disconnect();
-    if (sourceNode) sourceNode.disconnect();
-    if (audioContext) audioContext.close();
-  } catch(e){}
-  analyser = null; sourceNode = null; audioContext = null;
-}
-
-function showOverlay() {
-  recordOverlay.style.display = 'flex';
-  requestAnimationFrame(()=>{ recordOverlay.style.opacity = 1; recordOverlay.style.transform = 'translateX(-50%) translateY(0)'; });
-}
-function hideOverlay() {
-  recordOverlay.style.opacity = 0;
-  recordOverlay.style.transform = 'translateX(-50%) translateY(10px)';
-  setTimeout(()=>{ recordOverlay.style.display = 'none'; }, 180);
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-}
-
-function fmtTime(sec) {
-  if (!isFinite(sec)) return '0:00';
-  sec = Math.floor(sec);
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s < 10 ? '0'+s : s}`;
-}
-
-/* begin recording stream */
-async function beginRecording(pointerX) {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
-    recordedChunks = [];
-    isCancelled = false;
-    startX = pointerX || 0;
-
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
-    mediaRecorder.onstop = () => {
-      stopAnalyser();
-      stream.getTracks().forEach(t => t.stop());
-      if (isCancelled) {
-        recordedChunks = [];
-        audioBlob = null;
-        hideOverlay();
-        micBtn.classList.remove('recording-indicator');
-        return;
+        contentHTML = `<div class="chat-message ${bubbleClasses}">
+            <div class="ig-audio-player">
+                <button class="ig-play-btn"><i class="fa-solid fa-play"></i></button>
+                <input type="range" min="0" max="100" value="0" class="ig-progress">
+                <div class="ig-ts">0:00</div>
+            </div>
+            <audio class="audio-source" src="${data.audio_url}"></audio>
+            <span class="message-time">${data.time}</span>
+        </div>`;
+      } else if (data.image) {
+          // Placeholder for Image Support
+           const bubbleClasses = isSender ? 'chat-message-sent' : 'chat-message-received';
+           contentHTML = `<div class="chat-message ${bubbleClasses}" style="padding: 0.5rem;">
+             <img src="${data.image}" style="max-width:100%; height:auto; border-radius:10px; display:block"
+                  onerror="this.onerror=null; this.src='https://placehold.co/200x150/9CA3AF/FFFFFF?text=Image+Unavailable';" />
+             <span class="message-time" style="padding: 0 0.5rem;">${data.time}</span>
+           </div>`;
       }
-      audioBlob = new Blob(recordedChunks, { type:'audio/webm' });
-      setupPreview(audioBlob);
-      hideOverlay();
-      micBtn.classList.remove('recording-indicator');
-    };
 
-    mediaRecorder.start();
-    recordingStart = Date.now();
-    micBtn.classList.add('recording-indicator');
+      div.innerHTML = contentHTML;
+      messageOutput.appendChild(div);
 
-    startAnalyser(stream);
-    showOverlay();
-    slideHint.textContent = 'Slide left to cancel';
-    recTimer.textContent = '0:00';
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(()=> {
-      const s = Math.floor((Date.now() - recordingStart)/1000);
-      recTimer.textContent = fmtTime(s);
-    }, 250);
-  } catch(err) {
-    console.error('getUserMedia err', err);
-    alert('Microphone access denied or not supported.');
-    micBtn.classList.remove('recording-indicator');
-    hideOverlay();
-  }
-}
+      // Initialize audio controls for the new element if it contains audio
+      if (data.audio_url) {
+        initAudioControls(div.querySelector('.chat-message'));
+      }
 
-/* pointer-based hold-to-record */
-micBtn.addEventListener('pointerdown', async (ev) => {
-  try {
-    ev.preventDefault();
-    activePointerId = ev.pointerId;
-    micBtn.setPointerCapture(activePointerId);
-  } catch(e){}
-  await beginRecording(ev.clientX);
+      // Scroll to new message
+      messageOutput.scrollTo({top:messageOutput.scrollHeight, behavior:'smooth'});
+    });
 
-  function onMove(e) {
-    if (e.pointerId !== activePointerId) return;
-    if (startX - e.clientX > CANCEL_THRESHOLD) {
-      slideHint.textContent = 'Release to cancel';
-      slideHint.style.color = '#ff3b30';
-      isCancelled = true;
-    } else {
-      slideHint.textContent = 'Slide left to cancel';
-      slideHint.style.color = '#fff';
-      isCancelled = false;
+    /* ================= Text Send & Send/Mic Toggle ================= */
+    sendBtn.addEventListener('click', ()=> {
+      const text = messageInput.value.trim();
+      const file = imageInput.files[0];
+
+      if (!text && !file) return;
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = ()=> {
+          // Send text and base64 image data
+          socket.send(JSON.stringify({ type:'text', receiver, message:text, image: reader.result }));
+          messageInput.value = ''; imageInput.value = ''; toggleSendMic();
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // Send text only
+        socket.send(JSON.stringify({ type:'text', receiver, message:text, image: null }));
+        messageInput.value = ''; toggleSendMic();
+      }
+    });
+
+    function toggleSendMic(){
+      // Check if text or file input has content
+      if (messageInput.value.trim().length > 0 || imageInput.files.length > 0) {
+        sendBtn.style.display = 'block';
+        micBtn.style.display = 'none';
+      } else {
+        sendBtn.style.display = 'none';
+        micBtn.style.display = 'block';
+      }
     }
-  }
+    messageInput.addEventListener('input', toggleSendMic);
+    imageInput.addEventListener('change', toggleSendMic);
+    messageInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendBtn.click(); });
 
-  function onUp(e) {
-    if (e.pointerId !== activePointerId) return;
-    try { micBtn.releasePointerCapture(activePointerId); } catch(e){}
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    activePointerId = null;
-  }
+    /* ================= Emoji picker (UNCHANGED LOGIC) ================= */
+    const emojiBtn = document.getElementById("emojiBtn");
+    const emojiPicker = document.getElementById("emojiPicker");
+    const inputField = document.getElementById("message");
 
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
-});
+    const emojiList = [
+      "😀","😁","😂","🤣","😃","😄","😅","😆","😉","😊","😋","😎","😍","😘","🥰","😗","😙","😚",
+      "🙂","🤗","🤩","🤔","🤨","😐","😑","😶","🙄","😏","😣","😥","😮","🤐","😯","😪","😫","🥱",
+      "😴","😌","😛","😜","😝","🤤","😒","😓","😔","😕","🙃","🫠","🫡","🫣","🫥",
+      "😲","🙁","😖","😞","😟","😤","😢","😭","😦","😧","😨","😩","🤯","😬","😰","😱","🥵","🥶",
+      "😳","🤪","😵","🤕","🤒","🤢","🤮","🤧","🥴","😵‍💫","🫨",
+      "❤️","🩷","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❤️‍🔥","❤️‍🩹",
+      "👍","👎","👊","✊","🤛","🤜","👏","🙌","👐","🤲",
+      "🙏","✍️","💅","🤳",
+      "👋","🤝","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","☝️","👇","👆","🫵",
+      "🫶","🤲",
+      "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵",
+      "🔥","✨","🌟","💫","💥","💯","⚡","💢","💤","🎉","🎊",
+      "🍕","🍔","🍟","🌭","🍗","🍖","🍜","🍝","🍣","🍩","🧁",
+      "🚗","🚕","🚙","🚌","🚎","🏎","🚓","🚑","🚒",
+      "⚽","🏀","🏈","🎾","🥊","🥋","🎮","🎧"
+    ];
 
-/* click fallback quick-record for desktop */
-micBtn.addEventListener('click', (ev) => {
-  if (mediaRecorder && mediaRecorder.state === 'recording') return;
-  (async ()=>{
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
-      recordedChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => { if (e.data && e.data.size>0) recordedChunks.push(e.data); };
-      mediaRecorder.onstop = () => {
-        stopAnalyser();
-        stream.getTracks().forEach(t => t.stop());
-        audioBlob = new Blob(recordedChunks, { type:'audio/webm' });
-        setupPreview(audioBlob);
+    function loadEmojis() {
+      emojiPicker.innerHTML = "";
+      emojiList.forEach(e => {
+        const span = document.createElement("span");
+        span.textContent = e;
+        span.onclick = () => {
+          insertAtCursor(inputField, e);
+          emojiPicker.style.display = 'none';
+          inputField.focus();
+          toggleSendMic();
+        };
+        emojiPicker.appendChild(span);
+      });
+    }
+
+    // Insert emoji into input at cursor
+    function insertAtCursor(field, emoji) {
+      const start = field.selectionStart || 0;
+      const end = field.selectionEnd || 0;
+      const text = field.value;
+      field.value = text.substring(0, start) + emoji + text.substring(end);
+      const pos = start + emoji.length;
+      field.selectionStart = field.selectionEnd = pos;
+      field.focus();
+    }
+
+    emojiBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (emojiPicker.style.display === 'none' || emojiPicker.style.display === '') {
+        emojiPicker.style.display = 'grid';
+        loadEmojis();
+      } else {
+        emojiPicker.style.display = 'none';
+      }
+    });
+
+    // Close emoji picker when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) {
+        emojiPicker.style.display = 'none';
+      }
+    });
+
+    /* ================= Recording System (V2) (UNCHANGED LOGIC) ================= */
+
+    /* Elements */
+    const recordOverlay = document.getElementById('recordOverlay');
+    const waveCanvas = document.getElementById('waveCanvas');
+    const recTimer = document.getElementById('recTimer');
+    const slideHint = document.getElementById('slideHint');
+
+    const previewArea = document.getElementById('previewArea');
+    const previewPlay = document.getElementById('previewPlay');
+    const previewProgress = document.getElementById('previewProgress');
+    const previewTime = document.getElementById('previewTime');
+    const btnCancelPreview = document.getElementById('btnCancelPreview');
+    const btnSendPreview = document.getElementById('btnSendPreview');
+
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let audioBlob = null;
+    let audioContext = null;
+    let analyser = null;
+    let sourceNode = null;
+    let recordingStart = 0;
+    let timerInterval = null;
+    let activePointerId = null;
+    let isCancelled = false;
+    let startX = 0;
+    const CANCEL_THRESHOLD = 80;
+
+    /* Wave canvas setup */
+    const ctx = waveCanvas.getContext('2d');
+    function resizeCanvas() {
+        waveCanvas.width = Math.floor(waveCanvas.clientWidth * devicePixelRatio);
+        waveCanvas.height = Math.floor(waveCanvas.clientHeight * devicePixelRatio);
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    function drawWave(dataArray, width, height) {
+      ctx.clearRect(0,0,width,height);
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#5865F2'; /* Primary color from CSS vars */
+      ctx.beginPath();
+
+      const step = Math.max(1, Math.floor(dataArray.length / width));
+      let x = 0;
+      for (let i = 0; i < dataArray.length; i += step) {
+        const v = dataArray[i] / 128.0;
+        const y = (v * height) / 2;
+        if (x === 0) ctx.moveTo(x, height/2 + y - height/4);
+        else ctx.lineTo(x, height/2 + y - height/4);
+        x++;
+      }
+      ctx.stroke();
+    }
+
+    function startAnalyser(stream) {
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        sourceNode = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        sourceNode.connect(analyser);
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        const w = waveCanvas.width;
+        const h = waveCanvas.height;
+
+        (function render(){
+          if (!analyser) return;
+          analyser.getByteTimeDomainData(dataArray);
+          drawWave(dataArray, w, h);
+          requestAnimationFrame(render);
+        })();
+      } catch(e){ console.warn('Analyser failed:', e); }
+    }
+
+    function stopAnalyser() {
+      try {
+        if (analyser) analyser.disconnect();
+        if (sourceNode) sourceNode.disconnect();
+        if (audioContext && audioContext.state !== 'closed') audioContext.close();
+      } catch(e){}
+      analyser = null; sourceNode = null; audioContext = null;
+    }
+
+    function showOverlay() {
+      recordOverlay.style.display = 'flex';
+      requestAnimationFrame(()=>{ recordOverlay.style.opacity = 1; recordOverlay.style.transform = 'translateX(-50%) translateY(0)'; });
+    }
+    function hideOverlay() {
+      recordOverlay.style.opacity = 0;
+      recordOverlay.style.transform = 'translateX(-50%) translateY(10px)';
+      setTimeout(()=>{ recordOverlay.style.display = 'none'; }, 200);
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    }
+
+    /* begin recording stream */
+    async function beginRecording(pointerX) {
+      if (mediaRecorder && mediaRecorder.state === 'recording') return;
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+        recordedChunks = [];
+        isCancelled = false;
+        startX = pointerX || 0;
+
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+        
+        mediaRecorder.onstop = () => {
+          stopAnalyser();
+          stream.getTracks().forEach(t => t.stop());
+
+          micBtn.classList.remove('recording-indicator');
+
+          if (isCancelled || recordedChunks.length === 0) {
+            recordedChunks = [];
+            audioBlob = null;
+            hideOverlay();
+            return;
+          }
+          
+          audioBlob = new Blob(recordedChunks, { type:'audio/webm' });
+          setupPreview(audioBlob);
+          hideOverlay();
+        };
+
+        mediaRecorder.start();
+        recordingStart = Date.now();
+        micBtn.classList.add('recording-indicator');
+
+        startAnalyser(stream);
+        showOverlay();
+        slideHint.textContent = 'Slide left to cancel';
+        slideHint.style.color = '#f7f7f7';
+        recTimer.textContent = '0:00';
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(()=> {
+          const s = Math.floor((Date.now() - recordingStart)/1000);
+          recTimer.textContent = formatTime(s);
+        }, 250);
+      } catch(err) {
+        console.error('getUserMedia error:', err);
         micBtn.classList.remove('recording-indicator');
-      };
-      mediaRecorder.start();
-      micBtn.classList.add('recording-indicator');
-      startAnalyser(stream);
-      setTimeout(()=> { if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); }, 2500);
-    } catch(e){}
-  })();
-});
-
-/* preview setup after recording */
-let previewAudio = null;
-function setupPreview(blob) {
-  previewArea.style.display = 'flex';
-  const url = URL.createObjectURL(blob);
-  if (previewAudio) { previewAudio.pause(); previewAudio = null; }
-  previewAudio = new Audio(url);
-  previewAudio.preload = 'metadata';
-  previewTime.textContent = '0:00';
-  previewProgress.value = 0;
-  previewPlay.innerHTML = '<i class="fa-solid fa-play"></i>';
-
-  previewAudio.addEventListener('loadedmetadata', ()=> {
-    previewTime.textContent = fmtTime(previewAudio.duration);
-    previewProgress.value = 0;
-  });
-  previewAudio.addEventListener('timeupdate', ()=> {
-    if (previewAudio.duration) {
-      previewProgress.value = (previewAudio.currentTime / previewAudio.duration) * 100;
-      previewTime.textContent = fmtTime(previewAudio.currentTime);
+        hideOverlay();
+      }
     }
-  });
-  previewPlay.onclick = ()=> {
-    if (previewAudio.paused) previewAudio.play(); else previewAudio.pause();
-  };
-  previewAudio.addEventListener('play', ()=> previewPlay.innerHTML = '<i class="fa-solid fa-pause"></i>');
-  previewAudio.addEventListener('pause', ()=> previewPlay.innerHTML = '<i class="fa-solid fa-play"></i>');
-  previewProgress.oninput = ()=> { if (previewAudio.duration) previewAudio.currentTime = (previewProgress.value/100) * previewAudio.duration; };
 
-  btnCancelPreview.onclick = ()=> {
-    if (previewAudio) { previewAudio.pause(); previewAudio = null; }
-    previewArea.style.display = 'none';
-    audioBlob = null;
-  };
+    /* pointer-based hold-to-record */
+    micBtn.addEventListener('pointerdown', async (ev) => {
+      ev.preventDefault();
+      activePointerId = ev.pointerId;
+      try { micBtn.setPointerCapture(activePointerId); } catch(e){}
+      await beginRecording(ev.clientX);
 
-  btnSendPreview.onclick = ()=> {
-    if (!blob) return;
-    const reader = new FileReader();
-    reader.onloadend = ()=> {
-      socket.send(JSON.stringify({ type:'audio', receiver, audio: reader.result }));
-      previewArea.style.display = 'none';
-      if (previewAudio) { previewAudio.pause(); previewAudio = null; }
-      audioBlob = null;
-      messageOutput.scrollTo({top: messageOutput.scrollHeight, behavior:'smooth'});
-    };
-    reader.readAsDataURL(blob);
-  };
-}
+      function onMove(e) {
+        if (e.pointerId !== activePointerId) return;
+        if (startX - e.clientX > CANCEL_THRESHOLD) {
+          slideHint.textContent = 'Release to cancel';
+          slideHint.style.color = '#EF4444'; /* Red */
+          isCancelled = true;
+        } else {
+          slideHint.textContent = 'Slide left to cancel';
+          slideHint.style.color = '#f7f7f7';
+          isCancelled = false;
+        }
+      }
 
-/* cleanup on unload */
-window.addEventListener('beforeunload', ()=> {
-  try {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-    stopAnalyser();
-  } catch(e){}
-});
+      function onUp(e) {
+        if (e.pointerId !== activePointerId) return;
+        try { micBtn.releasePointerCapture(activePointerId); } catch(e){}
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        activePointerId = null;
+      }
 
-/* small util for players */
-function formatTime(sec) {
-  if (!sec || !isFinite(sec)) return '0:00';
-  sec = Math.floor(sec);
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s < 10 ? '0' + s : s}`;
-}
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+
+    /* preview setup after recording */
+    let previewAudio = null;
+    function setupPreview(blob) {
+      previewArea.style.display = 'flex';
+      const url = URL.createObjectURL(blob);
+      
+      if (previewAudio) { previewAudio.pause(); URL.revokeObjectURL(previewAudio.src); }
+      
+      previewAudio = new Audio(url);
+      previewAudio.preload = 'metadata';
+      previewTime.textContent = '0:00';
+      previewProgress.value = 0;
+      previewPlay.innerHTML = '<i class="fa-solid fa-play"></i>';
+
+      previewAudio.addEventListener('loadedmetadata', ()=> {
+        previewTime.textContent = formatTime(previewAudio.duration);
+        previewProgress.value = 0;
+      });
+      previewAudio.addEventListener('timeupdate', ()=> {
+        if (previewAudio.duration) {
+          previewProgress.value = (previewAudio.currentTime / previewAudio.duration) * 100;
+          previewTime.textContent = formatTime(previewAudio.currentTime);
+        }
+      });
+      
+      previewAudio.addEventListener('ended', ()=> {
+          previewAudio.currentTime = 0;
+          previewProgress.value = 0;
+          previewPlay.innerHTML = '<i class="fa-solid fa-play"></i>';
+      });
+
+      previewPlay.onclick = ()=> {
+        if (previewAudio.paused) previewAudio.play(); else previewAudio.pause();
+      };
+      previewAudio.addEventListener('play', ()=> previewPlay.innerHTML = '<i class="fa-solid fa-pause"></i>');
+      previewAudio.addEventListener('pause', ()=> previewPlay.innerHTML = '<i class="fa-solid fa-play"></i>');
+      previewProgress.oninput = ()=> { if (previewAudio.duration) previewAudio.currentTime = (previewProgress.value/100) * previewAudio.duration; };
+
+      btnCancelPreview.onclick = ()=> {
+        if (previewAudio) { previewAudio.pause(); URL.revokeObjectURL(previewAudio.src); previewAudio = null; }
+        previewArea.style.display = 'none';
+        audioBlob = null;
+      };
+
+      btnSendPreview.onclick = ()=> {
+        if (!blob) return;
+        const reader = new FileReader();
+        reader.onloadend = ()=> {
+          socket.send(JSON.stringify({ type:'audio', receiver, audio: reader.result }));
+          
+          previewArea.style.display = 'none';
+          if (previewAudio) { previewAudio.pause(); URL.revokeObjectURL(previewAudio.src); previewAudio = null; }
+          audioBlob = null;
+          
+          messageOutput.scrollTo({top: messageOutput.scrollHeight, behavior:'smooth'});
+        };
+        reader.readAsDataURL(blob);
+      };
+    }
+
+    /* cleanup on unload */
+    window.addEventListener('beforeunload', ()=> {
+      try {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        stopAnalyser();
+      } catch(e){}
+    });
 </script>
 </body>
 </html>
+
+
+
+
+
+
   
