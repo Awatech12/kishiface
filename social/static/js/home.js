@@ -20,14 +20,19 @@
                 if (prevPlayIcon) prevPlayIcon.style.opacity = '1';
                 
             }
-             // 3. Reset the icon state for the previously playing media if it's an audio
+             // 3. Reset the icon state and wave state for the previously playing media if it's an audio
             else if (currentlyPlayingMedia.tagName === 'AUDIO') {
                 const postId = currentlyPlayingMedia.id.split('-')[1];
                 const prevIcon = document.getElementById('audio-icon-' + postId);
+                const prevWave = document.getElementById('audio-wave-' + postId);
+                
                 if (prevIcon) {
                     prevIcon.classList.remove('fa-pause');
                     prevIcon.classList.add('fa-play');
                     prevIcon.style.opacity = '1';
+                }
+                if (prevWave) {
+                    prevWave.classList.remove('playing');
                 }
             }
         }
@@ -91,19 +96,24 @@
         const audio = document.getElementById(audioId);
         const postId = audioId.split('-')[1]; 
         const icon = document.getElementById('audio-icon-' + postId);
+        const wave = document.getElementById('audio-wave-' + postId);
         
         if (audio.paused || audio.ended) {
             pauseAllOtherMedia(audio); // Enforce single playback
 
             audio.play().catch(e => console.error("Audio Play Error:", e));
+            // Event listeners will handle icon and wave state, but we set them immediately for responsiveness
             icon.classList.remove('fa-play');
             icon.classList.add('fa-pause');
             icon.style.opacity = '0'; // Hide icon when playing
+            wave.classList.add('playing'); // Show wave when playing
         } else {
             audio.pause();
+            // Event listeners will handle icon and wave state, but we set them immediately for responsiveness
             icon.classList.remove('fa-pause');
             icon.classList.add('fa-play');
             icon.style.opacity = '1'; // Show icon when paused
+            wave.classList.remove('playing'); // Hide wave when paused
         }
     }
 
@@ -180,32 +190,39 @@
         
         document.querySelectorAll('.audio-post-container').forEach(container => {
             const audio = container.querySelector('.audio-hidden');
-            const icon = container.querySelector('.audio-play-icon');
+            const postId = audio.id.split('-')[1]; 
+            const icon = document.getElementById('audio-icon-' + postId);
+            const wave = document.getElementById('audio-wave-' + postId);
+
 
             // Add the container to the Intersection Observer
             mediaObserver.observe(container);
             
-            // Sync icon state with audio state and global tracker
+            // Sync icon and wave state with audio state and global tracker
             audio.addEventListener('play', () => {
                 icon.classList.remove('fa-play');
                 icon.classList.add('fa-pause');
                 icon.style.opacity = '0';
+                wave.classList.add('playing');
             });
             audio.addEventListener('pause', () => {
                 icon.classList.remove('fa-pause');
                 icon.classList.add('fa-play');
                 icon.style.opacity = '1';
+                wave.classList.remove('playing');
                 if(currentlyPlayingMedia === audio) currentlyPlayingMedia = null;
             });
             audio.addEventListener('ended', () => {
                 icon.classList.remove('fa-pause');
                 icon.classList.add('fa-play');
                 icon.style.opacity = '1';
+                wave.classList.remove('playing');
                 if(currentlyPlayingMedia === audio) currentlyPlayingMedia = null;
             });
-            // Ensure initial icon is 'play'
+            // Ensure initial icon is 'play' and wave is hidden
             icon.classList.add('fa-play');
             icon.style.opacity = '1';
+            wave.classList.remove('playing');
         });
 
         // --- 2. Other Initializations ---
@@ -376,3 +393,4 @@ function closePanel2(){
       setupLinks();
       setupLink();
   }
+
