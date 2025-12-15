@@ -22,6 +22,8 @@ urlpatterns = [
     path("generate_ai_text/", views.generate_ai_text, name="generate_ai_text"),
     # ===== Market Place Path ======
     path('market', views.market, name='market'),
+    path('channel_message/<uuid:channel_id>/', views.channel_message, name='channel_message'),
+    path('channelmessage_like/<uuid:channelmessage_id>/', views.channelmessage_like, name='channelmessage_like'),
     #====== market form =======
     path('add', views.marketForm, name='marketform'),
     path('comment_reply/<uuid:comment_id>', views.comment_reply, name='comment_reply'),

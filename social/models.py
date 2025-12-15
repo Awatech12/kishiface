@@ -143,108 +143,19 @@ class Channel(models.Model):
 # --- CRITICAL: CORRECTED ChannelMessage MODEL ---
 # In models.py, update the ChannelMessage model
 class ChannelMessage(models.Model):
-    channemessage_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    channelmessage_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     channel = models.ForeignKey(
         "Channel",
         on_delete=models.CASCADE,
         related_name="channel_messages"
     )
     author = models.ForeignKey(User, on_delete=models.CASCADE)
-    pictureUrl = models.TextField(blank=True)
     message = models.TextField(blank=True)
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
-
     # Fields to store file info
-    file_name = models.CharField(max_length=255, blank=True, null=True)
     file_type = models.CharField(max_length=50, blank=True, null=True)
-    file_url = models.TextField(blank=True, null=True)
+    file = models.FileField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
-    # Single field to store uploaded file
-    if settings.USE_CLOUDINARY:
-        # CloudinaryField can remain 'raw' here; we handle resource_type dynamically in save()
-        file = CloudinaryField(
-            'channel_file',
-            resource_type='raw',
-            folder='channel_files',
-            blank=True,
-            null=True,
-            use_filename=True,
-            unique_filename=True,
-            overwrite=False,
-        )
-    else:
-        file = models.FileField(upload_to='channel_files', blank=True, null=True)
-
-    # --- Methods ---
-
-    def detect_file_type(self, name):
-        """
-        Detects file type based on file extension
-        """
-        name = name.lower()
-        if any(x in name for x in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']):
-            return "image"
-        if any(x in name for x in ['.mp4', '.mov', '.avi', '.mkv', '.webm']):
-            return "video"
-        if any(x in name for x in ['.mp3', '.wav', '.ogg', '.m4a', '.flac']):
-            return "audio"
-        return "document"
-
-    def get_resource_type(self, file_name):
-        """
-        Returns correct Cloudinary resource_type for the file
-        """
-        ftype = self.detect_file_type(file_name)
-        if ftype == "image":
-            return "image"
-        elif ftype in ["video", "audio"]:
-            return "video"
-        else:
-            return "raw"
-
-    def save(self, *args, **kwargs):
-        """
-        Overrides save to handle Cloudinary uploads dynamically and set file info
-        """
-        if self.file:
-            # Store file name and type
-            self.file_name = os.path.basename(self.file.name)
-            self.file_type = self.detect_file_type(self.file_name)
-
-            if settings.USE_CLOUDINARY:
-                from cloudinary.uploader import upload as cloudinary_upload
-
-                # Determine resource_type
-                resource_type = self.get_resource_type(self.file_name)
-
-                # Upload file to Cloudinary
-                upload_result = cloudinary_upload(
-                    file=self.file,
-                    folder='channel_files',
-                    resource_type=resource_type,
-                    use_filename=True,
-                    unique_filename=True,
-                    overwrite=False,
-                )
-
-                # Save Cloudinary secure URL
-                self.file_url = upload_result.get("secure_url")
-                self.file_name = upload_result.get("original_filename")
-
-            else:
-                # Local file fallback
-                url = str(self.file.url)
-                if not settings.DEBUG and url.startswith("http://"):
-                    self.file_url = url.replace("http://", "https://", 1)
-                else:
-                    self.file_url = url
-        else:
-            self.file_name = None
-            self.file_type = None
-            self.file_url = None
-
-        super().save(*args, **kwargs)
 
     # --- Utility Properties ---
 

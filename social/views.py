@@ -15,6 +15,7 @@ from django.http import JsonResponse
 from openai import OpenAI
 from django.conf import settings
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
+from django.utils import timezone
 
 # Create your views here.
 def index(request):
@@ -436,20 +437,71 @@ def channel(request, channel_id):
 
     return render(request, 'channel.html', context)
 
+def channel_message(request, channel_id):
     channel = get_object_or_404(Channel, channel_id=channel_id)
-    messages = ChannelMessage.objects.filter(channel=channel)
-    grouped_messages = {}
-    for label, msgs in groupby(messages, key=lambda m: m.chat_date_label):
-        grouped_messages[label] = list(msgs)
+    if request.method == 'POST':
+        message = request.POST.get('message', '')
+        file_upload = request.FILES.get('file_upload')
 
-    context = {
-        'channel': channel,
-        'channel_id': channel_id,
-        'grouped_messages': grouped_messages
-    }
-    return render(request, 'channel.html', context)
+        file_type = None
+        file_url = None
+        if file_upload:
+            content_type = file_upload.content_type
+            if content_type.startswith('image/'):
+                file_type = 'image'
+            elif content_type.startswith('video/'):
+                file_type = 'video'
+            elif content_type.startswith('audio/'):
+                file_type = 'audio'
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message':'error in file selection'
+                })
 
-# ======= Market Plce =======
+        channelMessage = ChannelMessage.objects.create(
+            channel = channel,
+            author = request.user,
+            message = message if message else '',
+            file_type = file_type if file_type else None,
+            file= file_upload if file_upload else None
+        )
+
+        layer = get_channel_layer()
+        group_name = f'channel_{channel_id}'
+        file_url = channelMessage.file.url if channelMessage.file else None
+        fileType = channelMessage.file_type if channelMessage.file_type else None
+
+        async_to_sync(layer.group_send)(
+            group_name,
+            {
+                'type': 'channel_message',
+                'author': channelMessage.author.username,
+                'message': channelMessage.message,
+                'file_type': fileType,
+                'file_url': file_url,
+                "time": timezone.now().strftime("%I:%M %p")
+            }
+        )
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Message Sent'
+        })
+# ====== channelMessage Like =======
+def channelmessage_like(request, channelmessage_id):
+    channelmessage = get_object_or_404(ChannelMessage, channelmessage_id=channelmessage_id)
+    if request.user not in channelmessage.like.all():
+        channelmessage.like.add(request.user)
+        liked = True
+        return redirect(request.META.get('HTTP_REFERER'))
+    else:
+        channelmessage.like.remove(request.user)
+        liked = False
+        return redirect(request.META.get('HTTP_REFERER'))
+    
+    
+# ======= Market Plce ======='
+
 
 def market(request):
     products = Market.objects.all()
