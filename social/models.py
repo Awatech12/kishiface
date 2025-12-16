@@ -154,7 +154,18 @@ class ChannelMessage(models.Model):
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
     # Fields to store file info
     file_type = models.CharField(max_length=50, blank=True, null=True)
-    file = models.FileField(blank=True, null=True)
+     # Use CloudinaryField if USE_CLOUDINARY is True, matching the folder in message.py
+    if settings.USE_CLOUDINARY:
+        file = CloudinaryField(
+            'channelMessage_files',
+            resource_type='auto', # Cloudinary requires 'video' for audio files
+            folder='channelMessage_files', 
+            blank=True,
+            null=True
+        )
+    else:
+        file = models.FileField(upload_to='message_file', blank=True, null=True) # Changed to 'message_file' for clarity
+     
     created_at = models.DateTimeField(auto_now_add=True)
 
     # --- Utility Properties ---
