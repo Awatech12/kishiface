@@ -25,7 +25,7 @@ class Profile(models.Model):
     bio = models.CharField(max_length=300)
     location = models.TextField()
     if settings.USE_CLOUDINARY:
-        picture = CloudinaryField('picture', folder='profile_image', default='v1763882783/male_rzf6mv.png')
+        picture = CloudinaryField('picture', folder='profile_image', default='logo_iowyea')
     else:
         picture = models.ImageField(
             upload_to='profile_image/',
