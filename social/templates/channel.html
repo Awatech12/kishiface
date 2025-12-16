@@ -2,135 +2,1261 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-     <meta name='csrf-token' content="{{csrf_token}}" >
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>{{ channel.name }} | Channel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        #formData{
-            position: fixed;
-            bottom: 0;
-            margin-left: 0;
-            margin-right: 0;
+        :root {
+            --primary-color: #0084ff;
+            --secondary-color: #f0f2f5;
+            --border-color: #e4e6eb;
+            --text-primary: #050505;
+            --text-secondary: #65676b;
+            --background-white: #ffffff;
+            --background-grey: #f0f2f5;
+            --success-color: #31a24c;
+            --hover-color: #f2f2f2;
+            --shadow-light: rgba(0, 0, 0, 0.1);
+            --shadow-medium: rgba(0, 0, 0, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background: var(--background-grey);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* HEADER */
+        .channel-header {
+            background: var(--background-white);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 20px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px var(--shadow-light);
+            position: sticky;
+            top: 0;
             z-index: 1000;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .back-button {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .channel-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .channel-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .channel-details h1 {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .channel-details .members {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-action-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .header-action-btn:hover {
+            color: var(--primary-color);
+        }
+
+        /* MESSAGE AREA */
+        #comments {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: var(--background-grey);
+        }
+
+        /* Date Separator */
+        .date-separator {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .date-separator span {
+            background: var(--background-white);
+            padding: 6px 16px;
+            border-radius: 18px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            font-weight: 500;
+            box-shadow: 0 1px 2px var(--shadow-light);
+        }
+
+        /* Message Bubbles */
+        .message-container {
+            max-width: 65%;
+            margin: 2px 0;
+            animation: messageAppear 0.3s ease;
+        }
+
+        @keyframes messageAppear {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-bubble {
+            background: var(--background-white);
+            border-radius: 18px;
+            padding: 12px 16px;
+            box-shadow: 0 1px 2px var(--shadow-light);
+            position: relative;
+            transition: background-color 0.2s;
+        }
+
+        .message-author {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: var(--text-secondary);
+        }
+
+        .message-text {
+            font-size: 15px;
+            line-height: 1.4;
+            word-break: break-word;
+            margin-bottom: 8px;
+        }
+
+        .message-meta {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: var(--text-secondary);
+            opacity: 0.8;
+        }
+
+        /* Message Actions */
+        .message-actions {
+            position: absolute;
+            right: -40px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+            gap: 8px;
+        }
+
+        .message-container:hover .message-actions {
+            display: flex;
+        }
+
+        .message-action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: var(--background-white);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            box-shadow: 0 2px 4px var(--shadow-light);
+            transition: all 0.2s;
+        }
+
+        .message-action-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        /* Media Attachments */
+        .media-attachment {
+            margin-top: 12px;
+            border-radius: 12px;
+            overflow: hidden;
+            max-width: 400px;
+        }
+
+        .media-attachment img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .media-attachment img:hover {
+            transform: scale(1.02);
+        }
+
+        /* Video Player */
+        .tg-video-player {
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 12px;
+            max-width: 400px;
+            position: relative;
+        }
+
+        .tg-video-player video {
+            width: 100%;
+            display: block;
+            border-radius: 12px;
+        }
+
+        .video-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tg-video-player:hover .video-controls {
+            opacity: 1;
+        }
+
+        .video-controls button {
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .video-progress {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .video-progress-filled {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 2px;
+        }
+
+        /* Audio Player */
+        .tg-audio-player {
+            background: var(--background-white);
+            border-radius: 25px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+            max-width: 300px;
+            box-shadow: 0 2px 8px var(--shadow-light);
+        }
+
+        .audio-controls button {
+            background: var(--primary-color);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+        }
+
+        .audio-progress-container {
+            flex: 1;
+            height: 4px;
+            background: var(--border-color);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .audio-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 2px;
+            width: 0%;
+        }
+
+        /* INPUT AREA */
+        .message-input-container {
+            background: var(--background-white);
+            border-top: 1px solid var(--border-color);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: sticky;
+            bottom: 0;
+            z-index: 100;
+        }
+
+        .input-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .input-action-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.2s;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .input-action-btn:hover {
+            background: var(--hover-color);
+            color: var(--primary-color);
+        }
+
+        .message-input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        #message {
+            width: 100%;
+            padding: 12px 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            font-size: 15px;
+            background: var(--background-grey);
+            outline: none;
+            transition: all 0.3s;
+            resize: none;
+            min-height: 46px;
+            max-height: 120px;
+            line-height: 1.4;
+        }
+
+        #message:focus {
+            border-color: var(--primary-color);
+            background: var(--background-white);
+            box-shadow: 0 0 0 3px rgba(0, 132, 255, 0.1);
+        }
+
+        .send-button {
+            background: var(--primary-color);
+            border: none;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        .send-button:hover {
+            background: #0066cc;
+            transform: scale(1.05);
+        }
+
+        .send-button:active {
+            transform: scale(0.95);
+        }
+
+        /* Typing Indicator */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--background-white);
+            border-radius: 18px;
+            margin: 4px 0;
+            align-self: flex-start;
+            max-width: 120px;
+            box-shadow: 0 1px 2px var(--shadow-light);
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--text-secondary);
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-4px); }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        /* File Upload Preview */
+        .upload-preview {
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            right: 20px;
+            background: var(--background-white);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 20px var(--shadow-medium);
+            display: none;
+            z-index: 1000;
+        }
+
+        .upload-preview.show {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* RESPONSIVE DESIGN */
+        @media (max-width: 768px) {
+            .channel-header {
+                padding: 0 16px;
+                height: 56px;
+            }
+
+            .back-button {
+                display: block;
+            }
+
+            .channel-avatar {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+
+            .channel-details h1 {
+                font-size: 16px;
+            }
+
+            #comments {
+                padding: 16px 12px;
+            }
+
+            .message-container {
+                max-width: 85%;
+            }
+
+            .message-input-container {
+                padding: 12px 16px;
+            }
+
+            .header-actions {
+                gap: 16px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .channel-header {
+                padding: 0 12px;
+            }
+
+            #comments {
+                padding: 12px 8px;
+            }
+
+            .message-container {
+                max-width: 90%;
+            }
+
+            .message-bubble {
+                padding: 10px 14px;
+            }
+
+            .message-text {
+                font-size: 14px;
+            }
+
+            .message-input-container {
+                padding: 10px 12px;
+            }
+
+            .input-action-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 18px;
+            }
+
+            #message {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+
+            .send-button {
+                width: 42px;
+                height: 42px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .channel-details h1 {
+                font-size: 15px;
+            }
+
+            .channel-details .members {
+                font-size: 12px;
+            }
+
+            .message-container {
+                max-width: 95%;
+            }
+
+            .tg-video-player,
+            .media-attachment {
+                max-width: 100%;
+            }
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary-color: #0084ff;
+                --secondary-color: #242526;
+                --border-color: #3e4042;
+                --text-primary: #e4e6eb;
+                --text-secondary: #b0b3b8;
+                --background-white: #242526;
+                --background-grey: #18191a;
+                --hover-color: #3a3b3c;
+                --shadow-light: rgba(0, 0, 0, 0.3);
+                --shadow-medium: rgba(0, 0, 0, 0.4);
+            }
+        }
+
+        /* Custom scrollbar */
+        #comments::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #comments::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #comments::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        #comments::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
         }
     </style>
 </head>
+
 <body>
-     {% for message in messages %}
-    {{message}}
-    {% endfor %}
-
-    <h2>message</h2>
-   
-    <form id="formData">
-        <input 
-            type="file" 
-            name="file_upload" 
-            id="file_upload" 
-            accept="image/*, video/*, audio/*, .pdf, .doc, .docx, .txt" hidden> <br>
-        <input type="text" name="message" id="message">
-        <button type="submit">Send</button> <label for="file_upload">File</label>
-    </form>
-    <div id="comments">
-       {% for label, msgs in grouped_messages.items %}
-            <div class="message-group-label">
-                <span>{{ label }}</span>
-            </div>
-            {% for message in msgs %}
-        {{message.author.username}} : {{message.message}} <br>
-        {% if message.file_type == 'image' %}
-        <img src="{{message.file.url}}" height="200" width="200" alt=""> <a href="{{message.file.url}}" target="_blank" download>
-            Download
-        </a><br>
-        {% endif %}
-        {% if message.file_type == 'video' %}
-        <video src="{{message.file.url}}" height="200" width="200" controls>  </video> <a href="{{message.file.url}}" target="_blank" download>
-            Download
-        </a> <br>
-        {% endif %}
-        {% if message.file_type == 'audio' %}
-        <audio src="{{message.file.url}}"  controls>  </audio> <a href="{{message.file.url}}" target="_blank" download>
-            Download
-        </a> <br>
-        {% endif %}
-        {{message.chat_time}} <br>
-        <form action="{% url 'channelmessage_like' message.channelmessage_id %}" method="post">
-            {% csrf_token %}
-             <button type="submit">
-             {% if request.user in message.like.all %}
-           
-                Unlike {% else %} Like
-                 {% endif %}
+    <!-- HEADER -->
+    <div class="channel-header">
+        <div class="header-left">
+            <button class="back-button" onclick="window.history.back()">
+                <i class="fas fa-arrow-left"></i>
             </button>
-            {{message.like.count}}
-        </form>
-        <hr style="width: 50%" color="bisque;">
-        {% empty %}
-        <h3>No message Yet</h3>
-        {% endfor %}
-        {% endfor %}
+            <div class="channel-info">
+                <div class="channel-avatar">
+                    {{ channel.name|slice:":1"|upper }}
+                </div>
+                <div class="channel-details">
+                    <h1>{{ channel.name }}</h1>
+                    <div class="members">24 members • 12 online</div>
+                </div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="header-action-btn" title="Search">
+                <i class="fas fa-search"></i>
+            </button>
+            <button class="header-action-btn" title="Channel Info">
+                <i class="fas fa-info-circle"></i>
+            </button>
+            <button class="header-action-btn" title="More options">
+                <i class="fas fa-ellipsis-v"></i>
+            </button>
+        </div>
     </div>
-   
-    <script>
-        // ===== csrf token ====
-    const getCSRFToken = ()=>{
-        return document.cookie
-        .split('; ')
-        .map(cookie => cookie.split('='))
-        .find(([key]) => key === 'csrftoken')?.[1];
 
-    };
-    const csrftoken = getCSRFToken();
-    const form = document.getElementById('formData');
-    const channel_id = '{{channel_id}}';
-    form.addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        const formData = new FormData(form);
-        const response = await fetch(`/channel_message/${channel_id}/`, {
-                method: 'POST',
-                headers:{
-                    'X-CSRFToken': csrftoken
-                },
-                body: formData
-            });
-            const data = await response.json();
-                form.reset();
-        })
-    
-    const protocol = window.location.protocol === 'https:' ? "wss://" : "ws://";
-    const socket = new WebSocket(`${protocol}${window.location.host}/ws/${channel_id}/`);
-    socket.addEventListener('message', function(e){
-        const data = JSON.parse(e.data);
-         const commentDiv = document.getElementById('comments');
-         const notify = document.getElementById('notify');
-            const p = document.createElement('p');
-            console.log(data.author);
-            if(data.file_type && data.file_url){
-                if(data.file_type === 'image'){
-                    p.innerHTML =`${data.author} : ${data.message} <br> ${data.time}
-                    <img src='${data.file_url}' height='100px', width='100px'>`;
-                }
-                else if(data.file_type === 'video'){
-                    p.innerHTML =`${data.author} : ${data.message} <br> ${data.time}
-                    <video src='${data.file_url}' height='200px', width='200px' controls> your  </video>`;
-                }
-                 else if(data.file_type === 'audio'){
-                    p.innerHTML =`${data.author} : ${data.message} <br> ${data.time}
-                    <audio src='${data.file_url}' height='200px', width='200px' controls> your  </audio>`;
-                }
-            }else{
-                p.innerHTML =`${data.author} : ${data.message} <br> ${data.time}
-             `;
-            }
-            commentDiv.appendChild(p);
-            notify.innerHTML = data.count;
-            console.log(data.message_id);
+    <!-- MESSAGES -->
+    <div id="comments">
+        {% if not grouped_messages %}
+            <div class="empty-state">
+                <i class="fas fa-comments"></i>
+                <h3>No messages yet</h3>
+                <p>Start the conversation!</p>
+            </div>
+        {% else %}
+            {% for label, msgs in grouped_messages.items %}
+                <div class="date-separator">
+                    <span>{{ label }}</span>
+                </div>
+                {% for message in msgs %}
+                    <div class="message-container">
+                        <div class="message-bubble">
+                            <div class="message-author">{{ message.author.username }}</div>
+                            
+                            {% if message.message %}
+                                <div class="message-text">{{ message.message }}</div>
+                            {% endif %}
+
+                            <!-- Media Attachments -->
+                            {% if message.file_type == 'image' %}
+                                <div class="media-attachment">
+                                    <img src="{{ message.file.url }}" alt="Shared image" onclick="openMediaModal('{{ message.file.url }}', 'image')">
+                                </div>
+                            {% elif message.file_type == 'video' %}
+                                <div class="tg-video-player">
+                                    <video id="video-{{ message.channelmessage_id }}" src="{{ message.file.url }}" preload="metadata"></video>
+                                    <div class="video-controls">
+                                        <button class="video-play-btn" data-target="video-{{ message.channelmessage_id }}">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <div class="video-progress">
+                                            <div class="video-progress-filled" id="progress-{{ message.channelmessage_id }}"></div>
+                                        </div>
+                                        <span class="video-time" id="time-{{ message.channelmessage_id }}">0:00</span>
+                                    </div>
+                                </div>
+                            {% elif message.file_type == 'audio' %}
+                                <div class="tg-audio-player">
+                                    <button class="audio-play-btn" data-target="audio-{{ message.channelmessage_id }}">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <div class="audio-info">
+                                        <div class="audio-progress-container">
+                                            <div class="audio-progress" id="aprogress-{{ message.channelmessage_id }}"></div>
+                                        </div>
+                                        <span class="audio-time" id="atime-{{ message.channelmessage_id }}">0:00 / 0:00</span>
+                                    </div>
+                                    <button class="audio-download-btn" onclick="downloadFile('{{ message.file.url }}')">
+                                        <i class="fas fa-download"></i>
+                                    </button>
+                                </div>
+                                <audio id="audio-{{ message.channelmessage_id }}" src="{{ message.file.url }}"></audio>
+                            {% endif %}
+
+                            <!-- Like Form -->
+                            <div class="message-actions-inline">
+                                <form action="{% url 'channelmessage_like' message.channelmessage_id %}" method="post" style="display: inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" style="background: none; border: none; color: #3390ec; cursor: pointer; font-size: 12px; padding: 0;">
+                                        {% if request.user in message.like.all %}Unlike{% else %}Like{% endif %}
+                                    </button> 
+                                    ({{ message.like.count }})
+                                </form>
+                                {% if message.file %}
+                                <a href="{{ message.file.url }}" target="_blank" download style="margin-left: 12px; font-size: 12px; color: #3390ec;">Download</a>
+                                {% endif %}
+                            </div>
+
+                            <div class="message-meta">
+                                <span class="message-time">{{ message.chat_time }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Message Actions -->
+                        <div class="message-actions">
+                            <button class="message-action-btn" title="Like" onclick="toggleLike('{{ message.channelmessage_id }}')">
+                                <i class="fas fa-thumbs-up"></i>
+                            </button>
+                            <button class="message-action-btn" title="Reply">
+                                <i class="fas fa-reply"></i>
+                            </button>
+                            <button class="message-action-btn" title="More">
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- UPLOAD PREVIEW -->
+    <div class="upload-preview" id="uploadPreview">
+        <div class="preview-content" id="previewContent"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px;">
+            <button onclick="cancelUpload()" style="padding: 8px 16px; border: 1px solid var(--border-color); background: none; border-radius: 6px; cursor: pointer;">Cancel</button>
+            <button onclick="sendUpload()" style="padding: 8px 20px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer;">Send</button>
+        </div>
+    </div>
+
+    <!-- MESSAGE INPUT -->
+    <form id="formData" class="message-input-container">
+        <div class="input-actions">
+            <button type="button" class="input-action-btn" title="Attach file" onclick="document.getElementById('file_upload').click()">
+                <i class="fas fa-paperclip"></i>
+            </button>
+            <button type="button" class="input-action-btn" title="Add emoji">
+                <i class="far fa-smile"></i>
+            </button>
+        </div>
         
+        <div class="message-input-wrapper">
+            <textarea id="message" name="message" placeholder="Type a message..." rows="1"></textarea>
+        </div>
+        
+        <button class="send-button" type="submit" title="Send message">
+            <i class="fas fa-paper-plane"></i>
+        </button>
+        
+        <input type="file" id="file_upload" name="file_upload" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" hidden>
+        <input type="hidden" name="channel_id" value="{{ channel_id }}">
+    </form>
 
-    })
+    <!-- Media Modal -->
+    <div id="mediaModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 2000; align-items: center; justify-content: center;">
+        <img id="modalImage" src="" style="max-width: 90%; max-height: 90%; border-radius: 8px;">
+        <button onclick="closeMediaModal()" style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; width: 40px; height: 40px; border-radius: 50%; color: white; font-size: 20px; cursor: pointer;">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
 
-    
+    <script>
+        // CSRF Token
+        const getCSRFToken = () => {
+            const name = 'csrftoken';
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        };
+
+        const csrftoken = getCSRFToken();
+        const form = document.getElementById('formData');
+        const comments = document.getElementById('comments');
+        const channel_id = '{{ channel_id }}';
+        let fileToUpload = null;
+
+        // Auto-resize textarea
+        const textarea = document.getElementById('message');
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // Initialize on load
+        window.onload = () => {
+            comments.scrollTop = comments.scrollHeight;
+            initMediaPlayers();
+            initEventListeners();
+        };
+
+        // Scroll to bottom
+        function scrollToBottom() {
+            comments.scrollTo({
+                top: comments.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+
+        // Submit message
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const message = textarea.value.trim();
+            
+            if (!message && !fileToUpload) return;
+
+            if (fileToUpload) {
+                formData.append('file_upload', fileToUpload);
+            }
+
+            try {
+                const response = await fetch(`/channel_message/${channel_id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    form.reset();
+                    textarea.style.height = 'auto';
+                    fileToUpload = null;
+                    document.getElementById('uploadPreview').classList.remove('show');
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+            }
+        });
+
+        // File upload handling
+        document.getElementById('file_upload').addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                fileToUpload = this.files[0];
+                showUploadPreview(fileToUpload);
+            }
+        });
+
+        function showUploadPreview(file) {
+            const preview = document.getElementById('uploadPreview');
+            const content = document.getElementById('previewContent');
+            content.innerHTML = '';
+
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    content.innerHTML = `<img src="${e.target.result}" style="max-width: 200px; border-radius: 8px;">`;
+                };
+                reader.readAsDataURL(file);
+            } else if (file.type.startsWith('video/')) {
+                content.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-video" style="font-size: 24px;"></i>
+                        <div>
+                            <div style="font-weight: 500;">${file.name}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">${(file.size / 1024 / 1024).toFixed(2)} MB</div>
+                        </div>
+                    </div>
+                `;
+            } else if (file.type.startsWith('audio/')) {
+                content.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-music" style="font-size: 24px;"></i>
+                        <div>
+                            <div style="font-weight: 500;">${file.name}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">${(file.size / 1024).toFixed(2)} KB</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-file" style="font-size: 24px;"></i>
+                        <div>
+                            <div style="font-weight: 500;">${file.name}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">${(file.size / 1024).toFixed(2)} KB</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            preview.classList.add('show');
+        }
+
+        function cancelUpload() {
+            fileToUpload = null;
+            document.getElementById('file_upload').value = '';
+            document.getElementById('uploadPreview').classList.remove('show');
+        }
+
+        function sendUpload() {
+            document.getElementById('formData').dispatchEvent(new Event('submit'));
+        }
+
+        // WebSocket Connection
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const socket = new WebSocket(`${protocol}${window.location.host}/ws/${channel_id}/`);
+
+        socket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            appendNewMessage(data);
+        };
+
+        function appendNewMessage(data) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message-container';
+            
+            let html = `
+                <div class="message-bubble">
+                    <div class="message-author">${data.author}</div>
+                    ${data.message ? `<div class="message-text">${data.message}</div>` : ''}
+            `;
+
+            // Handle media attachments
+            if (data.file_type === 'image') {
+                html += `
+                    <div class="media-attachment">
+                        <img src="${data.file_url}" alt="Shared image" onclick="openMediaModal('${data.file_url}', 'image')">
+                    </div>
+                `;
+            } else if (data.file_type === 'video') {
+                html += `
+                    <div class="tg-video-player">
+                        <video id="video-${data.message_id}" src="${data.file_url}" preload="metadata"></video>
+                        <div class="video-controls">
+                            <button class="video-play-btn" data-target="video-${data.message_id}">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <div class="video-progress">
+                                <div class="video-progress-filled" id="progress-${data.message_id}"></div>
+                            </div>
+                            <span class="video-time" id="time-${data.message_id}">0:00</span>
+                        </div>
+                    </div>
+                `;
+            } else if (data.file_type === 'audio') {
+                html += `
+                    <div class="tg-audio-player">
+                        <button class="audio-play-btn" data-target="audio-${data.message_id}">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <div class="audio-info">
+                            <div class="audio-progress-container">
+                                <div class="audio-progress" id="aprogress-${data.message_id}"></div>
+                            </div>
+                            <span class="audio-time" id="atime-${data.message_id}">0:00 / 0:00</span>
+                        </div>
+                        <button class="audio-download-btn" onclick="downloadFile('${data.file_url}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                    <audio id="audio-${data.message_id}" src="${data.file_url}"></audio>
+                `;
+            }
+
+            // Add like form and download link
+            html += `
+                <div class="message-actions-inline">
+                    <form action="/channelmessage_like/${data.message_id}/" method="post" style="display: inline;">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrftoken}">
+                        <button type="submit" style="background: none; border: none; color: #3390ec; cursor: pointer; font-size: 12px; padding: 0;">
+                            ${data.liked_by_user ? 'Unlike' : 'Like'}
+                        </button> (${data.like_count})
+                    </form>
+            `;
+
+            if (data.file_url) {
+                html += `<a href="${data.file_url}" target="_blank" download style="margin-left: 12px; font-size: 12px; color: #3390ec;">Download</a>`;
+            }
+
+            html += `
+                    </div>
+                    <div class="message-meta">
+                        <span class="message-time">${data.time}</span>
+                    </div>
+                </div>
+                <div class="message-actions">
+                    <button class="message-action-btn" title="Like" onclick="toggleLike('${data.message_id}')">
+                        <i class="fas fa-thumbs-up"></i>
+                    </button>
+                    <button class="message-action-btn" title="Reply">
+                        <i class="fas fa-reply"></i>
+                    </button>
+                    <button class="message-action-btn" title="More">
+                        <i class="fas fa-ellipsis-h"></i>
+                    </button>
+                </div>
+            `;
+
+            messageDiv.innerHTML = html;
+            comments.appendChild(messageDiv);
+            scrollToBottom();
+            
+            // Initialize media players for new message
+            setTimeout(() => initMediaPlayers(), 100);
+        }
+
+        // Media player initialization
+        function initMediaPlayers() {
+            // Video players
+            document.querySelectorAll('.video-play-btn').forEach(btn => {
+                const vid = document.getElementById(btn.dataset.target);
+                const progress = document.getElementById('progress-' + vid.id.split('-')[1]);
+                const timeLabel = document.getElementById('time-' + vid.id.split('-')[1]);
+                
+                btn.onclick = () => {
+                    if (vid.paused) {
+                        vid.play();
+                        btn.innerHTML = '<i class="fas fa-pause"></i>';
+                    } else {
+                        vid.pause();
+                        btn.innerHTML = '<i class="fas fa-play"></i>';
+                    }
+                };
+                
+                vid.ontimeupdate = () => {
+                    const percentage = (vid.currentTime / vid.duration) * 100;
+                    if (progress) progress.style.width = percentage + '%';
+                    
+                    const formatTime = (seconds) => {
+                        const mins = Math.floor(seconds / 60);
+                        const secs = Math.floor(seconds % 60);
+                        return `${mins}:${secs.toString().padStart(2, '0')}`;
+                    };
+                    
+                    if (timeLabel) {
+                        timeLabel.textContent = formatTime(vid.currentTime);
+                    }
+                };
+                
+                // Click on progress bar to seek
+                const progressContainer = btn.closest('.video-controls').querySelector('.video-progress');
+                if (progressContainer) {
+                    progressContainer.onclick = (e) => {
+                        const rect = progressContainer.getBoundingClientRect();
+                        const percentage = (e.clientX - rect.left) / rect.width;
+                        vid.currentTime = percentage * vid.duration;
+                    };
+                }
+            });
+
+            // Audio players
+            document.querySelectorAll('.audio-play-btn').forEach(btn => {
+                const aud = document.getElementById(btn.dataset.target);
+                const progress = document.getElementById('aprogress-' + aud.id.split('-')[1]);
+                const timeLabel = document.getElementById('atime-' + aud.id.split('-')[1]);
+                
+                btn.onclick = () => {
+                    if (aud.paused) {
+                        aud.play();
+                        btn.innerHTML = '<i class="fas fa-pause"></i>';
+                    } else {
+                        aud.pause();
+                        btn.innerHTML = '<i class="fas fa-play"></i>';
+                    }
+                };
+                
+                aud.ontimeupdate = () => {
+                    const percentage = (aud.currentTime / aud.duration) * 100;
+                    if (progress) progress.style.width = percentage + '%';
+                    
+                    const formatTime = (seconds) => {
+                        const mins = Math.floor(seconds / 60);
+                        const secs = Math.floor(seconds % 60);
+                        return `${mins}:${secs.toString().padStart(2, '0')}`;
+                    };
+                    
+                    if (timeLabel) {
+                        timeLabel.textContent = `${formatTime(aud.currentTime)} / ${formatTime(aud.duration)}`;
+                    }
+                };
+                
+                // Click on progress bar to seek
+                const progressContainer = btn.closest('.tg-audio-player').querySelector('.audio-progress-container');
+                if (progressContainer) {
+                    progressContainer.onclick = (e) => {
+                        const rect = progressContainer.getBoundingClientRect();
+                        const percentage = (e.clientX - rect.left) / rect.width;
+                        aud.currentTime = percentage * aud.duration;
+                    };
+                }
+            });
+        }
+
+        // Media modal
+        function openMediaModal(url, type) {
+            if (type === 'image') {
+                document.getElementById('modalImage').src = url;
+                document.getElementById('mediaModal').style.display = 'flex';
+            }
+        }
+
+        function closeMediaModal() {
+            document.getElementById('mediaModal').style.display = 'none';
+        }
+
+        // Download file
+        function downloadFile(url) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = url.split('/').pop();
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // Like functionality
+        async function toggleLike(messageId) {
+            try {
+                const response = await fetch(`/channelmessage_like/${messageId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    }
+                });
+                
+                if (response.ok) {
+                    // Update like count visually
+                    const data = await response.json();
+                    console.log('Like updated:', data);
+                }
+            } catch (error) {
+                console.error('Error liking message:', error);
+            }
+        }
+
+        // Event listeners
+        function initEventListeners() {
+            // Close modal on ESC
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeMediaModal();
+                }
+            });
+
+            // Click outside modal to close
+            document.getElementById('mediaModal').addEventListener('click', (e) => {
+                if (e.target.id === 'mediaModal') {
+                    closeMediaModal();
+                }
+            });
+
+            // Prevent form submission on Enter (new line instead)
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    form.dispatchEvent(new Event('submit'));
+                }
+            });
+        }
+
+        // Simulate typing indicator (for demo purposes)
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'typing-indicator';
+            typingDiv.innerHTML = `
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+                <span>typing...</span>
+            `;
+            comments.appendChild(typingDiv);
+            scrollToBottom();
+        }
     </script>
 </body>
 </html>
