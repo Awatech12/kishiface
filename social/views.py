@@ -200,11 +200,23 @@ def postcomment(request, post_id):
             }
         )
         if post.author != request.user:
-            Notification.objects.create(
+            notify=Notification.objects.create(
                 recipient=post.author,
                 actor = request.user,
                  message=f"  commented on your post {post.content}",
                  post=post)
+            layer = get_channel_layer()
+            group_name = 'comment_notification'
+            count = Notification.objects.filter(recipient=request.user, is_read=False).count()
+            async_to_sync(layer.group_send)(
+                group_name,
+                {
+                    'type': 'send_notification',
+                    'sender':notify.actor,
+                    'receiver': notify.recipient,
+                    'count': str(count)
+                }
+            )
         return render(request, 'snippet/comment_list.html', {'post':post, 'comment': comment})
     
 
