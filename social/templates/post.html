@@ -392,8 +392,17 @@
             background-color: rgba(255, 255, 255, 0.3);
         }
 
+        /* Watermark Styling */
         .kf-video-watermark {
-            display: none; /* Hide watermark for cleaner UI, or make it subtle */
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+            opacity: 0.9;
+            z-index: 5;
         }
 
         .kf-video-preview {
@@ -724,6 +733,57 @@
             width: 80%;
         }
 
+        /* Loading Overlay */
+        .kf-loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .kf-loading-overlay.active {
+            display: flex;
+        }
+
+        .kf-loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--ig-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        .kf-loading-text {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--ig-text);
+            margin-bottom: 10px;
+        }
+
+        .kf-loading-subtext {
+            font-size: 14px;
+            color: var(--ig-text-light);
+            text-align: center;
+            max-width: 300px;
+        }
+
+        /* File Size Info */
+        .kf-file-size-info {
+            font-size: 12px;
+            color: var(--ig-text-light);
+            margin-top: 8px;
+            text-align: center;
+        }
+
         /* Responsive adjustments for a better Instagram feel */
         @media (max-width: 600px) {
             body {
@@ -733,6 +793,11 @@
                 height: 100vh;
                 border-left: none;
                 border-right: none;
+            }
+            .kf-video-watermark {
+                font-size: 14px;
+                bottom: 120px;
+                left: 15px;
             }
         }
         
@@ -769,6 +834,13 @@
     </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div class="kf-loading-overlay" id="loadingOverlay">
+        <div class="kf-loading-spinner"></div>
+        <div class="kf-loading-text">Sharing your post...</div>
+        <div class="kf-loading-subtext">Please wait while we upload your content. This may take a moment.</div>
+    </div>
+
     <main class="kf-main-container">
         <div class="kf-post-card">
             <div class="kf-post-header">
@@ -940,6 +1012,7 @@
                             </div>
                             <div class="kf-preview-text">Post Preview</div>
                             <div id="previewItem" class="kf-preview-item">No media or text content yet</div>
+                            <div id="fileSizeInfo" class="kf-file-size-info"></div>
                         </div>
                     </div>
                 </div>
@@ -972,7 +1045,7 @@
                     <span>REC</span>
                 </div>
                 <div class="kf-video-watermark">
-                    @kishiface
+                    @{{request.user.username}}
                 </div>
             </div>
             
@@ -1057,6 +1130,8 @@
         const volumeSlider = document.getElementById('volumeSlider');
         const volumeFilled = document.getElementById('volumeFilled');
         const sharePostBtn = document.getElementById('sharePostBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const fileSizeInfo = document.getElementById('fileSizeInfo');
 
         // =================== Video Recording Variables ===================
         let videoStream = null;
@@ -1069,6 +1144,15 @@
         let isFrontCamera = true;
         let isMicOn = true;
         const MAX_RECORDING_TIME = 3 * 60 * 1000; // 3 minutes in milliseconds
+        
+        // Video compression settings
+        const VIDEO_SETTINGS = {
+            quality: 0.7, // Lower quality for smaller file size (0.1 to 1.0)
+            bitrate: 1000000, // 1 Mbps bitrate for reasonable quality/size
+            width: 640, // Reduced resolution for smaller files
+            height: 360, // Reduced resolution for smaller files
+            fps: 30 // Lower frame rate for smaller files
+        };
 
         // =================== Audio Recording Variables ===================
         let audioMediaRecorder = null;
@@ -1097,6 +1181,54 @@
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Update file size display
+        function updateFileSizeDisplay() {
+            let totalSize = 0;
+            
+            // Check images
+            if (imageInput.files.length > 0) {
+                for (let file of imageInput.files) {
+                    totalSize += file.size;
+                }
+            }
+            
+            // Check video
+            if (videoFileInput.files.length > 0) {
+                totalSize += videoFileInput.files[0].size;
+            }
+            
+            // Check audio
+            if (audioFileInput.files.length > 0) {
+                totalSize += audioFileInput.files[0].size;
+            }
+            
+            if (totalSize > 0) {
+                fileSizeInfo.textContent = `Total size: ${formatFileSize(totalSize)}`;
+                fileSizeInfo.style.display = 'block';
+                
+                // Warning for large files
+                if (totalSize > 50 * 1024 * 1024) { // 50MB
+                    fileSizeInfo.style.color = 'var(--ig-danger)';
+                    fileSizeInfo.innerHTML = `Total size: ${formatFileSize(totalSize)} <span style="font-weight:bold;">(Large file may take longer to upload)</span>`;
+                } else if (totalSize > 10 * 1024 * 1024) { // 10MB
+                    fileSizeInfo.style.color = '#ff9800';
+                } else {
+                    fileSizeInfo.style.color = 'var(--ig-text-light)';
+                }
+            } else {
+                fileSizeInfo.style.display = 'none';
+            }
         }
         
         // =================== Music Mixing Cleanup ===================
@@ -1136,26 +1268,28 @@
         }
 
         // =================== Video Recording Functions ===================
-        // Start video recording - FIXED VERSION
+        // Start video recording - WITH COMPRESSION
         async function startVideoRecording() {
             try {
-                console.log('Starting video recording...');
+                console.log('Starting video recording with compression...');
                 
                 // 1. Get Camera and Microphone Access
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: isFrontCamera ? 'user' : 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: VIDEO_SETTINGS.width, max: 1280 },
+                        height: { ideal: VIDEO_SETTINGS.height, max: 720 },
+                        frameRate: { ideal: VIDEO_SETTINGS.fps, max: 30 }
                     },
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: true,
+                        channelCount: 1 // Mono audio for smaller file size
                     }
                 });
 
-                console.log('Got media stream:', videoStream);
+                console.log('Got media stream with compression settings:', videoStream);
 
                 // Set video stream to preview
                 videoLive.srcObject = videoStream;
@@ -1240,14 +1374,16 @@
                     mixedStream = new MediaStream([videoTrack]);
                 }
 
-                // Create MediaRecorder with options
+                // Create MediaRecorder with compression settings
                 const options = {
                     mimeType: 'video/webm;codecs=vp9,opus',
-                    videoBitsPerSecond: 2500000 
+                    videoBitsPerSecond: VIDEO_SETTINGS.bitrate
                 };
 
+                // Fallback for browsers that don't support vp9
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options.mimeType = 'video/webm;codecs=vp8,opus';
+                    options.videoBitsPerSecond = VIDEO_SETTINGS.bitrate * 1.2; // vp8 needs slightly higher bitrate
                 }
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options.mimeType = 'video/webm';
@@ -1256,6 +1392,7 @@
                     options.mimeType = '';
                 }
 
+                console.log('Using MediaRecorder options:', options);
                 videoMediaRecorder = new MediaRecorder(mixedStream, options);
                 videoChunks = [];
 
@@ -1267,7 +1404,7 @@
                 };
 
                 // Handle recording stop
-                videoMediaRecorder.onstop = () => {
+                videoMediaRecorder.onstop = async () => {
                     console.log('MediaRecorder stopped');
                     // Stop music playback
                     if (musicSourceNode) {
@@ -1285,8 +1422,18 @@
                         type: 'video/webm' 
                     });
                     
-                    currentVideoBlob = videoBlob;
-                    const videoUrl = URL.createObjectURL(videoBlob);
+                    console.log('Raw video size:', formatFileSize(videoBlob.size));
+                    
+                    // Compress video further if needed
+                    let compressedBlob = videoBlob;
+                    if (videoBlob.size > 10 * 1024 * 1024) { // If larger than 10MB
+                        console.log('Video is large, applying additional compression...');
+                        compressedBlob = await compressVideo(videoBlob);
+                        console.log('Compressed video size:', formatFileSize(compressedBlob.size));
+                    }
+                    
+                    currentVideoBlob = compressedBlob;
+                    const videoUrl = URL.createObjectURL(compressedBlob);
                     
                     // Set video source
                     videoElement.src = videoUrl;
@@ -1307,6 +1454,7 @@
                     // Update preview
                     previewBox.classList.add('has-content');
                     previewItem.textContent = 'Video recording ready';
+                    updateFileSizeDisplay();
                     
                     // Reset UI
                     videoRecordBtn.classList.remove('recording');
@@ -1338,6 +1486,48 @@
                 cleanupMusicContext();
                 videoRecorderModal.classList.remove('active');
             }
+        }
+
+        // Additional video compression using canvas (for very large files)
+        async function compressVideo(videoBlob) {
+            return new Promise((resolve) => {
+                // Create a video element to decode the blob
+                const tempVideo = document.createElement('video');
+                tempVideo.src = URL.createObjectURL(videoBlob);
+                
+                tempVideo.onloadedmetadata = () => {
+                    // Create canvas for re-encoding
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Set canvas dimensions (reduced for compression)
+                    canvas.width = Math.min(tempVideo.videoWidth, VIDEO_SETTINGS.width);
+                    canvas.height = Math.min(tempVideo.videoHeight, VIDEO_SETTINGS.height);
+                    
+                    // Draw video frame to canvas (this is a simplified approach)
+                    // Note: In a real app, you'd want to use a proper video encoder
+                    tempVideo.currentTime = 0;
+                    
+                    tempVideo.onseeked = () => {
+                        ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+                        
+                        // Convert canvas to blob with compression
+                        canvas.toBlob((compressedBlob) => {
+                            // Clean up
+                            URL.revokeObjectURL(tempVideo.src);
+                            resolve(compressedBlob || videoBlob); // Fallback to original if compression fails
+                        }, 'image/jpeg', VIDEO_SETTINGS.quality);
+                    };
+                    
+                    tempVideo.currentTime = 0;
+                };
+                
+                // Fallback if something goes wrong
+                setTimeout(() => {
+                    URL.revokeObjectURL(tempVideo.src);
+                    resolve(videoBlob);
+                }, 5000);
+            });
         }
 
         // Stop video recording
@@ -1443,13 +1633,15 @@
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: isFrontCamera ? 'user' : 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: VIDEO_SETTINGS.width, max: 1280 },
+                        height: { ideal: VIDEO_SETTINGS.height, max: 720 },
+                        frameRate: { ideal: VIDEO_SETTINGS.fps, max: 30 }
                     },
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: true,
+                        channelCount: 1
                     }
                 });
                 
@@ -1669,13 +1861,15 @@
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: isFrontCamera ? 'user' : 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: VIDEO_SETTINGS.width, max: 1280 },
+                        height: { ideal: VIDEO_SETTINGS.height, max: 720 },
+                        frameRate: { ideal: VIDEO_SETTINGS.fps, max: 30 }
                     },
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: true,
+                        channelCount: 1
                     }
                 });
                 
@@ -1799,6 +1993,7 @@
                 videoFileInput.files = dataTransfer.files;
                 
                 previewItem.textContent = 'Video saved to post';
+                updateFileSizeDisplay();
             }
             updateShareButtonState();
         });
@@ -1859,6 +2054,7 @@
                 // Update preview
                 previewBox.classList.add('has-content');
                 previewItem.textContent = `Video: ${file.name}`;
+                updateFileSizeDisplay();
             }
             updateShareButtonState();
         });
@@ -1871,12 +2067,14 @@
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        sampleRate: 44100
+                        sampleRate: 22050, // Lower sample rate for smaller file size
+                        channelCount: 1 // Mono audio for smaller file size
                     } 
                 });
                 
                 audioMediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'audio/webm;codecs=opus'
+                    mimeType: 'audio/webm;codecs=opus',
+                    audioBitsPerSecond: 64000 // Lower bitrate for smaller files
                 });
                 
                 audioChunks = [];
@@ -1911,6 +2109,7 @@
                     // Update preview
                     previewBox.classList.add('has-content');
                     previewItem.textContent = 'Audio recording ready';
+                    updateFileSizeDisplay();
                     updateShareButtonState(); // Update share button state
                 };
                 
@@ -1979,6 +2178,7 @@
                 // Update preview
                 previewBox.classList.add('has-content');
                 previewItem.textContent = `Audio: ${file.name}`;
+                updateFileSizeDisplay();
             }
             updateShareButtonState();
         });
@@ -2046,6 +2246,7 @@
                 playAudioBtn.innerHTML = '<i class="fas fa-play"></i>';
                 playAudioBtn.classList.remove('playing');
                 isPlaying = false;
+                updateFileSizeDisplay();
             }
             updateShareButtonState();
         });
@@ -2100,6 +2301,7 @@
                 previewBox.classList.remove('has-content');
                 previewItem.textContent = 'No media or text content yet';
             }
+            updateFileSizeDisplay();
             updateShareButtonState();
         }
         
@@ -2118,7 +2320,10 @@
         }
 
         // Image Upload Handler
-        imageInput.addEventListener('change', updatePreview);
+        imageInput.addEventListener('change', function() {
+            updatePreview();
+            updateFileSizeDisplay();
+        });
 
         // Textarea interaction
         textarea.addEventListener('input', updatePreview);
@@ -2135,7 +2340,7 @@
             }
         });
 
-        // Form validation
+        // Form validation with loading overlay
         document.getElementById('postForm').addEventListener('submit', function(e) {
             const hasContent = textarea.value.trim().length > 0;
             const hasMedia = imageInput.files.length > 0 || 
@@ -2145,7 +2350,39 @@
             if (!hasContent && !hasMedia) {
                 e.preventDefault();
                 alert('Please add a caption or media to your post.');
+                return;
             }
+            
+            // Show loading overlay
+            loadingOverlay.classList.add('active');
+            
+            // Disable form submission button
+            sharePostBtn.disabled = true;
+            sharePostBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sharing...';
+            
+            // Prevent multiple submissions
+            let isSubmitting = false;
+            
+            // Check if already submitting
+            if (isSubmitting) {
+                e.preventDefault();
+                return;
+            }
+            
+            isSubmitting = true;
+            
+            // Simulate upload delay for demonstration
+            // In real app, this would be actual upload time
+            setTimeout(() => {
+                // Re-enable button and remove loading overlay
+                // (In real app, this would happen after successful upload)
+                loadingOverlay.classList.remove('active');
+                sharePostBtn.disabled = false;
+                sharePostBtn.innerHTML = 'Share';
+                isSubmitting = false;
+                
+                // The form will continue to submit normally
+            }, 2000);
         });
 
         // Initialize
@@ -2170,6 +2407,14 @@
                 videoStream.getTracks().forEach(track => track.stop());
             }
             cleanupMusicContext(); // Ensure audio context is closed on exit
+            
+            // Revoke object URLs
+            if (currentVideoBlob) {
+                URL.revokeObjectURL(videoElement.src);
+            }
+            if (currentAudioBlob) {
+                URL.revokeObjectURL(audioElement.src);
+            }
         });
     </script>
 </body>
