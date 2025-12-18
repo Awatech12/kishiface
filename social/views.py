@@ -71,17 +71,26 @@ def register(request):
     return render(request, 'register.html')
 @login_required(login_url='/')
 def home(request):
-    posts = Post.objects.all().order_by('?')
-    products = Market.objects.all().order_by('?')
-    members = User.objects.all().order_by('?')
+    profile = Profile.objects.get(user=request.user)
+
+    # Users this user follows
+    following_users = profile.followings.values_list('user', flat=True)
+
+    # Posts from followed users + own posts
+    posts = Post.objects.filter(
+        Q(author__in=following_users) | Q(author=request.user)
+    ).order_by('-created_at')
+
+    products = Market.objects.order_by('?')
+    members = User.objects.exclude(id=request.user.id).order_by('?')
+
     context = {
-        'posts':posts,
+        'posts': posts,
         'members': members,
-        'user': request.user,
-        'products': products}
+        'products': products,
+    }
+
     return render(request, 'home.html', context)
-
-
     
 def post(request):
     if request.method =='POST':
@@ -135,17 +144,34 @@ def editpost(request, post_id):
 @login_required(login_url='/')
 def like_post(request, post_id):
     post = get_object_or_404(Post, post_id=post_id)
-    if request.user not in post.likes.all():
+
+    if request.user in post.likes.all():
+        post.likes.remove(request.user)
+
+        # Remove like notification on unlike
+        Notification.objects.filter(
+            recipient=post.author,
+            actor=request.user,
+            post=post,
+            notification_type='like'
+        ).delete()
+
+    else:
         post.likes.add(request.user)
+
         if post.author != request.user:
             Notification.objects.create(
                 recipient=post.author,
-                actor = request.user,
+                actor=request.user,
                 post=post,
-                message=f' Liked your post {post.content}')
-    else:
-        post.likes.remove(request.user)
-    return render(request, 'snippet/post_like.html', {'post':post, 'post_id':post_id})  
+                notification_type='like'
+            )
+
+    return render(request, 'snippet/post_like.html', {
+        'post': post,
+        'post_id': post_id
+    })
+
        
 
 @login_required(login_url='/')
@@ -164,60 +190,59 @@ def commentpopup(request, post_id):
     return render(request, 'commentpopup.html', {'post':post, 'comments': comments})
 @login_required(login_url='/')
 def postcomment(request, post_id):
-    post=get_object_or_404(Post, post_id=post_id)
+    post = get_object_or_404(Post, post_id=post_id)
+
     if request.method == 'POST':
         content = request.POST.get('comment')
         image = request.FILES.get('image')
         audio = request.FILES.get('audio_file')
+
         if not content and not image and not audio:
             return
+
         comment = PostComment.objects.create(
             post=post,
             author=request.user,
-            comment=content if content else "",
-            image=image if image else None,
-            file=audio if audio else None
+            comment=content or "",
+            image=image,
+            file=audio
         )
-        # send Real-time update
-        created_at = naturaltime(comment.created_at)
+
+        # 🔴 REAL-TIME SOCKET (UNCHANGED)
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f'post_{post_id}',
             {
-            'type': 'new_comment',
-            'comment_id': str(comment.comment_id),
-            'author_username': comment.author.username,
-            'author_first':str( comment.author.first_name),
-            'author_last': str(comment.author.last_name),
-            'is_verify': comment.author.profile.is_verify,
-            'profile_pic': comment.author.profile.picture.url,
-            'comment': comment.comment if comment.comment else '',
-            'image_url': comment.image.url if comment.image else '',
-            'file_url': comment.file.url if comment.file else '',
-            'post_id': str(post_id),
-            'created_at': str(created_at),
-            'user_id': comment.author.id
+                'type': 'new_comment',
+                'comment_id': str(comment.comment_id),
+                'author_username': comment.author.username,
+                'author_first': comment.author.first_name,
+                'author_last': comment.author.last_name,
+                'is_verify': comment.author.profile.is_verify,
+                'profile_pic': comment.author.profile.picture.url,
+                'comment': comment.comment or '',
+                'image_url': comment.image.url if comment.image else '',
+                'file_url': comment.file.url if comment.file else '',
+                'post_id': str(post_id),
+                'created_at': str(naturaltime(comment.created_at)),
+                'user_id': comment.author.id
             }
         )
+
+      
         if post.author != request.user:
-            notify=Notification.objects.create(
+            Notification.objects.create(
                 recipient=post.author,
-                actor = request.user,
-                 message=f"  commented on your post {post.content}",
-                 post=post)
-            layer = get_channel_layer()
-            group_name = 'comment_notification'
-            count = Notification.objects.filter(recipient=request.user, is_read=False).count()
-            async_to_sync(layer.group_send)(
-                group_name,
-                {
-                    'type': 'send_notification',
-                    'sender':notify.actor,
-                    'receiver': notify.recipient,
-                    'count': str(count)
-                }
+                actor=request.user,
+                post=post,
+                notification_type='comment'
             )
-        return render(request, 'snippet/comment_list.html', {'post':post, 'comment': comment})
+
+        return render(
+            request,
+            'snippet/comment_list.html',
+            {'post': post, 'comment': comment}
+        )
     
 
 def comment_like(request, comment_id):

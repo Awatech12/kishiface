@@ -82,12 +82,43 @@ class PostComment(models.Model):
 
 
 class Notification(models.Model):
-    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notification_receiver')
-    actor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notification_sender')
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, null=True, blank=True)
-    message=models.CharField(max_length=300)
+    LIKE = 'like'
+    COMMENT = 'comment'
+
+    TYPES = (
+        (LIKE, 'Like'),
+        (COMMENT, 'Comment'),
+    )
+
+    recipient = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notifications'
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='sent_notifications'
+    )
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+
+    notification_type = models.CharField(
+        max_length=20,
+        choices=TYPES,
+        blank=True,
+        null=True
+    )
+
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
 
 # --- START MESSAGE MODEL CORRECTION ---
