@@ -401,14 +401,33 @@ def message(request, username):
     return render(request, 'message.html', context )
 
 @login_required(login_url='/')
-def open_notification(request, pk):
-    notifications =get_object_or_404(Notification, pk=pk, recipient=request.user)
-    notifications.is_read=True
-    notifications.save()
-    if notifications.post: 
-        return redirect('post_comment', post_id=notifications.post.post_id)
-   
-    return render(request, 'home.html')
+def open_notification(request, post_id):
+
+
+    # Ensure post exists
+    post = get_object_or_404(Post, post_id=post_id)
+
+    # Get ONE notification (latest) — NOT get()
+    notification = (
+    Notification.objects
+    .filter(recipient=request.user, post=post)
+    .order_by('-created_at')
+    .first()
+    )
+
+    if not notification:
+        return redirect('home')
+
+    # Mark ALL related notifications as read
+    Notification.objects.filter(
+    recipient=request.user,
+    post=post,
+    notification_type=notification.notification_type,
+    is_read=False
+    ).update(is_read=True)
+
+    # Redirect to post comment page
+    return redirect('post_comment', post_id=post.post_id)
     
 login_required(login_url='/')
 def inbox(request):
