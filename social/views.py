@@ -399,29 +399,17 @@ def message(request, username):
     return render(request, 'message.html', context )
 
 @login_required(login_url='/')
-def open_notification(request, post_id):
+def open_notification(request, post_id, notification_type):
 
 
     # Ensure post exists
     post = get_object_or_404(Post, post_id=post_id)
 
-    # Get ONE notification (latest) — NOT get()
-    notification = (
-    Notification.objects
-    .filter(recipient=request.user, post=post)
-    .order_by('-created_at')
-    .first()
-    )
-
-    if not notification:
-        return redirect('home')
-
-    # Mark ALL related notifications as read
     Notification.objects.filter(
-    recipient=request.user,
-    post=post,
-    notification_type=notification.notification_type,
-    is_read=False
+        recipient = request.user,
+        post = post,
+        notification_type=notification_type,
+        is_read = False
     ).update(is_read=True)
 
     # Redirect to post comment page
