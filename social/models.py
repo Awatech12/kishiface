@@ -61,7 +61,21 @@ class Post(models.Model):
 
     def __str__(self):
         return self.author.username
-
+    
+    def preview_type(self):
+        if self.images.exists():
+            return 'image'
+        if self.video_file:
+            return 'video'
+        if self.file:
+            return 'audio'
+        return 'text'
+    
+    def preview_url(self):
+        if self.images.exists():
+            return self.images.first().image.url
+        return None
+    
 class PostImage(models.Model):
     post=models.ForeignKey(Post, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='post_images/')

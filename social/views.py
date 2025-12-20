@@ -12,9 +12,7 @@ from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
 import time
 from django.http import JsonResponse
-from openai import OpenAI
 from django.conf import settings
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
 from django.utils import timezone
 
 # Create your views here.
@@ -598,24 +596,6 @@ def marketForm(request):
 
     return render(request, 'marketform.html')
 
-
-# ======== AI Mood ======
-@login_required
-def generate_ai_text(request):
-    mood = request.GET.get("mood")
-    if not mood:
-        return JsonResponse({"error": "Mood is required"}, status=400)
-
-    prompt = f"Write a short social media caption based on the mood: {mood}. Make it human-like with emojis."
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    caption = response.choices[0].message["content"].strip()
-    return JsonResponse({"caption": caption})
-    
 
 # ==== for Notification and inbox  updating =====
 def notification_partial(request):
