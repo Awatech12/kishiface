@@ -264,8 +264,12 @@ def profile(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
     
-    # Get all posts initially (for the Posts tab)
-    posts = Post.objects.filter(author=user).prefetch_related('images')
+    # Get only image posts for initial load
+    posts = Post.objects.filter(
+        author=user
+    ).prefetch_related('images').filter(
+        images__isnull=False
+    ).distinct()[:30]  # Limit to 30 posts for initial load
     
     context = {
         'user': user,
@@ -274,7 +278,6 @@ def profile(request, username):
         'current_profile': request.user.profile if request.user.is_authenticated else None,
     }
     
-    # Check if this is an HTMX request for partial content
     if request.headers.get('HX-Request'):
         return render(request, 'profile_posts_partial.html', context)
     
@@ -288,7 +291,7 @@ def profile_videos(request, username):
     video_posts = Post.objects.filter(
         author=user,
         video_file__isnull=False
-    ).prefetch_related('images')
+    )[:30]  # Limit to 30 posts
     
     context = {
         'user': user,
@@ -296,11 +299,9 @@ def profile_videos(request, username):
         'posts': video_posts,
     }
     
-    # If HTMX request, return only the posts container
     if request.headers.get('HX-Request'):
         return render(request, 'profile_videos_partial.html', context)
     
-    # For direct navigation, render full page
     return render(request, 'profile.html', context)
 
 def profile_audios(request, username):
@@ -311,7 +312,7 @@ def profile_audios(request, username):
     audio_posts = Post.objects.filter(
         author=user,
         file__isnull=False
-    ).prefetch_related('images')
+    )[:30]  # Limit to 30 posts
     
     context = {
         'user': user,
@@ -334,7 +335,7 @@ def profile_text_posts(request, username):
         images__isnull=True,
         video_file__isnull=True,
         file__isnull=True
-    ).filter(content__isnull=False).exclude(content='')
+    ).filter(content__isnull=False).exclude(content='')[:30]  # Limit to 30 posts
     
     context = {
         'user': user,
