@@ -43,27 +43,69 @@ class Profile(models.Model):
     def __str__(self):
         return self.user.username
 
-
 class Post(models.Model):
-    post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    likes = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='like_post', blank=True)
+    post_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
+
+    likes = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='like_post',
+        blank=True
+    )
+
     content = models.TextField()
 
+    # ===================== MEDIA FIELDS =====================
     if settings.USE_CLOUDINARY:
-        video_file = CloudinaryField('video', resource_type='video', folder='post_files', blank=True, null=True)
-        video_thumbnail = CloudinaryField('image', resource_type='image', folder='video_thumbs', blank=True, null=True)
-        file = CloudinaryField('audio', resource_type='video', folder='post_files', blank=True, null=True)
+        video_file = CloudinaryField(
+            'video',
+            resource_type='video',
+            folder='post_files',
+            blank=True,
+            null=True
+        )
+
+        # Thumbnail ONLY for production
+        video_thumbnail = CloudinaryField(
+            'image',
+            resource_type='image',
+            folder='video_thumbs',
+            blank=True,
+            null=True
+        )
+
+        file = CloudinaryField(
+            'audio',
+            resource_type='video',
+            folder='post_files',
+            blank=True,
+            null=True
+        )
     else:
-        video_file = models.FileField(upload_to='post_file', blank=True, null=True)
-        file = models.FileField(upload_to='post_file', blank=True, null=True)
-        # No video_thumbnail for local
+        video_file = models.FileField(
+            upload_to='post_file',
+            blank=True,
+            null=True
+        )
+
+        file = models.FileField(
+            upload_to='post_file',
+            blank=True,
+            null=True
+        )
+        # ❌ No video_thumbnail for local
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # ===================== STRING =====================
     def __str__(self):
         return self.author.username
 
+    # ===================== PREVIEW TYPE =====================
     def preview_type(self):
         if hasattr(self, 'images') and self.images.exists():
             return 'image'
@@ -73,29 +115,48 @@ class Post(models.Model):
             return 'audio'
         return 'text'
 
+    # ===================== PREVIEW URL =====================
     def preview_url(self):
         if hasattr(self, 'images') and self.images.exists():
             return self.images.first().image.url
+
         if settings.USE_CLOUDINARY and self.video_thumbnail:
             return self.video_thumbnail.url
+
         if self.video_file:
             return self.video_file.url
+
         if self.file:
             return self.file.url
+
         return None
 
+    # ===================== SAVE =====================
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
 
-        # Cloudinary: generate thumbnail automatically if missing
-        if settings.USE_CLOUDINARY and self.video_file and not self.video_thumbnail:
-            from cloudinary import CloudinaryImage
-            self.video_thumbnail = CloudinaryImage(self.video_file.public_id).build_url(
-                format='jpg',
+        # Auto-generate thumbnail ONLY in production
+        if (
+            settings.USE_CLOUDINARY
+            and self.video_file
+            and not self.video_thumbnail
+        ):
+            from cloudinary.uploader import upload
+
+            result = upload(
+                self.video_file,
                 resource_type='video',
-                transformation=[{'start_offset': '0'}]
+                format='jpg',
+                eager=[{
+                    "start_offset": "0",
+                    "width": 600,
+                    "crop": "scale"
+                }]
             )
+
+            self.video_thumbnail = result.get("public_id")
             super().save(update_fields=['video_thumbnail'])
+
     
 class PostImage(models.Model):
     post=models.ForeignKey(Post, on_delete=models.CASCADE, related_name='images')
