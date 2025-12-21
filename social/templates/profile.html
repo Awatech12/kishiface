@@ -8,9 +8,6 @@
     <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
     <title>{% if profile.full_name %} {{profile.full_name}} {% else %} {{user.username}} {% endif %} / Kishiface</title>
     
-    <!-- HTMX -->
-    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
-    
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     
@@ -266,6 +263,10 @@
             text-decoration: none;
             transition: background-color 0.2s;
             position: relative;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-family: inherit;
         }
 
         .kishiface-tab:hover {
@@ -291,6 +292,7 @@
         /* Posts Grid */
         .kishiface-posts-container {
             padding: 0;
+            min-height: 200px;
         }
 
         .kishiface-posts-grid {
@@ -395,14 +397,24 @@
         .kishiface-placeholder {
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-            background-size: 200% 100%;
-            animation: loading 1.5s infinite;
+            background: #f0f0f0;
         }
 
-        @keyframes loading {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
+        .kishiface-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--kishiface-button-bg);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
         }
 
         /* Stats overlay */
@@ -691,114 +703,265 @@
             </div>
 
             <nav class="kishiface-tabs">
-                <a href="{% url 'profile' user.username %}" 
-                   class="kishiface-tab kishiface-tab-active"
-                   hx-get="{% url 'profile' user.username %}"
-                   hx-target=".kishiface-posts-container"
-                   hx-swap="innerHTML"
-                   hx-push-url="true">Posts</a>
-                
-                <a href="{% url 'profile_videos' user.username %}" 
-                   class="kishiface-tab"
-                   hx-get="{% url 'profile_videos' user.username %}"
-                   hx-target=".kishiface-posts-container"
-                   hx-swap="innerHTML"
-                   hx-push-url="true">Videos</a>
-                
-                <a href="{% url 'profile_audios' user.username %}" 
-                   class="kishiface-tab"
-                   hx-get="{% url 'profile_audios' user.username %}"
-                   hx-target=".kishiface-posts-container"
-                   hx-swap="innerHTML"
-                   hx-push-url="true">Audio</a>
-                
-                <a href="{% url 'profile_text_posts' user.username %}" 
-                   class="kishiface-tab"
-                   hx-get="{% url 'profile_text_posts' user.username %}"
-                   hx-target=".kishiface-posts-container"
-                   hx-swap="innerHTML"
-                   hx-push-url="true">Text</a>
+                <button data-tab="posts" data-url="{% url 'profile' user.username %}" class="kishiface-tab kishiface-tab-active">Posts</button>
+                <button data-tab="videos" data-url="{% url 'profile_videos' user.username %}" class="kishiface-tab">Videos</button>
+                <button data-tab="audio" data-url="{% url 'profile_audios' user.username %}" class="kishiface-tab">Audio</button>
+                <button data-tab="text" data-url="{% url 'profile_text_posts' user.username %}" class="kishiface-tab">Text</button>
             </nav>
         </section>
 
         <section class="kishiface-posts-container" id="posts-container">
-            <!-- Initial content will be loaded here -->
-            {% include 'profile_posts_partial.html' %}
+            <!-- Initial content loaded server-side -->
+            {% if posts %}
+            <div class="kishiface-posts-grid">
+                {% for post in posts %}
+                    {% if post.preview_type == 'image' and post.preview_url %}
+                        <a href="{% url 'post_comment' post.post_id %}" class="kishiface-post-item">
+                            {% if post.preview_url %}
+                                <img src="{{ post.preview_url }}" 
+                                     alt="Post" 
+                                     class="kishiface-post-image"
+                                     loading="lazy">
+                            {% else %}
+                                <div class="kishiface-placeholder"></div>
+                            {% endif %}
+                            <div class="kishiface-post-overlay">
+                                <span><i class="fa-solid fa-heart"></i> {{post.likes.count}}</span>
+                                <span><i class="fa-solid fa-comment"></i> {{post.comments.count}}</span>
+                            </div>
+                        </a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="kishiface-no-posts">
+                <h2 class="kishiface-no-posts-title">No posts yet</h2>
+                <p class="kishiface-no-posts-text">When they do, their posts will show up here.</p>
+            </div>
+            {% endif %}
         </section>
     </main>
 </div>
 
 {% include 'footer.html' %}
-
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Back button
-        const backBtn = document.querySelector('.kishiface-header-back');
-        if (backBtn) {
-            backBtn.addEventListener('click', function() {
-                window.history.back();
-            });
+document.addEventListener('DOMContentLoaded', function() {
+    const username = '{{ user.username }}';
+    const postsContainer = document.getElementById('posts-container');
+    const headerPosts = document.querySelector('.kishiface-header-posts');
+    const tabs = document.querySelectorAll('.kishiface-tab');
+    const backBtn = document.querySelector('.kishiface-header-back');
+    
+    // Store current active tab
+    let currentTab = 'posts';
+    
+    // Back button
+    if (backBtn) {
+        backBtn.addEventListener('click', function() {
+            window.history.back();
+        });
+    }
+    
+    // Tab click handlers
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabName = this.getAttribute('data-tab');
+            const url = this.getAttribute('data-url') + '?ajax=1'; // Add ajax parameter
+            
+            // Don't reload if already on this tab
+            if (tabName === currentTab) return;
+            
+            // Update active tab
+            tabs.forEach(t => t.classList.remove('kishiface-tab-active'));
+            this.classList.add('kishiface-tab-active');
+            
+            // Update current tab
+            currentTab = tabName;
+            
+            // Load content
+            loadTabContent(tabName, url);
+            
+            // Update URL without reload
+            history.pushState({tab: tabName}, '', url.replace('?ajax=1', ''));
+        });
+    });
+    
+    // Handle browser back/forward
+    window.addEventListener('popstate', function(event) {
+        // Extract tab from URL
+        const path = window.location.pathname;
+        let tabName = 'posts';
+        
+        if (path.includes('/videos/')) {
+            tabName = 'videos';
+        } else if (path.includes('/audios/')) {
+            tabName = 'audio';
+        } else if (path.includes('/text-posts/')) {
+            tabName = 'text';
         }
         
-        // Tab click handlers
-        document.querySelectorAll('.kishiface-tab').forEach(tab => {
-            tab.addEventListener('click', function(e) {
-                e.preventDefault();
-                
-                // Update active tab
-                document.querySelectorAll('.kishiface-tab').forEach(t => {
-                    t.classList.remove('kishiface-tab-active');
-                });
-                this.classList.add('kishiface-tab-active');
-                
-                // Get the URL
-                const url = this.getAttribute('href');
-                const tabText = this.textContent.trim();
-                const headerPosts = document.querySelector('.kishiface-header-posts');
-                
-                // Update header
-                headerPosts.textContent = `Loading ${tabText.toLowerCase()}...`;
+        const tabElement = document.querySelector(`[data-tab="${tabName}"]`);
+        if (tabElement) {
+            tabs.forEach(t => t.classList.remove('kishiface-tab-active'));
+            tabElement.classList.add('kishiface-tab-active');
+            currentTab = tabName;
+            loadTabContent(tabName, tabElement.getAttribute('data-url') + '?ajax=1');
+        }
+    });
+    
+    // Load tab content function
+    async function loadTabContent(tabName, url) {
+        // Show loading
+        postsContainer.innerHTML = '<div class="kishiface-loading"></div>';
+        headerPosts.textContent = `Loading ${tabName}...`;
+        
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
             });
-        });
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('Content not found');
+                }
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const html = await response.text();
+            
+            // Check if we got the full page instead of partial
+            if (html.includes('<!DOCTYPE html>') || html.includes('<html')) {
+                console.error('Got full page instead of partial');
+                // Extract just the posts container from the response
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                const partialContent = tempDiv.querySelector('.kishiface-posts-container') || 
+                                      tempDiv.querySelector('.kishiface-text-posts') ||
+                                      tempDiv;
+                
+                if (partialContent) {
+                    postsContainer.innerHTML = partialContent.innerHTML;
+                } else {
+                    throw new Error('Could not extract content from response');
+                }
+            } else {
+                // We got the partial content directly
+                postsContainer.innerHTML = html;
+            }
+            
+            // Update post count based on content type
+            updatePostCount(tabName);
+            
+            // Initialize video thumbnails for videos tab
+            if (tabName === 'videos') {
+                initializeVideoThumbnails();
+            }
+            
+            // Initialize lazy loading for images
+            initializeLazyLoading();
+            
+        } catch (error) {
+            console.error('Error loading tab content:', error);
+            postsContainer.innerHTML = `
+                <div class="kishiface-no-posts">
+                    <h2 class="kishiface-no-posts-title">Error loading content</h2>
+                    <p class="kishiface-no-posts-text">${error.message}</p>
+                </div>
+            `;
+            headerPosts.textContent = 'Error';
+        }
+    }
+    
+    // Update post count
+    function updatePostCount(tabName) {
+        let itemCount = 0;
         
-        // Handle popstate (back/forward buttons)
-        window.addEventListener('popstate', function(event) {
-            // Reload the page to get fresh state
-            window.location.reload();
-        });
+        if (tabName === 'posts' || tabName === 'videos' || tabName === 'audio') {
+            itemCount = postsContainer.querySelectorAll('.kishiface-post-item').length;
+        } else if (tabName === 'text') {
+            itemCount = postsContainer.querySelectorAll('.kishiface-text-item').length;
+            
+            // If no text items found, check for no-posts message
+            if (itemCount === 0 && postsContainer.querySelector('.kishiface-no-posts')) {
+                itemCount = 0;
+            }
+        }
         
-        // Prevent video autoplay on hover
-        document.querySelectorAll('.kishiface-preview-media').forEach(video => {
-            video.addEventListener('mouseenter', function(e) {
+        headerPosts.textContent = `${itemCount} ${tabName}`;
+    }
+    
+    // Initialize video thumbnails
+    function initializeVideoThumbnails() {
+        const videos = postsContainer.querySelectorAll('.kishiface-preview-media');
+        videos.forEach(video => {
+            // Make sure video doesn't play
+            video.controls = false;
+            video.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
             });
             
-            video.addEventListener('touchstart', function(e) {
+            video.addEventListener('play', function(e) {
                 e.preventDefault();
-                e.stopPropagation();
+                this.pause();
             });
         });
+    }
+    
+    // Lazy loading for images
+    function initializeLazyLoading() {
+        const lazyImages = postsContainer.querySelectorAll('img[data-src]');
         
-        // Lazy load images
-        function lazyLoadImages() {
-            const images = document.querySelectorAll('img[data-src]');
-            images.forEach(img => {
-                if (img.getBoundingClientRect().top < window.innerHeight + 300) {
+        if ('IntersectionObserver' in window) {
+            const imageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        img.src = img.dataset.src;
+                        img.removeAttribute('data-src');
+                        observer.unobserve(img);
+                    }
+                });
+            }, {
+                rootMargin: '50px 0px',
+                threshold: 0.1
+            });
+            
+            lazyImages.forEach(img => imageObserver.observe(img));
+        } else {
+            // Fallback
+            lazyImages.forEach(img => {
+                if (img.getBoundingClientRect().top < window.innerHeight + 100) {
                     img.src = img.dataset.src;
                     img.removeAttribute('data-src');
                 }
             });
+            
+            window.addEventListener('scroll', function() {
+                lazyImages.forEach(img => {
+                    if (img.getBoundingClientRect().top < window.innerHeight + 100 && img.hasAttribute('data-src')) {
+                        img.src = img.dataset.src;
+                        img.removeAttribute('data-src');
+                    }
+                });
+            });
         }
-        
-        lazyLoadImages();
-        window.addEventListener('scroll', lazyLoadImages);
-        
-        // More actions button
-        document.querySelector('.kishiface-more-actions')?.addEventListener('click', function() {
-            alert('More actions menu would open here');
-        });
+    }
+    
+    // Initialize lazy loading for initial content
+    initializeLazyLoading();
+    
+    // More actions button
+    document.querySelector('.kishiface-more-actions')?.addEventListener('click', function() {
+        alert('More actions menu would open here');
     });
+    
+    // Initialize state for back/forward navigation
+    history.replaceState({tab: 'posts'}, '', window.location.href);
+});
 </script>
 
 </body>

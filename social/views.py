@@ -264,12 +264,11 @@ def profile(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
     
-    # Get only image posts for initial load
+    # Get ONLY image posts for the Posts tab
     posts = Post.objects.filter(
-        author=user
-    ).prefetch_related('images').filter(
+        author=user,
         images__isnull=False
-    ).distinct()[:30]  # Limit to 30 posts for initial load
+    ).prefetch_related('images').distinct()[:30]
     
     context = {
         'user': user,
@@ -278,7 +277,8 @@ def profile(request, username):
         'current_profile': request.user.profile if request.user.is_authenticated else None,
     }
     
-    if request.headers.get('HX-Request'):
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render(request, 'profile_posts_partial.html', context)
     
     return render(request, 'profile.html', context)
@@ -287,11 +287,11 @@ def profile_videos(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
     
-    # Filter posts that have video files
+    # Get video posts
     video_posts = Post.objects.filter(
         author=user,
         video_file__isnull=False
-    )[:30]  # Limit to 30 posts
+    ).prefetch_related('images')[:30]
     
     context = {
         'user': user,
@@ -299,20 +299,23 @@ def profile_videos(request, username):
         'posts': video_posts,
     }
     
-    if request.headers.get('HX-Request'):
+    # Always return partial for AJAX
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
         return render(request, 'profile_videos_partial.html', context)
     
+    # For direct access, return full page with video posts
+    context['posts'] = video_posts
     return render(request, 'profile.html', context)
 
 def profile_audios(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
     
-    # Filter posts that have audio files
+    # Get audio posts
     audio_posts = Post.objects.filter(
         author=user,
         file__isnull=False
-    )[:30]  # Limit to 30 posts
+    ).prefetch_related('images')[:30]
     
     context = {
         'user': user,
@@ -320,22 +323,23 @@ def profile_audios(request, username):
         'posts': audio_posts,
     }
     
-    if request.headers.get('HX-Request'):
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
         return render(request, 'profile_audios_partial.html', context)
     
+    context['posts'] = audio_posts
     return render(request, 'profile.html', context)
 
 def profile_text_posts(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
     
-    # Filter text-only posts (no images, video, or audio files)
+    # Get text posts
     text_posts = Post.objects.filter(
         author=user,
         images__isnull=True,
         video_file__isnull=True,
         file__isnull=True
-    ).filter(content__isnull=False).exclude(content='')[:30]  # Limit to 30 posts
+    ).exclude(content='').filter(content__isnull=False)[:30]
     
     context = {
         'user': user,
@@ -343,10 +347,12 @@ def profile_text_posts(request, username):
         'posts': text_posts,
     }
     
-    if request.headers.get('HX-Request'):
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
         return render(request, 'profile_text_posts_partial.html', context)
     
+    context['posts'] = text_posts
     return render(request, 'profile.html', context)
+    
 def profile_popup(request, username):
     user = get_object_or_404(User, username=username)
     posts = Post.objects.filter(author=user)
