@@ -18,6 +18,12 @@ urlpatterns = [
     path('notification', views.notification_partial, name='notification_partial'),
     path('editpost/<uuid:post_id>', views.editpost, name='editpost'),
     path('list', views.notification_list, name='notification_list'),
+    #====== Profials codes =======
+    path('<str:username>/', views.profile, name='profile'),
+    path('<str:username>/videos/', views.profile_videos, name='profile_videos'),
+    path('<str:username>/audios/', views.profile_audios, name='profile_audios'),
+    path('<str:username>/text-posts/', views.profile_text_posts, name='profile_text_posts'),
+
     # ===== Market Place Path ======
     path('market', views.market, name='market'),
     path('channel_message/<uuid:channel_id>/', views.channel_message, name='channel_message'),
@@ -38,7 +44,7 @@ urlpatterns = [
     path('follow/<str:username>', views.follow, name='follow'),
     path('like/<uuid:post_id>', views.like_post, name='like_post'),
     path('comment/<uuid:post_id>', views.post_comment, name='post_comment'),
-    path('<str:username>', views.profile, name='profile'),
+    #path('<str:username>', views.profile, name='profile'),
    
     path('?/<str:username>', views.update_profile, name='update_profile')
 ]
