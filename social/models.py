@@ -51,6 +51,7 @@ class Post(models.Model):
     content = models.TextField()
     if settings.USE_CLOUDINARY:
         video_file = CloudinaryField('video', resource_type='video',folder='post_files',blank=True)
+        video_thumbnail = CloudinaryField('image', resource_type='image', folder='video_thumbs', blank=True, null=True)
     else:
         video_file = models.FileField(upload_to='post_file', blank=True)
     if settings.USE_CLOUDINARY:
@@ -79,6 +80,17 @@ class Post(models.Model):
         if self.file:
             return self.file.url
         return None
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.video_file and not self.video_thumbnail:
+            from cloudinary import CloudinaryImage
+            self.video_thumbnail = CloudinaryImage(self.video_file.public_id).build_url(
+                format = 'jpg',
+                resource_type = 'video',
+                transformation=[{'start_offset' : '0'}]
+            )
+            super().save(updata_field=['video_thumbnail'])
     
 class PostImage(models.Model):
     post=models.ForeignKey(Post, on_delete=models.CASCADE, related_name='images')
