@@ -74,6 +74,10 @@ class Post(models.Model):
     def preview_url(self):
         if self.images.exists():
             return self.images.first().image.url
+        if self.video_file:
+            return self.video_file.url
+        if self.file:
+            return self.file.url
         return None
     
 class PostImage(models.Model):

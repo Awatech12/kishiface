@@ -1,48 +1,149 @@
 {% load time %}
-<a href="{% url 'open_notification' n.post.post_id n.type %}"
-   class="notification-item {% if not n.is_read %}unread{% endif %}">
+<style>
+    .kishiface-notif-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        background: #fff;
+        text-decoration: none;
+        color: #000;
+    }
 
-    <img src="{{ n.latest_actor.profile.picture.url }}"
-         class="notif-avatar">
+    .kishiface-unread {
+        background: #fbfcfe;
+    }
 
-    <div class="notif-content">
-        <b>{{ n.latest_actor.username }}</b>
+    .kishiface-avatar-img {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-right: 12px;
+        flex-shrink: 0;
+        border: 1px solid #efefef;
+    }
 
-        {% if n.others_count > 0 %}
-            and {{ n.others_count }} others
-        {% endif %}
+    .kishiface-notif-body {
+        flex: 1;
+        font-size: 14px;
+        line-height: 1.4;
+        color: #262626;
+    }
 
-        {% if n.type == 'like' %}
-            liked your post
-        {% elif n.type == 'comment' %}
-            commented on your post
-        {% endif %}
+    .kishiface-username {
+        font-weight: 600;
+        margin-right: 4px;
+    }
 
-        <span class="notif-time">
-            {{ n.created_at|insta_timesince}}
-        </span>
-    </div>
+    .kishiface-timestamp {
+        color: #8e8e8e;
+        margin-left: 4px;
+    }
 
- 
-   {% if n.post.preview_type == 'image' %}
-    <img src="{{ n.post.preview_url }}" class="notif-thumb">
+    .kishiface-preview-container {
+        width: 44px;
+        height: 44px;
+        margin-left: 12px;
+        flex-shrink: 0;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f8f8f8; /* Visible light gray background */
+        border: 1px solid #efefef;
+        overflow: hidden;
+        border-radius: 4px;
+    }
 
-    {% elif  n.post.preview_type == 'video' %}
-    <div class="media-icon video-icon">
-        <i class="fa-solid fa-play"></i>
-    </div>
+    .kishiface-preview-media {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Fixed icon visibility issue */
+    .kishiface-icon-box {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .kishiface-icon-box i {
+        color: #262626 !important; /* Force icons to be dark/visible */
+        font-size: 18px !important;
+        display: inline-block !important;
+    }
+
+    .kishiface-video-overlay {
+        position: absolute;
+        color: #fff;
+        font-size: 10px;
+        pointer-events: none;
+        z-index: 5;
+    }
+</style>
+
+<a href="{% url 'open_notification' n.post.post_id n.type %}" 
+   class="kishiface-notif-item {% if not n.is_read %}kishiface-unread{% endif %}">
     
+    <img src="{{ n.latest_actor.profile.picture.url }}" class="kishiface-avatar-img">
 
-    {% elif  n.post.preview_type == 'audio' %}
-     <div class="media-icon music-icon">
-        <i class="fa-solid fa-music"></i>
-     </div>
-
-    {% else %}
-    <div class="media-icon text-icon">
-         <i class="fa-solid fa-align-left"></i>
-    </div>
+    <div class="kishiface-notif-body">
+        <span class="kishiface-username">{{ n.latest_actor.username }}</span>
         
-    {% endif %}
+        <span>
+            {% if n.others_count > 0 %}and {{ n.others_count }} others {% endif %}
+
+            {% if n.type == 'like' %}
+                liked your 
+            {% elif n.type == 'comment' %}
+                commented on your 
+            {% endif %}
+
+            {# Classified by post media type #}
+            {% if n.post.preview_type == 'video' %}
+                video post.
+            {% elif n.post.preview_type == 'audio' %}
+                audio post.
+            {% elif n.post.preview_type == 'image' %}
+                image post.
+            {% elif n.post.preview_type == 'text' %}
+                text post.
+            {% else %}
+                post.
+            {% endif %}
+        </span>
+
+        <span class="kishiface-timestamp">{{ n.created_at|insta_timesince }}</span>
+    </div>
+
+    <div class="kishiface-preview-container">
+        {% if n.post.preview_type == 'image' %}
+            <img src="{{ n.post.preview_url }}" class="kishiface-preview-media">
+        
+        {% elif n.post.preview_type == 'video' %}
+            <video class="kishiface-preview-media" preload="metadata" muted playsinline>
+                <source src="{{ n.post.preview_url }}#t=0.5" type="video/mp4">
+            </video>
+            <div class="kishiface-video-overlay"><i class="fa-solid fa-play"></i></div>
+        
+        {% elif n.post.preview_type == 'audio' %}
+            <div class="kishiface-icon-box">
+                <i class="fa-solid fa-music"></i>
+            </div>
+
+        {% elif n.post.preview_type == 'text' %}
+            <div class="kishiface-icon-box">
+                <i class="fa-solid fa-paragraph"></i>
+            </div>
+        
+        {% else %}
+            <div class="kishiface-icon-box">
+                <i class="fa-solid fa-align-left"></i>
+            </div>
+        {% endif %}
+    </div>
 </a>
 
