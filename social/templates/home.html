@@ -90,6 +90,9 @@
     
     .kf-post-actions {
       margin-left: auto;
+      display: flex;
+      gap: 12px;
+      align-items: center;
     }
     
     .kf-post-content {
@@ -123,6 +126,7 @@
       flex-shrink: 0;
       display: block;
       background: #fafafa;
+      position: relative;
     }
     
     .kf-image-slide img {
@@ -137,7 +141,36 @@
       opacity: 1;
     }
     
-    /* ===== EXACT VIDEO PLAYER FROM OLD CODE ===== */
+    /* Download button for images */
+    .kf-image-download-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 36px;
+      height: 36px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 50%;
+      border: none;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      opacity: 0;
+      transition: opacity 0.3s ease, background 0.3s ease;
+    }
+    
+    .kf-image-slide:hover .kf-image-download-btn {
+      opacity: 1;
+    }
+    
+    .kf-image-download-btn:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+    
+    /* ===== VIDEO PLAYER ===== */
     .kf-video-container {
       position: relative; 
       width: 100%;
@@ -178,7 +211,7 @@
       opacity: 1;
     }
     
-    /* OVERLAY SEEK ICONS - EXACT FROM OLD CODE */
+    /* OVERLAY SEEK ICONS */
     .kf-seek-overlay-btn {
       position: absolute;
       bottom: 10px; 
@@ -208,6 +241,35 @@
     .kf-forward-btn {
       right: 10px;
     }
+    
+    /* Video download button */
+    .kf-video-download-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 36px;
+      height: 36px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 50%;
+      border: none;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      opacity: 0;
+      transition: opacity 0.3s ease, background 0.3s ease;
+    }
+    
+    .kf-video-container:hover .kf-video-download-btn {
+      opacity: 1;
+    }
+    
+    .kf-video-download-btn:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
 
     /* State Class: Show controls when paused or hovered */
     .kf-video-container.paused .kf-seek-overlay-btn,
@@ -220,6 +282,7 @@
     .kf-audio-player {
       width: 100%;
       background: var(--kf-white);
+      position: relative;
     }
     
     .kf-audio-cover {
@@ -305,6 +368,35 @@
       display: flex;
       align-items: center;
       gap: 6px;
+    }
+    
+    /* Audio download button */
+    .kf-audio-download-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 36px;
+      height: 36px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 50%;
+      border: none;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      opacity: 0;
+      transition: opacity 0.3s ease, background 0.3s ease;
+    }
+    
+    .kf-audio-player:hover .kf-audio-download-btn {
+      opacity: 1;
+    }
+    
+    .kf-audio-download-btn:hover {
+      background: rgba(0, 0, 0, 0.8);
     }
     
     /* Marketplace */
@@ -458,6 +550,24 @@
       animation: kfFadeIn 0.3s ease;
     }
     
+    /* Download icon button styling */
+    .kf-download-icon {
+      color: var(--kf-text);
+      padding: 8px;
+      border-radius: 50%;
+      transition: all 0.15s ease-in-out;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    
+    .kf-download-icon:hover {
+      color: var(--kf-primary);
+      background-color: #f3f4f6;
+    }
+    
     /* Responsive adjustments */
     @media (min-width: 768px) {
       .kf-feed {
@@ -530,11 +640,24 @@
           </div>
           <div class="kf-post-actions">
             {% if request.user == post.author %}
-              <a href="{% url 'editpost' post.post_id %}" title="Edit">
+              <a href="{% url 'editpost' post.post_id %}" title="Edit" class="kf-download-icon">
                 <i class="fas fa-edit"></i>
               </a>
+              <a href="#" 
+                 title="Delete Post" 
+                 class="kf-download-icon delete-btn">
+                <i class="fas fa-trash"></i>
+              </a>
             {% else %}
-              <i class="fas fa-ellipsis-h"></i>
+              <!-- Download icon for non-owner users -->
+              <i class="fas fa-download kf-download-icon" 
+                 title="Download Media" 
+                 onclick="kfDownloadPostMedia('{{ post.post_id }}', this)"
+                 data-post-id="{{ post.post_id }}"
+                 data-has-video="{% if post.video_file %}true{% else %}false{% endif %}"
+                 data-has-audio="{% if post.file %}true{% else %}false{% endif %}"
+                 data-has-images="{% if post.images.all %}true{% else %}false{% endif %}"
+                 style="cursor:pointer;"></i>
             {% endif %}
           </div>
         </div>
@@ -550,6 +673,13 @@
         {% if post.file %}
         <div class="kf-media-container">
           <div class="kf-audio-player" id="kf-audio-{{ post.post_id }}">
+            <!-- Download button for audio -->
+            <button class="kf-audio-download-btn" 
+                    title="Download Audio" 
+                    onclick="kfDownloadAudio('{{ post.post_id }}', '{{ post.file.url }}')">
+              <i class="fas fa-download"></i>
+            </button>
+            
             <div class="kf-audio-cover" 
                  style="background-image: url('{% if post.images.first %}{{post.images.first.image.url}}{% else %}{{post.author.profile.picture.url}}{% endif %}');">
               <button class="kf-audio-play-btn" onclick="kfToggleAudio('{{ post.post_id }}')">
@@ -580,15 +710,22 @@
         </div>
         {% endif %}
 
-        <!-- ===== VIDEO POST (CORRECTED) ===== -->
+        <!-- Video Post -->
         {% if post.video_file %}
         <div class="kf-media-container">
           <div class="kf-video-container" id="kf-container-{{ post.post_id }}">
+            <!-- Download button for video -->
+            <button class="kf-video-download-btn" 
+                    title="Download Video" 
+                    onclick="kfDownloadVideo('{{ post.post_id }}', '{{ post.video_file.url }}')">
+              <i class="fas fa-download"></i>
+            </button>
+            
             <video class="kf-video" 
                    id="kf-post-video-{{ post.post_id }}" 
                    preload="metadata" 
                    onclick="kfTogglePlayPause('kf-post-video-{{ post.post_id }}', event)">
-              <source src="{{ post.video_file.url }}#t=0.5" type="video/mp4">
+              <source src="{{ post.video_file.url }}" type="video/mp4">
               Your browser does not support HTML5 video.
             </video>
             
@@ -613,6 +750,13 @@
             <div class="kf-image-track" id="kf-track-{{ post.post_id }}">
               {% for image in post.images.all %}
               <div class="kf-image-slide">
+                <!-- Download button for each image -->
+                <button class="kf-image-download-btn" 
+                        title="Download Image" 
+                        onclick="kfDownloadImage('{{ post.post_id }}', '{{ image.image.url }}', {{ forloop.counter }})">
+                  <i class="fas fa-download"></i>
+                </button>
+                
                 <img 
                   src="{% static 'images/placeholder.jpg' %}" 
                   data-src="{{ image.image.url }}" 
