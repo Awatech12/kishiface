@@ -1,432 +1,388 @@
-// --- Global Media Tracking for Single Playback ---
-let currentlyPlayingMedia = null;
+// ===== GLOBAL MEDIA TRACKING =====
+let kfCurrentlyPlayingMedia = null;
+const kfAudioTimers = {};
+
+// ===== VIDEO PLAYER CONTROLS (FIXED) =====
 
 /**
  * Pauses all video and audio elements except the one currently starting.
- * Enforces the "one media playing at a time" rule.
- * @param {HTMLElement} currentMediaElement - The media element that is about to play.
  */
-function pauseAllOtherMedia(currentMediaElement) {
-    if (currentlyPlayingMedia && currentlyPlayingMedia !== currentMediaElement) {
-        // 1. Pause the previously playing media
-        currentlyPlayingMedia.pause();
+function kfPauseAllOtherMedia(currentMediaElement) {
+    if (kfCurrentlyPlayingMedia && kfCurrentlyPlayingMedia !== currentMediaElement) {
+        // Pause the previously playing media
+        kfCurrentlyPlayingMedia.pause();
         
-        // 2. Reset the icon state for the previously playing media if it's a video
-        if (currentlyPlayingMedia.tagName === 'VIDEO') {
-            const prevContainer = currentlyPlayingMedia.closest('.instagram-video-container');
-            const prevPlayIcon = prevContainer ? prevContainer.querySelector('.play-pause-icon') : null;
-            
-            if (prevContainer) prevContainer.classList.add('paused');
-            if (prevPlayIcon) prevPlayIcon.style.opacity = '1';
-            
+        // Reset video UI
+        if (kfCurrentlyPlayingMedia.tagName === 'VIDEO') {
+            const prevContainer = kfCurrentlyPlayingMedia.closest('.kf-video-container');
+            if (prevContainer) {
+                prevContainer.classList.add('paused');
+                const prevPlayIcon = prevContainer.querySelector('.kf-play-pause-icon');
+                if (prevPlayIcon) prevPlayIcon.style.opacity = '1';
+            }
         }
-         // 3. Reset the icon state and wave state for the previously playing media if it's an audio
-        else if (currentlyPlayingMedia.tagName === 'AUDIO') {
-            const postId = currentlyPlayingMedia.id.split('-')[1];
-            const prevIcon = document.getElementById('audio-icon-' + postId);
-            const prevWave = document.getElementById('audio-wave-' + postId);
-            
+        // Reset audio UI
+        else if (kfCurrentlyPlayingMedia.tagName === 'AUDIO') {
+            const postId = kfCurrentlyPlayingMedia.id.replace('kf-audio-element-', '');
+            const prevIcon = document.getElementById('kf-audio-icon-' + postId);
             if (prevIcon) {
                 prevIcon.classList.remove('fa-pause');
                 prevIcon.classList.add('fa-play');
-                prevIcon.style.opacity = '1';
             }
-            if (prevWave) {
-                prevWave.classList.remove('playing');
-                // Stop wave animation
-                prevWave.querySelectorAll('.bar').forEach(bar => {
-                    bar.style.animation = 'none';
-                });
+            
+            // Stop audio timer
+            if (kfAudioTimers[postId]) {
+                clearInterval(kfAudioTimers[postId]);
+                delete kfAudioTimers[postId];
             }
         }
     }
     
-    // Update the globally tracked media element ONLY if it's playing
-    if (currentMediaElement && currentMediaElement.paused === false) {
-        currentlyPlayingMedia = currentMediaElement;
-    } 
+    // Update the globally tracked media element if it's playing
+    if (currentMediaElement && !currentMediaElement.paused) {
+        kfCurrentlyPlayingMedia = currentMediaElement;
+    }
 }
-
-
-/** * Video Player Controls 
- */
 
 /**
  * Toggles play/pause for the video.
- * Prevents restarting if the click originated from an overlay control button.
- * @param {string} videoId - The ID of the video element.
- * @param {Event} e - The click event object.
  */
-function togglePlayPause(videoId, e) {
-    // Safety check to prevent video restart if the click target is a control button
-    if (e && e.target.closest('.seek-overlay-btn')) {
-        // If the click hit a seek button, ignore the main video play/pause toggle.
+function kfTogglePlayPause(videoId, e) {
+    // Prevent restarting if the click target is a seek button
+    if (e && e.target.closest('.kf-seek-overlay-btn')) {
         return;
     }
 
     const video = document.getElementById(videoId);
+    if (!video) return;
 
     if (video.paused || video.ended) {
-        pauseAllOtherMedia(video); // Enforce single playback
-        video.play().catch(error => console.error("Video Play Error:", error));
+        kfPauseAllOtherMedia(video);
+        video.play().then(() => {
+            // Video started playing
+            const container = video.closest('.kf-video-container');
+            if (container) {
+                container.classList.remove('paused');
+                const playIcon = container.querySelector('.kf-play-pause-icon');
+                if (playIcon) playIcon.style.opacity = '0';
+            }
+        }).catch(error => {
+            console.error("Video Play Error:", error);
+        });
     } else {
         video.pause();
+        const container = video.closest('.kf-video-container');
+        if (container) {
+            container.classList.add('paused');
+            const playIcon = container.querySelector('.kf-play-pause-icon');
+            if (playIcon) playIcon.style.opacity = '1';
+        }
     }
 }
 
-
-/** * Seeks the video forward or backward by a specified amount.
- * @param {string} videoId - The ID of the video element.
- * @param {number} seconds - The number of seconds to move (e.g., -10 for backward, 10 for forward).
+/**
+ * Seeks the video forward or backward by a specified amount.
  */
-function seekVideo(videoId, seconds) {
+function kfSeekVideo(videoId, seconds) {
     const video = document.getElementById(videoId);
     if (video) {
-        // Calculate the new time
         let newTime = video.currentTime + seconds;
-        
-        // Clamp the new slide index between 0 and duration
         newTime = Math.max(0, newTime);
-        newTime = Math.min(newTime, video.duration);
-        
-        // Set the new time
+        if (video.duration) {
+            newTime = Math.min(newTime, video.duration);
+        }
         video.currentTime = newTime;
     }
 }
 
-/** * Audio Player Controls 
- */
-function toggleAudioPlay(audioId) {
-    const audio = document.getElementById(audioId);
-    const postId = audioId.split('-')[1]; 
-    const icon = document.getElementById('audio-icon-' + postId);
-    const wave = document.getElementById('audio-wave-' + postId);
-    
-    if (audio.paused || audio.ended) {
-        pauseAllOtherMedia(audio); // Enforce single playback
+// ===== AUDIO CONTROLS =====
 
-        audio.play().catch(e => console.error("Audio Play Error:", e));
-        // Event listeners will handle icon and wave state, but we set them immediately for responsiveness
-        icon.classList.remove('fa-play');
-        icon.classList.add('fa-pause');
-        icon.style.opacity = '0'; // Hide icon when playing
-        
-        // Start wave animation
-        if (wave) {
-            wave.classList.add('playing');
-            wave.querySelectorAll('.bar').forEach(bar => {
-                bar.style.animation = 'wave-movement 0.8s ease-in-out infinite';
-            });
-        }
-    } else {
-        audio.pause();
-        // Event listeners will handle icon and wave state, but we set them immediately for responsiveness
-        icon.classList.remove('fa-pause');
-        icon.classList.add('fa-play');
-        icon.style.opacity = '1'; // Show icon when paused
-        
-        // Stop wave animation
-        if (wave) {
-            wave.classList.remove('playing');
-            wave.querySelectorAll('.bar').forEach(bar => {
-                bar.style.animation = 'none';
-            });
-        }
-    }
+// Format time as MM:SS
+function kfFormatTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-// ------------------------------------------------------------------
-// Intersection Observer for Auto Pause on Scroll (Instagram-like)
-// ------------------------------------------------------------------
-
-const mediaObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-        const container = entry.target;
-        const mediaElement = container.querySelector('.instagram-video, .audio-hidden');
-
-        if (!mediaElement) return;
-
-        if (!entry.isIntersecting) {
-            // Media scrolled OUT of the viewport
-            if (!mediaElement.paused) {
-                // Pause the element
-                mediaElement.pause();
-                // The pause event listener will handle clearing currentlyPlayingMedia
-            }
-        }
+function kfToggleAudio(postId) {
+  const audio = document.getElementById(`kf-audio-element-${postId}`);
+  const icon = document.getElementById(`kf-audio-icon-${postId}`);
+  
+  if (!audio || !icon) return;
+  
+  if (audio.paused || audio.ended) {
+    kfPauseAllOtherMedia(audio);
+    
+    audio.play().then(() => {
+      icon.classList.remove('fa-play');
+      icon.classList.add('fa-pause');
+      
+      // Update progress
+      kfUpdateAudioProgress(postId);
+      kfAudioTimers[postId] = setInterval(() => kfUpdateAudioProgress(postId), 250);
+    }).catch(e => {
+      console.error("Audio Play Error:", e);
     });
-}, {
-    // Media must be at least 25% visible
-    threshold: 0.25 
-});
+  } else {
+    audio.pause();
+    icon.classList.remove('fa-pause');
+    icon.classList.add('fa-play');
+    
+    if (kfAudioTimers[postId]) {
+      clearInterval(kfAudioTimers[postId]);
+      delete kfAudioTimers[postId];
+    }
+  }
+}
 
+function kfUpdateAudioProgress(postId) {
+  const audio = document.getElementById(`kf-audio-element-${postId}`);
+  const progress = document.getElementById(`kf-audio-progress-${postId}`);
+  const time = document.getElementById(`kf-audio-time-${postId}`);
+  
+  if (!audio || !audio.duration) return;
+  
+  const percent = (audio.currentTime / audio.duration) * 100;
+  if (progress) progress.style.width = `${percent}%`;
+  if (time) time.textContent = kfFormatTime(audio.currentTime);
+}
 
-// ------------------------------------------------------------------
-// Initialization
-// ------------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
-    // --- 1. Video and Audio Initialization ---
-    document.querySelectorAll('.instagram-video-container').forEach(container => {
-        const video = container.querySelector('.instagram-video');
-        const playIcon = container.querySelector('.play-pause-icon');
+function kfSeekAudio(event, postId) {
+  const audio = document.getElementById(`kf-audio-element-${postId}`);
+  const progressBar = event.currentTarget;
+  const rect = progressBar.getBoundingClientRect();
+  const percent = (event.clientX - rect.left) / rect.width;
+  
+  if (audio && audio.duration) {
+    audio.currentTime = percent * audio.duration;
+    kfUpdateAudioProgress(postId);
+  }
+}
 
-        // Add the container to the Intersection Observer
-        mediaObserver.observe(container);
+function kfSeekAudioBy(postId, seconds) {
+  const audio = document.getElementById(`kf-audio-element-${postId}`);
+  if (audio) {
+    audio.currentTime = Math.max(0, Math.min(audio.currentTime + seconds, audio.duration || Infinity));
+    kfUpdateAudioProgress(postId);
+  }
+}
 
-        // Initial setup: Handle Autoplay
-        if (video.hasAttribute('autoplay')) {
-            video.play().then(() => {
-                currentlyPlayingMedia = video;
-                container.classList.remove('paused');
-                playIcon.style.opacity = '0';
-            }).catch(() => {
-                video.pause();
-                container.classList.add('paused');
-                playIcon.style.opacity = '1';
-            });
-        } else {
-            container.classList.add('paused');
-            playIcon.style.opacity = '1';
-        }
+// ===== CAROUSEL CONTROLS =====
+function kfSlideCarousel(postId, direction) {
+  const carousel = document.getElementById(`kf-carousel-${postId}`);
+  const track = document.getElementById(`kf-track-${postId}`);
+  const indicators = carousel?.querySelectorAll('.kf-indicator');
+  
+  if (!carousel || !track) return;
+  
+  let current = parseInt(carousel.dataset.slide || 0);
+  const total = parseInt(carousel.dataset.total || 1);
+  
+  if (total <= 1) return;
+  
+  current = (current + direction + total) % total;
+  
+  track.style.transform = `translateX(-${current * 100}%)`;
+  carousel.dataset.slide = current;
+  
+  indicators?.forEach((indicator, index) => {
+    indicator.classList.toggle('active', index === current);
+  });
+}
 
-        // Event listeners to sync UI state and global tracker
-        video.addEventListener('pause', () => {
-            container.classList.add('paused');
-            playIcon.style.opacity = '1';
-            if(currentlyPlayingMedia === video) currentlyPlayingMedia = null;
+// ===== INTERSECTION OBSERVER =====
+let kfMediaObserver = null;
+
+function kfInitMediaObserver() {
+    kfMediaObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) {
+                const container = entry.target;
+                const video = container.querySelector('.kf-video');
+                const audio = container.querySelector('.kf-audio-hidden');
+                
+                // Pause video if playing
+                if (video && !video.paused) {
+                    video.pause();
+                    container.classList.add('paused');
+                    const playIcon = container.querySelector('.kf-play-pause-icon');
+                    if (playIcon) playIcon.style.opacity = '1';
+                }
+                
+                // Pause audio if playing
+                if (audio && !audio.paused) {
+                    audio.pause();
+                    const postId = audio.id.replace('kf-audio-element-', '');
+                    const icon = document.getElementById(`kf-audio-icon-${postId}`);
+                    if (icon) {
+                        icon.classList.remove('fa-pause');
+                        icon.classList.add('fa-play');
+                    }
+                    
+                    // Stop audio timer
+                    if (kfAudioTimers[postId]) {
+                        clearInterval(kfAudioTimers[postId]);
+                        delete kfAudioTimers[postId];
+                    }
+                }
+            }
         });
+    }, {
+        threshold: 0.25
+    });
+}
+
+// ===== PROFILE PANEL =====
+function kfOpenProfilePanel(username) {
+  if (window.innerWidth <= 768) return;
+  
+  fetch(`/popup/${username}/`)
+    .then(res => res.text())
+    .then(html => {
+      document.getElementById('kf-profile-content').innerHTML = html;
+      document.getElementById('kf-profile-panel').classList.add('open');
+    });
+}
+
+function kfClosePanel(panelId) {
+  document.getElementById(panelId)?.classList.remove('open');
+}
+
+// ===== INITIALIZATION =====
+function kfInit() {
+    // Initialize media observer
+    kfInitMediaObserver();
+    
+    // --- Video Setup ---
+    document.querySelectorAll('.kf-video-container').forEach(container => {
+        const video = container.querySelector('.kf-video');
+        if (!video) return;
+        
+        // Add to Intersection Observer
+        if (kfMediaObserver) kfMediaObserver.observe(container);
+        
+        // Initial state - show play icon (paused by default)
+        container.classList.add('paused');
+        
+        // Event listeners
         video.addEventListener('play', () => {
             container.classList.remove('paused');
-            playIcon.style.opacity = '0';
+            const playIcon = container.querySelector('.kf-play-pause-icon');
+            if (playIcon) playIcon.style.opacity = '0';
+            kfCurrentlyPlayingMedia = video;
         });
+        
+        video.addEventListener('pause', () => {
+            container.classList.add('paused');
+            const playIcon = container.querySelector('.kf-play-pause-icon');
+            if (playIcon) playIcon.style.opacity = '1';
+            if (kfCurrentlyPlayingMedia === video) kfCurrentlyPlayingMedia = null;
+        });
+        
         video.addEventListener('ended', () => {
             container.classList.add('paused');
-            playIcon.style.opacity = '1';
-            if(currentlyPlayingMedia === video) currentlyPlayingMedia = null;
+            const playIcon = container.querySelector('.kf-play-pause-icon');
+            if (playIcon) playIcon.style.opacity = '1';
+            if (kfCurrentlyPlayingMedia === video) kfCurrentlyPlayingMedia = null;
         });
     });
     
-    document.querySelectorAll('.audio-post-container').forEach(container => {
-        const audio = container.querySelector('.audio-hidden');
-        const postId = audio.id.split('-')[1]; 
-        const icon = document.getElementById('audio-icon-' + postId);
-        const wave = document.getElementById('audio-wave-' + postId);
-
-        // Add the container to the Intersection Observer
-        mediaObserver.observe(container);
+    // --- Audio Setup ---
+    document.querySelectorAll('.kf-audio-player').forEach(container => {
+        const audio = container.querySelector('.kf-audio-hidden');
+        if (!audio) return;
         
-        // Sync icon and wave state with audio state and global tracker
+        const postId = audio.id.replace('kf-audio-element-', '');
+        
+        // Add to Intersection Observer
+        if (kfMediaObserver) kfMediaObserver.observe(container);
+        
+        // Audio metadata
+        audio.addEventListener('loadedmetadata', () => {
+            kfUpdateAudioProgress(postId);
+        });
+        
         audio.addEventListener('play', () => {
-            icon.classList.remove('fa-play');
-            icon.classList.add('fa-pause');
-            icon.style.opacity = '0';
-            if (wave) {
-                wave.classList.add('playing');
-                wave.querySelectorAll('.bar').forEach(bar => {
-                    bar.style.animation = 'wave-movement 0.8s ease-in-out infinite';
-                });
+            const icon = document.getElementById(`kf-audio-icon-${postId}`);
+            if (icon) {
+                icon.classList.remove('fa-play');
+                icon.classList.add('fa-pause');
             }
+            kfCurrentlyPlayingMedia = audio;
         });
+        
         audio.addEventListener('pause', () => {
-            icon.classList.remove('fa-pause');
-            icon.classList.add('fa-play');
-            icon.style.opacity = '1';
-            if (wave) {
-                wave.classList.remove('playing');
-                wave.querySelectorAll('.bar').forEach(bar => {
-                    bar.style.animation = 'none';
-                });
+            const icon = document.getElementById(`kf-audio-icon-${postId}`);
+            if (icon) {
+                icon.classList.remove('fa-pause');
+                icon.classList.add('fa-play');
             }
-            if(currentlyPlayingMedia === audio) currentlyPlayingMedia = null;
+            
+            if (kfAudioTimers[postId]) {
+                clearInterval(kfAudioTimers[postId]);
+                delete kfAudioTimers[postId];
+            }
+            
+            if (kfCurrentlyPlayingMedia === audio) kfCurrentlyPlayingMedia = null;
         });
+        
         audio.addEventListener('ended', () => {
-            icon.classList.remove('fa-pause');
-            icon.classList.add('fa-play');
-            icon.style.opacity = '1';
-            if (wave) {
-                wave.classList.remove('playing');
-                wave.querySelectorAll('.bar').forEach(bar => {
-                    bar.style.animation = 'none';
-                });
+            const icon = document.getElementById(`kf-audio-icon-${postId}`);
+            if (icon) {
+                icon.classList.remove('fa-pause');
+                icon.classList.add('fa-play');
             }
-            if(currentlyPlayingMedia === audio) currentlyPlayingMedia = null;
+            
+            if (kfAudioTimers[postId]) {
+                clearInterval(kfAudioTimers[postId]);
+                delete kfAudioTimers[postId];
+            }
+            
+            if (kfCurrentlyPlayingMedia === audio) kfCurrentlyPlayingMedia = null;
+            
+            // Reset progress
+            kfUpdateAudioProgress(postId);
         });
-        // Ensure initial icon is 'play' and wave is hidden
-        icon.classList.add('fa-play');
-        icon.style.opacity = '1';
-        if (wave) {
-            wave.classList.remove('playing');
-            wave.querySelectorAll('.bar').forEach(bar => {
-                bar.style.animation = 'none';
-            });
+    });
+    
+    // --- Profile Links ---
+    document.querySelectorAll('.kf-username').forEach(link => {
+        link.addEventListener('click', (e) => {
+            if (window.innerWidth > 768) {
+                e.preventDefault();
+                const username = link.dataset.user;
+                kfOpenProfilePanel(username);
+            }
+        });
+    });
+    
+    // --- Resize Handler ---
+    window.addEventListener('resize', () => {
+        if (window.innerWidth <= 768) {
+            kfClosePanel('kf-profile-panel');
+            kfClosePanel('kf-comments-panel');
         }
     });
-
-    // --- 2. Other Initializations ---
-    setupLinks();
-    initCarousels();
-    setupLink(); 
-});
-
-/** pop for profile modal code */
-
-function setupLinks(){
-    const isMobile = window.matchMedia("(max-width: 668px)").matches;
-  const userLink = document.querySelectorAll(".username-link");
-  userLink.forEach(link =>{
-      link.addEventListener('click', function(e){
-          if(isMobile){
-              return;
-          }
-
-          e.preventDefault();
-
-          const userId = this.getAttribute("data-id");
-          fetch(`/popup/${userId}/`)
-          .then(res =>res.text())
-          .then(html =>{
-              document.getElementById("panelContent").innerHTML = html;
-
-              document.getElementById("sidePanel").style.right=0;
-          });
-      });
-  });
-}
-  
-  window.matchMedia("(max-width: 668px)").addEventListener('change', setupLinks());
-  function closePanel(){
-      document.getElementById('sidePanel').style.right='-450px';
-  }
-   /* Auto close popup when changing to Mobile */
-   window.addEventListener('resize', function(){
-       setupLinks();
-      const isMobile = window.matchMedia("(max-width: 668px)").matches;
-      if(isMobile){
-          const panel = document.getElementById('sidePanel');
-          panel.style.right = '-450px';
-          panel.innerHTML='';
-      }
-   })
-
-   /* pop for comment */
-
-   function setupLink(){
-    const isMobile = window.matchMedia("(max-width: 668px)").matches;
-  const commentLink = document.querySelectorAll(".action-item");
-  commentLink.forEach(link =>{
-      link.addEventListener('click', function(e){
-          if(isMobile){
-              return;
-          }
-
-          e.preventDefault();
-
-          const commentId = this.getAttribute("data-id");
-          fetch(`/commentpopup/${commentId}/`)
-          .then(res =>res.text())
-          .then(html =>{
-              document.getElementById("panelContent2").innerHTML = html;
-
-              document.getElementById("sidePanel2").style.left=0;
-          });
-      });
-  });
-}
-  
-   /* Auto close popup when changing to Mobile */
-   window.addEventListener('resize', function(){
-       setupLink();
-      const isMobile = window.matchMedia("(max-width: 668px)").matches;
-      if(isMobile){
-          const panel2 = document.getElementById('sidePanel2');
-          panel2.style.left = '-400px';
-          panel2.innerHTML='';
-      }
-   })
-function closePanel2(){
-      document.getElementById('sidePanel2').style.left='-400px';
-  }
-  
-/**
- * Handles sliding of a post's image carousel.
- * @param {string} postId - The unique ID of the post.
- * @param {number} direction - -1 for previous, 1 for next.
- */
-function slidePost(postId, direction) {
-  const carousel = document.getElementById(`carousel-${postId}`);
-  const track = document.getElementById(`track-${postId}`);
-  const indicatorsContainer = document.getElementById(`indicators-${postId}`);
-  const prevButton = document.getElementById(`prev-${postId}`);
-  const nextButton = document.getElementById(`next-${postId}`);
-
-  if (!carousel || !track) return;
-
-  let currentSlide = parseInt(carousel.getAttribute('data-current-slide') || '0');
-  const totalSlides = parseInt(carousel.getAttribute('data-total-slides') || '1');
-
-  if (totalSlides <= 1) return;
-
-  let newSlide = currentSlide;
-
-  if (direction !== 0) { // Only update slide index if direction is provided
-      newSlide = currentSlide + direction;
-  }
-
-  // Clamp the new slide index
-  if (newSlide < 0) {
-    newSlide = 0;
-  } else if (newSlide >= totalSlides) {
-    newSlide = totalSlides - 1;
-  }
-
-  // 1. Update the slider position using CSS transform
-  const slideWidth = carousel.clientWidth;
-  const offset = newSlide * slideWidth;
-  track.style.transform = `translateX(-${offset}px)`;
-
-  // 2. Update the state attribute
-  carousel.setAttribute('data-current-slide', newSlide);
-
-  // 3. Update indicators
-  if (indicatorsContainer) {
-    indicatorsContainer.querySelectorAll('.indicator-dot').forEach((dot, index) => {
-      dot.classList.toggle('active', index === newSlide);
+    
+    // --- Cleanup ---
+    window.addEventListener('beforeunload', () => {
+        Object.values(kfAudioTimers).forEach(timer => clearInterval(timer));
     });
-  }
-
-  // 4. Update navigation buttons visibility
-  if (prevButton) {
-    prevButton.classList.toggle('hidden', newSlide === 0);
-  }
-  if (nextButton) {
-    nextButton.classList.toggle('hidden', newSlide === totalSlides - 1);
-  }
 }
 
-/**
- * Initializes all carousels on the page.
- */
-function initCarousels() {
-  // Select all carousels that have more than one slide (checked by total-slides attribute)
-  document.querySelectorAll('.post-image-carousel[data-total-slides]:not([data-total-slides="1"])').forEach(carousel => {
-      const postId = carousel.id.split('-')[1];
-      // Call slidePost with 0 direction to initialize current position and button visibility
-      slidePost(postId, 0);
-  });
+// ===== START WHEN READY =====
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', kfInit);
+} else {
+    kfInit();
 }
 
-// Ensure carousels are initialized and responsive on load and resize
-window.addEventListener('resize', initCarousels);
-// Re-run setupLinks and setupLink on window load for initial attachment
-window.addEventListener('load', () => {
-  initCarousels();
-  setupLinks();
-  setupLink();
-});
-
-// Fallback for immediate execution if the document is already ready
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    initCarousels();
-    setupLinks();
-    setupLink();
-}
+// ===== MAKE FUNCTIONS GLOBALLY AVAILABLE =====
+window.kfTogglePlayPause = kfTogglePlayPause;
+window.kfSeekVideo = kfSeekVideo;
+window.kfToggleAudio = kfToggleAudio;
+window.kfSeekAudio = kfSeekAudio;
+window.kfSeekAudioBy = kfSeekAudioBy;
+window.kfClosePanel = (panelId) => kfClosePanel(panelId || 'kf-profile-panel');
+window.kfClosePanel2 = () => kfClosePanel('kf-comments-panel');
+window.kfSlideCarousel = kfSlideCarousel;

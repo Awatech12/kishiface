@@ -6,483 +6,696 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preload" href="{% static 'images/logo.jpg' %}" as="image">
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
-  <title>KishiFace - Home</title>
-  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
+  <title>Kishiface - Home</title>
+  
+  <!-- Deferred scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-  <link rel="stylesheet" href="{% static 'css/home.css' %}">
-  <script src="{% static 'js/home.js' %}"></script>
+  
+  <!-- Inline critical CSS -->
   <style>
-    
-    /* Section Title Row */
-    .section {
-        margin-bottom: 25px;
-    }
-
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        padding: 0 5px;
-        margin-bottom: 12px;
-    }
-
-    .section-title {
-        font-size: 17px;
-        font-weight: 600;
-        color: #222;
-    }
-
-    .see-all {
-        font-size: 14px;
-        color: #0095f6;
-        cursor: pointer;
-    }
-
-    /* Marketplace  */
-    .marketplace-list {
-        display: flex;
-        gap: 12px;
-        overflow-x: auto;
-        scrollbar-width: none;
-    }
-
-    .marketplace-list::-webkit-scrollbar {
-        display: none;
-    }
-
-    .marketplace-item {
-        min-width: 150px;
-    }
-
-    .marketplace-item img {
-        width: 100%;
-        height: 160px;
-        object-fit: cover;
-        border-radius: 12px;
-    }
-
-    .item-title {
-        font-size: 14px;
-        margin-top: 6px;
-        color: #222;
-    }
-
-    .item-price {
-        font-size: 13px;
-        color: #444;
-        margin-top: 2px;
-    }
-
-    /* ---------------- AUDIO DESIGN ---------------- */
-    .audio-post-container {
-        /* Main container for the cover and controls */
-        display: flex;
-        flex-direction: column;
-        border: 1px solid var(--divider-color);
-        border-radius: 8px;
-        overflow: hidden; 
-        margin-top: 10px;
+    /* Minimal critical CSS */
+    :root {
+      --kf-bg: #fafafa;
+      --kf-white: #ffffff;
+      --kf-text: #262626;
+      --kf-text-light: #8e8e8e;
+      --kf-primary: #0095f6;
+      --kf-border: #dbdbdb;
     }
     
-    .audio-cover-area {
-        /* Styles for the background poster image - now clickable */
-        width: 100%;
-        height: 250px; 
-        background-size: cover;
-        background-position: center;
-        background-color: var(--text-dark); /* Fallback dark color */
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4);
-        cursor: pointer;
-        position: relative;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
     }
     
-    /* Play/Pause icon over the audio cover */
-    .audio-play-icon {
-        font-size: 3em;
-        color: white;
-        text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
-        z-index: 5;
-        transition: opacity 0.3s ease;
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kf-bg);
+      color: var(--kf-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior-y: contain;
+    }
+    
+    .kf-container {
+      max-width: 100%;
+      width: 100%;
+    }
+    
+    .kf-feed {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      padding-top: 44px; /* Space for fixed header */
+      padding-bottom: 49px; /* Space for fixed footer */
+    }
+    
+    /* Post */
+    .kf-post {
+      background: var(--kf-white);
+      margin-bottom: 16px;
+    }
+    
+    .kf-post-header {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+    }
+    
+    .kf-profile-pic {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-right: 12px;
+    }
+    
+    .kf-username {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--kf-text);
+      text-decoration: none;
+    }
+    
+    .kf-post-time {
+      font-size: 12px;
+      color: var(--kf-text-light);
+      margin-top: 2px;
+    }
+    
+    .kf-post-actions {
+      margin-left: auto;
+    }
+    
+    .kf-post-content {
+      padding: 0 16px 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    /* Media containers */
+    .kf-media-container {
+      width: 100%;
+      position: relative;
+      background: #000;
+      overflow: hidden;
+    }
+    
+    /* Image carousel */
+    .kf-image-carousel {
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .kf-image-track {
+      display: flex;
+      transition: transform 0.3s ease;
+    }
+    
+    .kf-image-slide {
+      width: 100%;
+      flex-shrink: 0;
+      display: block;
+      background: #fafafa;
+    }
+    
+    .kf-image-slide img {
+      width: 100%;
+      height: auto;
+      display: block;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .kf-image-slide img.loaded {
+      opacity: 1;
+    }
+    
+    /* ===== EXACT VIDEO PLAYER FROM OLD CODE ===== */
+    .kf-video-container {
+      position: relative; 
+      width: 100%;
+      overflow: hidden;
+      margin-top: 10px;
+      background-color: black;
+      min-height: 200px; 
+      display: flex; 
+      justify-content: center;
+      align-items: center;
     }
 
-    /* Hide the native audio element */
-    .audio-hidden {
-        display: none; 
-    }
-    /* ---------------- END AUDIO DESIGN ---------------- */
-
-    /* Existing styles from the original file (kept for compatibility) */
-    .cover{
-        width: 100%;
-        height: 250px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-    .cover i{
-        font-size: 50px;
-        color: #bdbdbd;
-        margin-right: 40px;
-    }
-    .audio{
-        width: 100%;
-        outline: none;
-    }
-
-    /* ----------------  Video Styles ---------------- */
-    .instagram-video-container {
-        position: relative; 
-        width: 100%;
-        overflow: hidden;
-        margin-top: 10px;
-        background-color: black;
-        min-height: 200px; 
-        display: flex; 
-        justify-content: center;
-        align-items: center;
-    }
-
-    .instagram-video {
-        max-width: 100%; 
-        height: auto; 
-        object-fit: contain; 
-        display: block; 
+    .kf-video {
+      max-width: 100%; 
+      height: auto; 
+      object-fit: contain; 
+      display: block; 
     }
 
     /* Styling for the Play/Pause Icon */
-    .play-pause-icon {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 4em; 
-        color: white;
-        background: rgba(0, 0, 0, 0.4);
-        border-radius: 50%;
-        padding: 15px 20px 15px 23px;
-        pointer-events: none;
-        opacity: 0; 
-        transition: opacity 0.3s ease;
+    .kf-play-pause-icon {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 4em; 
+      color: white;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 50%;
+      padding: 15px 20px 15px 23px;
+      pointer-events: none;
+      opacity: 0; 
+      transition: opacity 0.3s ease;
     }
 
     /* State Class: Show Play icon when video is paused */
-    .instagram-video-container.paused .play-pause-icon {
-        opacity: 1;
+    .kf-video-container.paused .kf-play-pause-icon {
+      opacity: 1;
     }
-    /* ---------------- End Video Styles ---------------- */
     
-    /* ---------------- NEW OVERLAY SEEK ICONS ---------------- */
-    .seek-overlay-btn {
-        position: absolute;
-        bottom: 10px; 
-        background: rgba(0, 0, 0, 0.4);
-        color: white;
-        border: none;
-        border-radius: 5px;
-        padding: 8px 10px;
-        font-size: 14px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        z-index: 10; 
-        opacity: 0; 
-        transition: opacity 0.3s ease;
+    /* OVERLAY SEEK ICONS - EXACT FROM OLD CODE */
+    .kf-seek-overlay-btn {
+      position: absolute;
+      bottom: 10px; 
+      background: rgba(0, 0, 0, 0.4);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 8px 10px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      z-index: 10; 
+      opacity: 0; 
+      transition: opacity 0.3s ease;
     }
 
-    .seek-overlay-btn:hover {
-        background: rgba(0, 0, 0, 0.6);
+    .kf-seek-overlay-btn:hover {
+      background: rgba(0, 0, 0, 0.6);
     }
 
-    .backward-btn {
-        left: 10px;
+    .kf-backward-btn {
+      left: 10px;
     }
 
-    .forward-btn {
-        right: 10px; /* Adjusted position */
+    .kf-forward-btn {
+      right: 10px;
     }
 
     /* State Class: Show controls when paused or hovered */
-    .instagram-video-container.paused .seek-overlay-btn,
-    .instagram-video-container:hover .seek-overlay-btn {
-        opacity: 1;
+    .kf-video-container.paused .kf-seek-overlay-btn,
+    .kf-video-container:hover .kf-seek-overlay-btn {
+      opacity: 1;
     }
-    /* ---------------- END NEW SEEK ICONS ---------------- */
+    /* ===== END VIDEO PLAYER ===== */
     
-     /* Pop up design */
-
-     #sidePanel{
-        position: fixed;
-        top: 0;
-        right: -450px;
-        width: 450px;
-        height: 100%;
-        background: white;
-        box-shadow: -2px 0px 6px rgba(0, 0, 0, 0.2);
-        border-left: 1px solid #ccc;
-        transition:  right 0.3s ease;
-        z-index: 9999;
-        overflow: auto;
-     }
-
-      #sidePanel2{
-        position: fixed;
-        top: 0;
-        left: -400px;
-        width: 400px;
-        height: 100%;
-        background: white;
-        box-shadow: -2px 0px 6px rgba(0, 0, 0, 0.2);
-        border-left: 1px solid #ccc;
-        transition:  left 0.4s ease;
-        z-index: 9999;
-        overflow: auto;
-     }
-    
-    /* Wave animation keyframes - ADDED TO INLINE STYLES */
-    @keyframes wave-movement {
-        0%, 100% { transform: scaleY(0.7); }
-        50% { transform: scaleY(1.3); }
+    /* Audio player */
+    .kf-audio-player {
+      width: 100%;
+      background: var(--kf-white);
     }
     
+    .kf-audio-cover {
+      width: 100%;
+      height: 400px;
+      background-size: cover;
+      background-position: center;
+      position: relative;
+    }
+    
+    .kf-audio-play-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 70px;
+      height: 70px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 50%;
+      border: none;
+      color: white;
+      font-size: 28px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .kf-audio-controls {
+      padding: 16px;
+    }
+    
+    .kf-audio-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    
+    .kf-audio-title {
+      font-weight: 600;
+      font-size: 15px;
+    }
+    
+    .kf-audio-time {
+      font-size: 13px;
+      color: var(--kf-text-light);
+      font-family: monospace;
+    }
+    
+    .kf-audio-progress {
+      width: 100%;
+      height: 2px;
+      background: var(--kf-border);
+      margin: 16px 0;
+      position: relative;
+      cursor: pointer;
+    }
+    
+    .kf-audio-progress-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      background: var(--kf-primary);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+    
+    .kf-audio-seek-buttons {
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .kf-seek-btn {
+      padding: 8px 16px;
+      background: none;
+      border: 1px solid var(--kf-border);
+      border-radius: 4px;
+      color: var(--kf-text);
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    /* Marketplace */
+    .kf-marketplace {
+      padding: 16px 0;
+      background: var(--kf-white);
+      margin-bottom: 16px;
+    }
+    
+    .kf-marketplace-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 16px 12px;
+    }
+    
+    .kf-marketplace-title {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .kf-see-all {
+      color: var(--kf-primary);
+      font-size: 14px;
+      text-decoration: none;
+    }
+    
+    .kf-marketplace-list {
+      display: flex;
+      overflow-x: auto;
+      gap: 12px;
+      padding: 0 16px;
+      scrollbar-width: none;
+    }
+    
+    .kf-marketplace-list::-webkit-scrollbar {
+      display: none;
+    }
+    
+    .kf-marketplace-item {
+      flex: 0 0 120px;
+    }
+    
+    .kf-marketplace-item img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #fafafa;
+    }
+    
+    .kf-product-name {
+      font-size: 13px;
+      margin-top: 6px;
+      font-weight: 500;
+    }
+    
+    .kf-product-price {
+      font-size: 13px;
+      color: var(--kf-text-light);
+      margin-top: 2px;
+    }
+    
+    /* Side panels */
+    .kf-side-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--kf-white);
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      z-index: 1000;
+    }
+    
+    .kf-side-panel.open {
+      transform: translateX(0);
+    }
+    
+    /* Utility */
+    .hidden {
+      display: none;
+    }
+    
+    /* Carousel controls */
+    .kf-carousel-controls {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 12px;
+      pointer-events: none;
+    }
+    
+    .kf-carousel-prev,
+    .kf-carousel-next {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.5);
+      border: none;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      pointer-events: all;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+    }
+    
+    .kf-carousel-indicators {
+      position: absolute;
+      bottom: 16px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .kf-indicator {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.5);
+      transition: background 0.2s;
+    }
+    
+    .kf-indicator.active {
+      background: white;
+    }
+    
+    /* Hide carousel controls on single image */
+    .kf-image-carousel[data-total="1"] .kf-carousel-controls,
+    .kf-image-carousel[data-total="1"] .kf-carousel-indicators {
+      display: none;
+    }
+    
+    /* Loading animation for images */
+    @keyframes kfFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .kf-image-slide img.loaded {
+      animation: kfFadeIn 0.3s ease;
+    }
+    
+    /* Responsive adjustments */
+    @media (min-width: 768px) {
+      .kf-feed {
+        padding-top: 60px;
+        padding-bottom: 0;
+      }
+    }
   </style>
+  
+  <!-- Deferred JavaScript -->
+  <script src="{% static 'js/home.js' %}" defer></script>
 </head>
 <body>
 
-{% include 'header.html' %}
+  {% include 'header.html' %}
 
-<main class="container">
-    
-    <div class="left-sidebar desktop-only">
-        <div class="card">
-            <div class="sidebar-content">
-                <h4 class="sidebar-title">My Account</h4>
-        
-                <a href="{% url 'profile' user.username %}" class="sidebar-link" data-id="{{user.username}}">
-                  <img src="{{user.profile.picture.url}}" height="30" width="30" style="border-radius: 50%;" alt="">  
-                  {{user.profile.full_name}}
-                </a>
-                <a href="" class="sidebar-link">
-                    <i class="fa-solid fa-cog"></i> Settings
-                </a>
-                <a href="{% url 'channel_create' %}" class="sidebar-link">
-                    <i class="fa-solid fa-cog"></i> Channels
-                </a>
-                 <a href="{% url 'market' %}" class="sidebar-link">
-                    <i class="fa-solid fa-cog"></i> Market Place
-                </a>
-                <a href="{% url 'post' %}" class="sidebar-link">
-                <i><svg fill="none" stroke="currentColor" height="20" width="20" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" stroke-width="2"/>
-                  <line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/>
-                  <line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/>
-                </svg></i> Post
-              </a>
-                <hr class="sidebar-divider">
-                <a href="{% url 'logout' %}" class="sidebar-link logout">
-                    <i class="fa-solid fa-right-from-bracket"></i> Logout
-                </a>
-            </div>
-           
-        </div>
-         Hello my people of Kishiface. We have to find something to this place
-    </div>
-
-    <div id="sidePanel">
-        <div id="panelContent"></div>
-    </div>
-<div id="sidePanel2">
-        <div id="panelContent2"></div>
-    </div>
-
-    <div class="main-feed">
-
-        <div class="member-suggest-card mobile-only" id="mobile-member-section">
-            <div class="section">
-        <div class="section-header">
-            <span class="section-title">Marketplace</span>
-            <span class="see-all">
-                <a href="{% url 'market' %}">See all</a>
-            </span>
-        </div>
-        <div class="marketplace-list">
-            {% for product in products %}
-                <div class="marketplace-item">
-                {% with first_image=product.images.first %}
-                    {% if first_image %}
-                    <img src="{{first_image.product_image.url}}" />
-                    {% endif %}
-                {% endwith %}
-                <div class="item-title">{{product.product_name}}</div>
-                <div class="item-price">₦{{product.product_price}}</div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-
-        </div>
-        {% for post in posts%}
-        <article class="card">
-            <div class="post-header">
-                <div class="post-user">
-                    <img src="{{post.author.profile.picture.url}}" onerror="this.onerror=null; this.src='https://placehold.co/40x40/cccccc/ffffff?text=P';" alt="{{post.author.username}}" class="profile-pic">
-                    <div class="user-details">
-                        <a href="{% url 'profile' post.author.username %}" class="username-link"  data-id="{{post.author.username}}">{{post.author.first_name}} {{post.author.last_name}} 
-                          {% if post.author.profile.is_verify and post.author.first_name %} <img src="{% static 'images/verify1.jpg' %}" height="20" width="20" alt="">{% endif %}
-                        </a>
-                        <div class="post-meta">
-                            @{{post.author.username}}· {{post.created_at|insta_timesince}}
-                        </div>
-                    </div>
-                </div>
-                 
-                <div class="action-buttons">
-                    {% if request.user == post.author %}
-                    <a href="{% url 'editpost' post.post_id %}" 
-                       title="Edit Post"
-                       class="post-icon-button">
-                        <i class="fa-solid fa-pen-to-square"></i>
-                    </a>
-                    <a href="" 
-                       title="Delete Post"
-                       class="post-icon-button delete-btn">
-                        <i class="fa-solid fa-trash"></i>
-                    </a>
-                    {% else %}
-                    <i class="fa-solid fa-ellipsis post-ellipsis-icon" 
-                       style="cursor:pointer;"></i>
-                    {% endif %}
-                </div>
-                </div>
-            <b class="post-title" style="color: var(--text-dark);">{{post.content|urlize|linebreaksbr}}</b>
-            
-            {% if post.file %}
-              <div class="audio-post-container" id="audio-container-{{ post.post_id }}">
-                  <div class="audio-cover-area" 
-                       style="background-image: url('{% if post.images.first %}{{post.images.first.image.url}}{% else %}{{post.author.profile.picture.url}}{% endif %}');"
-                       onclick="toggleAudioPlay('audio-{{ post.post_id }}')">
-                        <i class="fa-solid fa-play audio-play-icon" id="audio-icon-{{ post.post_id }}"></i>
-                        <div class="audio-wave-visualizer" id="audio-wave-{{ post.post_id }}">
-                            <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
-                        </div>
-                  </div>
-                  <audio id="audio-{{ post.post_id }}" class="audio-hidden">
-                    <source src="{{ post.file.url }}" type="audio/webm">
-                  </audio>
-              </div>
+  <main class="kf-container">
+    <!-- Marketplace Section -->
+    <div class="kf-marketplace mobile-only">
+      <div class="kf-marketplace-header">
+        <h2 class="kf-marketplace-title">Marketplace</h2>
+        <a href="{% url 'market' %}" class="kf-see-all">See all</a>
+      </div>
+      <div class="kf-marketplace-list">
+        {% for product in products %}
+        <div class="kf-marketplace-item">
+          {% with first_image=product.images.first %}
+            {% if first_image %}
+              <img 
+                src="{% static 'images/placeholder.jpg' %}" 
+                data-src="{{first_image.product_image.url}}" 
+                class="kf-lazy"
+                alt="{{product.product_name}}"
+                loading="lazy"
+              />
+            {% else %}
+              <img src="{% static 'images/placeholder.jpg' %}" alt="{{product.product_name}}">
             {% endif %}
-
-              {% if post.video_file %}
-              <div class="instagram-video-container" id="container-{{ post.post_id }}">
-                  <video class="instagram-video" 
-                         id="post-video-{{ post.post_id }}" 
-                         preload="metadata"
-                         playsinline
-                         onclick="togglePlayPause('post-video-{{ post.post_id }}', event)"> 
-                      
-                      <source src="{{ post.video_file.url }}#t=0.5" type="video/mp4">
-                      Your browser does not support HTML5 video.
-                  </video>
-                  
-                  <i class="fa-solid fa-play play-pause-icon" id="play-icon-{{ post.post_id }}"></i>
-                  
-                  <button class="seek-overlay-btn backward-btn" 
-                          onclick="event.stopPropagation(); seekVideo('post-video-{{ post.post_id }}', -10)">
-                      <i class="fa-solid fa-backward-step"></i> 10s
-                  </button>
-                  <button class="seek-overlay-btn forward-btn" 
-                          onclick="event.stopPropagation(); seekVideo('post-video-{{ post.post_id }}', 10)">
-                      10s <i class="fa-solid fa-forward-step"></i>
-                  </button>
-                  </div>
-              
-              {% endif %}
-              
-            {% if post.images.all %}
-            <div class="post-image-carousel" id="carousel-{{ post.post_id }}" data-current-slide="0" data-total-slides="{{ post.images.all|length }}">
-                <div class="slider-track" id="track-{{ post.post_id }}">
-                    {% for p in post.images.all %}
-                    <img src="{{p.image.url}}" onerror="this.onerror=null; this.src='https://placehold.co/600x400/999999/ffffff?text=KishiFace+Post';" alt="Post Image {{forloop.counter}}" class="post-image-slide">
-                    {% empty %}
-                    <img src="https://placehold.co/600x400/999999/ffffff?text=KishiFace" alt="No Post Image" class="post-image-slide">
-                    {% endfor %}
-                </div>
-
-                {% if post.images.all|length > 1 %}
-                <div class="slide-nav">
-                    <button id="prev-{{ post.post_id }}" onclick="slidePost('{{ post.post_id }}', -1)" class="hidden"><i class="fa-solid fa-chevron-left"></i></button>
-                    <button id="next-{{ post.post_id }}" onclick="slidePost('{{ post.post_id }}', 1)"><i class="fa-solid fa-chevron-right"></i></button>
-                </div>
-
-                <div class="slider-indicators" id="indicators-{{ post.post_id }}">
-                    {% for p in post.images.all %}
-                    <div class="indicator-dot {% if forloop.first %}active{% endif %}"></div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            {% include 'snippet/post_like.html' %}
-        </article>
-        {% empty %}
-        <div class="card text-center" style="padding:40px; margin-top: 20px;">
-            <h3>No Posts Yet</h3>
-            <p style="color: var(--text-muted);">Start by sharing your first moment!</p>
+          {% endwith %}
+          <div class="kf-product-name">{{product.product_name}}</div>
+          <div class="kf-product-price">₦{{product.product_price}}</div>
         </div>
         {% endfor %}
-
-     
+      </div>
     </div>
-    
-    <div class="right-sidebar desktop-only">
-        <div class="card">
-            <div class="sidebar-content scrollable-content">
-                <h4 class="desktop-member-title">Faces You May Know</h4>
-                <div class="desktop-member-list">
-                    {% for member in members %}
-                        {% if user != member  %}
-                            <div class="desktop-member-item">
-                                <a href="{% url 'profile' member.username %}" class="username-link"  data-id="{{member.username}}">
-                                    <div class="member-pic-wrapper" style="background: var(--border-color); padding: 0;">
-                                        <img src="{{member.profile.picture.url}}" 
-                                             
-                                             alt="{{member.username}}" 
-                                            class="member-pic">
-                                    </div>
-                                    <div>
-                                        <span class="member-username block">{{member.first_name}} {{member.last_name}}</span>
-                                        <br><span class="member-title block">@{{member.username}}</span>
-                                    </div>
-                                </a>
-                                <a href="{% url 'follow' member.username %}">
-                                    {% if user.profile in member.profile.followers.all %}
-                                    <button type="submit" class="action-button btn-secondary">
-                                    Following
-                                    </button>
-                                    {% else %}
-                                    <button type="submit" class="action-button btn-secondary">
-                                    Follow
-                                    </button>
-                                    {% endif %}
-                                    </a>
-                              
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
+
+    <!-- Main Feed -->
+    <div class="kf-feed">
+      {% for post in posts %}
+      <article class="kf-post" data-post-id="{{ post.post_id }}">
+        <!-- Post Header -->
+        <div class="kf-post-header">
+          <img 
+            src="{% static 'images/profile-placeholder.jpg' %}" 
+            data-src="{{post.author.profile.picture.url}}" 
+            class="kf-profile-pic kf-lazy"
+            alt="{{post.author.username}}"
+            loading="lazy"
+          >
+          <div>
+            <a href="{% url 'profile' post.author.username %}" class="kf-username" data-user="{{post.author.username}}">
+              {{post.author.first_name}} {{post.author.last_name}}
+              {% if post.author.profile.is_verify and post.author.first_name %} 
+                <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+              {% endif %}
+            </a>
+            <div class="kf-post-time">
+              @{{post.author.username}} · {{post.created_at|insta_timesince}}
             </div>
+          </div>
+          <div class="kf-post-actions">
+            {% if request.user == post.author %}
+              <a href="{% url 'editpost' post.post_id %}" title="Edit">
+                <i class="fas fa-edit"></i>
+              </a>
+            {% else %}
+              <i class="fas fa-ellipsis-h"></i>
+            {% endif %}
+          </div>
         </div>
-    </div> </main>
 
-<footer class="mobile-only">
-    {% include 'footer.html' %}
-</footer>
+        <!-- Post Content -->
+        {% if post.content %}
+        <div class="kf-post-content">
+          {{post.content|urlize|linebreaksbr}}
+        </div>
+        {% endif %}
 
+        <!-- Audio Post -->
+        {% if post.file %}
+        <div class="kf-media-container">
+          <div class="kf-audio-player" id="kf-audio-{{ post.post_id }}">
+            <div class="kf-audio-cover" 
+                 style="background-image: url('{% if post.images.first %}{{post.images.first.image.url}}{% else %}{{post.author.profile.picture.url}}{% endif %}');">
+              <button class="kf-audio-play-btn" onclick="kfToggleAudio('{{ post.post_id }}')">
+                <i class="fas fa-play" id="kf-audio-icon-{{ post.post_id }}"></i>
+              </button>
+            </div>
+            <div class="kf-audio-controls">
+              <div class="kf-audio-info">
+                <span class="kf-audio-title">Audio Post</span>
+                <span class="kf-audio-time" id="kf-audio-time-{{ post.post_id }}">0:00</span>
+              </div>
+              <div class="kf-audio-progress" onclick="kfSeekAudio(event, '{{ post.post_id }}')">
+                <div class="kf-audio-progress-bar" id="kf-audio-progress-{{ post.post_id }}"></div>
+              </div>
+              <div class="kf-audio-seek-buttons">
+                <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ post.post_id }}', -10)">
+                  <i class="fas fa-backward-step"></i> 10s
+                </button>
+                <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ post.post_id }}', 10)">
+                  10s <i class="fas fa-forward-step"></i>
+                </button>
+              </div>
+            </div>
+            <audio id="kf-audio-element-{{ post.post_id }}" preload="metadata" class="kf-audio-hidden">
+              <source src="{{ post.file.url }}" type="audio/webm">
+            </audio>
+          </div>
+        </div>
+        {% endif %}
 
+        <!-- ===== VIDEO POST (CORRECTED) ===== -->
+        {% if post.video_file %}
+        <div class="kf-media-container">
+          <div class="kf-video-container" id="kf-container-{{ post.post_id }}">
+            <video class="kf-video" 
+                   id="kf-post-video-{{ post.post_id }}" 
+                   preload="metadata" 
+                   onclick="kfTogglePlayPause('kf-post-video-{{ post.post_id }}', event)">
+              <source src="{{ post.video_file.url }}#t=0.5" type="video/mp4">
+              Your browser does not support HTML5 video.
+            </video>
+            
+            <i class="fa-solid fa-play kf-play-pause-icon" id="kf-play-icon-{{ post.post_id }}"></i>
+            
+            <button class="kf-seek-overlay-btn kf-backward-btn" 
+                    onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ post.post_id }}', -10)">
+              <i class="fa-solid fa-backward-step"></i> 10s
+            </button>
+            <button class="kf-seek-overlay-btn kf-forward-btn" 
+                    onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ post.post_id }}', 10)">
+              10s <i class="fa-solid fa-forward-step"></i>
+            </button>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Image Carousel -->
+        {% if post.images.all %}
+        <div class="kf-media-container">
+          <div class="kf-image-carousel" id="kf-carousel-{{ post.post_id }}" data-slide="0" data-total="{{ post.images.all|length }}">
+            <div class="kf-image-track" id="kf-track-{{ post.post_id }}">
+              {% for image in post.images.all %}
+              <div class="kf-image-slide">
+                <img 
+                  src="{% static 'images/placeholder.jpg' %}" 
+                  data-src="{{ image.image.url }}" 
+                  alt="Post image {{ forloop.counter }}"
+                  class="kf-lazy"
+                  loading="lazy"
+                />
+              </div>
+              {% endfor %}
+            </div>
+            
+            {% if post.images.all|length > 1 %}
+            <div class="kf-carousel-controls">
+              <button class="kf-carousel-prev" onclick="kfSlideCarousel('{{ post.post_id }}', -1)">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+              <button class="kf-carousel-next" onclick="kfSlideCarousel('{{ post.post_id }}', 1)">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+            
+            <div class="kf-carousel-indicators">
+              {% for image in post.images.all %}
+              <span class="kf-indicator {% if forloop.first %}active{% endif %}"></span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Post Actions (Likes, Comments) -->
+        <div class="kf-post-actions">
+          {% include 'snippet/post_like.html' %}
+        </div>
+      </article>
+      {% empty %}
+      <div class="kf-post" style="text-align: center; padding: 60px 20px;">
+        <h3>No Posts Yet</h3>
+        <p style="color: var(--kf-text-light); margin-top: 8px;">Start by sharing your first moment!</p>
+      </div>
+      {% endfor %}
+    </div>
+  </main>
+
+  {% include 'footer.html' %}
+
+  <!-- Side Panels -->
+  <div class="kf-side-panel" id="kf-profile-panel">
+    <div id="kf-profile-content"></div>
+  </div>
+  
+  <div class="kf-side-panel" id="kf-comments-panel">
+    <div id="kf-comments-content"></div>
+  </div>
+
+  <!-- Inline script for immediate initialization -->
+  <script>
+    // Lazy load images
+    function kfLazyLoad() {
+      const lazyImages = document.querySelectorAll('.kf-lazy');
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            if (img.dataset.src) {
+              img.src = img.dataset.src;
+              img.classList.add('loaded');
+            }
+            observer.unobserve(img);
+          }
+        });
+      }, { rootMargin: '100px' });
+      
+      lazyImages.forEach(img => observer.observe(img));
+    }
+    
+    // Initialize on load
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', kfLazyLoad);
+    } else {
+      kfLazyLoad();
+    }
+  </script>
 </body>
 </html>
