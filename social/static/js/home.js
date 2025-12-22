@@ -2,7 +2,188 @@
 let kfCurrentlyPlayingMedia = null;
 const kfAudioTimers = {};
 
-// ===== VIDEO PLAYER CONTROLS (FIXED) =====
+// ===== DOWNLOAD FUNCTIONS =====
+
+/**
+ * Download a file from a URL
+ */
+function kfDownloadFile(url, filename) {
+    // Create a temporary anchor element
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'download';
+    link.target = '_blank';
+    
+    // Append to the document
+    document.body.appendChild(link);
+    
+    // Trigger the download
+    link.click();
+    
+    // Clean up
+    document.body.removeChild(link);
+}
+
+/**
+ * Download video file
+ */
+function kfDownloadVideo(postId, videoUrl) {
+    event.stopPropagation(); // Prevent video play/pause
+    const filename = `kishiface_video_${postId}_${Date.now()}.mp4`;
+    kfDownloadFile(videoUrl, filename);
+}
+
+/**
+ * Download audio file
+ */
+function kfDownloadAudio(postId, audioUrl) {
+    event.stopPropagation(); // Prevent audio play/pause
+    const filename = `kishiface_audio_${postId}_${Date.now()}.webm`;
+    kfDownloadFile(audioUrl, filename);
+}
+
+/**
+ * Download image file
+ */
+function kfDownloadImage(postId, imageUrl, imageNumber) {
+    event.stopPropagation(); // Prevent carousel slide
+    const filename = `kishiface_image_${postId}_${imageNumber}_${Date.now()}.jpg`;
+    kfDownloadFile(imageUrl, filename);
+}
+
+/**
+ * Smart download for post media - handles multiple media types
+ */
+function kfDownloadPostMedia(postId, downloadIcon) {
+    const hasVideo = downloadIcon.dataset.hasVideo === 'true';
+    const hasAudio = downloadIcon.dataset.hasAudio === 'true';
+    const hasImages = downloadIcon.dataset.hasImages === 'true';
+    
+    // If post has multiple media types, show download options
+    if ((hasVideo && hasAudio) || (hasVideo && hasImages) || (hasAudio && hasImages)) {
+        kfShowDownloadOptions(postId, hasVideo, hasAudio, hasImages);
+        return;
+    }
+    
+    // Single media type - download directly
+    if (hasVideo) {
+        const videoContainer = document.getElementById(`kf-container-${postId}`);
+        const video = videoContainer?.querySelector('.kf-video source');
+        if (video && video.src) {
+            kfDownloadVideo(postId, video.src);
+        }
+    } else if (hasAudio) {
+        const audioPlayer = document.getElementById(`kf-audio-${postId}`);
+        const audio = audioPlayer?.querySelector('.kf-audio-hidden source');
+        if (audio && audio.src) {
+            kfDownloadAudio(postId, audio.src);
+        }
+    } else if (hasImages) {
+        // Download first image
+        const carousel = document.getElementById(`kf-carousel-${postId}`);
+        const firstImage = carousel?.querySelector('.kf-image-slide img');
+        if (firstImage && firstImage.src) {
+            kfDownloadImage(postId, firstImage.src, 1);
+        }
+    }
+}
+
+/**
+ * Show download options modal for posts with multiple media types
+ */
+function kfShowDownloadOptions(postId, hasVideo, hasAudio, hasImages) {
+    // Create modal
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+    `;
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        max-width: 300px;
+        width: 90%;
+        text-align: center;
+    `;
+    
+    modalContent.innerHTML = `
+        <h3 style="margin: 0 0 16px 0; color: var(--kf-text);">Download Options</h3>
+        <p style="color: var(--kf-text-light); margin-bottom: 20px; font-size: 14px;">
+            Select what you want to download:
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            ${hasVideo ? '<button class="kf-download-option-btn" data-type="video" style="padding: 12px; background: var(--kf-primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">Download Video</button>' : ''}
+            ${hasAudio ? '<button class="kf-download-option-btn" data-type="audio" style="padding: 12px; background: var(--kf-primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">Download Audio</button>' : ''}
+            ${hasImages ? '<button class="kf-download-option-btn" data-type="images" style="padding: 12px; background: var(--kf-primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">Download Images</button>' : ''}
+            <button class="kf-cancel-btn" style="padding: 12px; background: #f3f4f6; color: var(--kf-text); border: none; border-radius: 8px; cursor: pointer; font-weight: 500; margin-top: 8px;">Cancel</button>
+        </div>
+    `;
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal || e.target.classList.contains('kf-cancel-btn')) {
+            document.body.removeChild(modal);
+        } else if (e.target.classList.contains('kf-download-option-btn')) {
+            const type = e.target.dataset.type;
+            kfHandleDownloadOption(postId, type);
+            document.body.removeChild(modal);
+        }
+    });
+}
+
+/**
+ * Handle download option selection
+ */
+function kfHandleDownloadOption(postId, type) {
+    switch(type) {
+        case 'video':
+            const videoContainer = document.getElementById(`kf-container-${postId}`);
+            const video = videoContainer?.querySelector('.kf-video source');
+            if (video && video.src) {
+                kfDownloadVideo(postId, video.src);
+            }
+            break;
+            
+        case 'audio':
+            const audioPlayer = document.getElementById(`kf-audio-${postId}`);
+            const audio = audioPlayer?.querySelector('.kf-audio-hidden source');
+            if (audio && audio.src) {
+                kfDownloadAudio(postId, audio.src);
+            }
+            break;
+            
+        case 'images':
+            const carousel = document.getElementById(`kf-carousel-${postId}`);
+            const images = carousel?.querySelectorAll('.kf-image-slide img');
+            if (images && images.length > 0) {
+                // Download all images
+                images.forEach((img, index) => {
+                    if (img.src && !img.src.includes('placeholder.jpg')) {
+                        setTimeout(() => {
+                            kfDownloadImage(postId, img.src, index + 1);
+                        }, index * 500); // Stagger downloads
+                    }
+                });
+            }
+            break;
+    }
+}
+
+// ===== VIDEO PLAYER CONTROLS =====
 
 /**
  * Pauses all video and audio elements except the one currently starting.
@@ -48,8 +229,8 @@ function kfPauseAllOtherMedia(currentMediaElement) {
  * Toggles play/pause for the video.
  */
 function kfTogglePlayPause(videoId, e) {
-    // Prevent restarting if the click target is a seek button
-    if (e && e.target.closest('.kf-seek-overlay-btn')) {
+    // Prevent restarting if the click target is a seek button or download button
+    if (e && (e.target.closest('.kf-seek-overlay-btn') || e.target.closest('.kf-video-download-btn'))) {
         return;
     }
 
@@ -383,6 +564,10 @@ window.kfSeekVideo = kfSeekVideo;
 window.kfToggleAudio = kfToggleAudio;
 window.kfSeekAudio = kfSeekAudio;
 window.kfSeekAudioBy = kfSeekAudioBy;
+window.kfDownloadVideo = kfDownloadVideo;
+window.kfDownloadAudio = kfDownloadAudio;
+window.kfDownloadImage = kfDownloadImage;
+window.kfDownloadPostMedia = kfDownloadPostMedia;
 window.kfClosePanel = (panelId) => kfClosePanel(panelId || 'kf-profile-panel');
 window.kfClosePanel2 = () => kfClosePanel('kf-comments-panel');
 window.kfSlideCarousel = kfSlideCarousel;
