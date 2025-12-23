@@ -175,8 +175,10 @@ def like_post(request, post_id):
 @login_required(login_url='/')
 def post_comment(request, post_id):
     post=get_object_or_404(Post, post_id=post_id)
-    
+    post.view +=1
+    post.save()
     comments=PostComment.objects.filter(post=post).order_by('-created_at')
+
     return render(request, 'postcomment.html', {'post':post, 'comments': comments})
 
 
@@ -263,7 +265,10 @@ def comment_reply(request, comment_id):
 def profile(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
-    
+    total_posts = Post.objects.filter(author=user)
+    total_view = 0
+    for post in total_posts:
+        total_view +=post.view
     # Get ONLY image posts for the Posts tab
     posts = Post.objects.filter(
         author=user,
@@ -275,6 +280,7 @@ def profile(request, username):
         'posts': posts,
         'profile': profile,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
+        'total_view':total_view
     }
     
     # Check if this is an AJAX request

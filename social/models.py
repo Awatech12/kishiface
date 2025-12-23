@@ -48,6 +48,7 @@ class Post(models.Model):
     post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     likes = models.ManyToManyField(User, related_name='like_post', blank=True)
+    view = models.IntegerField(default=0, null=True, blank=True)
     content = models.TextField()
     if settings.USE_CLOUDINARY:
         video_file = CloudinaryField('video', resource_type='video',folder='post_files',blank=True)
