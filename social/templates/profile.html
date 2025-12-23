@@ -5,6 +5,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Cache control meta tags -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
     <title>{% if profile.full_name %} {{profile.full_name}} {% else %} {{user.username}} {% endif %} / Kishiface</title>
     
@@ -310,6 +314,9 @@
             cursor: pointer;
             background-color: #fafafa;
             overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+            display: block;
         }
 
         /* Video thumbnail styling */
@@ -528,6 +535,26 @@
             object-fit: contain;
         }
 
+        /* Page refresh warning */
+        .kishiface-refresh-warning {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ff4444;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            z-index: 10000;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .kishiface-posts-grid {
@@ -556,6 +583,13 @@
                 padding: 5px 12px;
                 font-size: 13px;
                 min-width: 70px;
+            }
+            
+            .kishiface-refresh-warning {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                text-align: center;
             }
         }
 
@@ -597,6 +631,13 @@
 </head>
 <body>
 
+<!-- Refresh warning -->
+<div id="kishiface-refresh-warning" class="kishiface-refresh-warning">
+    <strong>Page needs refresh!</strong> Please refresh to see correct content.
+    <button onclick="window.location.reload()" style="margin-left: 10px; background: white; color: #ff4444; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+        Refresh Now
+    </button>
+</div>
 
 <div class="kishiface-container">
     
@@ -620,7 +661,8 @@
                 <img src="{{user.profile.picture.url}}" 
                      alt="{{user.username}}" 
                      class="kishiface-profile-avatar"
-                     loading="lazy">
+                     loading="lazy"
+                     >
             </div>
             
             <div class="kishiface-profile-actions">
@@ -719,18 +761,20 @@
             <div class="kishiface-posts-grid">
                 {% for post in posts %}
                     {% if post.preview_type == 'image' and post.preview_url %}
-                        <a href="{% url 'post_comment' post.post_id %}" class="kishiface-post-item">
+                        <a href="{% url 'post_comment' post.post_id %}?t={{ timestamp }}" class="kishiface-post-item">
                             {% if post.preview_url %}
                                 <img src="{{ post.preview_url }}" 
                                      alt="Post" 
                                      class="kishiface-post-image"
-                                     loading="lazy">
+                                     loading="lazy"
+                                     >
                             {% else %}
                                 <div class="kishiface-placeholder"></div>
                             {% endif %}
                             <div class="kishiface-post-overlay">
                                 <span><i class="fa-solid fa-heart"></i> {{post.likes.count}}</span>
                                 <span><i class="fa-solid fa-comment"></i> {{post.comments.count}}</span>
+                                <span><i class="fa-regular fa-eye"></i> {{post.view|intcomma}}</span>
                             </div>
                         </a>
                     {% endif %}
@@ -748,20 +792,94 @@
 
 {% include 'footer.html' %}
 <script>
+// Generate unique timestamp
+const KISHIFACE_TIMESTAMP = Date.now();
+
+// Detect if page is loaded from cache
+let isPageFromCache = false;
+
 document.addEventListener('DOMContentLoaded', function() {
     const username = '{{ user.username }}';
     const postsContainer = document.getElementById('posts-container');
     const headerPosts = document.querySelector('.kishiface-header-posts');
     const tabs = document.querySelectorAll('.kishiface-tab');
     const backBtn = document.querySelector('.kishiface-header-back');
+    const refreshWarning = document.getElementById('kishiface-refresh-warning');
     
     // Store current active tab
     let currentTab = 'posts';
+    let isInitialLoad = true;
+    
+    // Add timestamp to prevent caching
+    function addTimestampToLinks() {
+        const postLinks = postsContainer.querySelectorAll('.kishiface-post-item[href]');
+        const timestamp = KISHIFACE_TIMESTAMP;
+        
+        postLinks.forEach(link => {
+            let href = link.getAttribute('href');
+            if (href) {
+                // Remove existing timestamp if any
+                href = href.replace(/\?t=\d+/, '').replace(/&t=\d+/, '');
+                // Add new timestamp
+                const separator = href.includes('?') ? '&' : '?';
+                link.setAttribute('href', href + separator + 't=' + timestamp);
+            }
+        });
+    }
+    
+    // Show refresh warning if page is corrupted
+    function showRefreshWarning() {
+        if (refreshWarning) {
+            refreshWarning.style.display = 'block';
+            setTimeout(() => {
+                refreshWarning.style.display = 'none';
+            }, 10000);
+        }
+    }
+    
+    // Check if page structure is intact
+    function validatePageStructure() {
+        const mainElements = [
+            '.kishiface-profile-header',
+            '.kishiface-profile-info',
+            '.kishiface-posts-container'
+        ];
+        
+        for (const selector of mainElements) {
+            if (!document.querySelector(selector)) {
+                console.error('Missing element:', selector);
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    // Initialize page
+    function initializePage() {
+        // Validate structure
+        if (!validatePageStructure() && !isInitialLoad) {
+            showRefreshWarning();
+            return;
+        }
+        
+        // Add timestamps to initial links
+        addTimestampToLinks();
+        
+        // Initialize lazy loading
+        initializeLazyLoading();
+        
+        // Reset flags
+        isPageFromCache = false;
+        isInitialLoad = false;
+    }
     
     // Back button
     if (backBtn) {
         backBtn.addEventListener('click', function() {
-            window.history.back();
+            // Clear tab state
+            sessionStorage.removeItem('kishiface_profileTab_' + username);
+            // Force navigation
+            window.location.href = document.referrer || '/';
         });
     }
     
@@ -769,11 +887,14 @@ document.addEventListener('DOMContentLoaded', function() {
     tabs.forEach(tab => {
         tab.addEventListener('click', function(e) {
             e.preventDefault();
+            e.stopPropagation();
+            
             const tabName = this.getAttribute('data-tab');
-            const url = this.getAttribute('data-url') + '?ajax=1'; // Add ajax parameter
+            const baseUrl = this.getAttribute('data-url');
+            const url = baseUrl + '?ajax=1&_=' + Date.now();
             
             // Don't reload if already on this tab
-            if (tabName === currentTab) return;
+            if (tabName === currentTab && !isPageFromCache) return;
             
             // Update active tab
             tabs.forEach(t => t.classList.remove('kishiface-tab-active'));
@@ -782,99 +903,210 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update current tab
             currentTab = tabName;
             
+            // Store in session storage
+            sessionStorage.setItem('kishiface_profileTab_' + username, tabName);
+            sessionStorage.setItem('kishiface_profileUrl_' + username, baseUrl);
+            
             // Load content
-            loadTabContent(tabName, url);
+            loadTabContent(tabName, url, baseUrl);
             
             // Update URL without reload
-            history.pushState({tab: tabName}, '', url.replace('?ajax=1', ''));
+            history.replaceState({
+                tab: tabName,
+                username: username,
+                timestamp: Date.now()
+            }, '', baseUrl);
         });
     });
     
     // Handle browser back/forward
     window.addEventListener('popstate', function(event) {
-        // Extract tab from URL
-        const path = window.location.pathname;
-        let tabName = 'posts';
-        
-        if (path.includes('/videos/')) {
-            tabName = 'videos';
-        } else if (path.includes('/audios/')) {
-            tabName = 'audio';
-        } else if (path.includes('/text-posts/')) {
-            tabName = 'text';
-        }
-        
-        const tabElement = document.querySelector(`[data-tab="${tabName}"]`);
-        if (tabElement) {
-            tabs.forEach(t => t.classList.remove('kishiface-tab-active'));
-            tabElement.classList.add('kishiface-tab-active');
-            currentTab = tabName;
-            loadTabContent(tabName, tabElement.getAttribute('data-url') + '?ajax=1');
+        if (event.state && event.state.tab) {
+            // Restore from history state
+            const tabName = event.state.tab;
+            const tabElement = document.querySelector(`[data-tab="${tabName}"]`);
+            
+            if (tabElement) {
+                tabs.forEach(t => t.classList.remove('kishiface-tab-active'));
+                tabElement.classList.add('kishiface-tab-active');
+                currentTab = tabName;
+                
+                const baseUrl = tabElement.getAttribute('data-url');
+                const url = baseUrl + '?ajax=1&_=' + Date.now();
+                loadTabContent(tabName, url, baseUrl);
+            }
+        } else {
+            // Default to posts tab
+            window.location.reload();
         }
     });
     
+    // Handle page visibility (for back button detection)
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            // Page became visible again (user pressed back)
+            console.log('Page became visible - checking state');
+            
+            // Check if we need to reload
+            const lastTab = sessionStorage.getItem('kishiface_profileTab_' + username);
+            const lastUrl = sessionStorage.getItem('kishiface_profileUrl_' + username);
+            const currentPath = window.location.pathname;
+            
+            if (lastUrl && !currentPath.includes(lastUrl.split('/').pop())) {
+                // User came back from a different page, reload
+                window.location.reload();
+            }
+        }
+    });
+    
+    // Handle bfcache (back-forward cache)
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+            console.log('Page loaded from bfcache - reinitializing');
+            isPageFromCache = true;
+            
+            // Force scroll to top
+            window.scrollTo(0, 0);
+            
+            // Restore tab state
+            let tabName = sessionStorage.getItem('kishiface_profileTab_' + username) || 'posts';
+            const currentPath = window.location.pathname;
+            
+            // Override with URL path
+            if (currentPath.includes('/videos/')) {
+                tabName = 'videos';
+            } else if (currentPath.includes('/audios/')) {
+                tabName = 'audio';
+            } else if (currentPath.includes('/text-posts/')) {
+                tabName = 'text';
+            }
+            
+            const tabElement = document.querySelector(`[data-tab="${tabName}"]`);
+            if (tabElement) {
+                tabs.forEach(t => t.classList.remove('kishiface-tab-active'));
+                tabElement.classList.add('kishiface-tab-active');
+                currentTab = tabName;
+                
+                const baseUrl = tabElement.getAttribute('data-url');
+                const url = baseUrl + '?ajax=1&_=' + Date.now() + '&cache=1';
+                loadTabContent(tabName, url, baseUrl);
+            }
+            
+            // Reinitialize page
+            initializePage();
+        }
+    });
+    
+    // Prevent browser from caching this page
+    if (window.history && window.history.replaceState) {
+        window.history.replaceState({
+            tab: 'posts',
+            username: username,
+            timestamp: Date.now(),
+            preventCache: true
+        }, '', window.location.href);
+    }
+    
     // Load tab content function
-    async function loadTabContent(tabName, url) {
+    async function loadTabContent(tabName, url, baseUrl) {
         // Show loading
         postsContainer.innerHTML = '<div class="kishiface-loading"></div>';
         headerPosts.textContent = `Loading ${tabName}...`;
         
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
             const response = await fetch(url, {
                 headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Kishiface-Timestamp': KISHIFACE_TIMESTAMP
+                },
+                cache: 'no-store',
+                signal: controller.signal
             });
             
+            clearTimeout(timeoutId);
+            
             if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error('Content not found');
-                }
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
             const html = await response.text();
             
-            // Check if we got the full page instead of partial
-            if (html.includes('<!DOCTYPE html>') || html.includes('<html')) {
-                console.error('Got full page instead of partial');
-                // Extract just the posts container from the response
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = html;
-                const partialContent = tempDiv.querySelector('.kishiface-posts-container') || 
-                                      tempDiv.querySelector('.kishiface-text-posts') ||
-                                      tempDiv;
-                
-                if (partialContent) {
-                    postsContainer.innerHTML = partialContent.innerHTML;
-                } else {
-                    throw new Error('Could not extract content from response');
-                }
-            } else {
-                // We got the partial content directly
-                postsContainer.innerHTML = html;
+            // Check if response is valid HTML
+            if (!html.trim()) {
+                throw new Error('Empty response');
             }
             
-            // Update post count based on content type
+            // Parse and update content
+            let contentHtml = html;
+            
+            // Try to extract partial content if full page is returned
+            if (html.includes('<html') || html.includes('<!DOCTYPE')) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                
+                // Look for content in various possible containers
+                const contentSelectors = [
+                    '.kishiface-posts-container',
+                    '.kishiface-posts-grid',
+                    '.kishiface-text-posts',
+                    '.kishiface-no-posts',
+                    '#posts-container'
+                ];
+                
+                for (const selector of contentSelectors) {
+                    const content = tempDiv.querySelector(selector);
+                    if (content) {
+                        contentHtml = content.outerHTML;
+                        break;
+                    }
+                }
+                
+                // If no specific content found, use body content
+                if (contentHtml === html && tempDiv.body) {
+                    contentHtml = tempDiv.body.innerHTML;
+                }
+            }
+            
+            // Update posts container
+            postsContainer.innerHTML = contentHtml;
+            
+            // Update post count
             updatePostCount(tabName);
             
-            // Initialize video thumbnails for videos tab
+            // Add timestamps to new links
+            addTimestampToLinks();
+            
+            // Initialize video thumbnails if needed
             if (tabName === 'videos') {
                 initializeVideoThumbnails();
             }
             
-            // Initialize lazy loading for images
+            // Initialize lazy loading for new images
             initializeLazyLoading();
+            
+            // Store successful load
+            sessionStorage.setItem('kishiface_lastLoad_' + username, Date.now().toString());
             
         } catch (error) {
             console.error('Error loading tab content:', error);
+            
+            // Show error message
             postsContainer.innerHTML = `
                 <div class="kishiface-no-posts">
                     <h2 class="kishiface-no-posts-title">Error loading content</h2>
-                    <p class="kishiface-no-posts-text">${error.message}</p>
+                    <p class="kishiface-no-posts-text">${error.message || 'Please try again'}</p>
+                    <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: var(--kishiface-button-bg); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        Reload Page
+                    </button>
                 </div>
             `;
             headerPosts.textContent = 'Error';
+            
+            // Show refresh warning
+            showRefreshWarning();
         }
     }
     
@@ -923,47 +1155,70 @@ document.addEventListener('DOMContentLoaded', function() {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
                         const img = entry.target;
-                        img.src = img.dataset.src;
-                        img.removeAttribute('data-src');
+                        if (img.dataset.src) {
+                            img.src = img.dataset.src;
+                            img.removeAttribute('data-src');
+                        }
                         observer.unobserve(img);
                     }
                 });
             }, {
                 rootMargin: '50px 0px',
-                threshold: 0.1
+                threshold: 0.01
             });
             
             lazyImages.forEach(img => imageObserver.observe(img));
         } else {
-            // Fallback
+            // Fallback for older browsers
             lazyImages.forEach(img => {
                 if (img.getBoundingClientRect().top < window.innerHeight + 100) {
-                    img.src = img.dataset.src;
-                    img.removeAttribute('data-src');
-                }
-            });
-            
-            window.addEventListener('scroll', function() {
-                lazyImages.forEach(img => {
-                    if (img.getBoundingClientRect().top < window.innerHeight + 100 && img.hasAttribute('data-src')) {
+                    if (img.dataset.src) {
                         img.src = img.dataset.src;
                         img.removeAttribute('data-src');
                     }
-                });
+                }
             });
         }
     }
-    
-    // Initialize lazy loading for initial content
-    initializeLazyLoading();
     
     // More actions button
     document.querySelector('.kishiface-more-actions')?.addEventListener('click', function() {
         alert('More actions menu would open here');
     });
     
-    // Initialize state for back/forward navigation
-    history.replaceState({tab: 'posts'}, '', window.location.href);
+    // Initialize the page
+    initializePage();
+    
+    // Set initial history state
+    history.replaceState({
+        tab: 'posts',
+        username: username,
+        timestamp: Date.now()
+    }, '', window.location.href);
+});
+
+// Global function to force page refresh if needed
+function kishifaceForceRefresh() {
+    if (confirm('Page content appears to be outdated. Refresh now?')) {
+        window.location.reload(true);
+    }
+}
+
+// Export for global access
+window.kishifaceProfile = {
+    forceRefresh: kishifaceForceRefresh
+};
+
+// Auto-refresh check on focus
+window.addEventListener('focus', function() {
+    const lastLoad = sessionStorage.getItem('kishiface_lastLoad_{{ user.username }}');
+    if (lastLoad && Date.now() - parseInt(lastLoad) > 30000) { // 30 seconds
+        console.log('Page stale, suggesting refresh');
+        const warning = document.getElementById('kishiface-refresh-warning');
+        if (warning) {
+            warning.style.display = 'block';
+        }
+    }
 });
 </script>
 
