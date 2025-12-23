@@ -50,19 +50,45 @@ class Post(models.Model):
     likes = models.ManyToManyField(User, related_name='like_post', blank=True)
     view = models.IntegerField(default=0, null=True, blank=True)
     content = models.TextField()
+
     if settings.USE_CLOUDINARY:
-        video_file = CloudinaryField('video', resource_type='video',folder='post_files',blank=True)
+        video_file = CloudinaryField('video', resource_type='video', folder='post_files', blank=True)
+        video_thumbnail = CloudinaryField('image', folder='post_thumbnails', blank=True, null=True)
     else:
         video_file = models.FileField(upload_to='post_file', blank=True)
+        video_thumbnail = models.ImageField(upload_to='post_thumbnails', blank=True, null=True)
+
     if settings.USE_CLOUDINARY:
-        file = CloudinaryField('audio', resource_type='video',folder='post_files',blank=True)
+        file = CloudinaryField('audio', resource_type='video', folder='post_files', blank=True)
     else:
         file = models.FileField(upload_to='post_file', blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.author.username
-    
+
+    # ================= VIDEO THUMBNAIL GENERATION =================
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        # Skip thumbnail generation in DEBUG
+        if settings.DEBUG:
+            return
+
+        # Only generate if using Cloudinary and video exists
+        if settings.USE_CLOUDINARY and self.video_file and not self.video_thumbnail:
+            self.video_thumbnail = CloudinaryImage(self.video_file.public_id).build_url(
+                resource_type='video',
+                format='jpg',
+                transformation=[
+                    {'start_offset': '0.5'},
+                    {'width': 400, 'crop': 'scale'}
+                ]
+            )
+            super().save(update_fields=['video_thumbnail'])
+
+    # ================= HELPERS =================
     def preview_type(self):
         if self.images.exists():
             return 'image'
@@ -71,10 +97,12 @@ class Post(models.Model):
         if self.file:
             return 'audio'
         return 'text'
-    
+
     def preview_url(self):
         if self.images.exists():
             return self.images.first().image.url
+        if hasattr(self, 'video_thumbnail') and self.video_thumbnail:
+            return self.video_thumbnail.url
         if self.video_file:
             return self.video_file.url
         if self.file:
@@ -260,3 +288,4 @@ class MarketImage(models.Model):
     image_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     product = models.ForeignKey(Market, on_delete=models.CASCADE, related_name='images')
     product_image = models.ImageField(upload_to='product_images/')
+
