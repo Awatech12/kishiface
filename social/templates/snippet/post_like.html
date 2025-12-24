@@ -7,19 +7,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Post Engagement Block</title>
     
-    <!-- 
-        THE FIX: This link ensures the 'fab' (Brands) icons for Twitter and WhatsApp are available.
-        (I corrected the integrity attribute just to be safe.)
-    -->
     <link rel="stylesheet" 
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" 
           xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLMDJ8g359L5E727yL3rLw8x7e7Q6A2h9f6Jc8y5qP3f6sA7h3i5f6bN8Z6d5P8w==" 
           crossorigin="anonymous" 
           referrerpolicy="no-referrer" />
     
-  
     <style>
+        /* Container for the entire post engagement */
+        #post-engagement-{{ post.post_id }} {
+            position: relative;
+        }
 
+        /* LIKERS AND ENGAGEMENT COUNTS SECTION */
         .engagement {
             display: flex;
             align-items: center;
@@ -50,59 +50,116 @@
             font-size: 14px;
             color: #4b5563;
         }
+        
         .engagement-count a {
             font-weight: 600;
             color: #374151;
             text-decoration: none;
         }
 
-        /* ACTIONS SECTION STYLES */
-        .actions-container {
+        /* VERTICAL ACTIONS SECTION - TikTok Style */
+        .vertical-actions-container {
+            position: absolute;
+            right: 16px;
+            bottom: 0;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: flex-start; 
-            margin-top: 8px;
-            padding: 8px 0;
-        }
-        
-        .actions-left {
-            display: flex;
-            gap: 15px;
+            gap: 16px;
+            z-index: 10;
         }
 
-        .action-item {
+        .vertical-action-item {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
             text-decoration: none;
             color: #4b5563;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 500;
-            padding: 6px 8px;
-            border-radius: 6px;
-            transition: background-color 0.2s, color 0.2s;
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            width: 48px;
+            height: 48px;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 4px;
+        }
+
+        .vertical-action-item:hover {
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: scale(1.05);
+        }
+
+        .vertical-action-icon {
+            font-size: 20px;
+            margin-bottom: 4px;
+        }
+
+        .vertical-action-label {
+            font-size: 11px;
+            margin-top: 2px;
+            text-align: center;
+        }
+
+        /* Specific colors for hover effects */
+        .vertical-action-item:hover .fa-heart {
+            color: #ff2c55;
         }
         
-        .action-item:hover {
-            background-color: #f3f4f6;
-            color: #1f2937;
+        .vertical-action-item:hover .fa-comment {
+            color: #1da1f2;
         }
-
-        .action-icon {
-            font-size: 18px;
-        }
-
-        /* Styling for the social icons specifically */
-        .share-facebook, .share-twitter, .share-whatsapp {
-            padding: 6px 0; /* Aligning without the text span */
-        }
-        .share-facebook:hover { color: #1877f2; }
-        .share-twitter:hover { color: #1da1f2; }
-        .share-whatsapp:hover { color: #25d366; }
-
-
         
-   </style>
+        .share-facebook:hover .fa-facebook {
+            color: #1877f2;
+        }
+        
+        .share-twitter:hover .fa-twitter {
+            color: #1da1f2;
+        }
+        
+        .share-whatsapp:hover .fa-whatsapp {
+            color: #25d366;
+        }
+
+        /* Like button active state */
+        .vertical-action-item.liked .fa-heart {
+            color: #ff2c55;
+        }
+
+        /* Adjust main feed padding to accommodate vertical actions */
+        .kf-post {
+            position: relative;
+            padding-right: 80px; /* Space for vertical actions */
+        }
+
+        /* Media container adjustments for vertical actions */
+        .kf-media-container {
+            position: relative;
+        }
+
+        /* For audio/video players, position actions over media */
+        .kf-audio-player .vertical-actions-container,
+        .kf-video-container .vertical-actions-container {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 100;
+        }
+
+        /* For image carousel, position at bottom right */
+        .kf-image-carousel .vertical-actions-container {
+            position: absolute;
+            right: 16px;
+            bottom: 60px; /* Above carousel indicators */
+            z-index: 100;
+        }
+    </style>
 </head>
 <body>
 
@@ -130,101 +187,168 @@
       · <a style="text-decoration: none; color: #000;" href="{% url 'post_comment' post.post_id %}">{{ post.comments.count|intcomma|default:"0" }} comments</a>
     </span>
     <span style="margin-left: 10px;">  <i id="icon" class="fa-regular fa-eye"></i> {{post.view|intcomma}}</span>
-    
   </div>
 
-  <!-- ACTION BUTTONS SECTION -->
-  <div class="actions-container">
-    <div class="actions-left">
-      <!-- LIKE/UNLIKE BUTTON -->
-      <a href="#"
-         hx-get="{% url 'like_post' post.post_id %}"
-         hx-target="#post-engagement-{{ post.post_id }}"
-         hx-swap="outerHTML"
-         class="action-item">
-        {% if request.user in post.likes.all %}
-        <i class="fa-solid fa-heart action-icon" style="color: var(--color-danger, #666);"></i>
-        <span>Unlike</span>
-        {% else %}
-        <i class="fa-regular fa-heart action-icon"></i>
-        <span>Like</span>
-        {% endif %}
-      </a>
+  <!-- VERTICAL ACTION BUTTONS - TikTok Style -->
+  <div class="vertical-actions-container">
+    <!-- LIKE/UNLIKE BUTTON -->
+    <a href="#"
+       hx-get="{% url 'like_post' post.post_id %}"
+       hx-target="#post-engagement-{{ post.post_id }}"
+       hx-swap="outerHTML"
+       class="vertical-action-item {% if request.user in post.likes.all %}liked{% endif %}">
+      {% if request.user in post.likes.all %}
+      <i class="fa-solid fa-heart vertical-action-icon" style="color: #ff2c55;"></i>
+      <span class="vertical-action-label">{{ post.likes.count|intcomma }}</span>
+      {% else %}
+      <i class="fa-regular fa-heart vertical-action-icon"></i>
+      <span class="vertical-action-label">{{ post.likes.count|intcomma }}</span>
+      {% endif %}
+    </a>
 
-      <!-- COMMENT BUTTON -->
-      <a href="{% url 'post_comment' post.post_id %}"    class="action-item" data-id="{{post.post_id}}">
-        <i class="fa-regular fa-comment action-icon"></i>
-        <span>Comment</span>
-      </a>
+    <!-- COMMENT BUTTON -->
+    <a href="{% url 'post_comment' post.post_id %}" class="vertical-action-item">
+      <i class="fa-regular fa-comment vertical-action-icon"></i>
+      <span class="vertical-action-label">{{ post.comments.count|intcomma|default:"0" }}</span>
+    </a>
 
-      <!-- FACEBOOK -->
-      <a href="#" class="action-item share-facebook"
-         data-media="https://kishiface.pythonanywhere.com/{{post.post_id}}">
-        <i class="fab fa-facebook"></i>
-      </a>
-
-      <!-- TWITTER (Now working due to Font Awesome fix) -->
-      <a href="#" class="action-item share-twitter"
-         data-message="{{ post.message|urlencode }}"
-         data-media="https://kishiface.pythonanywhere.com/{{post.post_id}}">
-        <i class="fab fa-twitter"></i>
-      </a>
-
-      <!-- WHATSAPP (Now working due to Font Awesome fix) -->
-      <a href="#" class="action-item share-whatsapp"
-         data-message="{{ post.message|urlencode }}"
-         data-media="https://kishiface.pythonanywhere.com/comment/{{post.post_id}}">
-        <i class="fab fa-whatsapp"></i>
+    <!-- SHARE BUTTON (with dropdown or direct share) -->
+    <div style="position: relative;">
+      <a href="#" class="vertical-action-item share-toggle">
+        <i class="fa-solid fa-share vertical-action-icon"></i>
+        <span class="vertical-action-label">Share</span>
       </a>
       
+      <!-- Share options popup -->
+      <div class="share-options-popup" style="display: none; position: absolute; bottom: 100%; right: 0; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 8px; margin-bottom: 8px; z-index: 1000;">
+        <div style="display: flex; gap: 8px;">
+          <!-- FACEBOOK -->
+          <a href="#" class="vertical-action-item share-facebook" 
+             style="width: 40px; height: 40px; background: none; box-shadow: none;"
+             data-media="https://kishiface.pythonanywhere.com/{{post.post_id}}">
+            <i class="fab fa-facebook" style="color: #1877f2;"></i>
+          </a>
+
+          <!-- TWITTER -->
+          <a href="#" class="vertical-action-item share-twitter"
+             style="width: 40px; height: 40px; background: none; box-shadow: none;"
+             data-message="{{ post.message|urlencode }}"
+             data-media="https://kishiface.pythonanywhere.com/{{post.post_id}}">
+            <i class="fab fa-twitter" style="color: #1da1f2;"></i>
+          </a>
+
+          <!-- WHATSAPP -->
+          <a href="#" class="vertical-action-item share-whatsapp"
+             style="width: 40px; height: 40px; background: none; box-shadow: none;"
+             data-message="{{ post.message|urlencode }}"
+             data-media="https://kishiface.pythonanywhere.com/comment/{{post.post_id}}">
+            <i class="fab fa-whatsapp" style="color: #25d366;"></i>
+          </a>
+        </div>
+      </div>
     </div>
+
+    <!-- Alternative: Individual share buttons (if you prefer them always visible) -->
+    <!-- 
+    <a href="#" class="vertical-action-item share-facebook"
+       data-media="https://kishiface.pythonanywhere.com/{{post.post_id}}">
+      <i class="fab fa-facebook vertical-action-icon"></i>
+      <span class="vertical-action-label">Share</span>
+    </a>
+
+    <a href="#" class="vertical-action-item share-twitter"
+       data-message="{{ post.message|urlencode }}"
+       data-media="https://kishiface.pythonanywhere.com/{{post.post_id}}">
+      <i class="fab fa-twitter vertical-action-icon"></i>
+      <span class="vertical-action-label">Tweet</span>
+    </a>
+
+    <a href="#" class="vertical-action-item share-whatsapp"
+       data-message="{{ post.message|urlencode }}"
+       data-media="https://kishiface.pythonanywhere.com/comment/{{post.post_id}}">
+      <i class="fab fa-whatsapp vertical-action-icon"></i>
+      <span class="vertical-action-label">Share</span>
+    </a>
+    -->
   </div>
 </div>
 
-<!-- SCRIPT: Handles share buttons -->
+<!-- SCRIPT: Handles share buttons and toggle -->
 <script>
-document.addEventListener('click', function(e) {
-  const whatsappBtn = e.target.closest('.share-whatsapp');
-  const facebookBtn = e.target.closest('.share-facebook');
-  const twitterBtn = e.target.closest('.share-twitter');
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle share options popup
+    document.addEventListener('click', function(e) {
+        const shareToggle = e.target.closest('.share-toggle');
+        const popup = document.querySelector('.share-options-popup');
+        
+        if (shareToggle) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (popup) {
+                popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+            }
+        } else {
+            // Close popup when clicking elsewhere
+            if (popup && !popup.contains(e.target)) {
+                popup.style.display = 'none';
+            }
+        }
+    });
 
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    // Handle share button clicks
+    document.addEventListener('click', function(e) {
+        const whatsappBtn = e.target.closest('.share-whatsapp');
+        const facebookBtn = e.target.closest('.share-facebook');
+        const twitterBtn = e.target.closest('.share-twitter');
 
-  // WHATSAPP
-  if (whatsappBtn) {
-    e.preventDefault();
-    // Use encodeURIComponent for safety, reading data directly from the attribute
-    const message = encodeURIComponent(whatsappBtn.getAttribute('data-message'));
-    const media = encodeURIComponent(whatsappBtn.getAttribute('data-media'));
-    
-    const text = `${message}%20${media}`;
-    
-    // Determine URL based on device
-    const url = isMobile
-      ? `https://api.whatsapp.com/send?text=${text}`
-      : `https://web.whatsapp.com/send?text=${text}`;
-    window.open(url, '_blank');
-  }
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-  // FACEBOOK
-  if (facebookBtn) {
-    e.preventDefault();
-    const media = encodeURIComponent(facebookBtn.getAttribute('data-media'));
-    const url = `https://www.facebook.com/sharer/sharer.php?u=${media}`;
-    window.open(url, '_blank');
-  }
+        // WHATSAPP
+        if (whatsappBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const message = encodeURIComponent(whatsappBtn.getAttribute('data-message'));
+            const media = encodeURIComponent(whatsappBtn.getAttribute('data-media'));
+            
+            const text = `${message}%20${media}`;
+            
+            const url = isMobile
+                ? `https://api.whatsapp.com/send?text=${text}`
+                : `https://web.whatsapp.com/send?text=${text}`;
+            window.open(url, '_blank');
+            
+            // Close popup after sharing
+            const popup = document.querySelector('.share-options-popup');
+            if (popup) popup.style.display = 'none';
+        }
 
-  // TWITTER
-  if (twitterBtn) {
-    e.preventDefault();
-    const message = encodeURIComponent(twitterBtn.getAttribute('data-message'));
-    const media = encodeURIComponent(twitterBtn.getAttribute('data-media'));
-    const url = `https://twitter.com/intent/tweet?text=${message}%20${media}`;
-    window.open(url, '_blank');
-  }
+        // FACEBOOK
+        if (facebookBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const media = encodeURIComponent(facebookBtn.getAttribute('data-media'));
+            const url = `https://www.facebook.com/sharer/sharer.php?u=${media}`;
+            window.open(url, '_blank');
+            
+            const popup = document.querySelector('.share-options-popup');
+            if (popup) popup.style.display = 'none';
+        }
+
+        // TWITTER
+        if (twitterBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const message = encodeURIComponent(twitterBtn.getAttribute('data-message'));
+            const media = encodeURIComponent(twitterBtn.getAttribute('data-media'));
+            const url = `https://twitter.com/intent/tweet?text=${message}%20${media}`;
+            window.open(url, '_blank');
+            
+            const popup = document.querySelector('.share-options-popup');
+            if (popup) popup.style.display = 'none';
+        }
+    });
 });
 </script>
 
 </body>
 </html>
-
