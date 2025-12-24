@@ -14,6 +14,7 @@ import time
 from django.http import JsonResponse
 from django.conf import settings
 from django.utils import timezone
+import random
 
 # Create your views here.
 def index(request):
@@ -70,6 +71,42 @@ def register(request):
 @login_required(login_url='/')
 def home(request):
     profile = Profile.objects.get(user=request.user)
+    
+    # Get posts from followed users and self
+    following = profile.followings.values_list('user', flat=True)
+    posts = Post.objects.filter(
+        Q(author__in=following) | Q(author=request.user)
+    ).order_by('-created_at')
+    
+    # Get random products
+    products = list(Market.objects.order_by('?'))
+    
+    # Mix posts with products every 2 posts
+    mixed_feed = []
+    post_counter = 0
+    
+    for post in posts:
+        # Add post
+        mixed_feed.append({'type': 'post', 'data': post})
+        post_counter += 1
+        
+        # Add product after every 2 posts
+        if post_counter % 2 == 0 and products:
+            if products:
+                mixed_feed.append({'type': 'product', 'data': products.pop(0)})
+    
+    # Add initial products if feed is empty
+    if not mixed_feed and products:
+        mixed_feed = [{'type': 'product', 'data': p} for p in products[:2]]
+    
+    context = {
+        'posts_with_ads': mixed_feed,
+        'members': User.objects.exclude(id=request.user.id).order_by('?'),
+        'products': products[:5],
+    }
+    
+    return render(request, 'home.html', context)
+    profile = Profile.objects.get(user=request.user)
 
     # Users this user follows
     following_users = profile.followings.values_list('user', flat=True)
@@ -77,7 +114,68 @@ def home(request):
     # Posts from followed users + own posts
     posts = Post.objects.filter(
         Q(author__in=following_users) | Q(author=request.user)
-    ).order_by('-created_at')
+    ).order_by('-created_at')  # Changed from '?' to '-created_at' for chronological order
+
+    products = Market.objects.order_by('?')
+    
+    # Create a mixed feed with products after every 2 posts
+    posts_with_ads = []
+    post_count = 0
+    
+    # Convert posts queryset to list for easier manipulation
+    posts_list = list(posts)
+    products_list = list(products)
+    
+    # Shuffle products to show different ones
+    random.shuffle(products_list)
+    
+    i = 0  # Post index
+    j = 0  # Product index
+    
+    while i < len(posts_list):
+        # Add post
+        posts_with_ads.append({
+            'type': 'post',
+            'data': posts_list[i]
+        })
+        post_count += 1
+        i += 1
+        
+        # After every 2 posts, add a product if available
+        if post_count % 2 == 0 and j < len(products_list):
+            posts_with_ads.append({
+                'type': 'product',
+                'data': products_list[j]
+            })
+            j += 1
+    
+    # If we have fewer than 2 posts initially, still show some products
+    if len(posts_with_ads) < 3 and products_list:
+        for k in range(min(2, len(products_list))):
+            posts_with_ads.append({
+                'type': 'product',
+                'data': products_list[k]
+            })
+
+    members = User.objects.exclude(id=request.user.id).order_by('?')
+
+    context = {
+        'posts_with_ads': posts_with_ads,
+        'members': members,
+        'products': products_list[:5],  # Keep original for sidebar if needed
+    }
+
+    return render(request, 'home.html', context)
+
+    profile = Profile.objects.get(user=request.user)
+
+    # Users this user follows
+    following_users = profile.followings.values_list('user', flat=True)
+
+    # Posts from followed users + own posts
+    posts = Post.objects.filter(
+        Q(author__in=following_users) | Q(author=request.user)
+    ).order_by('?')
 
     products = Market.objects.order_by('?')
     members = User.objects.exclude(id=request.user.id).order_by('?')
