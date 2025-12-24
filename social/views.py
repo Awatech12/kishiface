@@ -76,7 +76,7 @@ def home(request):
     following = profile.followings.values_list('user', flat=True)
     posts = Post.objects.filter(
         Q(author__in=following) | Q(author=request.user)
-    ).order_by('-created_at')
+    ).order_by('?')
     
     # Get random products
     products = list(Market.objects.order_by('?'))
