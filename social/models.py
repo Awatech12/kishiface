@@ -260,3 +260,5 @@ class MarketImage(models.Model):
     image_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     product = models.ForeignKey(Market, on_delete=models.CASCADE, related_name='images')
     product_image = models.ImageField(upload_to='product_images/')
+
+
