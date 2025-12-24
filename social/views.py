@@ -207,28 +207,6 @@ def postcomment(request, post_id):
             image=image,
             file=audio
         )
-
-        # 🔴 REAL-TIME SOCKET (UNCHANGED)
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f'post_{post_id}',
-            {
-                'type': 'new_comment',
-                'comment_id': str(comment.comment_id),
-                'author_username': comment.author.username,
-                'author_first': comment.author.first_name,
-                'author_last': comment.author.last_name,
-                'is_verify': comment.author.profile.is_verify,
-                'profile_pic': comment.author.profile.picture.url,
-                'comment': comment.comment or '',
-                'image_url': comment.image.url if comment.image else '',
-                'file_url': comment.file.url if comment.file else '',
-                'post_id': str(post_id),
-                'created_at': str(naturaltime(comment.created_at)),
-                'user_id': comment.author.id
-            }
-        )
-
       
         if post.author != request.user:
             Notification.objects.create(
