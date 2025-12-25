@@ -23,6 +23,7 @@ urlpatterns = [
     path('<str:username>/videos/', views.profile_videos, name='profile_videos'),
     path('<str:username>/audios/', views.profile_audios, name='profile_audios'),
     path('<str:username>/text-posts/', views.profile_text_posts, name='profile_text_posts'),
+    path('follow/<int:user_id>/', views.follow_user, name='follow_user'),
 
     # ===== Market Place Path ======
     path('market', views.market, name='market'),
