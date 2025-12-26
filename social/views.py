@@ -3,7 +3,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage
+from social.models import Profile, Post, PostImage, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
 from django.db.models import Q
 from django.core.paginator import Paginator
 from asgiref.sync import async_to_sync
@@ -483,13 +483,48 @@ def following_list(request, username):
     return render(request, 'following_list.html', context)
 @login_required(login_url='/')
 def search(request):
-    quary = request.GET.get('q')
-    if quary:
+    query = request.GET.get('q', '').strip()
+    
+    if query:
+        # Save search to history
+        SearchHistory.objects.create(user=request.user, query=query)
+        
+        # Perform search
         users = User.objects.filter(
-            Q(username__icontains=quary) | Q(email__icontains=quary) | Q(first_name__icontains=quary) | Q(last_name__icontains=quary)
+            Q(username__icontains=query) | 
+            Q(first_name__icontains=query) | 
+            Q(last_name__icontains=query)
         )
-        return render(request, 'search.html', {'quary': quary, 'users':users})
-    return render(request, 'search.html')
+        
+        # Get recent searches (excluding current)
+        recent_searches = SearchHistory.objects.filter(
+            user=request.user
+        ).exclude(query=query).order_by('-created_at')[:5]
+        
+        return render(request, 'search.html', {
+            'query': query,
+            'users': users,
+            'recent_searches': recent_searches
+        })
+    
+    # Show search history when no query
+    search_history = SearchHistory.objects.filter(
+        user=request.user
+    ).order_by('-created_at')[:20]
+    
+    return render(request, 'search.html', {
+        'search_history': search_history
+    })
+
+@login_required
+def delete_history(request, history_id):
+    SearchHistory.objects.filter(id=history_id, user=request.user).delete()
+    return redirect('search')
+
+@login_required
+def clear_history(request):
+    SearchHistory.objects.filter(user=request.user).delete()
+    return redirect('search')
 
 @login_required(login_url='/')
 def message(request, username):

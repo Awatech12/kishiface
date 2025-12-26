@@ -262,3 +262,25 @@ class MarketImage(models.Model):
     product_image = models.ImageField(upload_to='product_images/')
 
 
+
+class SearchHistory(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    query = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']  # Most recent first
+        verbose_name_plural = 'Search Histories'
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.query}"
+    
+    def save(self, *args, **kwargs):
+        # Optional: Limit history to last 50 searches per user
+        super().save(*args, **kwargs)
+        
+        # Keep only last 50 searches per user
+        user_history = SearchHistory.objects.filter(user=self.user)
+        if user_history.count() > 50:
+            oldest = user_history.order_by('created_at').first()
+            oldest.delete()
