@@ -96,10 +96,47 @@
       align-items: center;
     }
     
+    /* POST CONTENT WITH SHOW MORE/LESS */
     .kf-post-content {
       padding: 0 16px 12px;
       font-size: 14px;
       line-height: 1.5;
+      position: relative;
+    }
+    
+    .kf-post-text {
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    
+    .kf-post-text.collapsed {
+      max-height: 60px; /* Show about 3 lines */
+    }
+    
+    .kf-post-text.expanded {
+      max-height: 1000px; /* Enough for expanded text */
+    }
+    
+    .kf-text-toggle {
+      background: none;
+      border: none;
+      color: var(--kf-text-light);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 4px 0;
+      margin-top: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .kf-text-toggle:hover {
+      color: var(--kf-text);
+    }
+    
+    .kf-text-toggle i {
+      font-size: 12px;
     }
     
     /* Media containers */
@@ -1021,6 +1058,27 @@
       background-color: #f3f4f6;
     }
     
+    /* ===== LAZY LOAD OPTIMIZATIONS ===== */
+    /* Smooth image fade-in */
+    img[loading="lazy"] {
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    img[loading="lazy"].loaded {
+      opacity: 1;
+    }
+    
+    /* Video poster fallback */
+    video[poster] {
+      background: #000;
+    }
+    
+    /* Make sure video container has a background */
+    .kf-video-container {
+      background: #000;
+    }
+    
     /* Responsive adjustments */
     @media (min-width: 768px) {
       .kf-feed {
@@ -1115,10 +1173,18 @@
               </div>
             </div>
 
-            <!-- Post Content -->
+            <!-- Post Content with Show More/Less -->
             {% if item.data.content %}
             <div class="kf-post-content">
-              {{ item.data.content|urlize|linebreaksbr }}
+              <div class="kf-post-text collapsed" id="kf-text-{{ item.data.post_id }}">
+                {{ item.data.content|urlize|linebreaksbr }}
+              </div>
+              {% if item.data.content|length > 150 %}
+              <button class="kf-text-toggle" onclick="kfToggleText('{{ item.data.post_id }}')">
+                <span>more</span>
+                <i class="fas fa-chevron-down"></i>
+              </button>
+              {% endif %}
             </div>
             {% endif %}
 
@@ -1190,11 +1256,14 @@
                             <i class="fas fa-download"></i>
                           </button>
                           
+                          <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
                           <video class="kf-video" 
                                  id="kf-post-video-{{ item.data.post_id }}" 
-                                 preload="metadata" 
+                                 preload="none"
+                                 poster="{{ item.data.video_thumbnail.url|default:'' }}"
+                                 data-src="{{ item.data.video_file.url }}"
                                  onclick="kfTogglePlayPause('kf-post-video-{{ item.data.post_id }}', event)">
-                            <source src="{{ item.data.video_file.url }}#t=0.5" type="video/mp4">
+                            <source data-src="{{ item.data.video_file.url }}" type="video/mp4">
                             Your browser does not support HTML5 video.
                           </video>
                           
@@ -1220,6 +1289,7 @@
                             <i class="fas fa-image"></i> Image {{ forloop.counter }}
                           </span>
                           <div class="kf-image-slide">
+                            <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
                             <img 
                               src="{{ image.image.url }}" 
                               alt="Post image {{ forloop.counter }}"
@@ -1252,7 +1322,7 @@
                     <div class="kf-mixed-carousel-indicators">
                       {% for i in "x"|rjust:total_media %}
                       <span class="kf-mixed-indicator {% if forloop.first %}active{% endif %}" 
-                            onclick="kfGoToMixedSlide('{{ item.data.post_id }}')"></span>
+                            onclick="kfGoToMixedSlide('{{ item.data.post_id }}', {{ forloop.counter0 }})"></span>
                       {% endfor %}
                     </div>
                   </div>
@@ -1304,11 +1374,14 @@
                         <i class="fas fa-download"></i>
                       </button>
                       
+                      <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
                       <video class="kf-video" 
                              id="kf-post-video-{{ item.data.post_id }}" 
-                             preload="metadata" 
+                             preload="none"
+                             poster="{{ item.data.video_thumbnail.url|default:'' }}"
+                             data-src="{{ item.data.video_file.url }}"
                              onclick="kfTogglePlayPause('kf-post-video-{{ item.data.post_id }}', event)">
-                        <source src="{{ item.data.video_file.url }}#t=0.5" type="video/mp4">
+                        <source data-src="{{ item.data.video_file.url }}" type="video/mp4">
                         Your browser does not support HTML5 video.
                       </video>
                       
@@ -1330,6 +1403,7 @@
                         <div class="kf-image-track" id="kf-track-{{ item.data.post_id }}">
                           {% for image in item.data.images.all %}
                           <div class="kf-image-slide">
+                            <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
                             <img 
                               src="{{ image.image.url }}" 
                               alt="Post image {{ forloop.counter }}"
@@ -1365,6 +1439,7 @@
                       <!-- Single Image -->
                       {% with image=item.data.images.first %}
                       <div class="kf-image-slide">
+                        <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
                         <img 
                           src="{{ image.image.url }}" 
                           alt="Post image"
@@ -1405,6 +1480,7 @@
                 <img 
                   src="{{ item.data.product_owner.profile.picture.url }}" 
                   alt="{{ item.data.seller.username }}"
+                  loading="lazy"
                 >
                 <div>
                   <div style="font-weight: 600; font-size: 14px;">
@@ -1432,6 +1508,7 @@
                     src="{{ item.data.product_image.url }}" 
                     alt="{{ item.data.product_name }}"
                     class="kf-marketplace-ad-image"
+                    loading="lazy"
                   />
                 {% endif %}
               {% endwith %}
@@ -1493,7 +1570,7 @@
                   <div class="kf-user-suggestion-name">
                     {{ item.data.first_name }} {{ item.data.last_name }}
                     {% if item.data.profile.is_verify %} 
-                      <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                      <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;" loading="lazy">
                     {% endif %}
                   </div>
                   <div class="kf-user-suggestion-username">
@@ -1554,7 +1631,7 @@
                         loading="lazy"
                       />
                     {% else %}
-                      <img src="{{ product.product_image.url }}" alt="{{ product.product_name }}">
+                      <img src="{{ product.product_image.url }}" alt="{{ product.product_name }}" loading="lazy">
                     {% endif %}
                   {% endwith %}
                   <div class="kf-product-name">{{ product.product_name }}</div>
@@ -1698,19 +1775,28 @@
       return cookieValue;
     }
     
-    // Lazy load images
-    function kfLazyLoad() {
-      const lazyImages = document.querySelectorAll('img[loading="lazy"]');
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const img = entry.target;
-            img.classList.add('loaded');
-          }
-        });
-      }, { rootMargin: '100px' });
+    // TEXT SHOW MORE/LESS FUNCTION
+    function kfToggleText(postId) {
+      const textElement = document.getElementById(`kf-text-${postId}`);
+      const button = document.querySelector(`#kf-text-${postId}`).nextElementSibling;
+      const span = button.querySelector('span');
+      const icon = button.querySelector('i');
       
-      lazyImages.forEach(img => observer.observe(img));
+      if (textElement.classList.contains('collapsed')) {
+        // Expand text
+        textElement.classList.remove('collapsed');
+        textElement.classList.add('expanded');
+        span.textContent = 'less';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+      } else {
+        // Collapse text
+        textElement.classList.remove('expanded');
+        textElement.classList.add('collapsed');
+        span.textContent = 'more';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+      }
     }
     
     // Mixed media carousel functions
@@ -1814,12 +1900,100 @@
       document.body.removeChild(link);
     }
     
-    // Initialize on load
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', kfLazyLoad);
-    } else {
-      kfLazyLoad();
+    // Update video play function for lazy loading
+    function kfTogglePlayPause(videoId, event) {
+      event.stopPropagation();
+      const video = document.getElementById(videoId);
+      
+      // If video hasn't been loaded yet, load it first
+      if (video.hasAttribute('data-src') && !video.src) {
+        const source = video.querySelector('source[data-src]');
+        if (source) {
+          source.src = source.dataset.src;
+          video.load();
+          video.removeAttribute('data-src');
+          
+          // Wait for video to load, then play
+          video.addEventListener('loadeddata', function playWhenLoaded() {
+            video.play();
+            video.parentElement.classList.remove('paused');
+            video.removeEventListener('loadeddata', playWhenLoaded);
+          });
+          return;
+        }
+      }
+      
+      // Toggle play/pause
+      if (video.paused) {
+        video.play();
+        video.parentElement.classList.remove('paused');
+      } else {
+        video.pause();
+        video.parentElement.classList.add('paused');
+      }
     }
+    
+    // ===== LAZY LOAD OPTIMIZATION SCRIPT =====
+    document.addEventListener('DOMContentLoaded', function() {
+      // 1. Lazy load videos when they're near the viewport
+      const lazyVideos = document.querySelectorAll('video[data-src]');
+      const videoObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const video = entry.target;
+            const source = video.querySelector('source[data-src]');
+            
+            if (source) {
+              // Load video metadata when near viewport
+              source.src = source.dataset.src;
+              video.load(); // Load metadata only (not full video)
+              video.removeAttribute('data-src');
+            }
+            
+            videoObserver.unobserve(video);
+          }
+        });
+      }, { rootMargin: '300px' }); // Load when 300px away from viewport
+      
+      lazyVideos.forEach(video => videoObserver.observe(video));
+      
+      // 2. Images are already lazy loaded by browser (loading="lazy")
+      // Just make sure they fade in smoothly
+      const lazyImages = document.querySelectorAll('img[loading="lazy"]');
+      const imgObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            img.style.opacity = '1';
+            imgObserver.unobserve(img);
+          }
+        });
+      });
+      
+      lazyImages.forEach(img => imgObserver.observe(img));
+      
+      // 3. Auto-detect long text and hide/show toggle buttons
+      document.querySelectorAll('.kf-post-text').forEach(textElement => {
+        const textContent = textElement.textContent.trim();
+        const lineCount = (textContent.match(/\n/g) || []).length + 1;
+        const charCount = textContent.length;
+        
+        // If text is long (more than 150 chars or has many lines)
+        if (charCount > 150 || lineCount > 3) {
+          textElement.classList.add('collapsed');
+          // Make sure there's a toggle button
+          if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kf-text-toggle')) {
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'kf-text-toggle';
+            toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
+            toggleBtn.onclick = function() {
+              kfToggleText(textElement.id.replace('kf-text-', ''));
+            };
+            textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
+          }
+        }
+      });
+    });
   </script>
 </body>
 </html>
