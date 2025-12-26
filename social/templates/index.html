@@ -5,147 +5,520 @@
   <meta charset="utf-8" />    
   <meta name="viewport" content="width=device-width, initial-scale=1" />    
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
-  <title>KishiFace</title>    
-  <style>    
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }    
-
-    /* ✅ Splash Screen */
+  <title>Login - Kishiface</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <style>
+    /* Clean, plane white design - no borders, no shadows */
+    :root {
+      --kf-bg: #ffffff;
+      --kf-text: #262626;
+      --kf-text-light: #8e8e8e;
+      --kf-primary: #0095f6;
+      --kf-error: #ed4956;
+      --kf-success: #4cb5f9;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #ffffff;
+      color: var(--kf-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    /* Splash Screen */
     #splash {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: #fff; /* white background like Instagram */
+      background: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 9999;
-      transition: opacity 0.8s ease, visibility 0.8s ease;
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
     }
-    #splash img {
-      width: 120px;
-      height: auto;
-      animation: fadeIn 1.5s ease-in-out infinite alternate;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0.6; transform: scale(0.95); }
-      to { opacity: 1; transform: scale(1); }
-    }
+    
     #splash.hidden {
       opacity: 0;
       visibility: hidden;
     }
-
-    form { max-width: 320px; }    
-    .field { margin-bottom: 14px; }    
-    label { display: block; margin-bottom: 6px; font-weight: 600; }    
-    input[type="text"], input[type="email"], input[type="password"] {    
-      width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;    
-    }    
-    .actions { margin-top: 16px; }    
-    button { padding: 10px 14px; border: 1px solid  #222; background: #222; color: #fff; border-radius: 8px; cursor: pointer; }    
-    button:hover { opacity: .9; }    
-    small { color: #555; }    
-    .signup-link { margin-top: 12px; display: block; font-size: 14px; }    
-    .signup-link a { color: #0066cc; text-decoration: none; }    
-    .signup-link a:hover { text-decoration: underline; }    
-
-    /* Skeleton styles */    
-    .skeleton {    
-      background: #ddd;    
-      border-radius: 6px;    
-      margin-bottom: 14px;    
-      animation: pulse 1.5s infinite ease-in-out;    
-    }    
-    .skeleton.title { height: 28px; width: 30%; margin-bottom: 20px; }    
-    .skeleton.input { height: 42px; width: 100%; }    
-    .skeleton.button { height: 44px; width: 100%; border-radius: 8px; }    
-    .skeleton.link { height: 16px; width: 70%; margin-top: 12px; }    
-
-    @keyframes pulse {    
-      0% { background-color: #e0e0e0; }    
-      50% { background-color: #f5f5f5; }    
-      100% { background-color: #e0e0e0; }    
-    }    
-
-    #content { display: none; }    
-  </style>    
+    
+    #splash img {
+      width: 120px;
+      height: 120px;
+      border-radius: 25px;
+      object-fit: cover;
+      animation: kfFadeInOut 2s ease-in-out infinite;
+    }
+    
+    @keyframes kfFadeInOut {
+      0%, 100% { opacity: 0.8; transform: scale(0.98); }
+      50% { opacity: 1; transform: scale(1.02); }
+    }
+    
+    /* Login Container */
+    .kf-login-container {
+      width: 100%;
+      max-width: 350px;
+      background: transparent;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    
+    .kf-login-container.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    /* Logo */
+    .kf-logo {
+      width: 100px;
+      height: 100px;
+      border-radius: 25px;
+      object-fit: cover;
+      margin: 0 auto 28px;
+      display: block;
+    }
+    
+    /* Title */
+    .kf-title {
+      font-size: 32px;
+      font-weight: 400;
+      margin-bottom: 8px;
+      color: var(--kf-text);
+      letter-spacing: -0.5px;
+    }
+    
+    .kf-subtitle {
+      font-size: 16px;
+      color: var(--kf-text-light);
+      margin-bottom: 40px;
+      font-weight: 300;
+      line-height: 1.5;
+    }
+    
+    /* Form */
+    .kf-form {
+      width: 100%;
+    }
+    
+    .kf-form-group {
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    
+    .kf-input-wrapper {
+      position: relative;
+    }
+    
+    .kf-input-icon {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--kf-text-light);
+      font-size: 16px;
+      width: 44px;
+      text-align: center;
+    }
+    
+    .kf-input {
+      width: 100%;
+      padding: 16px 16px 16px 44px;
+      font-size: 16px;
+      background: #f8f8f8;
+      border: none;
+      border-radius: 12px;
+      color: var(--kf-text);
+      transition: background-color 0.2s ease;
+    }
+    
+    .kf-input:focus {
+      outline: none;
+      background: #f0f0f0;
+    }
+    
+    .kf-input::placeholder {
+      color: var(--kf-text-light);
+      font-weight: 300;
+    }
+    
+    /* Error Messages */
+    .kf-error {
+      font-size: 13px;
+      color: var(--kf-error);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 400;
+    }
+    
+    /* Login Button */
+    .kf-login-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--kf-primary);
+      color: #ffffff;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    
+    .kf-login-btn:hover {
+      opacity: 0.9;
+    }
+    
+    .kf-login-btn:active {
+      opacity: 0.8;
+    }
+    
+    .kf-login-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    /* Divider */
+    .kf-divider {
+      display: flex;
+      align-items: center;
+      margin: 30px 0;
+      color: var(--kf-text-light);
+      font-size: 14px;
+    }
+    
+    .kf-divider::before,
+    .kf-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: #f0f0f0;
+    }
+    
+    .kf-divider span {
+      padding: 0 20px;
+    }
+    
+    /* Sign Up Link */
+    .kf-signup-link {
+      margin-top: 30px;
+    }
+    
+    .kf-signup-text {
+      font-size: 15px;
+      color: var(--kf-text);
+      margin-bottom: 16px;
+      font-weight: 400;
+    }
+    
+    .kf-signup-btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      background: transparent;
+      color: var(--kf-primary);
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 500;
+      text-decoration: none;
+      text-align: center;
+      transition: background-color 0.2s ease;
+    }
+    
+    .kf-signup-btn:hover {
+      background: #f8f8f8;
+    }
+    
+    /* Skeleton Loader */
+    #skeleton {
+      width: 100%;
+      max-width: 350px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .kf-skeleton {
+      background: #f0f0f0;
+      animation: kfSkeletonPulse 1.5s ease-in-out infinite;
+      border-radius: 12px;
+    }
+    
+    @keyframes kfSkeletonPulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 0.8; }
+      100% { opacity: 0.6; }
+    }
+    
+    .kf-skeleton-logo {
+      width: 100px;
+      height: 100px;
+      border-radius: 25px;
+      margin: 0 auto;
+    }
+    
+    .kf-skeleton-title {
+      width: 60%;
+      height: 36px;
+      margin: 0 auto 10px;
+    }
+    
+    .kf-skeleton-subtitle {
+      width: 80%;
+      height: 20px;
+      margin: 0 auto 40px;
+    }
+    
+    .kf-skeleton-input {
+      height: 52px;
+    }
+    
+    .kf-skeleton-button {
+      height: 52px;
+      margin-top: 10px;
+    }
+    
+    .kf-skeleton-divider {
+      height: 1px;
+      margin: 30px 0;
+    }
+    
+    .kf-skeleton-signup {
+      height: 52px;
+      margin-top: 30px;
+      border-radius: 12px;
+    }
+    
+    /* Responsive */
+    @media (max-width: 400px) {
+      body {
+        padding: 16px;
+      }
+      
+      .kf-title {
+        font-size: 28px;
+      }
+      
+      .kf-subtitle {
+        font-size: 15px;
+      }
+    }
+  </style>
 </head>    
 <body>    
 
-  <!-- ✅ Splash Screen -->
+  <!-- Splash Screen -->
   <div id="splash">
-    <img src="{% static 'images/logo.jpg' %}" alt="App Logo" /> <!-- Replace logo.png with your app logo -->
+    <img src="{% static 'images/logo.jpg' %}" alt="Kishiface Logo">
   </div>
 
-  <!-- Skeleton Loader -->    
-  <div id="skeleton">    
-    <div class="skeleton title"></div>    
-    <div class="skeleton input"></div>    
-    <div class="skeleton input"></div>    
-    <div class="skeleton button"></div>    
-    <div class="skeleton link"></div>    
-  </div>    
+  <!-- Skeleton Loader -->
+  <div id="skeleton">
+    <div class="kf-skeleton kf-skeleton-logo"></div>
+    <div class="kf-skeleton kf-skeleton-title"></div>
+    <div class="kf-skeleton kf-skeleton-subtitle"></div>
+    <div class="kf-skeleton kf-skeleton-input"></div>
+    <div class="kf-skeleton kf-skeleton-input"></div>
+    <div class="kf-skeleton kf-skeleton-button"></div>
+    <div class="kf-skeleton kf-skeleton-divider"></div>
+    <div class="kf-skeleton kf-skeleton-signup"></div>
+  </div>
 
-  <!-- Real Content -->    
-  <div id="content">    
-    <h1>Login</h1>    
+  <!-- Login Content -->
+  <div class="kf-login-container" id="content">
+    <!-- Logo -->
+    <img src="{% static 'images/logo.jpg' %}" alt="Kishiface" class="kf-logo">
+    
+    <!-- Title -->
+    <h1 class="kf-title">Kishiface</h1>
+    <p class="kf-subtitle">Connect with friends and share your moments</p>
 
-{% include 'info.html' %}
+    <!-- Info Messages -->
+    {% include 'info.html' %}
 
-    <form method="post">  
-        {% csrf_token %}   
-      <!-- Username or Email -->    
-      <div class="field">    
-        <label for="username">Username or Email</label>    
-        <input    
-          type="text"    
-          id="username"    
-          name="user_check"    
-          placeholder="Enter your username or email"    
-          required    
-        />    
-      </div>    
+    <!-- Login Form -->
+    <form method="post" class="kf-form">
+      {% csrf_token %}
+      
+      <!-- Username/Email -->
+      <div class="kf-form-group">
+        <div class="kf-input-wrapper">
+          <i class="fas fa-user kf-input-icon"></i>
+          <input 
+            type="text" 
+            name="user_check" 
+            class="kf-input"
+            placeholder="Username or email"
+            required
+            autocomplete="username"
+          >
+        </div>
+        {% if messages %}
+          {% for message in messages %}
+            {% if 'username' in message.tags or 'user_check' in message.tags %}
+              <div class="kf-error">
+                <i class="fas fa-exclamation-circle"></i>
+                {{ message }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      </div>
 
-      <!-- Password -->    
-      <div class="field">    
-        <label for="password">Password</label>    
-        <input    
-          type="password"    
-          id="password"    
-          name="password"    
-          placeholder="Enter your password"    
-          minlength="6"    
-          autocomplete="current-password"    
-          required    
-        />    
-      </div>    
+      <!-- Password -->
+      <div class="kf-form-group">
+        <div class="kf-input-wrapper">
+          <i class="fas fa-lock kf-input-icon"></i>
+          <input 
+            type="password" 
+            name="password" 
+            class="kf-input"
+            placeholder="Password"
+            minlength="6"
+            required
+            autocomplete="current-password"
+          >
+        </div>
+        {% if messages %}
+          {% for message in messages %}
+            {% if 'password' in message.tags %}
+              <div class="kf-error">
+                <i class="fas fa-exclamation-circle"></i>
+                {{ message }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      </div>
 
-      <!-- Submit -->    
-      <div class="actions">    
-        <button type="submit" name="login">Login</button>    
-      </div>    
+      <!-- Submit Button -->
+      <button type="submit" name="login" class="kf-login-btn">
+        <i class="fas fa-sign-in-alt"></i>
+        Log In
+      </button>
+    </form>
 
-      <!-- Sign up link -->    
-      <div class="signup-link">    
-        Don’t have an account? <a href="{% url 'register' %}">Sign up here</a>    
-      </div>    
-    </form>    
-  </div>    
+    <!-- Divider -->
+    <div class="kf-divider">
+      <span>or</span>
+    </div>
 
-  <script>    
-    // ✅ Show splash then skeleton then real content
-    window.addEventListener("load", function () {    
-      setTimeout(() => {    
-        document.getElementById("splash").classList.add("hidden"); // hide splash
+    <!-- Sign Up Link -->
+    <div class="kf-signup-link">
+      <p class="kf-signup-text">Don't have an account?</p>
+      <a href="{% url 'register' %}" class="kf-signup-btn">
+        <i class="fas fa-user-plus"></i>
+        Sign Up
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // Handle splash screen and skeleton transition
+    window.addEventListener("load", function () {
+      // Hide splash screen after 1.5 seconds
+      setTimeout(() => {
+        const splash = document.getElementById("splash");
+        splash.classList.add("hidden");
+        
+        // Hide skeleton after splash
         setTimeout(() => {
-          document.getElementById("skeleton").style.display = "none";    
-          document.getElementById("content").style.display = "block";    
-        }, 1000); // skeleton delay
-      }, 1500); // splash screen duration
-    });    
-  </script>    
+          const skeleton = document.getElementById("skeleton");
+          const content = document.getElementById("content");
+          
+          skeleton.style.display = "none";
+          content.classList.add("show");
+          
+          // Auto-focus on username input
+          const usernameInput = document.querySelector('input[name="user_check"]');
+          if (usernameInput) {
+            usernameInput.focus();
+          }
+        }, 200);
+      }, 1500);
+    });
+    
+    // Form submission feedback
+    document.addEventListener('DOMContentLoaded', function() {
+      const form = document.querySelector('form');
+      const inputs = document.querySelectorAll('.kf-input');
+      const loginBtn = document.querySelector('.kf-login-btn');
+      
+      // Add input focus effects
+      inputs.forEach(input => {
+        input.addEventListener('focus', function() {
+          this.style.background = '#f0f0f0';
+        });
+        
+        input.addEventListener('blur', function() {
+          this.style.background = '#f8f8f8';
+        });
+      });
+      
+      // Form submission
+      form.addEventListener('submit', function(e) {
+        // Basic validation before submit
+        const username = document.querySelector('input[name="user_check"]').value.trim();
+        const password = document.querySelector('input[name="password"]').value.trim();
+        
+        if (!username || !password) {
+          e.preventDefault();
+          
+          // Add shake animation
+          form.style.animation = 'shake 0.5s';
+          setTimeout(() => {
+            form.style.animation = '';
+          }, 500);
+          
+          return false;
+        }
+        
+        // Change button to loading state
+        loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+        loginBtn.disabled = true;
+        
+        // Add CSS for shake animation
+        const style = document.createElement('style');
+        style.textContent = `
+          @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+          }
+        `;
+        document.head.appendChild(style);
+      });
+    });
+  </script>
 
 </body>    
 </html>
