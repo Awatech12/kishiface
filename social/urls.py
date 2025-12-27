@@ -14,6 +14,10 @@ urlpatterns = [
     path('search/delete/<int:history_id>/', views.delete_history, name='delete_history'),
     path('search/clear/', views.clear_history, name='clear_history'),
     path('inbox',views.inbox, name='inbox'),
+    path('explore/', views.explore_users, name='explore'),
+    
+    # If you want both /explore/ and /explore-users/ to work:
+    path('explore-users/', views.explore_users, name='explore_users'),
     path('inbox',views.inbox, name='inbox'),
     path('followers/<str:username>', views.follower_list, name="followers"),
     path('following/<str:username>', views.following_list, name='following'),
