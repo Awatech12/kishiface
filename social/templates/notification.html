@@ -53,45 +53,297 @@
             flex-direction: column;
         }
 
+        /* Empty notifications styles */
+        .kishiface-empty-notifications {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        .kishiface-empty-icon {
+            font-size: 64px;
+            color: #dbdbdb;
+            margin-bottom: 20px;
+        }
+
+        .kishiface-empty-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #262626;
+        }
+
+        .kishiface-empty-text {
+            font-size: 14px;
+            color: #8e8e8e;
+            max-width: 300px;
+            line-height: 1.4;
+        }
+
+        /* Notification item wrapper */
+        .kishiface-notification-wrapper {
+            position: relative;
+        }
+
+        /* Notification removal button */
+        .kishiface-remove-btn {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #efefef;
+            color: #8e8e8e;
+            cursor: pointer;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            opacity: 0;
+            z-index: 20;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .kishiface-notification-wrapper:hover .kishiface-remove-btn {
+            opacity: 1;
+        }
+
+        .kishiface-remove-btn:hover {
+            background-color: #efefef;
+            color: #ff0000;
+            border-color: #ff0000;
+        }
+
+        /* Ensure notification content doesn't overlap with remove button */
+        .kishiface-notif-item {
+            padding-right: 50px !important; /* Space for the remove button */
+        }
+
+        /* Loading spinner */
+        .kishiface-remove-btn .fa-spinner {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         @media (max-width: 600px) {
             .kishiface-activity-container {
                 border: none;
+            }
+            
+            .kishiface-empty-icon {
+                font-size: 48px;
+            }
+            
+            .kishiface-empty-title {
+                font-size: 20px;
+            }
+            
+            /* Always show remove button on mobile */
+            .kishiface-remove-btn {
+                opacity: 0.8;
+                background: #fff;
+            }
+            
+            .kishiface-notif-item {
+                padding-right: 45px !important;
             }
         }
     </style>
 </head>
 <body>
 
+<!-- Add CSRF token for AJAX requests -->
+{% csrf_token %}
+
 <div class="kishiface-activity-container">
     <div class="kishiface-header">Notifications</div>
 
     <div class="kishiface-list">
-        {% if today_notifications %}
-            <div class="kishiface-section-title">Today</div>
-            {% for n in today_notifications %}
-                {% include "snippet/activity_item.html" %}
-            {% endfor %}
-        {% endif %}
+        {% if today_notifications or week_notifications or earlier_notifications %}
+            {% if today_notifications %}
+                <div class="kishiface-section-title">Today</div>
+                {% for n in today_notifications %}
+                    <div class="kishiface-notification-wrapper" 
+                         data-post-id="{{ n.post.post_id }}" 
+                         data-notification-type="{{ n.type }}"
+                         id="notification-{{ n.post.post_id }}-{{ n.type|slugify }}">
+                        <div class="kishiface-notification-content">
+                            {% include "snippet/activity_item.html" with n=n %}
+                        </div>
+                        <button class="kishiface-remove-btn" 
+                                onclick="removeNotification('{{ n.post.post_id }}', '{{ n.type }}', this)">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
 
-        {% if week_notifications %}
-            <div class="kishiface-section-title">This Week</div>
-            {% for n in week_notifications %}
-                {% include "snippet/activity_item.html" %}
-            {% endfor %}
-        {% endif %}
+            {% if week_notifications %}
+                <div class="kishiface-section-title">This Week</div>
+                {% for n in week_notifications %}
+                    <div class="kishiface-notification-wrapper"
+                         data-post-id="{{ n.post.post_id }}" 
+                         data-notification-type="{{ n.type }}"
+                         id="notification-{{ n.post.post_id }}-{{ n.type|slugify }}">
+                        <div class="kishiface-notification-content">
+                            {% include "snippet/activity_item.html" with n=n %}
+                        </div>
+                        <button class="kishiface-remove-btn" 
+                                onclick="removeNotification('{{ n.post.post_id }}', '{{ n.type }}', this)">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
 
-        {% if earlier_notifications %}
-            <div class="kishiface-section-title">Earlier</div>
-            {% for n in earlier_notifications %}
-                {% include "snippet/activity_item.html" %}
-            {% endfor %}
+            {% if earlier_notifications %}
+                <div class="kishiface-section-title">Earlier</div>
+                {% for n in earlier_notifications %}
+                    <div class="kishiface-notification-wrapper"
+                         data-post-id="{{ n.post.post_id }}" 
+                         data-notification-type="{{ n.type }}"
+                         id="notification-{{ n.post.post_id }}-{{ n.type|slugify }}">
+                        <div class="kishiface-notification-content">
+                            {% include "snippet/activity_item.html" with n=n %}
+                        </div>
+                        <button class="kishiface-remove-btn" 
+                                onclick="removeNotification('{{ n.post.post_id }}', '{{ n.type }}', this)">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% else %}
+            <!-- Empty notifications state -->
+            <div class="kishiface-empty-notifications">
+                <div class="kishiface-empty-icon">
+                    <i class="far fa-bell"></i>
+                </div>
+                <div class="kishiface-empty-title">No notifications yet</div>
+                <div class="kishiface-empty-text">
+                    When you get notifications, they'll show up here. Follow people or interact with posts to see notifications.
+                </div>
+            </div>
         {% endif %}
     </div>
 </div>
 
-
+<script>
+    function removeNotification(postId, notificationType, buttonElement) {
+        // Show loading spinner
+        const originalIcon = buttonElement.innerHTML;
+        buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        buttonElement.disabled = true;
+        
+        // Get the notification wrapper
+        const notificationId = `notification-${postId}-${notificationType.replace(/ /g, '-')}`;
+        const notificationWrapper = document.getElementById(notificationId);
+        
+        // Get CSRF token
+        function getCSRFToken() {
+            // Try to get from form first
+            const csrfTokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (csrfTokenInput) {
+                return csrfTokenInput.value;
+            }
+            
+            // Fallback to cookie
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, 10) === 'csrftoken=') {
+                        cookieValue = decodeURIComponent(cookie.substring(10));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // We need to send the first notification ID from this group
+        // For now, we'll send post_id and notification_type
+        const requestData = {
+            post_id: postId,
+            notification_type: notificationType,
+            csrfmiddlewaretoken: getCSRFToken()
+        };
+        
+        // Send request to delete notification group
+        fetch(`/notifications/delete-group/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCSRFToken(),
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Success - remove the notification from UI
+                if (notificationWrapper) {
+                    notificationWrapper.style.opacity = '0.5';
+                    notificationWrapper.style.transform = 'translateX(-20px)';
+                    setTimeout(() => {
+                        notificationWrapper.remove();
+                        // Check if we need to show empty state
+                        checkEmptyState();
+                    }, 300);
+                }
+            } else {
+                // Error - restore button
+                buttonElement.innerHTML = originalIcon;
+                buttonElement.disabled = false;
+                alert('Could not delete notification: ' + (data.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            buttonElement.innerHTML = originalIcon;
+            buttonElement.disabled = false;
+            alert('Network error. Please try again.');
+        });
+    }
+    
+    function checkEmptyState() {
+        const container = document.querySelector('.kishiface-list');
+        const notifications = container.querySelectorAll('.kishiface-notification-wrapper');
+        const emptyState = container.querySelector('.kishiface-empty-notifications');
+        
+        // If no notifications left and no empty state is shown
+        if (notifications.length === 0 && !emptyState) {
+            // Remove any remaining section titles
+            const sectionTitles = container.querySelectorAll('.kishiface-section-title');
+            sectionTitles.forEach(title => title.remove());
+            
+            // Show empty state
+            container.innerHTML = `
+                <div class="kishiface-empty-notifications">
+                    <div class="kishiface-empty-icon">
+                        <i class="far fa-bell"></i>
+                    </div>
+                    <div class="kishiface-empty-title">No notifications yet</div>
+                    <div class="kishiface-empty-text">
+                        When you get notifications, they'll show up here. Follow people or interact with posts to see notifications.
+                    </div>
+                </div>
+            `;
+        }
+    }
+</script>
 
 </body>
 </html>
 {% include 'footer.html' %}
-

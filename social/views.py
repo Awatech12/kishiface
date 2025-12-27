@@ -834,6 +834,33 @@ def notification_partial(request):
     })
 def inbox_partial(request):
     return render(request, 'snippet/inbox_count.html')
+# Alternative simpler delete view
+@login_required
+def delete_notification_group(request):
+    if request.method == 'POST':
+        import json
+        data = json.loads(request.body)
+        
+        post_id = data.get('post_id')
+        notification_type = data.get('notification_type')
+        
+        if not post_id or not notification_type:
+            return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
+        
+        # Delete all notifications in this group
+        deleted_count, _ = Notification.objects.filter(
+            recipient=request.user,
+            post_id=post_id,
+            notification_type=notification_type
+        ).delete()
+        
+        return JsonResponse({
+            'status': 'success',
+            'deleted_count': deleted_count,
+            'message': f'Deleted {deleted_count} notifications'
+        })
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=400)
 def error_404(request, exception):
     return render(request, '404.html', status=404)
 def logout(request):
