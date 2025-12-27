@@ -81,13 +81,19 @@ def home(request):
     # Build feed
     feed = []
     
-    if not following:  # New user
-        feed = [{'type': 'user_suggestion', 'data': u} for u in users[:3]]
-        feed += [{'type': 'product', 'data': p} for p in products[:2]]
-        if not feed:
-            feed.append({'type': 'welcome'})
+    if not following:  # New user - hasn't followed anyone yet
+        # Always show welcome message for new users
+        feed.append({'type': 'welcome'})
+        
+        # Then add some user suggestions (up to 3)
+        if users:
+            feed += [{'type': 'user_suggestion', 'data': u} for u in users[:3]]
+        
+        # Then add some marketplace products (up to 2)
+        if products:
+            feed += [{'type': 'product', 'data': p} for p in products[:2]]
     
-    else:  # Existing user
+    else:  # Existing user - already follows people
         for i, post in enumerate(posts, 1):
             feed.append({'type': 'post', 'data': post})
             if i % 2 == 0:
