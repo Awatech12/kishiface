@@ -817,9 +817,21 @@ def marketForm(request):
 
 
 # ==== for Notification and inbox  updating =====
+# In your views.py
 def notification_partial(request):
-    return render(request, 'snippet/notification_count.html')
-
+    if request.user.is_authenticated:
+        # Calculate unread notifications count
+        unread_count = Notification.objects.filter(
+            recipient=request.user,
+            is_read=False
+        ).count()
+    else:
+        unread_count = 0
+    
+    # Return the complete badge HTML
+    return render(request, 'snippet/notification_count.html', {
+        'unread_notifications_count': unread_count
+    })
 def inbox_partial(request):
     return render(request, 'snippet/inbox_count.html')
 def error_404(request, exception):

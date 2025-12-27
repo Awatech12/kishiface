@@ -4,6 +4,9 @@
   <meta charset="utf-8" />  
   <meta name="viewport" content="width=device-width, initial-scale=1" />  
   <title>Home - KishiFace</title>  
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  
   <style>  
     body { 
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
@@ -115,13 +118,6 @@
       background: rgba(255, 68, 68, 0.1);
     }
     
-    .chat-icon {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-    
     .profile-img {
       width: 100%;
       height: 100%;
@@ -156,6 +152,31 @@
       z-index: 1002;
     }
     
+    /* Footer Notification Badge */
+    .footer-notification-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background-color: #ff3b30;
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+      z-index: 1002;
+      border: 1.5px solid white;
+    }
+    
+    /* Hide badge when count is 0 */
+    .footer-notification-badge.hidden {
+      display: none !important;
+    }
+    
     /* Profile Trigger Notification Indicator */
     .profile-notification-indicator {
       position: absolute;
@@ -178,6 +199,10 @@
       animation: pulse 1.5s infinite;
     }
     
+    .profile-notification-indicator.hidden {
+      display: none !important;
+    }
+    
     @keyframes pulse {
       0% {
         transform: scale(1);
@@ -191,6 +216,22 @@
         transform: scale(1);
         box-shadow: 0 2px 6px rgba(237, 73, 86, 0.5);
       }
+    }
+    
+    /* Notification icon specific styles */
+    .notification-icon-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      color: #333;
+      font-size: 22px;
+      position: relative;
+    }
+    
+    .notification-icon-link:hover {
+      color: #0095f6;
     }
     
     /* Modal styles for logout confirmation */
@@ -280,6 +321,12 @@
       background: #ff0000;
     }
     
+    /* Footer badge container */
+    .footer-badge-container {
+      position: relative;
+      display: inline-block;
+    }
+    
     /* Responsive adjustments */
     @media (max-width: 768px) {
       .bottom-nav {
@@ -307,12 +354,29 @@
         font-size: 9px;
       }
       
+      .footer-notification-badge {
+        min-width: 14px;
+        height: 14px;
+        font-size: 9px;
+      }
+      
       .profile-notification-indicator {
         min-width: 18px;
         height: 18px;
         font-size: 9px;
         top: -2px;
         right: -2px;
+      }
+      
+      .notification-icon-link {
+        width: 20px;
+        height: 20px;
+        font-size: 18px;
+      }
+      
+      .profile-trigger {
+        width: 45px;
+        height: 45px;
       }
     }
     
@@ -327,14 +391,16 @@
       }
       
       .profile-trigger {
-        width: 45px;
-        height: 45px;
+        width: 42px;
+        height: 42px;
       }
       
       .profile-notification-indicator {
         min-width: 16px;
         height: 16px;
         font-size: 8px;
+        top: -1px;
+        right: -1px;
       }
     }
   </style>  
@@ -394,9 +460,23 @@
       </svg>
     </a>
     
-    <!-- Channel Icon -->
-    <a href="{% url 'channel_create' %}" title="Channels">
-      <img src="{% static 'images/chat.png' %}" alt="Channel" class="chat-icon">
+    <!-- Notification Icon with HTMX Badge -->
+    <a href="{% url 'notification_list' %}" title="Notifications" class="notification-icon-link">
+      <div class="footer-badge-container">
+        <i class="fa-regular fa-bell"></i>
+        <div class="footer-notification-badge {% if unread_notifications_count == 0 %}hidden{% endif %}" 
+             id="footerNotificationBadge"
+             data-count="{{ unread_notifications_count|default:0 }}">
+          <span
+            hx-get="{% url 'notification_partial' %}"
+            hx-trigger="every 0.15s"
+            hx-target="#footerNotificationBadge"
+            hx-swap="outerHTML"   
+          >
+          {{ unread_notifications_count|default:0 }}
+          </span>
+        </div>
+      </div>
     </a>
     
     <!-- Profile Icon in Navigation -->
@@ -427,6 +507,8 @@
             9+
           {% endif %}
         </div>
+      {% else %}
+        <div class="profile-notification-indicator hidden" id="profileNotificationIndicator">0</div>
       {% endif %}
     {% endwith %}
   </div>
@@ -515,60 +597,122 @@
       }
     });
     
-    // Function to check and update notifications
-    function checkNotifications() {
-      // You can implement AJAX call here to check for new notifications
-      // Example:
-      // fetch('/check-notifications/')
-      //   .then(response => response.json())
-      //   .then(data => {
-      //     if (data.new_notifications) {
-      //       updateNotificationUI(data.count);
-      //     }
-      //   });
-    }
-    
-    // Update notification UI
-    function updateNotificationUI(count) {
-      const indicator = document.getElementById('profileNotificationIndicator');
+    // Function to update total notification indicator
+    function updateTotalNotificationIndicator() {
+      const footerBadge = document.getElementById('footerNotificationBadge');
+      const exploreBadge = document.getElementById('exploreNotificationBadge');
+      const profileIndicator = document.getElementById('profileNotificationIndicator');
       
-      if (count > 0) {
-        if (!indicator) {
-          // Create new indicator if it doesn't exist
-          const newIndicator = document.createElement('div');
-          newIndicator.className = 'profile-notification-indicator';
-          newIndicator.id = 'profileNotificationIndicator';
-          newIndicator.textContent = count <= 9 ? count : '9+';
-          profileTrigger.appendChild(newIndicator);
-        } else {
-          // Update existing indicator
-          indicator.textContent = count <= 9 ? count : '9+';
-          indicator.style.display = 'flex';
-        }
-      } else {
-        // Hide indicator if no notifications
-        if (indicator) {
-          indicator.style.display = 'none';
+      let totalCount = 0;
+      
+      // Get count from footer notification badge (like/comment notifications)
+      if (footerBadge) {
+        const badgeText = footerBadge.textContent.trim();
+        const badgeCount = parseInt(badgeText) || 0;
+        if (badgeCount > 0 && !footerBadge.classList.contains('hidden')) {
+          totalCount += badgeCount;
         }
       }
+      
+      // Get count from explore notification badge (follow notifications)
+      if (exploreBadge) {
+        const exploreText = exploreBadge.textContent.trim();
+        const exploreCount = parseInt(exploreText) || 0;
+        totalCount += exploreCount;
+      }
+      
+      // Update profile notification indicator
+      if (profileIndicator) {
+        if (totalCount > 0) {
+          profileIndicator.textContent = totalCount <= 9 ? totalCount : '9+';
+          profileIndicator.classList.remove('hidden');
+        } else {
+          profileIndicator.classList.add('hidden');
+        }
+      }
+      
+      console.log('Total notifications:', totalCount);
     }
     
-    // Check notifications periodically (every 30 seconds)
-    setInterval(checkNotifications, 30000);
+    // Function to handle HTMX badge updates
+    function handleBadgeUpdate(event) {
+      const badge = event.target;
+      const countText = badge.textContent.trim();
+      const count = parseInt(countText) || 0;
+      
+      // Update badge visibility
+      if (count > 0) {
+        badge.classList.remove('hidden');
+        badge.setAttribute('data-count', count);
+      } else {
+        badge.classList.add('hidden');
+        badge.setAttribute('data-count', '0');
+      }
+      
+      // Update total notification indicator
+      setTimeout(updateTotalNotificationIndicator, 100);
+    }
+    
+    // Initialize HTMX configuration
+    htmx.config.useTemplateFragments = true;
+    
+    // Listen for HTMX events
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+      // Handle footer notification badge updates
+      if (event.target.id === 'footerNotificationBadge') {
+        handleBadgeUpdate(event);
+      }
+      
+      // Handle explore badge updates
+      if (event.target.id === 'exploreNotificationBadge') {
+        setTimeout(updateTotalNotificationIndicator, 100);
+      }
+    });
+    
+    // Also listen for HTMX beforeSwap to ensure proper handling
+    document.body.addEventListener('htmx:beforeSwap', function(event) {
+      if (event.detail.target.id === 'footerNotificationBadge' || 
+          event.detail.target.id === 'exploreNotificationBadge') {
+        event.detail.shouldSwap = true;
+      }
+    });
+    
+    // Initialize total indicator on page load
+    setTimeout(updateTotalNotificationIndicator, 500);
+    
+    // Check notifications periodically
+    setInterval(updateTotalNotificationIndicator, 30000);
     
     // Check when page becomes visible
     document.addEventListener('visibilitychange', function() {
       if (!document.hidden) {
-        checkNotifications();
+        updateTotalNotificationIndicator();
       }
     });
     
-    // Clear notifications when user opens the profile menu
-    profileTrigger.addEventListener('click', function() {
-      // You can add logic here to mark notifications as read
-      // when user opens the menu
-      setTimeout(checkNotifications, 1000);
-    });
+    // Mark notifications as read when user clicks notification icon
+    const notificationLink = document.querySelector('.notification-icon-link');
+    if (notificationLink) {
+      notificationLink.addEventListener('click', function() {
+        // You can add AJAX call here to mark notifications as read
+        // fetch('/mark-notifications-read/', { method: 'POST' });
+        
+        // Update UI immediately
+        setTimeout(updateTotalNotificationIndicator, 1000);
+      });
+    }
+    
+    // Mark follow notifications as read when user clicks explore icon
+    const exploreLink = document.querySelector('.explore-icon');
+    if (exploreLink) {
+      exploreLink.addEventListener('click', function() {
+        // You can add AJAX call here to mark follow notifications as read
+        // fetch('/mark-follow-notifications-read/', { method: 'POST' });
+        
+        // Update UI immediately
+        setTimeout(updateTotalNotificationIndicator, 1000);
+      });
+    }
   });
 </script>
 
