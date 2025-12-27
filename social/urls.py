@@ -15,6 +15,7 @@ urlpatterns = [
     path('search/clear/', views.clear_history, name='clear_history'),
     path('inbox',views.inbox, name='inbox'),
     path('explore/', views.explore_users, name='explore'),
+      path('mark-follow-notifications-read/', views.mark_follow_notifications_read, name='mark_follow_notifications_read'),
     
     # If you want both /explore/ and /explore-users/ to work:
     path('explore-users/', views.explore_users, name='explore_users'),

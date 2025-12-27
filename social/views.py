@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse 
+from .models import FollowNotification
 from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
@@ -110,6 +111,8 @@ def home(request):
 
 
 
+# views.py - Update follow_user view
+
 
 def follow_user(request, user_id):
     if request.method == 'POST':
@@ -128,10 +131,23 @@ def follow_user(request, user_id):
                 # Unfollow
                 current_profile.followings.remove(target_profile)
                 followed = False
+                
+                # Delete follow notification if exists
+                FollowNotification.objects.filter(
+                    from_user=request.user,
+                    to_user=user_to_follow
+                ).delete()
             else:
                 # Follow
                 current_profile.followings.add(target_profile)
                 followed = True
+                
+                # Create follow notification (only create if not self)
+                if request.user != user_to_follow:
+                    FollowNotification.objects.get_or_create(
+                        from_user=request.user,
+                        to_user=user_to_follow
+                    )
             
             # Save the profile
             current_profile.save()
@@ -149,6 +165,7 @@ def follow_user(request, user_id):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
 
     
 def post(request):
@@ -444,13 +461,37 @@ def update_profile(request, username):
 
 
     return render(request, 'update_profile.html', {'profile':profile})
+
+@login_required
+def mark_follow_notifications_read(request):
+    if request.method == 'POST':
+        # Mark all unread follow notifications as read
+        updated = FollowNotification.objects.filter(
+            to_user=request.user,
+            is_read=False
+        ).update(is_read=True)
+        
+        return JsonResponse({
+            'success': True,
+            'updated_count': updated
+        })
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})
 @login_required
 def explore_users(request):
     # Get current user's profile
     current_profile = get_object_or_404(Profile, user=request.user)
     
-    # Get search query from GET parameters
-    search_query = request.GET.get('q', '').strip()
+    # Get unread follow notifications count
+    unread_follow_count = FollowNotification.objects.filter(
+        to_user=request.user,
+        is_read=False
+    ).count()
+    
+    # Get recent follow notifications (last 10)
+    recent_follows = FollowNotification.objects.filter(
+        to_user=request.user
+    ).select_related('from_user', 'from_user__profile').order_by('-created_at')[:10]
     
     # Get Profile IDs of people the current user follows
     following_profile_ids = current_profile.followings.values_list('id', flat=True)
@@ -458,38 +499,21 @@ def explore_users(request):
     # Base queryset - exclude self profile and already followed profiles
     profiles = Profile.objects.exclude(user=request.user).exclude(id__in=following_profile_ids)
     
-    # Apply search filter if query exists
-    if search_query:
-        profiles = profiles.filter(
-            Q(user__username__icontains=search_query) |
-            Q(user__first_name__icontains=search_query) |
-            Q(user__last_name__icontains=search_query) |
-            Q(full_name__icontains=search_query) |
-            Q(bio__icontains=search_query) |
-            Q(location__icontains=search_query)
-        )
-    
     # Order by popularity (most followers first) by default
     profiles = profiles.annotate(
         follower_count=Count('followers')
     ).order_by('-follower_count', '-created_at')
-    
-    # Check if it's an AJAX request (for search)
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        # Return HTML snippet for AJAX requests
-        return render(request, 'partials/user_list.html', {
-            'profiles': profiles[:50],
-            'current_user': request.user,
-        })
     
     # For initial page load, limit to 30 profiles
     profiles = profiles[:30]
     
     return render(request, 'explore_users.html', {
         'profiles': profiles,
-        'search_query': search_query,
         'title': 'Explore Users',
+        'unread_follow_count': unread_follow_count,
+        'recent_follows': recent_follows,
     })
+
 
 
 

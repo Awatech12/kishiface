@@ -139,6 +139,26 @@ class Notification(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+class FollowNotification(models.Model):
+    from_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='sent_follow_notifications'
+    )
+    to_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='received_follow_notifications'
+    )
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = ['from_user', 'to_user']
+    
+    def __str__(self):
+        return f"{self.from_user.username} followed {self.to_user.username}"
 
 # --- START MESSAGE MODEL CORRECTION ---
 class Message(models.Model):

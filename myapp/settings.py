@@ -94,6 +94,7 @@ TEMPLATES = [
                 'social.context_processors.unread_count_processor',
                 'social.context_processors.information',
                 'social.context_processors.user_notifications',
+                'social.context_processors.follow_notifications_context',
             ],
         },
     },

@@ -1,8 +1,8 @@
-from .models import Message
+from .models import Message, Notification, FollowNotification
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
-from .models import Notification
+
 def unread_count_processor(request):
     if request.user.is_authenticated:
         unread_count = Message.objects.filter(receiver=request.user, is_read=False).count()
@@ -83,3 +83,54 @@ def user_notifications(request):
     }
 
 
+def follow_notifications_context(request):
+    """
+    Context processor for follow notifications
+    Provides:
+    - unread_follow_count: Count of unread follow notifications
+    - recent_follows: Recent follow notifications (last 10)
+    """
+    if not request.user.is_authenticated:
+        return {
+            'unread_follow_count': 0,
+            'recent_follows': [],
+            'total_follow_notifications': 0
+        }
+    
+    try:
+        # Get unread follow notifications count
+        unread_follow_count = FollowNotification.objects.filter(
+            to_user=request.user,
+            is_read=False
+        ).count()
+        
+        # Get recent follow notifications (last 10)
+        recent_follows = FollowNotification.objects.filter(
+            to_user=request.user
+        ).select_related(
+            'from_user', 
+            'from_user__profile'
+        ).order_by('-created_at')[:10]
+        
+        # Get total follow notifications count
+        total_follow_notifications = FollowNotification.objects.filter(
+            to_user=request.user
+        ).count()
+        
+        return {
+            'unread_follow_count': unread_follow_count,
+            'recent_follows': recent_follows,
+            'total_follow_notifications': total_follow_notifications,
+            'has_follow_notifications': total_follow_notifications > 0,
+            'has_unread_follows': unread_follow_count > 0,
+        }
+    
+    except Exception as e:
+        # In case of any error, return default values
+        return {
+            'unread_follow_count': 0,
+            'recent_follows': [],
+            'total_follow_notifications': 0,
+            'has_follow_notifications': False,
+            'has_unread_follows': False,
+        }

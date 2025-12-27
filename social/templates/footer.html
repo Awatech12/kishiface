@@ -55,6 +55,7 @@
       height: 36px;
       border-radius: 50%;
       transition: all 0.2s ease;
+      position: relative;
     }
     
     .nav-icons a:hover {
@@ -75,7 +76,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      overflow: visible;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     
@@ -134,6 +135,62 @@
       height: 24px;
       border-radius: 50%;
       object-fit: cover;
+    }
+    
+    /* Notification Badge Styles */
+    .notification-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: #ed4956;
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+      z-index: 1002;
+    }
+    
+    /* Profile Trigger Notification Indicator */
+    .profile-notification-indicator {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      background: #ed4956;
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      z-index: 1002;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      border: 2px solid white;
+      animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 2px 6px rgba(237, 73, 86, 0.5);
+      }
+      50% {
+        transform: scale(1.1);
+        box-shadow: 0 3px 8px rgba(237, 73, 86, 0.7);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 2px 6px rgba(237, 73, 86, 0.5);
+      }
     }
     
     /* Modal styles for logout confirmation */
@@ -243,6 +300,42 @@
         width: 20px;
         height: 20px;
       }
+      
+      .notification-badge {
+        min-width: 14px;
+        height: 14px;
+        font-size: 9px;
+      }
+      
+      .profile-notification-indicator {
+        min-width: 18px;
+        height: 18px;
+        font-size: 9px;
+        top: -2px;
+        right: -2px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .bottom-nav {
+        right: 10px;
+      }
+      
+      .nav-icons {
+        padding: 10px;
+        gap: 10px;
+      }
+      
+      .profile-trigger {
+        width: 45px;
+        height: 45px;
+      }
+      
+      .profile-notification-indicator {
+        min-width: 16px;
+        height: 16px;
+        font-size: 8px;
+      }
     }
   </style>  
 </head>  
@@ -270,13 +363,18 @@
       </svg>
     </a>  
     
-    <!-- Explore Users Icon - NEW -->
-    <a href="{% url 'explore' %}" title="Explore Users">
+    <!-- Explore Users Icon with Follow Notification Badge -->
+    <a href="{% url 'explore' %}" title="Explore Users" class="explore-icon">
       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z"/>
         <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8.25 15.75l1.5-1.5 2.25 2.25 4.5-4.5 1.5 1.5-6 6z"/>
         <circle cx="18" cy="6" r="1.5" stroke-width="2"/>
       </svg>
+      {% if unread_follow_count and unread_follow_count > 0 %}
+      <span class="notification-badge" id="exploreNotificationBadge">
+        {{ unread_follow_count }}
+      </span>
+      {% endif %}
     </a>
     
     <!-- Search Icon -->
@@ -314,9 +412,23 @@
     </a>
   </div>
   
-  <!-- Profile Picture Trigger -->
+  <!-- Profile Picture Trigger with Notification Indicator -->
   <div class="profile-trigger" id="profileTrigger">
     <img src="{{request.user.profile.picture.url}}" alt="Profile" class="profile-img">
+    
+    <!-- Total Notification Indicator -->
+    {% comment %} Calculate total notifications (follow + like/comment) {% endcomment %}
+    {% with total_notifications=unread_follow_count|add:unread_notifications_count %}
+      {% if total_notifications > 0 %}
+        <div class="profile-notification-indicator" id="profileNotificationIndicator">
+          {% if total_notifications <= 9 %}
+            {{ total_notifications }}
+          {% else %}
+            9+
+          {% endif %}
+        </div>
+      {% endif %}
+    {% endwith %}
   </div>
 </div>  
 
@@ -401,6 +513,61 @@
       if (e.key === 'Escape') {
         logoutModal.classList.remove('active');
       }
+    });
+    
+    // Function to check and update notifications
+    function checkNotifications() {
+      // You can implement AJAX call here to check for new notifications
+      // Example:
+      // fetch('/check-notifications/')
+      //   .then(response => response.json())
+      //   .then(data => {
+      //     if (data.new_notifications) {
+      //       updateNotificationUI(data.count);
+      //     }
+      //   });
+    }
+    
+    // Update notification UI
+    function updateNotificationUI(count) {
+      const indicator = document.getElementById('profileNotificationIndicator');
+      
+      if (count > 0) {
+        if (!indicator) {
+          // Create new indicator if it doesn't exist
+          const newIndicator = document.createElement('div');
+          newIndicator.className = 'profile-notification-indicator';
+          newIndicator.id = 'profileNotificationIndicator';
+          newIndicator.textContent = count <= 9 ? count : '9+';
+          profileTrigger.appendChild(newIndicator);
+        } else {
+          // Update existing indicator
+          indicator.textContent = count <= 9 ? count : '9+';
+          indicator.style.display = 'flex';
+        }
+      } else {
+        // Hide indicator if no notifications
+        if (indicator) {
+          indicator.style.display = 'none';
+        }
+      }
+    }
+    
+    // Check notifications periodically (every 30 seconds)
+    setInterval(checkNotifications, 30000);
+    
+    // Check when page becomes visible
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) {
+        checkNotifications();
+      }
+    });
+    
+    // Clear notifications when user opens the profile menu
+    profileTrigger.addEventListener('click', function() {
+      // You can add logic here to mark notifications as read
+      // when user opens the menu
+      setTimeout(checkNotifications, 1000);
     });
   });
 </script>
