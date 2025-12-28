@@ -53,6 +53,7 @@ urlpatterns = [
     path('create_channel', views.channel_create, name='channel_create'),
     path('post', views.post, name="post"),
     path('private/<str:username>', views.message, name='message'),
+    path('send_message/<str:username>/', views.send_message, name='send_message'),
     path('follow/<str:username>', views.follow, name='follow'),
     path('like/<uuid:post_id>', views.like_post, name='like_post'),
     path('comment/<uuid:post_id>', views.post_comment, name='post_comment'),

@@ -166,19 +166,33 @@ class Message(models.Model):
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver')
     conversation = models.TextField()
     
-    # Use CloudinaryField if USE_CLOUDINARY is True, matching the folder in message.py
+    # Add file_type field
+    file_type = models.CharField(max_length=20, blank=True, null=True)  # 'image', 'video', 'audio'
+    
+    # Use CloudinaryField if USE_CLOUDINARY is True
     if settings.USE_CLOUDINARY:
+        from cloudinary.models import CloudinaryField
         file = CloudinaryField(
-            'audio_message',
-            resource_type='video', # Cloudinary requires 'video' for audio files
-            folder='message_files', 
-            blank=True
+            'message_file',
+            resource_type='auto',
+            folder='message_files',
+            blank=True,
+            null=True
         )
     else:
-        file = models.FileField(upload_to='message_file', blank=True) # Changed to 'message_file' for clarity
-        
+        file = models.FileField(upload_to='message_files/', blank=True, null=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+    
+    # Add like field
+    like = models.ManyToManyField(User, related_name='liked_messages', blank=True)
+    
+    # REMOVED: message_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    
+    def __str__(self):
+        return f"{self.sender} to {self.receiver}: {self.conversation[:50]}"
+    
     @property
     def chat_date_label(self):
         message_date = self.created_at.date()
@@ -192,6 +206,7 @@ class Message(models.Model):
             return calendar.day_name[message_date.weekday()]
         else:
             return self.created_at.strftime("%B %d, %Y")
+    
     @property
     def chat_time(self):
         return self.created_at.strftime("%I:%M %p")

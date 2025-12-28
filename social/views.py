@@ -604,30 +604,116 @@ def delete_history(request, history_id):
 def clear_history(request):
     SearchHistory.objects.filter(user=request.user).delete()
     return redirect('search')
-
 @login_required(login_url='/')
 def message(request, username):
     receiver = get_object_or_404(User, username=username)
     sender = request.user
-    unread_message = Message.objects.filter(
-        receiver=sender, sender=receiver, is_read=False
+    
+    # Mark unread messages as read
+    unread_messages = Message.objects.filter(
+        sender=receiver,
+        receiver=sender,
+        is_read=False
     )
-    for msg in unread_message:
-        msg.is_read = True
-        msg.save()
-   
+    unread_messages.update(is_read=True)
+    
+    # Get conversations
     conversations = Message.objects.filter(
         Q(sender=sender, receiver=receiver) | Q(sender=receiver, receiver=sender)
     ).order_by('created_at')
+    
+    # Group messages by date
     grouped_messages = {}
     for label, msgs in groupby(conversations, key=lambda m: m.chat_date_label):
         grouped_messages[label] = list(msgs)
-
+    
     context = {
-        'grouped_messages':grouped_messages,
+        'grouped_messages': grouped_messages,
         'receiver': receiver
-        }
-    return render(request, 'message.html', context )
+    }
+    return render(request, 'message.html', context)
+
+@login_required(login_url='/')
+def send_message(request, username):
+    receiver = get_object_or_404(User, username=username)
+    
+    if request.method == 'POST':
+        message_text = request.POST.get('message', '')
+        file_upload = request.FILES.get('file_upload')
+        
+        # If no message and no file, just return success
+        if not message_text and not file_upload:
+            return JsonResponse({
+                'status': 'success',
+                'message': 'No content to send'
+            })
+        
+        file_type = None
+        if file_upload:
+            content_type = file_upload.content_type
+            if content_type.startswith('image/'):
+                file_type = 'image'
+            elif content_type.startswith('video/'):
+                file_type = 'video'
+            elif content_type.startswith('audio/'):
+                file_type = 'audio'
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Unsupported file type'
+                })
+        
+        # Create message
+        message = Message.objects.create(
+            sender=request.user,
+            receiver=receiver,
+            conversation=message_text if message_text else '',
+            file_type=file_type,
+            file=file_upload if file_upload else None
+        )
+        
+        # Mark any unread messages from this sender as read
+        unread_messages = Message.objects.filter(
+            sender=receiver,
+            receiver=request.user,
+            is_read=False
+        )
+        unread_messages.update(is_read=True)
+        
+        # Broadcast via WebSocket
+        channel_layer = get_channel_layer()
+        
+        # Create a unique room for the conversation
+        user_ids = sorted([request.user.id, receiver.id])
+        room_name = f"dm_{user_ids[0]}_{user_ids[1]}"
+        
+        file_url = message.file.url if message.file else None
+        
+        async_to_sync(channel_layer.group_send)(
+            room_name,
+            {
+                'type': 'direct_message',
+                'message_id': message.id,
+                'sender': request.user.username,
+                'receiver': receiver.username,
+                'message': message_text,
+                'file_type': file_type,
+                'file_url': file_url,
+                'time': message.chat_time,
+                'date_label': message.chat_date_label,
+                'created_at': message.created_at.isoformat()
+            }
+        )
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Message sent',
+            'message_id': message.id
+        })
+    
+    # Handle GET requests by redirecting to message page
+    return redirect('message', username=username)
+
 
 @login_required(login_url='/')
 def open_notification(request, post_id, notification_type):
