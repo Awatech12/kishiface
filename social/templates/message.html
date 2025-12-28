@@ -5,8 +5,10 @@
     <meta name="csrf-token" content="{{ csrf_token }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{{ receiver.username }} • Messages</title>
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Font Awesome (Updated CDN) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <!-- Emoji Picker CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.13.0/dist/emoji-picker.css">
     <style>
         /* Mobile-only Messenger Styles */
         :root {
@@ -20,7 +22,6 @@
             --kf-hover: #f2f2f2;
             --kf-error: #ff3b30;
             --kf-success: #34c759;
-            --kf-shadow: rgba(0, 0, 0, 0.1);
         }
 
         * {
@@ -44,6 +45,7 @@
             display: flex;
             flex-direction: column;
             background: var(--kf-white);
+            position: relative;
         }
 
         /* Chat Header */
@@ -57,7 +59,6 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 1px 3px var(--kf-shadow);
         }
 
         .kf-chat-user-info {
@@ -146,7 +147,6 @@
             font-size: 12px;
             color: var(--kf-secondary);
             border: 1px solid var(--kf-border);
-            box-shadow: 0 1px 2px var(--kf-shadow);
         }
 
         /* Message Bubbles */
@@ -194,13 +194,14 @@
             color: var(--kf-text);
             border-bottom-left-radius: 4px;
             border: 1px solid var(--kf-border);
-            box-shadow: 0 1px 2px var(--kf-shadow);
         }
 
         .kf-message-text {
             font-size: 15px;
             line-height: 1.4;
             margin-bottom: 4px;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
 
         .kf-message-meta {
@@ -232,12 +233,41 @@
             color: #53bdeb;
         }
 
+        /* Media Actions */
+        .kf-media-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+            gap: 8px;
+        }
+
+        .kf-download-btn {
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .kf-download-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+            transform: scale(1.1);
+        }
+
         /* Media Attachments */
         .kf-media-attachment {
             margin-top: 8px;
             border-radius: 12px;
             overflow: hidden;
             max-width: 250px;
+            position: relative;
         }
 
         .kf-media-attachment img {
@@ -248,7 +278,7 @@
             border-radius: 8px;
         }
 
-        /* Video Player */
+        /* Video Player with Progress Bar */
         .kf-video-player {
             background: #000;
             border-radius: 12px;
@@ -256,6 +286,7 @@
             margin-top: 8px;
             max-width: 250px;
             position: relative;
+            cursor: pointer;
         }
 
         .kf-video-player video {
@@ -263,7 +294,24 @@
             height: auto;
             display: block;
             border-radius: 8px;
-            cursor: pointer;
+        }
+
+        .kf-video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .kf-video-player:hover .kf-video-overlay {
+            opacity: 1;
         }
 
         .kf-video-controls {
@@ -271,12 +319,18 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
-            padding: 8px;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+            padding: 10px;
             display: flex;
             align-items: center;
             gap: 8px;
             z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .kf-video-player:hover .kf-video-controls {
+            opacity: 1;
         }
 
         .kf-video-play-btn {
@@ -292,48 +346,139 @@
             font-size: 14px;
             color: #333;
             z-index: 11;
+            flex-shrink: 0;
         }
 
-        /* Audio Player */
+        .kf-video-progress-container {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            margin: 0 8px;
+        }
+
+        .kf-video-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--kf-primary);
+            width: 0%;
+            transition: width 0.1s;
+        }
+
+        .kf-video-time {
+            font-size: 12px;
+            color: white;
+            min-width: 45px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        /* WhatsApp-style Audio Player */
         .kf-audio-player {
             background: var(--kf-white);
-            border-radius: 20px;
-            padding: 10px 14px;
+            border-radius: 18px;
+            padding: 12px 16px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             margin-top: 8px;
-            max-width: 220px;
+            max-width: 280px;
             border: 1px solid var(--kf-border);
-            box-shadow: 0 1px 3px var(--kf-shadow);
             position: relative;
+            cursor: pointer;
+        }
+
+        .kf-message-bubble.sent .kf-audio-player {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
         }
 
         .kf-audio-play-btn {
             background: var(--kf-primary);
             border: none;
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 12px;
+            font-size: 14px;
             flex-shrink: 0;
             z-index: 11;
         }
 
+        .kf-message-bubble.sent .kf-audio-play-btn {
+            background: white;
+            color: var(--kf-primary);
+        }
+
+        .kf-audio-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .kf-audio-waveform {
+            height: 24px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            margin-bottom: 4px;
+        }
+
+        .kf-audio-wave {
+            width: 2px;
+            background: var(--kf-border);
+            border-radius: 1px;
+            transition: all 0.3s;
+        }
+
+        .kf-message-bubble.sent .kf-audio-wave {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .kf-audio-wave.active {
+            background: var(--kf-primary);
+        }
+
+        .kf-message-bubble.sent .kf-audio-wave.active {
+            background: white;
+        }
+
+        .kf-audio-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .kf-audio-duration {
+            color: var(--kf-secondary);
+        }
+
+        .kf-message-bubble.sent .kf-audio-duration {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
         .kf-audio-progress {
             flex: 1;
-            height: 3px;
+            height: 2px;
             background: var(--kf-border);
-            border-radius: 2px;
+            border-radius: 1px;
             cursor: pointer;
             position: relative;
             overflow: hidden;
-            min-width: 60px;
+            margin: 0 8px;
+        }
+
+        .kf-message-bubble.sent .kf-audio-progress {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         .kf-audio-progress-filled {
@@ -346,12 +491,67 @@
             transition: width 0.1s;
         }
 
-        .kf-audio-time {
-            font-size: 11px;
-            color: var(--kf-secondary);
-            min-width: 45px;
-            text-align: center;
-            flex-shrink: 0;
+        .kf-message-bubble.sent .kf-audio-progress-filled {
+            background: white;
+        }
+
+        /* Recording Overlay */
+        .kf-recording-overlay {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 1000;
+            min-width: 200px;
+            display: none;
+            animation: kfSlideUp 0.3s ease;
+        }
+
+        @keyframes kfSlideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .kf-recording-wave {
+            width: 60px;
+            height: 30px;
+            background: transparent;
+        }
+
+        .kf-recording-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .kf-recording-text {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .kf-recording-timer {
+            font-size: 13px;
+            color: var(--kf-error);
+            font-weight: 600;
+        }
+
+        .kf-cancel-text {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 2px;
         }
 
         /* Typing Indicator */
@@ -365,7 +565,6 @@
             margin: 4px 0;
             max-width: 120px;
             border: 1px solid var(--kf-border);
-            box-shadow: 0 1px 2px var(--kf-shadow);
             display: none;
         }
 
@@ -442,6 +641,9 @@
             background: var(--kf-bg);
             transition: all 0.3s;
             min-width: 0;
+            resize: none;
+            max-height: 120px;
+            line-height: 1.4;
         }
 
         .kf-message-input:focus {
@@ -485,21 +687,10 @@
             background: var(--kf-white);
             border-radius: 12px;
             padding: 16px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             display: none;
             z-index: 1000;
             animation: kfSlideUp 0.3s ease;
-        }
-
-        @keyframes kfSlideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            border: 1px solid var(--kf-border);
         }
 
         .kf-preview-buttons {
@@ -579,11 +770,6 @@
             background: var(--kf-secondary);
         }
 
-        /* Active media state */
-        .kf-active-media {
-            box-shadow: 0 0 0 2px var(--kf-primary);
-        }
-        
         /* Hide browser's default controls */
         .kf-video-player video::-webkit-media-controls {
             display: none !important;
@@ -595,6 +781,72 @@
         
         .kf-audio-player audio {
             display: none !important;
+        }
+
+        /* Recording animation for mic button */
+        .kf-recording-pulse {
+            animation: pulse 1.5s infinite;
+            color: var(--kf-error) !important;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* Emoji Picker */
+        .kf-emoji-picker-container {
+            position: absolute;
+            bottom: 70px;
+            left: 16px;
+            right: 16px;
+            z-index: 1001;
+            display: none;
+            border: 1px solid var(--kf-border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .kf-emoji-picker-container emoji-picker {
+            width: 100%;
+            height: 300px;
+            --background: var(--kf-white);
+            --border-color: var(--kf-border);
+            --indicator-color: var(--kf-primary);
+            --input-border-color: var(--kf-border);
+            --input-font-color: var(--kf-text);
+            --input-placeholder-color: var(--kf-secondary);
+            --outline-color: var(--kf-primary);
+            --category-button-active-color: var(--kf-primary);
+        }
+
+        /* Emoji button */
+        .kf-emoji-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: none;
+            color: var(--kf-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .kf-emoji-btn:hover {
+            background: var(--kf-hover);
+            color: var(--kf-primary);
+        }
+
+        .kf-emoji-btn.active {
+            color: var(--kf-primary);
+            background: var(--kf-hover);
         }
     </style>
 </head>
@@ -619,14 +871,7 @@
                     </div>
                 </div>
             </div>
-            <div class="kf-chat-actions">
-                <button class="kf-icon-btn" title="Call">
-                    <i class="fas fa-phone"></i>
-                </button>
-                <button class="kf-icon-btn" title="More options">
-                    <i class="fas fa-ellipsis-v"></i>
-                </button>
-            </div>
+            <!-- Removed call and more options buttons -->
         </div>
 
         <!-- Messages Container -->
@@ -654,15 +899,29 @@
                                     {% if message.file_type == 'image' %}
                                         <div class="kf-media-attachment">
                                             <img src="{{ message.file.url }}" alt="Image" onclick="openMediaModal('{{ message.file.url }}')">
+                                            <div class="kf-media-actions">
+                                                <button class="kf-download-btn" onclick="downloadFile('{{ message.file.url }}', 'image_{{ message.id }}')" title="Download image">
+                                                    <i class="fas fa-download"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                     {% elif message.file_type == 'video' %}
                                         <div class="kf-video-player" data-media-id="{{ message.id }}">
                                             <video preload="metadata">
                                                 <source src="{{ message.file.url }}">
                                             </video>
+                                            <!-- REMOVED: Middle play/pause overlay button -->
+                                            <div class="kf-video-overlay"></div>
                                             <div class="kf-video-controls">
                                                 <button class="kf-video-play-btn">
                                                     <i class="fas fa-play"></i>
+                                                </button>
+                                                <div class="kf-video-progress-container">
+                                                    <div class="kf-video-progress"></div>
+                                                </div>
+                                                <div class="kf-video-time">0:00 / 0:00</div>
+                                                <button class="kf-download-btn" onclick="downloadFile('{{ message.file.url }}', 'video_{{ message.id }}')" title="Download video">
+                                                    <i class="fas fa-download"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -671,10 +930,21 @@
                                             <button class="kf-audio-play-btn">
                                                 <i class="fas fa-play"></i>
                                             </button>
-                                            <div class="kf-audio-progress">
-                                                <div class="kf-audio-progress-filled"></div>
+                                            <div class="kf-audio-info">
+                                                <div class="kf-audio-waveform" id="waveform-{{ message.id }}">
+                                                    <!-- Waveform will be generated by JavaScript -->
+                                                </div>
+                                                <div class="kf-audio-details">
+                                                    <div class="kf-audio-duration" id="duration-{{ message.id }}">0:00</div>
+                                                    <div class="kf-audio-progress">
+                                                        <div class="kf-audio-progress-filled"></div>
+                                                    </div>
+                                                    <div class="kf-audio-duration" id="current-{{ message.id }}">0:00</div>
+                                                </div>
                                             </div>
-                                            <div class="kf-audio-time">0:00</div>
+                                            <button class="kf-download-btn" onclick="downloadFile('{{ message.file.url }}', 'audio_{{ message.id }}')" title="Download audio">
+                                                <i class="fas fa-download"></i>
+                                            </button>
                                             <audio src="{{ message.file.url }}" preload="metadata"></audio>
                                         </div>
                                     {% endif %}
@@ -707,26 +977,48 @@
             <span>{{ receiver.username }} is typing...</span>
         </div>
 
+        <!-- Emoji Picker -->
+        <div class="kf-emoji-picker-container" id="kfEmojiPicker">
+            <emoji-picker></emoji-picker>
+        </div>
+
         <!-- Input Area -->
         <div class="kf-input-container">
             <div class="kf-input-wrapper">
                 <div class="kf-input-actions">
+                    <button type="button" class="kf-emoji-btn" id="kfEmojiBtn" onclick="toggleEmojiPicker()" title="Emoji">
+                        <i class="far fa-smile"></i>
+                    </button>
                     <button type="button" class="kf-input-action-btn" onclick="document.getElementById('kfFileUpload').click()" title="Attach file">
                         <i class="fas fa-paperclip"></i>
                     </button>
                 </div>
                 
-                <input type="text" class="kf-message-input" id="kfMessageInput" placeholder="Message..." autocomplete="off">
+                <textarea class="kf-message-input" id="kfMessageInput" placeholder="Message..." autocomplete="off" rows="1"></textarea>
                 
                 <button type="button" class="kf-send-btn" id="kfSendBtn" title="Send message" onclick="sendMessage()" style="display: none;">
                     <i class="fas fa-paper-plane"></i>
                 </button>
                 
-                <button type="button" class="kf-input-action-btn" id="kfMicBtn" title="Hold to record">
+                <button type="button" class="kf-input-action-btn" id="kfMicBtn" title="Hold to record" 
+                        onmousedown="startRecording(event)" 
+                        onmouseup="stopRecording()"
+                        ontouchstart="handleTouchStart(event)"
+                        ontouchend="handleTouchEnd(event)">
                     <i class="fas fa-microphone"></i>
                 </button>
                 
                 <input type="file" id="kfFileUpload" name="file_upload" accept="image/*,video/*,audio/*" hidden>
+            </div>
+        </div>
+
+        <!-- Recording Overlay -->
+        <div class="kf-recording-overlay" id="kfRecordingOverlay">
+            <canvas class="kf-recording-wave" id="kfRecordingWave" width="60" height="30"></canvas>
+            <div class="kf-recording-info">
+                <div class="kf-recording-text">Recording...</div>
+                <div class="kf-recording-timer" id="kfRecordingTimer">0:00</div>
+                <div class="kf-cancel-text">Release to send</div>
             </div>
         </div>
 
@@ -746,7 +1038,13 @@
         <button class="kf-icon-btn" onclick="closeMediaModal()" style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); color: white;">
             <i class="fas fa-times"></i>
         </button>
+        <button class="kf-download-btn" onclick="downloadModalFile()" style="position: absolute; top: 70px; right: 20px; background: rgba(255,255,255,0.2);">
+            <i class="fas fa-download"></i>
+        </button>
     </div>
+
+    <!-- Emoji Picker Script -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.13.0/dist/emoji-picker.js"></script>
 
     <script>
         // CSRF Token
@@ -758,20 +1056,71 @@
         const kfMessageInput = document.getElementById('kfMessageInput');
         const kfMessages = document.getElementById('kfMessages');
         const kfSendBtn = document.getElementById('kfSendBtn');
+        const kfMicBtn = document.getElementById('kfMicBtn');
         const kfFileUpload = document.getElementById('kfFileUpload');
         const kfUploadPreview = document.getElementById('kfUploadPreview');
         const kfPreviewContent = document.getElementById('kfPreviewContent');
         const kfTypingIndicator = document.getElementById('kfTypingIndicator');
+        const kfRecordingOverlay = document.getElementById('kfRecordingOverlay');
+        const kfRecordingWave = document.getElementById('kfRecordingWave');
+        const kfRecordingTimer = document.getElementById('kfRecordingTimer');
+        const kfEmojiPicker = document.getElementById('kfEmojiPicker');
+        const kfEmojiBtn = document.getElementById('kfEmojiBtn');
         
         // Global variables
         let fileToUpload = null;
         let typingTimeout = null;
         let socket = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingStartTime = 0;
+        let recordingTimer = null;
+        let audioContext = null;
+        let analyser = null;
+        let isRecording = false;
         let currentlyPlayingMedia = null;
+        let stream = null;
+        let isTouchDevice = 'ontouchstart' in window;
+        let currentModalFileUrl = '';
+        let autoScrollEnabled = true;
         
+        // ========== DOWNLOAD FUNCTIONS ==========
+        
+        function downloadFile(url, filename) {
+            event.stopPropagation();
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename || getFilenameFromUrl(url);
+            link.target = '_blank';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        function downloadModalFile() {
+            if (currentModalFileUrl) {
+                const filename = getFilenameFromUrl(currentModalFileUrl);
+                downloadFile(currentModalFileUrl, filename);
+            }
+        }
+        
+        function getFilenameFromUrl(url) {
+            try {
+                const urlObj = new URL(url);
+                const pathname = urlObj.pathname;
+                return pathname.substring(pathname.lastIndexOf('/') + 1) || 'download';
+            } catch (e) {
+                const lastSlash = url.lastIndexOf('/');
+                const filename = url.substring(lastSlash + 1);
+                const queryIndex = filename.indexOf('?');
+                return queryIndex !== -1 ? filename.substring(0, queryIndex) : filename || 'download';
+            }
+        }
+
         // ========== WEBSOCKET FUNCTIONS ==========
         
-        // Initialize WebSocket connection
         function initWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
             const wsPath = `/ws/message/${receiver}/`;
@@ -799,18 +1148,15 @@
             socket.onclose = function(event) {
                 console.log('WebSocket disconnected');
                 
-                // Try to reconnect after 3 seconds
                 setTimeout(() => {
                     initWebSocket();
                 }, 3000);
             };
         }
 
-        // Handle incoming WebSocket messages
         function handleWebSocketMessage(data) {
             switch(data.type) {
                 case 'new_message':
-                    // Display message from WebSocket
                     appendMessage({
                         message_id: data.message_id,
                         sender: data.sender,
@@ -831,7 +1177,6 @@
             }
         }
 
-        // Send message
         async function sendMessage() {
             const message = kfMessageInput.value.trim();
             
@@ -839,13 +1184,11 @@
                 return;
             }
             
-            // If there's a file, upload it
             if (fileToUpload) {
                 await uploadFileWithMessage(message);
                 return;
             }
             
-            // For text-only messages
             if (message) {
                 try {
                     const response = await fetch(`/send_message/${receiver}/`, {
@@ -860,8 +1203,8 @@
                     const result = await response.json();
                     
                     if (result.status === 'success') {
-                        // Clear input only - WebSocket will handle displaying
                         kfMessageInput.value = '';
+                        autoResizeTextarea();
                         updateSendButton();
                     }
                 } catch (error) {
@@ -870,7 +1213,6 @@
             }
         }
 
-        // Upload file with message
         async function uploadFileWithMessage(message) {
             const formData = new FormData();
             formData.append('receiver', receiver);
@@ -889,10 +1231,10 @@
                 const result = await response.json();
                 
                 if (result.status === 'success') {
-                    // Clear inputs - WebSocket will handle displaying
                     kfMessageInput.value = '';
                     fileToUpload = null;
                     kfUploadPreview.style.display = 'none';
+                    autoResizeTextarea();
                     updateSendButton();
                 }
             } catch (error) {
@@ -900,14 +1242,12 @@
             }
         }
 
-        // Send message with file
         function sendMessageWithFile() {
             sendMessage();
         }
 
         // ========== MESSAGE DISPLAY FUNCTIONS ==========
         
-        // Append message to chat
         function appendMessage(data) {
             const isSender = data.sender === sender;
             const messageRow = document.createElement('div');
@@ -921,12 +1261,16 @@
                 messageHTML += `<div class="kf-message-text">${escapeHtml(data.message)}</div>`;
             }
             
-            // Handle media attachments
             if (data.file_url) {
                 if (data.file_type === 'image') {
                     messageHTML += `
                         <div class="kf-media-attachment">
                             <img src="${data.file_url}" alt="Image" onclick="openMediaModal('${data.file_url}')">
+                            <div class="kf-media-actions">
+                                <button class="kf-download-btn" onclick="downloadFile('${data.file_url}', 'image_${data.message_id}')" title="Download image">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </div>
                         </div>
                     `;
                 } else if (data.file_type === 'video') {
@@ -936,9 +1280,17 @@
                             <video preload="metadata">
                                 <source src="${data.file_url}">
                             </video>
+                            <div class="kf-video-overlay"></div>
                             <div class="kf-video-controls">
                                 <button class="kf-video-play-btn">
                                     <i class="fas fa-play"></i>
+                                </button>
+                                <div class="kf-video-progress-container">
+                                    <div class="kf-video-progress"></div>
+                                </div>
+                                <div class="kf-video-time">0:00 / 0:00</div>
+                                <button class="kf-download-btn" onclick="downloadFile('${data.file_url}', 'video_${messageId}')" title="Download video">
+                                    <i class="fas fa-download"></i>
                                 </button>
                             </div>
                         </div>
@@ -950,10 +1302,19 @@
                             <button class="kf-audio-play-btn">
                                 <i class="fas fa-play"></i>
                             </button>
-                            <div class="kf-audio-progress">
-                                <div class="kf-audio-progress-filled"></div>
+                            <div class="kf-audio-info">
+                                <div class="kf-audio-waveform" id="waveform-${messageId}"></div>
+                                <div class="kf-audio-details">
+                                    <div class="kf-audio-duration" id="duration-${messageId}">0:00</div>
+                                    <div class="kf-audio-progress">
+                                        <div class="kf-audio-progress-filled"></div>
+                                    </div>
+                                    <div class="kf-audio-duration" id="current-${messageId}">0:00</div>
+                                </div>
                             </div>
-                            <div class="kf-audio-time">0:00</div>
+                            <button class="kf-download-btn" onclick="downloadFile('${data.file_url}', 'audio_${messageId}')" title="Download audio">
+                                <i class="fas fa-download"></i>
+                            </button>
                             <audio src="${data.file_url}" preload="metadata"></audio>
                         </div>
                     `;
@@ -969,20 +1330,279 @@
             
             messageRow.innerHTML = messageHTML;
             
-            // Remove empty state if exists
             const emptyState = kfMessages.querySelector('.kf-empty-state');
             if (emptyState) {
                 emptyState.remove();
             }
             
-            // Add to messages container
             kfMessages.appendChild(messageRow);
             
-            // Scroll to bottom
-            scrollToBottom();
+            if (autoScrollEnabled) {
+                scrollToBottom();
+            }
             
-            // Initialize media players for this message
             initMediaPlayers(messageRow);
+        }
+
+        // ========== EMOJI FUNCTIONS ==========
+        
+        function toggleEmojiPicker() {
+            event.stopPropagation();
+            
+            if (kfEmojiPicker.style.display === 'block') {
+                kfEmojiPicker.style.display = 'none';
+                kfEmojiBtn.classList.remove('active');
+            } else {
+                kfEmojiPicker.style.display = 'block';
+                kfEmojiBtn.classList.add('active');
+                kfUploadPreview.style.display = 'none';
+            }
+        }
+
+        function initEmojiPicker() {
+            const picker = document.querySelector('emoji-picker');
+            if (picker) {
+                picker.addEventListener('emoji-click', event => {
+                    const emoji = event.detail.unicode;
+                    insertAtCursor(emoji);
+                });
+                
+                picker.config = {
+                    skinToneEmoji: '👍',
+                    recentsCount: 24,
+                    defaultSkinTone: 1,
+                    emojiVersion: '15.0'
+                };
+            }
+            
+            document.addEventListener('click', (event) => {
+                if (!event.target.closest('.kf-emoji-picker-container') && 
+                    !event.target.closest('.kf-emoji-btn')) {
+                    kfEmojiPicker.style.display = 'none';
+                    kfEmojiBtn.classList.remove('active');
+                }
+            });
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && kfEmojiPicker.style.display === 'block') {
+                    kfEmojiPicker.style.display = 'none';
+                    kfEmojiBtn.classList.remove('active');
+                }
+            });
+            
+            kfMessageInput.addEventListener('focus', () => {
+                kfEmojiPicker.style.display = 'none';
+                kfEmojiBtn.classList.remove('active');
+            });
+        }
+
+        function insertAtCursor(text) {
+            const input = kfMessageInput;
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            
+            input.value = input.value.substring(0, start) + text + input.value.substring(end);
+            input.selectionStart = input.selectionEnd = start + text.length;
+            
+            input.dispatchEvent(new Event('input'));
+            autoResizeTextarea();
+            input.focus();
+        }
+
+        // ========== AUDIO RECORDING FUNCTIONS ==========
+        
+        function handleTouchStart(event) {
+            event.preventDefault();
+            startRecording(event);
+        }
+        
+        function handleTouchEnd(event) {
+            event.preventDefault();
+            stopRecording();
+        }
+
+        async function startRecording(event) {
+            event.preventDefault();
+            
+            kfMicBtn.classList.add('kf-recording-pulse');
+            
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    } 
+                });
+                
+                const options = { mimeType: 'audio/webm' };
+                if (!MediaRecorder.isTypeSupported('audio/webm')) {
+                    options.mimeType = 'audio/mp4';
+                }
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    delete options.mimeType;
+                }
+                
+                mediaRecorder = new MediaRecorder(stream, options);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    if (audioChunks.length === 0) {
+                        cleanupRecording();
+                        return;
+                    }
+                    
+                    const audioBlob = new Blob(audioChunks, { 
+                        type: mediaRecorder.mimeType || 'audio/webm' 
+                    });
+                    
+                    const formData = new FormData();
+                    formData.append('receiver', receiver);
+                    const filename = `recording_${Date.now()}.${mediaRecorder.mimeType.includes('webm') ? 'webm' : 'mp4'}`;
+                    formData.append('file_upload', audioBlob, filename);
+                    
+                    try {
+                        const response = await fetch(`/send_message/${receiver}/`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': csrftoken,
+                            },
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.status === 'success') {
+                            console.log('✅ Audio sent successfully');
+                        }
+                    } catch (error) {
+                        console.error('❌ Error sending audio:', error);
+                    }
+                    
+                    cleanupRecording();
+                };
+                
+                mediaRecorder.onerror = (error) => {
+                    console.error('❌ MediaRecorder error:', error);
+                    cleanupRecording();
+                };
+                
+                mediaRecorder.start();
+                recordingStartTime = Date.now();
+                isRecording = true;
+                
+                kfRecordingOverlay.style.display = 'flex';
+                startRecordingTimer();
+                startAudioVisualizer(stream);
+                
+            } catch (error) {
+                console.error('❌ Error accessing microphone:', error);
+                alert('Unable to access microphone. Please check permissions and try again.');
+                kfMicBtn.classList.remove('kf-recording-pulse');
+            }
+        }
+
+        function cleanupRecording() {
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    track.enabled = false;
+                });
+                stream = null;
+            }
+            
+            if (recordingTimer) {
+                clearInterval(recordingTimer);
+                recordingTimer = null;
+            }
+            
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            audioChunks = [];
+            
+            kfRecordingOverlay.style.display = 'none';
+            isRecording = false;
+            mediaRecorder = null;
+            
+            kfMicBtn.classList.remove('kf-recording-pulse');
+            kfRecordingTimer.textContent = '0:00';
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+            }
+        }
+
+        function startRecordingTimer() {
+            recordingTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                kfRecordingTimer.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        function startAudioVisualizer(stream) {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+                analyser.fftSize = 256;
+                
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                const canvasCtx = kfRecordingWave.getContext('2d');
+                
+                function draw() {
+                    if (!isRecording || !analyser) return;
+                    
+                    requestAnimationFrame(draw);
+                    
+                    analyser.getByteFrequencyData(dataArray);
+                    
+                    canvasCtx.clearRect(0, 0, kfRecordingWave.width, kfRecordingWave.height);
+                    
+                    const barWidth = (kfRecordingWave.width / bufferLength) * 2.5;
+                    let barHeight;
+                    let x = 0;
+                    
+                    for (let i = 0; i < bufferLength; i++) {
+                        barHeight = dataArray[i] / 2;
+                        
+                        const gradient = canvasCtx.createLinearGradient(0, 0, 0, kfRecordingWave.height);
+                        gradient.addColorStop(0, '#0084ff');
+                        gradient.addColorStop(1, '#0066cc');
+                        
+                        canvasCtx.fillStyle = gradient;
+                        canvasCtx.fillRect(x, kfRecordingWave.height - barHeight, barWidth, barHeight);
+                        
+                        x += barWidth + 1;
+                    }
+                }
+                
+                draw();
+            } catch (error) {
+                console.error('❌ Audio visualizer error:', error);
+            }
+        }
+
+        // ========== TEXTAREA AUTO-RESIZE ==========
+        
+        function autoResizeTextarea() {
+            const textarea = kfMessageInput;
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
         }
 
         // ========== UTILITY FUNCTIONS ==========
@@ -1001,6 +1621,31 @@
             hours = hours % 12;
             hours = hours ? hours : 12;
             return `${hours}:${minutes} ${ampm}`;
+        }
+
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return "0:00";
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function generateWaveform(player, audioElement) {
+            const waveform = player.querySelector('.kf-audio-waveform');
+            if (!waveform) return;
+            
+            waveform.innerHTML = '';
+            
+            const barCount = 40;
+            for (let i = 0; i < barCount; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'kf-audio-wave';
+                
+                const height = Math.floor(Math.random() * 75) + 25;
+                bar.style.height = `${height}%`;
+                
+                waveform.appendChild(bar);
+            }
         }
 
         // File upload handling
@@ -1060,10 +1705,10 @@
             
             if (hasText || hasFile) {
                 kfSendBtn.style.display = 'flex';
-                document.getElementById('kfMicBtn').style.display = 'none';
+                kfMicBtn.style.display = 'none';
             } else {
                 kfSendBtn.style.display = 'none';
-                document.getElementById('kfMicBtn').style.display = 'flex';
+                kfMicBtn.style.display = 'flex';
             }
             
             kfSendBtn.disabled = !hasText && !hasFile;
@@ -1072,8 +1717,8 @@
         // Typing indicator
         kfMessageInput.addEventListener('input', function() {
             updateSendButton();
+            autoResizeTextarea();
             
-            // Send typing indicator
             if (this.value.trim() && socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({
                     action: 'typing',
@@ -1097,7 +1742,10 @@
             
             if (isTyping) {
                 kfTypingIndicator.style.display = 'flex';
+                const prevAutoScroll = autoScrollEnabled;
+                autoScrollEnabled = true;
                 scrollToBottom();
+                autoScrollEnabled = prevAutoScroll;
             } else {
                 kfTypingIndicator.style.display = 'none';
             }
@@ -1106,26 +1754,69 @@
         // ========== MEDIA PLAYBACK FUNCTIONS ==========
         
         function initMediaPlayers(container = document) {
-            // Video players
+            // Video players - FIXED: Removed middle play button, only one button next to progress bar
             container.querySelectorAll('.kf-video-player').forEach(player => {
                 const video = player.querySelector('video');
-                const playBtn = player.querySelector('.kf-video-play-btn');
+                const playBtn = player.querySelector('.kf-video-play-btn'); // This is the button next to progress bar
+                const progress = player.querySelector('.kf-video-progress');
+                const progressContainer = player.querySelector('.kf-video-progress-container');
+                const timeDisplay = player.querySelector('.kf-video-time');
                 
-                if (!video || !playBtn) return;
+                if (!video) return;
                 
-                video.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    toggleVideoPlayback(video);
+                const updateTimeDisplay = () => {
+                    if (timeDisplay) {
+                        timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+                    }
+                };
+                
+                const updateProgress = () => {
+                    const percentage = (video.currentTime / video.duration) * 100;
+                    if (progress) {
+                        progress.style.width = percentage + '%';
+                    }
+                };
+                
+                const toggleVideoPlayback = () => {
+                    if (video.paused) {
+                        video.play().catch(error => {
+                            console.error('Error playing video:', error);
+                        });
+                    } else {
+                        video.pause();
+                    }
+                };
+                
+                // Click on video to play/pause
+                player.addEventListener('click', (e) => {
+                    if (!e.target.closest('.kf-download-btn') && !e.target.closest('.kf-video-progress-container')) {
+                        toggleVideoPlayback();
+                    }
                 });
                 
-                playBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    toggleVideoPlayback(video);
-                });
+                // Click on play button (next to progress bar)
+                if (playBtn) {
+                    playBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleVideoPlayback();
+                    });
+                }
                 
+                // Click on progress bar to seek
+                if (progressContainer) {
+                    progressContainer.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const rect = progressContainer.getBoundingClientRect();
+                        const clickPosition = (e.clientX - rect.left) / rect.width;
+                        video.currentTime = clickPosition * video.duration;
+                        updateProgress();
+                        updateTimeDisplay();
+                    });
+                }
+                
+                // Video event listeners - update single play button icon
                 video.addEventListener('play', () => {
-                    playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-                    player.classList.add('kf-active-media');
+                    if (playBtn) playBtn.innerHTML = '<i class="fas fa-pause"></i>';
                     
                     // Stop other media if playing
                     if (currentlyPlayingMedia && currentlyPlayingMedia !== video) {
@@ -1135,51 +1826,96 @@
                 });
                 
                 video.addEventListener('pause', () => {
-                    playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                    player.classList.remove('kf-active-media');
+                    if (playBtn) playBtn.innerHTML = '<i class="fas fa-play"></i>';
                     if (currentlyPlayingMedia === video) {
                         currentlyPlayingMedia = null;
                     }
                 });
                 
                 video.addEventListener('ended', () => {
-                    playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                    player.classList.remove('kf-active-media');
+                    if (playBtn) playBtn.innerHTML = '<i class="fas fa-play"></i>';
                     if (currentlyPlayingMedia === video) {
                         currentlyPlayingMedia = null;
                     }
                 });
+                
+                video.addEventListener('timeupdate', () => {
+                    updateProgress();
+                    updateTimeDisplay();
+                });
+                
+                video.addEventListener('loadedmetadata', () => {
+                    updateTimeDisplay();
+                    updateProgress();
+                });
+                
+                updateTimeDisplay();
+                updateProgress();
             });
             
-            // Audio players
+            // Audio players (unchanged)
             container.querySelectorAll('.kf-audio-player').forEach(player => {
                 const audio = player.querySelector('audio');
                 const playBtn = player.querySelector('.kf-audio-play-btn');
                 const progress = player.querySelector('.kf-audio-progress');
                 const progressFilled = player.querySelector('.kf-audio-progress-filled');
-                const timeDisplay = player.querySelector('.kf-audio-time');
+                const waveform = player.querySelector('.kf-audio-waveform');
                 
                 if (!audio || !playBtn) return;
                 
-                updateAudioTimeDisplay(audio, timeDisplay);
+                generateWaveform(player, audio);
                 
-                playBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    toggleAudioPlayback(audio);
+                const durationElement = player.querySelector('.kf-audio-duration:nth-child(1)');
+                const currentElement = player.querySelector('.kf-audio-duration:nth-child(3)');
+                
+                const updateTimeDisplay = () => {
+                    if (durationElement) {
+                        durationElement.textContent = formatTime(audio.duration);
+                    }
+                    if (currentElement) {
+                        currentElement.textContent = formatTime(audio.currentTime);
+                    }
+                };
+                
+                const updateProgress = () => {
+                    const percentage = (audio.currentTime / audio.duration) * 100;
+                    if (progressFilled) {
+                        progressFilled.style.width = percentage + '%';
+                    }
+                    
+                    if (waveform) {
+                        const bars = waveform.querySelectorAll('.kf-audio-wave');
+                        const activeBar = Math.floor((percentage / 100) * bars.length);
+                        
+                        bars.forEach((bar, index) => {
+                            if (index <= activeBar) {
+                                bar.classList.add('active');
+                            } else {
+                                bar.classList.remove('active');
+                            }
+                        });
+                    }
+                };
+                
+                player.addEventListener('click', (e) => {
+                    if (!e.target.closest('.kf-download-btn') && !e.target.closest('.kf-audio-progress')) {
+                        toggleAudioPlayback(audio);
+                    }
                 });
                 
                 if (progress) {
                     progress.addEventListener('click', (e) => {
+                        e.stopPropagation();
                         const rect = progress.getBoundingClientRect();
                         const clickPosition = (e.clientX - rect.left) / rect.width;
                         audio.currentTime = clickPosition * audio.duration;
-                        updateAudioProgress(audio, progressFilled, timeDisplay);
+                        updateProgress();
+                        updateTimeDisplay();
                     });
                 }
                 
                 audio.addEventListener('play', () => {
                     playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-                    player.classList.add('kf-active-media');
                     
                     if (currentlyPlayingMedia && currentlyPlayingMedia !== audio) {
                         stopCurrentlyPlayingMedia();
@@ -1189,7 +1925,6 @@
                 
                 audio.addEventListener('pause', () => {
                     playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                    player.classList.remove('kf-active-media');
                     if (currentlyPlayingMedia === audio) {
                         currentlyPlayingMedia = null;
                     }
@@ -1197,34 +1932,27 @@
                 
                 audio.addEventListener('ended', () => {
                     playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                    player.classList.remove('kf-active-media');
                     audio.currentTime = 0;
-                    updateAudioProgress(audio, progressFilled, timeDisplay);
+                    updateProgress();
+                    updateTimeDisplay();
                     if (currentlyPlayingMedia === audio) {
                         currentlyPlayingMedia = null;
                     }
                 });
                 
                 audio.addEventListener('timeupdate', () => {
-                    updateAudioProgress(audio, progressFilled, timeDisplay);
+                    updateProgress();
+                    updateTimeDisplay();
                 });
                 
                 audio.addEventListener('loadedmetadata', () => {
-                    updateAudioTimeDisplay(audio, timeDisplay);
+                    updateTimeDisplay();
+                    updateProgress();
                 });
                 
-                updateAudioProgress(audio, progressFilled, timeDisplay);
+                updateTimeDisplay();
+                updateProgress();
             });
-        }
-
-        function toggleVideoPlayback(video) {
-            if (video.paused) {
-                video.play().catch(error => {
-                    console.error('Error playing video:', error);
-                });
-            } else {
-                video.pause();
-            }
         }
 
         function toggleAudioPlayback(audio) {
@@ -1245,43 +1973,21 @@
                 video.pause();
                 const playBtn = video.closest('.kf-video-player')?.querySelector('.kf-video-play-btn');
                 if (playBtn) playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                video.closest('.kf-video-player')?.classList.remove('kf-active-media');
             } else if (currentlyPlayingMedia.tagName === 'AUDIO') {
                 const audio = currentlyPlayingMedia;
                 audio.pause();
                 const playBtn = audio.closest('.kf-audio-player')?.querySelector('.kf-audio-play-btn');
                 if (playBtn) playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                audio.closest('.kf-audio-player')?.classList.remove('kf-active-media');
             }
             
             currentlyPlayingMedia = null;
         }
 
-        function updateAudioProgress(audio, progressFilled, timeDisplay) {
-            if (!audio || !progressFilled || !timeDisplay) return;
-            
-            const percentage = (audio.currentTime / audio.duration) * 100;
-            progressFilled.style.width = percentage + '%';
-            
-            updateAudioTimeDisplay(audio, timeDisplay);
-        }
-
-        function updateAudioTimeDisplay(audio, timeDisplay) {
-            if (!audio || !timeDisplay) return;
-            
-            const formatTime = (seconds) => {
-                if (isNaN(seconds)) return "0:00";
-                const mins = Math.floor(seconds / 60);
-                const secs = Math.floor(seconds % 60);
-                return `${mins}:${secs.toString().padStart(2, '0')}`;
-            };
-            
-            timeDisplay.textContent = `${formatTime(audio.currentTime)}`;
-        }
-
-        // ========== UI FUNCTIONS ==========
+        // ========== SCROLL FUNCTIONS ==========
         
         function scrollToBottom() {
+            if (!autoScrollEnabled) return;
+            
             requestAnimationFrame(() => {
                 kfMessages.scrollTo({
                     top: kfMessages.scrollHeight,
@@ -1290,7 +1996,27 @@
             });
         }
 
+        // Track user scroll position
+        let userScrolled = false;
+        
+        kfMessages.addEventListener('scroll', () => {
+            const scrollTop = kfMessages.scrollTop;
+            const scrollHeight = kfMessages.scrollHeight;
+            const clientHeight = kfMessages.clientHeight;
+            
+            if (scrollTop + clientHeight < scrollHeight - 100) {
+                userScrolled = true;
+                autoScrollEnabled = false;
+            } else {
+                userScrolled = false;
+                autoScrollEnabled = true;
+            }
+        });
+
+        // ========== UI FUNCTIONS ==========
+        
         function openMediaModal(url) {
+            currentModalFileUrl = url;
             const modal = document.getElementById('kfMediaModal');
             const modalImage = document.getElementById('kfModalImage');
             modalImage.src = url;
@@ -1299,24 +2025,21 @@
 
         function closeMediaModal() {
             document.getElementById('kfMediaModal').style.display = 'none';
+            currentModalFileUrl = '';
         }
 
         // ========== INITIALIZATION ==========
         
         window.addEventListener('load', () => {
-            // Initialize WebSocket
             initWebSocket();
+            initEmojiPicker();
             
-            // Scroll to bottom
+            autoScrollEnabled = true;
             scrollToBottom();
             
-            // Update send button
             updateSendButton();
-            
-            // Initialize existing media players
             initMediaPlayers();
             
-            // Set up event listeners
             kfMessageInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -1324,31 +2047,67 @@
                 }
             });
             
-            // Close modal on ESC
+            kfMessageInput.addEventListener('input', autoResizeTextarea);
+            
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
                     closeMediaModal();
+                    kfEmojiPicker.style.display = 'none';
+                    kfEmojiBtn.classList.remove('active');
                 }
             });
             
-            // Click outside modal to close
             document.getElementById('kfMediaModal').addEventListener('click', (e) => {
                 if (e.target.id === 'kfMediaModal') {
                     closeMediaModal();
                 }
             });
+            
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.kf-emoji-picker-container') && 
+                    !e.target.closest('.kf-emoji-btn') &&
+                    kfEmojiPicker.style.display === 'block') {
+                    kfEmojiPicker.style.display = 'none';
+                    kfEmojiBtn.classList.remove('active');
+                }
+            });
+            
+            window.addEventListener('beforeunload', (e) => {
+                if (isRecording) {
+                    e.preventDefault();
+                    e.returnValue = 'You are currently recording. Are you sure you want to leave?';
+                }
+            });
         });
 
-        // Handle page visibility change
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 stopCurrentlyPlayingMedia();
+                if (isRecording) {
+                    stopRecording();
+                }
             }
         });
         
-        // Auto-scroll when new content is added
-        const observer = new MutationObserver(() => {
-            scrollToBottom();
+        const observer = new MutationObserver((mutations) => {
+            let shouldScroll = false;
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                    for (const node of mutation.addedNodes) {
+                        if (node.classList && 
+                            (node.classList.contains('kf-message-row') || 
+                             node.classList.contains('kf-typing-indicator'))) {
+                            shouldScroll = true;
+                            break;
+                        }
+                    }
+                }
+                if (shouldScroll) break;
+            }
+            
+            if (shouldScroll && autoScrollEnabled) {
+                scrollToBottom();
+            }
         });
         
         observer.observe(kfMessages, { childList: true, subtree: true });
