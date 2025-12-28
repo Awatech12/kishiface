@@ -2,7 +2,6 @@
 from django.urls import re_path
 from .consumers.channelConsumer import ChannelConsumer
 from .consumers.message import DirectMessageConsumer
-
 from .consumers.notification import NotificationConsumer
 
 websocket_urlpatterns = [

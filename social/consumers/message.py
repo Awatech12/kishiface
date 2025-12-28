@@ -2,11 +2,12 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from django.contrib.auth.models import User
+
 
 
 class DirectMessageConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        from django.contrib.auth.models import User
         self.user = self.scope['user']
         if not self.user.is_authenticated:
             await self.close()
@@ -88,6 +89,7 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def get_user(self, username):
+        from django.contrib.auth.models import User
         return User.objects.get(username=username)
 
     @database_sync_to_async
