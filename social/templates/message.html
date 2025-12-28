@@ -476,65 +476,6 @@
             transform: none;
         }
 
-        /* Recording Overlay */
-        .kf-recording-overlay {
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
-            padding: 16px 20px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            z-index: 1000;
-            min-width: 200px;
-            display: none;
-            animation: kfSlideUp 0.3s ease;
-        }
-
-        @keyframes kfSlideUp {
-            from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-        }
-
-        .kf-recording-wave {
-            width: 60px;
-            height: 30px;
-            background: transparent;
-        }
-
-        .kf-recording-info {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .kf-recording-text {
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .kf-recording-timer {
-            font-size: 13px;
-            color: var(--kf-error);
-            font-weight: 600;
-        }
-
-        .kf-cancel-text {
-            font-size: 12px;
-            opacity: 0.9;
-            margin-top: 2px;
-        }
-
         /* Upload Preview */
         .kf-upload-preview {
             position: fixed;
@@ -548,6 +489,17 @@
             display: none;
             z-index: 1000;
             animation: kfSlideUp 0.3s ease;
+        }
+
+        @keyframes kfSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .kf-preview-buttons {
@@ -630,17 +582,6 @@
         /* Active media state */
         .kf-active-media {
             box-shadow: 0 0 0 2px var(--kf-primary);
-        }
-
-        /* Recording Animation */
-        .kf-recording-pulse {
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
         }
         
         /* Hide browser's default controls */
@@ -781,21 +722,11 @@
                     <i class="fas fa-paper-plane"></i>
                 </button>
                 
-                <button type="button" class="kf-input-action-btn kf-recording-pulse" id="kfMicBtn" title="Hold to record" onmousedown="startRecording(event)" onmouseup="stopRecording()" ontouchstart="handleTouchStart(event)" ontouchend="handleTouchEnd(event)">
+                <button type="button" class="kf-input-action-btn" id="kfMicBtn" title="Hold to record">
                     <i class="fas fa-microphone"></i>
                 </button>
                 
                 <input type="file" id="kfFileUpload" name="file_upload" accept="image/*,video/*,audio/*" hidden>
-            </div>
-        </div>
-
-        <!-- Recording Overlay -->
-        <div class="kf-recording-overlay" id="kfRecordingOverlay">
-            <canvas class="kf-recording-wave" id="kfRecordingWave" width="60" height="30"></canvas>
-            <div class="kf-recording-info">
-                <div class="kf-recording-text">Recording...</div>
-                <div class="kf-recording-timer" id="kfRecordingTimer">0:00</div>
-                <div class="kf-cancel-text">Release to send, slide left to cancel</div>
             </div>
         </div>
 
@@ -819,12 +750,7 @@
 
     <script>
         // CSRF Token
-        const getCSRFToken = () => {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-            return csrfToken || '';
-        };
-
-        const csrftoken = getCSRFToken();
+        const csrftoken = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const receiver = "{{ receiver.username }}";
         const sender = "{{ request.user.username }}";
         
@@ -832,103 +758,80 @@
         const kfMessageInput = document.getElementById('kfMessageInput');
         const kfMessages = document.getElementById('kfMessages');
         const kfSendBtn = document.getElementById('kfSendBtn');
-        const kfMicBtn = document.getElementById('kfMicBtn');
         const kfFileUpload = document.getElementById('kfFileUpload');
         const kfUploadPreview = document.getElementById('kfUploadPreview');
         const kfPreviewContent = document.getElementById('kfPreviewContent');
         const kfTypingIndicator = document.getElementById('kfTypingIndicator');
-        const kfRecordingOverlay = document.getElementById('kfRecordingOverlay');
-        const kfRecordingWave = document.getElementById('kfRecordingWave');
-        const kfRecordingTimer = document.getElementById('kfRecordingTimer');
         
         // Global variables
         let fileToUpload = null;
         let typingTimeout = null;
         let socket = null;
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let recordingStartTime = 0;
-        let recordingTimer = null;
-        let audioContext = null;
-        let analyser = null;
-        let isRecording = false;
         let currentlyPlayingMedia = null;
-        let stream = null;
-        let isTouchDevice = 'ontouchstart' in window;
         
         // ========== WEBSOCKET FUNCTIONS ==========
         
         // Initialize WebSocket connection
         function initWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-            const wsPath = `ws/message/${receiver}/`;
-            const wsUrl = protocol + window.location.host + '/' + wsPath;
+            const wsPath = `/ws/message/${receiver}/`;
+            const wsUrl = protocol + window.location.host + wsPath;
             
-            console.log('🔗 Connecting to WebSocket:', wsUrl);
+            socket = new WebSocket(wsUrl);
             
-            try {
-                socket = new WebSocket(wsUrl);
+            socket.onopen = function(event) {
+                console.log('✅ WebSocket connected');
+            };
+            
+            socket.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (error) {
+                    console.error('Error parsing message:', error);
+                }
+            };
+            
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+            
+            socket.onclose = function(event) {
+                console.log('WebSocket disconnected');
                 
-                socket.onopen = function(event) {
-                    console.log('✅ WebSocket connected successfully');
-                };
-                
-                socket.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        handleWebSocketMessage(data);
-                    } catch (error) {
-                        console.error('❌ Error parsing WebSocket message:', error);
-                    }
-                };
-                
-                socket.onerror = function(error) {
-                    console.error('❌ WebSocket error:', error);
-                };
-                
-                socket.onclose = function(event) {
-                    console.log('🔌 WebSocket disconnected');
-                    
-                    // Try to reconnect after 3 seconds
-                    setTimeout(() => {
-                        console.log('🔄 Attempting to reconnect WebSocket...');
-                        initWebSocket();
-                    }, 3000);
-                };
-            } catch (error) {
-                console.error('❌ WebSocket connection failed:', error);
-            }
+                // Try to reconnect after 3 seconds
+                setTimeout(() => {
+                    initWebSocket();
+                }, 3000);
+            };
         }
 
         // Handle incoming WebSocket messages
         function handleWebSocketMessage(data) {
-            console.log('📨 WebSocket message received:', data);
-            
             switch(data.type) {
                 case 'new_message':
-                    // Display the new message immediately
+                    // Display message from WebSocket
                     appendMessage({
-                        message_id: data.message_id || Date.now(),
+                        message_id: data.message_id,
                         sender: data.sender,
                         receiver: data.receiver,
                         message: data.message,
                         file_type: data.file_type,
                         file_url: data.file_url,
-                        time: data.time || getCurrentTime(),
-                        date_label: data.date_label || 'Now'
+                        time: data.time,
+                        date_label: data.date_label
                     });
                     break;
                     
                 case 'typing':
-                    showTypingIndicator(data.sender, data.is_typing);
+                    if (data.sender === receiver) {
+                        showTypingIndicator(data.sender, data.is_typing);
+                    }
                     break;
-                    
-                default:
-                    console.log('📦 Unknown message type:', data.type);
             }
         }
 
-        // Send message via WebSocket AND HTTP (for database)
+        // Send message
         async function sendMessage() {
             const message = kfMessageInput.value.trim();
             
@@ -936,7 +839,7 @@
                 return;
             }
             
-            // If there's a file, upload it via HTTP
+            // If there's a file, upload it
             if (fileToUpload) {
                 await uploadFileWithMessage(message);
                 return;
@@ -944,7 +847,6 @@
             
             // For text-only messages
             if (message) {
-                // Send via HTTP to save to database (Django view will broadcast via WebSocket)
                 try {
                     const response = await fetch(`/send_message/${receiver}/`, {
                         method: 'POST',
@@ -956,25 +858,14 @@
                     });
                     
                     const result = await response.json();
-                    console.log('💾 Database save result:', result);
                     
                     if (result.status === 'success') {
-                        // Display immediately on sender's side
-                        appendMessage({
-                            message_id: result.message_id || Date.now(),
-                            sender: sender,
-                            receiver: receiver,
-                            message: message,
-                            time: getCurrentTime(),
-                            date_label: 'Now'
-                        });
-                        
-                        // Clear input
+                        // Clear input only - WebSocket will handle displaying
                         kfMessageInput.value = '';
                         updateSendButton();
                     }
                 } catch (error) {
-                    console.error('❌ Error sending message:', error);
+                    console.error('Error sending message:', error);
                 }
             }
         }
@@ -996,32 +887,16 @@
                 });
                 
                 const result = await response.json();
-                console.log('📤 File upload result:', result);
                 
                 if (result.status === 'success') {
-                    // Display the message immediately with file
-                    const fileType = getFileType(fileToUpload.type);
-                    const fileUrl = result.file_url || URL.createObjectURL(fileToUpload);
-                    
-                    appendMessage({
-                        message_id: result.message_id || Date.now(),
-                        sender: sender,
-                        receiver: receiver,
-                        message: message,
-                        file_type: fileType,
-                        file_url: fileUrl,
-                        time: getCurrentTime(),
-                        date_label: 'Now'
-                    });
-                    
-                    // Clear inputs
+                    // Clear inputs - WebSocket will handle displaying
                     kfMessageInput.value = '';
                     fileToUpload = null;
                     kfUploadPreview.style.display = 'none';
                     updateSendButton();
                 }
             } catch (error) {
-                console.error('❌ Error uploading file:', error);
+                console.error('Error uploading file:', error);
             }
         }
 
@@ -1034,8 +909,6 @@
         
         // Append message to chat
         function appendMessage(data) {
-            console.log('🎨 Appending message to DOM:', data);
-            
             const isSender = data.sender === sender;
             const messageRow = document.createElement('div');
             messageRow.className = `kf-message-row ${isSender ? 'sent' : 'received'}`;
@@ -1130,13 +1003,6 @@
             return `${hours}:${minutes} ${ampm}`;
         }
 
-        function getFileType(mimeType) {
-            if (mimeType.startsWith('image/')) return 'image';
-            if (mimeType.startsWith('video/')) return 'video';
-            if (mimeType.startsWith('audio/')) return 'audio';
-            return null;
-        }
-
         // File upload handling
         kfFileUpload.addEventListener('change', function(e) {
             if (this.files.length > 0) {
@@ -1194,10 +1060,10 @@
             
             if (hasText || hasFile) {
                 kfSendBtn.style.display = 'flex';
-                kfMicBtn.style.display = 'none';
+                document.getElementById('kfMicBtn').style.display = 'none';
             } else {
                 kfSendBtn.style.display = 'none';
-                kfMicBtn.style.display = 'flex';
+                document.getElementById('kfMicBtn').style.display = 'flex';
             }
             
             kfSendBtn.disabled = !hasText && !hasFile;
@@ -1237,246 +1103,6 @@
             }
         }
 
-        // ========== AUDIO RECORDING FUNCTIONS ==========
-        
-        // Touch event handlers for mobile
-        function handleTouchStart(event) {
-            event.preventDefault();
-            startRecording(event);
-        }
-        
-        function handleTouchEnd(event) {
-            event.preventDefault();
-            stopRecording();
-        }
-
-        async function startRecording(event) {
-            event.preventDefault();
-            
-            console.log('🎤 Starting recording...');
-            
-            try {
-                // Request microphone permission
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        sampleRate: 44100
-                    } 
-                });
-                
-                console.log('✅ Microphone access granted');
-                
-                // Check for supported MIME types
-                const options = { mimeType: 'audio/webm' };
-                if (!MediaRecorder.isTypeSupported('audio/webm')) {
-                    options.mimeType = 'audio/mp4';
-                }
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    delete options.mimeType; // Let browser choose default
-                }
-                
-                // Create MediaRecorder
-                mediaRecorder = new MediaRecorder(stream, options);
-                audioChunks = [];
-                
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        audioChunks.push(event.data);
-                        console.log('📊 Audio chunk received:', event.data.size, 'bytes');
-                    }
-                };
-                
-                mediaRecorder.onstop = async () => {
-                    console.log('🛑 Recording stopped, chunks:', audioChunks.length);
-                    
-                    if (audioChunks.length === 0) {
-                        console.log('❌ No audio data recorded');
-                        cleanupRecording();
-                        return;
-                    }
-                    
-                    const audioBlob = new Blob(audioChunks, { 
-                        type: mediaRecorder.mimeType || 'audio/webm' 
-                    });
-                    
-                    console.log('🎵 Audio blob created:', audioBlob.size, 'bytes');
-                    
-                    // Create form data
-                    const formData = new FormData();
-                    formData.append('receiver', receiver);
-                    const filename = `recording_${Date.now()}.${mediaRecorder.mimeType.includes('webm') ? 'webm' : 'mp4'}`;
-                    formData.append('file_upload', audioBlob, filename);
-                    
-                    try {
-                        console.log('📤 Uploading audio...');
-                        const response = await fetch(`/send_message/${receiver}/`, {
-                            method: 'POST',
-                            headers: {
-                                'X-CSRFToken': csrftoken,
-                            },
-                            body: formData
-                        });
-                        
-                        const result = await response.json();
-                        console.log('📥 Upload response:', result);
-                        
-                        if (result.status === 'success') {
-                            console.log('✅ Audio sent successfully');
-                            // Create a URL for the blob to play immediately
-                            const audioUrl = URL.createObjectURL(audioBlob);
-                            
-                            // Display immediately
-                            appendMessage({
-                                message_id: result.message_id || Date.now(),
-                                sender: sender,
-                                receiver: receiver,
-                                message: 'Audio message',
-                                file_type: 'audio',
-                                file_url: audioUrl,
-                                time: getCurrentTime(),
-                                date_label: 'Now'
-                            });
-                        } else {
-                            console.error('❌ Audio upload failed:', result);
-                        }
-                    } catch (error) {
-                        console.error('❌ Error sending audio:', error);
-                    }
-                    
-                    // Clean up
-                    cleanupRecording();
-                };
-                
-                mediaRecorder.onerror = (error) => {
-                    console.error('❌ MediaRecorder error:', error);
-                    cleanupRecording();
-                };
-                
-                // Start recording
-                mediaRecorder.start();
-                recordingStartTime = Date.now();
-                isRecording = true;
-                
-                console.log('🎤 Recording started with MIME type:', mediaRecorder.mimeType);
-                
-                // Show recording overlay
-                kfRecordingOverlay.style.display = 'flex';
-                startRecordingTimer();
-                startAudioVisualizer(stream);
-                
-            } catch (error) {
-                console.error('❌ Error accessing microphone:', error);
-                alert('Unable to access microphone. Please check permissions and try again.');
-            }
-        }
-
-        function cleanupRecording() {
-            // Stop all tracks
-            if (stream) {
-                stream.getTracks().forEach(track => {
-                    track.stop();
-                    track.enabled = false;
-                });
-                stream = null;
-            }
-            
-            // Clear recording timer
-            if (recordingTimer) {
-                clearInterval(recordingTimer);
-                recordingTimer = null;
-            }
-            
-            // Close audio context
-            if (audioContext && audioContext.state !== 'closed') {
-                audioContext.close();
-                audioContext = null;
-            }
-            
-            // Clear audio chunks
-            audioChunks = [];
-            
-            // Hide recording overlay
-            kfRecordingOverlay.style.display = 'none';
-            isRecording = false;
-            mediaRecorder = null;
-            
-            // Reset timer display
-            kfRecordingTimer.textContent = '0:00';
-            
-            console.log('🧹 Recording cleaned up');
-        }
-
-        function stopRecording() {
-            if (mediaRecorder && isRecording) {
-                console.log('🛑 Stopping recording...');
-                mediaRecorder.stop();
-            } else {
-                console.log('⚠️ No active recording to stop');
-            }
-        }
-
-        function startRecordingTimer() {
-            recordingTimer = setInterval(() => {
-                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-                const minutes = Math.floor(elapsed / 60);
-                const seconds = elapsed % 60;
-                kfRecordingTimer.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                
-                // Auto-stop after 60 seconds
-                if (elapsed >= 60) {
-                    stopRecording();
-                }
-            }, 1000);
-        }
-
-        function startAudioVisualizer(stream) {
-            try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                const source = audioContext.createMediaStreamSource(stream);
-                source.connect(analyser);
-                analyser.fftSize = 256;
-                
-                const bufferLength = analyser.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
-                const canvasCtx = kfRecordingWave.getContext('2d');
-                
-                function draw() {
-                    if (!isRecording || !analyser) return;
-                    
-                    requestAnimationFrame(draw);
-                    
-                    analyser.getByteFrequencyData(dataArray);
-                    
-                    // Clear canvas
-                    canvasCtx.clearRect(0, 0, kfRecordingWave.width, kfRecordingWave.height);
-                    
-                    const barWidth = (kfRecordingWave.width / bufferLength) * 2.5;
-                    let barHeight;
-                    let x = 0;
-                    
-                    for (let i = 0; i < bufferLength; i++) {
-                        barHeight = dataArray[i] / 2;
-                        
-                        // Create gradient for visual effect
-                        const gradient = canvasCtx.createLinearGradient(0, 0, 0, kfRecordingWave.height);
-                        gradient.addColorStop(0, '#0084ff');
-                        gradient.addColorStop(1, '#0066cc');
-                        
-                        canvasCtx.fillStyle = gradient;
-                        canvasCtx.fillRect(x, kfRecordingWave.height - barHeight, barWidth, barHeight);
-                        
-                        x += barWidth + 1;
-                    }
-                }
-                
-                draw();
-            } catch (error) {
-                console.error('❌ Audio visualizer error:', error);
-            }
-        }
-
         // ========== MEDIA PLAYBACK FUNCTIONS ==========
         
         function initMediaPlayers(container = document) {
@@ -1487,19 +1113,16 @@
                 
                 if (!video || !playBtn) return;
                 
-                // Set up video click handler
                 video.addEventListener('click', (e) => {
                     e.stopPropagation();
                     toggleVideoPlayback(video);
                 });
                 
-                // Set up play button click handler
                 playBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     toggleVideoPlayback(video);
                 });
                 
-                // Update button when video plays/pauses
                 video.addEventListener('play', () => {
                     playBtn.innerHTML = '<i class="fas fa-pause"></i>';
                     player.classList.add('kf-active-media');
@@ -1538,16 +1161,13 @@
                 
                 if (!audio || !playBtn) return;
                 
-                // Initialize time display
                 updateAudioTimeDisplay(audio, timeDisplay);
                 
-                // Set up play button click handler
                 playBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     toggleAudioPlayback(audio);
                 });
                 
-                // Set up progress bar click handler
                 if (progress) {
                     progress.addEventListener('click', (e) => {
                         const rect = progress.getBoundingClientRect();
@@ -1557,12 +1177,10 @@
                     });
                 }
                 
-                // Update button when audio plays/pauses
                 audio.addEventListener('play', () => {
                     playBtn.innerHTML = '<i class="fas fa-pause"></i>';
                     player.classList.add('kf-active-media');
                     
-                    // Stop other media if playing
                     if (currentlyPlayingMedia && currentlyPlayingMedia !== audio) {
                         stopCurrentlyPlayingMedia();
                     }
@@ -1595,7 +1213,6 @@
                     updateAudioTimeDisplay(audio, timeDisplay);
                 });
                 
-                // Initialize progress
                 updateAudioProgress(audio, progressFilled, timeDisplay);
             });
         }
@@ -1603,7 +1220,7 @@
         function toggleVideoPlayback(video) {
             if (video.paused) {
                 video.play().catch(error => {
-                    console.error('❌ Error playing video:', error);
+                    console.error('Error playing video:', error);
                 });
             } else {
                 video.pause();
@@ -1613,7 +1230,7 @@
         function toggleAudioPlayback(audio) {
             if (audio.paused) {
                 audio.play().catch(error => {
-                    console.error('❌ Error playing audio:', error);
+                    console.error('Error playing audio:', error);
                 });
             } else {
                 audio.pause();
@@ -1687,8 +1304,6 @@
         // ========== INITIALIZATION ==========
         
         window.addEventListener('load', () => {
-            console.log('🚀 Initializing chat application...');
-            
             // Initialize WebSocket
             initWebSocket();
             
@@ -1722,25 +1337,12 @@
                     closeMediaModal();
                 }
             });
-            
-            // Prevent accidental page refresh during recording
-            window.addEventListener('beforeunload', (e) => {
-                if (isRecording) {
-                    e.preventDefault();
-                    e.returnValue = 'You are currently recording. Are you sure you want to leave?';
-                }
-            });
-            
-            console.log('✅ Chat application initialized');
         });
 
         // Handle page visibility change
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 stopCurrentlyPlayingMedia();
-                if (isRecording) {
-                    stopRecording();
-                }
             }
         });
         

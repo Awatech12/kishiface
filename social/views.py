@@ -683,16 +683,22 @@ def send_message(request, username):
         # Broadcast via WebSocket
         channel_layer = get_channel_layer()
         
-        # Create a unique room for the conversation
+        # Create consistent room name (MUST match consumer)
         user_ids = sorted([request.user.id, receiver.id])
         room_name = f"dm_{user_ids[0]}_{user_ids[1]}"
+        room_group_name = f"chat_{room_name}"
         
         file_url = message.file.url if message.file else None
         
+        print(f"📤 Broadcasting message to room: {room_group_name}")
+        print(f"👤 From: {request.user.username}")
+        print(f"👥 To: {receiver.username}")
+        
+        # Send to both users in the room
         async_to_sync(channel_layer.group_send)(
-            room_name,
+            room_group_name,  # Use the SAME group name as in consumer
             {
-                'type': 'direct_message',
+                'type': 'chat_message',  # This MUST match the method name in consumer
                 'message_id': message.id,
                 'sender': request.user.username,
                 'receiver': receiver.username,
@@ -708,7 +714,8 @@ def send_message(request, username):
         return JsonResponse({
             'status': 'success',
             'message': 'Message sent',
-            'message_id': message.id
+            'message_id': message.id,
+            'file_url': file_url
         })
     
     # Handle GET requests by redirecting to message page
