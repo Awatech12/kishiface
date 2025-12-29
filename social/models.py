@@ -23,75 +23,83 @@ class Profile(models.Model):
     bio = models.CharField(max_length=300)
     location = models.TextField()
     
+    # Conditional picture field
     if settings.USE_CLOUDINARY:
         picture = CloudinaryField('picture', folder='profile_image', default='logo_iowyea')
     else:
-        picture = models.ImageField(upload_to='profile_image/', default='male.png')
+        picture = models.ImageField(
+            upload_to='profile_image/',
+            default='male.png'
+        )
     
     created_at = models.DateTimeField(auto_now_add=True)
     last_seen = models.DateTimeField(auto_now=True)
     online = models.BooleanField(default=False)
-    last_ping = models.DateTimeField(null=True, blank=True)  # For heartbeat tracking
     
     def save(self, *args, **kwargs):
+        # Capitalize address
         self.address = self.address.title()
+        
+        # Capitalize user names
         if self.user.first_name:
             self.user.first_name = self.user.first_name.capitalize()
         if self.user.last_name:
             self.user.last_name = self.user.last_name.capitalize()
+        
+        # Set full name
         self.full_name = f'{self.user.first_name} {self.user.last_name}'
+        
+        # Save user first
         self.user.save()
+        
+        # Save profile
         super().save(*args, **kwargs)
-    
-    def update_ping(self):
-        """Update last ping time"""
-        self.last_ping = timezone.now()
-        self.online = True
-        self.save(update_fields=['last_ping', 'online'])
-    
+
+    def update_online_status(self, online=True):
+        """Update online status - call this from WebSocket"""
+        self.online = online
+        self.last_seen = timezone.now()
+        self.save(update_fields=['last_seen', 'online'])
+
     def get_status(self):
-        """Real-time status updating every second"""
+        """Always show accurate time since last seen"""
         now = timezone.now()
-        
-        # Check last ping (most accurate - updates every second via WebSocket)
-        if self.last_ping:
-            ping_diff = (now - self.last_ping).total_seconds()
-            if ping_diff < 10:  # Last ping < 10 seconds = Online
-                return "Online"
-        
-        # Fallback to last_seen
         diff = now - self.last_seen
-        seconds = diff.total_seconds()
         
-        if seconds < 60:
+        if diff.seconds < 60:
             return "Just now"
-        elif seconds < 3600:
-            return f"{int(seconds // 60)}m ago"
+        elif diff.seconds < 3600:
+            return f"{diff.seconds // 60}m ago"
         elif diff.days == 0:
-            return f"{int(seconds // 3600)}h ago"
+            return f"{diff.seconds // 3600}h ago"
         elif diff.days == 1:
             return "Yesterday"
-        elif diff.days < 7:
-            return f"{diff.days}d ago"
         else:
-            return self.last_seen.strftime("%b %d")
-    
+            return f"{diff.days}d ago"
+
+
     @property
-    def is_currently_online(self):
-        """Check if user is currently online"""
-        now = timezone.now()
-        
-        # Check last ping first (updates every second)
-        if self.last_ping:
-            if (now - self.last_ping).total_seconds() < 10:
-                return True
-        
-        # Check last_seen as fallback
-        return (now - self.last_seen).total_seconds() < 300
-    
+    def is_recently_online(self):
+        """Check if user was online in last 5 minutes"""
+        diff = timezone.now() - self.last_seen
+        return diff.seconds < 300
+
+    @classmethod
+    def mark_user_online(cls, user_id):
+        """Mark user as online (static method)"""
+        cls.objects.filter(user_id=user_id).update(
+            online=True,
+            last_seen=timezone.now()
+        )
+
+    @classmethod
+    def mark_user_offline(cls, user_id):
+        """Mark user as offline (static method)"""
+        cls.objects.filter(user_id=user_id).update(online=False)
+
     class Meta:
         db_table = 'Profile_Table'
-    
+
     def __str__(self):
         return self.user.username
 
