@@ -741,14 +741,105 @@ def open_notification(request, post_id, notification_type):
     
 login_required(login_url='/')
 def inbox(request):
+    # Get all unique conversations for the current user
+    conversations = {}
+    
+    # Get the last message for each conversation
+    # First, get all messages involving the current user
+    all_messages = Message.objects.filter(
+        Q(sender=request.user) | Q(receiver=request.user)
+    )
+    
+    # Get distinct conversation partners
+    conversation_partners = set()
+    for msg in all_messages:
+        other_user = msg.sender if msg.sender != request.user else msg.receiver
+        conversation_partners.add(other_user)
+    
+    # For each conversation partner, get the most recent message
+    for partner in conversation_partners:
+        # Get the last message in this conversation
+        last_message = Message.objects.filter(
+            Q(sender=request.user, receiver=partner) |
+            Q(sender=partner, receiver=request.user)
+        ).order_by('-created_at').first()
+        
+        if last_message:
+            # Get unread count for this conversation
+            unread_count = Message.objects.filter(
+                sender=partner,
+                receiver=request.user,
+                is_read=False
+            ).count()
+            
+            conversations[partner] = {
+                'last_message': last_message,
+                'unread_count': unread_count
+            }
+    
+    # Sort conversations by last message time (most recent first)
+    sorted_conversations = sorted(
+        conversations.items(),
+        key=lambda x: x[1]['last_message'].created_at,
+        reverse=True
+    )
+    
+    # Get contacts for stories (all conversation partners)
+    contacts = conversation_partners
+    
+    return render(request, 'inbox.html', {
+        'conversations': dict(sorted_conversations),
+        'contacts': contacts,
+        'user': request.user
+    })
+    # Get all conversations involving the current user
     inbox_messages = Message.objects.filter(
         Q(sender=request.user) | Q(receiver=request.user)
-    ).order_by('-created_at')
-    conversations={}
+    )
+    
+    # Get the other user and last message for each conversation
+    conversations = {}
     for message in inbox_messages:
-        other_user=message.sender if message.sender != request.user else message.receiver
+        other_user = message.sender if message.sender != request.user else message.receiver
         conversations.setdefault(other_user, message)
-    return render(request, 'inbox.html', {'messages':conversations.values(),})
+    
+    # Get unread counts for each conversation
+    unread_counts = {}
+    for other_user in conversations.keys():
+        unread_count = Message.objects.filter(
+            sender=other_user,
+            receiver=request.user,
+            is_read=False
+        ).count()
+        unread_counts[other_user] = unread_count
+    
+    # Get last active time for each user (simplified - using last message time)
+    last_active = {}
+    for other_user in conversations.keys():
+        last_message = Message.objects.filter(
+            Q(sender=other_user, receiver=request.user) |
+            Q(sender=request.user, receiver=other_user)
+        ).order_by('-created_at').first()
+        if last_message:
+            last_active[other_user] = last_message.created_at
+    
+    # Prepare context
+    context_messages = []
+    for other_user, last_message in conversations.items():
+        context_messages.append({
+            'other_user': other_user,
+            'last_message': last_message,
+            'unread_count': unread_counts.get(other_user, 0),
+            'last_active': last_active.get(other_user)
+        })
+    
+    # Sort by last message time
+    context_messages.sort(key=lambda x: x['last_message'].created_at, reverse=True)
+    
+    return render(request, 'inbox.html', {
+        'messages': context_messages,
+        'user': request.user
+    })
 
 login_required(login_url='/')
 def notification_list(request):

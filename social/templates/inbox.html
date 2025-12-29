@@ -48,10 +48,45 @@
             color: #262626;
         }
 
-        .inbox-header i {
+        .header-icons {
+            display: flex;
+            gap: 20px;
+        }
+
+        .header-icons i {
             font-size: 1.3rem;
             color: #262626;
             cursor: pointer;
+        }
+
+        /* Search Bar */
+        .search-container {
+            padding: 12px 16px;
+            background-color: #fafafa;
+            border-bottom: 1px solid #dbdbdb;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            background-color: white;
+            border-radius: 8px;
+            padding: 8px 12px;
+            border: 1px solid #dbdbdb;
+        }
+
+        .search-box i {
+            color: #8e8e8e;
+            margin-right: 12px;
+        }
+
+        .search-box input {
+            border: none;
+            outline: none;
+            width: 100%;
+            font-size: 0.9rem;
+            background: transparent;
+            color: #262626;
         }
 
         /* Stories Bar */
@@ -77,7 +112,7 @@
             height: 60px;
             border-radius: 50%;
             padding: 2px;
-            border: 2px solid #c13584; /* Instagram story gradient color */
+            border: 2px solid #c13584;
             object-fit: cover;
         }
 
@@ -122,15 +157,30 @@
             min-width: 0;
         }
 
-        .username-link {
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .username {
             font-weight: 600;
             font-size: 0.95rem;
             color: #262626;
             text-decoration: none;
         }
 
-        .username-link:hover {
-            text-decoration: underline;
+        .message-time {
+            font-size: 0.75rem;
+            color: #8e8e8e;
+            white-space: nowrap;
+        }
+
+        .message-preview-container {
+            display: flex;
+            align-items: center;
+            min-width: 0;
         }
 
         .message-preview {
@@ -141,25 +191,31 @@
             white-space: nowrap;
             text-overflow: ellipsis;
             max-width: 100%;
+            flex-grow: 1;
         }
 
-        .message-time {
-            font-size: 0.75rem;
+        .message-icon {
+            margin-right: 6px;
+            font-size: 0.85rem;
             color: #8e8e8e;
-            margin-left: 8px;
-            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         /* Unread indicator */
-        .unread-dot {
-            width: 10px;
-            height: 10px;
+        .unread-badge {
             background-color: #0095f6;
+            color: white;
             border-radius: 50%;
-            position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
+            min-width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0 6px;
+            margin-left: 8px;
+            flex-shrink: 0;
         }
 
         .empty-message {
@@ -199,8 +255,19 @@
     <div class="inbox-container">
         <header class="inbox-header">
             <h2>{{user.username}}</h2>
-            <i class="fas fa-edit"></i>
+            <div class="header-icons">
+                <i class="fas fa-edit"></i>
+                <i class="fas fa-search"></i>
+            </div>
         </header>
+
+        <!-- Search Bar -->
+        <div class="search-container">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Search messages...">
+            </div>
+        </div>
 
         <!-- Stories Bar -->
         <div class="stories-bar">
@@ -213,33 +280,97 @@
         </div>
 
         <!-- Message List -->
-        {% for message in messages %}
-            {% if message.sender.username == user.username %}
-                <!-- Message sent by current user -->
-                <a href="{% url 'message' message.receiver.username %}" class="message-item">
-                    <img src="{{ message.receiver.profile.picture.url }}" alt="{{ message.receiver.username }}'s profile picture" class="profile-pic">
-                    <div class="message-content">
-                        <span class="username-link">{{message.receiver.username}}</span>
-                        <span class="message-preview">{{message.conversation|truncatechars:25}}</span>
+        {% for other_user, conversation_data in conversations.items %}
+            {% with message=conversation_data.last_message unread_count=conversation_data.unread_count %}
+            <a href="{% url 'message' other_user.username %}" class="message-item" data-username="{{ other_user.username }}">
+                <img src="{{ other_user.profile.picture.url }}" alt="{{ other_user.username }}'s profile picture" class="profile-pic">
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="username">{{ other_user.username }}</span>
+                        <span class="message-time">{{ message.created_at|insta_timesince }}</span>
                     </div>
-                    <span class="message-time">{{message.created_at|insta_timesince}}</span>
-                </a>
-            {% else %}
-                <!-- Message received by current user -->
-                <a href="{% url 'message' message.sender.username %}" class="message-item">
-                    <img src="{{ message.sender.profile.picture.url }}" alt="{{ message.sender.username }}'s profile picture" class="profile-pic">
-                    <div class="message-content">
-                        <span class="username-link">{{message.sender.username}}</span>
-                        <span class="message-preview">{{message.conversation|truncatechars:25}}</span>
+                    <div class="message-preview-container">
+                        {% if message.file_type == 'image' %}
+                            <div style="display: flex; align-items: center;">
+                                <i class="fas fa-image message-icon"></i>
+                                <span class="message-preview">Photo</span>
+                            </div>
+                        {% elif message.file_type == 'audio' %}
+                            <div style="display: flex; align-items: center;">
+                                <i class="fas fa-microphone message-icon"></i>
+                                <span class="message-preview">Audio</span>
+                            </div>
+                        {% elif message.file_type == 'video' %}
+                            <div style="display: flex; align-items: center;">
+                                <i class="fas fa-video message-icon"></i>
+                                <span class="message-preview">Video</span>
+                            </div>
+                        {% else %}
+                            <span class="message-preview">
+                                {% if message.sender == user %}
+                                    You: {{ message.conversation|truncatechars:25 }}
+                                {% else %}
+                                    {{ message.conversation|truncatechars:25 }}
+                                {% endif %}
+                            </span>
+                        {% endif %}
+                        
+                        <!-- Show unread count -->
+                        {% if unread_count > 0 %}
+                            {% if unread_count > 9 %}
+                                <span class="unread-badge">9+</span>
+                            {% else %}
+                                <span class="unread-badge">{{ unread_count }}</span>
+                            {% endif %}
+                        {% endif %}
                     </div>
-                    <span class="message-time">{{message.created_at|insta_timesince}}</span>
-                    <!-- Show unread dot only if message is unread AND current user is receiver -->
-                    {% if not message.is_read %}<span class="unread-dot"></span>{% endif %}
-                </a>
-            {% endif %}
+                </div>
+            </a>
+            {% endwith %}
         {% empty %}
-            <h2 class="empty-message">No messages yet.</h2>
+            <div class="empty-message">
+                <i class="fas fa-comments" style="font-size: 3rem; color: #ddd; margin-bottom: 20px;"></i>
+                <h3>No messages yet</h3>
+                <p>Start a conversation by messaging a friend</p>
+            </div>
         {% endfor %}
     </div>
+
+    <script>
+        // Search functionality
+        const searchInput = document.querySelector('.search-box input');
+        const messageItems = document.querySelectorAll('.message-item');
+        
+        searchInput.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            
+            if (searchTerm === '') {
+                // Show all messages when search is empty
+                messageItems.forEach(item => {
+                    item.style.display = 'flex';
+                });
+                return;
+            }
+            
+            messageItems.forEach(item => {
+                const username = item.querySelector('.username').textContent.toLowerCase();
+                const messagePreview = item.querySelector('.message-preview').textContent.toLowerCase();
+                
+                if (username.includes(searchTerm) || messagePreview.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+
+        // Log which conversation is being opened
+        document.querySelectorAll('.message-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                const username = this.getAttribute('data-username');
+                console.log(`Opening chat with: ${username}`);
+            });
+        });
+    </script>
 </body>
 </html>
