@@ -2,7 +2,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
-from social.models import Profile
+
 
 
 class OnlineStatusConsumer(AsyncWebsocketConsumer):
@@ -27,13 +27,15 @@ class OnlineStatusConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def mark_online(self, user_id):
-        
+        from social.models import Profile
         Profile.mark_user_online(user_id)
 
     @database_sync_to_async
     def mark_offline(self, user_id):
+        from social.models import Profile
         Profile.mark_user_offline(user_id)
 
     @database_sync_to_async
     def update_last_seen(self, user_id):
+        from social.models import Profile
         Profile.objects.filter(user_id=user_id).update(last_seen=timezone.now())
