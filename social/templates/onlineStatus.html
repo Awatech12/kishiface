@@ -1,18 +1,88 @@
+<!-- Add this to your base.html -->
 <script>
-// Connect WebSocket
-const ws = new WebSocket(`ws://${window.location.host}/ws/online-status/`);
-
-// Heartbeat every 25 seconds
-setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) {
-        ws.send('ping');
+class RealTimeStatus {
+    constructor() {
+        this.ws = null;
+        this.userId = window.userId;
+        this.statusInterval = null;
+        this.connect();
     }
-}, 25000);
+    
+    connect() {
+        if (!this.userId) return;
+        
+        this.ws = new WebSocket(`ws://${window.location.host}/ws/online-status/`);
+        
+        this.ws.onopen = () => {
+            console.log('✅ Real-time status connected');
+            this.startStatusUpdates();
+        };
+        
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'status') {
+                    this.updateStatusDisplay('Online');
+                } else if (data.type === 'heartbeat') {
+                    // Heartbeat received, user is online
+                    this.updateStatusDisplay('Online');
+                }
+            } catch(e) {}
+        };
+        
+        this.ws.onclose = () => {
+            console.log('🔴 Connection closed, reconnecting...');
+            this.stopStatusUpdates();
+            setTimeout(() => this.connect(), 1000);
+        };
+    }
+    
+    startStatusUpdates() {
+        // Send ping every second
+        this.statusInterval = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({type: 'ping'}));
+            }
+        }, 1000);
+    }
+    
+    stopStatusUpdates() {
+        if (this.statusInterval) {
+            clearInterval(this.statusInterval);
+        }
+    }
+    
+    updateStatusDisplay(status) {
+        // Update all status elements on page
+        document.querySelectorAll('.user-status').forEach(el => {
+            if (el.dataset.userId === this.userId) {
+                el.textContent = status;
+                el.className = `user-status ${status.toLowerCase()}`;
+            }
+        });
+    }
+    
+    disconnect() {
+        this.stopStatusUpdates();
+        if (this.ws) {
+            this.ws.close();
+        }
+    }
+}
 
-// Auto-reconnect
-ws.onclose = function() {
-    setTimeout(() => {
-        location.reload(); // Simplest: reload page
-    }, 5000);
-};
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.userId) {
+        window.statusManager = new RealTimeStatus();
+        
+        // Also update on user activity
+        ['click', 'mousemove', 'keydown'].forEach(event => {
+            document.addEventListener(event, () => {
+                if (window.statusManager && window.statusManager.ws) {
+                    window.statusManager.ws.send(JSON.stringify({type: 'ping'}));
+                }
+            });
+        });
+    }
+});
 </script>
