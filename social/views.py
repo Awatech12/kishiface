@@ -12,7 +12,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
-import time
+import time, json
 from django.http import JsonResponse
 from django.conf import settings
 from django.utils import timezone
@@ -110,10 +110,6 @@ def home(request):
     })
 
 
-
-# views.py - Update follow_user view
-
-
 def follow_user(request, user_id):
     if request.method == 'POST':
         try:
@@ -191,7 +187,7 @@ def post(request):
 
     return render(request, 'post.html')
 
-login_required(login_url='/')
+@login_required(login_url='/')
 def editpost(request, post_id):
     post = get_object_or_404(Post, post_id=post_id, author=request.user)
     image = PostImage.objects.filter(post=post)
@@ -604,6 +600,7 @@ def delete_history(request, history_id):
 def clear_history(request):
     SearchHistory.objects.filter(user=request.user).delete()
     return redirect('search')
+
 @login_required(login_url='/')
 def message(request, username):
     receiver = get_object_or_404(User, username=username)
@@ -638,7 +635,15 @@ def send_message(request, username):
     receiver = get_object_or_404(User, username=username)
     
     if request.method == 'POST':
-        message_text = request.POST.get('message', '')
+        # Check if it's JSON data
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+            message_text = data.get('message', '')
+            reply_to_id = data.get('reply_to')
+        else:
+            message_text = request.POST.get('message', '')
+            reply_to_id = request.POST.get('reply_to')
+        
         file_upload = request.FILES.get('file_upload')
         
         # If no message and no file, just return success
@@ -663,13 +668,26 @@ def send_message(request, username):
                     'message': 'Unsupported file type'
                 })
         
+        # Get reply_to message if exists
+        reply_to = None
+        if reply_to_id:
+            try:
+                reply_to = Message.objects.get(id=reply_to_id)
+                # Verify reply_to message is in the same conversation
+                if not (reply_to.sender == request.user or reply_to.receiver == request.user or
+                        reply_to.sender == receiver or reply_to.receiver == receiver):
+                    reply_to = None
+            except Message.DoesNotExist:
+                reply_to = None
+        
         # Create message
         message = Message.objects.create(
             sender=request.user,
             receiver=receiver,
             conversation=message_text if message_text else '',
             file_type=file_type,
-            file=file_upload if file_upload else None
+            file=file_upload if file_upload else None,
+            reply_to=reply_to
         )
         
         # Mark any unread messages from this sender as read
@@ -694,6 +712,15 @@ def send_message(request, username):
         print(f"👤 From: {request.user.username}")
         print(f"👥 To: {receiver.username}")
         
+        # Prepare reply data for WebSocket
+        reply_data = None
+        if reply_to:
+            reply_data = {
+                'sender': reply_to.sender.username,
+                'message': reply_to.conversation,
+                'file_type': reply_to.file_type
+            }
+        
         # Send to both users in the room
         async_to_sync(channel_layer.group_send)(
             room_group_name,  # Use the SAME group name as in consumer
@@ -707,7 +734,8 @@ def send_message(request, username):
                 'file_url': file_url,
                 'time': message.chat_time,
                 'date_label': message.chat_date_label,
-                'created_at': message.created_at.isoformat()
+                'created_at': message.created_at.isoformat(),
+                'reply_to': reply_data
             }
         )
         
@@ -721,7 +749,59 @@ def send_message(request, username):
     # Handle GET requests by redirecting to message page
     return redirect('message', username=username)
 
-
+@login_required(login_url='/')
+def delete_message(request, message_id):
+    if request.method == 'POST':
+        try:
+            message = Message.objects.get(id=message_id)
+            
+            # Check if user is authorized to delete (sender or receiver)
+            if message.sender != request.user and message.receiver != request.user:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Unauthorized'
+                })
+            
+            # Broadcast deletion via WebSocket
+            channel_layer = get_channel_layer()
+            
+            # Create consistent room name
+            user_ids = sorted([message.sender.id, message.receiver.id])
+            room_name = f"dm_{user_ids[0]}_{user_ids[1]}"
+            room_group_name = f"chat_{room_name}"
+            
+            # Broadcast deletion to both users
+            async_to_sync(channel_layer.group_send)(
+                room_group_name,
+                {
+                    'type': 'chat_message',
+                    'message_id': message.id,
+                    'type': 'message_deleted',
+                    'sender': message.sender.username,
+                    'receiver': message.receiver.username
+                }
+            )
+            
+            # Delete the message
+            message.delete()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Message deleted successfully'
+            })
+            
+        except Message.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Message not found'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e)
+            })
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid method'})
 @login_required(login_url='/')
 def open_notification(request, post_id, notification_type):
 

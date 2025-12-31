@@ -219,11 +219,14 @@ class FollowNotification(models.Model):
     def __str__(self):
         return f"{self.from_user.username} followed {self.to_user.username}"
 
-# --- START MESSAGE MODEL CORRECTION ---
 class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sender')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver')
     conversation = models.TextField()
+    
+    # Add reply_to field for message replies
+    reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, 
+                                null=True, blank=True, related_name='replies')
     
     # Add file_type field
     file_type = models.CharField(max_length=20, blank=True, null=True)  # 'image', 'video', 'audio'
@@ -247,8 +250,6 @@ class Message(models.Model):
     # Add like field
     like = models.ManyToManyField(User, related_name='liked_messages', blank=True)
     
-    # REMOVED: message_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    
     def __str__(self):
         return f"{self.sender} to {self.receiver}: {self.conversation[:50]}"
     
@@ -269,7 +270,7 @@ class Message(models.Model):
     @property
     def chat_time(self):
         return self.created_at.strftime("%I:%M %p")
-# --- END MESSAGE MODEL CORRECTION ---
+
 
 
 class Channel(models.Model):

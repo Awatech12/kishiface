@@ -4,8 +4,11 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 
 
-
 class DirectMessageConsumer(AsyncWebsocketConsumer):
+    @database_sync_to_async
+    def get_user(self, username):
+        from django.contrib.auth.models import User
+        return User.objects.get(username=username)
     async def connect(self):
         from django.contrib.auth.models import User
         self.user = self.scope['user']
@@ -64,8 +67,7 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
 
     async def chat_message(self, event):
         """
-        Handle incoming chat messages broadcast to the group.
-        This is triggered by channel_layer.group_send()
+        Handle NEW messages from send_message view
         """
         print(f"📨 Sending message to WebSocket: {event.get('sender')} -> {event.get('receiver')}")
         
@@ -80,7 +82,22 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
             'file_url': event.get('file_url'),
             'time': event.get('time'),
             'date_label': event.get('date_label'),
-            'created_at': event.get('created_at')
+            'created_at': event.get('created_at'),
+            'reply_to': event.get('reply_to')
+        }))
+
+    async def message_deleted(self, event):
+        """
+        Handle DELETION events from delete_message view
+        This is called when event['type'] == 'message_deleted'
+        """
+        print(f"🗑️ Message deletion event: {event.get('message_id')}")
+        
+        await self.send(text_data=json.dumps({
+            'type': 'message_deleted',
+            'message_id': event.get('message_id'),
+            'sender': event.get('sender'),
+            'receiver': event.get('receiver')
         }))
 
     async def typing_indicator(self, event):
@@ -94,8 +111,3 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
                 'sender': event['sender'],
                 'is_typing': event['is_typing']
             }))
-
-    @database_sync_to_async
-    def get_user(self, username):
-        from django.contrib.auth.models import User
-        return User.objects.get(username=username)
