@@ -54,6 +54,25 @@
             position: relative;
         }
 
+        /* Progress Bar Container */
+        .kishiface-progress-bar-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: transparent;
+            z-index: 2001;
+            display: none;
+        }
+
+        .kishiface-progress-bar {
+            height: 100%;
+            background: var(--kf-primary);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
         /* Chat Header */
         .kishiface-chat-header {
             padding: 12px 16px;
@@ -256,58 +275,6 @@
 
         .kishiface-message-check.read {
             color: var(--kf-primary);
-        }
-
-        /* Uploading Spinner */
-        .kishiface-upload-spinner {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255, 255, 255, 0.9);
-            z-index: 2000;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .kishiface-spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid var(--kf-border);
-            border-top: 4px solid var(--kf-primary);
-            border-radius: 50%;
-            animation: kishifaceSpin 1s linear infinite;
-        }
-
-        @keyframes kishifaceSpin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .kishiface-upload-text {
-            font-size: 16px;
-            color: var(--kf-text);
-            font-weight: 500;
-        }
-
-        .kishiface-upload-progress {
-            width: 200px;
-            height: 4px;
-            background: var(--kf-border);
-            border-radius: 2px;
-            overflow: hidden;
-            margin-top: 8px;
-        }
-
-        .kishiface-upload-progress-bar {
-            height: 100%;
-            background: var(--kf-primary);
-            width: 0%;
-            transition: width 0.3s ease;
         }
 
         /* Kishiface-style Image Attachment */
@@ -616,6 +583,33 @@
             width: 300px;
         }
 
+        .kishiface-modal-text-preview {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            text-align: center;
+            z-index: 2001;
+        }
+
+        .kishiface-modal-text-content {
+            font-size: 14px;
+            line-height: 1.4;
+            margin-bottom: 4px;
+            word-wrap: break-word;
+        }
+
+        .kishiface-modal-text-time {
+            font-size: 11px;
+            opacity: 0.8;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
         .kishiface-modal-controls {
             position: absolute;
             top: 20px;
@@ -906,49 +900,6 @@
             cursor: not-allowed;
             transform: none;
             opacity: 0.5;
-        }
-
-        /* Upload Preview */
-        .kishiface-upload-preview {
-            position: fixed;
-            bottom: 80px;
-            left: 16px;
-            right: 16px;
-            background: var(--kf-white);
-            border-radius: 12px;
-            padding: 16px;
-            display: none;
-            z-index: 1000;
-            animation: kishifaceSlideUp 0.3s ease;
-            border: 1px solid var(--kf-border);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .kishiface-preview-buttons {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            margin-top: 16px;
-        }
-
-        .kishiface-btn-secondary {
-            padding: 8px 16px;
-            border: 1px solid var(--kf-border);
-            background: none;
-            border-radius: 6px;
-            cursor: pointer;
-            color: var(--kf-text);
-            font-size: 14px;
-        }
-
-        .kishiface-btn-primary {
-            padding: 8px 20px;
-            background: var(--kf-primary);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
         }
 
         /* Empty State */
@@ -1339,17 +1290,13 @@
     </style>
 </head>
 <body>
+    <!-- Progress Bar -->
+    <div class="kishiface-progress-bar-container" id="kishifaceProgressBar">
+        <div class="kishiface-progress-bar" id="kishifaceProgressBarFill"></div>
+    </div>
+
     <!-- Main Container -->
     <div class="kishiface-messenger-container">
-        <!-- Upload Spinner -->
-        <div class="kishiface-upload-spinner" id="kishifaceUploadSpinner">
-            <div class="kishiface-spinner"></div>
-            <div class="kishiface-upload-text" id="kishifaceUploadText">Uploading...</div>
-            <div class="kishiface-upload-progress">
-                <div class="kishiface-upload-progress-bar" id="kishifaceUploadProgressBar"></div>
-            </div>
-        </div>
-
         <!-- Chat Header -->
         <div class="kishiface-chat-header">
             <div class="kishiface-chat-user-info">
@@ -1454,11 +1401,11 @@
                             <!-- Media Attachments -->
                             {% if message.file %}
                                 {% if message.file_type == 'image' %}
-                                    <div class="kishiface-image-attachment" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'image', '{{ message.chat_time }}')">
+                                    <div class="kishiface-image-attachment" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'image', '{{ message.chat_time }}', '{{ message.conversation|default:"" }}')">
                                         <img src="{{ message.file.url }}" alt="Image">
                                     </div>
                                 {% elif message.file_type == 'video' %}
-                                    <div class="kishiface-video-player" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'video', '{{ message.chat_time }}')">
+                                    <div class="kishiface-video-player" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'video', '{{ message.chat_time }}', '{{ message.conversation|default:"" }}')">
                                         <video preload="metadata" poster="">
                                             <source src="{{ message.file.url }}">
                                         </video>
@@ -1469,7 +1416,7 @@
                                         </div>
                                     </div>
                                 {% elif message.file_type == 'audio' %}
-                                    <div class="kishiface-audio-player" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'audio', '{{ message.chat_time }}')">
+                                    <div class="kishiface-audio-player" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'audio', '{{ message.chat_time }}', '{{ message.conversation|default:"" }}')">
                                         <div class="kishiface-audio-content">
                                             <button class="kishiface-audio-play-btn" onclick="event.stopPropagation(); toggleKishifaceAudioPlayback(this, '{{ message.id }}')">
                                                 <i class="fas fa-play"></i>
@@ -1541,15 +1488,6 @@
                 <div class="kishiface-cancel-text">Release to send</div>
             </div>
         </div>
-
-        <!-- Upload Preview -->
-        <div class="kishiface-upload-preview" id="kishifaceUploadPreview">
-            <div class="kishiface-preview-content" id="kishifacePreviewContent"></div>
-            <div class="kishiface-preview-buttons">
-                <button onclick="cancelKishifaceUpload()" class="kishiface-btn-secondary">Cancel</button>
-                <button onclick="sendKishifaceMessageWithFile()" class="kishiface-btn-primary">Send</button>
-            </div>
-        </div>
     </div>
 
     <!-- Selection overlay for long press -->
@@ -1558,6 +1496,12 @@
     <!-- Kishiface-style Media Modal -->
     <div class="kishiface-media-modal" id="kishifaceMediaModal">
         <div class="kishiface-modal-content">
+            <!-- Text Preview -->
+            <div class="kishiface-modal-text-preview" id="kishifaceModalTextPreview" style="display: none;">
+                <div class="kishiface-modal-text-content" id="kishifaceModalTextContent"></div>
+                <div class="kishiface-modal-text-time" id="kishifaceModalTextTime"></div>
+            </div>
+            
             <img id="kishifaceModalImage" class="kishiface-modal-media" src="" alt="" style="display: none;">
             <video id="kishifaceModalVideo" class="kishiface-modal-video" controls style="display: none;"></video>
             <div id="kishifaceModalAudio" class="kishiface-modal-audio" style="display: none;">
@@ -1637,8 +1581,6 @@
         const kishifaceSendBtn = document.getElementById('kishifaceSendBtn');
         const kishifaceMicBtn = document.getElementById('kishifaceMicBtn');
         const kishifaceFileUpload = document.getElementById('kishifaceFileUpload');
-        const kishifaceUploadPreview = document.getElementById('kishifaceUploadPreview');
-        const kishifacePreviewContent = document.getElementById('kishifacePreviewContent');
         const kishifaceTypingIndicator = document.getElementById('kishifaceTypingIndicator');
         const kishifaceRecordingOverlay = document.getElementById('kishifaceRecordingOverlay');
         const kishifaceRecordingWave = document.getElementById('kishifaceRecordingWave');
@@ -1648,10 +1590,9 @@
         const kishifaceEmojiGrid = document.getElementById('kishifaceEmojiGrid');
         const kishifaceSelectionOverlay = document.getElementById('kishifaceSelectionOverlay');
         
-        // Upload spinner elements
-        const kishifaceUploadSpinner = document.getElementById('kishifaceUploadSpinner');
-        const kishifaceUploadText = document.getElementById('kishifaceUploadText');
-        const kishifaceUploadProgressBar = document.getElementById('kishifaceUploadProgressBar');
+        // Progress bar elements
+        const kishifaceProgressBar = document.getElementById('kishifaceProgressBar');
+        const kishifaceProgressBarFill = document.getElementById('kishifaceProgressBarFill');
         
         // Modal elements
         const kishifaceMediaModal = document.getElementById('kishifaceMediaModal');
@@ -1662,6 +1603,9 @@
         const kishifaceModalAudioPlay = document.getElementById('kishifaceModalAudioPlay');
         const kishifaceModalAudioTime = document.getElementById('kishifaceModalAudioTime');
         const kishifaceModalAudioProgress = document.getElementById('kishifaceModalAudioProgress');
+        const kishifaceModalTextPreview = document.getElementById('kishifaceModalTextPreview');
+        const kishifaceModalTextContent = document.getElementById('kishifaceModalTextContent');
+        const kishifaceModalTextTime = document.getElementById('kishifaceModalTextTime');
         
         // Context menu elements
         const kishifaceContextMenu = document.getElementById('kishifaceContextMenu');
@@ -1705,6 +1649,35 @@
         let longPressTimer = null;
         let isLongPress = false;
         const LONG_PRESS_DURATION = 500; // 500ms for long press
+        
+        // ========== PROGRESS BAR FUNCTIONS ==========
+        
+        function showKishifaceProgressBar() {
+            kishifaceProgressBar.style.display = 'block';
+            kishifaceProgressBarFill.style.width = '0%';
+            isUploading = true;
+            
+            // Disable input and buttons while uploading
+            kishifaceMessageInput.disabled = true;
+            kishifaceSendBtn.disabled = true;
+            kishifaceMicBtn.disabled = true;
+            kishifaceEmojiBtn.disabled = true;
+        }
+        
+        function hideKishifaceProgressBar() {
+            kishifaceProgressBar.style.display = 'none';
+            isUploading = false;
+            
+            // Re-enable input and buttons
+            kishifaceMessageInput.disabled = false;
+            kishifaceSendBtn.disabled = false;
+            kishifaceMicBtn.disabled = false;
+            kishifaceEmojiBtn.disabled = false;
+        }
+        
+        function updateKishifaceProgressBar(percentage) {
+            kishifaceProgressBarFill.style.width = percentage + '%';
+        }
         
         // ========== LONG PRESS FUNCTIONS ==========
         
@@ -1989,8 +1962,9 @@
             if (!selectedMessageId) return;
             
             try {
-                // Show upload spinner
-                const progressInterval = showKishifaceUploadSpinner('Deleting...');
+                // Show progress bar
+                showKishifaceProgressBar();
+                updateKishifaceProgressBar(50);
                 
                 // Send delete request to server
                 const response = await fetch(`/delete_message/${selectedMessageId}/`, {
@@ -2006,84 +1980,41 @@
                 
                 const result = await response.json();
                 
-                if (result.status === 'success') {
-                    // Remove message from DOM
-                    if (selectedMessage) {
-                        selectedMessage.remove();
+                updateKishifaceProgressBar(100);
+                
+                setTimeout(() => {
+                    if (result.status === 'success') {
+                        // Remove message from DOM
+                        if (selectedMessage) {
+                            selectedMessage.remove();
+                        }
+                        
+                        // Check if there are no more messages
+                        const messageRows = kishifaceMessages.querySelectorAll('.kishiface-message-row');
+                        if (messageRows.length === 0) {
+                            const emptyState = document.createElement('div');
+                            emptyState.className = 'kishiface-empty-state';
+                            emptyState.innerHTML = `
+                                <i class="far fa-comments"></i>
+                                <h3>No messages yet</h3>
+                                <p>Start a conversation!</p>
+                            `;
+                            kishifaceMessages.appendChild(emptyState);
+                        }
+                        
+                        hideKishifaceProgressBar();
+                    } else {
+                        hideKishifaceProgressBar();
+                        alert('Failed to delete message: ' + result.message);
                     }
-                    
-                    // Check if there are no more messages
-                    const messageRows = kishifaceMessages.querySelectorAll('.kishiface-message-row');
-                    if (messageRows.length === 0) {
-                        const emptyState = document.createElement('div');
-                        emptyState.className = 'kishiface-empty-state';
-                        emptyState.innerHTML = `
-                            <i class="far fa-comments"></i>
-                            <h3>No messages yet</h3>
-                            <p>Start a conversation!</p>
-                        `;
-                        kishifaceMessages.appendChild(emptyState);
-                    }
-                    
-                    hideKishifaceUploadSpinner();
-                } else {
-                    hideKishifaceUploadSpinner();
-                    alert('Failed to delete message: ' + result.message);
-                }
+                }, 300);
             } catch (error) {
                 console.error('Error deleting message:', error);
-                hideKishifaceUploadSpinner();
+                hideKishifaceProgressBar();
                 alert('Error deleting message. Please try again.');
             }
             
             kishifaceDeleteModal.style.display = 'none';
-        }
-        
-        // ========== UPLOAD SPINNER FUNCTIONS ==========
-        
-        function showKishifaceUploadSpinner(text = 'Uploading...') {
-            kishifaceUploadText.textContent = text;
-            kishifaceUploadProgressBar.style.width = '0%';
-            kishifaceUploadSpinner.style.display = 'flex';
-            isUploading = true;
-            
-            // Disable input and buttons while uploading
-            kishifaceMessageInput.disabled = true;
-            kishifaceSendBtn.disabled = true;
-            kishifaceMicBtn.disabled = true;
-            kishifaceEmojiBtn.disabled = true;
-            
-            // Simulate progress animation
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                if (progress < 90) {
-                    progress += Math.random() * 10;
-                    kishifaceUploadProgressBar.style.width = progress + '%';
-                }
-            }, 300);
-            
-            return progressInterval;
-        }
-        
-        function hideKishifaceUploadSpinner() {
-            kishifaceUploadSpinner.style.display = 'none';
-            isUploading = false;
-            
-            // Re-enable input and buttons
-            kishifaceMessageInput.disabled = false;
-            kishifaceSendBtn.disabled = false;
-            kishifaceMicBtn.disabled = false;
-            kishifaceEmojiBtn.disabled = false;
-            
-            // Reset progress bar
-            setTimeout(() => {
-                kishifaceUploadProgressBar.style.width = '0%';
-            }, 300);
-        }
-        
-        function updateKishifaceUploadProgress(percentage, text = 'Uploading...') {
-            kishifaceUploadText.textContent = text;
-            kishifaceUploadProgressBar.style.width = percentage + '%';
         }
         
         // ========== VIDEO FUNCTIONS ==========
@@ -2179,13 +2110,12 @@
             } else {
                 kishifaceEmojiPicker.style.display = 'block';
                 kishifaceEmojiBtn.classList.add('active');
-                kishifaceUploadPreview.style.display = 'none';
             }
         }
         
         // ========== MEDIA MODAL FUNCTIONS ==========
         
-        function openKishifaceMediaModal(url, type, time = '') {
+        function openKishifaceMediaModal(url, type, time = '', text = '') {
             currentModalFileUrl = url;
             kishifaceModalTime.textContent = time;
             
@@ -2193,12 +2123,20 @@
             kishifaceModalImage.style.display = 'none';
             kishifaceModalVideo.style.display = 'none';
             kishifaceModalAudio.style.display = 'none';
+            kishifaceModalTextPreview.style.display = 'none';
             
             // Stop any currently playing audio
             if (currentlyPlayingAudio) {
                 currentlyPlayingAudio.pause();
                 updateWaveform(currentlyPlayingAudio.id.replace('audio-', ''), false);
                 currentlyPlayingAudio = null;
+            }
+            
+            // Show text preview if available
+            if (text && text.trim() !== '') {
+                kishifaceModalTextContent.textContent = text;
+                kishifaceModalTextTime.textContent = time;
+                kishifaceModalTextPreview.style.display = 'block';
             }
             
             if (type === 'image') {
@@ -2582,14 +2520,14 @@
             if (data.file_url) {
                 if (data.file_type === 'image') {
                     messageHTML += `
-                        <div class="kishiface-image-attachment" onclick="openKishifaceMediaModal('${data.file_url}', 'image', '${data.time || ''}')">
+                        <div class="kishiface-image-attachment" onclick="openKishifaceMediaModal('${data.file_url}', 'image', '${data.time || ''}', '${data.message || ''}')">
                             <img src="${data.file_url}" alt="Image" onerror="this.src='https://placehold.co/220x220/cccccc/666666?text=Image+Error'">
                         </div>
                     `;
                 } else if (data.file_type === 'video') {
                     const videoId = data.message_id || Date.now();
                     messageHTML += `
-                        <div class="kishiface-video-player" onclick="openKishifaceMediaModal('${data.file_url}', 'video', '${data.time || ''}')">
+                        <div class="kishiface-video-player" onclick="openKishifaceMediaModal('${data.file_url}', 'video', '${data.time || ''}', '${data.message || ''}')">
                             <video preload="metadata" id="video-${videoId}">
                                 <source src="${data.file_url}">
                             </video>
@@ -2603,7 +2541,7 @@
                 } else if (data.file_type === 'audio') {
                     const messageId = data.message_id || Date.now();
                     messageHTML += `
-                        <div class="kishiface-audio-player" onclick="openKishifaceMediaModal('${data.file_url}', 'audio', '${data.time || ''}')">
+                        <div class="kishiface-audio-player" onclick="openKishifaceMediaModal('${data.file_url}', 'audio', '${data.time || ''}', '${data.message || ''}')">
                             <div class="kishiface-audio-content">
                                 <button class="kishiface-audio-play-btn" onclick="event.stopPropagation(); toggleKishifaceAudioPlayback(this, '${messageId}')">
                                     <i class="fas fa-play"></i>
@@ -2673,7 +2611,7 @@
             });
         }
         
-        // ========== SEND MESSAGE FUNCTIONS WITH UPLOAD SPINNER ==========
+        // ========== SEND MESSAGE FUNCTIONS ==========
         
         async function sendKishifaceMessage() {
             const message = kishifaceMessageInput.value.trim();
@@ -2725,9 +2663,9 @@
         }
         
         async function uploadKishifaceFileWithMessage(message) {
-            // Show upload spinner
-            const progressInterval = showKishifaceUploadSpinner();
-            updateKishifaceUploadProgress(10, 'Preparing upload...');
+            // Show progress bar
+            showKishifaceProgressBar();
+            updateKishifaceProgressBar(10);
             
             const formData = new FormData();
             formData.append('receiver', receiver);
@@ -2736,7 +2674,7 @@
             formData.append('file_upload', fileToUpload);
             
             try {
-                updateKishifaceUploadProgress(30, 'Uploading file...');
+                updateKishifaceProgressBar(30);
                 
                 // Create XMLHttpRequest for progress tracking
                 const xhr = new XMLHttpRequest();
@@ -2744,7 +2682,7 @@
                 xhr.upload.addEventListener('progress', function(event) {
                     if (event.lengthComputable) {
                         const percentage = Math.round((event.loaded / event.total) * 100);
-                        updateKishifaceUploadProgress(30 + Math.floor(percentage * 0.6), 'Uploading file...');
+                        updateKishifaceProgressBar(30 + Math.floor(percentage * 0.6));
                     }
                 });
                 
@@ -2768,53 +2706,37 @@
                 xhr.setRequestHeader('X-CSRFToken', csrftoken);
                 xhr.send(formData);
                 
-                updateKishifaceUploadProgress(90, 'Processing file...');
+                updateKishifaceProgressBar(90);
                 
                 const result = await uploadPromise;
                 
-                // Clear progress interval
-                if (progressInterval) {
-                    clearInterval(progressInterval);
-                }
-                
-                updateKishifaceUploadProgress(100, 'Upload complete!');
+                updateKishifaceProgressBar(100);
                 
                 setTimeout(() => {
                     if (result.status === 'success') {
                         kishifaceMessageInput.value = '';
                         fileToUpload = null;
-                        kishifaceUploadPreview.style.display = 'none';
                         autoResizeKishifaceTextarea();
                         updateKishifaceSendButton();
                         
                         // Clear reply preview
                         cancelKishifaceReply();
                         
-                        // Hide spinner after success
+                        // Hide progress bar after success
                         setTimeout(() => {
-                            hideKishifaceUploadSpinner();
-                        }, 500);
+                            hideKishifaceProgressBar();
+                        }, 300);
                     } else {
-                        hideKishifaceUploadSpinner();
+                        hideKishifaceProgressBar();
                         alert('Upload failed. Please try again.');
                     }
-                }, 500);
+                }, 300);
                 
             } catch (error) {
                 console.error('Error uploading file:', error);
-                
-                // Clear progress interval
-                if (progressInterval) {
-                    clearInterval(progressInterval);
-                }
-                
-                hideKishifaceUploadSpinner();
+                hideKishifaceProgressBar();
                 alert('Upload failed. Please try again.');
             }
-        }
-        
-        function sendKishifaceMessageWithFile() {
-            sendKishifaceMessage();
         }
         
         function insertAtKishifaceCursor(text) {
@@ -2835,51 +2757,9 @@
         kishifaceFileUpload.addEventListener('change', function(e) {
             if (this.files.length > 0 && !isUploading) {
                 fileToUpload = this.files[0];
-                showKishifaceUploadPreview(fileToUpload);
                 updateKishifaceSendButton();
             }
         });
-        
-        function showKishifaceUploadPreview(file) {
-            kishifacePreviewContent.innerHTML = '';
-            
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    kishifacePreviewContent.innerHTML = `<img src="${e.target.result}" style="max-width: 200px; border-radius: 8px;">`;
-                };
-                reader.readAsDataURL(file);
-            } else if (file.type.startsWith('video/')) {
-                kishifacePreviewContent.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <i class="fas fa-video" style="font-size: 24px; color: var(--kf-primary);"></i>
-                        <div>
-                            <div style="font-weight: 500;">${file.name}</div>
-                            <div style="font-size: 12px; color: var(--kf-secondary);">${(file.size / 1024 / 1024).toFixed(2)} MB</div>
-                        </div>
-                    </div>
-                `;
-            } else if (file.type.startsWith('audio/')) {
-                kishifacePreviewContent.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <i class="fas fa-music" style="font-size: 24px; color: var(--kf-primary);"></i>
-                        <div>
-                            <div style="font-weight: 500;">${file.name}</div>
-                            <div style="font-size: 12px; color: var(--kf-secondary);">${(file.size / 1024).toFixed(2)} KB</div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            kishifaceUploadPreview.style.display = 'block';
-        }
-        
-        function cancelKishifaceUpload() {
-            fileToUpload = null;
-            kishifaceFileUpload.value = '';
-            kishifaceUploadPreview.style.display = 'none';
-            updateKishifaceSendButton();
-        }
         
         // ========== AUDIO RECORDING FUNCTIONS ==========
         
@@ -2926,9 +2806,9 @@
                         return;
                     }
                     
-                    // Show upload spinner for audio recording
-                    const progressInterval = showKishifaceUploadSpinner('Sending audio...');
-                    updateKishifaceUploadProgress(30, 'Processing audio...');
+                    // Show progress bar for audio recording
+                    showKishifaceProgressBar();
+                    updateKishifaceProgressBar(30);
                     
                     const audioBlob = new Blob(audioChunks, { 
                         type: mediaRecorder.mimeType || 'audio/webm' 
@@ -2940,7 +2820,7 @@
                     formData.append('file_upload', audioBlob, filename);
                     
                     try {
-                        updateKishifaceUploadProgress(60, 'Sending audio...');
+                        updateKishifaceProgressBar(60);
                         
                         const response = await fetch(`/send_message/${receiver}/`, {
                             method: 'POST',
@@ -2948,23 +2828,23 @@
                             body: formData
                         });
                         
-                        updateKishifaceUploadProgress(90, 'Finalizing...');
+                        updateKishifaceProgressBar(90);
                         
                         const result = await response.json();
                         
                         if (result.status === 'success') {
                             console.log('✅ Audio sent successfully');
-                            updateKishifaceUploadProgress(100, 'Audio sent!');
+                            updateKishifaceProgressBar(100);
                             
                             setTimeout(() => {
-                                hideKishifaceUploadSpinner();
+                                hideKishifaceProgressBar();
                             }, 500);
                         } else {
-                            hideKishifaceUploadSpinner();
+                            hideKishifaceProgressBar();
                         }
                     } catch (error) {
                         console.error('❌ Error sending audio:', error);
-                        hideKishifaceUploadSpinner();
+                        hideKishifaceProgressBar();
                     }
                     
                     cleanupKishifaceRecording();
