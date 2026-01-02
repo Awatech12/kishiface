@@ -60,6 +60,6 @@ urlpatterns = [
     path('like/<uuid:post_id>', views.like_post, name='like_post'),
     path('comment/<uuid:post_id>', views.post_comment, name='post_comment'),
     #path('<str:username>', views.profile, name='profile'),
-   
+   path('repost/<uuid:post_id>/', views.repost_post, name='repost_post'),
     path('?/<str:username>', views.update_profile, name='update_profile')
 ]

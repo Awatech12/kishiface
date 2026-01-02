@@ -107,22 +107,34 @@ class Post(models.Model):
     post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     likes = models.ManyToManyField(User, related_name='like_post', blank=True)
+    reposts = models.ManyToManyField(User, related_name='repost_post', blank=True)  # NEW
     view = models.IntegerField(default=0, null=True, blank=True)
     content = models.TextField()
+    
+    # Repost related fields - NEW
+    is_repost = models.BooleanField(default=False)
+    original_post = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='reposts_made')
+    repost_content = models.TextField(blank=True, null=True)  # Optional caption for repost
+    
     if settings.USE_CLOUDINARY:
-        video_file = CloudinaryField('video', resource_type='video',folder='post_files',blank=True)
+        video_file = CloudinaryField('video', resource_type='video', folder='post_files', blank=True)
     else:
         video_file = models.FileField(upload_to='post_file', blank=True)
+    
     if settings.USE_CLOUDINARY:
-        file = CloudinaryField('audio', resource_type='video',folder='post_files',blank=True)
+        file = CloudinaryField('audio', resource_type='video', folder='post_files', blank=True)
     else:
         file = models.FileField(upload_to='post_file', blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.author.username
     
     def preview_type(self):
+        if self.is_repost and self.original_post:
+            # For reposts, show the original post's media type
+            return self.original_post.preview_type()
         if self.images.exists():
             return 'image'
         if self.video_file:
@@ -132,6 +144,9 @@ class Post(models.Model):
         return 'text'
     
     def preview_url(self):
+        if self.is_repost and self.original_post:
+            # For reposts, show the original post's media
+            return self.original_post.preview_url()
         if self.images.exists():
             return self.images.first().image.url
         if self.video_file:
@@ -140,6 +155,25 @@ class Post(models.Model):
             return self.file.url
         return None
     
+    def get_original_author(self):
+        """Get the original author for reposts"""
+        if self.is_repost and self.original_post:
+            return self.original_post.author
+        return self.author
+    
+    def get_original_post_id(self):
+        """Get the original post ID for reposts"""
+        if self.is_repost and self.original_post:
+            return self.original_post.post_id
+        return self.post_id
+    
+    def get_republished_content(self):
+        """Get content for display, handling reposts"""
+        if self.is_repost and self.original_post:
+            return self.original_post.content
+        return self.content
+
+ 
 class PostImage(models.Model):
     post=models.ForeignKey(Post, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='post_images/')

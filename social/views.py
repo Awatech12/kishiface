@@ -75,8 +75,13 @@ def home(request):
     profile = Profile.objects.get(user=request.user)
     following = profile.followings.values_list('user', flat=True)
     
-    # Get data
-    posts = Post.objects.filter(Q(author__in=following) | Q(author=request.user)).order_by('?')
+    # Get data - include reposts from followed users
+    posts = Post.objects.filter(
+        Q(author__in=following) | 
+        Q(author=request.user) |
+        Q(is_repost=True, author__in=following)  # Include reposts by followed users
+    ).order_by('?')
+    
     products = list(Market.objects.order_by('?'))
     users = list(User.objects.exclude(id__in=following).exclude(id=request.user.id).order_by('?'))
     
@@ -108,7 +113,50 @@ def home(request):
         'posts_with_ads': feed,
         'products': products[:5],
     })
+# views.py
+from django.views.decorators.http import require_POST
 
+
+@require_POST
+def repost_post(request, post_id):
+    """Handle reposting a post"""
+    try:
+        original_post = Post.objects.get(post_id=post_id)
+        user = request.user
+        
+        # Check if user has already reposted this
+        if user.repost_post.filter(post_id=post_id).exists():
+            # User wants to undo repost
+            user.repost_post.remove(original_post)
+            # Also delete the repost entry if exists
+            Post.objects.filter(author=user, is_repost=True, original_post=original_post).delete()
+            reposted = False
+        else:
+            # Create a new repost
+            repost = Post.objects.create(
+                author=user,
+                is_repost=True,
+                original_post=original_post,
+                repost_content=request.POST.get('repost_caption', '').strip(),
+                content=""  # Empty content for repost
+            )
+            # Add to reposts count
+            original_post.reposts.add(user)
+            reposted = True
+        
+        # Get updated counts
+        repost_count = original_post.reposts.count()
+        
+        return JsonResponse({
+            'success': True,
+            'reposted': reposted,
+            'repost_count': repost_count
+        })
+        
+    except Post.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Post not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 def follow_user(request, user_id):
     if request.method == 'POST':
