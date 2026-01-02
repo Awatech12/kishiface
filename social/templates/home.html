@@ -26,6 +26,7 @@
       --kf-primary: #0095f6;
       --kf-border: #dbdbdb;
       --kf-repost: #17bf63;
+      --kf-repost-bg: #f0fff4;
     }
     
     * {
@@ -69,10 +70,10 @@
       display: flex;
       align-items: center;
       padding: 8px 16px;
-      background: #f8f9fa;
-      border-bottom: 1px solid var(--kf-border);
+      background: var(--kf-bg);
+      border-bottom: var(--kf-border);
       font-size: 12px;
-      color: var(--kf-text-light);
+      color: var(--kf-repost);
     }
     
     .kf-repost-header i {
@@ -84,6 +85,7 @@
       color: var(--kf-primary);
       text-decoration: none;
       font-weight: 500;
+      margin: 0 4px;
     }
     
     .kf-repost-header a:hover {
@@ -165,6 +167,34 @@
     
     .kf-text-toggle i {
       font-size: 12px;
+    }
+    
+    /* Repost caption styling - UPDATED FOR BETTER VISIBILITY */
+    .kf-repost-caption-container {
+      padding: 12px 16px 0 16px;
+      background: white;
+   
+    }
+    
+    .kf-repost-caption {
+      padding: 10px;
+      background: var(--kf-white);
+      border: 1px solid whitesmoke;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--kf-text);
+    }
+    
+    .kf-repost-caption-author {
+      font-weight: 600;
+      color: var(--kf-repost);
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    .kf-repost-caption-text {
+      color: var(--kf-text);
     }
     
     /* Media containers */
@@ -995,7 +1025,7 @@
       font-size: 13px;
       color: var(--kf-text);
       line-height: 1.4;
-    }
+    } 
     
     .kf-user-suggestion-actions {
       display: flex;
@@ -1333,7 +1363,7 @@
                 loading="lazy"
               >
               <div>
-                <a href="{% url 'profile' item.data.author.username%}{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}" class="kf-username" data-user="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}">
+                <a href="{% url 'profile' item.data.author.username %}{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}" class="kf-username" data-user="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}">
                   {% if item.data.is_repost and item.data.original_post %}
                     {{ item.data.original_post.author.first_name }} {{ item.data.original_post.author.last_name }}
                   {% else %}
@@ -1363,7 +1393,7 @@
                 <!-- Repost button -->
                 <button class="kf-repost-icon" 
                         title="Repost" 
-                        onclick="kfToggleRepost('{{ item.data.post_id }}', this)"
+                        onclick="kfToggleRepost('{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.post_id }}{% else %}{{ item.data.post_id }}{% endif %}', this)"
                         data-reposted="{% if request.user in item.data.reposts.all %}true{% else %}false{% endif %}">
                   <i class="fas fa-retweet {% if request.user in item.data.reposts.all %}reposted{% endif %}"></i>
                   <span class="kf-repost-count {% if item.data.reposts.count > 0 %}show{% endif %}" id="kf-repost-count-{{ item.data.post_id }}">
@@ -1379,11 +1409,19 @@
               </div>
             </div>
 
-            <!-- Repost caption (if exists) -->
+            <!-- Repost caption (if exists) - UPDATED FOR BETTER VISIBILITY -->
             {% if item.data.is_repost and item.data.repost_content %}
-            <div class="kf-post-content">
-              <div class="kf-post-text">
-                {{ item.data.repost_content|urlize|linebreaksbr }}
+            <div class="kf-repost-caption-container">
+              <div class="kf-repost-caption">
+                <span class="kf-repost-caption-author">
+                  {{ item.data.author.first_name }} {{ item.data.author.last_name }}
+                  {% if item.data.author.profile.is_verify %} 
+                    <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align: middle;">
+                  {% endif %}
+                </span>
+                <div class="kf-repost-caption-text">
+                  {{ item.data.repost_content|urlize|linebreaksbr }}
+                </div>
               </div>
             </div>
             {% endif %}
@@ -1398,11 +1436,20 @@
                   {{ item.data.content|urlize|linebreaksbr }}
                 {% endif %}
               </div>
-              {% if item.data.content|length > 150 or item.data.is_repost and item.data.original_post.content|length > 150 %}
-              <button class="kf-text-toggle" onclick="kfToggleText('{{ item.data.post_id }}')">
-                <span>more</span>
-                <i class="fas fa-chevron-down"></i>
-              </button>
+              {% if item.data.is_repost and item.data.original_post %}
+                {% if item.data.original_post.content|length > 150 %}
+                <button class="kf-text-toggle" onclick="kfToggleText('{{ item.data.post_id }}')">
+                  <span>more</span>
+                  <i class="fas fa-chevron-down"></i>
+                </button>
+                {% endif %}
+              {% else %}
+                {% if item.data.content|length > 150 %}
+                <button class="kf-text-toggle" onclick="kfToggleText('{{ item.data.post_id }}')">
+                  <span>more</span>
+                  <i class="fas fa-chevron-down"></i>
+                </button>
+                {% endif %}
               {% endif %}
             </div>
             {% endif %}
@@ -1410,29 +1457,162 @@
             <!-- Media Container - Handle all media types -->
             {% if item.data.file or item.data.video_file or item.data.images.all or item.data.is_repost %}
             <div class="kf-media-container">
-              {% with total_media=item.data|total_media_count %}
-                
-                {% if total_media > 1 %}
-                  <!-- Mixed Media Carousel (multiple items) -->
-                  <div class="kf-mixed-media-carousel" id="kf-mixed-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ total_media }}">
-                    <div class="kf-mixed-media-track" id="kf-mixed-track-{{ item.data.post_id }}">
+              {% comment %} 
+                For reposts, we need to check if the original post has media 
+                For regular posts, check the post's own media
+              {% endcomment %}
+              {% if item.data.is_repost and item.data.original_post %}
+                {% comment %} This is a repost - get media from original post {% endcomment %}
+                {% with original_post=item.data.original_post %}
+                  {% with total_media=original_post|total_media_count %}
+                    
+                    {% if total_media > 1 %}
+                      <!-- Mixed Media Carousel (multiple items) -->
+                      <div class="kf-mixed-media-carousel" id="kf-mixed-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ total_media }}">
+                        <div class="kf-mixed-media-track" id="kf-mixed-track-{{ item.data.post_id }}">
+                          
+                          <!-- Audio First (if exists) -->
+                          {% if original_post.file %}
+                          <div class="kf-mixed-media-slide" data-media-type="audio">
+                            <span class="kf-media-type-badge">
+                              <i class="fas fa-music"></i> Audio
+                            </span>
+                            <div class="kf-audio-player" id="kf-audio-{{ item.data.post_id }}">
+                              <!-- Download button for audio -->
+                              <button class="kf-audio-download-btn" 
+                                      title="Download Audio" 
+                                      onclick="kfDownloadAudio('{{ original_post.post_id }}', '{{ original_post.file.url }}')">
+                                <i class="fas fa-download"></i>
+                              </button>
+                              
+                              <div class="kf-audio-cover" 
+                                   style="background-image: url('{% if original_post.images.first %}{{ original_post.images.first.image.url }}{% else %}{{ original_post.author.profile.picture.url }}{% endif %}');">
+                                <button class="kf-audio-play-btn" onclick="kfToggleAudio('{{ item.data.post_id }}')">
+                                  <i class="fas fa-play" id="kf-audio-icon-{{ item.data.post_id }}"></i>
+                                </button>
+                              </div>
+                              <div class="kf-audio-controls">
+                                <div class="kf-audio-info">
+                                  <span class="kf-audio-title">Audio Post</span>
+                                  <span class="kf-audio-time" id="kf-audio-time-{{ item.data.post_id }}">0:00</span>
+                                </div>
+                                <div class="kf-audio-progress" onclick="kfSeekAudio(event, '{{ item.data.post_id }}')">
+                                  <div class="kf-audio-progress-bar" id="kf-audio-progress-{{ item.data.post_id }}"></div>
+                                </div>
+                                <div class="kf-audio-seek-buttons">
+                                  <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ item.data.post_id }}', -10)">
+                                    <i class="fas fa-backward-step"></i> 10s
+                                  </button>
+                                  <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ item.data.post_id }}', 10)">
+                                    10s <i class="fas fa-forward-step"></i>
+                                  </button>
+                                </div>
+                              </div>
+                              <audio id="kf-audio-element-{{ item.data.post_id }}" preload="metadata" class="kf-audio-hidden">
+                                <source src="{{ original_post.file.url }}" type="audio/webm">
+                              </audio>
+                            </div>
+                          </div>
+                          {% endif %}
+                          
+                          <!-- Video Next (if exists) -->
+                          {% if original_post.video_file %}
+                          <div class="kf-mixed-media-slide" data-media-type="video">
+                            <span class="kf-media-type-badge">
+                              <i class="fas fa-video"></i> Video
+                            </span>
+                            <div class="kf-video-container" id="kf-container-{{ item.data.post_id }}">
+                              <!-- Download button for video -->
+                              <button class="kf-video-download-btn" 
+                                      title="Download Video" 
+                                      onclick="kfDownloadVideo('{{ original_post.post_id }}', '{{ original_post.video_file.url }}')">
+                                <i class="fas fa-download"></i>
+                              </button>
+                              
+                              <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
+                              <video class="kf-video" 
+                                     id="kf-post-video-{{ item.data.post_id }}" 
+                                     preload="metadata"
+                                     poster="{% if original_post.video_thumbnail %}{{ original_post.video_thumbnail.url }}{% else %}{% endif %}"
+                                     data-src="{{ original_post.video_file.url }}"
+                                     onclick="kfTogglePlayPause('kf-post-video-{{ item.data.post_id }}', event)">
+                                <source data-src="{{ original_post.video_file.url }}#t=0.5" type="video/mp4">
+                                Your browser does not support HTML5 video.
+                              </video>
+                              
+                              <i class="fa-solid fa-play kf-play-pause-icon" id="kf-play-icon-{{ item.data.post_id }}"></i>
+                              
+                              <button class="kf-seek-overlay-btn kf-backward-btn" 
+                                      onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ item.data.post_id }}', -10)">
+                                <i class="fa-solid fa-backward-step"></i> 10s
+                              </button>
+                              <button class="kf-seek-overlay-btn kf-forward-btn" 
+                                      onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ item.data.post_id }}', 10)">
+                                10s <i class="fa-solid fa-forward-step"></i>
+                              </button>
+                            </div>
+                          </div>
+                          {% endif %}
+                          
+                          <!-- Images Last (if exist) -->
+                          {% if original_post.images.all %}
+                            {% for image in original_post.images.all %}
+                            <div class="kf-mixed-media-slide" data-media-type="image">
+                              <span class="kf-media-type-badge">
+                                <i class="fas fa-image"></i> Image {{ forloop.counter }}
+                              </span>
+                              <div class="kf-image-slide">
+                                <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                                <img 
+                                  src="{{ image.image.url }}" 
+                                  alt="Post image {{ forloop.counter }}"
+                                  loading="lazy"
+                                  onload="this.classList.add('loaded')"
+                                />
+                                <!-- Download button for image -->
+                                <button class="kf-image-download-btn" 
+                                        title="Download Image" 
+                                        onclick="kfDownloadImage('{{ original_post.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
+                                  <i class="fas fa-download"></i>
+                                </button>
+                              </div>
+                            </div>
+                            {% endfor %}
+                          {% endif %}
+                        </div>
+                        
+                        <!-- Carousel Controls for Multiple Items -->
+                        <div class="kf-mixed-carousel-controls">
+                          <button class="kf-mixed-carousel-prev" onclick="kfSlideMixedCarousel('{{ item.data.post_id }}', -1)">
+                            <i class="fas fa-chevron-left"></i>
+                          </button>
+                          <button class="kf-mixed-carousel-next" onclick="kfSlideMixedCarousel('{{ item.data.post_id }}', 1)">
+                            <i class="fas fa-chevron-right"></i>
+                          </button>
+                        </div>
+                        
+                        <!-- Carousel Indicators -->
+                        <div class="kf-mixed-carousel-indicators">
+                          {% for i in "x"|rjust:total_media %}
+                          <span class="kf-mixed-indicator {% if forloop.first %}active{% endif %}" 
+                                onclick="kfGoToMixedSlide('{{ item.data.post_id }}', {{ forloop.counter0 }})"></span>
+                          {% endfor %}
+                        </div>
+                      </div>
                       
-                      <!-- Audio First (if exists) -->
-                      {% if item.data.file %}
-                      <div class="kf-mixed-media-slide" data-media-type="audio">
-                        <span class="kf-media-type-badge">
-                          <i class="fas fa-music"></i> Audio
-                        </span>
+                    {% else %}
+                      <!-- Single media item (no carousel needed) -->
+                      {% if original_post.file %}
+                        <!-- Single Audio -->
                         <div class="kf-audio-player" id="kf-audio-{{ item.data.post_id }}">
-                          <!-- Download button for audio -->
                           <button class="kf-audio-download-btn" 
                                   title="Download Audio" 
-                                  onclick="kfDownloadAudio('{{ item.data.post_id }}', '{{ item.data.file.url }}')">
+                                  onclick="kfDownloadAudio('{{ original_post.post_id }}', '{{ original_post.file.url }}')">
                             <i class="fas fa-download"></i>
                           </button>
                           
                           <div class="kf-audio-cover" 
-                               style="background-image: url('{% if item.data.images.first %}{{ item.data.images.first.image.url }}{% else %}{{ item.data.author.profile.picture.url }}{% endif %}');">
+                               style="background-image: url('{% if original_post.images.first %}{{ original_post.images.first.image.url }}{% else %}{{ original_post.author.profile.picture.url }}{% endif %}');">
                             <button class="kf-audio-play-btn" onclick="kfToggleAudio('{{ item.data.post_id }}')">
                               <i class="fas fa-play" id="kf-audio-icon-{{ item.data.post_id }}"></i>
                             </button>
@@ -1455,23 +1635,15 @@
                             </div>
                           </div>
                           <audio id="kf-audio-element-{{ item.data.post_id }}" preload="metadata" class="kf-audio-hidden">
-                            <source src="{{ item.data.file.url }}" type="audio/webm">
+                            <source src="{{ original_post.file.url }}" type="audio/webm">
                           </audio>
                         </div>
-                      </div>
-                      {% endif %}
-                      
-                      <!-- Video Next (if exists) -->
-                      {% if item.data.video_file %}
-                      <div class="kf-mixed-media-slide" data-media-type="video">
-                        <span class="kf-media-type-badge">
-                          <i class="fas fa-video"></i> Video
-                        </span>
+                      {% elif original_post.video_file %}
+                        <!-- Single Video -->
                         <div class="kf-video-container" id="kf-container-{{ item.data.post_id }}">
-                          <!-- Download button for video -->
                           <button class="kf-video-download-btn" 
                                   title="Download Video" 
-                                  onclick="kfDownloadVideo('{{ item.data.post_id }}', '{{ item.data.video_file.url }}')">
+                                  onclick="kfDownloadVideo('{{ original_post.post_id }}', '{{ original_post.video_file.url }}')">
                             <i class="fas fa-download"></i>
                           </button>
                           
@@ -1479,10 +1651,10 @@
                           <video class="kf-video" 
                                  id="kf-post-video-{{ item.data.post_id }}" 
                                  preload="metadata"
-                                 poster="{{ item.data.video_thumbnail.url|default:'' }}"
-                                 data-src="{{ item.data.video_file.url }}"
+                                 poster="{% if original_post.video_thumbnail %}{{ original_post.video_thumbnail.url }}{% else %}{% endif %}"
+                                 data-src="{{ original_post.video_file.url }}"
                                  onclick="kfTogglePlayPause('kf-post-video-{{ item.data.post_id }}', event)">
-                            <source data-src="{{ item.data.video_file.url }}#t=0.5" type="video/mp4">
+                            <source data-src="{{ original_post.video_file.url }}#t=0.5" type="video/mp4">
                             Your browser does not support HTML5 video.
                           </video>
                           
@@ -1497,186 +1669,339 @@
                             10s <i class="fa-solid fa-forward-step"></i>
                           </button>
                         </div>
-                      </div>
-                      {% endif %}
-                      
-                      <!-- Images Last (if exist) -->
-                      {% if item.data.images.all %}
-                        {% for image in item.data.images.all %}
-                        <div class="kf-mixed-media-slide" data-media-type="image">
-                          <span class="kf-media-type-badge">
-                            <i class="fas fa-image"></i> Image {{ forloop.counter }}
-                          </span>
+                      {% elif original_post.images.all %}
+                        <!-- Single or Multiple Images (original image carousel) -->
+                        {% if original_post.images.all|length > 1 %}
+                          <div class="kf-image-carousel" id="kf-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ original_post.images.all|length }}">
+                            <div class="kf-image-track" id="kf-track-{{ item.data.post_id }}">
+                              {% for image in original_post.images.all %}
+                              <div class="kf-image-slide">
+                                <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                                <img 
+                                  src="{{ image.image.url }}" 
+                                  alt="Post image {{ forloop.counter }}"
+                                  loading="lazy"
+                                  onload="this.classList.add('loaded')"
+                                />
+                                <!-- Download button for image -->
+                                <button class="kf-image-download-btn" 
+                                        title="Download Image" 
+                                        onclick="kfDownloadImage('{{ original_post.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
+                                  <i class="fas fa-download"></i>
+                                </button>
+                              </div>
+                              {% endfor %}
+                            </div>
+                            
+                            <div class="kf-carousel-controls">
+                              <button class="kf-carousel-prev" onclick="kfSlideCarousel('{{ item.data.post_id }}', -1)">
+                                <i class="fas fa-chevron-left"></i>
+                              </button>
+                              <button class="kf-carousel-next" onclick="kfSlideCarousel('{{ item.data.post_id }}', 1)">
+                                <i class="fas fa-chevron-right"></i>
+                              </button>
+                            </div>
+                            
+                            <div class="kf-carousel-indicators">
+                              {% for image in original_post.images.all %}
+                              <span class="kf-indicator {% if forloop.first %}active{% endif %}"></span>
+                              {% endfor %}
+                            </div>
+                          </div>
+                        {% else %}
+                          <!-- Single Image -->
+                          {% with image=original_post.images.first %}
                           <div class="kf-image-slide">
                             <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
                             <img 
                               src="{{ image.image.url }}" 
-                              alt="Post image {{ forloop.counter }}"
+                              alt="Post image"
                               loading="lazy"
                               onload="this.classList.add('loaded')"
                             />
                             <!-- Download button for image -->
                             <button class="kf-image-download-btn" 
                                     title="Download Image" 
-                                    onclick="kfDownloadImage('{{ item.data.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
+                                    onclick="kfDownloadImage('{{ original_post.post_id }}', '{{ image.image.url }}', 'image')">
                               <i class="fas fa-download"></i>
                             </button>
                           </div>
-                        </div>
-                        {% endfor %}
+                          {% endwith %}
+                        {% endif %}
                       {% endif %}
-                    </div>
-                    
-                    <!-- Carousel Controls for Multiple Items -->
-                    <div class="kf-mixed-carousel-controls">
-                      <button class="kf-mixed-carousel-prev" onclick="kfSlideMixedCarousel('{{ item.data.post_id }}', -1)">
-                        <i class="fas fa-chevron-left"></i>
-                      </button>
-                      <button class="kf-mixed-carousel-next" onclick="kfSlideMixedCarousel('{{ item.data.post_id }}', 1)">
-                        <i class="fas fa-chevron-right"></i>
-                      </button>
-                    </div>
-                    
-                    <!-- Carousel Indicators -->
-                    <div class="kf-mixed-carousel-indicators">
-                      {% for i in "x"|rjust:total_media %}
-                      <span class="kf-mixed-indicator {% if forloop.first %}active{% endif %}" 
-                            onclick="kfGoToMixedSlide('{{ item.data.post_id }}')"></span>
-                      {% endfor %}
-                    </div>
-                  </div>
+                    {% endif %}
+                  {% endwith %}
+                {% endwith %}
+              {% else %}
+                {% comment %} This is a regular post - use post's own media {% endcomment %}
+                {% with total_media=item.data|total_media_count %}
                   
-                {% else %}
-                  <!-- Single media item (no carousel needed) -->
-                  {% if item.data.file %}
-                    <!-- Single Audio -->
-                    <div class="kf-audio-player" id="kf-audio-{{ item.data.post_id }}">
-                      <button class="kf-audio-download-btn" 
-                              title="Download Audio" 
-                              onclick="kfDownloadAudio('{{ item.data.post_id }}', '{{ item.data.file.url }}')">
-                        <i class="fas fa-download"></i>
-                      </button>
+                  {% if total_media > 1 %}
+                    <!-- Mixed Media Carousel (multiple items) -->
+                    <div class="kf-mixed-media-carousel" id="kf-mixed-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ total_media }}">
+                      <div class="kf-mixed-media-track" id="kf-mixed-track-{{ item.data.post_id }}">
+                        
+                        <!-- Audio First (if exists) -->
+                        {% if item.data.file %}
+                        <div class="kf-mixed-media-slide" data-media-type="audio">
+                          <span class="kf-media-type-badge">
+                            <i class="fas fa-music"></i> Audio
+                          </span>
+                          <div class="kf-audio-player" id="kf-audio-{{ item.data.post_id }}">
+                            <!-- Download button for audio -->
+                            <button class="kf-audio-download-btn" 
+                                    title="Download Audio" 
+                                    onclick="kfDownloadAudio('{{ item.data.post_id }}', '{{ item.data.file.url }}')">
+                              <i class="fas fa-download"></i>
+                            </button>
+                            
+                            <div class="kf-audio-cover" 
+                                 style="background-image: url('{% if item.data.images.first %}{{ item.data.images.first.image.url }}{% else %}{{ item.data.author.profile.picture.url }}{% endif %}');">
+                              <button class="kf-audio-play-btn" onclick="kfToggleAudio('{{ item.data.post_id }}')">
+                                <i class="fas fa-play" id="kf-audio-icon-{{ item.data.post_id }}"></i>
+                              </button>
+                            </div>
+                            <div class="kf-audio-controls">
+                              <div class="kf-audio-info">
+                                <span class="kf-audio-title">Audio Post</span>
+                                <span class="kf-audio-time" id="kf-audio-time-{{ item.data.post_id }}">0:00</span>
+                              </div>
+                              <div class="kf-audio-progress" onclick="kfSeekAudio(event, '{{ item.data.post_id }}')">
+                                <div class="kf-audio-progress-bar" id="kf-audio-progress-{{ item.data.post_id }}"></div>
+                              </div>
+                              <div class="kf-audio-seek-buttons">
+                                <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ item.data.post_id }}', -10)">
+                                  <i class="fas fa-backward-step"></i> 10s
+                                </button>
+                                <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ item.data.post_id }}', 10)">
+                                  10s <i class="fas fa-forward-step"></i>
+                                </button>
+                              </div>
+                            </div>
+                            <audio id="kf-audio-element-{{ item.data.post_id }}" preload="metadata" class="kf-audio-hidden">
+                              <source src="{{ item.data.file.url }}" type="audio/webm">
+                            </audio>
+                          </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Video Next (if exists) -->
+                        {% if item.data.video_file %}
+                        <div class="kf-mixed-media-slide" data-media-type="video">
+                          <span class="kf-media-type-badge">
+                            <i class="fas fa-video"></i> Video
+                          </span>
+                          <div class="kf-video-container" id="kf-container-{{ item.data.post_id }}">
+                            <!-- Download button for video -->
+                            <button class="kf-video-download-btn" 
+                                    title="Download Video" 
+                                    onclick="kfDownloadVideo('{{ item.data.post_id }}', '{{ item.data.video_file.url }}')">
+                              <i class="fas fa-download"></i>
+                            </button>
+                            
+                            <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
+                            <video class="kf-video" 
+                                   id="kf-post-video-{{ item.data.post_id }}" 
+                                   preload="metadata"
+                                   poster="{{ item.data.video_thumbnail.url|default:'' }}"
+                                   data-src="{{ item.data.video_file.url }}"
+                                   onclick="kfTogglePlayPause('kf-post-video-{{ item.data.post_id }}', event)">
+                              <source data-src="{{ item.data.video_file.url }}#t=0.5" type="video/mp4">
+                              Your browser does not support HTML5 video.
+                            </video>
+                            
+                            <i class="fa-solid fa-play kf-play-pause-icon" id="kf-play-icon-{{ item.data.post_id }}"></i>
+                            
+                            <button class="kf-seek-overlay-btn kf-backward-btn" 
+                                    onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ item.data.post_id }}', -10)">
+                              <i class="fa-solid fa-backward-step"></i> 10s
+                            </button>
+                            <button class="kf-seek-overlay-btn kf-forward-btn" 
+                                    onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ item.data.post_id }}', 10)">
+                              10s <i class="fa-solid fa-forward-step"></i>
+                            </button>
+                          </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Images Last (if exist) -->
+                        {% if item.data.images.all %}
+                          {% for image in item.data.images.all %}
+                          <div class="kf-mixed-media-slide" data-media-type="image">
+                            <span class="kf-media-type-badge">
+                              <i class="fas fa-image"></i> Image {{ forloop.counter }}
+                            </span>
+                            <div class="kf-image-slide">
+                              <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                              <img 
+                                src="{{ image.image.url }}" 
+                                alt="Post image {{ forloop.counter }}"
+                                loading="lazy"
+                                onload="this.classList.add('loaded')"
+                              />
+                              <!-- Download button for image -->
+                              <button class="kf-image-download-btn" 
+                                      title="Download Image" 
+                                      onclick="kfDownloadImage('{{ item.data.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
+                                <i class="fas fa-download"></i>
+                              </button>
+                            </div>
+                          </div>
+                          {% endfor %}
+                        {% endif %}
+                      </div>
                       
-                      <div class="kf-audio-cover" 
-                           style="background-image: url('{% if item.data.images.first %}{{ item.data.images.first.image.url }}{% else %}{{ item.data.author.profile.picture.url }}{% endif %}');">
-                        <button class="kf-audio-play-btn" onclick="kfToggleAudio('{{ item.data.post_id }}')">
-                          <i class="fas fa-play" id="kf-audio-icon-{{ item.data.post_id }}"></i>
+                      <!-- Carousel Controls for Multiple Items -->
+                      <div class="kf-mixed-carousel-controls">
+                        <button class="kf-mixed-carousel-prev" onclick="kfSlideMixedCarousel('{{ item.data.post_id }}', -1)">
+                          <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button class="kf-mixed-carousel-next" onclick="kfSlideMixedCarousel('{{ item.data.post_id }}', 1)">
+                          <i class="fas fa-chevron-right"></i>
                         </button>
                       </div>
-                      <div class="kf-audio-controls">
-                        <div class="kf-audio-info">
-                          <span class="kf-audio-title">Audio Post</span>
-                          <span class="kf-audio-time" id="kf-audio-time-{{ item.data.post_id }}">0:00</span>
-                        </div>
-                        <div class="kf-audio-progress" onclick="kfSeekAudio(event, '{{ item.data.post_id }}')">
-                          <div class="kf-audio-progress-bar" id="kf-audio-progress-{{ item.data.post_id }}"></div>
-                        </div>
-                        <div class="kf-audio-seek-buttons">
-                          <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ item.data.post_id }}', -10)">
-                            <i class="fas fa-backward-step"></i> 10s
-                          </button>
-                          <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ item.data.post_id }}', 10)">
-                            10s <i class="fas fa-forward-step"></i>
-                          </button>
-                        </div>
+                      
+                      <!-- Carousel Indicators -->
+                      <div class="kf-mixed-carousel-indicators">
+                        {% for i in "x"|rjust:total_media %}
+                        <span class="kf-mixed-indicator {% if forloop.first %}active{% endif %}" 
+                              onclick="kfGoToMixedSlide('{{ item.data.post_id }}', {{ forloop.counter0 }})"></span>
+                        {% endfor %}
                       </div>
-                      <audio id="kf-audio-element-{{ item.data.post_id }}" preload="metadata" class="kf-audio-hidden">
-                        <source src="{{ item.data.file.url }}" type="audio/webm">
-                      </audio>
                     </div>
-                  {% elif item.data.video_file %}
-                    <!-- Single Video -->
-                    <div class="kf-video-container" id="kf-container-{{ item.data.post_id }}">
-                      <button class="kf-video-download-btn" 
-                              title="Download Video" 
-                              onclick="kfDownloadVideo('{{ item.data.post_id }}', '{{ item.data.video_file.url }}')">
-                        <i class="fas fa-download"></i>
-                      </button>
-                      
-                      <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
-                      <video class="kf-video" 
-                             id="kf-post-video-{{ item.data.post_id }}" 
-                             preload="metadata"
-                             poster="{{ item.data.video_thumbnail.url|default:'' }}"
-                             data-src="{{ item.data.video_file.url }}"
-                             onclick="kfTogglePlayPause('kf-post-video-{{ item.data.post_id }}', event)">
-                        <source data-src="{{ item.data.video_file.url }}#t=0.5" type="video/mp4">
-                        Your browser does not support HTML5 video.
-                      </video>
-                      
-                      <i class="fa-solid fa-play kf-play-pause-icon" id="kf-play-icon-{{ item.data.post_id }}"></i>
-                      
-                      <button class="kf-seek-overlay-btn kf-backward-btn" 
-                              onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ item.data.post_id }}', -10)">
-                        <i class="fa-solid fa-backward-step"></i> 10s
-                      </button>
-                      <button class="kf-seek-overlay-btn kf-forward-btn" 
-                              onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ item.data.post_id }}', 10)">
-                        10s <i class="fa-solid fa-forward-step"></i>
-                      </button>
-                    </div>
-                  {% elif item.data.images.all %}
-                    <!-- Single or Multiple Images (original image carousel) -->
-                    {% if item.data.images.all|length > 1 %}
-                      <div class="kf-image-carousel" id="kf-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ item.data.images.all|length }}">
-                        <div class="kf-image-track" id="kf-track-{{ item.data.post_id }}">
-                          {% for image in item.data.images.all %}
-                          <div class="kf-image-slide">
-                            <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
-                            <img 
-                              src="{{ image.image.url }}" 
-                              alt="Post image {{ forloop.counter }}"
-                              loading="lazy"
-                              onload="this.classList.add('loaded')"
-                            />
-                            <!-- Download button for image -->
-                            <button class="kf-image-download-btn" 
-                                    title="Download Image" 
-                                    onclick="kfDownloadImage('{{ item.data.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
-                              <i class="fas fa-download"></i>
-                            </button>
-                          </div>
-                          {% endfor %}
-                        </div>
-                        
-                        <div class="kf-carousel-controls">
-                          <button class="kf-carousel-prev" onclick="kfSlideCarousel('{{ item.data.post_id }}', -1)">
-                            <i class="fas fa-chevron-left"></i>
-                          </button>
-                          <button class="kf-carousel-next" onclick="kfSlideCarousel('{{ item.data.post_id }}', 1)">
-                            <i class="fas fa-chevron-right"></i>
-                          </button>
-                        </div>
-                        
-                        <div class="kf-carousel-indicators">
-                          {% for image in item.data.images.all %}
-                          <span class="kf-indicator {% if forloop.first %}active{% endif %}"></span>
-                          {% endfor %}
-                        </div>
-                      </div>
-                    {% else %}
-                      <!-- Single Image -->
-                      {% with image=item.data.images.first %}
-                      <div class="kf-image-slide">
-                        <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
-                        <img 
-                          src="{{ image.image.url }}" 
-                          alt="Post image"
-                          loading="lazy"
-                          onload="this.classList.add('loaded')"
-                        />
-                        <!-- Download button for image -->
-                        <button class="kf-image-download-btn" 
-                                title="Download Image" 
-                                onclick="kfDownloadImage('{{ item.data.post_id }}', '{{ image.image.url }}', 'image')">
+                    
+                  {% else %}
+                    <!-- Single media item (no carousel needed) -->
+                    {% if item.data.file %}
+                      <!-- Single Audio -->
+                      <div class="kf-audio-player" id="kf-audio-{{ item.data.post_id }}">
+                        <button class="kf-audio-download-btn" 
+                                title="Download Audio" 
+                                onclick="kfDownloadAudio('{{ item.data.post_id }}', '{{ item.data.file.url }}')">
                           <i class="fas fa-download"></i>
                         </button>
+                        
+                        <div class="kf-audio-cover" 
+                             style="background-image: url('{% if item.data.images.first %}{{ item.data.images.first.image.url }}{% else %}{{ item.data.author.profile.picture.url }}{% endif %}');">
+                          <button class="kf-audio-play-btn" onclick="kfToggleAudio('{{ item.data.post_id }}')">
+                            <i class="fas fa-play" id="kf-audio-icon-{{ item.data.post_id }}"></i>
+                          </button>
+                        </div>
+                        <div class="kf-audio-controls">
+                          <div class="kf-audio-info">
+                            <span class="kf-audio-title">Audio Post</span>
+                            <span class="kf-audio-time" id="kf-audio-time-{{ item.data.post_id }}">0:00</span>
+                          </div>
+                          <div class="kf-audio-progress" onclick="kfSeekAudio(event, '{{ item.data.post_id }}')">
+                            <div class="kf-audio-progress-bar" id="kf-audio-progress-{{ item.data.post_id }}"></div>
+                          </div>
+                          <div class="kf-audio-seek-buttons">
+                            <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ item.data.post_id }}', -10)">
+                              <i class="fas fa-backward-step"></i> 10s
+                            </button>
+                            <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ item.data.post_id }}', 10)">
+                              10s <i class="fas fa-forward-step"></i>
+                            </button>
+                          </div>
+                        </div>
+                        <audio id="kf-audio-element-{{ item.data.post_id }}" preload="metadata" class="kf-audio-hidden">
+                          <source src="{{ item.data.file.url }}" type="audio/webm">
+                        </audio>
                       </div>
-                      {% endwith %}
+                    {% elif item.data.video_file %}
+                      <!-- Single Video -->
+                      <div class="kf-video-container" id="kf-container-{{ item.data.post_id }}">
+                        <button class="kf-video-download-btn" 
+                                title="Download Video" 
+                                onclick="kfDownloadVideo('{{ item.data.post_id }}', '{{ item.data.video_file.url }}')">
+                          <i class="fas fa-download"></i>
+                        </button>
+                        
+                        <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
+                        <video class="kf-video" 
+                               id="kf-post-video-{{ item.data.post_id }}" 
+                               preload="metadata"
+                               poster="{{ item.data.video_thumbnail.url|default:'' }}"
+                               data-src="{{ item.data.video_file.url }}"
+                               onclick="kfTogglePlayPause('kf-post-video-{{ item.data.post_id }}', event)">
+                          <source data-src="{{ item.data.video_file.url }}#t=0.5" type="video/mp4">
+                          Your browser does not support HTML5 video.
+                        </video>
+                        
+                        <i class="fa-solid fa-play kf-play-pause-icon" id="kf-play-icon-{{ item.data.post_id }}"></i>
+                        
+                        <button class="kf-seek-overlay-btn kf-backward-btn" 
+                                onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ item.data.post_id }}', -10)">
+                          <i class="fa-solid fa-backward-step"></i> 10s
+                        </button>
+                        <button class="kf-seek-overlay-btn kf-forward-btn" 
+                                onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ item.data.post_id }}', 10)">
+                          10s <i class="fa-solid fa-forward-step"></i>
+                        </button>
+                      </div>
+                    {% elif item.data.images.all %}
+                      <!-- Single or Multiple Images (original image carousel) -->
+                      {% if item.data.images.all|length > 1 %}
+                        <div class="kf-image-carousel" id="kf-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ item.data.images.all|length }}">
+                          <div class="kf-image-track" id="kf-track-{{ item.data.post_id }}">
+                            {% for image in item.data.images.all %}
+                            <div class="kf-image-slide">
+                              <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                              <img 
+                                src="{{ image.image.url }}" 
+                                alt="Post image {{ forloop.counter }}"
+                                loading="lazy"
+                                onload="this.classList.add('loaded')"
+                              />
+                              <!-- Download button for image -->
+                              <button class="kf-image-download-btn" 
+                                      title="Download Image" 
+                                      onclick="kfDownloadImage('{{ item.data.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
+                                <i class="fas fa-download"></i>
+                              </button>
+                            </div>
+                            {% endfor %}
+                          </div>
+                          
+                          <div class="kf-carousel-controls">
+                            <button class="kf-carousel-prev" onclick="kfSlideCarousel('{{ item.data.post_id }}', -1)">
+                              <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button class="kf-carousel-next" onclick="kfSlideCarousel('{{ item.data.post_id }}', 1)">
+                              <i class="fas fa-chevron-right"></i>
+                            </button>
+                          </div>
+                          
+                          <div class="kf-carousel-indicators">
+                            {% for image in item.data.images.all %}
+                            <span class="kf-indicator {% if forloop.first %}active{% endif %}"></span>
+                            {% endfor %}
+                          </div>
+                        </div>
+                      {% else %}
+                        <!-- Single Image -->
+                        {% with image=item.data.images.first %}
+                        <div class="kf-image-slide">
+                          <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                          <img 
+                            src="{{ image.image.url }}" 
+                            alt="Post image"
+                            loading="lazy"
+                            onload="this.classList.add('loaded')"
+                          />
+                          <!-- Download button for image -->
+                          <button class="kf-image-download-btn" 
+                                  title="Download Image" 
+                                  onclick="kfDownloadImage('{{ item.data.post_id }}', '{{ image.image.url }}', 'image')">
+                            <i class="fas fa-download"></i>
+                          </button>
+                        </div>
+                        {% endwith %}
+                      {% endif %}
                     {% endif %}
                   {% endif %}
-                {% endif %}
-              {% endwith %}
+                {% endwith %}
+              {% endif %}
             </div>
             {% endif %}
 
@@ -2066,6 +2391,11 @@
       // Get CSRF token
       const csrftoken = getCookie('csrftoken');
       
+      // Show loading state
+      const originalText = button.innerHTML;
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      button.disabled = true;
+      
       // Send AJAX request
       fetch(`/repost/${postId}/`, {
         method: 'POST',
@@ -2083,7 +2413,7 @@
         if (data.success) {
           // Update button state
           if (data.reposted) {
-            showToast('Post reposted successfully!', 'success');
+            showToast(data.message || 'Post reposted successfully!', 'success');
             button.setAttribute('data-reposted', 'true');
             icon.classList.add('reposted');
             
@@ -2092,8 +2422,13 @@
               countSpan.textContent = data.repost_count;
               countSpan.classList.add('show');
             }
+            
+            // Reload the page to show the new repost with caption
+            setTimeout(() => {
+              location.reload();
+            }, 800);
           } else {
-            showToast('Repost removed', 'info');
+            showToast(data.message || 'Repost removed', 'info');
             button.setAttribute('data-reposted', 'false');
             icon.classList.remove('reposted');
             
@@ -2103,14 +2438,23 @@
             } else {
               countSpan.classList.remove('show');
             }
+            
+            // Reload to remove the repost from feed
+            setTimeout(() => {
+              location.reload();
+            }, 800);
           }
         } else {
           showToast('Error: ' + data.error, 'error');
+          button.innerHTML = originalText;
+          button.disabled = false;
         }
       })
       .catch(error => {
         console.error('Error:', error);
         showToast('Something went wrong. Please try again.', 'error');
+        button.innerHTML = originalText;
+        button.disabled = false;
       });
     }
     
