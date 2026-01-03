@@ -3,7 +3,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 import json
 from django.utils import timezone
 from asgiref.sync import sync_to_async
-from social.models import ChannelUserLastSeen, Channel, ChannelMessage
+
 
 class ChannelConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -85,6 +85,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             }))
 
     async def mark_channel_as_read(self):
+        from social.models import ChannelUserLastSeen, Channel, ChannelMessage
         """Mark a channel as read for the current user"""
         channel = await sync_to_async(Channel.objects.get)(channel_id=self.channel_id)
         
@@ -95,6 +96,7 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         )
 
     async def send_unread_counts(self):
+        from social.models import ChannelUserLastSeen, Channel, ChannelMessage
         """Send unread counts for all subscribed channels"""
         # Get all channels user is subscribed to
         channels = await sync_to_async(list)(
@@ -159,6 +161,7 @@ class UserConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event)) #
 
     async def get_total_followed_unread(self):
+        from social.models import Channel
         """Helper to sum unread counts for followed channels only"""
         # Get channels where the user is a subscriber
         followed_channels = await sync_to_async(list)(
@@ -170,6 +173,7 @@ class UserConsumer(AsyncWebsocketConsumer):
         return total
 
     async def mark_channel_read(self, channel_id):
+        from social.models import ChannelUserLastSeen, Channel
         """Updated to send the new total after marking a channel as read"""
         channel = await sync_to_async(Channel.objects.get)(channel_id=channel_id)
         await sync_to_async(ChannelUserLastSeen.objects.update_or_create)(
