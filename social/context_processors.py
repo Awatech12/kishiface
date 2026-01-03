@@ -1,4 +1,4 @@
-from .models import Message, Notification, FollowNotification
+from .models import Message, Notification, FollowNotification, Channel
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
@@ -134,3 +134,17 @@ def follow_notifications_context(request):
             'has_follow_notifications': False,
             'has_unread_follows': False,
         }
+        
+  
+def channel_unread_processor(request):
+    if not request.user.is_authenticated:
+        return {'total_followed_unread': 0}
+    
+    # Filter only channels the user follows
+    followed_channels = Channel.objects.filter(subscriber=request.user)
+    
+    # Sum the unread counts
+    total_unread = sum(c.unread_count_for_user(request.user) for c in followed_channels)
+    
+    return {'total_followed_unread': total_unread} #
+

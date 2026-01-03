@@ -4,7 +4,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
+from social.models import Profile, Post, PostImage,ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
 from django.db.models import Q
 from django.db.models import Count
 from django.core.paginator import Paginator
@@ -943,75 +943,59 @@ def inbox(request):
         'contacts': contacts,
         'user': request.user
     })
-    # Get all conversations involving the current user
-    inbox_messages = Message.objects.filter(
-        Q(sender=request.user) | Q(receiver=request.user)
-    )
-    
-    # Get the other user and last message for each conversation
-    conversations = {}
-    for message in inbox_messages:
-        other_user = message.sender if message.sender != request.user else message.receiver
-        conversations.setdefault(other_user, message)
-    
-    # Get unread counts for each conversation
-    unread_counts = {}
-    for other_user in conversations.keys():
-        unread_count = Message.objects.filter(
-            sender=other_user,
-            receiver=request.user,
-            is_read=False
-        ).count()
-        unread_counts[other_user] = unread_count
-    
-    # Get last active time for each user (simplified - using last message time)
-    last_active = {}
-    for other_user in conversations.keys():
-        last_message = Message.objects.filter(
-            Q(sender=other_user, receiver=request.user) |
-            Q(sender=request.user, receiver=other_user)
-        ).order_by('-created_at').first()
-        if last_message:
-            last_active[other_user] = last_message.created_at
-    
-    # Prepare context
-    context_messages = []
-    for other_user, last_message in conversations.items():
-        context_messages.append({
-            'other_user': other_user,
-            'last_message': last_message,
-            'unread_count': unread_counts.get(other_user, 0),
-            'last_active': last_active.get(other_user)
-        })
-    
-    # Sort by last message time
-    context_messages.sort(key=lambda x: x['last_message'].created_at, reverse=True)
-    
-    return render(request, 'inbox.html', {
-        'messages': context_messages,
-        'user': request.user
-    })
 
 login_required(login_url='/')
 def notification_list(request):
     return render(request, 'notification.html')
 
-login_required(login_url='/')
+@login_required
 def channel_create(request):
     if request.method == 'POST':
         name = request.POST.get('name')
         about = request.POST.get('about')
         icon = request.FILES.get('icon')
-        if not name and not about and not icon:
-            return
-        channel=Channel.objects.create(channel_name=name, channel_owner=request.user, about=about, image=icon)
-        messages.info(request, 'Channel Created Successfully')
-        return redirect('channel_create')
-
-    channels = Channel.objects.all().order_by('?')
+        
+        # Create new channel
+        channel = Channel.objects.create(
+            channel_owner=request.user,
+            channel_name=name,
+            about=about,
+            image=icon if icon else 'male.png'
+        )
+        
+        # Auto-follow the channel owner
+        channel.subscriber.add(request.user)
+        
+        return redirect('channel', channel_id=channel.channel_id)
+    
+    # Get all channels with unread counts for current user
+    channels = Channel.objects.all().order_by('-created_at')
+    channels_with_unread = []
+    
+    for channel in channels:
+        unread_count = channel.unread_count_for_user(request.user)
+        channels_with_unread.append({
+            'channel': channel,
+            'unread_count': unread_count
+        })
+    
+    # Calculate total unread for footer
+    total_unread = sum(item['unread_count'] for item in channels_with_unread)
+    
+    # Get members for suggestions
+    from django.contrib.auth.models import User
+    members = User.objects.exclude(id=request.user.id)[:10]
+    
+    # Get notifications count
+    notifications = request.user.notifications.filter(is_read=False)
+    
     context = {
-        'channels': channels
+        'channels_with_unread': channels_with_unread,
+        'total_unread': total_unread,
+        'members': members,
+        'notifications': notifications,
     }
+    
     return render(request, 'channel_create.html', context)
 
 def follow_channel(request, channel_id):
@@ -1023,36 +1007,54 @@ def follow_channel(request, channel_id):
     return redirect(request.META.get('HTTP_REFERER'))
     
     
-login_required(login_url='/')
+@login_required
 def channel(request, channel_id):
     channel = get_object_or_404(Channel, channel_id=channel_id)
-
-    messages = ChannelMessage.objects.filter(channel=channel) \
-                                   .select_related('author') \
-                                   .order_by('created_at')
-
+    
+    # Update last seen timestamp
+    ChannelUserLastSeen.objects.update_or_create(
+        channel=channel,
+        user=request.user,
+        defaults={'last_seen_at': timezone.now()}
+    )
+    
+    # Get all messages for this channel
+    messages = ChannelMessage.objects.filter(channel=channel).order_by('created_at')
+    
+    # Group messages by date
     grouped_messages = {}
-    message_list = list(messages)
-
-    for label, msgs in groupby(message_list, key=lambda m: m.chat_date_label):
-        grouped_messages[label] = list(msgs)
-
+    for message in messages:
+        date_label = message.chat_date_label
+        if date_label not in grouped_messages:
+            grouped_messages[date_label] = []
+        grouped_messages[date_label].append(message)
+    
+    # Get total unread for footer
+    channels = Channel.objects.filter(subscriber=request.user)
+    total_unread = sum(ch.unread_count_for_user(request.user) for ch in channels)
+    
+    # Get notifications count
+    notifications = request.user.notifications.filter(is_read=False)
+    
     context = {
         'channel': channel,
-        'channel_id': channel_id,
-        'grouped_messages': grouped_messages
+        'grouped_messages': grouped_messages,
+        'channel_id': str(channel_id),
+        'total_unread': total_unread,
+        'notifications': notifications,
     }
-
+    
     return render(request, 'channel.html', context)
-
+@login_required
 def channel_message(request, channel_id):
     channel = get_object_or_404(Channel, channel_id=channel_id)
+    
     if request.method == 'POST':
         message = request.POST.get('message', '')
         file_upload = request.FILES.get('file_upload')
 
         file_type = None
-        file_url = None
+        
         if file_upload:
             content_type = file_upload.content_type
             if content_type.startswith('image/'):
@@ -1064,50 +1066,82 @@ def channel_message(request, channel_id):
             else:
                 return JsonResponse({
                     'status': 'error',
-                    'message':'error in file selection'
+                    'message': 'Unsupported file type'
                 })
 
+        # Create the message
         channelMessage = ChannelMessage.objects.create(
-            channel = channel,
-            author = request.user,
-            message = message if message else '',
-            file_type = file_type if file_type else None,
-            file= file_upload if file_upload else None
+            channel=channel,
+            author=request.user,
+            message=message if message else '',
+            file_type=file_type if file_type else None,
+            file=file_upload if file_upload else None
         )
 
+        # Get all subscribers except the sender
+        subscribers = channel.subscriber.exclude(id=request.user.id)
+        
+        # Get channel layer for WebSocket
         layer = get_channel_layer()
         group_name = f'channel_{channel_id}'
+        
         file_url = channelMessage.file.url if channelMessage.file else None
-        fileType = channelMessage.file_type if channelMessage.file_type else None
-
+        
+        # Send message to channel group
         async_to_sync(layer.group_send)(
             group_name,
             {
                 'type': 'channel_message',
                 'author': channelMessage.author.username,
                 'message': channelMessage.message,
-                'file_type': fileType,
+                'file_type': file_type,
                 'file_url': file_url,
-                "time": timezone.now().strftime("%I:%M %p")
+                "time": channelMessage.chat_time,
+                "message_id": str(channelMessage.channelmessage_id),
+                "created_at": channelMessage.created_at.isoformat(),
             }
         )
+        
+        # Update unread counts for all subscribers
+        for subscriber in subscribers:
+            unread_count = channel.unread_count_for_user(subscriber)
+            
+            # Send unread update to each subscriber
+            user_group_name = f'user_{subscriber.id}_channels'
+            async_to_sync(layer.group_send)(
+                user_group_name,
+                {
+                    'type': 'unread_update',
+                    'channel_id': str(channel.channel_id),
+                    'unread_count': unread_count,
+                    'channel_name': channel.channel_name,
+                    'message_preview': message[:30] if message else "New media message",
+                }
+            )
+        
         return JsonResponse({
             'status': 'success',
-            'message': 'Message Sent'
+            'message': 'Message sent',
+            'message_id': str(channelMessage.channelmessage_id),
         })
-# ====== channelMessage Like =======
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid request'})
+@login_required
 def channelmessage_like(request, channelmessage_id):
     channelmessage = get_object_or_404(ChannelMessage, channelmessage_id=channelmessage_id)
+    
     if request.user not in channelmessage.like.all():
         channelmessage.like.add(request.user)
         liked = True
-        return redirect(request.META.get('HTTP_REFERER'))
     else:
         channelmessage.like.remove(request.user)
         liked = False
-        return redirect(request.META.get('HTTP_REFERER'))
     
-    
+    return JsonResponse({
+        'liked': liked,
+        'like_count': channelmessage.like.count()
+    })
+  
 # ======= Market Plce ======='
 
 

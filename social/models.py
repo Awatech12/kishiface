@@ -307,6 +307,7 @@ class Message(models.Model):
 
 
 
+
 class Channel(models.Model):
     channel_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     channel_owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='channel_author')
@@ -315,8 +316,46 @@ class Channel(models.Model):
     subscriber = models.ManyToManyField(User, blank=True, related_name='channel_subscriber')
     image=models.ImageField(upload_to='channel_image', default='male.png')
     created_at = models.DateTimeField(auto_now_add=True)
-# --- CRITICAL: CORRECTED ChannelMessage MODEL ---
-# In models.py, update the ChannelMessage model
+    
+    def __str__(self):
+        return self.channel_name
+    
+    
+    def unread_count_for_user(self, user):
+        """Get unread message count for a specific user"""
+        if not user.is_authenticated:
+            return 0
+        
+        # Get user's last seen timestamp for this channel
+        last_seen = ChannelUserLastSeen.objects.filter(
+            channel=self,
+            user=user
+        ).first()
+        
+        if last_seen:
+            # Count messages created after user last saw the channel
+            return ChannelMessage.objects.filter(
+                channel=self,
+                created_at__gt=last_seen.last_seen_at
+            ).exclude(author=user).count()
+        
+        # If never seen before, count all messages except user's own
+        return ChannelMessage.objects.filter(
+            channel=self
+        ).exclude(author=user).count()
+
+class ChannelUserLastSeen(models.Model):
+    """Tracks when a user last viewed a channel"""
+    channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    
+    class Meta:
+        unique_together = ['channel', 'user']
+    
+    def __str__(self):
+        return f"{self.user.username} last saw {self.channel.channel_name} at {self.last_seen_at}"
+
 class ChannelMessage(models.Model):
     channelmessage_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     channel = models.ForeignKey(
@@ -327,29 +366,23 @@ class ChannelMessage(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     message = models.TextField(blank=True)
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
-    # Fields to store file info
     file_type = models.CharField(max_length=50, blank=True, null=True)
-     # Use CloudinaryField if USE_CLOUDINARY is True, matching the folder in message.py
+    
     if settings.USE_CLOUDINARY:
         file = CloudinaryField(
             'channelMessage_files',
-            resource_type='auto', # Cloudinary requires 'video' for audio files
+            resource_type='auto',
             folder='channelMessage_files', 
             blank=True,
             null=True
         )
     else:
-        file = models.FileField(upload_to='message_file', blank=True, null=True) # Changed to 'message_file' for clarity
+        file = models.FileField(upload_to='message_file', blank=True, null=True)
      
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # --- Utility Properties ---
-
     @property
     def chat_date_label(self):
-        """
-        Returns "Today", "Yesterday", weekday, or formatted date
-        """
         d = self.created_at.date()
         t = date.today()
         if d == t:
@@ -362,18 +395,14 @@ class ChannelMessage(models.Model):
 
     @property
     def chat_time(self):
-        """
-        Returns time in 12-hour format
-        """
         return self.created_at.strftime("%I:%M %p")
 
     def like_count(self):
-        """
-        Returns total number of likes
-        """
         return self.like.count()
-# --- END CORRECTED ChannelMessage MODEL ---
-
+    
+    def __str__(self):
+        return f"{self.author.username}: {self.message[:50]}"
+    
 class Market(models.Model):
     product_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     product_owner = models.ForeignKey(User, related_name='products', on_delete=models.CASCADE)

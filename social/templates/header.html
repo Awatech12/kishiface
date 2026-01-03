@@ -149,13 +149,65 @@
 
   <header>
   <h1>KishiFace</h1>
-  <div class="icon-group">
-    <!-- Channel Icon (replacing Notification icon) -->
-    <a href="{% url 'channel_create' %}" class="icon-link" title="Channels">
-      <div class="icon-badge-container">
-        <img src="{% static 'images/chat.png' %}" alt="Channel" class="channel-icon-header">
-      </div>
-    </a>
+  <div class="icon-group"><a href="{% url 'channel_create' %}" class="icon-link" title="Channels">
+  <div class="icon-badge-container">
+    <img src="{% static 'images/chat.png' %}" alt="Channel" class="channel-icon-header">
+    <div class="icon-badge" id="header-channel-badge" 
+         style="display: {% if total_followed_unread > 0 %}flex{% else %}none{% endif %};">
+        {{ total_followed_unread }}
+    </div>
+  </div>
+</a>
+
+<script>
+    function updateHeaderBadge(count) {
+        const badge = document.getElementById('header-channel-badge');
+        if (badge) {
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'flex' : 'none';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if ('WebSocket' in window && "{{ request.user.is_authenticated }}" === "True") {
+            const userId = "{{ request.user.id }}";
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const ws = new WebSocket(`${protocol}${window.location.host}/ws/user/${userId}/`);
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'unread_update') {
+                    // Update the header badge instantly using the total from the server
+                    if (data.total_followed_unread !== undefined) {
+                        updateHeaderBadge(data.total_followed_unread);
+                    }
+
+                    // Optional: Update individual list item badge if on channel_create.html
+                    const channelItemLink = document.querySelector(`.channel-item a[href*="${data.channel_id}"]`);
+                    if (channelItemLink) {
+                        const actions = channelItemLink.closest('.channel-item').querySelector('.channel-actions');
+                        let itemBadge = actions.querySelector('.unread-badge');
+                        if (data.unread_count > 0) {
+                            if (!itemBadge) {
+                                itemBadge = document.createElement('span');
+                                itemBadge.className = 'unread-badge';
+                                actions.appendChild(itemBadge);
+                            }
+                            itemBadge.textContent = data.unread_count;
+                        } else if (itemBadge) {
+                            itemBadge.remove();
+                        }
+                    }
+                }
+            };
+        }
+    });
+</script>
+
+
+
+
     
     <!-- Message Icon with Badge -->
     <a href="{% url 'inbox' %}" class="icon-link">
@@ -178,8 +230,52 @@
 
 {% include 'info.html' %}
 <script>
- 
+    function updateHeaderBadge(count) {
+        const badge = document.getElementById('header-channel-badge');
+        if (badge) {
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'flex' : 'none';
+        }
+    }
 
+    document.addEventListener('DOMContentLoaded', function() {
+        if ('WebSocket' in window && "{{ request.user.is_authenticated }}" === "True") {
+            const userId = "{{ request.user.id }}";
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const ws = new WebSocket(`${protocol}${window.location.host}/ws/user/${userId}/`);
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'unread_update') {
+                    // Update the header badge instantly using the total from the server
+                    if (data.total_followed_unread !== undefined) {
+                        updateHeaderBadge(data.total_followed_unread);
+                    }
+
+                    // Optional: Update individual list item badge if on channel_create.html
+                    const channelItemLink = document.querySelector(`.channel-item a[href*="${data.channel_id}"]`);
+                    if (channelItemLink) {
+                        const actions = channelItemLink.closest('.channel-item').querySelector('.channel-actions');
+                        let itemBadge = actions.querySelector('.unread-badge');
+                        if (data.unread_count > 0) {
+                            if (!itemBadge) {
+                                itemBadge = document.createElement('span');
+                                itemBadge.className = 'unread-badge';
+                                actions.appendChild(itemBadge);
+                            }
+                            itemBadge.textContent = data.unread_count;
+                        } else if (itemBadge) {
+                            itemBadge.remove();
+                        }
+                    }
+                }
+            };
+        }
+    });
 </script>
+
+
+
 </body>
 </html>
