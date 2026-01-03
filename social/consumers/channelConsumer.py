@@ -146,47 +146,47 @@ class UserConsumer(AsyncWebsocketConsumer):
             return
         self.user_group_name = f'user_{self.user.id}_channels'
         await self.channel_layer.group_add(self.user_group_name, self.channel_name)
-        await self.accept() #
+        await self.accept()
 
-    async def unread_update(self, event):
-        """
-        Triggered when a new message is sent to a channel.
-        We now calculate the TOTAL for followed channels and send it.
-        """
-        # Calculate total unread only for channels the user follows
-        total_unread = await self.get_total_followed_unread()
-        
-        # Attach the global total to the event data
-        event['total_followed_unread'] = total_unread
-        await self.send(text_data=json.dumps(event)) #
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(self.user_group_name, self.channel_name)
 
     async def get_total_followed_unread(self):
-        from social.models import Channel
-        """Helper to sum unread counts for followed channels only"""
-        # Get channels where the user is a subscriber
-        followed_channels = await sync_to_async(list)(
-            Channel.objects.filter(subscriber=self.user)
-        )
+        from social.models import Channel 
+        followed = await sync_to_async(list)(Channel.objects.filter(subscriber=self.user))
         total = 0
-        for channel in followed_channels:
+        for channel in followed:
             total += await sync_to_async(channel.unread_count_for_user)(self.user)
         return total
 
+    async def unread_update(self, event):
+        """Handle unread updates and add a timestamp for real-time UI"""
+        total_count = await self.get_total_followed_unread()
+        
+        # Add data for real-time timestamp and reordering
+        event['total_followed_unread'] = total_count
+        # ISO format allows JavaScript to parse the date easily
+        event['timestamp'] = timezone.now().isoformat() 
+        
+        await self.send(text_data=json.dumps(event))
+
     async def mark_channel_read(self, channel_id):
-        from social.models import ChannelUserLastSeen, Channel
-        """Updated to send the new total after marking a channel as read"""
+        from social.models import Channel, ChannelUserLastSeen
         channel = await sync_to_async(Channel.objects.get)(channel_id=channel_id)
         await sync_to_async(ChannelUserLastSeen.objects.update_or_create)(
             channel=channel, user=self.user,
             defaults={'last_seen_at': timezone.now()}
         )
-        # Broadcast the new lower total to the header
         new_total = await self.get_total_followed_unread()
         await self.send(text_data=json.dumps({
             'type': 'unread_update',
-            'total_followed_unread': new_total,
             'channel_id': channel_id,
-            'unread_count': 0
-        })) #
+            'unread_count': 0,
+            'total_followed_unread': new_total,
+            'timestamp': timezone.now().isoformat()
+        }))
+
+
+
 
 

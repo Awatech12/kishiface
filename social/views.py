@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from social.models import Profile, Post, PostImage,ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
 from django.db.models import Q
-from django.db.models import Count
+from django.db.models import Count, Max
 from django.core.paginator import Paginator
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -950,53 +950,67 @@ def notification_list(request):
 
 @login_required
 def channel_create(request):
+    # 1. Handle New Channel Creation (POST)
     if request.method == 'POST':
         name = request.POST.get('name')
         about = request.POST.get('about')
         icon = request.FILES.get('icon')
         
-        # Create new channel
-        channel = Channel.objects.create(
+        # Create the new channel
+        new_channel = Channel.objects.create(
             channel_owner=request.user,
             channel_name=name,
             about=about,
             image=icon if icon else 'male.png'
         )
         
-        # Auto-follow the channel owner
-        channel.subscriber.add(request.user)
+        # The creator automatically follows their own channel
+        new_channel.subscriber.add(request.user)
         
-        return redirect('channel', channel_id=channel.channel_id)
+        return redirect('channel', channel_id=new_channel.channel_id)
+
+    # 2. Logic for Followed Channels (WhatsApp style)
+    # We annotate with the latest message time to sort active chats to the top
+    followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
+        last_app_activity=Max('channel_messages__created_at')
+    ).order_by('-last_app_activity', '-created_at')
+
+    followed_list = []
+    total_unread = 0
     
-    # Get all channels with unread counts for current user
-    channels = Channel.objects.all().order_by('-created_at')
-    channels_with_unread = []
-    
-    for channel in channels:
-        unread_count = channel.unread_count_for_user(request.user)
-        channels_with_unread.append({
-            'channel': channel,
-            'unread_count': unread_count
+    for c in followed_channels:
+        # Get unread count for the badge
+        unread = c.unread_count_for_user(request.user)
+        total_unread += unread
+        
+        # Get the actual last message object for preview and timestamp
+        last_msg = c.channel_messages.order_by('-created_at').first()
+        
+        followed_list.append({
+            'channel': c,
+            'unread_count': unread,
+            'last_message': last_msg.message if last_msg else "No messages yet",
+            'last_time': last_msg.created_at if last_msg else None
         })
-    
-    # Calculate total unread for footer
-    total_unread = sum(item['unread_count'] for item in channels_with_unread)
-    
-    # Get members for suggestions
-    from django.contrib.auth.models import User
+
+    # 3. Logic for Unfollowed Channels (Discovery style)
+    # We exclude channels the user already follows
+    unfollowed_channels = Channel.objects.exclude(subscriber=request.user).order_by('-created_at')
+
+    # 4. Additional UI Context (Suggestions & Notifications)
     members = User.objects.exclude(id=request.user.id)[:10]
-    
-    # Get notifications count
     notifications = request.user.notifications.filter(is_read=False)
     
     context = {
-        'channels_with_unread': channels_with_unread,
-        'total_unread': total_unread,
+        'followed_list': followed_list,
+        'unfollowed_channels': unfollowed_channels,
+        'total_unread': total_unread, # Total unread for the footer badge
         'members': members,
         'notifications': notifications,
     }
-    
+
     return render(request, 'channel_create.html', context)
+
 
 def follow_channel(request, channel_id):
     channel = get_object_or_404(Channel, channel_id=channel_id)

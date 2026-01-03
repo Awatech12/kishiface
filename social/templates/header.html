@@ -153,7 +153,7 @@
   <div class="icon-badge-container">
     <img src="{% static 'images/chat.png' %}" alt="Channel" class="channel-icon-header">
     <div class="icon-badge" id="header-channel-badge" 
-         style="display: {% if total_followed_unread > 0 %}flex{% else %}none{% endif %};">
+         >
         {{ total_followed_unread }}
     </div>
   </div>
@@ -229,8 +229,19 @@
 </header>
 
 {% include 'info.html' %}
+
 <script>
-    function updateHeaderBadge(count) {
+    // Helper to format the time since a message was received
+    function timeSince(dateString) {
+        const date = new Date(dateString);
+        const seconds = Math.floor((new Date() - date) / 1000);
+        if (seconds < 60) return "just now";
+        const interval = Math.floor(seconds / 60);
+        if (interval < 60) return interval + " minutes ago";
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function updateGlobalHeader(count) {
         const badge = document.getElementById('header-channel-badge');
         if (badge) {
             badge.textContent = count;
@@ -239,34 +250,123 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        if ('WebSocket' in window && "{{ request.user.is_authenticated }}" === "True") {
+        if ("{{ request.user.is_authenticated }}" === "True") {
             const userId = "{{ request.user.id }}";
             const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
             const ws = new WebSocket(`${protocol}${window.location.host}/ws/user/${userId}/`);
-            
+
             ws.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 
                 if (data.type === 'unread_update') {
-                    // Update the header badge instantly using the total from the server
-                    if (data.total_followed_unread !== undefined) {
-                        updateHeaderBadge(data.total_followed_unread);
-                    }
+                    updateGlobalHeader(data.total_followed_unread);
 
-                    // Optional: Update individual list item badge if on channel_create.html
-                    const channelItemLink = document.querySelector(`.channel-item a[href*="${data.channel_id}"]`);
-                    if (channelItemLink) {
-                        const actions = channelItemLink.closest('.channel-item').querySelector('.channel-actions');
-                        let itemBadge = actions.querySelector('.unread-badge');
+                    const channelLink = document.querySelector(`.channel-item a[href*="${data.channel_id}"]`);
+                    if (channelLink) {
+                        const channelItem = channelLink.closest('.channel-item');
+                        const followingSection = document.querySelector('.channels-list');
+                        
+                        // 1. Reorder: Move to top of the 'Following' section
+                        if (followingSection) {
+                            const header = followingSection.querySelector('.channels-header');
+                            header.after(channelItem);
+                        }
+
+                        // 2. Update Time: Change static time to "just now"
+                        const timeSpan = channelItem.querySelector('.channel-time');
+                        if (timeSpan && data.timestamp) {
+                            timeSpan.textContent = timeSince(data.timestamp);
+                        }
+
+                        // 3. Update Preview & Badge
+                        const preview = channelItem.querySelector('.channel-details');
+                        if (preview && data.message_preview) {
+                            preview.textContent = data.message_preview;
+                        }
+
+                        const actions = channelItem.querySelector('.channel-actions');
+                        let badge = actions.querySelector('.unread-badge');
                         if (data.unread_count > 0) {
-                            if (!itemBadge) {
-                                itemBadge = document.createElement('span');
-                                itemBadge.className = 'unread-badge';
-                                actions.appendChild(itemBadge);
+                            if (!badge) {
+                                badge = document.createElement('span');
+                                badge.className = 'unread-badge';
+                                actions.appendChild(badge);
                             }
-                            itemBadge.textContent = data.unread_count;
-                        } else if (itemBadge) {
-                            itemBadge.remove();
+                            badge.textContent = data.unread_count;
+                        } else if (badge) {
+                            badge.remove();
+                        }
+                    }
+                }
+            };
+        }
+    });
+</script>
+<script>
+    // Helper to format the time since a message was received
+    function timeSince(dateString) {
+        const date = new Date(dateString);
+        const seconds = Math.floor((new Date() - date) / 1000);
+        if (seconds < 60) return "just now";
+        const interval = Math.floor(seconds / 60);
+        if (interval < 60) return interval + " minutes ago";
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function updateGlobalHeader(count) {
+        const badge = document.getElementById('header-channel-badge');
+        if (badge) {
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'flex' : 'none';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if ("{{ request.user.is_authenticated }}" === "True") {
+            const userId = "{{ request.user.id }}";
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const ws = new WebSocket(`${protocol}${window.location.host}/ws/user/${userId}/`);
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'unread_update') {
+                    updateGlobalHeader(data.total_followed_unread);
+
+                    const channelLink = document.querySelector(`.channel-item a[href*="${data.channel_id}"]`);
+                    if (channelLink) {
+                        const channelItem = channelLink.closest('.channel-item');
+                        const followingSection = document.querySelector('.channels-list');
+                        
+                        // 1. Reorder: Move to top of the 'Following' section
+                        if (followingSection) {
+                            const header = followingSection.querySelector('.channels-header');
+                            header.after(channelItem);
+                        }
+
+                        // 2. Update Time: Change static time to "just now"
+                        const timeSpan = channelItem.querySelector('.channel-time');
+                        if (timeSpan && data.timestamp) {
+                            timeSpan.textContent = timeSince(data.timestamp);
+                        }
+
+                        // 3. Update Preview & Badge
+                        const preview = channelItem.querySelector('.channel-details');
+                        if (preview && data.message_preview) {
+                            preview.textContent = data.message_preview;
+                        }
+
+                        const actions = channelItem.querySelector('.channel-actions');
+                        let badge = actions.querySelector('.unread-badge');
+                        if (data.unread_count > 0) {
+                            if (!badge) {
+                                badge = document.createElement('span');
+                                badge.className = 'unread-badge';
+                                actions.appendChild(badge);
+                            }
+                            badge.textContent = data.unread_count;
+                        } else if (badge) {
+                            badge.remove();
                         }
                     }
                 }
