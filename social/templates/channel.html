@@ -1,532 +1,596 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="csrf-token" content="{{ csrf_token }}">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-    <title>{{ channel.name }} | Channel</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ channel.name }} | KishiFace</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
         :root {
-            --primary-color: #0084ff;
-            --secondary-color: #f0f2f5;
-            --border-color: #e4e6eb;
-            --text-primary: #050505;
-            --text-secondary: #65676b;
-            --background-white: #ffffff;
-            --background-grey: #f0f2f5;
-            --success-color: #31a24c;
-            --hover-color: #f2f2f2;
-            --shadow-light: rgba(0, 0, 0, 0.1);
-            --shadow-medium: rgba(0, 0, 0, 0.15);
+            --kf-bg: #ffffff;
+            --kf-msg-bg: #ffffff;
+            --kf-text-main: #111b21;
+            --kf-text-secondary: #667781;
+            --kf-accent: #008069;
+            --kf-time: #667781;
+            --kf-header-bg: #ffffff;
+            --kf-footer-bg: #ffffff;
+            --kf-input-bg: #f0f2f5;
+            --kf-chat-bg: #efeae2;
         }
 
-        * {
+        body, html {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-        }
-
-        body {
-            background: var(--background-grey);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--kf-bg);
+            color: var(--kf-text-main);
             height: 100vh;
             overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .kishiface-container {
             display: flex;
             flex-direction: column;
+            height: 100vh;
+            max-width: 100%;
+            margin: 0 auto;
+            background: var(--kf-bg);
+            position: relative;
         }
 
-        /* HEADER */
-        .channel-header {
-            background: var(--background-white);
-            border-bottom: 1px solid var(--border-color);
-            padding: 0 12px;
-            height: 56px;
+        /* Header Styling */
+        .kishiface-header {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            box-shadow: 0 1px 3px var(--shadow-light);
+            padding: 10px 16px;
+            background: var(--kf-header-bg);
+            z-index: 10;
+            border-bottom: 1px solid #f0f0f0;
+            min-height: 60px;
             position: sticky;
             top: 0;
-            z-index: 1000;
         }
 
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .back-button {
+        .kishiface-back-btn {
+            margin-right: 15px;
+            color: var(--kf-accent);
+            text-decoration: none;
+            font-size: 1.2rem;
             background: none;
             border: none;
-            font-size: 20px;
-            color: var(--text-secondary);
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+
+        .kishiface-back-btn:hover {
+            background-color: rgba(0, 128, 105, 0.1);
+        }
+
+        .kishiface-channel-info {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+            cursor: pointer;
+            min-width: 0;
+        }
+
+        .kishiface-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .kishiface-avatar-placeholder {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 12px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .kishiface-channel-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .kishiface-channel-name {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .kishiface-channel-subscribers {
+            font-size: 12px;
+            color: var(--kf-text-secondary);
+        }
+
+        .kishiface-header-actions {
+            display: flex;
+            gap: 20px;
+            color: var(--kf-text-secondary);
+            align-items: center;
+        }
+
+        .kishiface-header-action {
+            background: none;
+            border: none;
+            color: var(--kf-text-secondary);
+            font-size: 1.2rem;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+
+        .kishiface-header-action:hover {
+            background-color: rgba(102, 119, 129, 0.1);
+        }
+
+        /* Message Area */
+        .kishiface-messages-scroll {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px 0;
+            background-color: var(--kf-chat-bg);
+            background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+            background-blend-mode: overlay;
+            position: relative;
+        }
+
+        /* Date Separator */
+        .kishiface-date-separator {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .kishiface-date-label {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--kf-text-secondary);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            font-weight: 500;
+            display: inline-block;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Message Wrapper */
+        .kishiface-msg-wrapper {
+            max-width: 80%;
+            margin: 4px 16px 12px 16px;
+            background: var(--kf-msg-bg);
+            border-radius: 8px;
+            padding: 0;
+            position: relative;
+            box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Message Content */
+        .kishiface-message-content {
+            position: relative;
+        }
+
+        /* Media Content */
+        .kishiface-media-content {
+            width: 100%;
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+            margin-bottom: 0;
+            position: relative;
+        }
+
+        .kishiface-media-content img {
+            width: 100%;
+            display: block;
+            max-height: 400px;
+            object-fit: contain;
+            background: #f0f0f0;
             cursor: pointer;
         }
 
-        .channel-info {
+        .kishiface-media-content video {
+            width: 100%;
+            display: block;
+            max-height: 400px;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .kishiface-video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .kishiface-video-play-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.6);
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .kishiface-video-play-btn:hover {
+            background: rgba(0, 0, 0, 0.8);
+            transform: scale(1.1);
+        }
+
+        /* Audio Player */
+        .kishiface-audio-player {
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--kf-input-bg);
+            margin: 12px;
+            border-radius: 8px;
+        }
+
+        .kishiface-audio-play-btn {
+            background: var(--kf-accent);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+
+        .kishiface-audio-play-btn:hover {
+            background: #009879;
+            transform: scale(1.05);
+        }
+
+        .kishiface-audio-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .kishiface-audio-filename {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--kf-text-main);
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .kishiface-audio-controls {
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        .channel-avatar {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 16px;
+        .kishiface-audio-progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
         }
 
-        .channel-details h1 {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 2px;
+        .kishiface-audio-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--kf-accent);
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.1s linear;
         }
 
-        .channel-details .members {
-            font-size: 12px;
-            color: var(--text-secondary);
+        .kishiface-audio-time {
+            font-size: 11px;
+            color: var(--kf-text-secondary);
+            font-weight: 500;
+            min-width: 45px;
         }
 
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .header-action-btn {
+        .kishiface-audio-download {
             background: none;
             border: none;
-            font-size: 18px;
-            color: var(--text-secondary);
+            color: var(--kf-accent);
+            font-size: 16px;
             cursor: pointer;
-            transition: color 0.2s;
+            padding: 4px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
         }
 
-        .header-action-btn:hover {
-            color: var(--primary-color);
+        .kishiface-audio-download:hover {
+            background: rgba(0, 128, 105, 0.1);
         }
 
-        /* MESSAGE AREA */
-        #comments {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            background: var(--background-grey);
-        }
-
-        /* Date Separator */
-        .date-separator {
-            text-align: center;
-            margin: 16px 0;
-            position: relative;
-        }
-
-        .date-separator span {
-            background: var(--background-white);
-            padding: 6px 12px;
-            border-radius: 18px;
-            font-size: 12px;
-            color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-            font-weight: 500;
-            box-shadow: 0 1px 2px var(--shadow-light);
-        }
-
-        /* Message Bubbles */
-        .message-container {
-            max-width: 90%;
-            margin: 2px 0;
-            animation: messageAppear 0.3s ease;
-        }
-
-        @keyframes messageAppear {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .message-bubble {
-            background: var(--background-white);
-            border-radius: 18px;
-            padding: 10px 14px;
-            box-shadow: 0 1px 2px var(--shadow-light);
-            position: relative;
-            transition: background-color 0.2s;
-        }
-
-        .message-author {
-            font-weight: 600;
-            font-size: 12px;
-            margin-bottom: 4px;
-            color: var(--text-secondary);
-        }
-
-        .message-text {
-            font-size: 14px;
+        /* Text Content */
+        .kishiface-text-content {
+            padding: 8px 12px 28px 12px;
+            font-size: 14.5px;
             line-height: 1.4;
-            word-break: break-word;
-            margin-bottom: 6px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
 
-        .message-meta {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            gap: 6px;
-            margin-top: 4px;
-        }
-
-        .message-time {
-            font-size: 10px;
-            color: var(--text-secondary);
-            opacity: 0.8;
-        }
-
-        /* Message Actions */
-        .message-actions {
-            position: absolute;
-            right: -35px;
-            top: 50%;
-            transform: translateY(-50%);
-            display: none;
-            gap: 6px;
-        }
-
-        .message-container:hover .message-actions {
-            display: flex;
-        }
-
-        .message-action-btn {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            border: none;
-            background: var(--background-white);
-            color: var(--text-secondary);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            box-shadow: 0 2px 4px var(--shadow-light);
-            transition: all 0.2s;
-        }
-
-        .message-action-btn:hover {
-            background: var(--primary-color);
-            color: white;
-            transform: scale(1.1);
-        }
-
-        /* Media Attachments */
-        .media-attachment {
-            margin-top: 10px;
-            border-radius: 10px;
-            overflow: hidden;
-            max-width: 100%;
-        }
-
-        .media-attachment img {
-            width: 100%;
-            height: auto;
-            display: block;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: transform 0.3s;
-        }
-
-        .media-attachment img:hover {
-            transform: scale(1.02);
-        }
-
-        /* Video Player */
-        .tg-video-player {
-            background: #000;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-top: 10px;
-            max-width: 100%;
-            position: relative;
-        }
-
-        .tg-video-player video {
-            width: 100%;
-            display: block;
-            border-radius: 10px;
-        }
-
-        .video-controls {
+        .kishiface-text-overlay {
             position: absolute;
             bottom: 0;
             left: 0;
             right: 0;
             background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
-            padding: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            opacity: 0;
-            transition: opacity 0.3s;
+            padding: 40px 12px 12px 12px;
+            z-index: 1;
         }
 
-        .tg-video-player:hover .video-controls {
+        .kishiface-text-overlay .kishiface-text-content {
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+            padding: 0;
+        }
+
+        /* Message Meta */
+        .kishiface-meta {
+            position: absolute;
+            bottom: 8px;
+            right: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .kishiface-time {
+            font-size: 11px;
+            color: var(--kf-time);
+        }
+
+        .kishiface-meta-overlay {
+            position: absolute;
+            bottom: 8px;
+            right: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+        }
+
+        .kishiface-time-overlay {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Message Actions */
+        .kishiface-message-actions {
+            position: absolute;
+            right: 12px;
+            top: 8px;
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .kishiface-msg-wrapper:hover .kishiface-message-actions {
             opacity: 1;
         }
 
-        .video-controls button {
-            background: rgba(255, 255, 255, 0.9);
-            border: none;
-            width: 32px;
-            height: 32px;
+        .kishiface-action-btn {
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
-            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
-            color: #333;
-        }
-
-        .video-progress {
-            flex: 1;
-            height: 3px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 2px;
+            color: var(--kf-text-secondary);
             cursor: pointer;
-            position: relative;
+            font-size: 11px;
+            transition: all 0.2s ease;
         }
 
-        .video-progress-filled {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            background: var(--primary-color);
-            border-radius: 2px;
+        .kishiface-action-btn:hover {
+            background: var(--kf-accent);
+            border-color: var(--kf-accent);
+            color: white;
         }
 
-        /* Audio Player */
-        .tg-audio-player {
-            background: var(--background-white);
-            border-radius: 20px;
-            padding: 10px 12px;
+        /* Like Section */
+        .kishiface-like-section {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 8px 12px 12px 12px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .kishiface-like-btn {
+            background: none;
+            border: none;
+            color: var(--kf-text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .kishiface-like-btn:hover {
+            background: rgba(0, 128, 105, 0.1);
+            color: var(--kf-accent);
+        }
+
+        .kishiface-like-btn.liked {
+            color: var(--kf-accent);
+        }
+
+        .kishiface-like-btn.liked i {
+            color: var(--kf-accent);
+        }
+
+        .kishiface-like-count {
+            font-size: 11px;
+            color: var(--kf-text-secondary);
+        }
+
+        .kishiface-like-btn.loading {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        /* Input Area - Footer */
+        .kishiface-footer {
+            background: var(--kf-footer-bg);
+            padding: 10px 16px;
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-top: 10px;
-            max-width: 100%;
-            box-shadow: 0 2px 6px var(--shadow-light);
-        }
-
-        .audio-controls button {
-            background: var(--primary-color);
-            border: none;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 12px;
-        }
-
-        .audio-progress-container {
-            flex: 1;
-            height: 3px;
-            background: var(--border-color);
-            border-radius: 2px;
-            cursor: pointer;
-            position: relative;
-        }
-
-        .audio-progress {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            background: var(--primary-color);
-            border-radius: 2px;
-            width: 0%;
-        }
-
-        /* INPUT AREA */
-        .message-input-container {
-            background: var(--background-white);
-            border-top: 1px solid var(--border-color);
-            padding: 10px 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            border-top: 1px solid #f0f0f0;
             position: sticky;
             bottom: 0;
-            z-index: 100;
         }
 
-        .input-actions {
+        .kishiface-input-container {
+            flex-grow: 1;
+            background: var(--kf-input-bg);
+            border-radius: 20px;
+            padding: 8px 16px;
             display: flex;
+            align-items: center;
             gap: 8px;
         }
 
-        .input-action-btn {
-            background: none;
-            border: none;
-            font-size: 18px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: color 0.2s;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .input-action-btn:hover {
-            background: var(--hover-color);
-            color: var(--primary-color);
-        }
-
-        .message-input-wrapper {
-            flex: 1;
-            position: relative;
-        }
-
-        #message {
+        .kishiface-input {
             width: 100%;
-            padding: 10px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            font-size: 14px;
-            background: var(--background-grey);
+            border: none;
+            background: transparent;
             outline: none;
-            transition: all 0.3s;
+            font-size: 15px;
+            color: var(--kf-text-main);
+            font-family: inherit;
             resize: none;
-            min-height: 42px;
             max-height: 100px;
             line-height: 1.4;
         }
 
-        #message:focus {
-            border-color: var(--primary-color);
-            background: var(--background-white);
-            box-shadow: 0 0 0 3px rgba(0, 132, 255, 0.1);
+        .kishiface-input::placeholder {
+            color: var(--kf-text-secondary);
         }
 
-        .send-button {
-            background: var(--primary-color);
+        .kishiface-attachment-btn {
+            background: none;
             border: none;
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            color: white;
+            color: var(--kf-text-secondary);
+            font-size: 1.2rem;
             cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+
+        .kishiface-attachment-btn:hover {
+            background-color: rgba(102, 119, 129, 0.1);
+        }
+
+        .kishiface-send-btn {
+            color: var(--kf-accent);
+            background: none;
+            border: none;
+            font-size: 1.4rem;
+            cursor: pointer;
+            padding: 5px;
+            width: 44px;
+            height: 44px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
-            transition: all 0.2s;
-        }
-
-        .send-button:hover {
-            background: #0066cc;
-            transform: scale(1.05);
-        }
-
-        .send-button:active {
-            transform: scale(0.95);
-        }
-
-        /* Typing Indicator */
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: var(--background-white);
-            border-radius: 18px;
-            margin: 4px 0;
-            align-self: flex-start;
-            max-width: 100px;
-            box-shadow: 0 1px 2px var(--shadow-light);
-        }
-
-        .typing-dots {
-            display: flex;
-            gap: 3px;
-        }
-
-        .typing-dot {
-            width: 6px;
-            height: 6px;
-            background: var(--text-secondary);
             border-radius: 50%;
-            animation: typing 1.4s infinite;
+            transition: background-color 0.2s;
         }
 
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-4px); }
+        .kishiface-send-btn:hover {
+            background-color: rgba(0, 128, 105, 0.1);
         }
 
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 40px 12px;
-            color: var(--text-secondary);
+        .kishiface-send-btn:disabled {
+            color: var(--kf-text-secondary);
+            cursor: not-allowed;
         }
 
-        .empty-state i {
-            font-size: 36px;
-            margin-bottom: 12px;
-            opacity: 0.5;
-        }
-
-        .empty-state h3 {
-            font-size: 16px;
-            margin-bottom: 6px;
-            font-weight: 600;
+        .kishiface-send-btn:disabled:hover {
+            background-color: transparent;
         }
 
         /* File Upload Preview */
-        .upload-preview {
-            position: absolute;
-            bottom: 70px;
-            left: 12px;
-            right: 12px;
-            background: var(--background-white);
-            border-radius: 10px;
-            padding: 12px;
-            box-shadow: 0 4px 15px var(--shadow-medium);
-            display: none;
+        .kishiface-upload-preview {
+            position: fixed;
+            bottom: 80px;
+            left: 16px;
+            right: 16px;
+            background: var(--kf-bg);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             z-index: 1000;
+            display: none;
         }
 
-        .upload-preview.show {
+        .kishiface-upload-preview.show {
             display: block;
             animation: slideUp 0.3s ease;
         }
@@ -542,813 +606,1080 @@
             }
         }
 
-        /* Custom scrollbar */
-        #comments::-webkit-scrollbar {
-            width: 4px;
+        .kishiface-preview-content {
+            margin-bottom: 16px;
         }
 
-        #comments::-webkit-scrollbar-track {
-            background: transparent;
+        .kishiface-preview-image {
+            max-width: 150px;
+            max-height: 150px;
+            border-radius: 8px;
+            display: block;
+            margin: 0 auto;
         }
 
-        #comments::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 2px;
-        }
-
-        #comments::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-        }
-
-        /* Unread badge in header */
-        .unread-badge-header {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: red;
-            color: white;
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
+        .kishiface-preview-info {
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: bold;
+            gap: 12px;
+            padding: 8px;
+            background: var(--kf-input-bg);
+            border-radius: 8px;
         }
 
-        /* Dark mode support */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --primary-color: #0084ff;
-                --secondary-color: #242526;
-                --border-color: #3e4042;
-                --text-primary: #e4e6eb;
-                --text-secondary: #b0b3b8;
-                --background-white: #242526;
-                --background-grey: #18191a;
-                --hover-color: #3a3b3c;
-                --shadow-light: rgba(0, 0, 0, 0.3);
-                --shadow-medium: rgba(0, 0, 0, 0.4);
+        .kishiface-preview-icon {
+            font-size: 24px;
+            color: var(--kf-accent);
+            flex-shrink: 0;
+        }
+
+        .kishiface-preview-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .kishiface-preview-filename {
+            font-weight: 500;
+            font-size: 14px;
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .kishiface-preview-size {
+            font-size: 12px;
+            color: var(--kf-text-secondary);
+        }
+
+        .kishiface-preview-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .kishiface-preview-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            font-weight: 500;
+        }
+
+        .kishiface-preview-cancel {
+            background: transparent;
+            color: var(--kf-text-secondary);
+            border: 1px solid var(--kf-text-secondary);
+        }
+
+        .kishiface-preview-send {
+            background: var(--kf-accent);
+            color: white;
+        }
+
+        /* Empty State */
+        .kishiface-empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--kf-text-secondary);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+        }
+
+        .kishiface-empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: rgba(102, 119, 129, 0.3);
+            display: block;
+        }
+
+        .kishiface-empty-state h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .kishiface-empty-state p {
+            font-size: 14px;
+            color: var(--kf-text-secondary);
+        }
+
+        /* Modal */
+        .kishiface-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+
+        .kishiface-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .kishiface-modal-content {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            overflow: hidden;
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
             }
         }
 
-        /* Mobile footer */
-        .mobile-footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--background-white);
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-around;
-            padding: 8px 0;
-            z-index: 1000;
-        }
-
-        .footer-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-decoration: none;
-            color: var(--text-secondary);
-            font-size: 10px;
-            gap: 4px;
-        }
-
-        .footer-item.active {
-            color: var(--primary-color);
-        }
-
-        .footer-icon {
+        .kishiface-modal-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            text-align: center;
+            font-weight: 600;
             font-size: 18px;
             position: relative;
         }
 
-        .footer-badge {
+        .kishiface-modal-close {
             position: absolute;
-            top: -5px;
-            right: -5px;
-            background: red;
-            color: white;
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
+            right: 16px;
+            top: 16px;
+            background: none;
+            border: none;
+            color: var(--kf-text-secondary);
+            font-size: 24px;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 9px;
-            font-weight: bold;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .kishiface-modal-close:hover {
+            background-color: rgba(102, 119, 129, 0.1);
+        }
+
+        .kishiface-modal-body {
+            padding: 20px;
+        }
+
+        /* Scrollbar */
+        .kishiface-messages-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .kishiface-messages-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .kishiface-messages-scroll::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
+        }
+        .kishiface-messages-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .kishiface-container {
+                max-width: 100%;
+            }
+
+            .kishiface-msg-wrapper {
+                max-width: 85%;
+                margin: 4px 12px 12px 12px;
+            }
+
+            .kishiface-header {
+                padding: 10px 12px;
+            }
+
+            .kishiface-footer {
+                padding: 10px 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .kishiface-msg-wrapper {
+                max-width: 90%;
+                margin: 4px 8px 12px 8px;
+            }
+
+            .kishiface-header-actions {
+                gap: 15px;
+            }
+
+            .kishiface-input-container {
+                padding: 6px 12px;
+            }
+            
+            .kishiface-upload-preview {
+                left: 8px;
+                right: 8px;
+                bottom: 70px;
+            }
+        }
+
+        /* Loading Spinner */
+        .kishiface-spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 128, 105, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--kf-accent);
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast */
+        .kishiface-toast {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            background: var(--kf-accent);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            animation: modalSlideIn 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .kishiface-toast.error {
+            background: #ff3040;
+        }
+
+        .kishiface-toast.success {
+            background: var(--kf-accent);
         }
     </style>
 </head>
-
 <body>
-    {% include 'header.html' %}
-    <!-- HEADER -->
-    <div class="channel-header">
-        <div class="header-left">
-            <button class="back-button" onclick="window.history.back()">
-                <i class="fas fa-arrow-left"></i>
-            </button>
-            <div class="channel-info">
-                <div class="channel-avatar">
+
+<div class="kishiface-container">
+    <!-- Header -->
+    <header class="kishiface-header">
+        <button class="kishiface-back-btn" onclick="window.history.back()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        
+        <div class="kishiface-channel-info" onclick="openChannelDetailsModal()">
+            {% if channel.image %}
+                <img src="{{ channel.image.url }}" alt="{{ channel.name }}" class="kishiface-avatar">
+            {% else %}
+                <div class="kishiface-avatar-placeholder">
                     {{ channel.name|slice:":1"|upper }}
                 </div>
-                <div class="channel-details">
-                    <h1>{{ channel.name }}</h1>
-                    <div class="members">{{ channel.subscriber.count }} subscribers</div>
-                </div>
+            {% endif %}
+            
+            <div class="kishiface-channel-details">
+                <div class="kishiface-channel-name">{{ channel.name }}</div>
+                <div class="kishiface-channel-subscribers">{{ channel.subscriber.count }} subscribers</div>
             </div>
         </div>
-        <div class="header-actions">
-            <button class="header-action-btn" title="Search">
+        
+        <div class="kishiface-header-actions">
+            <button class="kishiface-header-action" title="Search">
                 <i class="fas fa-search"></i>
             </button>
-            <button class="header-action-btn" title="Channel Info">
-                <i class="fas fa-info-circle"></i>
+            <button class="kishiface-header-action" title="Menu" onclick="openChannelDetailsModal()">
+                <i class="fas fa-ellipsis-v"></i>
             </button>
         </div>
-    </div>
+    </header>
 
-    <!-- MESSAGES -->
-    <div id="comments">
+    <!-- Messages Container -->
+    <main class="kishiface-messages-scroll" id="messagesList">
         {% if not grouped_messages %}
-            <div class="empty-state">
-                <i class="fas fa-comments"></i>
+            <div class="kishiface-empty-state">
+                <i class="far fa-comments"></i>
                 <h3>No messages yet</h3>
-                <p>Start the conversation!</p>
+                <p>Be the first to send a message!</p>
             </div>
         {% else %}
             {% for label, msgs in grouped_messages.items %}
-                <div class="date-separator">
-                    <span>{{ label }}</span>
+                <div class="kishiface-date-separator">
+                    <span class="kishiface-date-label">{{ label }}</span>
                 </div>
+                
                 {% for message in msgs %}
-                    <div class="message-container">
-                        <div class="message-bubble">
-                            <div class="message-author">{{ message.author.username }}</div>
-                            
-                            {% if message.message %}
-                                <div class="message-text">{{ message.message }}</div>
-                            {% endif %}
-
-                            <!-- Media Attachments -->
-                            {% if message.file_type == 'image' %}
-                                <div class="media-attachment">
-                                    <img src="{{ message.file.url }}" alt="Shared image" onclick="openMediaModal('{{ message.file.url }}', 'image')">
-                                </div>
-                            {% elif message.file_type == 'video' %}
-                                <div class="tg-video-player">
-                                    <video id="video-{{ message.channelmessage_id }}" src="{{ message.file.url }}" preload="metadata"></video>
-                                    <div class="video-controls">
-                                        <button class="video-play-btn" data-target="video-{{ message.channelmessage_id }}">
-                                            <i class="fas fa-play"></i>
-                                        </button>
-                                        <div class="video-progress">
-                                            <div class="video-progress-filled" id="progress-{{ message.channelmessage_id }}"></div>
-                                        </div>
-                                        <span class="video-time" id="time-{{ message.channelmessage_id }}">0:00</span>
-                                    </div>
-                                </div>
-                            {% elif message.file_type == 'audio' %}
-                                <div class="tg-audio-player">
-                                    <button class="audio-play-btn" data-target="audio-{{ message.channelmessage_id }}">
-                                        <i class="fas fa-play"></i>
-                                    </button>
-                                    <div class="audio-info">
-                                        <div class="audio-progress-container">
-                                            <div class="audio-progress" id="aprogress-{{ message.channelmessage_id }}"></div>
-                                        </div>
-                                        <span class="audio-time" id="atime-{{ message.channelmessage_id }}">0:00 / 0:00</span>
-                                    </div>
-                                    <button class="audio-download-btn" onclick="downloadFile('{{ message.file.url }}')">
-                                        <i class="fas fa-download"></i>
-                                    </button>
-                                </div>
-                                <audio id="audio-{{ message.channelmessage_id }}" src="{{ message.file.url }}"></audio>
-                            {% endif %}
-
-                            <!-- Like Form -->
-                            <div class="message-actions-inline">
-                                <form action="{% url 'channelmessage_like' message.channelmessage_id %}" method="post" style="display: inline;">
-                                    {% csrf_token %}
-                                    <button type="submit" style="background: none; border: none; color: #3390ec; cursor: pointer; font-size: 11px; padding: 0;">
-                                        {% if request.user in message.like.all %}Unlike{% else %}Like{% endif %}
-                                    </button> 
-                                    ({{ message.like.count }})
-                                </form>
+                    <div class="kishiface-msg-wrapper" data-message-id="{{ message.channelmessage_id }}">
+                        <div class="kishiface-message-content">
+                            <!-- Message Actions -->
+                            <div class="kishiface-message-actions">
+                                <button class="kishiface-action-btn" 
+                                        onclick="toggleLike('{{ message.channelmessage_id }}')" 
+                                        title="Like">
+                                    <i class="{% if request.user in message.like.all %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
+                                </button>
                                 {% if message.file %}
-                                <a href="{{ message.file.url }}" target="_blank" download style="margin-left: 8px; font-size: 11px; color: #3390ec;">Download</a>
+                                <a href="{{ message.file.url }}" download class="kishiface-action-btn" title="Download">
+                                    <i class="fas fa-download"></i>
+                                </a>
                                 {% endif %}
                             </div>
-
-                            <div class="message-meta">
-                                <span class="message-time">{{ message.chat_time }}</span>
+                            
+                            <!-- Combined Media + Text -->
+                            {% if message.message and message.file %}
+                                {% if message.file_type == 'image' %}
+                                    <div class="kishiface-media-content">
+                                        <img src="{{ message.file.url }}" alt="Shared image" onclick="openMediaModal('{{ message.file.url }}', 'image')">
+                                        <div class="kishiface-text-overlay">
+                                            <div class="kishiface-text-content">{{ message.message }}</div>
+                                        </div>
+                                    </div>
+                                {% elif message.file_type == 'video' %}
+                                    <div class="kishiface-media-content">
+                                        <video id="video-{{ message.channelmessage_id }}" src="{{ message.file.url }}" preload="metadata"></video>
+                                        <div class="kishiface-video-overlay" onclick="toggleVideoPlay('{{ message.channelmessage_id }}')">
+                                            <button class="kishiface-video-play-btn">
+                                                <i class="fas fa-play"></i>
+                                            </button>
+                                        </div>
+                                        <div class="kishiface-text-overlay">
+                                            <div class="kishiface-text-content">{{ message.message }}</div>
+                                        </div>
+                                    </div>
+                                {% elif message.file_type == 'audio' %}
+                                    <div class="kishiface-audio-player" id="audio-{{ message.channelmessage_id }}">
+                                        <button class="kishiface-audio-play-btn" onclick="toggleAudioPlay('{{ message.channelmessage_id }}')">
+                                            <i class="fas fa-play" id="audio-play-icon-{{ message.channelmessage_id }}"></i>
+                                        </button>
+                                        <div class="kishiface-audio-info">
+                                            <div class="kishiface-audio-filename">
+                                                {{ message.file.name|default:"Audio message" }}
+                                            </div>
+                                            <div class="kishiface-audio-controls">
+                                                <div class="kishiface-audio-progress-bar" onclick="audioSeek(event, '{{ message.channelmessage_id }}')">
+                                                    <div class="kishiface-audio-progress" id="audio-progress-{{ message.channelmessage_id }}"></div>
+                                                </div>
+                                                <span class="kishiface-audio-time" id="audio-time-{{ message.channelmessage_id }}">0:00</span>
+                                            </div>
+                                        </div>
+                                        <button class="kishiface-audio-download" onclick="downloadFile('{{ message.file.url }}', '{{ message.file.name|default:"audio_message" }}')">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                        <audio id="audio-player-{{ message.channelmessage_id }}" src="{{ message.file.url }}" preload="metadata"></audio>
+                                    </div>
+                                    <div class="kishiface-text-content">{{ message.message }}</div>
+                                {% endif %}
+                                
+                                <div class="kishiface-meta-overlay">
+                                    <span class="kishiface-time-overlay">{{ message.chat_time }}</span>
+                                </div>
+                            
+                            <!-- Text Only -->
+                            {% elif message.message and not message.file %}
+                                <div class="kishiface-text-content">{{ message.message }}</div>
+                                <div class="kishiface-meta">
+                                    <span class="kishiface-time">{{ message.chat_time }}</span>
+                                </div>
+                            
+                            <!-- Media Only -->
+                            {% elif message.file and not message.message %}
+                                {% if message.file_type == 'image' %}
+                                    <div class="kishiface-media-content">
+                                        <img src="{{ message.file.url }}" alt="Shared image" onclick="openMediaModal('{{ message.file.url }}', 'image')">
+                                    </div>
+                                    <div class="kishiface-meta">
+                                        <span class="kishiface-time">{{ message.chat_time }}</span>
+                                    </div>
+                                {% elif message.file_type == 'video' %}
+                                    <div class="kishiface-media-content">
+                                        <video id="video-{{ message.channelmessage_id }}" src="{{ message.file.url }}" preload="metadata"></video>
+                                        <div class="kishiface-video-overlay" onclick="toggleVideoPlay('{{ message.channelmessage_id }}')">
+                                            <button class="kishiface-video-play-btn">
+                                                <i class="fas fa-play"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="kishiface-meta">
+                                        <span class="kishiface-time">{{ message.chat_time }}</span>
+                                    </div>
+                                {% elif message.file_type == 'audio' %}
+                                    <div class="kishiface-audio-player" id="audio-{{ message.channelmessage_id }}">
+                                        <button class="kishiface-audio-play-btn" onclick="toggleAudioPlay('{{ message.channelmessage_id }}')">
+                                            <i class="fas fa-play" id="audio-play-icon-{{ message.channelmessage_id }}"></i>
+                                        </button>
+                                        <div class="kishiface-audio-info">
+                                            <div class="kishiface-audio-filename">
+                                                {{ message.file.name|default:"Audio message" }}
+                                            </div>
+                                            <div class="kishiface-audio-controls">
+                                                <div class="kishiface-audio-progress-bar" onclick="audioSeek(event, '{{ message.channelmessage_id }}')">
+                                                    <div class="kishiface-audio-progress" id="audio-progress-{{ message.channelmessage_id }}"></div>
+                                                </div>
+                                                <span class="kishiface-audio-time" id="audio-time-{{ message.channelmessage_id }}">0:00</span>
+                                            </div>
+                                        </div>
+                                        <button class="kishiface-audio-download" onclick="downloadFile('{{ message.file.url }}', '{{ message.file.name|default:"audio_message" }}')">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                        <audio id="audio-player-{{ message.channelmessage_id }}" src="{{ message.file.url }}" preload="metadata"></audio>
+                                    </div>
+                                    <div class="kishiface-meta">
+                                        <span class="kishiface-time">{{ message.chat_time }}</span>
+                                    </div>
+                                {% endif %}
+                            {% endif %}
+                            
+                            <!-- Like Section -->
+                            <div class="kishiface-like-section">
+                                <button class="kishiface-like-btn {% if request.user in message.like.all %}liked{% endif %}" 
+                                        onclick="toggleLike('{{ message.channelmessage_id }}')"
+                                        data-message-id="{{ message.channelmessage_id }}">
+                                    <i class="{% if request.user in message.like.all %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
+                                    <span class="like-text">
+                                        {% if request.user in message.like.all %}Unlike{% else %}Like{% endif %}
+                                    </span>
+                                </button>
+                                <span class="kishiface-like-count" data-like-count="{{ message.channelmessage_id }}">
+                                    {{ message.like.count }}
+                                </span>
                             </div>
-                        </div>
-
-                        <!-- Message Actions -->
-                        <div class="message-actions">
-                            <button class="message-action-btn" title="Like" onclick="toggleLike('{{ message.channelmessage_id }}')">
-                                <i class="fas fa-thumbs-up"></i>
-                            </button>
-                            <button class="message-action-btn" title="Reply">
-                                <i class="fas fa-reply"></i>
-                            </button>
                         </div>
                     </div>
                 {% endfor %}
             {% endfor %}
         {% endif %}
+    </main>
+
+    <!-- File Upload Preview -->
+    <div class="kishiface-upload-preview" id="uploadPreview">
+        <div class="kishiface-preview-content" id="previewContent"></div>
+        <div class="kishiface-preview-actions">
+            <button class="kishiface-preview-btn kishiface-preview-cancel" onclick="cancelUpload()">Cancel</button>
+            <button class="kishiface-preview-btn kishiface-preview-send" onclick="sendUpload()">Send</button>
+        </div>
     </div>
 
-    <!-- UPLOAD PREVIEW -->
-    <div class="upload-preview" id="uploadPreview">
-        <div class="preview-content" id="previewContent"></div>
-        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
-            <button onclick="cancelUpload()" style="padding: 6px 12px; border: 1px solid var(--border-color); background: none; border-radius: 6px; cursor: pointer; font-size: 14px;">Cancel</button>
-            <button onclick="sendUpload()" style="padding: 6px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">Send</button>
-        </div>
-    </div>
-
-    <!-- MESSAGE INPUT -->
-    <form id="formData" class="message-input-container">
-        <div class="input-actions">
-            <button type="button" class="input-action-btn" title="Attach file" onclick="document.getElementById('file_upload').click()">
-                <i class="fas fa-paperclip"></i>
-            </button>
+    <!-- Footer Input -->
+    <footer class="kishiface-footer">
+        <button type="button" class="kishiface-attachment-btn" title="Attach file" onclick="document.getElementById('fileInput').click()">
+            <i class="fas fa-paperclip"></i>
+        </button>
+        
+        <div class="kishiface-input-container">
+            <textarea id="messageInput" class="kishiface-input" placeholder="Broadcast a message..." rows="1"></textarea>
         </div>
         
-        <div class="message-input-wrapper">
-            <textarea id="message" name="message" placeholder="Type a message..." rows="1"></textarea>
-        </div>
-        
-        <button class="send-button" type="submit" title="Send message">
+        <button class="kishiface-send-btn" id="sendButton" type="button" title="Send message" onclick="sendMessage()">
             <i class="fas fa-paper-plane"></i>
         </button>
-        
-        <input type="file" id="file_upload" name="file_upload" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" hidden>
-        <input type="hidden" name="channel_id" value="{{ channel_id }}">
-    </form>
+    </footer>
 
-   
-    <!-- Media Modal -->
-    <div id="mediaModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 2000; align-items: center; justify-content: center;">
-        <img id="modalImage" src="" style="max-width: 95%; max-height: 95%; border-radius: 8px;">
-        <button onclick="closeMediaModal()" style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.2); border: none; width: 36px; height: 36px; border-radius: 50%; color: white; font-size: 18px; cursor: pointer;">
-            <i class="fas fa-times"></i>
-        </button>
+    <!-- File Input (Hidden) -->
+    <input type="file" id="fileInput" name="file_upload" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" style="display: none;">
+
+    <!-- Channel Details Modal -->
+    <div class="kishiface-modal" id="channelDetailsModal">
+        <div class="kishiface-modal-content">
+            <div class="kishiface-modal-header">
+                Channel Details
+                <button class="kishiface-modal-close" onclick="closeChannelDetailsModal()">&times;</button>
+            </div>
+            <div class="kishiface-modal-body">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    {% if channel.image %}
+                        <img src="{{ channel.image.url }}" alt="{{ channel.name }}" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 16px;">
+                    {% else %}
+                        <div style="width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 36px; margin: 0 auto 16px;">
+                            {{ channel.name|slice:":1"|upper }}
+                        </div>
+                    {% endif %}
+                    
+                    <h2 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">{{ channel.name }}</h2>
+                    <div style="color: var(--kf-text-secondary); margin-bottom: 20px;">
+                        <i class="fas fa-users"></i> {{ channel.subscriber.count }} subscribers
+                    </div>
+                    
+                    <div style="background: var(--kf-input-bg); padding: 16px; border-radius: 12px; text-align: left;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--kf-text-secondary);">ABOUT</h3>
+                        <p style="font-size: 14px; line-height: 1.6; color: var(--kf-text-main);">{{ channel.about|default:"No description provided." }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script>
-        // CSRF Token
-        const getCSRFToken = () => {
-            const name = 'csrftoken';
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
+    <!-- Media Modal -->
+    <div class="kishiface-modal" id="mediaModal">
+        <div class="kishiface-modal-content" style="background: transparent; box-shadow: none;">
+            <button class="kishiface-modal-close" onclick="closeMediaModal()" style="color: white; background: rgba(0,0,0,0.5);">&times;</button>
+            <div class="kishiface-modal-body" style="display: flex; align-items: center; justify-content: center; padding: 20px;">
+                <img id="modalImage" src="" style="max-width: 100%; max-height: 80vh; border-radius: 12px;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // CSRF Token
+    const getCSRFToken = () => {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
                 }
             }
-            return cookieValue;
-        };
+        }
+        return cookieValue;
+    };
 
-        const csrftoken = getCSRFToken();
-        const form = document.getElementById('formData');
-        const comments = document.getElementById('comments');
-        const channel_id = '{{ channel_id }}';
-        let fileToUpload = null;
-        let messagesMarkedAsRead = false;
-        let observer = null;
+    const csrftoken = getCSRFToken();
+    const channelId = '{{ channel.channel_id }}';
+    let selectedFile = null;
 
-        // Auto-resize textarea
-        const textarea = document.getElementById('message');
-        textarea.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
-        });
+    // Modal functions
+    function openChannelDetailsModal() {
+        const modal = document.getElementById('channelDetailsModal');
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
 
-        // Initialize on load
-        window.onload = () => {
-            comments.scrollTop = comments.scrollHeight;
-            initMediaPlayers();
-            initEventListeners();
-            markMessagesAsRead();
-            setupIntersectionObserver();
-        };
+    function closeChannelDetailsModal() {
+        const modal = document.getElementById('channelDetailsModal');
+        modal.classList.remove('show');
+        document.body.style.overflow = '';
+    }
 
-        // Setup intersection observer
-        function setupIntersectionObserver() {
-            observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        markMessagesAsRead();
-                    }
-                });
-            }, { threshold: 0.3 });
+    function openMediaModal(url, type) {
+        if (type === 'image') {
+            const modal = document.getElementById('mediaModal');
+            document.getElementById('modalImage').src = url;
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeMediaModal() {
+        const modal = document.getElementById('mediaModal');
+        modal.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+
+    // Close modals when clicking outside
+    document.getElementById('channelDetailsModal').addEventListener('click', function(event) {
+        if (event.target === this) {
+            closeChannelDetailsModal();
+        }
+    });
+
+    document.getElementById('mediaModal').addEventListener('click', function(event) {
+        if (event.target === this) {
+            closeMediaModal();
+        }
+    });
+
+    // Close modals with Escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            if (document.getElementById('channelDetailsModal').classList.contains('show')) {
+                closeChannelDetailsModal();
+            }
+            if (document.getElementById('mediaModal').classList.contains('show')) {
+                closeMediaModal();
+            }
+        }
+    });
+
+    // File input handling
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        if (this.files.length > 0) {
+            selectedFile = this.files[0];
+            showUploadPreview(selectedFile);
             
-            // Observe all existing messages
-            document.querySelectorAll('.message-container').forEach(msg => {
-                observer.observe(msg);
-            });
+            // Enable send button if file is selected
+            const sendButton = document.getElementById('sendButton');
+            const messageInput = document.getElementById('messageInput');
+            sendButton.disabled = !messageInput.value.trim() && !selectedFile;
+        }
+    });
+
+    // Show upload preview
+    function showUploadPreview(file) {
+        const preview = document.getElementById('uploadPreview');
+        const content = document.getElementById('previewContent');
+        content.innerHTML = '';
+
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                content.innerHTML = `<img src="${e.target.result}" class="kishiface-preview-image">`;
+            };
+            reader.readAsDataURL(file);
+        } else {
+            // For non-image files, show file info
+            const fileIcon = getFileIcon(file.type);
+            const fileSize = formatFileSize(file.size);
+            
+            content.innerHTML = `
+                <div class="kishiface-preview-info">
+                    <div class="kishiface-preview-icon">
+                        <i class="${fileIcon}"></i>
+                    </div>
+                    <div class="kishiface-preview-details">
+                        <div class="kishiface-preview-filename">${file.name}</div>
+                        <div class="kishiface-preview-size">${fileSize}</div>
+                    </div>
+                </div>
+            `;
         }
 
-        // Scroll to bottom
-        function scrollToBottom() {
-            comments.scrollTo({
-                top: comments.scrollHeight,
-                behavior: 'smooth'
-            });
-        }
+        preview.classList.add('show');
+    }
 
-        // Mark messages as read
-        function markMessagesAsRead() {
-            if (!messagesMarkedAsRead) {
-                // Send WebSocket message to mark as read
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify({
-                        type: 'mark_as_read',
-                        channel_id: channel_id
-                    }));
+    // Get appropriate file icon
+    function getFileIcon(fileType) {
+        if (fileType.startsWith('video/')) return 'fas fa-video';
+        if (fileType.startsWith('audio/')) return 'fas fa-music';
+        if (fileType.includes('pdf')) return 'fas fa-file-pdf';
+        if (fileType.includes('word') || fileType.includes('document')) return 'fas fa-file-word';
+        if (fileType.includes('text')) return 'fas fa-file-alt';
+        return 'fas fa-file';
+    }
+
+    // Format file size
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Cancel upload
+    function cancelUpload() {
+        selectedFile = null;
+        document.getElementById('fileInput').value = '';
+        document.getElementById('uploadPreview').classList.remove('show');
+        
+        // Update send button state
+        const sendButton = document.getElementById('sendButton');
+        const messageInput = document.getElementById('messageInput');
+        sendButton.disabled = !messageInput.value.trim();
+    }
+
+    // Send upload (when using preview)
+    function sendUpload() {
+        sendMessage();
+    }
+
+    // Video Player Functions
+    function initializeVideoPlayers() {
+        document.querySelectorAll('video').forEach(video => {
+            const container = video.parentElement;
+            if (container.classList.contains('kishiface-media-content')) {
+                const videoId = video.id.replace('video-', '');
+                
+                video.addEventListener('loadedmetadata', () => {
+                    // Video is ready
+                });
+                
+                video.addEventListener('play', () => {
+                    // Pause other videos when one starts playing
+                    document.querySelectorAll('video').forEach(otherVideo => {
+                        if (otherVideo !== video && !otherVideo.paused) {
+                            otherVideo.pause();
+                        }
+                    });
+                });
+            }
+        });
+    }
+    
+    function toggleVideoPlay(videoId) {
+        const video = document.getElementById(`video-${videoId}`);
+        if (!video) return;
+        
+        if (video.paused) {
+            video.play();
+        } else {
+            video.pause();
+        }
+    }
+
+    // Audio Player Functions
+    const audioPlayers = {};
+    
+    function initializeAudioPlayers() {
+        document.querySelectorAll('audio').forEach(audio => {
+            const audioId = audio.id.replace('audio-player-', '');
+            const progress = document.getElementById(`audio-progress-${audioId}`);
+            const timeDisplay = document.getElementById(`audio-time-${audioId}`);
+            const playIcon = document.getElementById(`audio-play-icon-${audioId}`);
+            
+            if (!audio || !progress) return;
+            
+            audioPlayers[audioId] = {
+                audio: audio,
+                progress: progress,
+                timeDisplay: timeDisplay,
+                playIcon: playIcon
+            };
+            
+            audio.addEventListener('loadedmetadata', () => {
+                updateAudioTime(audioId);
+            });
+            
+            audio.addEventListener('timeupdate', () => {
+                updateAudioProgress(audioId);
+                updateAudioTime(audioId);
+            });
+            
+            audio.addEventListener('play', () => {
+                playIcon.className = 'fas fa-pause';
+            });
+            
+            audio.addEventListener('pause', () => {
+                playIcon.className = 'fas fa-play';
+            });
+            
+            audio.addEventListener('ended', () => {
+                playIcon.className = 'fas fa-play';
+            });
+        });
+    }
+    
+    function toggleAudioPlay(audioId) {
+        const player = audioPlayers[audioId];
+        if (!player) return;
+        
+        if (player.audio.paused) {
+            // Pause all other audio players
+            Object.keys(audioPlayers).forEach(id => {
+                if (id !== audioId && !audioPlayers[id].audio.paused) {
+                    audioPlayers[id].audio.pause();
+                    audioPlayers[id].playIcon.className = 'fas fa-play';
+                }
+            });
+            
+            player.audio.play();
+        } else {
+            player.audio.pause();
+        }
+    }
+    
+    function updateAudioProgress(audioId) {
+        const player = audioPlayers[audioId];
+        if (!player || !player.progress) return;
+        
+        const percentage = (player.audio.currentTime / player.audio.duration) * 100;
+        player.progress.style.width = percentage + '%';
+    }
+    
+    function updateAudioTime(audioId) {
+        const player = audioPlayers[audioId];
+        if (!player || !player.timeDisplay) return;
+        
+        const formatTime = (seconds) => {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        };
+        
+        player.timeDisplay.textContent = formatTime(player.audio.currentTime);
+    }
+    
+    function audioSeek(event, audioId) {
+        const player = audioPlayers[audioId];
+        if (!player) return;
+        
+        const progressBar = event.currentTarget;
+        const rect = progressBar.getBoundingClientRect();
+        const percentage = (event.clientX - rect.left) / rect.width;
+        player.audio.currentTime = percentage * player.audio.duration;
+    }
+    
+    function downloadFile(url, filename) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    // LIKE FUNCTIONALITY - UPDATED
+    async function toggleLike(messageId) {
+        try {
+            // Find the like button and count elements
+            const likeBtn = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${messageId}"] .kishiface-like-btn`);
+            const likeIcon = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${messageId}"] .kishiface-like-btn i`);
+            const likeText = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${messageId}"] .like-text`);
+            const likeCount = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${messageId}"] .kishiface-like-count`);
+            const actionBtnIcon = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${messageId}"] .kishiface-message-actions .kishiface-action-btn i`);
+            
+            if (!likeBtn || !likeIcon || !likeText || !likeCount) {
+                console.error('Like elements not found for message:', messageId);
+                return;
+            }
+            
+            // Show loading state
+            likeBtn.classList.add('loading');
+            likeBtn.disabled = true;
+            
+            const response = await fetch(`/channelmessage_like/${messageId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Update UI based on response
+                if (data.liked) {
+                    // User liked the message
+                    likeBtn.classList.add('liked');
+                    likeIcon.className = 'fas fa-thumbs-up';
+                    likeText.textContent = 'Unlike';
+                    if (actionBtnIcon) {
+                        actionBtnIcon.className = 'fas fa-thumbs-up';
+                    }
+                } else {
+                    // User unliked the message
+                    likeBtn.classList.remove('liked');
+                    likeIcon.className = 'far fa-thumbs-up';
+                    likeText.textContent = 'Like';
+                    if (actionBtnIcon) {
+                        actionBtnIcon.className = 'far fa-thumbs-up';
+                    }
                 }
                 
-                // Update local badge
-                updateUnreadCount(channel_id, 0);
-                messagesMarkedAsRead = true;
-            }
-        }
-
-        // Update unread count badge
-        function updateUnreadCount(channelId, count) {
-            // Update mobile footer badge
-            const channelBadge = document.querySelector('.footer-item.active .footer-badge');
-            if (channelBadge) {
-                if (count > 0) {
-                    channelBadge.textContent = count;
-                    channelBadge.style.display = 'flex';
-                } else {
-                    channelBadge.style.display = 'none';
-                }
-            }
-            
-            // Store in localStorage for other pages
-            localStorage.setItem(`unread_${channelId}`, count);
-            
-            // Update total unread
-            updateTotalUnread();
-        }
-
-        // Update total unread count
-        function updateTotalUnread() {
-            let total = 0;
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith('unread_')) {
-                    const count = parseInt(localStorage.getItem(key)) || 0;
-                    total += count;
-                }
-            }
-            
-            // Update total badge
-            const totalBadge = document.querySelector('.footer-item:nth-child(2) .footer-badge');
-            if (totalBadge) {
-                if (total > 0) {
-                    totalBadge.textContent = total;
-                    totalBadge.style.display = 'flex';
-                } else {
-                    totalBadge.style.display = 'none';
-                }
-            }
-        }
-
-        // Submit message
-        form.addEventListener('submit', async e => {
-            e.preventDefault();
-            const formData = new FormData(form);
-            const message = textarea.value.trim();
-            
-            if (!message && !fileToUpload) return;
-
-            if (fileToUpload) {
-                formData.append('file_upload', fileToUpload);
-            }
-
-            try {
-                const response = await fetch(`/channel_message/${channel_id}/`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrftoken
-                    },
-                    body: formData
-                });
-
-                if (response.ok) {
-                    form.reset();
-                    textarea.style.height = 'auto';
-                    fileToUpload = null;
-                    document.getElementById('uploadPreview').classList.remove('show');
-                    
-                    // Mark as read since user just sent a message
-                    markMessagesAsRead();
-                }
-            } catch (error) {
-                console.error('Error sending message:', error);
-            }
-        });
-
-        // File upload handling
-        document.getElementById('file_upload').addEventListener('change', function(e) {
-            if (this.files.length > 0) {
-                fileToUpload = this.files[0];
-                showUploadPreview(fileToUpload);
-            }
-        });
-
-        function showUploadPreview(file) {
-            const preview = document.getElementById('uploadPreview');
-            const content = document.getElementById('previewContent');
-            content.innerHTML = '';
-
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    content.innerHTML = `<img src="${e.target.result}" style="max-width: 150px; border-radius: 8px; width: 100%;">`;
-                };
-                reader.readAsDataURL(file);
-            } else if (file.type.startsWith('video/')) {
-                content.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-video" style="font-size: 20px;"></i>
-                        <div>
-                            <div style="font-weight: 500; font-size: 14px;">${file.name}</div>
-                            <div style="font-size: 11px; color: var(--text-secondary);">${(file.size / 1024 / 1024).toFixed(2)} MB</div>
-                        </div>
-                    </div>
-                `;
-            } else if (file.type.startsWith('audio/')) {
-                content.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-music" style="font-size: 20px;"></i>
-                        <div>
-                            <div style="font-weight: 500; font-size: 14px;">${file.name}</div>
-                            <div style="font-size: 11px; color: var(--text-secondary);">${(file.size / 1024).toFixed(2)} KB</div>
-                        </div>
-                    </div>
-                `;
+                // Update like count
+                likeCount.textContent = data.like_count;
+                
+                console.log('Like updated:', data);
+                
             } else {
-                content.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-file" style="font-size: 20px;"></i>
-                        <div>
-                            <div style="font-weight: 500; font-size: 14px;">${file.name}</div>
-                            <div style="font-size: 11px; color: var(--text-secondary);">${(file.size / 1024).toFixed(2)} KB</div>
-                        </div>
-                    </div>
-                `;
+                throw new Error('Failed to update like');
+            }
+            
+        } catch (error) {
+            console.error('Error liking message:', error);
+            showToast('Error updating like', 'error');
+        } finally {
+            // Remove loading state
+            const likeBtn = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${messageId}"] .kishiface-like-btn`);
+            if (likeBtn) {
+                likeBtn.classList.remove('loading');
+                likeBtn.disabled = false;
+            }
+        }
+    }
+
+    // Message handling
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const fileInput = document.getElementById('fileInput');
+
+    // Auto-resize textarea
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        
+        // Enable/disable send button
+        sendButton.disabled = !this.value.trim() && !selectedFile;
+    });
+
+    // MAIN MESSAGE SEND FUNCTION
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        
+        // Check if there's a message or file
+        if (!message && !selectedFile) {
+            showToast('Please enter a message or select a file', 'error');
+            return;
+        }
+
+        try {
+            // Disable send button and show loading
+            const originalContent = sendButton.innerHTML;
+            sendButton.innerHTML = '<span class="kishiface-spinner"></span>';
+            sendButton.disabled = true;
+
+            // Create FormData
+            const formData = new FormData();
+            
+            // Add CSRF token if not already in form
+            formData.append('csrfmiddlewaretoken', csrftoken);
+            
+            // Add message to form data
+            if (message) {
+                formData.append('message', message);
+            }
+            
+            // Add channel ID
+            formData.append('channel_id', channelId);
+            
+            // Add file if selected
+            if (selectedFile) {
+                formData.append('file_upload', selectedFile);
             }
 
-            preview.classList.add('show');
-        }
+            // Send request
+            const response = await fetch(`/channel_message/${channelId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                },
+                body: formData
+            });
 
-        function cancelUpload() {
-            fileToUpload = null;
-            document.getElementById('file_upload').value = '';
-            document.getElementById('uploadPreview').classList.remove('show');
-        }
-
-        function sendUpload() {
-            document.getElementById('formData').dispatchEvent(new Event('submit'));
-        }
-
-        // WebSocket Connection
-        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const socket = new WebSocket(`${protocol}${window.location.host}/ws/${channel_id}/`);
-
-        socket.onopen = function() {
-            console.log('WebSocket connected');
-            // Request initial unread counts
-            socket.send(JSON.stringify({
-                type: 'get_unread_counts'
-            }));
-        };
-
-        socket.onmessage = function(e) {
-            const data = JSON.parse(e.data);
-            
-            if (data.type === 'new_message') {
-                appendNewMessage(data);
+            if (response.ok) {
+                const data = await response.json();
                 
-                // If user is viewing this channel, mark as read
-                if (window.location.pathname.includes(channel_id)) {
-                    markMessagesAsRead();
-                } else {
-                    // Otherwise, increment unread count
-                    const currentCount = parseInt(localStorage.getItem(`unread_${channel_id}`) || 0);
-                    updateUnreadCount(channel_id, currentCount + 1);
-                }
-            } else if (data.type === 'unread_update') {
-                // Update unread count from server
-                updateUnreadCount(data.channel_id, data.unread_count);
-            } else if (data.type === 'marked_as_read') {
-                console.log('Messages marked as read');
-                updateUnreadCount(data.channel_id, 0);
-            }
-        };
-
-        socket.onerror = function(error) {
-            console.error('WebSocket error:', error);
-        };
-
-        socket.onclose = function() {
-            console.log('WebSocket disconnected');
-        };
-
-        function appendNewMessage(data) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'message-container';
-            
-            let html = `
-                <div class="message-bubble">
-                    <div class="message-author">${data.author}</div>
-                    ${data.message ? `<div class="message-text">${data.message}</div>` : ''}
-            `;
-
-            // Handle media attachments
-            if (data.file_type === 'image') {
-                html += `
-                    <div class="media-attachment">
-                        <img src="${data.file_url}" alt="Shared image" onclick="openMediaModal('${data.file_url}', 'image')">
-                    </div>
-                `;
-            } else if (data.file_type === 'video') {
-                html += `
-                    <div class="tg-video-player">
-                        <video id="video-${data.message_id}" src="${data.file_url}" preload="metadata"></video>
-                        <div class="video-controls">
-                            <button class="video-play-btn" data-target="video-${data.message_id}">
-                                <i class="fas fa-play"></i>
-                            </button>
-                            <div class="video-progress">
-                                <div class="video-progress-filled" id="progress-${data.message_id}"></div>
-                            </div>
-                            <span class="video-time" id="time-${data.message_id}">0:00</span>
-                        </div>
-                    </div>
-                `;
-            } else if (data.file_type === 'audio') {
-                html += `
-                    <div class="tg-audio-player">
-                        <button class="audio-play-btn" data-target="audio-${data.message_id}">
-                            <i class="fas fa-play"></i>
-                        </button>
-                        <div class="audio-info">
-                            <div class="audio-progress-container">
-                                <div class="audio-progress" id="aprogress-${data.message_id}"></div>
-                            </div>
-                            <span class="audio-time" id="atime-${data.message_id}">0:00 / 0:00</span>
-                        </div>
-                        <button class="audio-download-btn" onclick="downloadFile('${data.file_url}')">
-                            <i class="fas fa-download"></i>
-                        </button>
-                    </div>
-                    <audio id="audio-${data.message_id}" src="${data.file_url}"></audio>
-                `;
-            }
-
-            // Add like form and download link
-            html += `
-                <div class="message-actions-inline">
-                    <form action="/channelmessage_like/${data.message_id}/" method="post" style="display: inline;">
-                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrftoken}">
-                        <button type="submit" style="background: none; border: none; color: #3390ec; cursor: pointer; font-size: 11px; padding: 0;">
-                            ${data.liked_by_user ? 'Unlike' : 'Like'}
-                        </button> (${data.like_count || 0})
-                    </form>
-            `;
-
-            if (data.file_url) {
-                html += `<a href="${data.file_url}" target="_blank" download style="margin-left: 8px; font-size: 11px; color: #3390ec;">Download</a>`;
-            }
-
-            html += `
-                    </div>
-                    <div class="message-meta">
-                        <span class="message-time">${data.time}</span>
-                    </div>
-                </div>
-                <div class="message-actions">
-                    <button class="message-action-btn" title="Like" onclick="toggleLike('${data.message_id}')">
-                        <i class="fas fa-thumbs-up"></i>
-                    </button>
-                    <button class="message-action-btn" title="Reply">
-                        <i class="fas fa-reply"></i>
-                    </button>
-                </div>
-            `;
-
-            messageDiv.innerHTML = html;
-            comments.appendChild(messageDiv);
-            scrollToBottom();
-            
-            // Observe the new message
-            if (observer) {
-                observer.observe(messageDiv);
-            }
-            
-            // Initialize media players for new message
-            setTimeout(() => initMediaPlayers(), 100);
-            
-            // Mark as read if visible
-            markMessagesAsRead();
-        }
-
-        // Media player initialization
-        function initMediaPlayers() {
-            // Video players
-            document.querySelectorAll('.video-play-btn').forEach(btn => {
-                const vid = document.getElementById(btn.dataset.target);
-                const progress = document.getElementById('progress-' + vid.id.split('-')[1]);
-                const timeLabel = document.getElementById('time-' + vid.id.split('-')[1]);
+                // Reset form
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                fileInput.value = '';
+                selectedFile = null;
+                sendButton.disabled = true;
                 
-                btn.onclick = () => {
-                    if (vid.paused) {
-                        vid.play();
-                        btn.innerHTML = '<i class="fas fa-pause"></i>';
-                    } else {
-                        vid.pause();
-                        btn.innerHTML = '<i class="fas fa-play"></i>';
+                // Hide upload preview
+                document.getElementById('uploadPreview').classList.remove('show');
+                
+                // Show success message
+                showToast('Message sent successfully', 'success');
+                
+                // Reload to show new message
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            } else {
+                let errorText = 'Error sending message';
+                try {
+                    const errorData = await response.json();
+                    errorText = errorData.error || errorData.detail || errorText;
+                } catch (e) {
+                    try {
+                        errorText = await response.text();
+                    } catch (e2) {
+                        errorText = 'Server error: ' + response.status;
                     }
-                };
-                
-                vid.ontimeupdate = () => {
-                    const percentage = (vid.currentTime / vid.duration) * 100;
-                    if (progress) progress.style.width = percentage + '%';
-                    
-                    const formatTime = (seconds) => {
-                        const mins = Math.floor(seconds / 60);
-                        const secs = Math.floor(seconds % 60);
-                        return `${mins}:${secs.toString().padStart(2, '0')}`;
-                    };
-                    
-                    if (timeLabel) {
-                        timeLabel.textContent = formatTime(vid.currentTime);
-                    }
-                };
-                
-                // Click on progress bar to seek
-                const progressContainer = btn.closest('.video-controls').querySelector('.video-progress');
-                if (progressContainer) {
-                    progressContainer.onclick = (e) => {
-                        const rect = progressContainer.getBoundingClientRect();
-                        const percentage = (e.clientX - rect.left) / rect.width;
-                        vid.currentTime = percentage * vid.duration;
-                    };
                 }
-            });
-
-            // Audio players
-            document.querySelectorAll('.audio-play-btn').forEach(btn => {
-                const aud = document.getElementById(btn.dataset.target);
-                const progress = document.getElementById('aprogress-' + aud.id.split('-')[1]);
-                const timeLabel = document.getElementById('atime-' + aud.id.split('-')[1]);
-                
-                btn.onclick = () => {
-                    if (aud.paused) {
-                        aud.play();
-                        btn.innerHTML = '<i class="fas fa-pause"></i>';
-                    } else {
-                        aud.pause();
-                        btn.innerHTML = '<i class="fas fa-play"></i>';
-                    }
-                };
-                
-                aud.ontimeupdate = () => {
-                    const percentage = (aud.currentTime / aud.duration) * 100;
-                    if (progress) progress.style.width = percentage + '%';
-                    
-                    const formatTime = (seconds) => {
-                        const mins = Math.floor(seconds / 60);
-                        const secs = Math.floor(seconds % 60);
-                        return `${mins}:${secs.toString().padStart(2, '0')}`;
-                    };
-                    
-                    if (timeLabel) {
-                        timeLabel.textContent = `${formatTime(aud.currentTime)} / ${formatTime(aud.duration)}`;
-                    }
-                };
-                
-                // Click on progress bar to seek
-                const progressContainer = btn.closest('.tg-audio-player').querySelector('.audio-progress-container');
-                if (progressContainer) {
-                    progressContainer.onclick = (e) => {
-                        const rect = progressContainer.getBoundingClientRect();
-                        const percentage = (e.clientX - rect.left) / rect.width;
-                        aud.currentTime = percentage * aud.duration;
-                    };
-                }
-            });
-        }
-
-        // Media modal
-        function openMediaModal(url, type) {
-            if (type === 'image') {
-                document.getElementById('modalImage').src = url;
-                document.getElementById('mediaModal').style.display = 'flex';
+                console.error('Server error:', errorText, response.status);
+                showToast(errorText, 'error');
             }
+        } catch (error) {
+            console.error('Network error:', error);
+            showToast('Network error. Please check your connection.', 'error');
+        } finally {
+            // Restore send button
+            sendButton.innerHTML = '<i class="fas fa-paper-plane"></i>';
+            sendButton.disabled = !messageInput.value.trim() && !selectedFile;
         }
+    }
 
-        function closeMediaModal() {
-            document.getElementById('mediaModal').style.display = 'none';
+    // Enter key to send (Shift+Enter for new line)
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
         }
+    });
 
-        // Download file
-        function downloadFile(url) {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = url.split('/').pop();
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
+    // Toast notification function
+    function showToast(message, type = 'success') {
+        // Remove existing toasts
+        document.querySelectorAll('.kishiface-toast').forEach(toast => {
+            toast.remove();
+        });
 
-        // Like functionality
-        async function toggleLike(messageId) {
-            try {
-                const response = await fetch(`/channelmessage_like/${messageId}/`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrftoken,
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('Like updated:', data);
+        const toast = document.createElement('div');
+        toast.className = `kishiface-toast ${type}`;
+        toast.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            <span>${message}</span>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    document.body.removeChild(toast);
                 }
-            } catch (error) {
-                console.error('Error liking message:', error);
+            }, 300);
+        }, 3000);
+    }
+
+    // Scroll to bottom of messages
+    function scrollToBottom() {
+        const messagesContainer = document.getElementById('messagesList');
+        if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    }
+
+    // Mark messages as read
+    function markMessagesAsRead() {
+        fetch(`/mark_channel_read/${channelId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/json',
             }
-        }
+        }).catch(console.error);
+    }
 
-        // Event listeners
-        function initEventListeners() {
-            // Close modal on ESC
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    closeMediaModal();
-                }
-            });
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        scrollToBottom();
+        markMessagesAsRead();
+        initializeVideoPlayers();
+        initializeAudioPlayers();
+        
+        // Disable send button initially
+        sendButton.disabled = true;
+        
+        // Handle input focus for mobile
+        messageInput.addEventListener('focus', () => {
+            setTimeout(() => {
+                scrollToBottom();
+            }, 300);
+        });
+    });
+</script>
 
-            // Click outside modal to close
-            document.getElementById('mediaModal').addEventListener('click', (e) => {
-                if (e.target.id === 'mediaModal') {
-                    closeMediaModal();
-                }
-            });
-
-            // Prevent form submission on Enter (new line instead)
-            textarea.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    form.dispatchEvent(new Event('submit'));
-                }
-            });
-
-            // Mark as read when user interacts with page
-            document.addEventListener('click', markMessagesAsRead);
-            document.addEventListener('touchstart', markMessagesAsRead);
-            
-            // Mark as read when page becomes visible
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) {
-                    markMessagesAsRead();
-                }
-            });
-        }
-
-        // Simulate typing indicator (for demo purposes)
-        function showTypingIndicator() {
-            const typingDiv = document.createElement('div');
-            typingDiv.className = 'typing-indicator';
-            typingDiv.innerHTML = `
-                <div class="typing-dots">
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                </div>
-                <span style="font-size: 11px;">typing...</span>
-            `;
-            comments.appendChild(typingDiv);
-            scrollToBottom();
-        }
-    </script>
 </body>
 </html>
