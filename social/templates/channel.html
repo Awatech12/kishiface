@@ -708,6 +708,42 @@
             color: var(--kf-text-secondary);
         }
 
+        /* Typing Indicator */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--kf-bg);
+            border-radius: 18px;
+            margin: 4px 0;
+            align-self: flex-start;
+            max-width: 100px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            margin-left: 16px;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 3px;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--kf-text-secondary);
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-4px); }
+        }
+
         /* Modal */
         .kishiface-modal {
             position: fixed;
@@ -1163,6 +1199,133 @@
     const csrftoken = getCSRFToken();
     const channelId = '{{ channel.channel_id }}';
     let selectedFile = null;
+    let socket = null;
+    let messagesMarkedAsRead = false;
+    let observer = null;
+    let typingTimeout = null;
+    let isTyping = false;
+
+    // Initialize WebSocket Connection
+    function connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${protocol}${window.location.host}/ws/${channelId}/`;
+        
+        try {
+            socket = new WebSocket(wsUrl);
+            
+            socket.onopen = function() {
+                console.log('WebSocket connected to channel:', channelId);
+                // Request initial unread counts
+                socket.send(JSON.stringify({
+                    type: 'get_unread_counts'
+                }));
+            };
+            
+            socket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                console.log('WebSocket message received:', data.type);
+                
+                switch(data.type) {
+                    case 'new_message':
+                        appendNewMessage(data);
+                        break;
+                        
+                    case 'message_liked':
+                        updateMessageLike(data);
+                        break;
+                        
+                    case 'unread_update':
+                        updateUnreadCount(data.channel_id, data.unread_count);
+                        break;
+                        
+                    case 'marked_as_read':
+                        console.log('Messages marked as read');
+                        updateUnreadCount(data.channel_id, 0);
+                        break;
+                        
+                    case 'user_typing':
+                        showTypingIndicator(data.username);
+                        break;
+                        
+                    case 'user_stopped_typing':
+                        removeTypingIndicator(data.username);
+                        break;
+                        
+                    case 'user_joined':
+                        showToast(`${data.username} joined the channel`, 'success');
+                        break;
+                        
+                    case 'user_left':
+                        showToast(`${data.username} left the channel`, 'error');
+                        break;
+                }
+            };
+            
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+            
+            socket.onclose = function() {
+                console.log('WebSocket disconnected');
+                // Try to reconnect after 3 seconds
+                setTimeout(connectWebSocket, 3000);
+            };
+        } catch (error) {
+            console.error('WebSocket connection failed:', error);
+        }
+    }
+
+    // Mark messages as read via WebSocket
+    function markMessagesAsRead() {
+        if (!messagesMarkedAsRead && socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: 'mark_as_read',
+                channel_id: channelId
+            }));
+            
+            // Update local badge
+            updateUnreadCount(channelId, 0);
+            messagesMarkedAsRead = true;
+        }
+    }
+
+    // Update unread count badge
+    function updateUnreadCount(channelId, count) {
+        // Store in localStorage for other pages
+        localStorage.setItem(`unread_${channelId}`, count);
+        
+        // Update total unread
+        updateTotalUnread();
+    }
+
+    // Update total unread count
+    function updateTotalUnread() {
+        let total = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('unread_')) {
+                const count = parseInt(localStorage.getItem(key)) || 0;
+                total += count;
+            }
+        }
+        console.log('Total unread messages:', total);
+    }
+
+    // Setup intersection observer for read receipts
+    function setupIntersectionObserver() {
+        observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    markMessagesAsRead();
+                }
+            });
+        }, { threshold: 0.3 });
+        
+        // Observe all existing messages
+        document.querySelectorAll('.kishiface-msg-wrapper').forEach(msg => {
+            observer.observe(msg);
+        });
+    }
 
     // Modal functions
     function openChannelDetailsModal() {
@@ -1434,7 +1597,7 @@
         document.body.removeChild(a);
     }
 
-    // LIKE FUNCTIONALITY - UPDATED
+    // LIKE FUNCTIONALITY
     async function toggleLike(messageId) {
         try {
             // Find the like button and count elements
@@ -1486,6 +1649,16 @@
                 // Update like count
                 likeCount.textContent = data.like_count;
                 
+                // Send WebSocket notification about like
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'message_liked',
+                        message_id: messageId,
+                        liked: data.liked,
+                        like_count: data.like_count
+                    }));
+                }
+                
                 console.log('Like updated:', data);
                 
             } else {
@@ -1505,6 +1678,21 @@
         }
     }
 
+    // Update message like from WebSocket
+    function updateMessageLike(data) {
+        const likeBtn = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${data.message_id}"] .kishiface-like-btn`);
+        const likeIcon = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${data.message_id}"] .kishiface-like-btn i`);
+        const likeText = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${data.message_id}"] .like-text`);
+        const likeCount = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${data.message_id}"] .kishiface-like-count`);
+        const actionBtnIcon = document.querySelector(`.kishiface-msg-wrapper[data-message-id="${data.message_id}"] .kishiface-message-actions .kishiface-action-btn i`);
+        
+        if (likeBtn && likeIcon && likeText && likeCount) {
+            // Only update if it's not the current user's action (handled by AJAX)
+            // This is for other users' like actions
+            likeCount.textContent = data.like_count;
+        }
+    }
+
     // Message handling
     const messageInput = document.getElementById('messageInput');
     const sendButton = document.getElementById('sendButton');
@@ -1517,7 +1705,73 @@
         
         // Enable/disable send button
         sendButton.disabled = !this.value.trim() && !selectedFile;
+        
+        // Typing indicator
+        if (!isTyping && this.value.trim()) {
+            isTyping = true;
+            sendTypingIndicator();
+        }
+        
+        // Clear previous timeout
+        clearTimeout(typingTimeout);
+        
+        // Set timeout to stop typing indicator
+        typingTimeout = setTimeout(() => {
+            if (isTyping) {
+                isTyping = false;
+                sendStopTypingIndicator();
+            }
+        }, 1000);
     });
+
+    // Send typing indicator via WebSocket
+    function sendTypingIndicator() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: 'typing',
+                channel_id: channelId
+            }));
+        }
+    }
+
+    // Send stop typing indicator via WebSocket
+    function sendStopTypingIndicator() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: 'stop_typing',
+                channel_id: channelId
+            }));
+        }
+    }
+
+    // Show typing indicator for other users
+    function showTypingIndicator(username) {
+        // Remove existing typing indicator
+        removeTypingIndicator(username);
+        
+        const messagesList = document.getElementById('messagesList');
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'typing-indicator';
+        typingDiv.id = `typing-${username}`;
+        typingDiv.innerHTML = `
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+            <span style="font-size: 11px; color: var(--kf-text-secondary);">${username} is typing...</span>
+        `;
+        messagesList.appendChild(typingDiv);
+        scrollToBottom();
+    }
+
+    // Remove typing indicator
+    function removeTypingIndicator(username) {
+        const existingTyping = document.getElementById(`typing-${username}`);
+        if (existingTyping) {
+            existingTyping.remove();
+        }
+    }
 
     // MAIN MESSAGE SEND FUNCTION
     async function sendMessage() {
@@ -1576,13 +1830,20 @@
                 // Hide upload preview
                 document.getElementById('uploadPreview').classList.remove('show');
                 
+                // Send stop typing indicator
+                if (isTyping) {
+                    isTyping = false;
+                    sendStopTypingIndicator();
+                }
+                
                 // Show success message
                 showToast('Message sent successfully', 'success');
                 
-                // Reload to show new message
-                setTimeout(() => {
-                    window.location.reload();
-                }, 500);
+                // Mark as read since user just sent a message
+                markMessagesAsRead();
+                
+                // No need to reload - WebSocket will handle new message
+                
             } else {
                 let errorText = 'Error sending message';
                 try {
@@ -1606,6 +1867,195 @@
             sendButton.innerHTML = '<i class="fas fa-paper-plane"></i>';
             sendButton.disabled = !messageInput.value.trim() && !selectedFile;
         }
+    }
+
+    // Append new message from WebSocket
+    function appendNewMessage(data) {
+        const messagesList = document.getElementById('messagesList');
+        
+        // Remove empty state if it exists
+        const emptyState = messagesList.querySelector('.kishiface-empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+        
+        // Check if message already exists
+        const existingMessage = messagesList.querySelector(`[data-message-id="${data.message_id}"]`);
+        if (existingMessage) {
+            return; // Message already exists
+        }
+        
+        // Create message element
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'kishiface-msg-wrapper';
+        messageDiv.dataset.messageId = data.message_id;
+        
+        let html = `
+            <div class="kishiface-message-content">
+                <div class="kishiface-message-actions">
+                    <button class="kishiface-action-btn" onclick="toggleLike('${data.message_id}')" title="Like">
+                        <i class="${data.liked_by_user ? 'fas' : 'far'} fa-thumbs-up"></i>
+                    </button>
+        `;
+        
+        if (data.file_url) {
+            html += `<a href="${data.file_url}" download class="kishiface-action-btn" title="Download">
+                        <i class="fas fa-download"></i>
+                    </a>`;
+        }
+        
+        html += `</div>`;
+        
+        // Handle different message types
+        if (data.message && data.file_url) {
+            if (data.file_type === 'image') {
+                html += `
+                    <div class="kishiface-media-content">
+                        <img src="${data.file_url}" alt="Shared image" onclick="openMediaModal('${data.file_url}', 'image')">
+                        <div class="kishiface-text-overlay">
+                            <div class="kishiface-text-content">${data.message}</div>
+                        </div>
+                    </div>
+                    <div class="kishiface-meta-overlay">
+                        <span class="kishiface-time-overlay">${data.time}</span>
+                    </div>
+                `;
+            } else if (data.file_type === 'video') {
+                html += `
+                    <div class="kishiface-media-content">
+                        <video id="video-${data.message_id}" src="${data.file_url}" preload="metadata"></video>
+                        <div class="kishiface-video-overlay" onclick="toggleVideoPlay('${data.message_id}')">
+                            <button class="kishiface-video-play-btn">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        </div>
+                        <div class="kishiface-text-overlay">
+                            <div class="kishiface-text-content">${data.message}</div>
+                        </div>
+                    </div>
+                    <div class="kishiface-meta-overlay">
+                        <span class="kishiface-time-overlay">${data.time}</span>
+                    </div>
+                `;
+            } else if (data.file_type === 'audio') {
+                html += `
+                    <div class="kishiface-audio-player" id="audio-${data.message_id}">
+                        <button class="kishiface-audio-play-btn" onclick="toggleAudioPlay('${data.message_id}')">
+                            <i class="fas fa-play" id="audio-play-icon-${data.message_id}"></i>
+                        </button>
+                        <div class="kishiface-audio-info">
+                            <div class="kishiface-audio-filename">
+                                ${data.file_name || 'Audio message'}
+                            </div>
+                            <div class="kishiface-audio-controls">
+                                <div class="kishiface-audio-progress-bar" onclick="audioSeek(event, '${data.message_id}')">
+                                    <div class="kishiface-audio-progress" id="audio-progress-${data.message_id}"></div>
+                                </div>
+                                <span class="kishiface-audio-time" id="audio-time-${data.message_id}">0:00</span>
+                            </div>
+                        </div>
+                        <button class="kishiface-audio-download" onclick="downloadFile('${data.file_url}', '${data.file_name || 'audio_message'}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <audio id="audio-player-${data.message_id}" src="${data.file_url}" preload="metadata"></audio>
+                    </div>
+                    <div class="kishiface-text-content">${data.message}</div>
+                `;
+            }
+        } else if (data.message && !data.file_url) {
+            html += `
+                <div class="kishiface-text-content">${data.message}</div>
+                <div class="kishiface-meta">
+                    <span class="kishiface-time">${data.time}</span>
+                </div>
+            `;
+        } else if (data.file_url && !data.message) {
+            if (data.file_type === 'image') {
+                html += `
+                    <div class="kishiface-media-content">
+                        <img src="${data.file_url}" alt="Shared image" onclick="openMediaModal('${data.file_url}', 'image')">
+                    </div>
+                    <div class="kishiface-meta">
+                        <span class="kishiface-time">${data.time}</span>
+                    </div>
+                `;
+            } else if (data.file_type === 'video') {
+                html += `
+                    <div class="kishiface-media-content">
+                        <video id="video-${data.message_id}" src="${data.file_url}" preload="metadata"></video>
+                        <div class="kishiface-video-overlay" onclick="toggleVideoPlay('${data.message_id}')">
+                            <button class="kishiface-video-play-btn">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="kishiface-meta">
+                        <span class="kishiface-time">${data.time}</span>
+                    </div>
+                `;
+            } else if (data.file_type === 'audio') {
+                html += `
+                    <div class="kishiface-audio-player" id="audio-${data.message_id}">
+                        <button class="kishiface-audio-play-btn" onclick="toggleAudioPlay('${data.message_id}')">
+                            <i class="fas fa-play" id="audio-play-icon-${data.message_id}"></i>
+                        </button>
+                        <div class="kishiface-audio-info">
+                            <div class="kishiface-audio-filename">
+                                ${data.file_name || 'Audio message'}
+                            </div>
+                            <div class="kishiface-audio-controls">
+                                <div class="kishiface-audio-progress-bar" onclick="audioSeek(event, '${data.message_id}')">
+                                    <div class="kishiface-audio-progress" id="audio-progress-${data.message_id}"></div>
+                                </div>
+                                <span class="kishiface-audio-time" id="audio-time-${data.message_id}">0:00</span>
+                            </div>
+                        </div>
+                        <button class="kishiface-audio-download" onclick="downloadFile('${data.file_url}', '${data.file_name || 'audio_message'}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <audio id="audio-player-${data.message_id}" src="${data.file_url}" preload="metadata"></audio>
+                    </div>
+                    <div class="kishiface-meta">
+                        <span class="kishiface-time">${data.time}</span>
+                    </div>
+                `;
+            }
+        }
+        
+        // Add like section
+        html += `
+            <div class="kishiface-like-section">
+                <button class="kishiface-like-btn ${data.liked_by_user ? 'liked' : ''}" 
+                        onclick="toggleLike('${data.message_id}')"
+                        data-message-id="${data.message_id}">
+                    <i class="${data.liked_by_user ? 'fas' : 'far'} fa-thumbs-up"></i>
+                    <span class="like-text">
+                        ${data.liked_by_user ? 'Unlike' : 'Like'}
+                    </span>
+                </button>
+                <span class="kishiface-like-count" data-like-count="${data.message_id}">
+                    ${data.like_count || 0}
+                </span>
+            </div>
+        </div>`;
+        
+        messageDiv.innerHTML = html;
+        messagesList.appendChild(messageDiv);
+        scrollToBottom();
+        
+        // Observe the new message
+        if (observer) {
+            observer.observe(messageDiv);
+        }
+        
+        // Initialize media players for new message
+        setTimeout(() => {
+            initializeVideoPlayers();
+            initializeAudioPlayers();
+        }, 100);
+        
+        // Mark as read if visible
+        markMessagesAsRead();
     }
 
     // Enter key to send (Shift+Enter for new line)
@@ -1651,23 +2101,14 @@
         }
     }
 
-    // Mark messages as read
-    function markMessagesAsRead() {
-        fetch(`/mark_channel_read/${channelId}/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrftoken,
-                'Content-Type': 'application/json',
-            }
-        }).catch(console.error);
-    }
-
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         scrollToBottom();
         markMessagesAsRead();
         initializeVideoPlayers();
         initializeAudioPlayers();
+        setupIntersectionObserver();
+        connectWebSocket();
         
         // Disable send button initially
         sendButton.disabled = true;
@@ -1677,6 +2118,24 @@
             setTimeout(() => {
                 scrollToBottom();
             }, 300);
+        });
+        
+        // Mark as read when user interacts with page
+        document.addEventListener('click', markMessagesAsRead);
+        document.addEventListener('touchstart', markMessagesAsRead);
+        
+        // Mark as read when page becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                markMessagesAsRead();
+            }
+        });
+        
+        // Stop typing indicator when leaving page
+        window.addEventListener('beforeunload', () => {
+            if (isTyping) {
+                sendStopTypingIndicator();
+            }
         });
     });
 </script>
