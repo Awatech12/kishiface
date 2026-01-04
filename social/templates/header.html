@@ -205,10 +205,6 @@
     });
 </script>
 
-
-
-
-    
     <!-- Message Icon with Badge -->
     <a href="{% url 'inbox' %}" class="icon-link">
       <div class="icon-badge-container">
@@ -229,25 +225,13 @@
 </header>
 
 {% include 'info.html' %}
-
 <script>
-    // Helper to format the time since a message was received
-    function timeSince(dateString) {
-        const date = new Date(dateString);
-        const seconds = Math.floor((new Date() - date) / 1000);
-        if (seconds < 60) return "just now";
-        const interval = Math.floor(seconds / 60);
-        if (interval < 60) return interval + " minutes ago";
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-
-    function updateGlobalHeader(count) {
-        const badge = document.getElementById('header-channel-badge');
-        if (badge) {
-            badge.textContent = count;
-            badge.style.display = count > 0 ? 'flex' : 'none';
+    // Handles page refresh on "Back" navigation
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
+            window.location.reload();
         }
-    }
+    });
 
     document.addEventListener('DOMContentLoaded', function() {
         if ("{{ request.user.is_authenticated }}" === "True") {
@@ -259,42 +243,49 @@
                 const data = JSON.parse(event.data);
                 
                 if (data.type === 'unread_update') {
-                    updateGlobalHeader(data.total_followed_unread);
+                    // 1. Global Badge Update
+                    const hBadge = document.getElementById('header-channel-badge');
+                    if (hBadge) {
+                        hBadge.textContent = data.total_followed_unread;
+                        hBadge.style.display = data.total_followed_unread > 0 ? 'flex' : 'none';
+                    }
 
-                    const channelLink = document.querySelector(`.channel-item a[href*="${data.channel_id}"]`);
+                    // 2. Find Channel Item in List
+                    const channelLink = document.querySelector(`a[href*="${data.channel_id}"]`);
                     if (channelLink) {
                         const channelItem = channelLink.closest('.channel-item');
-                        const followingSection = document.querySelector('.channels-list');
                         
-                        // 1. Reorder: Move to top of the 'Following' section
-                        if (followingSection) {
-                            const header = followingSection.querySelector('.channels-header');
+                        // 3. Reorder: Move to top
+                        const list = document.querySelector('.channels-list');
+                        if (list && channelItem) {
+                            const header = list.querySelector('.channels-header');
                             header.after(channelItem);
                         }
 
-                        // 2. Update Time: Change static time to "just now"
-                        const timeSpan = channelItem.querySelector('.channel-time');
-                        if (timeSpan && data.timestamp) {
-                            timeSpan.textContent = timeSince(data.timestamp);
-                        }
-
-                        // 3. Update Preview & Badge
-                        const preview = channelItem.querySelector('.channel-details');
+                        // 4. Update Message Text
+                        const preview = document.getElementById(`last-msg-${data.channel_id}`);
                         if (preview && data.message_preview) {
                             preview.textContent = data.message_preview;
                         }
 
+                        // 5. Update Time
+                        const timeSpan = channelItem.querySelector('.channel-time');
+                        if (timeSpan) timeSpan.textContent = "just now";
+
+                        // 6. Update Badge
                         const actions = channelItem.querySelector('.channel-actions');
-                        let badge = actions.querySelector('.unread-badge');
-                        if (data.unread_count > 0) {
-                            if (!badge) {
-                                badge = document.createElement('span');
-                                badge.className = 'unread-badge';
-                                actions.appendChild(badge);
+                        if (actions) {
+                            let badge = actions.querySelector('.unread-badge');
+                            if (data.unread_count > 0) {
+                                if (!badge) {
+                                    badge = document.createElement('span');
+                                    badge.className = 'unread-badge';
+                                    actions.appendChild(badge);
+                                }
+                                badge.textContent = data.unread_count;
+                            } else if (badge) {
+                                badge.remove();
                             }
-                            badge.textContent = data.unread_count;
-                        } else if (badge) {
-                            badge.remove();
                         }
                     }
                 }
@@ -302,78 +293,7 @@
         }
     });
 </script>
-<script>
-    // Helper to format the time since a message was received
-    function timeSince(dateString) {
-        const date = new Date(dateString);
-        const seconds = Math.floor((new Date() - date) / 1000);
-        if (seconds < 60) return "just now";
-        const interval = Math.floor(seconds / 60);
-        if (interval < 60) return interval + " minutes ago";
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
 
-    function updateGlobalHeader(count) {
-        const badge = document.getElementById('header-channel-badge');
-        if (badge) {
-            badge.textContent = count;
-            badge.style.display = count > 0 ? 'flex' : 'none';
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        if ("{{ request.user.is_authenticated }}" === "True") {
-            const userId = "{{ request.user.id }}";
-            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-            const ws = new WebSocket(`${protocol}${window.location.host}/ws/user/${userId}/`);
-
-            ws.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                
-                if (data.type === 'unread_update') {
-                    updateGlobalHeader(data.total_followed_unread);
-
-                    const channelLink = document.querySelector(`.channel-item a[href*="${data.channel_id}"]`);
-                    if (channelLink) {
-                        const channelItem = channelLink.closest('.channel-item');
-                        const followingSection = document.querySelector('.channels-list');
-                        
-                        // 1. Reorder: Move to top of the 'Following' section
-                        if (followingSection) {
-                            const header = followingSection.querySelector('.channels-header');
-                            header.after(channelItem);
-                        }
-
-                        // 2. Update Time: Change static time to "just now"
-                        const timeSpan = channelItem.querySelector('.channel-time');
-                        if (timeSpan && data.timestamp) {
-                            timeSpan.textContent = timeSince(data.timestamp);
-                        }
-
-                        // 3. Update Preview & Badge
-                        const preview = channelItem.querySelector('.channel-details');
-                        if (preview && data.message_preview) {
-                            preview.textContent = data.message_preview;
-                        }
-
-                        const actions = channelItem.querySelector('.channel-actions');
-                        let badge = actions.querySelector('.unread-badge');
-                        if (data.unread_count > 0) {
-                            if (!badge) {
-                                badge = document.createElement('span');
-                                badge.className = 'unread-badge';
-                                actions.appendChild(badge);
-                            }
-                            badge.textContent = data.unread_count;
-                        } else if (badge) {
-                            badge.remove();
-                        }
-                    }
-                }
-            };
-        }
-    });
-</script>
 
 
 

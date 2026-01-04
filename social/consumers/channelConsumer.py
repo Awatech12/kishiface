@@ -160,31 +160,22 @@ class UserConsumer(AsyncWebsocketConsumer):
         return total
 
     async def unread_update(self, event):
-        """Handle unread updates and add a timestamp for real-time UI"""
+        """Handle unread updates and add message preview/timestamp for real-time UI"""
         total_count = await self.get_total_followed_unread()
         
-        # Add data for real-time timestamp and reordering
+        # Ensure message_preview is present
+        if not event.get('message_preview'):
+            from social.models import ChannelMessage
+            last_msg = await sync_to_async(
+                ChannelMessage.objects.filter(channel_id=event['channel_id']).order_by('-created_at').first
+            )()
+            event['message_preview'] = last_msg.message if last_msg else "New message"
+
         event['total_followed_unread'] = total_count
         # ISO format allows JavaScript to parse the date easily
         event['timestamp'] = timezone.now().isoformat() 
         
         await self.send(text_data=json.dumps(event))
-
-    async def mark_channel_read(self, channel_id):
-        from social.models import Channel, ChannelUserLastSeen
-        channel = await sync_to_async(Channel.objects.get)(channel_id=channel_id)
-        await sync_to_async(ChannelUserLastSeen.objects.update_or_create)(
-            channel=channel, user=self.user,
-            defaults={'last_seen_at': timezone.now()}
-        )
-        new_total = await self.get_total_followed_unread()
-        await self.send(text_data=json.dumps({
-            'type': 'unread_update',
-            'channel_id': channel_id,
-            'unread_count': 0,
-            'total_followed_unread': new_total,
-            'timestamp': timezone.now().isoformat()
-        }))
 
 
 
