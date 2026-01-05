@@ -160,22 +160,42 @@ class UserConsumer(AsyncWebsocketConsumer):
         return total
 
     async def unread_update(self, event):
-        """Handle unread updates and add message preview/timestamp for real-time UI"""
+        """Handle unread updates and add message preview/type for real-time UI icons"""
+        from social.models import ChannelMessage
         total_count = await self.get_total_followed_unread()
         
-        # Ensure message_preview is present
-        if not event.get('message_preview'):
-            from social.models import ChannelMessage
-            last_msg = await sync_to_async(
-                ChannelMessage.objects.filter(channel_id=event['channel_id']).order_by('-created_at').first
-            )()
-            event['message_preview'] = last_msg.message if last_msg else "New message"
+        # Fetch the latest message to determine its file type (audio/video/text)
+        last_msg = await sync_to_async(
+            lambda: ChannelMessage.objects.filter(channel_id=event['channel_id']).order_by('-created_at').first()
+        )()
 
-        event['total_followed_unread'] = total_count
-        # ISO format allows JavaScript to parse the date easily
-        event['timestamp'] = timezone.now().isoformat() 
+        msg_preview = "New message"
+        msg_type = "text"
+
+        if last_msg:
+            if last_msg.file_type == 'audio':
+                msg_preview = "Audio message"
+                msg_type = "audio"
+            elif last_msg.file_type == 'video':
+                msg_preview = "Video message"
+                msg_type = "video"
+            elif last_msg.file_type == 'image':
+                msg_preview = "Image message"
+                msg_type = "image"
+            else:
+                msg_preview = last_msg.message if last_msg.message else "Sent a file"
+
+        # Construct the full payload for the frontend
+        event.update({
+            'message_preview': msg_preview,
+            'message_type': msg_type,
+            'total_followed_unread': total_count,
+            'timestamp': timezone.now().isoformat()
+        })
         
         await self.send(text_data=json.dumps(event))
+
+
 
 
 

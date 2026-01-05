@@ -956,21 +956,16 @@ def channel_create(request):
         about = request.POST.get('about')
         icon = request.FILES.get('icon')
         
-        # Create the new channel
         new_channel = Channel.objects.create(
             channel_owner=request.user,
             channel_name=name,
             about=about,
             image=icon if icon else 'male.png'
         )
-        
-        # The creator automatically follows their own channel
         new_channel.subscriber.add(request.user)
-        
         return redirect('channel', channel_id=new_channel.channel_id)
 
-    # 2. Logic for Followed Channels (WhatsApp style)
-    # We annotate with the latest message time to sort active chats to the top
+    # 2. Logic for Followed Channels
     followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
         last_app_activity=Max('channel_messages__created_at')
     ).order_by('-last_app_activity', '-created_at')
@@ -979,34 +974,37 @@ def channel_create(request):
     total_unread = 0
     
     for c in followed_channels:
-        # Get unread count for the badge
         unread = c.unread_count_for_user(request.user)
         total_unread += unread
         
-        # Get the actual last message object for preview and timestamp
+        # Get the actual last message object
         last_msg = c.channel_messages.order_by('-created_at').first()
         
+        # Determine the message type for the initial page load icons
+        msg_type = 'text'
+        if last_msg:
+            if last_msg.file_type == 'audio':
+                msg_type = 'audio'
+            elif last_msg.file_type == 'video':
+                msg_type = 'video'
+            elif last_msg.file_type == 'image':
+                msg_type = 'image'
+
         followed_list.append({
             'channel': c,
             'unread_count': unread,
             'last_message': last_msg.message if last_msg else "No messages yet",
-            'last_time': last_msg.created_at if last_msg else None
+            'last_time': last_msg.created_at if last_msg else None,
+            'message_type': msg_type 
         })
 
-    # 3. Logic for Unfollowed Channels (Discovery style)
-    # We exclude channels the user already follows
+    # 3. Logic for Unfollowed Channels (Discover)
     unfollowed_channels = Channel.objects.exclude(subscriber=request.user).order_by('-created_at')
 
-    # 4. Additional UI Context (Suggestions & Notifications)
-    members = User.objects.exclude(id=request.user.id)[:10]
-    notifications = request.user.notifications.filter(is_read=False)
-    
     context = {
         'followed_list': followed_list,
         'unfollowed_channels': unfollowed_channels,
-        'total_unread': total_unread, # Total unread for the footer badge
-        'members': members,
-        'notifications': notifications,
+        'total_followed_unread': total_unread, 
     }
 
     return render(request, 'channel_create.html', context)
