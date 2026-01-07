@@ -1,3 +1,4 @@
+
 {% load humanize %}
 {% load static %}
 {% load time %}
@@ -535,7 +536,7 @@
       cursor: pointer; 
       font-size: 14px; 
       font-weight: 600; 
-      display: flex; 
+display: flex; 
       align-items: center; 
       gap: 6px;
       padding: 6px 8px; 
@@ -1118,6 +1119,21 @@ button:hover{
         white-space: nowrap;
     }
 
+    /* New: Stop recording button */
+    .kf-stop-recording-btn {
+        background: transparent;
+        border-radius: 50%; 
+        padding: 5px;
+        color: #ff3b30;
+        font-size: 22px;
+        animation: pulse 1s infinite;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
   </style>
 </head>
 <body>
@@ -1334,6 +1350,10 @@ button:hover{
       <!-- Audio Preview Container INSIDE the input wrapper -->
       <div class="kf-audio-preview-container record-mode-hidden" id="audioPreviewContainer">
         <button id="deleteAudioBtn" type="button" class="kf-comment-action-btn"><i class="fa-solid fa-trash-can"></i></button>
+        <!-- Stop Recording Button -->
+        <button id="stopRecordingBtn" type="button" class="kf-stop-recording-btn" title="Stop recording" style="display: none;">
+          <i class="fa-solid fa-square"></i>
+        </button>
         <div class="kf-preview-audio-player">
           <audio id="previewAudio"></audio>
           <div id="recordingStatus" class="kf-recording-indicator"></div>
@@ -1365,12 +1385,14 @@ button:hover{
   const previewAudio = document.getElementById('previewAudio');
   const recordingStatus = document.getElementById('recordingStatus');
   const deleteAudioBtn = document.getElementById('deleteAudioBtn');
+  const stopRecordingBtn = document.getElementById('stopRecordingBtn');
   const audio_file_input = document.getElementById('audio_file');
   const postForm = document.getElementById('postForm');
   
   /*** Upgraded Recording Code */
-  let mediaRecord;
+  let mediaRecorder;
   let audioChunks = [];
+  let mediaStream;
   
   // Helper function to switch UI to recording mode
   function switchToRecordingUI() {
@@ -1378,6 +1400,8 @@ button:hover{
     audioPreviewContainer.classList.remove('record-mode-hidden');
     startBtn.classList.add('record-mode-hidden');
     sendBtn.style.display = 'none';
+    deleteAudioBtn.style.display = 'none';
+    stopRecordingBtn.style.display = 'flex';
     // Clear any existing audio file
     deleteAudio(false); // Do not reset UI, we are transitioning to record mode
     // Show status that recording is ON
@@ -1387,7 +1411,9 @@ button:hover{
   // Helper function to switch UI to playback mode
   function switchToPlaybackUI(audioURL) {
     startBtn.classList.add('record-mode-hidden');
-    sendBtn.style.display = 'none';
+    sendBtn.style.display = 'flex';
+    deleteAudioBtn.style.display = 'flex';
+    stopRecordingBtn.style.display = 'none';
     previewAudio.src = audioURL;
     previewAudio.load();
     // Set controls to true to make the player visible and playable
@@ -1401,7 +1427,21 @@ button:hover{
     textInput.classList.remove('record-mode-hidden');
     audioPreviewContainer.classList.add('record-mode-hidden');
     startBtn.classList.remove('record-mode-hidden');
+    deleteAudioBtn.style.display = 'flex';
+    stopRecordingBtn.style.display = 'none';
     updateSendButton();
+  }
+
+  // Function to stop recording
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
+      
+      // Stop all tracks to turn off the microphone light/indicator
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+      }
+    }
   }
 
   // Function to delete the audio file and reset UI
@@ -1466,14 +1506,17 @@ button:hover{
     }
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecord = new MediaRecorder(stream);
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(mediaStream);
       audioChunks = [];
-      mediaRecord.ondataavailable = event => audioChunks.push(event.data);
       
-      mediaRecord.onstop = () =>{
+      mediaRecorder.ondataavailable = event => {
+        audioChunks.push(event.data);
+      };
+      
+      mediaRecorder.onstop = () => {
         // Stop all tracks to turn off the microphone light/indicator
-        stream.getTracks().forEach(track => track.stop());
+        mediaStream.getTracks().forEach(track => track.stop());
         
         const blob = new Blob(audioChunks, {
           type: 'audio/webm'
@@ -1493,7 +1536,7 @@ button:hover{
         updateSendButton();
       };
       
-      mediaRecord.start();
+      mediaRecorder.start();
       switchToRecordingUI(); // Switch UI state to active recording
       
     } catch(err) {
@@ -1501,6 +1544,11 @@ button:hover{
       alert('Microphone access was denied. Please allow access in your browser settings to record voice notes.');
       switchToTextInputUI(); // Ensure UI is reset if error occurs
     }
+  });
+
+  // --- Stop Recording ---
+  stopRecordingBtn.addEventListener('click', function() {
+    stopRecording();
   });
 
   // --- Delete Audio ---
