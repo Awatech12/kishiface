@@ -7,32 +7,44 @@
         <img src="{{ comment.author.profile.picture.url }}" alt="Profile" class="avatar-img">
     {% else %}
         <div class="avatar-letter">
-            {{ comment.author.first_name|default:"?"|slice:"1" }} 
+            {{ comment.author.first_name|default:"?"|slice:"1" }}
         </div>
     {% endif %}
 
     <div class="comment-body">
       
-      <a href="{% url 'profile' comment.author.username %}" class="username">
-        {{ comment.author.first_name }} {{ comment.author.last_name }}
-        {% if comment.author.profile.is_verify and comment.author.first_name %} <img src="{% static 'images/verify1.jpg' %}" height="20" width="20" alt="">{% endif %}
-      </a>
+      <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 1px;">
+        <a href="{% url 'profile' comment.author.username %}" class="username">
+          {{ comment.author.first_name }} {{ comment.author.last_name }}
+        </a>
+        {% if comment.author.profile.is_verify and comment.author.first_name %}
+          <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="" style="vertical-align: middle;">
+        {% endif %}
+      </div>
       
       <p class="text">{{ comment.comment }}</p>
 
       {% if comment.image %}
-        <img src="{{ comment.image.url }}" alt="Comment Image" class="comment-image" style="width:200px; height:200px; border-radius:8px;">
+        <img src="{{ comment.image.url }}" alt="Comment Image" class="comment-image">
       {% endif %}
 
       {% if comment.file %}
         <div class="audio-container" data-src="{{ comment.file.url }}">
-            <audio class="hidden-audio" preload="metadata">
+            <!-- Audio wave visualization -->
+            <div class="audio-wave" id="wave-{{ comment.comment_id }}">
+                <div class="wave-bar" style="height: 8px;"></div>
+                <div class="wave-bar" style="height: 12px;"></div>
+                <div class="wave-bar" style="height: 16px;"></div>
+                <div class="wave-bar" style="height: 12px;"></div>
+                <div class="wave-bar" style="height: 8px;"></div>
+            </div>
+            
+            <audio class="hidden-audio" preload="metadata" id="audio-{{ comment.comment_id }}">
                 <source src="{{ comment.file.url }}" type="audio/webm">
-                Your browser does not support the audio element.
             </audio>
 
             <button class="play-pause-btn" data-state="paused">
-                <i class="fas fa-play"></i> 
+                <i class="fas fa-play"></i>
             </button>
 
             <div class="progress-wrapper">
@@ -42,13 +54,21 @@
                 </div>
                 <span class="time-display">0:00</span>
             </div>
+            
+            <!-- Download button -->
+            <button class="audio-download-btn" onclick="kfDownloadCommentAudio('{{ comment.comment_id }}', '{{ comment.file.url }}')" title="Download audio">
+                <i class="fas fa-download"></i>
+            </button>
+            
+            <!-- Duration indicator -->
+            <span class="audio-duration" id="duration-{{ comment.comment_id }}"></span>
         </div>
       {% endif %}
 
-      <p class="channel-name">
-        {{comment.created_at|insta_timesince}} &bull;  
-        <a href="{% url 'comment_reply' comment.comment_id %}"> Reply</a> 
-      </p> 
+      <div class="comment-meta">
+        <span>{{comment.created_at|insta_timesince}}</span>
+        <a href="{% url 'comment_reply' comment.comment_id %}">Reply</a>
+      </div>
     </div>
     
     <div class="comment-actions">
@@ -57,3 +77,63 @@
         </span>
     </div>
 </div>
+
+<script>
+// Initialize audio wave animation
+function initAudioWave(container, audioId) {
+    const wave = container.querySelector('.audio-wave');
+    const bars = wave.querySelectorAll('.wave-bar');
+    const audio = document.getElementById('audio-' + audioId);
+    
+    if (audio) {
+        // Animate bars when playing
+        audio.addEventListener('play', function() {
+            bars.forEach((bar, index) => {
+                const height = 8 + Math.random() * 12;
+                bar.style.height = height + 'px';
+                bar.style.transition = 'height 0.3s ease';
+                
+                // Create pulsing animation
+                setInterval(() => {
+                    if (!audio.paused) {
+                        const newHeight = 8 + Math.random() * 12;
+                        bar.style.height = newHeight + 'px';
+                    }
+                }, 300 + index * 50);
+            });
+        });
+        
+        // Reset bars when paused
+        audio.addEventListener('pause', function() {
+            bars.forEach((bar, index) => {
+                bar.style.height = (8 + index * 2) + 'px';
+            });
+        });
+        
+        audio.addEventListener('ended', function() {
+            bars.forEach((bar, index) => {
+                bar.style.height = (8 + index * 2) + 'px';
+            });
+        });
+    }
+}
+
+// Download function for comment audio
+function kfDownloadCommentAudio(id, url) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `voice_message_${id}.webm`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Initialize when comment is added
+document.addEventListener('DOMContentLoaded', function() {
+    const audioContainers = document.querySelectorAll('.audio-container');
+    audioContainers.forEach(container => {
+        const audioId = container.dataset.src.split('/').pop().split('.')[0];
+        initAudioWave(container, audioId);
+    });
+});
+</script>
