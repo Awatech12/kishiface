@@ -1,3 +1,4 @@
+
 {% load humanize %}
 {% load static %}
 {% load time %}
@@ -7,7 +8,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KishiFace - Home</title>
-   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <script src="{% static 'js/home.js' %}"></script>
   <style>
@@ -20,6 +21,8 @@
       --kf-text-light: #8e8e8e;
       --kf-primary: #0095f6;
       --kf-border: #dbdbdb;
+      --kf-repost: #17bf63;
+      --kf-repost-bg: #f0fff4;
     }
     
     * {
@@ -54,6 +57,60 @@
     .kf-post {
       background: var(--kf-white);
       margin-bottom: 0 !important; /* Remove margin to eliminate gap */
+    }
+    
+    /* Repost header styling */
+    .kf-repost-header {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      background: var(--kf-bg);
+      border-bottom: 1px solid var(--kf-border);
+      font-size: 12px;
+      color: var(--kf-repost);
+    }
+    
+    .kf-repost-header i {
+      color: var(--kf-repost);
+      margin-right: 6px;
+    }
+    
+    .kf-repost-header a {
+      color: var(--kf-primary);
+      text-decoration: none;
+      font-weight: 500;
+      margin: 0 4px;
+    }
+    
+    .kf-repost-header a:hover {
+      text-decoration: underline;
+    }
+    
+    /* Repost caption styling */
+    .kf-repost-caption-container {
+      padding: 12px 16px 0 16px;
+      background: white;
+    }
+    
+    .kf-repost-caption {
+      padding: 10px;
+      background: var(--kf-white);
+      border: 1px solid whitesmoke;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--kf-text);
+    }
+    
+    .kf-repost-caption-author {
+      font-weight: 600;
+      color: var(--kf-repost);
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    .kf-repost-caption-text {
+      color: var(--kf-text);
     }
     
     .kf-post-header {
@@ -94,6 +151,42 @@
       padding: 0 16px 10px;
       font-size: 14px;
       line-height: 1.5;
+    }
+    
+    /* POST CONTENT WITH SHOW MORE/LESS */
+    .kf-post-text {
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    
+    .kf-post-text.collapsed {
+      max-height: 60px; /* Show about 3 lines */
+    }
+    
+    .kf-post-text.expanded {
+      max-height: 1000px; /* Enough for expanded text */
+    }
+    
+    .kf-text-toggle {
+      background: none;
+      border: none;
+      color: var(--kf-text-light);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 4px 0;
+      margin-top: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .kf-text-toggle:hover {
+      color: var(--kf-text);
+    }
+    
+    .kf-text-toggle i {
+      font-size: 12px;
     }
     
     /* Comments Header */
@@ -443,7 +536,146 @@
       background: rgba(0, 0, 0, 0.8);
     }
     
-  
+    /* Repost styling */
+    .kf-repost-icon {
+      background: none;
+      border: none;
+      color: var(--kf-text-light);
+      padding: 8px;
+      border-radius: 50%;
+      transition: all 0.15s ease-in-out;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    
+    .kf-repost-icon i.reposted {
+      color: var(--kf-repost);
+    }
+    
+    .kf-repost-icon:hover {
+      color: var(--kf-repost);
+      background-color: rgba(23, 191, 99, 0.1);
+    }
+    
+    .kf-repost-icon:hover i {
+      color: var(--kf-repost);
+    }
+    
+    .kf-repost-count {
+      position: absolute;
+      bottom: -8px;
+      right: -4px;
+      font-size: 10px;
+      background: var(--kf-repost);
+      color: white;
+      border-radius: 8px;
+      padding: 1px 4px;
+      min-width: 16px;
+      text-align: center;
+      display: none;
+    }
+    
+    .kf-repost-count.show {
+      display: block;
+    }
+    
+    /* Repost modal */
+    .kf-repost-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s, visibility 0.3s;
+    }
+    
+    .kf-repost-modal.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .kf-repost-modal-content {
+      background: var(--kf-white);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 400px;
+      overflow: hidden;
+    }
+    
+    .kf-repost-modal-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--kf-border);
+      text-align: center;
+      font-weight: 600;
+    }
+    
+    .kf-repost-modal-body {
+      padding: 16px;
+    }
+    
+    .kf-repost-textarea {
+      width: 100%;
+      border: 1px solid var(--kf-border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 80px;
+      margin-bottom: 16px;
+    }
+    
+    .kf-repost-modal-footer {
+      padding: 16px;
+      border-top: 1px solid var(--kf-border);
+      display: flex;
+      gap: 12px;
+    }
+    
+    .kf-repost-btn {
+      flex: 1;
+      padding: 10px;
+      background: var(--kf-repost);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .kf-repost-cancel-btn {
+      flex: 1;
+      padding: 10px;
+      background: transparent;
+      color: var(--kf-text);
+      border: 1px solid var(--kf-border);
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    
+    .kf-repost-btn:hover {
+      opacity: 0.9;
+    }
+    
+    .kf-repost-cancel-btn:hover {
+      background: var(--kf-bg);
+    }
+    
     /* Side panels */
     .kf-side-panel {
       position: fixed;
@@ -548,6 +780,24 @@
     }
     
     .kf-download-icon:hover {
+      color: var(--kf-primary);
+      background-color: #f3f4f6;
+    }
+    
+    /* Edit icon styling */
+    .kf-edit-icon {
+      color: var(--kf-text);
+      padding: 8px;
+      border-radius: 50%;
+      transition: all 0.15s ease-in-out;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    
+    .kf-edit-icon:hover {
       color: var(--kf-primary);
       background-color: #f3f4f6;
     }
@@ -1265,38 +1515,114 @@ button:hover{
     <div class="kf-feed">
 
       <article class="kf-post" data-post-id="{{ post.post_id }}">
+        <!-- Repost Header (if this is a repost) -->
+        {% if post.is_repost and post.original_post %}
+        <div class="kf-repost-header">
+          <i class="fas fa-retweet"></i>
+          <span>
+            <a href="{% url 'profile' post.author.username %}">{{ post.author.first_name }} {{ post.author.last_name }}</a>
+            reposted
+          </span>
+        </div>
+        {% endif %}
+        
         <!-- Post Header -->
         <div class="kf-post-header">
           <img 
-            src="{{ post.author.profile.picture.url }}" 
+            src="{% if post.is_repost and post.original_post %}{{ post.original_post.author.profile.picture.url }}{% else %}{{ post.author.profile.picture.url }}{% endif %}" 
             class="kf-profile-pic"
-            alt="{{ post.author.username }}"
+            alt="{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}"
             loading="lazy"
           >
           <div>
-            <a href="{% url 'profile' post.author.username %}" class="kf-username" data-user="{{ post.author.username }}">
-              {{ post.author.first_name }} {{ post.author.last_name }}
-              {% if post.author.profile.is_verify and post.author.first_name %} 
-                <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+            <a href="{% url 'profile' post.author.username %}{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}" class="kf-username" data-user="{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}">
+              {% if post.is_repost and post.original_post %}
+                {{ post.original_post.author.first_name }} {{ post.original_post.author.last_name }}
+              {% else %}
+                {{ post.author.first_name }} {{ post.author.last_name }}
+              {% endif %}
+              {% if post.is_repost and post.original_post %}
+                {% if post.original_post.author.profile.is_verify %} 
+                  <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                {% endif %}
+              {% else %}
+                {% if post.author.profile.is_verify and post.author.first_name %} 
+                  <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                {% endif %}
               {% endif %}
             </a>
             <div class="kf-post-time">
-              @{{ post.author.username }} · {{ post.created_at|insta_timesince }}
+              {% if post.is_repost %}
+                @{% if post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}
+                · Original post: {{ post.original_post.created_at|insta_timesince }}
+                · Reposted: {{ post.created_at|insta_timesince }}
+              {% else %}
+                @{{ post.author.username }} · {{ post.created_at|insta_timesince }}
+              {% endif %}
             </div>
           </div>
           <div class="kf-post-actions">
-            {% if request.user == post.author %}
-              <a href="{% url 'editpost' post.post_id %}" title="Edit" class="kf-download-icon">
+            <!-- Repost button -->
+            <button class="kf-repost-icon" 
+                    title="Repost" 
+                    onclick="kfToggleRepost('{% if post.is_repost and post.original_post %}{{ post.original_post.post_id }}{% else %}{{ post.post_id }}{% endif %}', this)"
+                    data-reposted="{% if request.user in post.reposts.all %}true{% else %}false{% endif %}">
+              <i class="fas fa-retweet {% if request.user in post.reposts.all %}reposted{% endif %}"></i>
+              <span class="kf-repost-count {% if post.reposts.count > 0 %}show{% endif %}" id="kf-repost-count-{{ post.post_id }}">
+                {% if post.reposts.count > 0 %}{{ post.reposts.count }}{% endif %}
+              </span>
+            </button>
+            
+            {% if request.user == post.author and not post.is_repost %}
+              <a href="{% url 'editpost' post.post_id %}" title="Edit" class="kf-edit-icon">
                 <i class="fas fa-edit"></i>
               </a>
             {% endif %}
           </div>
         </div>
 
-        <!-- Post Content -->
-        {% if post.content %}
+        <!-- Repost caption (if exists) -->
+        {% if post.is_repost and post.repost_content %}
+        <div class="kf-repost-caption-container">
+          <div class="kf-repost-caption">
+            <span class="kf-repost-caption-author">
+              {{ post.author.first_name }} {{ post.author.last_name }}
+              {% if post.author.profile.is_verify %} 
+                <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align: middle;">
+              {% endif %}
+            </span>
+            <div class="kf-repost-caption-text">
+              {{ post.repost_content|urlize|linebreaksbr }}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Post Content with Show More/Less -->
+        {% if post.content or post.is_repost %}
         <div class="kf-post-content">
-          {{ post.content|urlize|linebreaksbr }}
+          <div class="kf-post-text collapsed" id="kf-text-{{ post.post_id }}">
+            {% if post.is_repost and post.original_post %}
+              {{ post.original_post.content|urlize|linebreaksbr }}
+            {% else %}
+              {{ post.content|urlize|linebreaksbr }}
+            {% endif %}
+          </div>
+          {% if post.is_repost and post.original_post %}
+            {% if post.original_post.content|length > 150 %}
+            <button class="kf-text-toggle" onclick="kfToggleText('{{ post.post_id }}')">
+              <span>more</span>
+              <i class="fas fa-chevron-down"></i>
+            </button>
+            {% endif %}
+          {% else %}
+            {% if post.content|length > 150 %}
+            <button class="kf-text-toggle" onclick="kfToggleText('{{ post.post_id }}')">
+              <span>more</span>
+              <i class="fas fa-chevron-down"></i>
+            </button>
+            {% endif %}
+          {% endif %}
         </div>
         {% endif %}
 
@@ -1439,6 +1765,32 @@ button:hover{
   {% endfor %}
 </div>
 <br><br>
+
+<!-- Repost Modal -->
+<div class="kf-repost-modal" id="kf-repost-modal">
+  <div class="kf-repost-modal-content">
+    <div class="kf-repost-modal-header">
+      Repost
+    </div>
+    <div class="kf-repost-modal-body">
+      <textarea 
+        class="kf-repost-textarea" 
+        id="kf-repost-caption" 
+        placeholder="Add a comment to your repost (optional)"
+        maxlength="500"></textarea>
+      <div style="font-size: 12px; color: var(--kf-text-light); text-align: right;">
+        <span id="kf-repost-char-count">0</span>/500
+      </div>
+    </div>
+    <div class="kf-repost-modal-footer">
+      <button class="kf-repost-cancel-btn" onclick="kfCloseRepostModal()">Cancel</button>
+      <button class="kf-repost-btn" id="kf-repost-confirm-btn">
+        <i class="fas fa-retweet"></i> Repost
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Fixed input area at bottom - ALL ICONS INSIDE INPUT WRAPPER -->
 <div class="kf-comment-input-area" id="myForm">
   <form id="postForm"
@@ -1506,6 +1858,198 @@ button:hover{
 
 
 <script>
+  // Variables for repost modal
+  let currentRepostPostId = null;
+  let currentRepostButton = null;
+  
+  // Helper function to show toast
+  function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = 'kf-toast';
+    toast.innerHTML = `
+      <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+      <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.style.animation = 'kfSlideOut 0.3s ease';
+      setTimeout(() => {
+        document.body.removeChild(toast);
+      }, 300);
+    }, 3000);
+  }
+  
+  // Repost functionality
+  function kfToggleRepost(postId, button) {
+    currentRepostPostId = postId;
+    currentRepostButton = button;
+    
+    const isReposted = button.getAttribute('data-reposted') === 'true';
+    
+    if (isReposted) {
+      // If already reposted, undo repost
+      kfPerformRepost(postId, '', true);
+    } else {
+      // Show repost modal for new repost
+      kfOpenRepostModal();
+    }
+  }
+  
+  function kfOpenRepostModal() {
+    const modal = document.getElementById('kf-repost-modal');
+    const textarea = document.getElementById('kf-repost-caption');
+    const charCount = document.getElementById('kf-repost-char-count');
+    
+    // Reset modal
+    textarea.value = '';
+    charCount.textContent = '0';
+    
+    // Show modal
+    modal.classList.add('show');
+    
+    // Focus textarea
+    textarea.focus();
+    
+    // Add character count listener
+    textarea.addEventListener('input', function() {
+      charCount.textContent = this.value.length;
+    });
+    
+    // Set up confirm button
+    const confirmBtn = document.getElementById('kf-repost-confirm-btn');
+    confirmBtn.onclick = function() {
+      kfPerformRepost(currentRepostPostId, textarea.value, false);
+      kfCloseRepostModal();
+    };
+  }
+  
+  function kfCloseRepostModal() {
+    const modal = document.getElementById('kf-repost-modal');
+    modal.classList.remove('show');
+    currentRepostPostId = null;
+    currentRepostButton = null;
+  }
+  
+  function kfPerformRepost(postId, caption, undo = false) {
+    const button = currentRepostButton;
+    const icon = button.querySelector('i');
+    const countSpan = button.querySelector('.kf-repost-count');
+    
+    // Get CSRF token
+    const csrftoken = getCookie('csrftoken');
+    
+    // Show loading state
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+    
+    // Send AJAX request
+    fetch(`/repost/${postId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrftoken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        caption: caption,
+        undo: undo
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Update button state
+        if (data.reposted) {
+          showToast(data.message || 'Post reposted successfully!', 'success');
+          button.setAttribute('data-reposted', 'true');
+          icon.classList.add('reposted');
+          
+          // Update count
+          if (data.repost_count > 0) {
+            countSpan.textContent = data.repost_count;
+            countSpan.classList.add('show');
+          }
+          
+          // Reload the page to show the new repost with caption
+          setTimeout(() => {
+            location.reload();
+          }, 800);
+        } else {
+          showToast(data.message || 'Repost removed', 'info');
+          button.setAttribute('data-reposted', 'false');
+          icon.classList.remove('reposted');
+          
+          // Update count
+          if (data.repost_count > 0) {
+            countSpan.textContent = data.repost_count;
+          } else {
+            countSpan.classList.remove('show');
+          }
+          
+          // Reload to remove the repost from feed
+          setTimeout(() => {
+            location.reload();
+          }, 800);
+        }
+      } else {
+        showToast('Error: ' + data.error, 'error');
+        button.innerHTML = originalText;
+        button.disabled = false;
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      showToast('Something went wrong. Please try again.', 'error');
+      button.innerHTML = originalText;
+      button.disabled = false;
+    });
+  }
+  
+  // Helper function to get CSRF token
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+  
+  // TEXT SHOW MORE/LESS FUNCTION
+  function kfToggleText(postId) {
+    const textElement = document.getElementById(`kf-text-${postId}`);
+    const button = textElement.nextElementSibling;
+    if (!button || !button.classList.contains('kf-text-toggle')) return;
+    
+    const span = button.querySelector('span');
+    const icon = button.querySelector('i');
+    
+    if (textElement.classList.contains('collapsed')) {
+      // Expand text
+      textElement.classList.remove('collapsed');
+      textElement.classList.add('expanded');
+      span.textContent = 'less';
+      icon.classList.remove('fa-chevron-down');
+      icon.classList.add('fa-chevron-up');
+    } else {
+      // Collapse text
+      textElement.classList.remove('expanded');
+      textElement.classList.add('collapsed');
+      span.textContent = 'more';
+      icon.classList.remove('fa-chevron-up');
+      icon.classList.add('fa-chevron-down');
+    }
+  }
+
   // Initialize variables for input area
   const textInput = document.getElementById('textInput');
   const sendBtn = document.getElementById('sendBtn');
@@ -1858,6 +2402,42 @@ button:hover{
                  playPauseBtn.setAttribute('data-state', 'playing');
             }
         });
+    });
+    
+    // Auto-detect long text and hide/show toggle buttons
+    document.querySelectorAll('.kf-post-text').forEach(textElement => {
+      const textContent = textElement.textContent.trim();
+      const lineCount = (textContent.match(/\n/g) || []).length + 1;
+      const charCount = textContent.length;
+      
+      // If text is long (more than 150 chars or has many lines)
+      if (charCount > 150 || lineCount > 3) {
+        textElement.classList.add('collapsed');
+        // Make sure there's a toggle button
+        if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kf-text-toggle')) {
+          const toggleBtn = document.createElement('button');
+          toggleBtn.className = 'kf-text-toggle';
+          toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
+          toggleBtn.onclick = function() {
+            kfToggleText(textElement.id.replace('kf-text-', ''));
+          };
+          textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
+        }
+      }
+    });
+    
+    // Close modal when clicking outside
+    document.getElementById('kf-repost-modal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        kfCloseRepostModal();
+      }
+    });
+    
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        kfCloseRepostModal();
+      }
     });
 });
 
