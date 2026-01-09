@@ -12,7 +12,7 @@ USE_CLOUDINARY = True
 ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
-    'kishiface.onrender.com',
+    'kishiface.onrender.com', 
 ]
 
 CSRF_TRUSTED_ORIGINS = [
