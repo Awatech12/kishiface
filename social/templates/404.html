@@ -1,12 +1,891 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preload" href="{% static 'images/logo.jpg' %}" as="image">
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <title>Kishiface - Page Not Found</title>
+  
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  
+  <!-- Critical CSS (from home page) -->
+  <style>
+    /* Minimal critical CSS - Same as home page */
+    :root {
+      --kf-bg: #fafafa;
+      --kf-white: #ffffff;
+      --kf-text: #262626;
+      --kf-text-light: #8e8e8e;
+      --kf-primary: #0095f6;
+      --kf-border: #dbdbdb;
+      --kf-repost: #17bf63;
+      --kf-repost-bg: #f0fff4;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kf-bg);
+      color: var(--kf-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior-y: contain;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .kf-container {
+      max-width: 100%;
+      width: 100%;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Header styling (matching home page header) */
+    .kf-404-header {
+      background: var(--kf-white);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    
+    .kf-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    
+    .kf-logo-img {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    
+    .kf-logo-text {
+      font-weight: 600;
+      font-size: 20px;
+      color: var(--kf-text);
+    }
+    
+    .kf-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    
+    .kf-nav-link {
+      color: var(--kf-text);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.2s ease;
+    }
+    
+    .kf-nav-link:hover {
+      color: var(--kf-primary);
+    }
+    
+    /* Skeleton Loading Animation */
+    .kf-skeleton {
+      background: linear-gradient(
+        90deg,
+        var(--kf-border) 25%,
+        var(--kf-bg) 50%,
+        var(--kf-border) 75%
+      );
+      background-size: 200% 100%;
+      animation: kf-skeleton-loading 1.5s infinite;
+      border-radius: 4px;
+    }
+    
+    @keyframes kf-skeleton-loading {
+      0% {
+        background-position: 200% 0;
+      }
+      100% {
+        background-position: -200% 0;
+      }
+    }
+    
+    /* Skeleton elements for initial load */
+    .kf-skeleton-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      margin: 0 auto 24px;
+    }
+    
+    .kf-skeleton-title {
+      width: 60%;
+      height: 32px;
+      margin: 0 auto 12px;
+    }
+    
+    .kf-skeleton-subtitle {
+      width: 40%;
+      height: 24px;
+      margin: 0 auto 20px;
+    }
+    
+    .kf-skeleton-text {
+      width: 90%;
+      height: 20px;
+      margin: 0 auto 10px;
+    }
+    
+    .kf-skeleton-text.short {
+      width: 70%;
+    }
+    
+    .kf-skeleton-button {
+      width: 140px;
+      height: 48px;
+      border-radius: 6px;
+      margin: 0 auto;
+    }
+    
+    .kf-skeleton-link-item {
+      width: 100%;
+      height: 80px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    
+    /* Main 404 content - using home page plane design */
+    .kf-404-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+    
+    .kf-404-card {
+      background: var(--kf-white);
+      width: 100%;
+      max-width: 500px;
+      text-align: center;
+      padding: 50px 40px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    
+    .kf-404-card.loaded {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .kf-404-icon {
+      font-size: 80px;
+      color: var(--kf-primary);
+      margin-bottom: 24px;
+      animation: kf-404-float 3s ease-in-out infinite;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    
+    .kf-404-card.loaded .kf-404-icon {
+      opacity: 1;
+      transform: scale(1);
+    }
+    
+    @keyframes kf-404-float {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-10px) scale(1.05); }
+    }
+    
+    .kf-404-title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--kf-text);
+      margin-bottom: 12px;
+      line-height: 1.2;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.5s ease 0.1s, transform 0.5s ease 0.1s;
+    }
+    
+    .kf-404-card.loaded .kf-404-title {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .kf-404-subtitle {
+      font-size: 18px;
+      color: var(--kf-primary);
+      font-weight: 600;
+      margin-bottom: 20px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.5s ease 0.2s, transform 0.5s ease 0.2s;
+    }
+    
+    .kf-404-card.loaded .kf-404-subtitle {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .kf-404-message {
+      font-size: 16px;
+      color: var(--kf-text-light);
+      line-height: 1.6;
+      margin-bottom: 30px;
+      max-width: 400px;
+      margin-left: auto;
+      margin-right: auto;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.5s ease 0.3s, transform 0.5s ease 0.3s;
+    }
+    
+    .kf-404-card.loaded .kf-404-message {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .kf-404-highlight {
+      color: var(--kf-text);
+      font-weight: 500;
+    }
+    
+    /* Action buttons - matching home page style */
+    .kf-404-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 300px;
+      margin: 0 auto;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.5s ease 0.4s, transform 0.5s ease 0.4s;
+    }
+    
+    .kf-404-card.loaded .kf-404-actions {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    @media (min-width: 480px) {
+      .kf-404-actions {
+        flex-direction: row;
+        max-width: 100%;
+        justify-content: center;
+      }
+    }
+    
+    .kf-404-btn {
+      padding: 14px 24px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 15px;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      opacity: 0;
+      transform: scale(0.9);
+      animation: kf-button-appear 0.5s ease forwards;
+    }
+    
+    .kf-404-card.loaded .kf-404-btn {
+      animation: kf-button-appear 0.5s ease forwards;
+    }
+    
+    .kf-404-btn:nth-child(1) { animation-delay: 0.5s; }
+    .kf-404-btn:nth-child(2) { animation-delay: 0.6s; }
+    
+    @keyframes kf-button-appear {
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    
+    .kf-404-btn-primary {
+      background: var(--kf-primary);
+      color: white;
+      border: none;
+    }
+    
+    .kf-404-btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-2px);
+    }
+    
+    .kf-404-btn-secondary {
+      background: transparent;
+      color: var(--kf-primary);
+      border: 1px solid var(--kf-primary);
+    }
+    
+    .kf-404-btn-secondary:hover {
+      background: rgba(0, 149, 246, 0.05);
+      transform: translateY(-2px);
+    }
+    
+    /* Quick links section - similar to home page suggestions */
+    /* UPDATED: Mobile will now use 4-column grid like desktop */
+    .kf-404-quick-links {
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 1px solid var(--kf-border);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.5s ease 0.5s, transform 0.5s ease 0.5s;
+    }
+    
+    .kf-404-card.loaded .kf-404-quick-links {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .kf-404-quick-links-title {
+      font-size: 14px;
+      color: var(--kf-text-light);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+      opacity: 0;
+      transform: translateY(5px);
+      transition: opacity 0.5s ease 0.6s, transform 0.5s ease 0.6s;
+    }
+    
+    .kf-404-card.loaded .kf-404-quick-links-title {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    /* UPDATED: Mobile now uses 4-column grid with horizontal scroll for better visibility */
+    .kf-404-link-grid {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--kf-primary) var(--kf-border);
+    }
+    
+    .kf-404-link-grid::-webkit-scrollbar {
+      height: 4px;
+    }
+    
+    .kf-404-link-grid::-webkit-scrollbar-track {
+      background: var(--kf-border);
+      border-radius: 2px;
+    }
+    
+    .kf-404-link-grid::-webkit-scrollbar-thumb {
+      background: var(--kf-primary);
+      border-radius: 2px;
+    }
+    
+    @media (min-width: 480px) {
+      .kf-404-link-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        overflow-x: visible;
+        padding-bottom: 0;
+      }
+      
+      .kf-404-link-grid::-webkit-scrollbar {
+        display: none;
+      }
+    }
+    
+    .kf-404-link-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 12px;
+      background: var(--kf-bg);
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      opacity: 0;
+      transform: translateY(10px);
+      animation: kf-link-appear 0.5s ease forwards;
+      flex-shrink: 0;
+      min-width: 110px;
+    }
+    
+    /* For mobile, ensure items are properly sized */
+    @media (max-width: 479px) {
+      .kf-404-link-item {
+        width: calc(25% - 9px); /* 4 items with gaps */
+        min-width: 100px;
+      }
+    }
+    
+    @media (min-width: 480px) {
+      .kf-404-link-item {
+        width: auto;
+        min-width: auto;
+      }
+    }
+    
+    .kf-404-card.loaded .kf-404-link-item {
+      animation: kf-link-appear 0.5s ease forwards;
+    }
+    
+    .kf-404-link-item:nth-child(1) { animation-delay: 0.7s; }
+    .kf-404-link-item:nth-child(2) { animation-delay: 0.8s; }
+    .kf-404-link-item:nth-child(3) { animation-delay: 0.9s; }
+    .kf-404-link-item:nth-child(4) { animation-delay: 1.0s; }
+    
+    @keyframes kf-link-appear {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .kf-404-link-item:hover {
+      background: rgba(0, 149, 246, 0.05);
+      transform: translateY(-3px);
+    }
+    
+    .kf-404-link-icon {
+      font-size: 24px;
+      color: var(--kf-primary);
+      margin-bottom: 10px;
+      transition: transform 0.3s ease;
+    }
+    
+    .kf-404-link-item:hover .kf-404-link-icon {
+      transform: scale(1.2);
+    }
+    
+    .kf-404-link-text {
+      font-size: 13px;
+      color: var(--kf-text);
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 767px) {
+      .kf-404-title {
+        font-size: 28px;
+      }
+      
+      .kf-404-subtitle {
+        font-size: 16px;
+      }
+      
+      .kf-404-card {
+        padding: 40px 24px;
+      }
+      
+      .kf-nav-links {
+        display: none;
+      }
+      
+      .kf-404-icon {
+        font-size: 60px;
+      }
+      
+      /* Mobile-specific adjustments for 4-column layout */
+      .kf-404-link-grid {
+        display: flex;
+        justify-content: flex-start;
+        scroll-snap-type: x mandatory;
+      }
+      
+      .kf-404-link-item {
+        scroll-snap-align: start;
+      }
+    }
+    
+    @media (max-width: 479px) {
+      .kf-404-title {
+        font-size: 24px;
+      }
+      
+      .kf-404-card {
+        padding: 30px 20px;
+      }
+      
+      .kf-404-message {
+        font-size: 15px;
+      }
+      
+      /* Ensure proper spacing for 4 items on very small screens */
+      .kf-404-link-item {
+        min-width: 90px;
+        padding: 14px 8px;
+      }
+      
+      .kf-404-link-icon {
+        font-size: 20px;
+        margin-bottom: 8px;
+      }
+      
+      .kf-404-link-text {
+        font-size: 12px;
+      }
+    }
+    
+    @media (min-width: 480px) and (max-width: 767px) {
+      .kf-404-link-item {
+        min-width: 100px;
+      }
+    }
+    
+    /* Loading state */
+    .kf-loading {
+      display: none;
+    }
+    
+    .kf-404-card:not(.loaded) .kf-content {
+      display: none;
+    }
+    
+    .kf-404-card.loaded .kf-loading {
+      display: none;
+    }
+    
+    .kf-404-card:not(.loaded) .kf-loading {
+      display: block;
+    }
+    
+    /* Skeleton loading for mobile grid */
+    .kf-skeleton-grid {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+      overflow-x: auto;
+      padding-bottom: 10px;
+    }
+    
+    @media (min-width: 480px) {
+      .kf-skeleton-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        overflow-x: visible;
+      }
+    }
+    
+    .kf-skeleton-link-item {
+      flex-shrink: 0;
+      width: 100px;
+      height: 80px;
+      border-radius: 6px;
+    }
+    
+    @media (max-width: 479px) {
+      .kf-skeleton-link-item {
+        width: calc(25% - 9px);
+      }
+    }
+  </style>
 </head>
 <body>
-    <h2>Error 404</h2>
-    <h4>Page not Found</h4>
+  <div class="kf-container">
+    <!-- Header -->
+    <header class="kf-404-header">
+      <a href="{% url 'home' %}" class="kf-logo">
+        <img src="{% static 'images/logo.jpg' %}" alt="Kishiface" class="kf-logo-img">
+        <span class="kf-logo-text">Kishiface</span>
+      </a>
+      
+      <div class="kf-nav-links">
+        <a href="{% url 'home' %}" class="kf-nav-link">
+          <i class="fas fa-home"></i> Home
+        </a>
+        <a href="{% url 'explore' %}" class="kf-nav-link">
+          <i class="fas fa-compass"></i> Explore
+        </a>
+        <a href="{% url 'market' %}" class="kf-nav-link">
+          <i class="fas fa-shopping-bag"></i> Marketplace
+        </a>
+      </div>
+    </header>
+    
+    <!-- Main Content with Skeleton Loading -->
+    <main class="kf-404-content">
+      <div class="kf-404-card" id="kf-404-card">
+        <!-- Skeleton Loading State -->
+        <div class="kf-loading">
+          <div class="kf-skeleton kf-skeleton-icon"></div>
+          <div class="kf-skeleton kf-skeleton-title"></div>
+          <div class="kf-skeleton kf-skeleton-subtitle"></div>
+          <div class="kf-skeleton kf-skeleton-text"></div>
+          <div class="kf-skeleton kf-skeleton-text short"></div>
+          <div class="kf-skeleton kf-skeleton-button" style="margin-bottom: 30px;"></div>
+          <div class="kf-skeleton kf-skeleton-button" style="background: transparent; border: 1px solid var(--kf-border);"></div>
+          
+          <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid var(--kf-border);">
+            <div class="kf-skeleton" style="width: 40%; height: 16px; margin: 0 auto 20px;"></div>
+            <div class="kf-skeleton-grid">
+              <div class="kf-skeleton kf-skeleton-link-item"></div>
+              <div class="kf-skeleton kf-skeleton-link-item"></div>
+              <div class="kf-skeleton kf-skeleton-link-item"></div>
+              <div class="kf-skeleton kf-skeleton-link-item"></div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Actual Content (hidden during loading) -->
+        <div class="kf-content">
+          <div class="kf-404-icon">
+            <i class="fas fa-map-signs"></i>
+          </div>
+          
+          <h1 class="kf-404-title">Page Not Found</h1>
+          
+          <div class="kf-404-subtitle">Error 404</div>
+          
+          <p class="kf-404-message">
+            Oops! The page you're looking for seems to have wandered off. 
+            <span class="kf-404-highlight">Don't worry</span> — even the best journeys sometimes take unexpected turns. 
+            Let's get you back to the good stuff.
+          </p>
+          
+          <!-- Action Buttons -->
+          <div class="kf-404-actions">
+            <a href="{% url 'home' %}" class="kf-404-btn kf-404-btn-primary">
+              <i class="fas fa-home"></i> Return to Home
+            </a>
+            
+            <a href="{% url 'explore' %}" class="kf-404-btn kf-404-btn-secondary">
+              <i class="fas fa-compass"></i> Explore Content
+            </a>
+          </div>
+          
+          <!-- Quick Links - Now 4 columns on all devices -->
+          <div class="kf-404-quick-links">
+            <div class="kf-404-quick-links-title">Quick Links</div>
+            
+            <div class="kf-404-link-grid">
+              <a href="{% url 'market' %}" class="kf-404-link-item">
+                <i class="fas fa-shopping-cart kf-404-link-icon"></i>
+                <span class="kf-404-link-text">Marketplace</span>
+              </a>
+              
+              <a href="{% url 'explore' %}" class="kf-404-link-item">
+                <i class="fas fa-user-friends kf-404-link-icon"></i>
+                <span class="kf-404-link-text">Discover Users</span>
+              </a>
+              
+              <a href="{% url 'profile' request.user.username %}" class="kf-404-link-item">
+                <i class="fas fa-user-circle kf-404-link-icon"></i>
+                <span class="kf-404-link-text">Your Profile</span>
+              </a>
+              
+              <a href="#" class="kf-404-link-item" id="kf-go-back-link">
+                <i class="fas fa-arrow-left kf-404-link-icon"></i>
+                <span class="kf-404-link-text">Go Back</span>
+              </a>
+            </div>
+            
+            <!-- Mobile scroll hint (only visible on mobile) -->
+            <div class="kf-mobile-scroll-hint" style="display: none; text-align: center; margin-top: 10px;">
+              <span style="font-size: 12px; color: var(--kf-text-light);">
+                <i class="fas fa-arrows-left-right" style="margin-right: 4px;"></i>
+                Scroll to see all options
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <script>
+    // Simulate loading with skeleton animation
+    document.addEventListener('DOMContentLoaded', function() {
+      const card = document.getElementById('kf-404-card');
+      
+      // Show mobile scroll hint if needed
+      checkMobileScrollHint();
+      
+      // Show skeleton for 1.5 seconds, then reveal content
+      setTimeout(() => {
+        card.classList.add('loaded');
+        
+        // Add interactive effects after content loads
+        setupInteractiveEffects();
+      }, 1500);
+    });
+    
+    function checkMobileScrollHint() {
+      // Only show scroll hint on mobile if content might overflow
+      const isMobile = window.innerWidth < 480;
+      const scrollHint = document.querySelector('.kf-mobile-scroll-hint');
+      
+      if (isMobile && scrollHint) {
+        // Check if the grid might be scrollable
+        const linkGrid = document.querySelector('.kf-404-link-grid');
+        if (linkGrid) {
+          const gridWidth = linkGrid.scrollWidth;
+          const containerWidth = linkGrid.clientWidth;
+          
+          if (gridWidth > containerWidth) {
+            scrollHint.style.display = 'block';
+            
+            // Hide hint after 5 seconds
+            setTimeout(() => {
+              scrollHint.style.opacity = '0';
+              scrollHint.style.transition = 'opacity 1s ease';
+              setTimeout(() => {
+                scrollHint.style.display = 'none';
+              }, 1000);
+            }, 5000);
+          }
+        }
+      }
+    }
+    
+    function setupInteractiveEffects() {
+      // Simple animation for link items on hover
+      document.querySelectorAll('.kf-404-link-item').forEach(item => {
+        item.addEventListener('mouseenter', function() {
+          const icon = this.querySelector('.kf-404-link-icon');
+          icon.style.transform = 'scale(1.2) translateY(-3px)';
+        });
+        
+        item.addEventListener('mouseleave', function() {
+          const icon = this.querySelector('.kf-404-link-icon');
+          icon.style.transform = 'scale(1) translateY(0)';
+        });
+      });
+      
+      // Add ripple effect to buttons
+      document.querySelectorAll('.kf-404-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+          createRippleEffect(this, e);
+        });
+      });
+      
+      // Handle the "Go Back" button
+      const goBackLink = document.getElementById('kf-go-back-link');
+      if (goBackLink) {
+        goBackLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          createRippleEffect(this, e);
+          
+          // Add a smooth transition before going back
+          this.style.transform = 'scale(0.95)';
+          setTimeout(() => {
+            if (history.length > 1) {
+              history.back();
+            } else {
+              // If no history, redirect to home
+              window.location.href = "{% url 'home' %}";
+            }
+          }, 300);
+        });
+      }
+      
+      // Make quick links on mobile swipeable
+      const linkGrid = document.querySelector('.kf-404-link-grid');
+      if (linkGrid && 'ontouchstart' in window) {
+        let isSwiping = false;
+        let startX = 0;
+        let scrollLeft = 0;
+        
+        linkGrid.addEventListener('touchstart', (e) => {
+          isSwiping = true;
+          startX = e.touches[0].pageX - linkGrid.offsetLeft;
+          scrollLeft = linkGrid.scrollLeft;
+        });
+        
+        linkGrid.addEventListener('touchmove', (e) => {
+          if (!isSwiping) return;
+          e.preventDefault();
+          const x = e.touches[0].pageX - linkGrid.offsetLeft;
+          const walk = (x - startX) * 2;
+          linkGrid.scrollLeft = scrollLeft - walk;
+        });
+        
+        linkGrid.addEventListener('touchend', () => {
+          isSwiping = false;
+        });
+      }
+    }
+    
+    function createRippleEffect(element, event) {
+      const ripple = document.createElement('span');
+      const rect = element.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      const x = event.clientX - rect.left - size/2;
+      const y = event.clientY - rect.top - size/2;
+      
+      ripple.style.cssText = `
+        position: absolute;
+        border-radius: 50%;
+        background: ${element.classList.contains('kf-404-btn-primary') 
+          ? 'rgba(255, 255, 255, 0.7)' 
+          : element.classList.contains('kf-404-link-item')
+          ? 'rgba(0, 149, 246, 0.1)'
+          : 'rgba(0, 149, 246, 0.2)'};
+        transform: scale(0);
+        animation: ripple 0.6s linear;
+        width: ${size}px;
+        height: ${size}px;
+        top: ${y}px;
+        left: ${x}px;
+        pointer-events: none;
+        z-index: 1;
+      `;
+      
+      element.style.position = 'relative';
+      element.style.overflow = 'hidden';
+      element.appendChild(ripple);
+      
+      // Remove ripple after animation
+      setTimeout(() => {
+        if (ripple.parentNode === element) {
+          element.removeChild(ripple);
+        }
+      }, 600);
+    }
+    
+    // Add CSS for ripple effect
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes ripple {
+        to {
+          transform: scale(4);
+          opacity: 0;
+        }
+      }
+      
+      /* Add smooth scrolling for the mobile grid */
+      .kf-404-link-grid {
+        scroll-behavior: smooth;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Handle window resize to update mobile scroll hint
+    window.addEventListener('resize', checkMobileScrollHint);
+  </script>
 </body>
 </html>
