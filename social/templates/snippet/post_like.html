@@ -1,3 +1,4 @@
+<!-- post_like.html -->
 {% load humanize %}
 
 <!DOCTYPE html>
@@ -9,12 +10,63 @@
     
     <link rel="stylesheet" 
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" 
-          xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLMDJ8g359L5E727yL3rLw8x7e7Q6A2h9f6Jc8y5qP3f6sA7h3i5f6bN8Z6d5P8w==" 
+          integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PNO+I+9klVjKjK4FOGQJZp+QAUU9QJxO6g4aJiHXb8k1YQkT3qO+2Cjw==" 
           crossorigin="anonymous" 
           referrerpolicy="no-referrer" />
     
     <style>
-       
+        /* ANIMATION STYLES */
+        @keyframes heartBeat {
+            0% { transform: scale(1); }
+            15% { transform: scale(1.3); }
+            30% { transform: scale(0.95); }
+            45% { transform: scale(1.15); }
+            60% { transform: scale(0.98); }
+            75% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes bounceUp {
+            0% { transform: translateY(0); }
+            25% { transform: translateY(-8px); }
+            50% { transform: translateY(3px); }
+            75% { transform: translateY(-4px); }
+            100% { transform: translateY(0); }
+        }
+
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 0 0 rgba(255, 44, 85, 0.4); }
+            70% { box-shadow: 0 0 0 8px rgba(255, 44, 85, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 44, 85, 0); }
+        }
+
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-40px) scale(0.3);
+                opacity: 0;
+            }
+        }
+
+        @keyframes likeCountPop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes ripple {
+            0% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            100% {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
 
         /* LIKERS AND ENGAGEMENT COUNTS SECTION */
         .engagement {
@@ -38,14 +90,19 @@
             border-radius: 50%;
             border: 2px solid white;
             margin-left: -5px;
-            transition: transform 0.2s;
+            transition: transform 0.2s ease, z-index 0.2s;
+            position: relative;
         }
         
         .likers-container a:first-child .liker-pic {
             margin-left: 0;
         }
 
-        
+        .liker-pic:hover {
+            transform: translateY(-2px);
+            z-index: 10;
+        }
+
         .like-text {
             font-weight: normal;
             color: #374151;
@@ -61,7 +118,6 @@
             color: #374151;
         }
 
-        /* Comment text styling */
         .comment-text {
             font-size: 14px;
             color: #4b5563;
@@ -76,29 +132,25 @@
         .comment-text a:hover {
             text-decoration: underline;
         }
-        
 
-        /* View count styling */
         .view-text {
             font-size: 14px;
             color: #4b5563;
         }
 
-        /* Separator dots */
         .separator-dot {
             color: #4b5563;
             font-size: 14px;
             margin: 0 4px;
         }
 
-        /* Engagement item container */
         .engagement-item {
             display: flex;
             align-items: center;
             gap: 4px;
         }
 
-        /* HORIZONTAL ACTIONS SECTION */
+        /* HORIZONTAL ACTIONS SECTION - ENHANCED */
         .horizontal-actions-container {
             display: flex;
             align-items: center;
@@ -115,38 +167,128 @@
             color: #4b5563;
             font-size: 14px;
             font-weight: 500;
-            padding: 6px 10px;
-            border-radius: 8px;
-            transition: all 0.2s ease;
+            padding: 8px 12px;
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .horizontal-action-item::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 44, 85, 0.1);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .horizontal-action-item:active::before {
+            width: 120px;
+            height: 120px;
         }
 
         .horizontal-action-item:hover {
             background-color: #f3f4f6;
             color: #1f2937;
+            transform: translateY(-2px);
         }
 
         .horizontal-action-icon {
             font-size: 20px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
         }
 
-        /* Social icon colors */
-        .share-facebook:hover { color: #1877f2; }
-        .share-twitter:hover { color: #1da1f2; }
-        .share-whatsapp:hover { color: #25d366; }
+        /* Like button animation classes */
+        .heart-animate {
+            animation: heartBeat 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            color: #ff2c55 !important;
+        }
 
-        /* Like button active state */
-        .horizontal-action-item .fa-heart {
-            transition: color 0.2s;
+        .heart-pulse {
+            position: relative;
+        }
+
+        .heart-pulse::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 44, 85, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulseGlow 1s ease-out;
+            pointer-events: none;
+        }
+
+        .like-count-animate {
+            display: inline-block;
+            animation: likeCountPop 0.5s ease-out;
+            color: #ff2c55;
+            font-weight: 600;
+        }
+
+        /* Hover effects for social icons */
+        .share-facebook:hover .horizontal-action-icon {
+            color: #1877f2;
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .share-twitter:hover .horizontal-action-icon {
+            color: #1da1f2;
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .share-whatsapp:hover .horizontal-action-icon {
+            color: #25d366;
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        /* Comment icon animation */
+        .horizontal-action-item:hover .fa-comment {
+            animation: bounceUp 0.6s ease-out;
+        }
+
+        /* Ripple effect for click */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 44, 85, 0.3);
+            transform: scale(0);
+            animation: ripple 0.6s linear;
+            pointer-events: none;
+        }
+
+        /* HTMX transition classes */
+        .htmx-swapping .horizontal-action-icon {
+            opacity: 0.5;
+            transform: scale(0.8);
+        }
+
+        .htmx-settling .horizontal-action-icon {
+            transition: all 0.3s ease;
+        }
+
+        /* Like count color transitions */
+        .horizontal-action-item span {
+            transition: color 0.3s ease;
         }
 
         /* Mobile adjustments */
         @media (max-width: 767px) {
             .horizontal-actions-container {
-                gap: 15px;
+                gap: 12px;
             }
             
             .horizontal-action-item {
-                padding: 6px 8px;
+                padding: 6px 10px;
                 gap: 6px;
                 font-size: 13px;
             }
@@ -166,73 +308,83 @@
 <!-- Each post engagement block -->
 <div id="post-engagement-{{ post.post_id }}">
   
- 
-
   <!-- HORIZONTAL ACTION BUTTONS -->
   <div class="horizontal-actions-container">
     
-    <!-- LIKE/UNLIKE BUTTON -->
+    <!-- LIKE/UNLIKE BUTTON - ANIMATED -->
     <a href="#"
        hx-get="{% url 'like_post' post.post_id %}"
        hx-target="#post-engagement-{{ post.post_id }}"
        hx-swap="outerHTML"
-       class="horizontal-action-item">
+       hx-trigger="click"
+       hx-indicator="#like-indicator-{{ post.post_id }}"
+       class="horizontal-action-item like-btn"
+       id="like-btn-{{ post.post_id }}">
+      
       {% if request.user in post.likes.all %}
-      <i class="fa-solid fa-heart horizontal-action-icon" style="color: #ff2c55;"></i>
-      <span>Liked</span>
+      <i class="fa-solid fa-heart horizontal-action-icon heart-animate" 
+         style="color: #ff2c55;"></i>
+      <span class="like-text-animated">Liked</span>
       {% else %}
       <i class="fa-regular fa-heart horizontal-action-icon"></i>
       <span>Like</span>
       {% endif %}
+      
+      <!-- Loading indicator -->
+      <div id="like-indicator-{{ post.post_id }}" 
+           class="htmx-indicator"
+           style="display: none; margin-left: 5px;">
+        <i class="fas fa-spinner fa-spin"></i>
+      </div>
     </a>
 
     <!-- COMMENT BUTTON -->
     <a href="{% url 'post_comment' post.post_id %}" class="horizontal-action-item">
       <i class="fa-regular fa-comment horizontal-action-icon"></i>
-      <span>{{ post.comments.count|intcomma }} </span>
-      
+      <span class="comment-count">{{ post.comments.count|intcomma }}</span>
     </a>
 
     <!-- FACEBOOK -->
-    <a href="#" class="horizontal-action-item share-facebook"
-       data-media="https://kishiface.onrender.com/comment/{{post.post_id}}">
+    <a href="https://www.facebook.com/sharer/sharer.php?u=https://kishiface.pythonanywhere.com/{{post.post_id}}" 
+       target="_blank"
+       class="horizontal-action-item share-facebook">
       <i class="fab fa-facebook horizontal-action-icon"></i>
-      
     </a>
 
     <!-- TWITTER -->
-    <a href="#" class="horizontal-action-item share-twitter"
-       data-message="{{ post.message|urlencode }}"
-       data-media="https://kishiface.onrender.com/comment/{{post.post_id}}">
+    <a href="https://twitter.com/intent/tweet?text={{ post.message|urlencode }}%20https://kishiface.pythonanywhere.com/{{post.post_id}}" 
+       target="_blank"
+       class="horizontal-action-item share-twitter">
       <i class="fab fa-twitter horizontal-action-icon"></i>
-      
     </a>
 
     <!-- WHATSAPP -->
-    <a href="#" class="horizontal-action-item share-whatsapp"
-       data-message="{{ post.message|urlencode }}"
-       data-media="https://kishiface.onrender.com/comment/{{post.post_id}}">
+    <a href="https://api.whatsapp.com/send?text={{ post.message|urlencode }}%20https://kishiface.pythonanywhere.com/comment/{{post.post_id}}" 
+       target="_blank"
+       class="horizontal-action-item share-whatsapp">
       <i class="fab fa-whatsapp horizontal-action-icon"></i>
-      
     </a>
   </div>
 
-   <!-- LIKERS AND ENGAGEMENT COUNTS SECTION -->
+  <!-- LIKERS AND ENGAGEMENT COUNTS SECTION -->
   <div class="engagement">
     <!-- Show liker avatars only if there are likes -->
     {% if post.likes.count > 0 %}
     <div class="likers-container">
       {% for liker in post.likes.all|slice:":3" %}
-      <a href="{% url 'profile' liker.username %}">
+      <a href="{% url 'profile' liker.username %}" 
+         class="liker-link"
+         aria-label="{{ liker.username }}">
         <img src="{{ liker.profile.picture.url }}"
-             onerror="this.onerror=null; this.src='https://placehold.co/24x24/cccccc/ffffff?text=L';"
-             alt="{{ liker.username }}" class="liker-pic">
+             onerror="this.onerror=null; this.src='https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}';"
+             alt="{{ liker.username }}" 
+             class="liker-pic">
       </a>
       {% endfor %}
     </div>
     {% endif %}
 
-    <!-- LIKE COUNTING -->
+    <!-- LIKE COUNTING WITH ANIMATIONS -->
     <div class="engagement-item">
       <span class="like-text">
         {% if post.likes.count == 0 %}
@@ -243,14 +395,15 @@
           <!-- Current user HAS liked the post -->
           {% if post.likes.count == 1 %}
             <!-- Only the current user has liked -->
-            <span class="you-text">Liked by You</span>
+            <span class="you-text like-count-animate">Liked by You</span>
           
           {% elif post.likes.count == 2 %}
             <!-- You + 1 other person -->
-            <span class="you-text">Liked by You</span> and 
+            <span class="you-text like-count-animate">Liked by You</span> and 
             {% for liker in post.likes.all %}
               {% if liker != request.user %}
-                <a href="{% url 'profile' liker.username %}" style="font-weight: 600; color: #374151; text-decoration: none;">
+                <a href="{% url 'profile' liker.username %}" 
+                   style="font-weight: 600; color: #374151; text-decoration: none; transition: color 0.3s;">
                   {{ liker.username }}
                 </a>
               {% endif %}
@@ -258,15 +411,15 @@
           
           {% else %}
             <!-- You + 2+ others -->
-            <!-- Count how many non-user likers -->
             {% with non_user_likers_count=post.likes.count|add:"-1" %}
-              <span class="you-text">Liked by You</span>
+              <span class="you-text like-count-animate">Liked by You</span>
               {% if non_user_likers_count == 1 %}
                 <!-- You + 1 other -->
                 {% for liker in post.likes.all %}
                   {% if liker != request.user %}
                     and 
-                    <a href="{% url 'profile' liker.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+                    <a href="{% url 'profile' liker.username %}" 
+                       style="font-weight: normal; color: #374151; text-decoration: none;">
                       {{ liker.username }}
                     </a>
                   {% endif %}
@@ -277,12 +430,14 @@
                   {% if liker != request.user %}
                     {% if forloop.counter == 1 %}
                       , 
-                      <a href="{% url 'profile' liker.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+                      <a href="{% url 'profile' liker.username %}" 
+                         style="font-weight: normal; color: #374151; text-decoration: none;">
                         {{ liker.username }}
                       </a>
                     {% elif forloop.counter == 2 %}
                       and 
-                      <a href="{% url 'profile' liker.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+                      <a href="{% url 'profile' liker.username %}" 
+                         style="font-weight: normal; color: #374151; text-decoration: none;">
                         {{ liker.username }}
                       </a>
                     {% endif %}
@@ -294,12 +449,14 @@
                   {% if liker != request.user %}
                     {% if forloop.counter == 1 %}
                       , 
-                      <a href="{% url 'profile' liker.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+                      <a href="{% url 'profile' liker.username %}" 
+                         style="font-weight: normal; color: #374151; text-decoration: none;">
                         {{ liker.username }}
                       </a>
                     {% elif forloop.counter == 2 %}
                       and 
-                      <a href="#" style="font-weight: normal; color: #374151; text-decoration: none;">
+                      <a href="#" 
+                         style="font-weight: normal; color: #374151; text-decoration: none;">
                         {{ non_user_likers_count|add:"-1" }} others
                       </a>
                     {% endif %}
@@ -313,7 +470,8 @@
           <!-- Current user has NOT liked the post -->
           {% if post.likes.count == 1 %}
             {% with liker=post.likes.first %}
-              Liked by <a href="{% url 'profile' liker.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+              Liked by <a href="{% url 'profile' liker.username %}" 
+                         style="font-weight: normal; color: #374151; text-decoration: none;">
                 {{ liker.username }}
               </a>
             {% endwith %}
@@ -321,10 +479,12 @@
           {% elif post.likes.count == 2 %}
             {% with liker1=post.likes.all.0 liker2=post.likes.all.1 %}
               Liked by 
-              <a href="{% url 'profile' liker1.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+              <a href="{% url 'profile' liker1.username %}" 
+                 style="font-weight: normal; color: #374151; text-decoration: none;">
                 {{ liker1.username }}
               </a> and 
-              <a href="{% url 'profile' liker2.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+              <a href="{% url 'profile' liker2.username %}" 
+                 style="font-weight: normal; color: #374151; text-decoration: none;">
                 {{ liker2.username }}
               </a>
             {% endwith %}
@@ -332,13 +492,16 @@
           {% elif post.likes.count == 3 %}
             {% with liker1=post.likes.all.0 liker2=post.likes.all.1 liker3=post.likes.all.2 %}
               Liked by 
-              <a href="{% url 'profile' liker1.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+              <a href="{% url 'profile' liker1.username %}" 
+                 style="font-weight: normal; color: #374151; text-decoration: none;">
                 {{ liker1.username }}
               </a>, 
-              <a href="{% url 'profile' liker2.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+              <a href="{% url 'profile' liker2.username %}" 
+                 style="font-weight: normal; color: #374151; text-decoration: none;">
                 {{ liker2.username }}
               </a> and 
-              <a href="{% url 'profile' liker3.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+              <a href="{% url 'profile' liker3.username %}" 
+                 style="font-weight: normal; color: #374151; text-decoration: none;">
                 {{ liker3.username }}
               </a>
             {% endwith %}
@@ -346,13 +509,16 @@
           {% else %}
             {% with liker1=post.likes.all.0 liker2=post.likes.all.1 %}
               Liked by 
-              <a href="{% url 'profile' liker1.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+              <a href="{% url 'profile' liker1.username %}" 
+                 style="font-weight: normal; color: #374151; text-decoration: none;">
                 {{ liker1.username }}
               </a>, 
-              <a href="{% url 'profile' liker2.username %}" style="font-weight: normal; color: #374151; text-decoration: none;">
+              <a href="{% url 'profile' liker2.username %}" 
+                 style="font-weight: normal; color: #374151; text-decoration: none;">
                 {{ liker2.username }}
               </a> and 
-              <a href="#" style="font-weight: normal; color: #374151; text-decoration: none;">
+              <a href="#" 
+                 style="font-weight: normal; color: #374151; text-decoration: none;">
                 {{ post.likes.count|add:"-2" }} others
               </a>
             {% endwith %}
@@ -360,7 +526,6 @@
         {% endif %}
       </span>
     </div>
-
 
     <!-- VIEW COUNT (always shown) -->
     <span class="separator-dot">·</span>
@@ -372,50 +537,6 @@
     </div>
   </div>
 </div>
-
-<!-- SCRIPT: Handles share buttons -->
-<script>
-document.addEventListener('click', function(e) {
-    const whatsappBtn = e.target.closest('.share-whatsapp');
-    const facebookBtn = e.target.closest('.share-facebook');
-    const twitterBtn = e.target.closest('.share-twitter');
-
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-    // WHATSAPP
-    if (whatsappBtn) {
-        e.preventDefault();
-        // Use encodeURIComponent for safety
-        const message = encodeURIComponent(whatsappBtn.getAttribute('data-message'));
-        const media = encodeURIComponent(whatsappBtn.getAttribute('data-media'));
-        
-        const text = `${message}%20${media}`;
-        
-        // Determine URL based on device
-        const url = isMobile
-            ? `https://api.whatsapp.com/send?text=${text}`
-            : `https://web.whatsapp.com/send?text=${text}`;
-        window.open(url, '_blank');
-    }
-
-    // FACEBOOK
-    if (facebookBtn) {
-        e.preventDefault();
-        const media = encodeURIComponent(facebookBtn.getAttribute('data-media'));
-        const url = `https://www.facebook.com/sharer/sharer.php?u=${media}`;
-        window.open(url, '_blank');
-    }
-
-    // TWITTER
-    if (twitterBtn) {
-        e.preventDefault();
-        const message = encodeURIComponent(twitterBtn.getAttribute('data-message'));
-        const media = encodeURIComponent(twitterBtn.getAttribute('data-media'));
-        const url = `https://twitter.com/intent/tweet?text=${message}%20${media}`;
-        window.open(url, '_blank');
-    }
-});
-</script>
 
 </body>
 </html>
