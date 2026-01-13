@@ -317,13 +317,16 @@ class Channel(models.Model):
     subscriber = models.ManyToManyField(User, blank=True, related_name='subscribed_channels')
     image = models.ImageField(upload_to='channel_image', default='male.png')
     created_at = models.DateTimeField(auto_now_add=True)
-    
+    admins = models.ManyToManyField(User, blank=True, related_name='admin_of_channel')
     # NEW FIELDS for Admin Controls
     # stores users who are banned/blocked from re-joining or viewing the channel
     blocked_users = models.ManyToManyField(User, blank=True, related_name='blocked_from_channels')
     
     # If True, only the channel_owner can send messages. Regular subscribers can only read.
     is_broadcast_only = models.BooleanField(default=False)
+
+    def is_user_admin(self, user):
+        return user == self.channel_owner or self.admins.filter(id=user.id).exists()
 
     def __str__(self):
         return self.channel_name

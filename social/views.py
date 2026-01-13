@@ -1061,11 +1061,12 @@ def channel(request, channel_id):
         'channel_id': str(channel_id),
         'total_unread': total_unread,
         'notifications': notifications,
-        'is_admin': channel.channel_owner == request.user, # For template logic
+        'is_admin': channel.is_user_admin(request.user), 
+        'is_owner': channel.channel_owner == request.user
     }
     
     return render(request, 'channel.html', context)
-
+ 
 @login_required
 def channel_message(request, channel_id):
     """
@@ -1184,34 +1185,71 @@ def update_channel(request, channel_id):
 @login_required
 def manage_member(request, channel_id, user_id):
     """
-    Allows Admin to Remove or Block a user from the channel.
-    Uses JSON because the fetch call in HTML sends a JSON body.
+    Handles removing or blocking users from a channel.
+    Respects hierarchy: Regular Admins can manage members, 
+    but only the primary Owner can manage other Admins.
     """
     channel = get_object_or_404(Channel, channel_id=channel_id)
     
-    if request.user != channel.channel_owner:
-        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
-
+    # 1. Permission Check: Must be an Admin or the Owner to perform management
+    if not channel.is_user_admin(request.user):
+        return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
+    
     if request.method == 'POST':
         try:
-            # Parse JSON data from the fetch body
+            # Parse the JSON data from the request body
             data = json.loads(request.body)
             action = data.get('action')
-            target_user = User.objects.get(id=user_id)
+            target_user = get_object_or_404(User, id=user_id)
+            
+            # 2. Hierarchy Check:
+            # Check if the target is an admin or the primary creator
+            is_target_admin = channel.admins.filter(id=target_user.id).exists()
+            is_target_owner = (target_user == channel.channel_owner)
 
-            if action == 'remove':
+            # Security logic: Regular Admins cannot remove the Owner or other Admins.
+            if (is_target_admin or is_target_owner) and request.user != channel.channel_owner:
+                return JsonResponse({
+                    'success': False, 
+                    'message': 'Permission denied: Only the owner can remove admins.'
+                }, status=403)
+            
+            # 3. Execute Actions
+            if action == 'remove' or action == 'block':
+                # Remove from subscribers list
                 channel.subscriber.remove(target_user)
+                
+                # Cleanup: Always remove from admin list if they are being kicked out
+                channel.admins.remove(target_user) 
+                
+                if action == 'block':
+                    # Add to the blocked_users ManyToMany field
+                    channel.blocked_users.add(target_user)
+                    
                 return JsonResponse({'success': True})
+            
+            else:
+                return JsonResponse({'success': False, 'message': 'Unknown action'}, status=400)
 
-            elif action == 'block':
-                channel.subscriber.remove(target_user)
-                channel.blocked_users.add(target_user)
-                return JsonResponse({'success': True})
+        except (json.JSONDecodeError, User.DoesNotExist):
+            return JsonResponse({'success': False, 'message': 'Invalid request data'}, status=400)
 
-        except (User.DoesNotExist, json.JSONDecodeError):
-            return JsonResponse({'success': False}, status=400)
+    return JsonResponse({'success': False, 'message': 'Method not allowed'}, status=405)
 
-    return JsonResponse({'success': False}, status=400)
+@login_required
+def toggle_admin(request, channel_id, user_id):
+    """View to promote/demote a user."""
+    channel = get_object_or_404(Channel, channel_id=channel_id)
+    if request.user != channel.channel_owner:
+        return JsonResponse({'success': False}, status=403)
+
+    target_user = get_object_or_404(User, id=user_id)
+    if channel.admins.filter(id=target_user.id).exists():
+        channel.admins.remove(target_user)
+    else:
+        channel.admins.add(target_user)
+    return JsonResponse({'success': True})
+
 @login_required
 def channelmessage_like(request, channelmessage_id):
     channelmessage = get_object_or_404(ChannelMessage, channelmessage_id=channelmessage_id)

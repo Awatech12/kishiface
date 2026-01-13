@@ -49,6 +49,7 @@ urlpatterns = [
     
     # Member Management API
     path('channel/manage-member/<uuid:channel_id>/<int:user_id>/', views.manage_member, name='manage_member'),
+    path('channel/toggle-admin/<uuid:channel_id>/<int:user_id>/', views.toggle_admin, name='toggle_admin'),
 
     #====== market form =======
     path('add', views.marketForm, name='marketform'),
