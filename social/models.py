@@ -309,41 +309,58 @@ class Message(models.Model):
 
 
 class Channel(models.Model):
-    channel_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    channel_owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='channel_author')
+    # Original Fields
+    channel_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    channel_owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_channels')
     channel_name = models.CharField(max_length=200)
-    about = models.TextField()
-    subscriber = models.ManyToManyField(User, blank=True, related_name='channel_subscriber')
-    image=models.ImageField(upload_to='channel_image', default='male.png')
+    about = models.TextField(blank=True)
+    subscriber = models.ManyToManyField(User, blank=True, related_name='subscribed_channels')
+    image = models.ImageField(upload_to='channel_image', default='male.png')
     created_at = models.DateTimeField(auto_now_add=True)
     
+    # NEW FIELDS for Admin Controls
+    # stores users who are banned/blocked from re-joining or viewing the channel
+    blocked_users = models.ManyToManyField(User, blank=True, related_name='blocked_from_channels')
+    
+    # If True, only the channel_owner can send messages. Regular subscribers can only read.
+    is_broadcast_only = models.BooleanField(default=False)
+
     def __str__(self):
         return self.channel_name
-    
-    
+
     def unread_count_for_user(self, user):
-        """Get unread message count for a specific user"""
+        """
+        Calculates the number of messages sent after the user's last visit.
+        Note: Requires ChannelUserLastSeen and ChannelMessage models to exist.
+        """
         if not user.is_authenticated:
             return 0
         
-        # Get user's last seen timestamp for this channel
+        # We import inside the method to avoid circular import issues if models are in the same file
+        from .models import ChannelMessage, ChannelUserLastSeen
+        
+        # Get user's last seen timestamp for this specific channel
         last_seen = ChannelUserLastSeen.objects.filter(
             channel=self,
             user=user
         ).first()
         
         if last_seen:
-            # Count messages created after user last saw the channel
+            # Count messages created after the 'last_seen_at' timestamp
             return ChannelMessage.objects.filter(
                 channel=self,
                 created_at__gt=last_seen.last_seen_at
             ).exclude(author=user).count()
         
-        # If never seen before, count all messages except user's own
+        # If the user has never opened the channel, count all messages they didn't author
         return ChannelMessage.objects.filter(
             channel=self
         ).exclude(author=user).count()
 
+    class Meta:
+        verbose_name = "Channel"
+        verbose_name_plural = "Channels"
+        ordering = ['-created_at']
 class ChannelUserLastSeen(models.Model):
     """Tracks when a user last viewed a channel"""
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)

@@ -1021,19 +1021,26 @@ def follow_channel(request, channel_id):
     
 @login_required
 def channel(request, channel_id):
+    """
+    Renders the channel page with grouped messages and channel details.
+    Includes security check for blocked users.
+    """
     channel = get_object_or_404(Channel, channel_id=channel_id)
     
-    # Update last seen timestamp
+    # SECURITY: Check if current user is blocked from this channel
+    if request.user in channel.blocked_users.all():
+        # Redirect to a generic page or home if blocked
+        return redirect('home') 
+
+    # Update user's last seen timestamp for unread calculation
     ChannelUserLastSeen.objects.update_or_create(
         channel=channel,
         user=request.user,
         defaults={'last_seen_at': timezone.now()}
     )
     
-    # Get all messages for this channel
+    # Get all messages and group them by date
     messages = ChannelMessage.objects.filter(channel=channel).order_by('created_at')
-    
-    # Group messages by date
     grouped_messages = {}
     for message in messages:
         date_label = message.chat_date_label
@@ -1041,11 +1048,11 @@ def channel(request, channel_id):
             grouped_messages[date_label] = []
         grouped_messages[date_label].append(message)
     
-    # Get total unread for footer
-    channels = Channel.objects.filter(subscriber=request.user)
-    total_unread = sum(ch.unread_count_for_user(request.user) for ch in channels)
+    # Get total unread count across all subscribed channels for the sidebar/footer
+    subscribed_channels = Channel.objects.filter(subscriber=request.user)
+    total_unread = sum(ch.unread_count_for_user(request.user) for ch in subscribed_channels)
     
-    # Get notifications count
+    # User notifications
     notifications = request.user.notifications.filter(is_read=False)
     
     context = {
@@ -1054,17 +1061,27 @@ def channel(request, channel_id):
         'channel_id': str(channel_id),
         'total_unread': total_unread,
         'notifications': notifications,
+        'is_admin': channel.channel_owner == request.user, # For template logic
     }
     
     return render(request, 'channel.html', context)
+
 @login_required
 def channel_message(request, channel_id):
+    """
+    Handles sending messages (text, files, audio) and broadcasts via WebSockets.
+    Respects Broadcast Mode (Admins only if enabled).
+    """
     channel = get_object_or_404(Channel, channel_id=channel_id)
     
+    # SECURITY: Prevent non-admins from posting if broadcast mode is ON
+    if channel.is_broadcast_only and request.user != channel.channel_owner:
+        return JsonResponse({'status': 'error', 'message': 'Only admins can post in this channel.'}, status=403)
+
     if request.method == 'POST':
-        message = request.POST.get('message', '')
+        message_text = request.POST.get('message', '')
         file_upload = request.FILES.get('file_upload')
-        reply_to_id = request.POST.get('reply_to')  # Get the parent message ID from the request
+        reply_to_id = request.POST.get('reply_to')
 
         file_type = None
         if file_upload:
@@ -1076,68 +1093,49 @@ def channel_message(request, channel_id):
             elif content_type.startswith('audio/'):
                 file_type = 'audio'
             else:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Unsupported file type'
-                })
+                return JsonResponse({'status': 'error', 'message': 'Unsupported file type'})
 
-        # Handle Reply Logic: Fetch the message object being replied to
-        reply_to_obj = None
-        if reply_to_id:
-            try:
-                # Assuming channelmessage_id is a UUID or primary key
-                reply_to_obj = ChannelMessage.objects.get(channelmessage_id=reply_to_id)
-            except (ChannelMessage.DoesNotExist, ValueError):
-                reply_to_obj = None
-
-        # Create the new database entry
+        # Create the message instance
         channelMessage = ChannelMessage.objects.create(
             channel=channel,
             author=request.user,
-            message=message if message else '',
-            file_type=file_type if file_type else None,
-            file=file_upload if file_upload else None,
-            reply_to=reply_to_obj
+            message=message_text if message_text else '',
+            file_type=file_type,
+            file=file_upload,
+            reply_to_id=reply_to_id if reply_to_id else None
         )
 
-        # Prepare Reply Data for WebSocket (so other users see the reply bubble)
+        # Real-time Broadcast via WebSockets
+        layer = get_channel_layer()
+        group_name = f'channel_{channel_id}'
+        file_url = channelMessage.file.url if channelMessage.file else None
+        
+        # Determine reply data for real-time update
         reply_data = None
         if channelMessage.reply_to:
             reply_data = {
-                'id': str(channelMessage.reply_to.channelmessage_id),
                 'author': channelMessage.reply_to.author.username,
-                # Show snippet of text, or "Media file" if it's an image/video/audio
-                'message': channelMessage.reply_to.message[:50] if channelMessage.reply_to.message else "Media file",
-                'file_type': channelMessage.reply_to.file_type
+                'message': channelMessage.reply_to.message[:50] if channelMessage.reply_to.message else "Media file"
             }
 
-        layer = get_channel_layer()
-        channel_group_name = f'channel_{channel_id}'
-        file_url = channelMessage.file.url if channelMessage.file else None
-        
-        # 1. BROADCAST NEW MESSAGE: Send to everyone currently inside the channel
         async_to_sync(layer.group_send)(
-            channel_group_name,
+            group_name,
             {
-                'type': 'channel_message',
+                'type': 'channel_message', # This triggers appendNewMessage in your JS
                 'author': channelMessage.author.username,
                 'message': channelMessage.message,
                 'file_type': file_type,
                 'file_url': file_url,
                 "time": channelMessage.chat_time,
                 "message_id": str(channelMessage.channelmessage_id),
-                "created_at": channelMessage.created_at.isoformat(),
-                "reply_to": reply_data, # This enables real-time WhatsApp-style replies
+                "reply_to": reply_data,
             }
         )
         
-        # 2. NOTIFY SUBSCRIBERS: Update unread counts for people not currently looking at the channel
+        # Update unread counts for all other subscribers
         subscribers = channel.subscriber.exclude(id=request.user.id)
         for subscriber in subscribers:
-            # Calculate updated unread count
             unread_count = channel.unread_count_for_user(subscriber)
-            
-            # Send to user's personal notification group
             user_group_name = f'user_{subscriber.id}_channels'
             async_to_sync(layer.group_send)(
                 user_group_name,
@@ -1146,18 +1144,74 @@ def channel_message(request, channel_id):
                     'channel_id': str(channel.channel_id),
                     'unread_count': unread_count,
                     'channel_name': channel.channel_name,
-                    # Preview for the notification icon/sidebar
-                    'message_preview': message[:30] if message else "Sent a media file",
+                    'message_preview': message_text[:30] if message_text else "New media message",
                 }
             )
         
         return JsonResponse({
-            'status': 'success', 
-            'message': 'Message sent successfully',
-            'message_id': str(channelMessage.channelmessage_id)
+            'status': 'success',
+            'message_id': str(channelMessage.channelmessage_id),
         })
     
-    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+    return JsonResponse({'status': 'error', 'message': 'Invalid request'})
+
+@login_required
+def update_channel(request, channel_id):
+    """
+    View for the Channel Owner to update settings (Name, About, Image, Broadcast Mode).
+    """
+    channel = get_object_or_404(Channel, channel_id=channel_id)
+    
+    if request.user != channel.channel_owner:
+        return redirect('channel', channel_id=channel_id)
+
+    if request.method == 'POST':
+        channel.channel_name = request.POST.get('name', channel.channel_name)
+        channel.about = request.POST.get('about', channel.about)
+        
+        # Handle Broadcast Mode Toggle
+        broadcast = request.POST.get('broadcast')
+        channel.is_broadcast_only = (broadcast == 'true')
+        
+        # Handle Channel Icon
+        if request.FILES.get('image'):
+            channel.image = request.FILES.get('image')
+            
+        channel.save()
+        
+    return redirect('channel', channel_id=channel_id)
+
+@login_required
+def manage_member(request, channel_id, user_id):
+    """
+    Allows Admin to Remove or Block a user from the channel.
+    Uses JSON because the fetch call in HTML sends a JSON body.
+    """
+    channel = get_object_or_404(Channel, channel_id=channel_id)
+    
+    if request.user != channel.channel_owner:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+
+    if request.method == 'POST':
+        try:
+            # Parse JSON data from the fetch body
+            data = json.loads(request.body)
+            action = data.get('action')
+            target_user = User.objects.get(id=user_id)
+
+            if action == 'remove':
+                channel.subscriber.remove(target_user)
+                return JsonResponse({'success': True})
+
+            elif action == 'block':
+                channel.subscriber.remove(target_user)
+                channel.blocked_users.add(target_user)
+                return JsonResponse({'success': True})
+
+        except (User.DoesNotExist, json.JSONDecodeError):
+            return JsonResponse({'success': False}, status=400)
+
+    return JsonResponse({'success': False}, status=400)
 @login_required
 def channelmessage_like(request, channelmessage_id):
     channelmessage = get_object_or_404(ChannelMessage, channelmessage_id=channelmessage_id)

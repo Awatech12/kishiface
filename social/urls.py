@@ -42,6 +42,14 @@ urlpatterns = [
     path('market', views.market, name='market'),
     path('channel_message/<uuid:channel_id>/', views.channel_message, name='channel_message'),
     path('channelmessage_like/<uuid:channelmessage_id>/', views.channelmessage_like, name='channelmessage_like'),
+
+    
+    # Admin Update View
+    path('update_channel/<uuid:channel_id>/', views.update_channel, name='update_channel'),
+    
+    # Member Management API
+    path('channel/manage-member/<uuid:channel_id>/<int:user_id>/', views.manage_member, name='manage_member'),
+
     #====== market form =======
     path('add', views.marketForm, name='marketform'),
     path('comment_reply/<uuid:comment_id>', views.comment_reply, name='comment_reply'),
