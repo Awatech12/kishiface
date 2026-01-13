@@ -366,6 +366,9 @@ class ChannelMessage(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     message = models.TextField(blank=True)
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
+    # Add reply_to field for message replies
+    reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, 
+                                null=True, blank=True, related_name='replies')
     file_type = models.CharField(max_length=50, blank=True, null=True)
     
     if settings.USE_CLOUDINARY:

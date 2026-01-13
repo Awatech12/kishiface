@@ -1,13 +1,12 @@
-
-from channels.generic.websocket import AsyncWebsocketConsumer
 import json
+from channels.generic.websocket import AsyncWebsocketConsumer
 from django.utils import timezone
 from asgiref.sync import sync_to_async
-
 
 class ChannelConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.user = self.scope['user']
+        # Check if user is authenticated
         if not self.user.is_authenticated:
             await self.close()
             return
@@ -16,53 +15,48 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         self.group_name = f'channel_{self.channel_id}'
         self.user_group_name = f'user_{self.user.id}_channels'
         
-        # Join channel group
+        # Join the specific channel group
         await self.channel_layer.group_add(
             self.group_name,
             self.channel_name
         )
         
-        # Join user's personal group for unread updates
+        # Join user's personal group for cross-channel unread updates
         await self.channel_layer.group_add(
             self.user_group_name,
             self.channel_name
         )
         
         await self.accept()
-        print(f"Mobile WebSocket connected: {self.user.username} to channel {self.channel_id}")
 
     async def disconnect(self, close_code):
-        # Leave groups
+        # Leave both groups on disconnect
         await self.channel_layer.group_discard(
             self.group_name,
             self.channel_name
         )
-        
         await self.channel_layer.group_discard(
             self.user_group_name,
             self.channel_name
         )
-        
-        print(f"Mobile WebSocket disconnected: {self.user.username}")
 
     async def receive(self, text_data):
-        """Handle incoming WebSocket messages"""
+        """Handle incoming WebSocket signals from the frontend (e.g., mark as read)"""
         try:
             data = json.loads(text_data)
             message_type = data.get('type')
             
             if message_type == 'mark_as_read':
-                # Mark channel as read for this user
                 await self.mark_channel_as_read()
                 
-                # Send confirmation
+                # Send confirmation back to the sender
                 await self.send(text_data=json.dumps({
                     'type': 'marked_as_read',
                     'channel_id': self.channel_id,
                     'timestamp': timezone.now().isoformat()
                 }))
                 
-                # Notify user's other connections
+                # Notify user's other open tabs/devices to clear unread counts
                 await self.channel_layer.group_send(
                     self.user_group_name,
                     {
@@ -74,21 +68,18 @@ class ChannelConsumer(AsyncWebsocketConsumer):
                 )
                 
             elif message_type == 'get_unread_counts':
-                # Send current unread counts for all channels
                 await self.send_unread_counts()
                 
         except Exception as e:
-            print(f"Error in receive: {e}")
             await self.send(text_data=json.dumps({
                 'type': 'error',
                 'message': str(e)
             }))
 
     async def mark_channel_as_read(self):
-        from social.models import ChannelUserLastSeen, Channel, ChannelMessage
-        """Mark a channel as read for the current user"""
+        """Database operation to update last seen status"""
+        from social.models import ChannelUserLastSeen, Channel
         channel = await sync_to_async(Channel.objects.get)(channel_id=self.channel_id)
-        
         await sync_to_async(ChannelUserLastSeen.objects.update_or_create)(
             channel=channel,
             user=self.user,
@@ -96,16 +87,13 @@ class ChannelConsumer(AsyncWebsocketConsumer):
         )
 
     async def send_unread_counts(self):
-        from social.models import ChannelUserLastSeen, Channel, ChannelMessage
-        """Send unread counts for all subscribed channels"""
-        # Get all channels user is subscribed to
+        """Sends unread counts for all subscribed channels to the user"""
+        from social.models import Channel
         channels = await sync_to_async(list)(
             Channel.objects.filter(subscriber=self.user)
         )
-        
         for channel in channels:
             unread_count = await sync_to_async(channel.unread_count_for_user)(self.user)
-            
             await self.send(text_data=json.dumps({
                 'type': 'unread_update',
                 'channel_id': str(channel.channel_id),
@@ -114,8 +102,10 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             }))
 
     async def channel_message(self, event):
-        """Handle new channel messages"""
-        # Send message to everyone in the channel
+        """
+        Triggered when a new message is broadcasted to the group.
+        Includes reply_to metadata for WhatsApp-style real-time UI.
+        """
         await self.send(text_data=json.dumps({
             'type': 'new_message',
             'author': event.get('author'),
@@ -125,11 +115,11 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             'time': event.get('time'),
             'message_id': event.get('message_id'),
             'created_at': event.get('created_at'),
+            'reply_to': event.get('reply_to'), # Critical for Real-Time Replies
         }))
 
     async def unread_update(self, event):
-        """Handle unread count updates"""
-        # Send unread update to user
+        """Triggered for notification updates"""
         await self.send(text_data=json.dumps({
             'type': 'unread_update',
             'channel_id': event.get('channel_id'),
@@ -138,7 +128,12 @@ class ChannelConsumer(AsyncWebsocketConsumer):
             'message_preview': event.get('message_preview', ''),
             'action': event.get('action', 'update')
         }))
+
+
 class UserConsumer(AsyncWebsocketConsumer):
+    """
+    Consumer for global user notifications (sidebar unread counts, etc.)
+    """
     async def connect(self):
         self.user = self.scope['user']
         if not self.user.is_authenticated:
@@ -160,32 +155,31 @@ class UserConsumer(AsyncWebsocketConsumer):
         return total
 
     async def unread_update(self, event):
-        """Handle unread updates and add message preview/type for real-time UI icons"""
+        """Handle real-time notification previews in the sidebar/home view"""
         from social.models import ChannelMessage
         total_count = await self.get_total_followed_unread()
         
-        # Fetch the latest message to determine its file type (audio/video/text)
+        # Get preview of the actual last message
         last_msg = await sync_to_async(
             lambda: ChannelMessage.objects.filter(channel_id=event['channel_id']).order_by('-created_at').first()
         )()
 
-        msg_preview = "New message"
+        msg_preview = event.get('message_preview', "New message")
         msg_type = "text"
 
         if last_msg:
             if last_msg.file_type == 'audio':
-                msg_preview = "Audio message"
+                msg_preview = "Audio message 🎤"
                 msg_type = "audio"
             elif last_msg.file_type == 'video':
-                msg_preview = "Video message"
+                msg_preview = "Video message 📹"
                 msg_type = "video"
             elif last_msg.file_type == 'image':
-                msg_preview = "Image message"
+                msg_preview = "Photo 📷"
                 msg_type = "image"
-            else:
-                msg_preview = last_msg.message if last_msg.message else "Sent a file"
+            elif last_msg.message:
+                msg_preview = last_msg.message[:50]
 
-        # Construct the full payload for the frontend
         event.update({
             'message_preview': msg_preview,
             'message_type': msg_type,
@@ -194,10 +188,3 @@ class UserConsumer(AsyncWebsocketConsumer):
         })
         
         await self.send(text_data=json.dumps(event))
-
-
-
-
-
-
-

@@ -1064,9 +1064,9 @@ def channel_message(request, channel_id):
     if request.method == 'POST':
         message = request.POST.get('message', '')
         file_upload = request.FILES.get('file_upload')
+        reply_to_id = request.POST.get('reply_to')  # Get the parent message ID from the request
 
         file_type = None
-        
         if file_upload:
             content_type = file_upload.content_type
             if content_type.startswith('image/'):
@@ -1081,27 +1081,43 @@ def channel_message(request, channel_id):
                     'message': 'Unsupported file type'
                 })
 
-        # Create the message
+        # Handle Reply Logic: Fetch the message object being replied to
+        reply_to_obj = None
+        if reply_to_id:
+            try:
+                # Assuming channelmessage_id is a UUID or primary key
+                reply_to_obj = ChannelMessage.objects.get(channelmessage_id=reply_to_id)
+            except (ChannelMessage.DoesNotExist, ValueError):
+                reply_to_obj = None
+
+        # Create the new database entry
         channelMessage = ChannelMessage.objects.create(
             channel=channel,
             author=request.user,
             message=message if message else '',
             file_type=file_type if file_type else None,
-            file=file_upload if file_upload else None
+            file=file_upload if file_upload else None,
+            reply_to=reply_to_obj
         )
 
-        # Get all subscribers except the sender
-        subscribers = channel.subscriber.exclude(id=request.user.id)
-        
-        # Get channel layer for WebSocket
+        # Prepare Reply Data for WebSocket (so other users see the reply bubble)
+        reply_data = None
+        if channelMessage.reply_to:
+            reply_data = {
+                'id': str(channelMessage.reply_to.channelmessage_id),
+                'author': channelMessage.reply_to.author.username,
+                # Show snippet of text, or "Media file" if it's an image/video/audio
+                'message': channelMessage.reply_to.message[:50] if channelMessage.reply_to.message else "Media file",
+                'file_type': channelMessage.reply_to.file_type
+            }
+
         layer = get_channel_layer()
-        group_name = f'channel_{channel_id}'
-        
+        channel_group_name = f'channel_{channel_id}'
         file_url = channelMessage.file.url if channelMessage.file else None
         
-        # Send message to channel group
+        # 1. BROADCAST NEW MESSAGE: Send to everyone currently inside the channel
         async_to_sync(layer.group_send)(
-            group_name,
+            channel_group_name,
             {
                 'type': 'channel_message',
                 'author': channelMessage.author.username,
@@ -1111,14 +1127,17 @@ def channel_message(request, channel_id):
                 "time": channelMessage.chat_time,
                 "message_id": str(channelMessage.channelmessage_id),
                 "created_at": channelMessage.created_at.isoformat(),
+                "reply_to": reply_data, # This enables real-time WhatsApp-style replies
             }
         )
         
-        # Update unread counts for all subscribers
+        # 2. NOTIFY SUBSCRIBERS: Update unread counts for people not currently looking at the channel
+        subscribers = channel.subscriber.exclude(id=request.user.id)
         for subscriber in subscribers:
+            # Calculate updated unread count
             unread_count = channel.unread_count_for_user(subscriber)
             
-            # Send unread update to each subscriber
+            # Send to user's personal notification group
             user_group_name = f'user_{subscriber.id}_channels'
             async_to_sync(layer.group_send)(
                 user_group_name,
@@ -1127,17 +1146,18 @@ def channel_message(request, channel_id):
                     'channel_id': str(channel.channel_id),
                     'unread_count': unread_count,
                     'channel_name': channel.channel_name,
-                    'message_preview': message[:30] if message else "New media message",
+                    # Preview for the notification icon/sidebar
+                    'message_preview': message[:30] if message else "Sent a media file",
                 }
             )
         
         return JsonResponse({
-            'status': 'success',
-            'message': 'Message sent',
-            'message_id': str(channelMessage.channelmessage_id),
+            'status': 'success', 
+            'message': 'Message sent successfully',
+            'message_id': str(channelMessage.channelmessage_id)
         })
     
-    return JsonResponse({'status': 'error', 'message': 'Invalid request'})
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
 @login_required
 def channelmessage_like(request, channelmessage_id):
     channelmessage = get_object_or_404(ChannelMessage, channelmessage_id=channelmessage_id)
