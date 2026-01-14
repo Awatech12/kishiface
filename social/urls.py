@@ -28,7 +28,7 @@ urlpatterns = [
     path('notification', views.notification_partial, name='notification_partial'),
     path('editpost/<uuid:post_id>', views.editpost, name='editpost'),
     path('list', views.notification_list, name='notification_list'),
-    
+     path('spotlight/', views.spotlight_view, name='spotlight'),
    path('mark-follow-notifications-read/', views.mark_follow_notifications_read, name='mark_follow_notifications_read'),
    path('notifications/delete-group/', views.delete_notification_group, name='delete_notification_group'),
     #====== Profials codes =======
@@ -55,6 +55,7 @@ urlpatterns = [
     path('add', views.marketForm, name='marketform'),
     path('comment_reply/<uuid:comment_id>', views.comment_reply, name='comment_reply'),
     #path('posts', views.post_content, name='post_content'),
+   
     # path for pop profile
     path('popup/<str:username>/', views.profile_popup, name='popup_profile'),
     # pop for comment

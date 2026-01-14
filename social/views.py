@@ -1360,3 +1360,12 @@ def logout(request):
     auth.logout(request)
     messages.info(request, 'Logout Successfully')
     return redirect('/')
+
+def spotlight_view(request):
+    # Filter: (Has video) OR (Is a repost AND original has video)
+    spotlight_posts = Post.objects.filter(
+        Q(video_file__isnull=False) & ~Q(video_file='') | 
+        Q(is_repost=True, original_post__video_file__isnull=False) & ~Q(original_post__video_file='')
+    ).order_by('-created_at').select_related('author', 'original_post')
+
+    return render(request, 'spotlight.html', {'posts': spotlight_posts})

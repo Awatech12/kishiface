@@ -1,0 +1,121 @@
+{% include 'header.html' %}
+
+<style>
+    /* Full-screen Spotlight Container */
+    .spotlight-container {
+        height: 100vh;
+        overflow-y: scroll;
+        scroll-snap-type: y mandatory; /* The "Snap" effect */
+        background: #000;
+    }
+
+    .spotlight-item {
+        height: 100vh;
+        width: 100%;
+        scroll-snap-align: start;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    video {
+        height: 100%;
+        width: 100%;
+        object-fit: cover; /* Makes video fill screen like Snapchat */
+    }
+
+    /* Overlay for UI elements */
+    .ui-overlay {
+        position: absolute;
+        bottom: 50px;
+        left: 20px;
+        color: white;
+        z-index: 10;
+        text-shadow: 1px 1px 5px rgba(0,0,0,0.8);
+    }
+
+    .action-buttons {
+        position: absolute;
+        right: 15px;
+        bottom: 100px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        z-index: 10;
+        color: white;
+    }
+
+    .icon-btn {
+        font-size: 24px;
+        text-align: center;
+        cursor: pointer;
+    }
+</style>
+
+<div class="spotlight-container" id="video-feed">
+    {% for post in posts %}
+    <div class="spotlight-item">
+        <!-- Video Player -->
+        <video loop playsinline preload="auto" class="spotlight-video">
+            <source src="{{ post.preview_url }}" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+
+        <!-- Sidebar Actions -->
+        <div class="action-buttons">
+            <div class="icon-btn">❤️ <br><small>{{ post.likes.count }}</small></div>
+            <div class="icon-btn">🔄 <br><small>{{ post.reposts.count }}</small></div>
+            <div class="icon-btn">💬</div>
+        </div>
+
+        <!-- Text Overlay -->
+        <div class="ui-overlay">
+            <h3>@{{ post.author.username }}</h3>
+            <p>
+                {% if post.is_repost %}
+                    <small>Reposted: {{ post.repost_content }}</small><br>
+                {% endif %}
+                {{ post.get_republished_content|truncatechars:100 }}
+            </p>
+        </div>
+    </div>
+    {% empty %}
+    <div class="spotlight-item">
+        <h2 class="text-white">No Spotlight videos yet!</h2>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+    // Handle Auto-play/Pause on scroll
+    const options = {
+        root: document.querySelector('#video-feed'),
+        threshold: 0.6 // Play when 60% of video is visible
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            const video = entry.target.querySelector('video');
+            if (entry.isIntersecting) {
+                video.play().catch(e => console.log("Auto-play blocked"));
+            } else {
+                video.pause();
+                video.currentTime = 0; // Reset video when scrolled away
+            }
+        });
+    }, options);
+
+    document.querySelectorAll('.spotlight-item').forEach(item => {
+        observer.observe(item);
+    });
+
+    // Toggle Play/Pause on Click
+    document.querySelectorAll('.spotlight-video').forEach(video => {
+        video.addEventListener('click', () => {
+            if (video.paused) video.play();
+            else video.pause();
+        });
+    });
+</script>
+
