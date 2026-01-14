@@ -1,235 +1,295 @@
 {% include 'header.html' %}
+{% load static %}
 
-<!-- Font Awesome CDN (Ensure this is in your base.html or here) -->
+<!-- Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <style>
+    /* Reset and Layout */
     body { background: #000; margin: 0; overflow: hidden; }
+    
+    .spotlight-wrapper {
+        height: 100vh;
+        width: 100%;
+        background-color: #000;
+        display: flex;
+        justify-content: center;
+    }
 
-    /* Full-screen Spotlight Container */
+    /* Scroll Container */
     .spotlight-container {
         height: 100vh;
         width: 100%;
+        max-width: 500px; /* Constrain width for desktop like TikTok */
         overflow-y: scroll;
         scroll-snap-type: y mandatory;
-        scrollbar-width: none; /* Hide scrollbar Firefox */
+        scrollbar-width: none; /* Firefox */
+        position: relative;
     }
-    .spotlight-container::-webkit-scrollbar { display: none; } /* Hide scrollbar Chrome */
+    .spotlight-container::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 
+    /* Video Section */
     .spotlight-item {
         height: 100vh;
-        width: 100vw;
+        width: 100%;
         scroll-snap-align: start;
         position: relative;
-        display: flex;
-        justify-content: center;
         background: #000;
+        display: flex;
+        align-items: center;
     }
 
     video {
-        height: 100%;
-        max-width: 500px; /* Standard mobile width for desktop viewing */
         width: 100%;
+        height: 100%;
         object-fit: cover;
+        cursor: pointer;
     }
 
     /* RIGHT SIDEBAR (Actions) */
     .action-sidebar {
         position: absolute;
-        right: 15px;
-        bottom: 120px;
+        right: 12px;
+        bottom: 100px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 20px;
+        gap: 18px;
         z-index: 10;
     }
 
-    .profile-link-container {
+    .profile-wrap {
         position: relative;
         margin-bottom: 10px;
     }
 
-    .profile-pic-spotlight {
-        width: 48px;
-        height: 48px;
+    .profile-pic {
+        width: 45px;
+        height: 45px;
         border-radius: 50%;
-        border: 2px solid white;
+        border: 2px solid #fff;
         object-fit: cover;
     }
 
-    .follow-plus {
+    .follow-btn {
         position: absolute;
         bottom: -8px;
         left: 50%;
         transform: translateX(-50%);
         background: #fe2c55;
-        color: white;
+        color: #fff;
         border-radius: 50%;
-        width: 18px;
-        height: 18px;
+        width: 20px;
+        height: 20px;
         font-size: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
     }
 
-    .action-btn {
+    .action-group {
         text-align: center;
-        color: white;
+        color: #fff;
         cursor: pointer;
-        font-size: 28px;
-        text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
     }
 
-    .action-btn span {
+    .action-group i {
+        font-size: 30px;
+        text-shadow: 1px 1px 5px rgba(0,0,0,0.4);
+    }
+
+    .action-group span {
         display: block;
         font-size: 12px;
-        margin-top: 4px;
         font-weight: 600;
+        margin-top: 4px;
     }
 
-    /* BOTTOM OVERLAY (Captions) */
-    .bottom-overlay {
+    /* BOTTOM TEXT (Captions) */
+    .video-data {
         position: absolute;
-        bottom: 40px;
+        bottom: 30px;
         left: 15px;
-        right: 80px; /* Avoid overlapping sidebar */
-        color: white;
+        right: 70px;
+        color: #fff;
         z-index: 10;
+        text-shadow: 1px 1px 5px rgba(0,0,0,0.5);
     }
 
-    .user-handle {
-        font-weight: bold;
-        font-size: 17px;
+    .user-name {
+        font-weight: 700;
+        font-size: 18px;
         margin-bottom: 8px;
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 6px;
+        color: #fff;
         text-decoration: none;
-        color: white;
     }
 
-    .verified-badge { color: #20d5ec; font-size: 14px; }
+    .verified { color: #20d5ec; font-size: 14px; }
 
-    .post-caption {
+    .caption {
         font-size: 15px;
         line-height: 1.4;
-        margin-bottom: 10px;
+        margin-bottom: 5px;
+    }
+
+    /* DESKTOP NAVIGATION BUTTONS */
+    .desktop-nav {
+        position: fixed;
+        right: 30px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        z-index: 100;
+    }
+
+    .nav-circle {
+        width: 40px;
+        height: 40px;
+        background: rgba(255,255,255,0.2);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+    .nav-circle:hover { background: rgba(255,255,255,0.4); }
+
+    @media (max-width: 768px) {
+        .desktop-nav { display: none; }
+        .spotlight-container { max-width: 100%; }
     }
 </style>
 
-<div class="spotlight-container" id="video-feed">
-    {% for post in posts %}
-    <div class="spotlight-item">
-        <!-- The Video -->
-        <video loop playsinline preload="auto" class="spotlight-video">
-            <source src="{{ post.preview_url }}" type="video/mp4">
-        </video>
-
-        <!-- Right Sidebar (Like, Comment, Share) -->
-        <div class="action-sidebar">
-            <!-- Profile Pic Link -->
-            <div class="profile-link-container">
-                <a href="{% url 'profile' post.author.username %}">
-                    <img src="{{ post.author.profile.picture.url }}" class="profile-pic-spotlight" alt="profile">
-                    <div class="follow-plus"><i class="fa-solid fa-plus"></i></div>
-                </a>
-            </div>
-
-            <div class="action-btn">
-                <i class="fa-solid fa-heart"></i>
-                <span>{{ post.likes.count }}</span>
-            </div>
-
-            <div class="action-btn">
-                <i class="fa-solid fa-comment-dots"></i>
-                <span>{{ post.comments.count|default:"0" }}</span>
-            </div>
-
-            <div class="action-btn">
-                <i class="fa-solid fa-retweet"></i>
-                <span>{{ post.reposts.count }}</span>
-            </div>
-
-            <div class="action-btn">
-                <i class="fa-solid fa-share"></i>
-                <span>Share</span>
-            </div>
-        </div>
-
-        <!-- Bottom Info -->
-        <div class="bottom-overlay">
-            <a href="{% url 'profile' post.author.username %}" class="user-handle">
-                @{{ post.author.username }}
-                {% if post.author.profile.is_verify %}
-                    <i class="fa-solid fa-circle-check verified-badge"></i>
-                {% endif %}
-            </a>
-            
-            <div class="post-caption">
-                {% if post.is_repost %}
-                    <span style="color: #bbb;">(Repost) {{ post.repost_content|default:"" }}</span><br>
-                {% endif %}
-                {{ post.get_republished_content|truncatechars:150 }}
-            </div>
-        </div>
+<div class="spotlight-wrapper">
+    <!-- Desktop Controls -->
+    <div class="desktop-nav">
+        <div class="nav-circle" onclick="scrollPrev()"><i class="fa-solid fa-chevron-up"></i></div>
+        <div class="nav-circle" onclick="scrollNext()"><i class="fa-solid fa-chevron-down"></i></div>
     </div>
-    {% endfor %}
+
+    <div class="spotlight-container" id="spotlight-feed">
+        {% for post in posts %}
+        <div class="spotlight-item" id="video-{{ forloop.index }}">
+            <!-- Video Player -->
+            <video loop playsinline preload="auto" class="main-video">
+                <source src="{{ post.preview_url }}" type="video/mp4">
+            </video>
+
+            <!-- Sidebar -->
+            <div class="action-sidebar">
+                <div class="profile-wrap">
+                    <a href="{% url 'profile' post.author.username %}">
+                        <img src="{{ post.author.profile.picture.url }}" class="profile-pic">
+                        <div class="follow-btn"><i class="fa-solid fa-plus"></i></div>
+                    </a>
+                </div>
+
+                <div class="action-group">
+                    <i class="fa-solid fa-heart"></i>
+                    <span>{{ post.likes.count }}</span>
+                </div>
+
+                <div class="action-group">
+                    <i class="fa-solid fa-comment-dots"></i>
+                    <span>{{ post.comments.count|default:"0" }}</span>
+                </div>
+
+                <div class="action-group">
+                    <i class="fa-solid fa-share"></i>
+                    <span>Share</span>
+                </div>
+            </div>
+
+            <!-- Bottom Data -->
+            <div class="video-data">
+                <a href="{% url 'profile' post.author.username %}" class="user-name">
+                    @{{ post.author.username }}
+                    {% if post.author.profile.is_verify %}
+                        <i class="fa-solid fa-circle-check verified"></i>
+                    {% endif %}
+                </a>
+                <div class="caption">
+                    {% if post.is_repost %}
+                        <strong style="color: #fe2c55;">Repost:</strong> {{ post.repost_content|default:"" }}<br>
+                    {% endif %}
+                    {{ post.get_republished_content|truncatechars:150 }}
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="spotlight-item" style="justify-content: center; color: white;">
+            <h3>No Spotlight Videos yet</h3>
+        </div>
+        {% endfor %}
+    </div>
 </div>
 
 <script>
-    // Intersection Observer to Autoplay/Pause videos on scroll
-    const options = { threshold: 0.7 };
+    const container = document.getElementById('spotlight-feed');
+    const videos = document.querySelectorAll('.main-video');
+    const items = document.querySelectorAll('.spotlight-item');
+    let currentIndex = 0;
+
+    // --- AUTOPLAY LOGIC ---
+    const observerOptions = { threshold: 0.6 };
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             const video = entry.target.querySelector('video');
             if (entry.isIntersecting) {
-                video.play().catch(() => {});
+                video.play().catch(error => console.log("Autoplay blocked by browser"));
             } else {
                 video.pause();
+                video.currentTime = 0;
             }
         });
-    }, options);
+    }, observerOptions);
 
-    document.querySelectorAll('.spotlight-item').forEach(item => {
-        observer.observe(item);
-    });
-</script>
+    items.forEach(item => observer.observe(item));
 
-
-    {% endfor %}
-</div>
-
-<script>
-    // Handle Auto-play/Pause on scroll
-    const options = {
-        root: document.querySelector('#video-feed'),
-        threshold: 0.6 // Play when 60% of video is visible
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            const video = entry.target.querySelector('video');
-            if (entry.isIntersecting) {
-                video.play().catch(e => console.log("Auto-play blocked"));
-            } else {
-                video.pause();
-                video.currentTime = 0; // Reset video when scrolled away
-            }
+    // --- CLICK TO PLAY/PAUSE ---
+    videos.forEach(v => {
+        v.addEventListener('click', () => {
+            if (v.paused) v.play();
+            else v.pause();
         });
-    }, options);
-
-    document.querySelectorAll('.spotlight-item').forEach(item => {
-        observer.observe(item);
     });
 
-    // Toggle Play/Pause on Click
-    document.querySelectorAll('.spotlight-video').forEach(video => {
-        video.addEventListener('click', () => {
-            if (video.paused) video.play();
-            else video.pause();
-        });
+    // --- DESKTOP NAVIGATION ---
+    function scrollNext() {
+        if (currentIndex < items.length - 1) {
+            currentIndex++;
+            items[currentIndex].scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+
+    function scrollPrev() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            items[currentIndex].scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+
+    // Keyboard Support
+    window.addEventListener('keydown', (e) => {
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            scrollNext();
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            scrollPrev();
+        }
+    });
+
+    // Tracking current index during manual scroll
+    container.addEventListener('scroll', () => {
+        currentIndex = Math.round(container.scrollTop / window.innerHeight);
     });
 </script>
 
