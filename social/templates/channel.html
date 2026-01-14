@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,13 +102,27 @@
         .kf-info-name { font-size: 18px; font-weight: 700; color: var(--kf-text); margin-bottom: 4px; }
         .kf-info-subs { font-size: 13px; color: var(--kf-text-light); margin-bottom: 10px; }
 
-        .member-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #fafafa; }
+        /* MEMBER LIST & DROPDOWN */
+        .member-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #fafafa; position: relative; }
         .member-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; margin-right: 12px; }
         .member-info { flex: 1; min-width: 0; }
         .member-name { font-size: 14px; font-weight: 600; color: var(--kf-text); text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .member-action-btn { background: none; border: 1px solid var(--kf-border); padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; margin-left: 5px; }
-        .member-action-btn.danger { color: var(--kf-danger); border-color: var(--kf-danger); }
         .admin-badge { font-size: 10px; background: #e0f1ff; color: var(--kf-primary); padding: 2px 6px; border-radius: 4px; margin-left: 5px; font-weight: bold; }
+
+        .member-dropdown { position: relative; }
+        .member-dots-btn { background: none; border: none; font-size: 18px; color: var(--kf-text-light); cursor: pointer; padding: 5px 10px; }
+        .member-dropdown-content { 
+            display: none; position: absolute; right: 0; top: 100%; background: white; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15); border-radius: 12px; z-index: 100; min-width: 140px; overflow: hidden; border: 1px solid var(--kf-border);
+        }
+        .member-dropdown-content.show { display: block; }
+        .member-dropdown-content button { 
+            width: 100%; text-align: left; background: none; border: none; padding: 12px 16px; 
+            font-size: 13px; font-weight: 500; cursor: pointer; color: var(--kf-text); border-bottom: 1px solid #f0f0f0;
+        }
+        .member-dropdown-content button:last-child { border-bottom: none; }
+        .member-dropdown-content button:hover { background: #f9f9f9; }
+        .member-dropdown-content button.danger { color: var(--kf-danger); }
 
         .kf-form-group { margin-bottom: 15px; }
         .kf-form-group label { display: block; font-size: 11px; color: var(--kf-text-light); font-weight: 700; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
@@ -233,26 +248,29 @@
         <div class="kf-modal-header">Members <button class="kf-modal-close" onclick="closeModal('membersModal')">Close</button></div>
         <div class="kf-modal-body">
             <div class="member-item">
-                <img src="{{ channel.channel_owner.profile.picture.url|default:'/media/male.png' }}" class="member-avatar">
+                <img src="{{ channel.channel_owner.profile.image.url|default:'/media/male.png' }}" class="member-avatar">
                 <div class="member-info"><b>{{ channel.channel_owner.username }}</b> <span class="admin-badge">Owner</span></div>
             </div>
             {% for sub in channel.subscriber.all %}
             {% if sub != channel.channel_owner %}
             <div class="member-item" id="member-{{ sub.id }}">
-                <img src="{{ sub.profile.picture.url|default:'/media/male.png' }}" class="member-avatar">
+                <img src="{{ sub.profile.image.url|default:'/media/male.png' }}" class="member-avatar">
                 <div class="member-info">
                     <a href="{% url 'profile' sub.username %}" class="member-name">{{ sub.username }}</a>
                     {% if sub in channel.admins.all %}<span class="admin-badge">Admin</span>{% endif %}
                 </div>
                 {% if is_admin %}
-                <div style="display:flex;">
-                    {% if is_owner %}
-                    <button class="member-action-btn" onclick="toggleAdmin('{{ sub.id }}')">{% if sub in channel.admins.all %}Demote{% else %}Admin{% endif %}</button>
-                    {% endif %}
-                    {% if is_owner or sub not in channel.admins.all %}
-                    <button class="member-action-btn danger" onclick="manageMember('remove', '{{ sub.id }}')">Remove</button>
-                    <button class="member-action-btn danger" onclick="manageMember('block', '{{ sub.id }}')">Block</button>
-                    {% endif %}
+                <div class="member-dropdown">
+                    <button class="member-dots-btn" onclick="toggleMemberDropdown(event, '{{ sub.id }}')"><i class="fas fa-ellipsis-v"></i></button>
+                    <div id="dropdown-{{ sub.id }}" class="member-dropdown-content">
+                        {% if is_owner %}
+                        <button onclick="toggleAdmin('{{ sub.id }}')">{% if sub in channel.admins.all %}Demote from Admin{% else %}Make Admin{% endif %}</button>
+                        {% endif %}
+                        {% if is_owner or sub not in channel.admins.all %}
+                        <button class="danger" onclick="manageMember('remove', '{{ sub.id }}')">Remove Member</button>
+                        <button class="danger" onclick="manageMember('block', '{{ sub.id }}')">Block Member</button>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -279,6 +297,19 @@
     const fileInput = document.getElementById('fileInput');
     const micButton = document.getElementById('micButton');
     const sendButton = document.getElementById('sendButton');
+
+    // --- MEMBER MODAL DROPDOWN ---
+    function toggleMemberDropdown(event, id) {
+        event.stopPropagation();
+        document.querySelectorAll('.member-dropdown-content').forEach(d => {
+            if(d.id !== `dropdown-${id}`) d.classList.remove('show');
+        });
+        document.getElementById(`dropdown-${id}`).classList.toggle('show');
+    }
+
+    window.addEventListener('click', () => {
+        document.querySelectorAll('.member-dropdown-content').forEach(d => d.classList.remove('show'));
+    });
 
     // --- READ MORE LOGIC ---
     function applyReadMore(el) {
@@ -380,23 +411,35 @@
     function appendNewMessage(data) {
         const isOut = data.author === currentUser;
         const mid = data.message_id;
+        const isAdmin = '{{ is_admin }}' === 'True';
+        
+        let mediaHtml = '';
+        if (data.file_url) {
+            if (data.file_type === 'image') {
+                mediaHtml = `<img src="${data.file_url}">`;
+            } else if (data.file_type === 'video') {
+                mediaHtml = `<video src="${data.file_url}" controls></video>`;
+            } else if (data.file_type === 'audio') {
+                mediaHtml = `
+                    <div class="kishiface-audio-player">
+                        <button class="kishiface-audio-play-btn" onclick="toggleAudioPlay('${mid}')"><i class="fas fa-play" id="audio-play-icon-${mid}"></i></button>
+                        <div class="kishiface-audio-waveform" id="waveform-${mid}"></div>
+                        <audio id="audio-player-${mid}" src="${data.file_url}" ontimeupdate="updateAudioProgress('${mid}')" onended="resetAudioIcon('${mid}')"></audio>
+                    </div>`;
+            }
+        }
+
         const html = `
             <div id="msg-${mid}" class="kishiface-msg-wrapper ${isOut ? 'outgoing' : 'incoming'}" data-message-id="${mid}">
                 ${!isOut ? `<a href="/${data.author}/" class="kishiface-sender-name">${data.author}</a>` : ''}
-                <div class="kishiface-message-bubble ${isOut ? 'outgoing' : 'incoming'}" oncontextmenu="handleContextMenu(event, '${mid}', '${isOut || '{{ is_admin }}' === 'True' ? 'true' : 'false'}')" ondblclick="initiateReply('${mid}')">
+                <div class="kishiface-message-bubble ${isOut ? 'outgoing' : 'incoming'}" oncontextmenu="handleContextMenu(event, '${mid}', '${isOut || isAdmin ? 'true' : 'false'}')" ondblclick="initiateReply('${mid}')">
                     ${data.reply_to ? `<div class="reply-indicator"><b>${data.reply_to.author}</b>: ${data.reply_to.message}</div>` : ''}
-                    ${data.file_url ? `<div class="kishiface-media-content">
-                        ${data.file_type === 'image' ? `<img src="${data.file_url}">` : ''}
-                        ${data.file_type === 'audio' ? `<div class="kishiface-audio-player">
-                            <button class="kishiface-audio-play-btn" onclick="toggleAudioPlay('${mid}')"><i class="fas fa-play" id="audio-play-icon-${mid}"></i></button>
-                            <div class="kishiface-audio-waveform" id="waveform-${mid}"></div>
-                            <audio id="audio-player-${mid}" src="${data.file_url}" ontimeupdate="updateAudioProgress('${mid}')" onended="resetAudioIcon('${mid}')"></audio>
-                        </div>` : ''}
-                    </div>` : ''}
+                    ${data.file_url ? `<div class="kishiface-media-content">${mediaHtml}</div>` : ''}
                     ${data.message ? `<div class="message-text-container"><span class="text-content" id="text-${mid}">${data.message}</span></div>` : ''}
                     <div style="font-size: 10px; opacity: 0.7; text-align: right; margin-top: 4px;">${data.time}</div>
                 </div>
             </div>`;
+        
         messagesList.insertAdjacentHTML('beforeend', html);
         if(data.message) applyReadMore(document.getElementById(`text-${mid}`));
         if(data.file_type === 'audio') generateWaveform(document.getElementById(`waveform-${mid}`));
@@ -434,7 +477,8 @@
     }
     function resetAudioIcon(id) { document.getElementById(`audio-play-icon-${id}`).className = 'fas fa-play'; }
 
-    let mediaRecorder, audioChunks = [];
+    let mediaRecorder, audioChunks = [], recordingInterval, secondsElapsed = 0;
+
     async function startRecording(e) {
         e.preventDefault();
         try {
@@ -442,19 +486,41 @@
             mediaRecorder = new MediaRecorder(stream);
             mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
             mediaRecorder.onstop = sendAudio;
-            messageInput.style.display = 'none'; document.getElementById('attachBtn').style.display = 'none';
+            
+            // UI Update
+            messageInput.style.display = 'none'; 
+            document.getElementById('attachBtn').style.display = 'none';
             document.getElementById('recordingStatus').style.display = 'flex';
             micButton.classList.add('recording-pulse');
+            
+            // Start Timer
+            secondsElapsed = 0;
+            document.getElementById('recordingTimer').innerText = '0:00';
+            recordingInterval = setInterval(() => {
+                secondsElapsed++;
+                const mins = Math.floor(secondsElapsed / 60);
+                const secs = secondsElapsed % 60;
+                document.getElementById('recordingTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            }, 1000);
+
             mediaRecorder.start();
         } catch (err) { console.error(err); }
     }
+
     function stopRecording() {
         if(mediaRecorder?.state !== 'inactive') mediaRecorder.stop();
-        messageInput.style.display = 'block'; document.getElementById('attachBtn').style.display = 'block';
+        
+        // Stop Timer
+        clearInterval(recordingInterval);
+        
+        // UI Reset
+        messageInput.style.display = 'block'; 
+        document.getElementById('attachBtn').style.display = 'block';
         document.getElementById('recordingStatus').style.display = 'none';
         micButton.classList.remove('recording-pulse');
         updateInputVisibility();
     }
+
     async function sendAudio() {
         if(audioChunks.length === 0) return;
         const blob = new Blob(audioChunks, { type: 'audio/webm' });
