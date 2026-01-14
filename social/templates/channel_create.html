@@ -1,3 +1,4 @@
+
 {% load humanize %}
 {% load static %}
 {% load time %}
@@ -6,48 +7,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Channels</title>
+    <title>Channels | KishiFace</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
-        :root { --primary-bg: #f0f2f5; --card-bg: #ffffff; --text-main: #1c1e21; --text-muted: #65676b; --border: #e4e6eb; }
-        body { background-color: var(--primary-bg); font-family: sans-serif; margin: 0; padding-bottom: 80px; }
+        :root {
+            --primary-bg: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-main: #1c1e21;
+            --text-muted: #65676b;
+            --border: #e4e6eb;
+            --accent: #0095f6;
+            --success: #0095f6;
+            --update-glow: rgba(0, 149, 246, 0.15);
+        }
+
+        body { 
+            background-color: var(--primary-bg); 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            margin: 0; padding-bottom: 90px; color: var(--text-main);
+        }
+
         .container { max-width: 600px; margin: 0 auto; padding: 15px; }
-        
-        /* Modal Styles */
+
+        /* --- List Containers --- */
+        .channels-list { 
+            background: var(--card-bg); border-radius: 12px; overflow: hidden; 
+            margin-bottom: 25px; border: 1px solid var(--border);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .channels-header { padding: 15px 18px; border-bottom: 1px solid var(--border); background: #ffffff; }
+        .channels-header h2 { font-size: 14px; margin: 0; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+
+        /* --- Channel Items & Animations --- */
+        .channel-item { 
+            display: flex; align-items: center; padding: 14px 18px; 
+            text-decoration: none; color: inherit; border-bottom: 1px solid var(--border); 
+            transition: background 0.3s ease;
+            position: relative;
+            background: var(--card-bg);
+        }
+        .channel-item:last-child { border-bottom: none; }
+        .channel-item:hover { background: #f9fafb; }
+
+        /* Animation when row moves to top */
+        .new-update-flash {
+            animation: slideHighlight 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        @keyframes slideHighlight {
+            0% { background-color: var(--update-glow); transform: translateY(-10px); }
+            50% { background-color: var(--update-glow); transform: translateY(0); }
+            100% { background-color: transparent; }
+        }
+
+        .channel-icon { 
+            width: 56px; height: 56px; border-radius: 50%; object-fit: cover; 
+            margin-right: 15px; flex-shrink: 0; border: 1px solid var(--border);
+        }
+
+        .channel-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+        .channel-top { display: flex; justify-content: space-between; align-items: center; }
+        .channel-name { font-weight: 700; font-size: 16px; color: var(--text-main); }
+        .channel-time { font-size: 12px; color: var(--text-muted); }
+
+        .channel-bottom { display: flex; justify-content: space-between; align-items: center; }
+        .channel-details { font-size: 14px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+
+        /* --- Badge & Count Animation --- */
+        .unread-badge { 
+            background-color: var(--accent); color: white; font-size: 11px; font-weight: bold; 
+            min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; 
+            display: flex; align-items: center; justify-content: center;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* --- Follow & Discovery --- */
+        .channel-actions { display: flex; align-items: center; margin-left: 10px; }
+        .btn-follow { 
+            background: #e7f3ff; color: #007bff; border: none; padding: 8px 16px; 
+            border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px;
+        }
+
+        /* Empty States */
+        .empty-state { padding: 50px 20px; text-align: center; color: var(--text-muted); }
+        .empty-state i { font-size: 50px; margin-bottom: 15px; color: #d1d9e6; }
+
+        /* FAB Button */
+        .fab-button {
+            position: fixed; bottom: 85px; right: 20px; width: 60px; height: 60px;
+            background-color: var(--accent); color: white; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; box-shadow: 0 4px 15px rgba(0,149,246,0.4);
+            cursor: pointer; z-index: 1000; border: none; transition: transform 0.2s;
+        }
+        .fab-button:hover { transform: scale(1.1); }
+
+        /* Modal Blur */
         .modal {
             display: none; position: fixed; z-index: 2000; left: 0; top: 0; 
             width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); 
-            align-items: center; justify-content: center;
+            backdrop-filter: blur(5px); align-items: center; justify-content: center;
         }
-        .modal-content {
-            background-color: white; padding: 20px; border-radius: 12px;
-            width: 90%; max-width: 450px; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 90%; max-width: 400px; position: relative; }
+        .close-modal { position: absolute; right: 20px; top: 15px; font-size: 24px; cursor: pointer; color: #bbb; }
+        
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 8px; }
+        .form-group input, .form-group textarea {
+            width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: 10px; font-family: inherit;
         }
-        .close-modal { position: absolute; right: 15px; top: 10px; font-size: 24px; cursor: pointer; color: #999; }
-
-        /* Floating Button */
-        .fab-button {
-            position: fixed; bottom: 90px; right: 20px; width: 56px; height: 56px;
-            background-color: #0095f6; color: white; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            cursor: pointer; z-index: 1000; border: none;
+        .btn-create {
+            width: 100%; padding: 15px; background: var(--success); color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer;
         }
-
-        /* List Styles */
-        .channels-list { background: var(--card-bg); border-radius: 10px; overflow: hidden; margin-bottom: 20px;}
-        .channels-header { padding-bottom: 10px; border-bottom: 1px solid var(--border); background: #ffffff; }
-        .channels-header h2 { font-size: 16px; margin: 0; color: var(--text-muted); }
-        .channel-item { display: flex; align-items: center; padding: 12px 15px; text-decoration: none; color: inherit;  }
-        .channel-item:hover { background: #f9f9f9; }
-        .channel-icon { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; margin-right: 15px; }
-        .channel-content { flex: 1; min-width: 0; }
-        .channel-top { display: flex; justify-content: space-between; align-items: center; }
-        .channel-name { font-weight: 600; font-size: 16px; }
-        .channel-time { font-size: 12px; color: var(--text-muted); }
-        .channel-details { font-size: 14px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .unread-badge { background-color: #0095f6; color: white; font-size: 12px; font-weight: bold; padding: 2px 7px; border-radius: 10px; margin-left: 10px; }
-        .btn-follow { background: #e7f3ff; color: #007bff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -55,84 +132,136 @@
 {% include 'header.html' %}
 
 <div class="container">
-    <button class="fab-button" onclick="openModal()"><i class="fas fa-plus"></i></button>
-
-    <div id="createChannelModal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeModal()">&times;</span>
-            <h2 style="margin-top: 0; font-size: 18px;">Start a New Channel</h2>
-            <form action="{% url 'channel_create' %}" method="POST" enctype="multipart/form-data">
-                {% csrf_token %}
-                <label style="font-size: 12px; font-weight: bold;">Channel Name</label>
-                <input type="text" name="name" required style="width:100%; padding:10px; margin:5px 0 15px 0; border:1px solid #ddd; border-radius:5px; box-sizing: border-box;">
-                <label style="font-size: 12px; font-weight: bold;">Description</label>
-                <textarea name="about" required style="width:100%; padding:10px; margin:5px 0 15px 0; border:1px solid #ddd; border-radius:5px; height: 80px; box-sizing: border-box;"></textarea>
-                <label style="font-size: 12px; font-weight: bold;">Icon</label>
-                <input type="file" name="icon" accept="image/*" required style="margin-bottom: 15px;">
-                <button type="submit" style="width:100%; padding:12px; background:#0095f6; color:white; border:none; border-radius:5px; font-weight:bold; cursor: pointer;">Create Channel</button>
-            </form>
-        </div>
+    
+    <!-- Following Section -->
+    <div class="channels-list" id="following-list-container">
+        <div class="channels-header"><h2>Your Subscriptions</h2></div>
+        
+        {% if followed_list %}
+            {% for data in followed_list %}
+            <a href="{% url 'channel' data.channel.channel_id %}" class="channel-item" data-id="{{ data.channel.channel_id }}">
+                <img src="{{ data.channel.image.url }}" class="channel-icon">
+                <div class="channel-content">
+                    <div class="channel-top">
+                        <span class="channel-name">{{ data.channel.channel_name }}</span>
+                        <span class="channel-time">{% if data.last_time %}{{ data.last_time|insta_timesince }}{% endif %}</span>
+                    </div>
+                    <div class="channel-bottom">
+                        <div class="channel-details" id="last-msg-{{ data.channel.channel_id }}">
+                            {% if data.last_time %}
+                                {% if data.message_type == 'audio' %}
+                                    <i class="fas fa-microphone"></i> Audio message
+                                {% elif data.message_type == 'video' %}
+                                    <i class="fas fa-video"></i> Video message
+                                {% elif data.message_type == 'image' %}
+                                    <i class="fas fa-image"></i> Image message
+                                {% else %}
+                                    {{ data.last_message|truncatechars:35 }}
+                                {% endif %}
+                            {% else %}
+                                <i>No messages yet</i>
+                            {% endif %}
+                        </div>
+                        <div class="channel-actions">
+                            {% if data.unread_count > 0 %}
+                                <span class="unread-badge">{{ data.unread_count }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <i class="fa-solid fa-wind"></i>
+                <p>No active subscriptions.</p>
+            </div>
+        {% endif %}
     </div>
 
+    <!-- Discover Section -->
     <div class="channels-list">
-        <div class="channels-header"><h2>Channels</h2></div>
-        {% for data in followed_list %}
-        <a href="{% url 'channel' data.channel.channel_id %}" class="channel-item">
-            <img src="{{ data.channel.image.url }}" class="channel-icon">
-            <div class="channel-content">
-                <div class="channel-top">
-                    <span class="channel-name">{{ data.channel.channel_name }}</span>
-                    <span class="channel-time">{% if data.last_time %}{{ data.last_time|insta_timesince }}{% endif %}</span>
+        <div class="channels-header"><h2>Recommended</h2></div>
+        {% if unfollowed_channels %}
+            {% for channel in unfollowed_channels %}
+            <div class="channel-item">
+                <img src="{{ channel.image.url }}" class="channel-icon">
+                <div class="channel-content">
+                    <div class="channel-top">
+                        <span class="channel-name">{{ channel.channel_name }}</span>
+                    </div>
+                    <div class="channel-bottom">
+                        <div class="channel-details">{{ channel.about|truncatechars:45 }}</div>
+                    </div>
                 </div>
-                <div class="channel-details" id="last-msg-{{ data.channel.channel_id }}">
-                    {% if data.last_time %}
-                        {% if data.message_type == 'audio' %}
-                            <i class="fas fa-microphone"></i> Audio message
-                        {% elif data.message_type == 'video' %}
-                            <i class="fas fa-video"></i> Video message
-                        {% elif data.message_type == 'image' %}
-                            <i class="fas fa-image"></i> Image message
-                        {% else %}
-                            {{ data.last_message|truncatechars:35 }}
-                        {% endif %}
-                    {% else %}
-                        No messages yet
-                    {% endif %}
+                <div class="channel-actions">
+                    <a href="{% url 'follow_channel' channel.channel_id %}">
+                        <button class="btn-follow">Follow</button>
+                    </a>
                 </div>
             </div>
-            <div class="channel-actions">
-                {% if data.unread_count > 0 %}
-                    <span class="unread-badge">{{ data.unread_count }}</span>
-                {% endif %}
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <i class="fa-solid fa-moon"></i>
+                <p>Everything caught up!</p>
             </div>
-        </a>
-        {% endfor %}
+        {% endif %}
     </div>
+</div>
 
-    <div class="channels-list">
-        <div class="channels-header"><h2>Discover Channels</h2></div>
-        {% for channel in unfollowed_channels %}
-        <div class="channel-item">
-            <img src="{{ channel.image.url }}" class="channel-icon">
-            <div class="channel-content">
-                <span class="channel-name">{{ channel.channel_name }}</span>
-                <div class="channel-details">{{ channel.about|truncatechars:40 }}</div>
+<button class="fab-button" onclick="openModal()"><i class="fas fa-plus"></i></button>
+
+<!-- Modal -->
+<div id="createChannelModal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <h2 style="margin: 0 0 25px 0; font-size: 20px; text-align: center;">New Channel</h2>
+        <form action="{% url 'channel_create' %}" method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>CHANNEL NAME</label>
+                <input type="text" name="name" required placeholder="Name">
             </div>
-            <div class="channel-actions">
-                <a href="{% url 'follow_channel' channel.channel_id %}">
-                    <button class="btn-follow">Follow</button>
-                </a>
+            <div class="form-group">
+                <label>DESCRIPTION</label>
+                <textarea name="about" required placeholder="What will you share?" rows="3"></textarea>
             </div>
-        </div>
-        {% endfor %}
+            <div class="form-group">
+                <label>CHANNEL ICON</label>
+                <input type="file" name="icon" accept="image/*" required>
+            </div>
+            <button type="submit" class="btn-create">Launch Channel</button>
+        </form>
     </div>
 </div>
 
 <script>
+    // 1. Modal Logic
     function openModal() { document.getElementById("createChannelModal").style.display = "flex"; }
     function closeModal() { document.getElementById("createChannelModal").style.display = "none"; }
-    window.onclick = function(event) {
-        if (event.target == document.getElementById("createChannelModal")) closeModal();
+    window.onclick = e => { if (e.target.classList.contains('modal')) closeModal(); }
+
+    // 2. ANIMATION OBSERVER
+    // This watches for changes made by the WebSocket in header.html
+    const listContainer = document.getElementById('following-list-container');
+    
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            // If a node was moved (removed and added back)
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                const addedNode = mutation.addedNodes[0];
+                if (addedNode.classList && addedNode.classList.contains('channel-item')) {
+                    // Trigger the flash/slide animation
+                    addedNode.classList.add('new-update-flash');
+                    setTimeout(() => addedNode.classList.remove('new-update-flash'), 1500);
+                }
+            }
+        });
+    });
+
+    if(listContainer) {
+        observer.observe(listContainer, { childList: true });
     }
 </script>
 </body>
