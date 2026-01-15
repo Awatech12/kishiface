@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.humanize',
     'social.apps.SocialConfig',
+    'pwa',
     #'social',
 ]
 # ✅ Cloudinary Config (Environment Variables on Render)
@@ -147,3 +148,24 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# PWA Settings
+PWA_APP_NAME = 'Kishiface'
+PWA_APP_DESCRIPTION = "For Love and Connection"
+PWA_APP_THEME_COLOR = '#0A0302'
+PWA_APP_BACKGROUND_COLOR = '#ffffff'
+PWA_APP_DISPLAY = 'standalone'
+PWA_APP_SCOPE = '/'
+PWA_APP_ORIENTATION = 'any'
+PWA_APP_START_URL = '/'
+PWA_APP_STATUS_BAR_COLOR = 'default'
+PWA_APP_ICONS = [
+    {
+        'src': '/static/images/small.png',
+        'sizes': '192x192'
+    },
+    {
+        'src': '/static/images/big.png',
+        'sizes': '512x512'
+    }
+]

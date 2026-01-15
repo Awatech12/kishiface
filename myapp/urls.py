@@ -21,7 +21,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('kishiFaceADMPannel/', admin.site.urls),
-    path('', include('social.urls'))
+    path('', include('social.urls')),
+    path('', include('pwa.urls')),
 ]
 
 urlpatterns +=static(settings.MEDIA_URL, document_root= settings.MEDIA_ROOT)
