@@ -117,6 +117,10 @@
         .logout-modal.active { display: flex; }
         .logout-modal-content { background: white; border-radius: 12px; padding: 24px; width: 320px; text-align: center; }
         .logout-modal-btn { padding: 12px; border: none; border-radius: 8px; width: 100%; margin-top: 10px; cursor: pointer; font-weight: bold; }
+    
+     /* Spotlight Like Color */
+        .is-liked { color: #fe2c55 !important; animation: pop 0.3s ease; }
+        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body>
@@ -170,7 +174,7 @@
                 <source src="{{ post.preview_url }}" type="video/mp4">
             </video>
 
-            <!-- TikTok Sidebar -->
+            <!-- spotlight Sidebar -->
             <div class="action-sidebar">
                 <div class="creator-pic-wrap">
                     <a href="{% url 'profile' post.author.username %}">
@@ -181,10 +185,12 @@
                     </a>
                 </div>
 
-                <div class="action-btn">
-                    <i class="fa-solid fa-heart"></i>
-                    <span>{{ post.likes.count }}</span>
-                </div>
+                
+                <!-- API-BASED LIKE BUTTON -->
+                <button class="action-btn spotlight-like-btn" data-post-id="{{ post.post_id }}" style="background-color: transparent; border: none;">
+                    <i class="fa-solid fa-heart {% if request.user in post.likes.all %}is-liked{% endif %}"></i>
+                    <span class="like-count-text">{{ post.likes.count }}</span>
+                </button>
 
                 <a href="{% url 'post_comment' post.post_id %}" class="action-btn">
                     <i class="fa-solid fa-comment-dots"></i>
@@ -227,6 +233,49 @@
     const items = document.querySelectorAll('.spotlight-item');
     const videos = document.querySelectorAll('.post-video');
     let currentIndex = 0;
+
+  // --- 1. SPOTLIGHT LIKE API LOGIC ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const feed = document.getElementById('spotlight-feed');
+
+        feed.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.spotlight-like-btn');
+            if (!btn) return;
+
+            const postId = btn.getAttribute('data-post-id');
+            const icon = btn.querySelector('i');
+            const countLabel = btn.querySelector('.like-count-text');
+            
+            // Construct the URL to your existing view
+            const url = `/like/${postId}`; 
+
+            try {
+                const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                if (response.ok) {
+                    const html = await response.text();
+                    
+                    // Use DOMParser to "read" the metadata from your post_like.html snippet
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const wrapper = doc.querySelector('.engagement-wrapper');
+
+                    if (wrapper) {
+                        const newCount = wrapper.getAttribute('data-like-count');
+                        const isLiked = wrapper.getAttribute('data-is-liked') === 'true';
+
+                        // Update Spotlight UI
+                        countLabel.innerText = newCount;
+                        if (isLiked) {
+                            icon.classList.add('is-liked');
+                        } else {
+                            icon.classList.remove('is-liked');
+                        }
+                    }
+                }
+            } catch (err) { console.error("Error:", err); }
+        });
+    });
+
 
     // --- 1. VIDEO AUTOPLAY LOGIC ---
     const observer = new IntersectionObserver((entries) => {
