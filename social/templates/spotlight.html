@@ -1,4 +1,3 @@
-
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
@@ -101,7 +100,7 @@
         .action-sidebar {
             position: absolute; 
             right: 12px; 
-            bottom: calc(160px + env(safe-area-inset-bottom)); /* Lifted to make room for bottom bar */
+            bottom: calc(160px + env(safe-area-inset-bottom)); 
             display: flex;
             flex-direction: column; 
             align-items: center; 
@@ -119,8 +118,10 @@
         }
 
         .action-btn { text-align: center; color: #fff; text-decoration: none; cursor: pointer; background: none; border: none; }
-        .action-btn i { font-size: 28px; text-shadow: 0 1px 4px rgba(0,0,0,0.7); }
+        .action-btn i { font-size: 28px; text-shadow: 0 1px 4px rgba(0,0,0,0.7); transition: color 0.3s; }
         .action-btn span { display: block; font-size: 12px; font-weight: 600; margin-top: 4px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+        .reposted { color: #17bf63 !important; }
 
         /* 5. Bottom Data Overlay */
         .bottom-overlay {
@@ -143,7 +144,7 @@
             max-width: 80%;
         }
 
-        /* --- NEW FACEBOOK STYLE COMMENT BUTTON --- */
+        /* FACEBOOK STYLE COMMENT BUTTON */
         .fb-comment-bar {
             background: rgba(255, 255, 255, 0.2);
             backdrop-filter: blur(10px);
@@ -176,6 +177,27 @@
     
         .is-liked { color: #fe2c55 !important; animation: pop 0.3s ease; }
         @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
+
+        /* REPOST MODAL STYLES */
+        .kf-repost-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center;
+            z-index: 3000; opacity: 0; visibility: hidden; transition: 0.3s;
+        }
+        .kf-repost-modal.show { opacity: 1; visibility: visible; }
+        .kf-repost-modal-content { background: #fff; border-radius: 16px; width: 90%; max-width: 400px; padding: 20px; }
+        .kf-repost-modal-header { text-align: center; font-weight: 700; font-size: 18px; margin-bottom: 15px; color: #000; }
+        .kf-repost-textarea { width: 100%; border: 1px solid #ddd; border-radius: 10px; padding: 12px; font-family: inherit; font-size: 14px; resize: none; min-height: 100px; margin-bottom: 5px; }
+        .kf-repost-modal-footer { display: flex; gap: 10px; margin-top: 15px; }
+        .kf-repost-btn { flex: 1; background: #17bf63; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .kf-repost-cancel-btn { flex: 1; background: #eee; color: #333; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+
+        /* Toast Notification */
+        .kf-toast {
+            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px;
+            font-size: 14px; z-index: 4000; pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -242,6 +264,14 @@
                     <span class="like-count-text">{{ post.likes.count }}</span>
                 </button>
 
+                <!-- REPOST BUTTON -->
+                <button class="action-btn spotlight-repost-btn" 
+                        onclick="kfToggleRepost('{% if post.is_repost and post.original_post %}{{ post.original_post.post_id }}{% else %}{{ post.post_id }}{% endif %}', this)"
+                        data-reposted="{% if request.user in post.reposts.all %}true{% else %}false{% endif %}">
+                    <i class="fa-solid fa-retweet {% if request.user in post.reposts.all %}reposted{% endif %}"></i>
+                    <span class="repost-count-text">{{ post.reposts.count|default:"0" }}</span>
+                </button>
+
                 <a href="{% url 'post_comment' post.post_id %}" class="action-btn">
                     <i class="fa-solid fa-comment-dots"></i>
                     <span>{{ post.comments.count|default:"0" }}</span>
@@ -264,12 +294,11 @@
                 
                 <div class="caption">
                     {% if post.is_repost %}
-                        <strong style="color: #fe2c55;">Repost:</strong> {{ post.repost_content|default:"" }}<br>
+                        <strong style="color: #17bf63;"><i class="fa-solid fa-retweet"></i> Repost:</strong> {{ post.repost_content|default:"" }}<br>
                     {% endif %}
                     {{ post.get_republished_content|truncatechars:150 }}
                 </div>
 
-                <!-- NEW FACEBOOK-STYLE COMMENT BUTTON -->
                 <a href="{% url 'post_comment' post.post_id %}" class="fb-comment-bar">
                     <i class="fa-regular fa-comment"></i>
                     <span>Write a comment...</span>
@@ -285,6 +314,21 @@
     </div>
 </div>
 
+<!-- Repost Modal -->
+<div class="kf-repost-modal" id="kf-repost-modal">
+    <div class="kf-repost-modal-content">
+        <div class="kf-repost-modal-header">Repost Spotlight</div>
+        <textarea class="kf-repost-textarea" id="kf-repost-caption" placeholder="Add a comment to your repost..." maxlength="500"></textarea>
+        <div style="font-size: 12px; color: #888; text-align: right;">
+            <span id="kf-repost-char-count">0</span>/500
+        </div>
+        <div class="kf-repost-modal-footer">
+            <button class="kf-repost-cancel-btn" onclick="kfCloseRepostModal()">Cancel</button>
+            <button class="kf-repost-btn" id="kf-repost-confirm-btn">Repost</button>
+        </div>
+    </div>
+</div>
+
 <script>
     const feed = document.getElementById('spotlight-feed');
     const items = document.querySelectorAll('.spotlight-item');
@@ -293,7 +337,6 @@
 
     // Like Logic
     document.addEventListener('DOMContentLoaded', () => {
-        const feed = document.getElementById('spotlight-feed');
         feed.addEventListener('click', async (e) => {
             const btn = e.target.closest('.spotlight-like-btn');
             if (!btn) return;
@@ -319,6 +362,92 @@
             } catch (err) { console.error("Error:", err); }
         });
     });
+
+    // --- REPOST LOGIC ---
+    let currentRepostPostId = null;
+    let currentRepostButton = null;
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'kf-toast';
+        toast.innerText = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+    }
+
+    function kfToggleRepost(postId, button) {
+        currentRepostPostId = postId;
+        currentRepostButton = button;
+        const isReposted = button.getAttribute('data-reposted') === 'true';
+        if (isReposted) {
+            kfPerformRepost(postId, '', true);
+        } else {
+            const modal = document.getElementById('kf-repost-modal');
+            const textarea = document.getElementById('kf-repost-caption');
+            textarea.value = '';
+            document.getElementById('kf-repost-char-count').innerText = '0';
+            modal.classList.add('show');
+            textarea.focus();
+        }
+    }
+
+    function kfCloseRepostModal() {
+        document.getElementById('kf-repost-modal').classList.remove('show');
+    }
+
+    document.getElementById('kf-repost-confirm-btn').onclick = function() {
+        const caption = document.getElementById('kf-repost-caption').value;
+        kfPerformRepost(currentRepostPostId, caption, false);
+        kfCloseRepostModal();
+    };
+
+    document.getElementById('kf-repost-caption').oninput = function() {
+        document.getElementById('kf-repost-char-count').innerText = this.value.length;
+    };
+
+    function kfPerformRepost(postId, caption, undo = false) {
+        const btn = currentRepostButton;
+        const icon = btn.querySelector('i');
+        const countSpan = btn.querySelector('.repost-count-text');
+        const csrftoken = getCookie('csrftoken');
+
+        fetch(`/repost/${postId}/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ caption: caption, undo: undo })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message);
+                if (data.reposted) {
+                    btn.setAttribute('data-reposted', 'true');
+                    icon.classList.add('reposted');
+                } else {
+                    btn.setAttribute('data-reposted', 'false');
+                    icon.classList.remove('reposted');
+                }
+                countSpan.innerText = data.repost_count;
+            } else {
+                showToast(data.error);
+            }
+        }).catch(err => showToast("Error connecting to server"));
+    }
 
     // Autoplay logic
     const observer = new IntersectionObserver((entries) => {
