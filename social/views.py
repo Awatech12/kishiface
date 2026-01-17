@@ -342,8 +342,9 @@ def postcomment(request, post_id):
         image = request.FILES.get('image')
         audio = request.FILES.get('audio_file')
 
+        # If nothing was submitted, return an empty successful response
         if not content and not image and not audio:
-            return
+            return HttpResponse(status=204) # 204 No Content
 
         comment = PostComment.objects.create(
             post=post,
@@ -361,13 +362,22 @@ def postcomment(request, post_id):
                 notification_type='comment'
             )
 
+        # Return just the new comment (used by HTMX 'afterbegin')
         return render(
             request,
             'snippet/comment_list.html',
             {'post': post, 'comment': comment}
         )
-    
 
+    # --- HANDLE GET REQUEST (Modal loading) ---
+    # This fetches all existing comments when you open the modal
+    comments = post.comments.all().order_by('-created_at')
+    
+    return render(
+        request, 
+        'postcomment.html', # Or the specific template fragment containing the list
+        {'post': post, 'comments': comments}
+    )
 def comment_like(request, comment_id):
     comment=get_object_or_404(PostComment, comment_id=comment_id)
     if request.user in comment.like.all():
