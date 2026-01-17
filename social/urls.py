@@ -29,6 +29,8 @@ urlpatterns = [
     path('editpost/<uuid:post_id>', views.editpost, name='editpost'),
     path('list', views.notification_list, name='notification_list'),
      path('spotlight/', views.spotlight_view, name='spotlight'),
+      path('track_share/<uuid:post_id>/', views.track_share, name='track_share'),
+
    path('mark-follow-notifications-read/', views.mark_follow_notifications_read, name='mark_follow_notifications_read'),
    path('notifications/delete-group/', views.delete_notification_group, name='delete_notification_group'),
     #====== Profials codes =======

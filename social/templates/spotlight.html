@@ -75,7 +75,7 @@
         .kf-repost-cancel-btn { flex: 1; background: #eee; color: #333; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; }
         .kf-toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 4000; pointer-events: none; }
 
-        /* 2. COMMENT SHEET STYLES (New - Replicated from postcomment logic) */
+        /* 2. COMMENT SHEET STYLES */
         .comment-sheet-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); z-index: 5000; display: none; align-items: flex-end;
@@ -448,6 +448,45 @@
         color: #bdbdbd;
         margin-right: 40px;
     }
+
+    /* ===== NEW SHARE MODAL STYLES ===== */
+    .share-modal {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.6); display: none; justify-content: center; align-items: flex-end;
+        z-index: 6000;
+    }
+    .share-modal.active { display: flex; }
+    .share-modal-content {
+        background: white; width: 100%; border-radius: 20px 20px 0 0;
+        padding: 20px; animation: slideUp 0.3s ease-out; max-width: 500px;
+    }
+    .share-header {
+        display: flex; justify-content: space-between; align-items: center;
+        font-weight: bold; font-size: 18px; margin-bottom: 20px; color: #333;
+    }
+    .share-grid {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 10px; text-align: center;
+        max-height: 60vh; overflow-y: auto; padding-bottom: 10px;
+    }
+    .share-item {
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        text-decoration: none; color: #333; font-size: 11px; cursor: pointer;
+    }
+    .share-icon-wrap {
+        width: 50px; height: 50px; border-radius: 50%; display: flex;
+        align-items: center; justify-content: center; font-size: 24px; color: white;
+        transition: transform 0.2s;
+    }
+    .share-icon-wrap:active { transform: scale(0.9); }
+    .si-whatsapp { background: #25D366; }
+    .si-facebook { background: #1877F2; }
+    .si-x { background: #000; }
+    .si-telegram { background: #0088cc; }
+    .si-snapchat { background: #FFFC00; color: #000 !important; }
+    .si-sms { background: #4cd964; }
+    .si-email { background: #777; }
+    .si-copy { background: #8e8e8e; }
+    .si-download { background: #f0f2f5; color: #333 !important; border: 1px solid #ddd; }
     
     </style>
 </head>
@@ -483,7 +522,7 @@
     </div>
 </div>
 
-<!-- 3. MAIN FEED (Original + Modified Comment Triggers) -->
+<!-- 3. MAIN FEED (Original + Updated Share Count UI) -->
 <div class="spotlight-wrapper">
     <div class="desktop-nav">
         <div class="nav-circle" onclick="goPrev()"><i class="fa-solid fa-chevron-up"></i></div>
@@ -526,9 +565,11 @@
                     <span>{{ post.comments.count|default:"0" }}</span>
                 </button>
 
-                <div class="action-btn">
+                <!-- UPDATED SHARE BUTTON -->
+                <div class="action-btn" id="share-btn-{{ post.post_id }}" 
+                     onclick="openShareModal('{{ post.post_id }}', '{{ post.get_republished_content|escapejs|truncatechars:100 }}', '{{ post.preview_url }}')">
                     <i class="fa-solid fa-share"></i>
-                    <span>Share</span>
+                    <span class="share-count-text">{{ post.share|default:"0" }}</span>
                 </div>
             </div>
 
@@ -552,7 +593,7 @@
     </div>
 </div>
 
-<!-- 4. COMMENT SHEET MODAL (New) -->
+<!-- 4. COMMENT SHEET MODAL (Original) -->
 <div class="comment-sheet-overlay" id="commentSheet">
     <div class="comment-sheet-content">
         <div class="comment-sheet-header">
@@ -621,6 +662,54 @@
         <div class="kf-repost-modal-footer">
             <button class="kf-repost-cancel-btn" onclick="kfCloseRepostModal()">Cancel</button>
             <button class="kf-repost-btn" id="kf-repost-confirm-btn">Repost</button>
+        </div>
+    </div>
+</div>
+
+<!-- 6. EXTENDED SHARE MODAL (New Facebook-Style) -->
+<div class="share-modal" id="shareModal" onclick="closeShareModal(event)">
+    <div class="share-modal-content" onclick="event.stopPropagation()">
+        <div class="share-header">
+            Share to
+            <i class="fa-solid fa-xmark" style="cursor:pointer" onclick="closeShareModal()"></i>
+        </div>
+        <div class="share-grid">
+            <div class="share-item" onclick="shareVia('whatsapp')">
+                <div class="share-icon-wrap si-whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
+                <span>WhatsApp</span>
+            </div>
+            <div class="share-item" onclick="shareVia('facebook')">
+                <div class="share-icon-wrap si-facebook"><i class="fa-brands fa-facebook-f"></i></div>
+                <span>Facebook</span>
+            </div>
+            <div class="share-item" onclick="shareVia('telegram')">
+                <div class="share-icon-wrap si-telegram"><i class="fa-brands fa-telegram"></i></div>
+                <span>Telegram</span>
+            </div>
+            <div class="share-item" onclick="shareVia('snapchat')">
+                <div class="share-icon-wrap si-snapchat"><i class="fa-brands fa-snapchat"></i></div>
+                <span>Snapchat</span>
+            </div>
+            <div class="share-item" onclick="shareVia('sms')">
+                <div class="share-icon-wrap si-sms"><i class="fa-solid fa-comment-sms"></i></div>
+                <span>SMS</span>
+            </div>
+            <div class="share-item" onclick="shareVia('email')">
+                <div class="share-icon-wrap si-email"><i class="fa-solid fa-envelope"></i></div>
+                <span>Email</span>
+            </div>
+            <div class="share-item" onclick="shareVia('x')">
+                <div class="share-icon-wrap si-x"><i class="fa-brands fa-x-twitter"></i></div>
+                <span>X</span>
+            </div>
+            <div class="share-item" onclick="shareVia('copy')">
+                <div class="share-icon-wrap si-copy"><i class="fa-solid fa-link"></i></div>
+                <span>Copy link</span>
+            </div>
+            <div class="share-item" onclick="shareVia('download')">
+                <div class="share-icon-wrap si-download"><i class="fa-solid fa-download"></i></div>
+                <span>Download</span>
+            </div>
         </div>
     </div>
 </div>
@@ -700,8 +789,6 @@
         kfCloseRepostModal();
     };
 
-    document.getElementById('kf-repost-caption').oninput = function() { document.getElementById('kf-repost-char-count').innerText = this.value.length; };
-
     function kfPerformRepost(postId, caption, undo = false) {
         const btn = currentRepostButton;
         const icon = btn.querySelector('i');
@@ -734,7 +821,6 @@
 
     function goNext() { if (currentIndex < items.length - 1) { currentIndex++; items[currentIndex].scrollIntoView({ behavior: 'smooth' }); } }
     function goPrev() { if (currentIndex > 0) { currentIndex--; items[currentIndex].scrollIntoView({ behavior: 'smooth' }); } }
-    window.addEventListener('keydown', (e) => { if (e.key === "ArrowDown") { e.preventDefault(); goNext(); } else if (e.key === "ArrowUp") { e.preventDefault(); goPrev(); } });
     feed.addEventListener('scroll', () => { currentIndex = Math.round(feed.scrollTop / window.innerHeight); });
 
     const logoutTrigger = document.getElementById('logoutTrigger');
@@ -742,9 +828,8 @@
     const closeLogout = document.getElementById('closeLogout');
     logoutTrigger.addEventListener('click', (e) => { e.preventDefault(); logoutModal.classList.add('active'); });
     closeLogout.addEventListener('click', () => { logoutModal.classList.remove('active'); });
-    window.onclick = function(event) { if (event.target == logoutModal) { logoutModal.classList.remove('active'); } }
 
-    // --- 2. NEW COMMENT SHEET LOGIC (Derived from postcomment functions) ---
+    // --- 2. ORIGINAL COMMENT SHEET LOGIC ---
     const sheet = document.getElementById('commentSheet');
     const modalTextInput = document.getElementById('modalTextInput');
     const modalSendBtn = document.getElementById('modalSendBtn');
@@ -754,12 +839,9 @@
 
     function openCommentSheet(postId) {
         sheet.classList.add('active');
-        // Dynamic HTMX target
         modalForm.setAttribute('hx-post', `/comments/${postId}`);
         htmx.process(modalForm);
-        // Load existing
         htmx.ajax('GET', `/comments/${postId}`, {target: '#modal_comment_list', select: '#comment_list'});
-        // Pause active video
         const activeItem = items[currentIndex];
         if (activeItem) { const v = activeItem.querySelector('video'); if (v) v.pause(); }
     }
@@ -767,7 +849,6 @@
     function closeCommentSheet() {
         sheet.classList.remove('active');
         resetModalInputUI();
-        // Play active video
         const activeItem = items[currentIndex];
         if (activeItem) { const v = activeItem.querySelector('video'); if (v) v.play(); }
     }
@@ -782,14 +863,8 @@
         const hasText = modalTextInput.value.trim().length > 0;
         const hasAudio = modalAudioInput.files && modalAudioInput.files.length > 0;
         const hasImage = document.getElementById('modal_image_input').files.length > 0;
-        
-        if (hasText || hasAudio || hasImage) {
-            modalSendBtn.style.display = 'flex';
-            modalMicBtn.classList.add('record-mode-hidden');
-        } else {
-            modalSendBtn.style.display = 'none';
-            modalMicBtn.classList.remove('record-mode-hidden');
-        }
+        if (hasText || hasAudio || hasImage) { modalSendBtn.style.display = 'flex'; modalMicBtn.classList.add('record-mode-hidden'); } 
+        else { modalSendBtn.style.display = 'none'; modalMicBtn.classList.remove('record-mode-hidden'); }
     }
 
     function resetModalInputUI() {
@@ -800,10 +875,8 @@
         modalMicBtn.classList.remove('record-mode-hidden');
         modalSendBtn.style.display = 'none';
         modalAudioInput.value = '';
-        if(mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
     }
 
-    /* MediaRecorder Logic (Exact copy from postcomment) */
     let mediaRecorder;
     let audioChunks = [];
 
@@ -813,7 +886,6 @@
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
-
             mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
             mediaRecorder.onstop = () => {
                 const blob = new Blob(audioChunks, { type: 'audio/webm' });
@@ -821,12 +893,10 @@
                 const container = new DataTransfer();
                 container.items.add(file);
                 modalAudioInput.files = container.files;
-
                 document.getElementById('modalPreviewAudio').src = URL.createObjectURL(blob);
                 document.getElementById('modalStopBtn').style.display = 'none';
                 updateModalSendButton();
             };
-
             mediaRecorder.start();
             modalTextInput.classList.add('record-mode-hidden');
             document.getElementById('modalAudioPreview').classList.remove('record-mode-hidden');
@@ -836,12 +906,72 @@
         } catch(e) { alert("Mic access denied"); }
     };
 
-    document.getElementById('modalStopBtn').onclick = () => {
-        mediaRecorder.stop();
-        document.getElementById('modalRecordingStatus').innerHTML = '';
-    };
-
+    document.getElementById('modalStopBtn').onclick = () => { mediaRecorder.stop(); document.getElementById('modalRecordingStatus').innerHTML = ''; };
     document.getElementById('modalDeleteAudioBtn').onclick = () => resetModalInputUI();
+
+    // --- 3. NEW SHARE LOGIC ---
+    let currentShareId = '';
+    let currentShareText = '';
+    let currentVideoUrl = '';
+
+    function openShareModal(postId, text, videoUrl) {
+        currentShareId = postId;
+        currentShareText = text;
+        currentVideoUrl = videoUrl;
+        document.getElementById('shareModal').classList.add('active');
+    }
+
+    function closeShareModal() { document.getElementById('shareModal').classList.remove('active'); }
+
+    function getShareUrl() { return window.location.origin + '/post/' + currentShareId; }
+
+    function trackShareCount() {
+        fetch(`/track_share/${currentShareId}/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') }
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                const countEl = document.querySelector(`#share-btn-${currentShareId} .share-count-text`);
+                if(countEl) countEl.innerText = data.new_count;
+            }
+        });
+    }
+
+    function shareVia(platform) {
+        const url = getShareUrl();
+        const text = currentShareText;
+        const fullMsg = encodeURIComponent(text + " " + url);
+        let shareLink = "";
+        
+        switch(platform) {
+            case 'whatsapp': shareLink = `https://api.whatsapp.com/send?text=${fullMsg}`; break;
+            case 'facebook': shareLink = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`; break;
+            case 'telegram': shareLink = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`; break;
+            case 'snapchat': shareLink = `https://www.snapchat.com/scan?attachmentUrl=${encodeURIComponent(url)}`; break;
+            case 'sms': shareLink = `sms:?body=${fullMsg}`; break;
+            case 'email': shareLink = `mailto:?subject=Check this out on KishiFace&body=${fullMsg}`; break;
+            case 'x': shareLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`; break;
+            case 'copy':
+                navigator.clipboard.writeText(url).then(() => { showToast("Link copied!"); trackShareCount(); closeShareModal(); });
+                return;
+            case 'download':
+                const a = document.createElement('a');
+                a.href = currentVideoUrl;
+                a.download = `KishiFace_Video_${currentShareId}.mp4`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                trackShareCount();
+                closeShareModal();
+                return;
+        }
+
+        if(shareLink) {
+            window.open(shareLink, '_blank');
+            trackShareCount();
+            closeShareModal();
+        }
+    }
 </script>
 
 </body>

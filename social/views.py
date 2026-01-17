@@ -1376,6 +1376,26 @@ def spotlight_view(request):
     spotlight_posts = Post.objects.filter(
         Q(video_file__isnull=False) & ~Q(video_file='') | 
         Q(is_repost=True, original_post__video_file__isnull=False) & ~Q(original_post__video_file='')
-    ).order_by('-created_at').select_related('author', 'original_post')
+    ).order_by('?').select_related('author', 'original_post')
 
     return render(request, 'spotlight.html', {'posts': spotlight_posts})
+
+
+
+@require_POST
+def track_share(request, post_id):
+    # Fetch the post using the ID
+    post = get_object_or_404(Post, post_id=post_id)
+    
+    # Increment the share count (handling None if field is null)
+    if post.share is None:
+        post.share = 0
+    post.share += 1
+    post.save()
+    
+    # Return the new count to the frontend
+    return JsonResponse({
+        'success': True, 
+        'new_count': post.share
+    })
+

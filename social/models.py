@@ -109,6 +109,7 @@ class Post(models.Model):
     likes = models.ManyToManyField(User, related_name='like_post', blank=True)
     reposts = models.ManyToManyField(User, related_name='repost_post', blank=True)  # NEW
     view = models.IntegerField(default=0, null=True, blank=True)
+    share = models.IntegerField(default=0, null=True, blank=True)
     content = models.TextField()
     
     # Repost related fields - NEW
