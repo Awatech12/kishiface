@@ -488,6 +488,57 @@
     .si-copy { background: #8e8e8e; }
     .si-download { background: #f0f2f5; color: #333 !important; border: 1px solid #ddd; }
     
+    /* ===== NEW FEATURES: PROGRESS BAR & SEEK BUTTONS ===== */
+    .kf-video-progress-container {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.2);
+        z-index: 100;
+        cursor: pointer;
+    }
+    .kf-video-progress-bar {
+        height: 100%;
+        width: 0%;
+        background: #fe2c55; /* TikTok style pink/red */
+        transition: width 0.1s linear;
+    }
+    .kf-seek-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        pointer-events: none;
+        z-index: 5;
+    }
+    .kf-seek-btn {
+        pointer-events: auto;
+        background: rgba(0, 0, 0, 0.2);
+        border: none;
+        color: white;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin: 0 40px;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.3s, background 0.2s;
+    }
+    .spotlight-item:hover .kf-seek-btn { opacity: 0.6; }
+    .kf-seek-btn:hover { background: rgba(0, 0, 0, 0.5); opacity: 1 !important; }
+    .kf-seek-btn i { font-size: 20px; }
+    .kf-seek-btn span { font-size: 10px; font-weight: bold; margin-top: 2px; }
+
     </style>
 </head>
 <body>
@@ -522,7 +573,7 @@
     </div>
 </div>
 
-<!-- 3. MAIN FEED (Original + Updated Share Count UI) -->
+<!-- 3. MAIN FEED (Original + New Video UI) -->
 <div class="spotlight-wrapper">
     <div class="desktop-nav">
         <div class="nav-circle" onclick="goPrev()"><i class="fa-solid fa-chevron-up"></i></div>
@@ -535,6 +586,18 @@
             <video loop playsinline preload="auto" class="post-video">
                 <source src="{{ post.preview_url }}" type="video/mp4">
             </video>
+
+            <!-- NEW SEEK CONTROLS -->
+            <div class="kf-seek-overlay">
+                <button class="kf-seek-btn" onclick="seekVideo(this, -5)">
+                    <i class="fa-solid fa-backward"></i>
+                    <span>5s</span>
+                </button>
+                <button class="kf-seek-btn" onclick="seekVideo(this, 5)">
+                    <i class="fa-solid fa-forward"></i>
+                    <span>5s</span>
+                </button>
+            </div>
 
             <!-- Sidebar -->
             <div class="action-sidebar">
@@ -559,13 +622,11 @@
                     <span class="repost-count-text">{{ post.reposts.count|default:"0" }}</span>
                 </button>
 
-                <!-- Trigger Modal instead of navigation -->
                 <button class="action-btn" onclick="openCommentSheet('{{ post.post_id }}')">
                     <i class="fa-solid fa-comment-dots"></i>
                     <span>{{ post.comments.count|default:"0" }}</span>
                 </button>
 
-                <!-- UPDATED SHARE BUTTON -->
                 <div class="action-btn" id="share-btn-{{ post.post_id }}" 
                      onclick="openShareModal('{{ post.post_id }}', '{{ post.get_republished_content|escapejs|truncatechars:100 }}', '{{ post.preview_url }}')">
                     <i class="fa-solid fa-share"></i>
@@ -588,6 +649,11 @@
                     <span>Write a comment...</span>
                 </div>
             </div>
+
+            <!-- NEW PROGRESS BAR -->
+            <div class="kf-video-progress-container" onclick="manualSeek(event, this)">
+                <div class="kf-video-progress-bar"></div>
+            </div>
         </div>
         {% endfor %}
     </div>
@@ -601,12 +667,10 @@
             <i class="fa-solid fa-xmark close-sheet" onclick="closeCommentSheet()"></i>
         </div>
         
-        <!-- HTMX target container -->
         <div id="modal_comment_list">
             <div style="text-align:center; padding: 20px; color:#8e8e8e;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
         </div>
 
-        <!-- INPUT AREA (Exact copy of postcomment structure) -->
         <div class="kf-comment-input-area">
             <form id="modalPostForm"
                 hx-post="" 
@@ -628,7 +692,6 @@
                     
                     <textarea class="kf-comment-input" name="comment" id="modalTextInput" placeholder="Write a comment..." rows="1" oninput="autoResizeModalTextarea()"></textarea>
                     
-                    <!-- Recording Preview (Hidden by default) -->
                     <div class="kf-audio-preview-container record-mode-hidden" id="modalAudioPreview">
                         <button id="modalDeleteAudioBtn" type="button" class="kf-comment-action-btn"><i class="fa-solid fa-trash-can"></i></button>
                         <button id="modalStopBtn" type="button" class="kf-stop-recording-btn" style="display:none;"><i class="fa-solid fa-square"></i></button>
@@ -666,7 +729,7 @@
     </div>
 </div>
 
-<!-- 6. EXTENDED SHARE MODAL (New Facebook-Style) -->
+<!-- 6. EXTENDED SHARE MODAL (Original) -->
 <div class="share-modal" id="shareModal" onclick="closeShareModal(event)">
     <div class="share-modal-content" onclick="event.stopPropagation()">
         <div class="share-header">
@@ -742,7 +805,35 @@
                 }
             } catch (err) { console.error("Error:", err); }
         });
+
+        // PROGRESS BAR INITIALIZATION
+        videos.forEach(video => {
+            video.addEventListener('timeupdate', () => {
+                const bar = video.parentElement.querySelector('.kf-video-progress-bar');
+                if(bar && video.duration) {
+                    const percent = (video.currentTime / video.duration) * 100;
+                    bar.style.width = percent + '%';
+                }
+            });
+        });
     });
+
+    // NEW SEEK LOGIC
+    function seekVideo(btn, seconds) {
+        const video = btn.closest('.spotlight-item').querySelector('video');
+        if (video) {
+            video.currentTime = Math.min(Math.max(video.currentTime + seconds, 0), video.duration);
+        }
+    }
+
+    function manualSeek(event, container) {
+        const video = container.closest('.spotlight-item').querySelector('video');
+        if (video) {
+            const rect = container.getBoundingClientRect();
+            const pos = (event.clientX - rect.left) / rect.width;
+            video.currentTime = pos * video.duration;
+        }
+    }
 
     function getCookie(name) {
         let cookieValue = null;
@@ -817,7 +908,11 @@
     }, { threshold: 0.7 });
     items.forEach(item => observer.observe(item));
 
-    videos.forEach(v => { v.addEventListener('click', () => { v.paused ? v.play() : v.pause(); }); });
+    videos.forEach(v => { v.addEventListener('click', (e) => { 
+        if(e.target.classList.contains('post-video')) {
+            v.paused ? v.play() : v.pause(); 
+        }
+    }); });
 
     function goNext() { if (currentIndex < items.length - 1) { currentIndex++; items[currentIndex].scrollIntoView({ behavior: 'smooth' }); } }
     function goPrev() { if (currentIndex > 0) { currentIndex--; items[currentIndex].scrollIntoView({ behavior: 'smooth' }); } }
@@ -909,7 +1004,7 @@
     document.getElementById('modalStopBtn').onclick = () => { mediaRecorder.stop(); document.getElementById('modalRecordingStatus').innerHTML = ''; };
     document.getElementById('modalDeleteAudioBtn').onclick = () => resetModalInputUI();
 
-    // --- 3. NEW SHARE LOGIC ---
+    // --- 3. ORIGINAL SHARE LOGIC ---
     let currentShareId = '';
     let currentShareText = '';
     let currentVideoUrl = '';
