@@ -1,0 +1,330 @@
+
+{% load humanize %}
+{% load static %}
+<style>
+    :root {
+        --primary-blue: #0095f6;
+        --success-green: #2ecc71;
+        --text-dark: #262626;
+        --text-light: #8e8e8e;
+        --bg-color: #fafafa;
+        --card-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    .pd-container {
+        max-width: 1000px;
+        margin: 20px auto;
+        padding: 0 15px 100px; /* Space for mobile sticky bar */
+    }
+
+    /* Layout Grid */
+    .pd-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 30px;
+    }
+
+    /* Image Gallery */
+    .pd-gallery {
+        background: #000;
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+        aspect-ratio: 1/1;
+    }
+
+    .pd-main-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .pd-thumbnails {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+        overflow-x: auto;
+        padding-bottom: 5px;
+    }
+
+    .pd-thumb {
+        width: 70px;
+        height: 70px;
+        border-radius: 8px;
+        object-fit: cover;
+        cursor: pointer;
+        border: 2px solid transparent;
+        transition: 0.2s;
+    }
+
+    .pd-thumb.active {
+        border-color: var(--primary-blue);
+    }
+
+    /* Product Info */
+    .pd-info-card {
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        border: 1px solid #dbdbdb;
+    }
+
+    .pd-category {
+        font-size: 12px;
+        text-transform: uppercase;
+        color: var(--primary-blue);
+        font-weight: 700;
+        letter-spacing: 1px;
+    }
+
+    .pd-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin: 8px 0;
+        color: var(--text-dark);
+    }
+
+    .pd-price {
+        font-size: 28px;
+        font-weight: 800;
+        color: var(--primary-blue);
+        margin-bottom: 20px;
+    }
+
+    /* Seller Card */
+    .seller-box {
+        display: flex;
+        align-items: center;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .seller-img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        margin-right: 15px;
+    }
+
+    .seller-status {
+        width: 10px;
+        height: 10px;
+        background: #ccc;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .status-online { background: var(--success-green); }
+
+    /* Action Buttons */
+    .pd-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .btn-main {
+        padding: 14px;
+        border-radius: 8px;
+        font-weight: 600;
+        text-align: center;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        transition: 0.3s;
+    }
+
+    .btn-chat { background: var(--primary-blue); color: white; border: none; }
+    .btn-whatsapp { background: var(--success-green); color: white; }
+    .btn-save { background: white; color: var(--text-dark); border: 1px solid #dbdbdb; }
+
+    /* Description Section */
+    .pd-section {
+        margin-top: 30px;
+    }
+
+    .pd-section-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .pd-text {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #444;
+    }
+
+    .pd-meta-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px dashed #eee;
+        font-size: 14px;
+    }
+
+    /* Floating Mobile Bar */
+    @media (max-width: 768px) {
+        .pd-grid { grid-template-columns: 1fr; }
+        .mobile-sticky-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px;
+            display: flex;
+            gap: 10px;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        .desktop-actions { display: none; }
+    }
+
+    @media (min-width: 769px) {
+        .mobile-sticky-bar { display: none; }
+    }
+</style>
+
+<div class="pd-container">
+    <nav style="margin-bottom: 15px;">
+        <a href="{% url 'market' %}" style="text-decoration: none; color: var(--text-light); font-size: 14px;">
+            <i class="fas fa-arrow-left"></i> Back to Market
+        </a>
+    </nav>
+
+    <div class="pd-grid">
+        <!-- Left: Images -->
+        <div class="pd-left">
+            <div class="pd-gallery">
+                <img src="{{ product.images.first.product_image.url }}" id="mainDisplay" class="pd-main-img" alt="{{ product.product_name }}">
+            </div>
+            <div class="pd-thumbnails">
+                {% for img in images %}
+                <img src="{{ img.product_image.url }}" class="pd-thumb" onclick="updateMainImage(this.src, this)" alt="Thumbnail">
+                {% endfor %}
+            </div>
+
+            <div class="pd-section">
+                <h3 class="pd-section-title">Description</h3>
+                <div class="pd-text">
+                    {{ product.product_description|linebreaksbr }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Details -->
+        <div class="pd-right">
+            <div class="pd-info-card">
+                <span class="pd-category">{{ product.product_category }}</span>
+                <h1 class="pd-title">{{ product.product_name }}</h1>
+                <div class="pd-price">₦{{ product.product_price|intcomma }}</div>
+
+                <!-- Seller Info -->
+                <a href="{% url 'profile' product.product_owner.username %}" class="seller-box">
+                    <img src="{{ seller.picture.url }}" class="seller-img">
+                    <div>
+                        <div style="font-weight: 600; font-size: 15px;">
+                            {{ seller.full_name }}
+                            {% if seller.is_verify %}
+                            <img src="{% static 'images/verify1.jpg' %}" width="14">
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-light);">
+                            <span class="seller-status {% if seller.online %}status-online{% endif %}"></span>
+                            {% if seller.online %}Active Now{% else %}Last seen {{ seller.get_status }}{% endif %}
+                        </div>
+                    </div>
+                </a>
+
+                <div class="pd-meta">
+                    <div class="pd-meta-item">
+                        <span><i class="fas fa-map-marker-alt"></i> Location</span>
+                        <strong>{{ product.product_location }}</strong>
+                    </div>
+                    <div class="pd-meta-item">
+                        <span><i class="fas fa-box"></i> Condition</span>
+                        <strong>{{ product.product_availability }}</strong>
+                    </div>
+                    <div class="pd-meta-item">
+                        <span><i class="fas fa-calendar"></i> Posted</span>
+                        <strong>{{ product.posted_on|date:"M d, Y" }}</strong>
+                    </div>
+                </div>
+
+                <div class="pd-actions desktop-actions" style="margin-top: 25px;">
+                    <a href="{% url 'message' product.product_owner.username %}" class="btn-main btn-chat">
+                        <i class="fas fa-comment-dots"></i> Send Message
+                    </a>
+                    <a href="https://wa.me/{{ seller.phone }}?text=Hi, I am interested in {{ product.product_name }}" target="_blank" class="btn-main btn-whatsapp">
+                        <i class="fab fa-whatsapp"></i> Chat on WhatsApp
+                    </a>
+                    <button class="btn-main btn-save" onclick="saveProduct('{{ product.product_id }}')">
+                        <i class="far fa-heart"></i> Save to Wishlist
+                    </button>
+                </div>
+            </div>
+
+            <!-- Safety Tips (Social Proof) -->
+            <div style="margin-top: 20px; background: #fff5f5; padding: 15px; border-radius: 10px; border: 1px solid #ffe3e3;">
+                <h4 style="font-size: 14px; color: #d63031; margin-bottom: 5px;"><i class="fas fa-shield-alt"></i> Safety Tips</h4>
+                <ul style="font-size: 12px; color: #636e72; padding-left: 15px;">
+                    <li>Only pay after inspecting the item.</li>
+                    <li>Meet the seller in a public place.</li>
+                    <li>Check the item thoroughly before buying.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Related Products -->
+    <div class="pd-section">
+        <h3 class="pd-section-title">Similar Items</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px;">
+            {% for item in related_products %}
+            <a href="{% url 'product_detail' item.product_id %}" style="text-decoration: none; color: inherit;">
+                <div style="background: white; border-radius: 8px; overflow: hidden; border: 1px solid #eee;">
+                    <img src="{{ item.images.first.product_image.url }}" style="width: 100%; height: 140px; object-fit: cover;">
+                    <div style="padding: 10px;">
+                        <div style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ item.product_name }}</div>
+                        <div style="color: var(--primary-blue); font-weight: 700; font-size: 14px;">₦{{ item.product_price|intcomma }}</div>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Mobile Sticky Bar -->
+<div class="mobile-sticky-bar">
+    <a href="{% url 'message' product.product_owner.username %}" class="btn-main btn-chat" style="flex: 1;">
+        <i class="fas fa-comment"></i> Chat
+    </a>
+    <a href="https://wa.me/{{ seller.phone }}" class="btn-main btn-whatsapp" style="flex: 1;">
+        <i class="fab fa-whatsapp"></i> WhatsApp
+    </a>
+</div>
+
+<script>
+    function updateMainImage(src, thumb) {
+        document.getElementById('mainDisplay').src = src;
+        // Remove active class from all thumbnails
+        document.querySelectorAll('.pd-thumb').forEach(t => t.classList.remove('active'));
+        // Add active class to clicked
+        thumb.classList.add('active');
+    }
+
+    function saveProduct(id) {
+        // Implement Wishlist AJAX logic here
+        alert("Product saved to your wishlist!");
+    }
+</script>

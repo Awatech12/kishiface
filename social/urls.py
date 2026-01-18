@@ -28,6 +28,7 @@ urlpatterns = [
     path('notification', views.notification_partial, name='notification_partial'),
     path('editpost/<uuid:post_id>', views.editpost, name='editpost'),
     path('list', views.notification_list, name='notification_list'),
+      path('product/<uuid:product_id>/', views.product_detail, name='product_detail'),
      path('spotlight/', views.spotlight_view, name='spotlight'),
       path('track_share/<uuid:post_id>/', views.track_share, name='track_share'),
 

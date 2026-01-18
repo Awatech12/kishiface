@@ -435,6 +435,9 @@ class Market(models.Model):
     product_location = models.CharField(max_length=300)
     product_description = models.TextField()
     product_availability = models.CharField(max_length=150)
+    product_condition = models.CharField(max_length=50, choices=[('New', 'New'), ('Used', 'Used - Like New'), ('Fair', 'Used - Fair Condition')], default='New')
+    views_count = models.PositiveIntegerField(default=0) # Track how many people saw the product
+    is_promoted = models.BooleanField(default=False) # For paid ads
     product_category = models.CharField(max_length=100)
     posted_on = models.DateTimeField(auto_now_add=True)
 

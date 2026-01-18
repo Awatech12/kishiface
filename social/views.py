@@ -1399,3 +1399,22 @@ def track_share(request, post_id):
         'new_count': post.share
     })
 
+
+def product_detail(request, product_id):
+    product = get_object_or_404(Market, product_id=product_id)
+    # Get all images for this product
+    images = product.images.all() 
+    # Get related products (same category, excluding current)
+    related_products = Market.objects.filter(
+        product_category=product.product_category
+    ).exclude(product_id=product_id)[:4]
+    
+    seller_profile = get_object_or_404(Profile, user=product.product_owner)
+
+    context = {
+        'product': product,
+        'images': images,
+        'related_products': related_products,
+        'seller': seller_profile,
+    }
+    return render(request, 'product_details.html', context)
