@@ -31,6 +31,7 @@ urlpatterns = [
       path('product/<uuid:product_id>/', views.product_detail, name='product_detail'),
      path('spotlight/', views.spotlight_view, name='spotlight'),
       path('track_share/<uuid:post_id>/', views.track_share, name='track_share'),
+      path('get-location/<str:username>/', views.get_location, name='get_location'),
 
    path('mark-follow-notifications-read/', views.mark_follow_notifications_read, name='mark_follow_notifications_read'),
    path('notifications/delete-group/', views.delete_notification_group, name='delete_notification_group'),

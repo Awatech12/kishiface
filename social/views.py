@@ -1422,3 +1422,10 @@ def product_detail(request, product_id):
         'seller': seller_profile,
     }
     return render(request, 'product_details.html', context)
+
+def get_location(request, username):
+    user = Profile.objects.get(user__username=username)
+    return JsonResponse({
+        'lat': user.latitude,
+        'lng': user.longitude
+    })

@@ -8,6 +8,12 @@
 
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Leaflet Maps CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet Maps JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
         :root {
@@ -114,6 +120,42 @@
             margin-bottom: 15px;
         }
 
+        /* --- MAP STYLING --- */
+        #kf-live-map {
+            height: 250px;
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--kf-border);
+            margin: 15px 0;
+            z-index: 1;
+            background: #f8f9fa;
+        }
+
+        .live-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--kf-primary);
+            text-transform: uppercase;
+            margin-top: 15px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--kf-primary);
+            border-radius: 50%;
+            animation: pulse-blue 2s infinite;
+        }
+
+        @keyframes pulse-blue {
+            0% { box-shadow: 0 0 0 0 rgba(0, 149, 246, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 149, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 149, 246, 0); }
+        }
+
         .kf-badge {
             display: inline-block;
             padding: 2px 8px;
@@ -148,7 +190,26 @@
             gap: 8px;
         }
 
-        /* Action Buttons */
+        /* Thumbnails */
+        .kf-thumbs-wrapper {
+            padding: 10px 0;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .kf-thumb-img {
+            width: 60px;
+            height: 60px;
+            flex-shrink: 0;
+            object-fit: cover;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid var(--kf-border);
+        }
+
+        /* Desktop Actions */
         .kf-actions {
             padding: 16px;
             border-top: 1px solid var(--kf-border);
@@ -171,38 +232,11 @@
             transition: opacity 0.2s;
         }
 
-        .kf-btn:hover { opacity: 0.8; }
         .kf-btn-primary { background: var(--kf-primary); color: white; }
         .kf-btn-whatsapp { background: var(--kf-success); color: white; }
         .kf-btn-outline { background: white; color: var(--kf-text-main); border: 1px solid var(--kf-border); }
 
-        /* Thumbnails */
-        .kf-thumbs-wrapper {
-            padding: 10px 0;
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            scrollbar-width: none;
-        }
-        .kf-thumbs-wrapper::-webkit-scrollbar { display: none; }
-
-        .kf-thumb-img {
-            width: 60px;
-            height: 60px;
-            flex-shrink: 0;
-            object-fit: cover;
-            cursor: pointer;
-            border-radius: 4px;
-            border: 1px solid var(--kf-border);
-        }
-
-        /* More from Seller */
-        .kf-more-section {
-            margin-top: 40px;
-            border-top: 1px solid var(--kf-border);
-            padding-top: 20px;
-        }
-
+        /* More Products Grid */
         .kf-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -223,7 +257,7 @@
             object-fit: cover;
         }
 
-        /* --- Instagram Style Modal --- */
+        /* Instagram Modal Styles */
         #kfShareModal {
             display: none;
             position: fixed;
@@ -278,12 +312,8 @@
             justify-content: center;
             font-size: 20px;
             color: white;
-            transition: transform 0.2s;
         }
 
-        .kf-share-icon-btn:active i { transform: scale(0.9); }
-
-        /* Icon Colors */
         .bg-whatsapp { background-color: #25D366; }
         .bg-facebook { background-color: #1877F2; }
         .bg-telegram { background-color: #0088cc; }
@@ -291,31 +321,23 @@
         .bg-sms      { background-color: #34C759; }
         .bg-email    { background-color: #8e8e8e; }
 
-        .kf-modal-action-list {
-            display: flex;
-            flex-direction: column;
-        }
-
         .kf-modal-action-item {
             padding: 14px;
             border-top: 1px solid var(--kf-border);
             font-size: 14px;
-            font-weight: 400;
             background: none;
+            width: 100%;
             border-left: none; border-right: none;
             cursor: pointer;
             color: var(--kf-text-main);
         }
 
         .kf-modal-action-item.bold { font-weight: 700; }
-        .kf-modal-action-item.danger { color: #ed4956; font-weight: 700; }
 
-        /* Mobile Responsive */
+        /* Mobile Bar */
         @media (max-width: 768px) {
             .kf-product-card { flex-direction: column; border: none; }
             .kf-media-side { border-right: none; }
-            .kf-info-side { border-bottom: 1px solid var(--kf-border); }
-            .kf-grid { grid-template-columns: repeat(3, 1fr); }
             .kf-desktop-actions { display: none; }
             .kf-mobile-bar {
                 position: fixed;
@@ -329,16 +351,11 @@
             }
             .kf-container { padding-bottom: 120px; }
         }
-
-        @media (min-width: 769px) {
-            .kf-mobile-bar { display: none; }
-        }
     </style>
 </head>
 <body>
 
 <div class="kf-container">
-    <!-- Back Button -->
     <div style="margin-bottom: 15px; padding: 0 10px;">
         <a href="{% url 'market' %}" style="text-decoration: none; color: var(--kf-text-main); font-weight: 600; font-size: 14px;">
             <i class="fas fa-chevron-left"></i> Market
@@ -346,14 +363,13 @@
     </div>
 
     <div class="kf-product-card">
-        <!-- Left Visuals -->
+        <!-- Left Side -->
         <div class="kf-media-side">
             <img src="{{ product.images.first.product_image.url }}" id="kfMainDisplay" class="kf-main-img" alt="Product">
         </div>
 
         <!-- Right Side -->
         <div class="kf-info-side">
-            <!-- Header -->
             <div class="kf-seller-header">
                 <a href="{% url 'profile' product.product_owner.username %}">
                     <img src="{{ seller.picture.url }}" class="kf-avatar">
@@ -366,34 +382,35 @@
                 {% endif %}
             </div>
 
-            <!-- Content -->
             <div class="kf-scroll-content">
-                {% if product.is_promoted %}
-                <span class="kf-badge kf-badge-promoted">Sponsored</span>
-                {% endif %}
+                {% if product.is_promoted %}<span class="kf-badge kf-badge-promoted">Sponsored</span>{% endif %}
                 <span class="kf-badge kf-badge-condition">{{ product.product_condition }}</span>
                 
                 <h1 class="kf-product-title">{{ product.product_name }}</h1>
                 <div class="kf-price-tag">₦{{ product.product_price|intcomma }}</div>
-
                 <div class="kf-description">{{ product.product_description }}</div>
 
-                <!-- Multi-image Thumbnails -->
                 <div class="kf-thumbs-wrapper">
                     {% for img in product.images.all %}
                     <img src="{{ img.product_image.url }}" class="kf-thumb-img" onclick="setKfImage('{{ img.product_image.url }}')">
                     {% endfor %}
                 </div>
 
+                <!-- LIVE MAP -->
+                <div class="live-status">
+                    <div class="pulse-dot"></div> Seller's Live Location
+                </div>
+                <div id="kf-live-map"></div>
+
                 <ul class="kf-meta-list">
                     <li><i class="fas fa-tag"></i> Category: {{ product.product_category }}</li>
-                    <li><i class="fas fa-map-marker-alt"></i> {{ product.product_location }}</li>
+                    <li><i class="fas fa-map-marker-alt"></i> Area: {{ product.product_location }}</li>
                     <li><i class="fas fa-eye"></i> {{ product.views_count }} views</li>
                     <li><i class="fas fa-clock"></i> Posted {{ product.posted_on|naturaltime }}</li>
                 </ul>
             </div>
 
-            <!-- Desktop Actions -->
+            <!-- Desktop Buttons -->
             <div class="kf-actions kf-desktop-actions">
                 {% if request.user != product.product_owner %}
                     <a href="{% url 'message' product.product_owner.username %}" class="kf-btn kf-btn-primary">
@@ -403,20 +420,15 @@
                         <i class="fab fa-whatsapp"></i> WhatsApp
                     </a>
                 {% else %}
-                    <a href="#" class="kf-btn kf-btn-outline">
-                        <i class="fas fa-edit"></i> Edit Listing
-                    </a>
+                    <a href="#" class="kf-btn kf-btn-outline"><i class="fas fa-edit"></i> Edit Listing</a>
                 {% endif %}
-                
-                <button onclick="toggleShare()" class="kf-btn kf-btn-outline">
-                    <i class="fas fa-share-alt"></i> Share Product
-                </button>
+                <button onclick="toggleShare()" class="kf-btn kf-btn-outline"><i class="fas fa-share-alt"></i> Share Product</button>
             </div>
         </div>
     </div>
 
-    <!-- More Products Section -->
-    <div class="kf-more-section">
+    <!-- More from Seller Grid -->
+    <div style="margin-top: 40px; border-top: 1px solid var(--kf-border); padding-top: 20px;">
         <h3 style="font-size: 14px; color: var(--kf-text-muted); font-weight: 600; margin-bottom: 20px;">
             More products from <span style="color: var(--kf-text-main);">{{ product.product_owner.username }}</span>
         </h3>
@@ -437,92 +449,86 @@
     </div>
 </div>
 
-<!-- Mobile Fixed Bar -->
+<!-- Mobile Bar -->
 <div class="kf-mobile-bar">
     {% if request.user != product.product_owner %}
-        <a href="{% url 'message' product.product_owner.username %}" class="kf-btn kf-btn-primary" style="flex: 1; margin-bottom: 0;">
-            Message
-        </a>
-        <a href="https://wa.me/{{ seller.phone }}" class="kf-btn kf-btn-whatsapp" style="flex: 1; margin-bottom: 0;">
-            WhatsApp
-        </a>
+        <a href="{% url 'message' product.product_owner.username %}" class="kf-btn kf-btn-primary" style="flex: 1; margin-bottom: 0;">Message</a>
+        <a href="https://wa.me/{{ seller.phone }}" class="kf-btn kf-btn-whatsapp" style="flex: 1; margin-bottom: 0;">WhatsApp</a>
     {% endif %}
-    <button onclick="toggleShare()" class="kf-btn kf-btn-outline" style="width: 50px; margin-bottom: 0;">
-        <i class="fas fa-share-alt"></i>
-    </button>
+    <button onclick="toggleShare()" class="kf-btn kf-btn-outline" style="width: 50px; margin-bottom: 0;"><i class="fas fa-share-alt"></i></button>
 </div>
 
 <!-- Instagram Style Share Modal -->
 <div id="kfShareModal" onclick="toggleShare()">
     <div class="kf-share-box" onclick="event.stopPropagation()">
         <div class="kf-share-header">Share</div>
-        
-        <!-- Icon Grid (Socials) -->
         <div class="kf-share-grid">
-            <a href="https://wa.me/?text={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn">
-                <i class="fab fa-whatsapp bg-whatsapp"></i>
-                <span>WhatsApp</span>
-            </a>
-            <a href="https://t.me/share/url?url={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn">
-                <i class="fab fa-telegram-plane bg-telegram"></i>
-                <span>Telegram</span>
-            </a>
-            <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn">
-                <i class="fab fa-facebook-f bg-facebook"></i>
-                <span>Facebook</span>
-            </a>
-            <a href="https://twitter.com/intent/tweet?url={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn">
-                <i class="fab fa-twitter bg-twitter"></i>
-                <span>Twitter</span>
-            </a>
-            <a href="sms:?body=Check this out: {{ request.build_absolute_uri }}" class="kf-share-icon-btn">
-                <i class="fas fa-comment bg-sms"></i>
-                <span>SMS</span>
-            </a>
-            <a href="mailto:?subject=Look at this product&body={{ request.build_absolute_uri }}" class="kf-share-icon-btn">
-                <i class="fas fa-envelope bg-email"></i>
-                <span>Email</span>
-            </a>
+            <a href="https://wa.me/?text={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn"><i class="fab fa-whatsapp bg-whatsapp"></i><span>WhatsApp</span></a>
+            <a href="https://t.me/share/url?url={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn"><i class="fab fa-telegram-plane bg-telegram"></i><span>Telegram</span></a>
+            <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn"><i class="fab fa-facebook-f bg-facebook"></i><span>Facebook</span></a>
+            <a href="https://twitter.com/intent/tweet?url={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn"><i class="fab fa-twitter bg-twitter"></i><span>Twitter</span></a>
+            <a href="sms:?body=Check this: {{ request.build_absolute_uri }}" class="kf-share-icon-btn"><i class="fas fa-comment bg-sms"></i><span>SMS</span></a>
+            <a href="mailto:?body={{ request.build_absolute_uri }}" class="kf-share-icon-btn"><i class="fas fa-envelope bg-email"></i><span>Email</span></a>
         </div>
-
-        <!-- List Actions -->
-        <div class="kf-modal-action-list">
-            <button class="kf-modal-action-item bold" onclick="copyLink()">Copy Link</button>
-            <button class="kf-modal-action-item" onclick="toggleShare()">Cancel</button>
-        </div>
+        <button class="kf-modal-action-item bold" onclick="copyLink()" style="color:var(--kf-primary)">Copy Link</button>
+        <button class="kf-modal-action-item" onclick="toggleShare()">Cancel</button>
     </div>
 </div>
 
 <script>
-    function setKfImage(url) {
-        document.getElementById('kfMainDisplay').src = url;
-    }
+    function setKfImage(url) { document.getElementById('kfMainDisplay').src = url; }
 
     function toggleShare() {
         const modal = document.getElementById('kfShareModal');
         modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
-        // Prevent body scrolling when modal is open
         document.body.style.overflow = (modal.style.display === 'flex') ? 'hidden' : 'auto';
     }
 
     async function copyLink() {
+        const url = window.location.href;
         try {
-            await navigator.clipboard.writeText(window.location.href);
-            alert('Link copied to clipboard!');
-            toggleShare();
-        } catch (err) {
-            // Fallback for older browsers
-            const dummy = document.createElement('input');
-            document.body.appendChild(dummy);
-            dummy.value = window.location.href;
-            dummy.select();
-            document.execCommand('copy');
-            document.body.removeChild(dummy);
+            await navigator.clipboard.writeText(url);
             alert('Link copied!');
-            toggleShare();
+        } catch (err) {
+            const el = document.createElement('textarea');
+            el.value = url; document.body.appendChild(el);
+            el.select(); document.execCommand('copy');
+            document.body.removeChild(el);
+            alert('Link copied!');
         }
+        toggleShare();
     }
-</script>
 
+    // --- MAP LOGIC ---
+    let map; let sellerMarker;
+    const sellerUsername = "{{ product.product_owner.username }}";
+
+    function initMap() {
+        const lat = parseFloat("{{ seller.latitude }}") || 6.5244;
+        const lng = parseFloat("{{ seller.longitude }}") || 3.3792;
+        
+        map = L.map('kf-live-map').setView([lat, lng], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        sellerMarker = L.marker([lat, lng]).addTo(map).bindPopup("Seller is here");
+        
+        setTimeout(() => map.invalidateSize(), 400);
+        setInterval(updatePos, 10000); // Polling every 10s
+    }
+
+    function updatePos() {
+        if (!sellerUsername) return;
+        fetch(`/get-location/${sellerUsername}/`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.lat && data.lng) {
+                    const newPos = [parseFloat(data.lat), parseFloat(data.lng)];
+                    sellerMarker.setLatLng(newPos);
+                }
+            }).catch(e => console.log("Map sync error"));
+    }
+
+    window.onload = initMap;
+</script>
 </body>
 </html>
