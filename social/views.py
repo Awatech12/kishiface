@@ -1402,6 +1402,10 @@ def track_share(request, post_id):
 
 def product_detail(request, product_id):
     product = get_object_or_404(Market, product_id=product_id)
+    if product.views_count is None:
+        product.views_count = 0
+    product.views_count += 1
+    product.save()
     # Get all images for this product
     images = product.images.all() 
     # Get related products (same category, excluding current)

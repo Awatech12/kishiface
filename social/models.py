@@ -23,7 +23,7 @@ class Profile(models.Model):
     bio = models.CharField(max_length=300)
     location = models.TextField()
     
-    # Conditional picture field
+    # Conditional picture field from your original code
     if settings.USE_CLOUDINARY:
         picture = CloudinaryField('picture', folder='profile_image', default='logo_iowyea')
     else:
@@ -35,67 +35,6 @@ class Profile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_seen = models.DateTimeField(auto_now=True)
     online = models.BooleanField(default=False)
-    
-    def save(self, *args, **kwargs):
-        # Capitalize address
-        self.address = self.address.title()
-        
-        # Capitalize user names
-        if self.user.first_name:
-            self.user.first_name = self.user.first_name.capitalize()
-        if self.user.last_name:
-            self.user.last_name = self.user.last_name.capitalize()
-        
-        # Set full name
-        self.full_name = f'{self.user.first_name} {self.user.last_name}'
-        
-        # Save user first
-        self.user.save()
-        
-        # Save profile
-        super().save(*args, **kwargs)
-
-    def update_online_status(self, online=True):
-        """Update online status - call this from WebSocket"""
-        self.online = online
-        self.last_seen = timezone.now()
-        self.save(update_fields=['last_seen', 'online'])
-
-    def get_status(self):
-        """Always show accurate time since last seen"""
-        now = timezone.now()
-        diff = now - self.last_seen
-        
-        if diff.seconds < 60:
-            return "Just now"
-        elif diff.seconds < 3600:
-            return f"{diff.seconds // 60}m ago"
-        elif diff.days == 0:
-            return f"{diff.seconds // 3600}h ago"
-        elif diff.days == 1:
-            return "Yesterday"
-        else:
-            return f"{diff.days}d ago"
-
-
-    @property
-    def is_recently_online(self):
-        """Check if user was online in last 5 minutes"""
-        diff = timezone.now() - self.last_seen
-        return diff.seconds < 300
-
-    @classmethod
-    def mark_user_online(cls, user_id):
-        """Mark user as online (static method)"""
-        cls.objects.filter(user_id=user_id).update(
-            online=True,
-            last_seen=timezone.now()
-        )
-
-    @classmethod
-    def mark_user_offline(cls, user_id):
-        """Mark user as offline (static method)"""
-        cls.objects.filter(user_id=user_id).update(online=False)
 
     class Meta:
         db_table = 'Profile_Table'
@@ -103,6 +42,79 @@ class Profile(models.Model):
     def __str__(self):
         return self.user.username
 
+    def save(self, *args, **kwargs):
+        # Capitalize address
+        if self.address:
+            self.address = self.address.title()
+        
+        # Capitalize user names and save User object
+        if self.user:
+            if self.user.first_name:
+                self.user.first_name = self.user.first_name.capitalize()
+            if self.user.last_name:
+                self.user.last_name = self.user.last_name.capitalize()
+            
+            # Set full name based on updated names
+            self.full_name = f'{self.user.first_name} {self.user.last_name}'.strip()
+            self.user.save()
+        
+        super().save(*args, **kwargs)
+
+    @property
+    def is_online(self):
+        """
+        Returns True if user is marked online AND was seen in the last 60 seconds.
+        This prevents users from appearing 'Online' forever if their connection drops abruptly.
+        """
+        if self.online:
+            # Check if last_seen was within the last 1 minute
+            return self.last_seen > timezone.now() - timedelta(seconds=60)
+        return False
+
+    def get_status_display(self):
+        """Returns a string representing the current status (Online or Last Seen)"""
+        if self.is_online:
+            return "Online"
+        
+        now = timezone.now()
+        diff = now - self.last_seen
+        
+        if diff.days == 0:
+            if diff.seconds < 60:
+                return "Just now"
+            elif diff.seconds < 3600:
+                return f"{diff.seconds // 60}m ago"
+            else:
+                return f"{diff.seconds // 3600}h ago"
+        elif diff.days == 1:
+            return "Yesterday"
+        else:
+            return f"{diff.days}d ago"
+
+    @property
+    def is_recently_online(self):
+        """Check if user was online in last 5 minutes (for badges/lists)"""
+        diff = timezone.now() - self.last_seen
+        return diff.total_seconds() < 300
+
+    def update_online_status(self, online=True):
+        """Call this from WebSocket to update status efficiently"""
+        self.online = online
+        self.last_seen = timezone.now()
+        self.save(update_fields=['last_seen', 'online'])
+
+    @classmethod
+    def mark_user_online(cls, user_id):
+        """Static method to mark user online without loading full object"""
+        cls.objects.filter(user_id=user_id).update(
+            online=True,
+            last_seen=timezone.now()
+        )
+
+    @classmethod
+    def mark_user_offline(cls, user_id):
+        """Static method to mark user offline"""
+        cls.objects.filter(user_id=user_id).update(online=False)
 class Post(models.Model):
     post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     author = models.ForeignKey(User, on_delete=models.CASCADE)

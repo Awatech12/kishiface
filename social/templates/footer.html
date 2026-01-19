@@ -601,6 +601,55 @@
       }
     });
   });
+
+
+  // online status code 
+  class RealTimeStatus {
+    constructor() {
+        this.ws = null;
+        this.userId = window.userId; // Your ID
+        this.connect();
+    }
+    
+    connect() {
+        if (!this.userId) return;
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        this.ws = new WebSocket(`${protocol}${window.location.host}/ws/online-status/`);
+        
+        this.ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'status_change') {
+                // This is the magic: it updates the status of the specific user ID received
+                this.updateUI(data.user_id, data.status);
+            }
+        };
+        
+        this.ws.onopen = () => {
+            setInterval(() => {
+                if (this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({type: 'ping'}));
+                }
+            }, 20000); // Ping every 20 seconds
+        };
+        
+        this.ws.onclose = () => setTimeout(() => this.connect(), 3000);
+    }
+    
+    updateUI(id, status) {
+        const elements = document.querySelectorAll(`.user-status[data-user-id="${id}"]`);
+        elements.forEach(el => {
+            if (status === "Online") {
+                el.textContent = "Online";
+                el.className = "user-status online";
+            } else {
+                // If they go offline, we could show "Just now" 
+                // or wait for a page refresh for exact "5m ago"
+                el.textContent = "Just now"; 
+                el.className = "user-status offline";
+            }
+        });
+    }
+}
 </script>
 
 </body>  

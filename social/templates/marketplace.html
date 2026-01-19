@@ -9,7 +9,8 @@
     
     <style>
         :root {
-            --kf-bg: #fafafa;
+            --kf-bg: #ffffff;
+            --kf-secondary-bg: #fafafa;
             --kf-white: #ffffff;
             --kf-text: #262626;
             --kf-text-light: #8e8e8e;
@@ -30,57 +31,76 @@
             color: var(--kf-text);
             line-height: 1.4;
             -webkit-font-smoothing: antialiased;
-            padding-top: 44px;
-            padding-bottom: 49px;
+            padding-top: 94px; /* Space for fixed header + category bar */
+            padding-bottom: 60px;
         }
         
-        .kf-container {
-            max-width: 100%;
-            width: 100%;
-        }
-        
+        /* Fixed Header */
         .kf-marketplace-header {
             background: var(--kf-white);
-            padding: 16px;
+            padding: 12px 16px;
             text-align: center;
             border-bottom: 1px solid var(--kf-border);
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            z-index: 100;
+            z-index: 1000;
         }
         
         .kf-marketplace-title {
-            font-size: 18px;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--kf-text);
+            letter-spacing: -0.5px;
+        }
+
+        /* Category Filter Bar */
+        .kf-category-nav {
+            position: fixed;
+            top: 45px;
+            left: 0;
+            right: 0;
+            background: var(--kf-white);
+            border-bottom: 1px solid var(--kf-border);
+            z-index: 999;
+            padding: 8px 0;
+            display: flex;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        
+        .kf-category-nav::-webkit-scrollbar { display: none; }
+
+        .kf-category-list {
+            display: flex;
+            padding: 0 16px;
+            gap: 8px;
+        }
+
+        .kf-category-chip {
+            padding: 6px 14px;
+            background: var(--kf-secondary-bg);
+            border: 1px solid var(--kf-border);
+            border-radius: 8px;
+            font-size: 13px;
             font-weight: 600;
             color: var(--kf-text);
-        }
-        
-        .kf-marketplace-subtitle {
-            font-size: 14px;
-            color: var(--kf-text-light);
-            margin-top: 4px;
-        }
-        
-        .kf-add-item-btn {
-            position: fixed;
-            bottom: 60px;
-            right: 16px;
-            width: 56px;
-            height: 56px;
-            background: var(--kf-primary);
-            color: white;
-            border-radius: 50%;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             text-decoration: none;
-            box-shadow: 0 2px 10px rgba(0, 149, 246, 0.3);
+            white-space: nowrap;
+        }
+
+        .kf-category-chip.active {
+            background: var(--kf-text);
+            color: var(--kf-white);
+            border-color: var(--kf-text);
+        }
+
+        /* Grid Layout */
+        .kf-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
         }
         
         .kf-products-grid {
@@ -95,12 +115,17 @@
             position: relative;
         }
         
+        .kf-product-link {
+            text-decoration: none;
+            color: inherit;
+        }
+
         .kf-product-image-container {
             position: relative;
             width: 100%;
-            padding-top: 100%; /* 1:1 Aspect Ratio */
+            padding-top: 100%;
             overflow: hidden;
-            background: #fafafa;
+            background: #efefef;
         }
         
         .kf-product-image {
@@ -110,202 +135,118 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transition: transform 0.3s ease;
         }
-        
-        .kf-product-card:hover .kf-product-image {
-            transform: scale(1.05);
-        }
-        
-        .kf-product-multi-images {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            z-index: 2;
-        }
-        
-        .kf-product-seller {
+
+        /* Seller Overlay - Original Design Style */
+        .kf-seller-overlay {
             position: absolute;
             bottom: 8px;
             left: 8px;
             display: flex;
             align-items: center;
             gap: 6px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 4px 8px;
-            border-radius: 12px;
-            z-index: 2;
+            background: rgba(255, 255, 255, 0.85);
+            padding: 4px 8px 4px 4px;
+            border-radius: 20px;
+            z-index: 10;
+            max-width: 85%;
+            backdrop-filter: blur(4px);
+            border: 0.5px solid rgba(0,0,0,0.05);
         }
-        
+
         .kf-seller-avatar {
-            width: 20px;
-            height: 20px;
+            width: 22px;
+            height: 22px;
             border-radius: 50%;
             object-fit: cover;
+            border: 1px solid #fff;
         }
-        
-        .kf-seller-name {
-            font-size: 11px;
-            font-weight: 500;
-            color: var(--kf-text);
-        }
-        
-        .kf-product-info {
-            padding: 12px;
-        }
-        
-        .kf-product-name {
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--kf-text);
-            margin-bottom: 4px;
-            line-height: 1.3;
-            overflow: hidden;
-            display: -webkit-box;
 
-            -webkit-box-orient: vertical;
+        .kf-seller-username {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--kf-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
-        .kf-product-description {
-            font-size: 12px;
-            color: var(--kf-text-light);
-            margin-bottom: 8px;
-            line-height: 1.3;
-            overflow: hidden;
-            display: -webkit-box;
-            
-            -webkit-box-orient: vertical;
+        /* Multiple Image Badge */
+        .kf-product-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            z-index: 10;
+        }
+        
+        /* Product Details Footer */
+        .kf-product-info {
+            padding: 10px 12px;
         }
         
         .kf-product-price {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--kf-primary);
-        }
-        
-        .kf-product-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 8px;
-        }
-        
-        .kf-product-location {
-            font-size: 11px;
-            color: var(--kf-text-light);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        
-        .kf-product-date {
-            font-size: 11px;
-            color: var(--kf-text-light);
-        }
-        
-        .kf-empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            background: var(--kf-white);
-        }
-        
-        .kf-empty-icon {
-            font-size: 48px;
-            color: var(--kf-border);
-            margin-bottom: 16px;
-        }
-        
-        .kf-empty-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--kf-text);
-            margin-bottom: 8px;
-        }
-        
-        .kf-empty-description {
             font-size: 14px;
-            color: var(--kf-text-light);
-            margin-bottom: 20px;
+            font-weight: 700;
+            color: var(--kf-text);
+            margin-bottom: 1px;
         }
         
-        .kf-empty-btn {
-            padding: 10px 24px;
+        .kf-product-name {
+            font-size: 13px;
+            color: var(--kf-text-light);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Floating Add Button */
+        .kf-add-item-btn {
+            position: fixed;
+            bottom: 70px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
             background: var(--kf-primary);
             color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
+            border-radius: 50%;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             text-decoration: none;
-            display: inline-block;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1001;
         }
-        
-        /* Responsive grid for larger screens */
+
+        /* Responsive Breakpoints */
         @media (min-width: 768px) {
+            body { padding-top: 110px; }
+            .kf-marketplace-header { padding: 16px; }
+            .kf-category-nav { top: 57px; padding: 12px 0; }
             .kf-products-grid {
                 grid-template-columns: repeat(3, 1fr);
-                max-width: 1200px;
-                margin: 0 auto;
-            }
-            
-            body {
-                padding-top: 60px;
-                padding-bottom: 0;
-            }
-            
-            .kf-marketplace-header {
+                gap: 20px;
                 padding: 20px;
+                background: transparent;
             }
-            
-            .kf-marketplace-title {
-                font-size: 22px;
+            .kf-product-card {
+                border: 1px solid var(--kf-border);
+                border-radius: 12px;
+                overflow: hidden;
+                transition: transform 0.2s;
             }
+            .kf-product-card:hover { transform: translateY(-4px); }
         }
         
         @media (min-width: 1024px) {
-            .kf-products-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-        
-        /* Loading animation */
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        .kf-product-card {
-            animation: fadeIn 0.3s ease;
-        }
-        
-        /* Scrollbar styling */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: var(--kf-bg);
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: var(--kf-border);
-            border-radius: 3px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--kf-text-light);
+            .kf-products-grid { grid-template-columns: repeat(4, 1fr); }
         }
     </style>
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
 
@@ -313,11 +254,22 @@
     <!-- Fixed Header -->
     <div class="kf-marketplace-header">
         <div class="kf-marketplace-title">Marketplace</div>
-        <div class="kf-marketplace-subtitle">{{ products|length }} items available</div>
     </div>
 
+    <!-- Category Filter Bar -->
+    <nav class="kf-category-nav">
+        <div class="kf-category-list">
+            <a href="?category=all" class="kf-category-chip {% if not request.GET.category or request.GET.category == 'all' %}active{% endif %}">All</a>
+            <a href="?category=Phones" class="kf-category-chip {% if request.GET.category == 'Phones' %}active{% endif %}">Phones</a>
+            <a href="?category=Electronics" class="kf-category-chip {% if request.GET.category == 'Electronics' %}active{% endif %}">Electronics</a>
+            <a href="?category=Fashion" class="kf-category-chip {% if request.GET.category == 'Fashion' %}active{% endif %}">Fashion</a>
+            <a href="?category=Properties" class="kf-category-chip {% if request.GET.category == 'Properties' %}active{% endif %}">Properties</a>
+            <a href="?category=Others" class="kf-category-chip {% if request.GET.category == 'Others' %}active{% endif %}">Others</a>
+        </div>
+    </nav>
+
     <!-- Floating Add Item Button -->
-    <a href="{% url 'marketform' %}" class="kf-add-item-btn" title="Add New Item">
+    <a href="{% url 'marketform' %}" class="kf-add-item-btn">
         <i class="fas fa-plus"></i>
     </a>
 
@@ -327,66 +279,33 @@
             <div class="kf-products-grid">
                 {% for product in products %}
                     <div class="kf-product-card">
-                        <a href="" style="text-decoration: none; color: inherit;">
+                        <a href="{% url 'product_detail' product.product_id %}" class="kf-product-link">
                             <div class="kf-product-image-container">
+                                <!-- Main Image -->
                                 {% with first_image=product.images.first %}
-                                    {% if first_image %}
-                                        <img 
-                                            src="{{ first_image.product_image.url }}" 
-                                            alt="{{ product.product_name }}"
-                                            class="kf-product-image"
-                                            loading="lazy"
-                                        />
-                                    {% else %}
-                                        <img 
-                                            src="{{ product.product_image.url }}" 
-                                            alt="{{ product.product_name }}"
-                                            class="kf-product-image"
-                                            loading="lazy"
-                                        />
-                                    {% endif %}
+                                    <img src="{% if first_image %}{{ first_image.product_image.url }}{% else %}{{ product.product_image.url }}{% endif %}" 
+                                         alt="{{ product.product_name }}" class="kf-product-image" loading="lazy" />
                                 {% endwith %}
                                 
-                                <!-- Multiple images indicator -->
+                                <!-- Multiple Images Badge -->
                                 {% if product.images.count > 1 %}
-                                    <div class="kf-product-multi-images">
-                                        <i class="fas fa-layer-group"></i>
-                                        <span>{{ product.images.count }}</span>
+                                    <div class="kf-product-badge">
+                                        <i class="fas fa-clone"></i>
                                     </div>
                                 {% endif %}
-                                
-                                <!-- Seller info -->
-                                <div class="kf-product-seller">
-                                    <img 
-                                        src="{{ product.product_owner.profile.picture.url }}" 
-                                        alt="{{ product.product_owner.username }}"
-                                        class="kf-seller-avatar"
-                                    />
-                                    <span class="kf-seller-name">{{ product.seller.first_name|default:product.product_owner.username }}</span>
+
+                                <!-- Seller Overlay -->
+                                <div class="kf-seller-overlay">
+                                    <img src="{{ product.product_owner.profile.picture.url }}" 
+                                         alt="{{ product.product_owner.username }}" 
+                                         class="kf-seller-avatar">
+                                    <span class="kf-seller-username">{{ product.product_owner.username }}</span>
                                 </div>
                             </div>
                             
                             <div class="kf-product-info">
-                                <h3 class="kf-product-name">{{ product.product_name }}</h3>
-                                {% if product.product_description %}
-                                    <p class="kf-product-description">{{ product.product_description }}</p>
-                                {% endif %}
-                                
                                 <div class="kf-product-price">₦{{ product.product_price|intcomma }}</div>
-                                
-                                <div class="kf-product-meta">
-                                    <span class="kf-product-location">
-                                        <i class="fas fa-map-marker-alt"></i>
-                                        {% if product.product_location %}
-                                            {{ product.product_location }}
-                                        {% else %}
-                                            Kishi
-                                        {% endif %}
-                                    </span>
-                                    <span class="kf-product-date">
-                                        {{ product.created_at|timesince }} ago
-                                    </span>
-                                </div>
+                                <div class="kf-product-name">{{ product.product_name }}</div>
                             </div>
                         </a>
                     </div>
@@ -394,63 +313,14 @@
             </div>
         {% else %}
             <!-- Empty State -->
-            <div class="kf-empty-state">
-                <div class="kf-empty-icon">
-                    <i class="fas fa-store-slash"></i>
-                </div>
-                <h3 class="kf-empty-title">No Items Available</h3>
-                <p class="kf-empty-description">
-                    Be the first to list an item in the marketplace.
-                </p>
-                <a href="{% url 'marketform' %}" class="kf-empty-btn">
-                    <i class="fas fa-plus"></i> Add First Item
-                </a>
+            <div style="text-align: center; padding: 100px 20px; color: var(--kf-text-light);">
+                <i class="fas fa-store-slash" style="font-size: 40px; margin-bottom: 12px; opacity: 0.5;"></i>
+                <h3 style="color: var(--kf-text); font-size: 16px;">No items found</h3>
+                <p style="font-size: 14px;">Try selecting a different category.</p>
             </div>
         {% endif %}
     </div>
 
-    <!-- Include Footer -->
     {% include 'footer.html' %}
-
-    <script>
-        // Lazy load images
-        document.addEventListener('DOMContentLoaded', function() {
-            const lazyImages = document.querySelectorAll('img[loading="lazy"]');
-            
-            if ('IntersectionObserver' in window) {
-                const imageObserver = new IntersectionObserver((entries) => {
-                    entries.forEach((entry) => {
-                        if (entry.isIntersecting) {
-                            const img = entry.target;
-                            img.style.opacity = '1';
-                        }
-                    });
-                });
-                
-                lazyImages.forEach((img) => {
-                    img.style.opacity = '0';
-                    img.style.transition = 'opacity 0.3s ease';
-                    imageObserver.observe(img);
-                });
-            } else {
-                // Fallback for browsers that don't support IntersectionObserver
-                lazyImages.forEach((img) => {
-                    img.style.opacity = '1';
-                });
-            }
-            
-            // Add hover effect for product cards
-            const productCards = document.querySelectorAll('.kf-product-card');
-            productCards.forEach(card => {
-                card.addEventListener('mouseenter', function() {
-                    this.style.transform = 'translateY(-2px)';
-                });
-                
-                card.addEventListener('mouseleave', function() {
-                    this.style.transform = 'translateY(0)';
-                });
-            });
-        });
-    </script>
 </body>
 </html>
