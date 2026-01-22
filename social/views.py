@@ -70,10 +70,44 @@ def register(request):
 
 
     return render(request, 'register.html')
+
 @login_required(login_url='/')
 def home(request):
     profile = Profile.objects.get(user=request.user)
     following = profile.followings.values_list('user', flat=True)
+    
+    # Get channel data (using logic from channel_create view)
+    followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
+        last_app_activity=Max('channel_messages__created_at')
+    ).order_by('-last_app_activity', '-created_at')
+    
+    followed_list = []
+    total_unread = 0
+    
+    for channel in followed_channels:
+        unread = channel.unread_count_for_user(request.user)
+        total_unread += unread
+        
+        # Get the actual last message object
+        last_msg = channel.channel_messages.order_by('-created_at').first()
+        
+        # Determine the message type for the initial page load icons
+        msg_type = 'text'
+        if last_msg:
+            if last_msg.file_type == 'audio':
+                msg_type = 'audio'
+            elif last_msg.file_type == 'video':
+                msg_type = 'video'
+            elif last_msg.file_type == 'image':
+                msg_type = 'image'
+        
+        followed_list.append({
+            'channel': channel,
+            'unread_count': unread,
+            'last_message': last_msg.message if last_msg else "No messages yet",
+            'last_time': last_msg.created_at if last_msg else None,
+            'message_type': msg_type
+        })
     
     # Get data - include reposts from followed users
     posts = Post.objects.filter(
@@ -84,6 +118,19 @@ def home(request):
     
     products = list(Market.objects.order_by('?'))
     users = list(User.objects.exclude(id__in=following).exclude(id=request.user.id).order_by('?'))
+    user_products = Market.objects.filter(product_owner_id=request.user.id).order_by('-posted_on')
+    
+    # Get unread follow notifications count
+    unread_follow_count = FollowNotification.objects.filter(
+        to_user=request.user,
+        is_read=False
+    ).count()
+    
+    # Get unread notifications count
+    unread_notifications_count = Notification.objects.filter(
+        recipient=request.user,
+        is_read=False
+    ).count()
     
     # Build feed
     feed = []
@@ -112,8 +159,12 @@ def home(request):
     return render(request, 'home.html', {
         'posts_with_ads': feed,
         'products': products[:5],
+        'user_products': user_products[:6],
+        'followed_list': followed_list[:8],  # Only show first 8 channels
+        'unread_follow_count': unread_follow_count,
+        'unread_notifications_count': unread_notifications_count,
+        'users': users[:3]  # For right sidebar suggestions
     })
-# views.py
 from django.views.decorators.http import require_POST
 
 @require_POST
@@ -1423,9 +1474,11 @@ def product_detail(request, product_id):
     }
     return render(request, 'product_details.html', context)
 
-def get_location(request, username):
+def get_location(request, username): 
     user = Profile.objects.get(user__username=username)
     return JsonResponse({
         'lat': user.latitude,
         'lng': user.longitude
     })
+
+

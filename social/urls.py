@@ -28,13 +28,13 @@ urlpatterns = [
     path('notification', views.notification_partial, name='notification_partial'),
     path('editpost/<uuid:post_id>', views.editpost, name='editpost'),
     path('list', views.notification_list, name='notification_list'),
-      path('product/<uuid:product_id>/', views.product_detail, name='product_detail'),
-     path('spotlight/', views.spotlight_view, name='spotlight'),
-      path('track_share/<uuid:post_id>/', views.track_share, name='track_share'),
-      path('get-location/<str:username>/', views.get_location, name='get_location'),
-
+    path('product/<uuid:product_id>/', views.product_detail, name='product_detail'),
+    path('spotlight/', views.spotlight_view, name='spotlight'),
+    path('track_share/<uuid:post_id>/', views.track_share, name='track_share'),
+    path('get-location/<str:username>/', views.get_location, name='get_location'),
    path('mark-follow-notifications-read/', views.mark_follow_notifications_read, name='mark_follow_notifications_read'),
    path('notifications/delete-group/', views.delete_notification_group, name='delete_notification_group'),
+   
     #====== Profials codes =======
     path('<str:username>/', views.profile, name='profile'),
     path('<str:username>/videos/', views.profile_videos, name='profile_videos'),
