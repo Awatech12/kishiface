@@ -453,6 +453,19 @@ def profile(request, username):
     total_view = 0
     for post in total_posts:
         total_view +=post.view
+
+    user_posts = Post.objects.filter(author=user)
+    
+    total_like_recieved = user_posts.aggregate(total=Count('likes'))['total'] or 0
+    total_comments_received = PostComment.objects.filter(post__author = user).count() 
+
+    mutual_followings = None
+    mutual_count = 0
+    if request.user.is_authenticated and request.user !=user:
+        my_following = request.user.profile.followings.all()
+        mutual_followings = my_following.filter(followings=profile)[:3]
+        mutual_count = my_following.filter(followings=profile).count()
+        
     # Get ONLY image posts for the Posts tab
     posts = Post.objects.filter(
         author=user,
@@ -464,7 +477,12 @@ def profile(request, username):
         'posts': posts,
         'profile': profile,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
-        'total_view':total_view
+        'total_view':total_view,
+        'total_like_recieved':total_like_recieved,
+        'total_comments_received':total_comments_received,
+        'mutual_followings':mutual_followings,
+        'mutual_count':mutual_count
+
     }
     
     # Check if this is an AJAX request
