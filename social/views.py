@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from social.models import Profile, Post, PostImage,ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
 from django.db.models import Q
-from django.db.models import Count, Max
+from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -1350,10 +1350,12 @@ def channelmessage_like(request, channelmessage_id):
 
 def market(request):
     products = Market.objects.all()
-
+    price_stats = products.aggregate(highest_price=Max('product_price'), lowest_price=Min('product_price'))
     print(f'Products no: {products.count()}')
     context = {
-        'products': products
+        'products': products,
+        'highest_price':price_stats['highest_price'],
+        'lowest_price':price_stats['lowest_price']
     }
 
     return render(request, 'marketplace.html', context)
