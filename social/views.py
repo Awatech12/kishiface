@@ -116,7 +116,7 @@ def home(request):
         Q(is_repost=True, author__in=following)  # Include reposts by followed users
     ).order_by('?')
     
-    products = list(Market.objects.order_by('?'))
+    products = list(Market.objects.exclude(product_owner_id=request.user.id).order_by('?'))
     users = list(User.objects.exclude(id__in=following).exclude(id=request.user.id).order_by('?'))
     user_products = Market.objects.filter(product_owner_id=request.user.id).order_by('-posted_on')
     
@@ -560,54 +560,73 @@ def profile_text_posts(request, username):
     
     context['posts'] = text_posts
     return render(request, 'profile.html', context)
-    
-def profile_popup(request, username):
-    user = get_object_or_404(User, username=username)
-    posts = Post.objects.filter(author=user)
-    profile = user.profile
-
-    context={
-        'user':user,
-        'posts':posts,
-        'profile':profile,
-        'current_profile': request.user.profile
-    }
-
-    return render(request, 'popup_profile.html', context)
-
-
 
 @login_required(login_url='/')
 def update_profile(request, username):
     user = request.user
-    profile= request.user.profile
-    if request.method =='POST':
-        fname= request.POST.get('fname')
+    profile = request.user.profile
+    
+    if request.method == 'POST':
+        fname = request.POST.get('fname')
         lname = request.POST.get('lname')
         phone = request.POST.get('phone')
         address = request.POST.get('address')
         location = request.POST.get('location')
         image = request.FILES.get('image')
         bio = request.POST.get('bio')
-        if fname and lname:
-            user.first_name=fname
-            user.last_name=lname
-            user.save()
-        if phone and address and location and bio:
-            profile.phone = phone
-            profile.address= address
-            profile.location = location
-            profile.bio = bio
-            profile.save()
-        if image:
-            profile.picture = image
-            profile.save()
-        messages.info(request, 'Profile Updated Successfully')
-        return redirect('profile', username=request.user.username)
-
-
-    return render(request, 'update_profile.html', {'profile':profile})
-
+        
+        try:
+            if fname and lname:
+                user.first_name = fname
+                user.last_name = lname
+                user.save()
+            
+            if phone or address or location or bio:
+                if phone:
+                    profile.phone = phone
+                if address:
+                    profile.address = address
+                if location:
+                    profile.location = location
+                if bio:
+                    profile.bio = bio
+                profile.save()
+            
+            if image:
+                profile.picture = image
+                profile.save()
+            
+            # Check if it's an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'data': {
+                        'first_name': user.first_name,
+                        'last_name': user.last_name,
+                        'bio': profile.bio,
+                        'phone': profile.phone,
+                        'address': profile.address,
+                        'location': profile.location,
+                        'picture_url': profile.picture.url
+                    },
+                    'message': 'Profile updated successfully!'
+                })
+            else:
+                messages.info(request, 'Profile Updated Successfully')
+                return redirect('profile', username=request.user.username)
+                
+        except Exception as e:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'error': str(e)
+                })
+            else:
+                messages.error(request, f'Error updating profile: {str(e)}')
+                return redirect('profile', username=request.user.username)
+    
+    # For GET requests, still render the old page as fallback
+    return render(request, 'update_profile.html', {'profile': profile})
 @login_required
 def mark_follow_notifications_read(request):
     if request.method == 'POST':
