@@ -56,7 +56,6 @@ urlpatterns = [
     path('channel/toggle-admin/<uuid:channel_id>/<int:user_id>/', views.toggle_admin, name='toggle_admin'),
 
     #====== market form =======
-    path('add', views.marketForm, name='marketform'),
     path('comment_reply/<uuid:comment_id>', views.comment_reply, name='comment_reply'),
     path('followChannel/<uuid:channel_id>', views.follow_channel, name='follow_channel'),
     path('channel/<uuid:channel_id>/', views.channel, name='channel'),

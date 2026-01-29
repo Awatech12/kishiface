@@ -1367,50 +1367,74 @@ def channelmessage_like(request, channelmessage_id):
 # ======= Market Plce ======='
 
 
+
 def market(request):
-    products = Market.objects.all()
-    price_stats = products.aggregate(highest_price=Max('product_price'), lowest_price=Min('product_price'))
-    print(f'Products no: {products.count()}')
+    # Handle category filtering
+    category = request.GET.get('category', 'all')
+    
+    # Filter products based on category
+    if category == 'all':
+        products = Market.objects.all().order_by('-posted_on')
+    else:
+        products = Market.objects.filter(product_category=category).order_by('-posted_on')
+    
+    # Calculate stats
+    highest_price = products.aggregate(Max('product_price'))['product_price__max']
+    lowest_price = products.aggregate(Min('product_price'))['product_price__min']
+    
+    # Handle POST request for product creation
+    if request.method == 'POST' and 'form_type' in request.POST:
+        if request.POST['form_type'] == 'marketplace':
+            product_owner = request.user
+            product_name = request.POST.get('product_name')
+            product_price = request.POST.get('product_price')
+            product_location = request.POST.get('location', 'Ilorin, Nigeria')
+            product_description = request.POST.get('description')
+            product_availability = request.POST.get('availability', 'Single Item')
+            product_category = request.POST.get('category')
+            product_condition = request.POST.get('product_condition', 'New')
+            whatsapp_number = request.POST.get('whatsapp_number')
+            
+            # Validate required fields
+            if not all([product_name, product_price, product_category, product_description, whatsapp_number]):
+                messages.error(request, 'Please fill in all required fields.')
+                return redirect('market')
+            
+            # Check if at least one image is uploaded
+            images = request.FILES.getlist('images')
+            if len(images) == 0:
+                messages.error(request, 'Please upload at least one image.')
+                return redirect('market')
+            
+            # Create the product
+            product = Market.objects.create(
+                product_owner=product_owner,
+                product_name=product_name,
+                product_price=product_price,
+                product_location=product_location,
+                product_description=product_description,
+                product_availability=product_availability,
+                product_category=product_category,
+                product_condition=product_condition,
+                whatsapp_number=whatsapp_number
+            )
+            
+            # Save images (limit to 5)
+            for image in images[:5]:
+                MarketImage.objects.create(product=product, product_image=image)
+            
+            messages.success(request, 'Product Added Successfully', extra_tags='marketplace_success')
+            return redirect('market')
+    
     context = {
         'products': products,
-        'highest_price':price_stats['highest_price'],
-        'lowest_price':price_stats['lowest_price']
+        'highest_price': highest_price or 0,
+        'lowest_price': lowest_price or 0,
     }
-
     return render(request, 'marketplace.html', context)
 
-# ======= market form ====
-def marketForm(request):
-    if request.method == 'POST':
-        product_owner = request.user
-        product_name = request.POST.get('product_name')
-        product_price = request.POST.get('product_price')
-        product_location = request.POST.get('location')
-        product_description = request.POST.get('description')
-        product_availability = request.POST.get('availability')
-        product_category = request.POST.get('category')
-        images = request.FILES.getlist('images')
-        if not product_name and not product_availability and not product_category and not product_location:
-            return
-        product = Market.objects.create(
-            product_owner=product_owner,
-            product_name=product_name,
-            product_price=product_price,
-            product_location=product_location,
-            product_description=product_description,
-            product_availability=product_availability,
-            product_category=product_category)
-        
-        for image in images:
-            MarketImage.objects.create(product=product, product_image=image)
-        messages.success(request, 'Product Added Successfully')
-        return redirect('market')
-
-    return render(request, 'marketform.html')
 
 
-# ==== for Notification and inbox  updating =====
-# In your views.py
 def notification_partial(request):
     if request.user.is_authenticated:
         # Calculate unread notifications count

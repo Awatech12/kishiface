@@ -451,6 +451,7 @@ class Market(models.Model):
     views_count = models.PositiveIntegerField(default=0) # Track how many people saw the product
     is_promoted = models.BooleanField(default=False) # For paid ads
     product_category = models.CharField(max_length=100)
+    whatsapp_number = models.CharField(max_length=15, blank=True, null=True)
     posted_on = models.DateTimeField(auto_now_add=True)
 
 class MarketImage(models.Model):

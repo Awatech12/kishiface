@@ -471,6 +471,45 @@
             margin-bottom: 24px;
         }
         
+        /* Loading Overlay */
+        .kf-loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 4000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .kf-loading-overlay.active {
+            display: flex;
+        }
+        
+        .kf-loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--kf-primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .kf-loading-text {
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
         /* ===== MODAL STYLES ===== */
         .kf-marketplace-modal {
             display: none;
@@ -591,6 +630,42 @@
         
         .kf-modal-btn-secondary:hover {
             background: var(--kf-border);
+        }
+        
+        /* Form Validation Styles */
+        .kf-form-error {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+        
+        .kf-form-control.error {
+            border-color: #e74c3c;
+        }
+        
+        /* Success Message */
+        .kf-success-message {
+            background: var(--kf-success);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideDown 0.3s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         /* ===== FORM STYLES ===== */
@@ -849,6 +924,12 @@
 <body>
     {% include 'header.html' %}
 
+    <!-- Loading Overlay -->
+    <div class="kf-loading-overlay" id="loadingOverlay">
+        <div class="kf-loading-spinner"></div>
+        <div class="kf-loading-text">Uploading your product...</div>
+    </div>
+
     <!-- Desktop Layout -->
     <div class="kf-marketplace-desktop-layout">
         <!-- Left Sidebar - Navigation -->
@@ -915,6 +996,18 @@
 
         <!-- Main Content -->
         <main class="kf-marketplace-main">
+            <!-- Success Message (Displayed after form submission) -->
+            {% if messages %}
+                {% for message in messages %}
+                    {% if 'marketplace_success' in message.tags %}
+                        <div class="kf-success-message">
+                            <i class="fas fa-check-circle"></i>
+                            {{ message }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+
             <!-- Marketplace Header - Desktop Only -->
             <div class="kf-marketplace-main-header kf-desktop-only">
                 <div class="kf-marketplace-title-section">
@@ -1106,7 +1199,7 @@
             </div>
             
             <div class="kf-modal-body">
-                <form id="marketplaceForm" method="post" enctype="multipart/form-data">
+                <form id="marketplaceForm" method="post" enctype="multipart/form-data" action="{% url 'market' %}">
                     {% csrf_token %}
                     
                     <!-- Media Upload Section -->
@@ -1119,6 +1212,7 @@
                             </div>
                         </div>
                         <input type="file" name="images" id="fileInput" multiple accept="image/*" style="display: none;">
+                        <div class="kf-form-error" id="imagesError">Please add at least one image</div>
                     </div>
                     
                     <div class="kf-form-grid">
@@ -1127,11 +1221,13 @@
                             <div class="kf-form-group">
                                 <label class="kf-form-label">Product Name *</label>
                                 <input type="text" name="product_name" class="kf-form-control" placeholder="What are you selling?" required>
+                                <div class="kf-form-error" id="nameError">Product name is required</div>
                             </div>
                             
                             <div class="kf-form-group">
                                 <label class="kf-form-label">Price (₦) *</label>
                                 <input type="number" name="product_price" class="kf-form-control" placeholder="0.00" min="0" step="0.01" required>
+                                <div class="kf-form-error" id="priceError">Please enter a valid price</div>
                             </div>
                             
                             <div class="kf-form-group">
@@ -1144,6 +1240,7 @@
                                     <option value="Properties">Properties</option>
                                     <option value="Others">Others</option>
                                 </select>
+                                <div class="kf-form-error" id="categoryError">Please select a category</div>
                             </div>
                             
                             <div class="kf-form-group">
@@ -1174,6 +1271,7 @@
                             <div class="kf-form-group">
                                 <label class="kf-form-label">WhatsApp Number *</label>
                                 <input type="tel" name="whatsapp_number" class="kf-form-control" placeholder="08123456789" required>
+                                <div class="kf-form-error" id="whatsappError">Valid WhatsApp number is required</div>
                             </div>
                             
                             <div class="kf-form-group">
@@ -1198,6 +1296,7 @@
                     <div class="kf-form-group" style="grid-column: 1 / -1;">
                         <label class="kf-form-label">Description *</label>
                         <textarea name="description" class="kf-form-control kf-form-textarea" placeholder="Describe your product in detail..." required></textarea>
+                        <div class="kf-form-error" id="descriptionError">Description is required</div>
                     </div>
                     
                     <!-- Hidden Fields -->
@@ -1209,7 +1308,7 @@
                 <button class="kf-modal-btn kf-modal-btn-secondary" onclick="closeMarketplaceModal()">
                     Cancel
                 </button>
-                <button type="submit" form="marketplaceForm" class="kf-modal-btn kf-modal-btn-primary">
+                <button type="button" id="submitProductBtn" class="kf-modal-btn kf-modal-btn-primary">
                     <i class="fas fa-plus"></i> Add Product
                 </button>
             </div>
@@ -1284,6 +1383,9 @@
             const dataTransfer = new DataTransfer();
             files.forEach(file => dataTransfer.items.add(file));
             fileInput.files = dataTransfer.files;
+            
+            // Clear image error
+            document.getElementById('imagesError').style.display = 'none';
         });
         
         function removeImage(index) {
@@ -1298,21 +1400,156 @@
             fileInput.dispatchEvent(new Event('change'));
         }
         
+        // Form Validation
+        function validateForm() {
+            let isValid = true;
+            
+            // Reset errors
+            document.querySelectorAll('.kf-form-error').forEach(error => {
+                error.style.display = 'none';
+            });
+            document.querySelectorAll('.kf-form-control').forEach(input => {
+                input.classList.remove('error');
+            });
+            
+            // Check product name
+            const productName = document.querySelector('input[name="product_name"]');
+            if (!productName.value.trim()) {
+                document.getElementById('nameError').style.display = 'block';
+                productName.classList.add('error');
+                isValid = false;
+            }
+            
+            // Check price
+            const price = document.querySelector('input[name="product_price"]');
+            if (!price.value || parseFloat(price.value) <= 0) {
+                document.getElementById('priceError').style.display = 'block';
+                price.classList.add('error');
+                isValid = false;
+            }
+            
+            // Check category
+            const category = document.querySelector('select[name="category"]');
+            if (!category.value) {
+                document.getElementById('categoryError').style.display = 'block';
+                category.classList.add('error');
+                isValid = false;
+            }
+            
+            // Check WhatsApp number
+            const whatsapp = document.querySelector('input[name="whatsapp_number"]');
+            const whatsappRegex = /^[0-9]{10,15}$/;
+            if (!whatsapp.value.trim() || !whatsappRegex.test(whatsapp.value.replace(/\D/g, ''))) {
+                document.getElementById('whatsappError').style.display = 'block';
+                whatsapp.classList.add('error');
+                isValid = false;
+            }
+            
+            // Check description
+            const description = document.querySelector('textarea[name="description"]');
+            if (!description.value.trim()) {
+                document.getElementById('descriptionError').style.display = 'block';
+                description.classList.add('error');
+                isValid = false;
+            }
+            
+            // Check images
+            if (fileInput.files.length === 0) {
+                document.getElementById('imagesError').style.display = 'block';
+                isValid = false;
+            }
+            
+            return isValid;
+        }
+        
+        // Show loading overlay
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        // Hide loading overlay
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+        
+        // Form submission with loading spinner
+        document.getElementById('submitProductBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            if (!validateForm()) {
+                return;
+            }
+            
+            // Show loading overlay
+            showLoading();
+            
+            // Change button state
+            const submitBtn = this;
+            const originalHTML = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+            submitBtn.disabled = true;
+            
+            // Submit the form
+            const form = document.getElementById('marketplaceForm');
+            const formData = new FormData(form);
+            
+            // Add all selected files to FormData
+            const files = fileInput.files;
+            for (let i = 0; i < files.length; i++) {
+                formData.append('images', files[i]);
+            }
+            
+            // Add contact methods
+            const contactMethods = [];
+            document.querySelectorAll('input[name="contact_methods"]:checked').forEach(checkbox => {
+                contactMethods.push(checkbox.value);
+            });
+            formData.append('contact_methods', contactMethods.join(','));
+            
+            // Submit via AJAX or regular form submission
+            // For AJAX submission (uncomment if you want AJAX):
+            /*
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                submitBtn.innerHTML = originalHTML;
+                submitBtn.disabled = false;
+                
+                if (data.success) {
+                    // Close modal and refresh page
+                    closeMarketplaceModal();
+                    location.reload();
+                } else {
+                    // Show error messages
+                    alert(data.error || 'Failed to upload product. Please try again.');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                submitBtn.innerHTML = originalHTML;
+                submitBtn.disabled = false;
+                console.error('Error:', error);
+                alert('Network error. Please try again.');
+            });
+            */
+            
+            // For regular form submission (current implementation):
+            form.submit();
+        });
+        
         // Quick filter function
         function filterByCategory(category) {
             window.location.href = `?category=${category}`;
         }
-        
-        // Form submission
-        document.getElementById('marketplaceForm').addEventListener('submit', function(e) {
-            // Add loading state
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Listing...';
-            submitBtn.disabled = true;
-            
-            // Form will submit normally
-        });
         
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -1349,6 +1586,18 @@
                 if (savedScroll) {
                     rightSidebar.scrollTop = parseInt(savedScroll);
                 }
+            }
+            
+            // Auto-hide success message after 5 seconds
+            const successMessage = document.querySelector('.kf-success-message');
+            if (successMessage) {
+                setTimeout(() => {
+                    successMessage.style.opacity = '0';
+                    successMessage.style.transition = 'opacity 0.5s ease';
+                    setTimeout(() => {
+                        successMessage.style.display = 'none';
+                    }, 500);
+                }, 5000);
             }
         });
     </script>
