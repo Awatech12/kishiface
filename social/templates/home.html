@@ -2,6 +2,7 @@
 {% load humanize %}
 {% load static %}
 {% load time %}
+{% load text_filters %}  <!-- ADD THIS LINE -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -518,7 +519,7 @@
       align-items: center;
     }
     
-    /* POST CONTENT WITH SHOW MORE/LESS */
+    /* POST CONTENT WITH SHOW MORE/LESS - UPDATED FOR FORMATTING */
     .kf-post-content {
       padding: 0 16px 12px;
       font-size: 14px;
@@ -537,6 +538,71 @@
     
     .kf-post-text.expanded {
       max-height: 1000px; /* Enough for expanded text */
+    }
+    
+    /* Paragraph styling */
+    .kf-post-paragraph {
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    
+    .kf-post-paragraph:last-child {
+      margin-bottom: 0;
+    }
+    
+    /* Link styling for formatted text */
+    .kf-post-paragraph a,
+    .kf-post-text a {
+      color: var(--kf-primary);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .kf-post-paragraph a:hover,
+    .kf-post-text a:hover {
+      text-decoration: underline;
+    }
+    
+    /* Mention link styling */
+    .kf-mention-link {
+      color: var(--kf-primary);
+      text-decoration: none;
+      font-weight: 600;
+      background: rgba(0, 149, 246, 0.1);
+      padding: 0 2px;
+      border-radius: 3px;
+    }
+    
+    .kf-mention-link:hover {
+      text-decoration: underline;
+      background: rgba(0, 149, 246, 0.2);
+    }
+    
+    /* URL link styling */
+    .kf-url-link {
+      color: var(--kf-primary);
+      text-decoration: none;
+      font-weight: 500;
+      word-break: break-word;
+    }
+    
+    .kf-url-link:hover {
+      text-decoration: underline;
+    }
+    
+    /* BB Code styling */
+    .kf-post-paragraph strong,
+    .kf-post-paragraph b {
+      font-weight: 700;
+    }
+    
+    .kf-post-paragraph em,
+    .kf-post-paragraph i {
+      font-style: italic;
+    }
+    
+    .kf-post-paragraph u {
+      text-decoration: underline;
     }
     
     .kf-text-toggle {
@@ -2168,20 +2234,20 @@
                     {% endif %}
                   </span>
                   <div class="kf-repost-caption-text">
-                    {{ item.data.repost_content|urlize|linebreaksbr }}
+                    {{ item.data.repost_content|format_post_text|safe }}
                   </div>
                 </div>
               </div>
               {% endif %}
 
-              <!-- Post Content with Show More/Less -->
+              <!-- Post Content with Show More/Less - UPDATED WITH FORMATTING -->
               {% if item.data.content or item.data.is_repost %}
               <div class="kf-post-content">
                 <div class="kf-post-text collapsed" id="kf-text-{{ item.data.post_id }}">
                   {% if item.data.is_repost and item.data.original_post %}
-                    {{ item.data.original_post.content|urlize|linebreaksbr }}
+                    {{ item.data.original_post.content|format_post_text|safe }}
                   {% else %}
-                    {{ item.data.content|urlize|linebreaksbr }}
+                    {{ item.data.content|format_post_text|safe }}
                   {% endif %}
                 </div>
                 {% if item.data.is_repost and item.data.original_post %}
@@ -3719,22 +3785,28 @@
       
       // 3. Auto-detect long text and hide/show toggle buttons
       document.querySelectorAll('.kf-post-text').forEach(textElement => {
-        const textContent = textElement.textContent.trim();
-        const lineCount = (textContent.match(/\n/g) || []).length + 1;
-        const charCount = textContent.length;
+        // Check if text has HTML tags (formatted text)
+        const hasHTML = /<\/?[a-z][\s\S]*>/i.test(textElement.innerHTML);
         
-        // If text is long (more than 150 chars or has many lines)
-        if (charCount > 150 || lineCount > 3) {
-          textElement.classList.add('collapsed');
-          // Make sure there's a toggle button
-          if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kf-text-toggle')) {
-            const toggleBtn = document.createElement('button');
-            toggleBtn.className = 'kf-text-toggle';
-            toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
-            toggleBtn.onclick = function() {
-              kfToggleText(textElement.id.replace('kf-text-', ''));
-            };
-            textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
+        if (hasHTML) {
+          // Count characters in text content (excluding HTML tags)
+          const textContent = textElement.textContent || textElement.innerText;
+          const charCount = textContent.length;
+          
+          // If text is long (more than 150 chars)
+          if (charCount > 150) {
+            textElement.classList.add('collapsed');
+            // Make sure there's a toggle button
+            if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kf-text-toggle')) {
+              const toggleBtn = document.createElement('button');
+              toggleBtn.className = 'kf-text-toggle';
+              toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
+              toggleBtn.onclick = function() {
+                const postId = textElement.id.replace('kf-text-', '');
+                kfToggleText(postId);
+              };
+              textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
+            }
           }
         }
       });
@@ -3797,6 +3869,15 @@
         
         observer.observe(listContainer, { childList: true });
       }
+      
+      // 7. Fix text toggle for formatted text
+      // When text is expanded, make sure links are clickable
+      document.addEventListener('click', function(e) {
+        if (e.target.tagName === 'A' && e.target.closest('.kf-post-text')) {
+          // Allow links to work normally
+          return;
+        }
+      });
     });
   </script>
 </body>
