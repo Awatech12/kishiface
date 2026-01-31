@@ -574,6 +574,7 @@ def update_profile(request, username):
         location = request.POST.get('location')
         image = request.FILES.get('image')
         bio = request.POST.get('bio')
+        website = request.POST.get('website')
         
         try:
             if fname and lname:
@@ -581,7 +582,7 @@ def update_profile(request, username):
                 user.last_name = lname
                 user.save()
             
-            if phone or address or location or bio:
+            if phone or address or location or bio or website:
                 if phone:
                     profile.phone = phone
                 if address:
@@ -590,6 +591,8 @@ def update_profile(request, username):
                     profile.location = location
                 if bio:
                     profile.bio = bio
+                if website:
+                    profile.website =website
                 profile.save()
             
             if image:
@@ -607,7 +610,8 @@ def update_profile(request, username):
                         'phone': profile.phone,
                         'address': profile.address,
                         'location': profile.location,
-                        'picture_url': profile.picture.url
+                        'picture_url': profile.picture.url,
+                        'website':profile.website
                     },
                     'message': 'Profile updated successfully!'
                 })

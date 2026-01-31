@@ -9,19 +9,22 @@ import calendar
 import uuid
 import os
 from mimetypes import guess_type
+from django.core.exceptions import ValidationError
+import re
+from urllib.parse import urlparse
 
  
-# Create your models here.
-
+# models.py - Update Profile model
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     followings = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, blank=True, default='')
     full_name = models.CharField(max_length=200, blank=True)
     is_verify = models.BooleanField(default=False)
     address = models.TextField()
-    bio = models.CharField(max_length=300)
-    location = models.TextField()
+    website = models.URLField(max_length=500, blank=True, default='')  # Changed from 'address' to 'website'
+    bio = models.CharField(max_length=300, blank=True, default='')
+    location = models.CharField(max_length=200, blank=True, default='')  # Changed from TextField to CharField
     
     # Conditional picture field from your original code
     if settings.USE_CLOUDINARY:
@@ -42,10 +45,55 @@ class Profile(models.Model):
     def __str__(self):
         return self.user.username
 
+    def clean(self):
+        """Validate the data before saving"""
+        super().clean()
+        
+        # Validate website URL format
+        if self.website and self.website.strip():
+            # Add https:// if not present
+            if not self.website.startswith(('http://', 'https://')):
+                self.website = 'https://' + self.website
+            
+            # Basic URL validation
+            try:
+                result = urlparse(self.website)
+                if not all([result.scheme, result.netloc]):
+                    raise ValidationError({'website': 'Please enter a valid URL'})
+            except:
+                raise ValidationError({'website': 'Please enter a valid URL'})
+        
+        # Validate location (prevent script injection)
+        if self.location:
+            # Remove any HTML tags
+            self.location = re.sub(r'<[^>]*>', '', self.location)
+            # Limit length
+            if len(self.location) > 200:
+                raise ValidationError({'location': 'Location cannot exceed 200 characters'})
+        
+        # Validate bio (prevent script injection)
+        if self.bio:
+            # Remove any HTML tags
+            self.bio = re.sub(r'<[^>]*>', '', self.bio)
+            # Limit length
+            if len(self.bio) > 300:
+                raise ValidationError({'bio': 'Bio cannot exceed 300 characters'})
+        
+        # Validate phone number format
+        if self.phone:
+            # Remove all non-digit characters except +
+            cleaned_phone = re.sub(r'[^\d+]', '', self.phone)
+            if not re.match(r'^\+?[1-9]\d{1,14}$', cleaned_phone):
+                raise ValidationError({'phone': 'Please enter a valid phone number'})
+            self.phone = cleaned_phone
+
     def save(self, *args, **kwargs):
-        # Capitalize address
-        if self.address:
-            self.address = self.address.title()
+        # Clean the data before saving
+        self.full_clean()
+        
+        # Capitalize location
+        if self.location:
+            self.location = self.location.strip().title()
         
         # Capitalize user names and save User object
         if self.user:
@@ -115,6 +163,49 @@ class Profile(models.Model):
     def mark_user_offline(cls, user_id):
         """Static method to mark user offline"""
         cls.objects.filter(user_id=user_id).update(online=False)
+    
+    @property
+    def safe_website(self):
+        """Return sanitized website URL for display"""
+        if not self.website:
+            return ""
+        
+        # Remove any potential malicious content
+        website = self.website.strip()
+        # Ensure it starts with http:// or https://
+        if website and not website.startswith(('http://', 'https://')):
+            website = 'https://' + website
+        
+        # Validate URL format
+        try:
+            parsed = urlparse(website)
+            if parsed.scheme and parsed.netloc:
+                return website
+        except:
+            pass
+        
+        return ""
+    
+    @property
+    def display_website(self):
+        """Return a display-friendly version of the website"""
+        if not self.website:
+            return ""
+        
+        website = self.safe_website
+        if not website:
+            return ""
+        
+        # Remove protocol for display
+        display_url = website.replace('https://', '').replace('http://', '')
+        # Remove www. if present
+        if display_url.startswith('www.'):
+            display_url = display_url[4:]
+        
+        # Truncate if too long
+        if len(display_url) > 30:
+            return display_url[:27] + '...'
+        return display_url
 class Post(models.Model):
     post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -123,7 +214,7 @@ class Post(models.Model):
     view = models.IntegerField(default=0, null=True, blank=True)
     share = models.IntegerField(default=0, null=True, blank=True)
     content = models.TextField()
-    
+     
     # Repost related fields - NEW
     is_repost = models.BooleanField(default=False)
     original_post = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='reposts_made')
