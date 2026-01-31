@@ -20,7 +20,7 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 
-SECURE_SSL_REDIRECT = True
+
 
 INSTALLED_APPS = [
     'daphne',
