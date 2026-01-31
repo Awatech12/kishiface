@@ -19,6 +19,9 @@ CSRF_TRUSTED_ORIGINS = [
     'https://kishiface.onrender.com',
 ]
 
+
+SECURE_SSL_REDIRECT = True
+
 INSTALLED_APPS = [
     'daphne',
     'channels',
