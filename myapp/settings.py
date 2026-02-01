@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     'pwa',
     #'social',
 ]
-# ✅ Cloudinary Config (Environment Variables on Render)
+
 if USE_CLOUDINARY:
     INSTALLED_APPS += [
         'cloudinary',
@@ -60,7 +60,7 @@ if USE_CLOUDINARY:
         },
     }
 
-    # ✅ Add this block to correctly configure Cloudinary
+    
     cloudinary.config(
         cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
         api_key=os.getenv("CLOUDINARY_API_KEY"),
@@ -81,7 +81,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'axes.middleware.AxesMiddleware',   # Brute-force monitoring
+    'axes.middleware.AxesMiddleware',   
 ]
 
 ROOT_URLCONF = 'myapp.urls'
@@ -127,7 +127,7 @@ else:
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.getenv("DATABASE"),  # fallback for local development
+        default=os.getenv("DATABASE"),  
         conn_max_age=600,
         env='DATABASE_URL'
     )
@@ -204,7 +204,7 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     USE_X_FORWARDED_HOST = True
 
-    # Cookie Security (Prevents JavaScript theft of sessions)
+
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
@@ -215,7 +215,6 @@ if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     X_FRAME_OPTIONS = 'DENY' 
 
-    # HSTS (Forces browser to use HTTPS)
     SECURE_HSTS_SECONDS = 31536000 # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
