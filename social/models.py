@@ -118,7 +118,7 @@ def validate_file_extension(value):
     """Validate file extensions"""
     if value:
         ext = os.path.splitext(value.name)[1].lower()
-        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.avi', '.mp3', '.wav', '.pdf', '.doc', '.docx']
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.webm', '.mov', '.avi', '.mp3', '.wav', '.pdf', '.doc', '.docx']
         
         if ext not in allowed_extensions:
             raise ValidationError(f'File type {ext} is not allowed. Allowed types: {", ".join(allowed_extensions)}')
@@ -309,7 +309,7 @@ class Post(models.Model):
     reposts = models.ManyToManyField(User, related_name='repost_post', blank=True)  # NEW
     view = models.IntegerField(default=0, null=True, blank=True)
     share = models.IntegerField(default=0, null=True, blank=True)
-    content = models.TextField()
+    content = models.TextField(blank=True, null=True)
     
     # Repost related fields - NEW
     is_repost = models.BooleanField(default=False)
@@ -422,7 +422,7 @@ class PostComment(models.Model):
     comment_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(User, on_delete=models.CASCADE)
-    comment = models.TextField()
+    comment = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to='comment_image/', blank=True)
     
     if settings.USE_CLOUDINARY:
@@ -519,7 +519,7 @@ class FollowNotification(models.Model):
 class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sender')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver')
-    conversation = models.TextField()
+    conversation = models.TextField(blank=True, null=True)
     
     # Add reply_to field for message replies
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, 
@@ -596,7 +596,7 @@ class Channel(models.Model):
     channel_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     channel_owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_channels')
     channel_name = models.CharField(max_length=200)
-    about = models.TextField(blank=True)
+    about = models.TextField(blank=True, null=True)
     subscriber = models.ManyToManyField(User, blank=True, related_name='subscribed_channels')
     image = models.ImageField(upload_to='channel_image', default='male.png')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -687,7 +687,7 @@ class ChannelMessage(models.Model):
         related_name="channel_messages"
     )
     author = models.ForeignKey(User, on_delete=models.CASCADE)
-    message = models.TextField(blank=True)
+    message = models.TextField(blank=True, null=True)
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
     # Add reply_to field for message replies
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, 
@@ -758,7 +758,7 @@ class Market(models.Model):
     product_name = models.CharField(max_length=100)
     product_price = models.IntegerField()
     product_location = models.CharField(max_length=300)
-    product_description = models.TextField()
+    product_description = models.TextField(blank=True, null=True)
     product_availability = models.CharField(max_length=150)
     product_condition = models.CharField(max_length=50, choices=[('New', 'New'), ('Used', 'Used - Like New'), ('Fair', 'Used - Fair Condition')], default='New')
     views_count = models.PositiveIntegerField(default=0)  # Track how many people saw the product

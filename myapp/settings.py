@@ -180,3 +180,16 @@ PWA_APP_ICONS = [
         'purpose': 'maskable'
     }
 ]
+
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    USE_X_FORWARDED_HOST = True
+
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
