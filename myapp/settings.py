@@ -6,7 +6,7 @@ import cloudinary
 BASE_DIR = Path(__file__).resolve().parent.parent
 #load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.getenv("SECRET_KEY")
-DEBUG = os.getenv("DEBUG")
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 USE_CLOUDINARY = True
 ALLOWED_HOSTS = [
@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
+    'axes',    # Brute-force protection
     'social.apps.SocialConfig',
     'pwa',
     #'social',
@@ -80,6 +81,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'axes.middleware.AxesMiddleware',   # Brute-force monitoring
 ]
 
 ROOT_URLCONF = 'myapp.urls'
@@ -181,15 +183,41 @@ PWA_APP_ICONS = [
     }
 ]
 
+# ==============================================================================
+# AUTHENTICATION & SECURITY (AXES)
+# ==============================================================================
+
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend', # Axes must be first
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# Axes Configuration
+AXES_FAILURE_LIMIT = 5            # Lockout after 5 failed attempts
+AXES_COOLDOWN = 1                 # Lockout duration in hours
+AXES_LOCKOUT_BY_COMBINATION_USER_AND_IP = True 
+AXES_LOCKOUT_TEMPLATE = 'lockout.html' # Path to your custom HTML file
 
 if not DEBUG:
+    # SSL/HTTPS Logic
     SECURE_SSL_REDIRECT = True
-
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     USE_X_FORWARDED_HOST = True
 
+    # Cookie Security (Prevents JavaScript theft of sessions)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = True
 
+    # Browser protections
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = 'DENY' 
+
+    # HSTS (Forces browser to use HTTPS)
+    SECURE_HSTS_SECONDS = 31536000 # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    

@@ -31,10 +31,10 @@ MAX_TEXT_LENGTHS = {
     'channel_name': 200,
 }
 
-
 def sanitize_text(text, field_name=None):
     """
-    Sanitize text input by removing HTML/JS and limiting length
+    Sanitize text input by removing HTML/JS and limiting length.
+    Now supports punctuation like ?, ', and " correctly.
     """
     if not text:
         return text
@@ -42,10 +42,8 @@ def sanitize_text(text, field_name=None):
     # Remove null bytes
     text = text.replace('\x00', '')
     
-    # Escape HTML entities first
-    text = escape(text)
-    
-    # Use bleach to remove any remaining HTML/JS
+    # IMPORTANT: We removed 'text = escape(text)' here.
+    # bleach.clean handles security escaping automatically without double-encoding symbols.
     text = bleach.clean(text, tags=ALLOWED_HTML_TAGS, attributes=ALLOWED_ATTRIBUTES, strip=True)
     
     # Remove script tags and event handlers
@@ -67,6 +65,7 @@ def sanitize_text(text, field_name=None):
             text = text[:max_len]
     
     return text.strip()
+
 
 
 def validate_phone_number(phone):
