@@ -843,3 +843,94 @@ class SearchHistory(models.Model):
         if user_history.count() > 50:
             oldest = user_history.order_by('created_at').first()
             oldest.delete()
+
+
+class Story(models.Model):
+    STORY_TYPES = (
+        ('image', 'Image'),
+        ('video', 'Video'),
+        ('text', 'Text'),
+    )
+    
+    story_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    viewers = models.ManyToManyField(User, related_name='viewed_stories', blank=True)
+    
+    # Content fields
+    content = models.TextField(blank=True, null=True)
+    story_type = models.CharField(max_length=10, choices=STORY_TYPES, default='text')
+    
+    # Media fields
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='stories', blank=True, null=True)
+        video = CloudinaryField('video', resource_type='video', folder='stories', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='stories/images/', blank=True, null=True)
+        video = models.FileField(upload_to='stories/videos/', blank=True, null=True)
+    
+    # Styling options
+    background_color = models.CharField(max_length=7, default='#0095f6', blank=True)  # Hex color
+    text_color = models.CharField(max_length=7, default='#ffffff', blank=True)  # Hex color
+    font_size = models.IntegerField(default=24)  # px
+    font_family = models.CharField(max_length=50, default='Arial', blank=True)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.author.username}'s story"
+    
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            # Set expiration to 24 hours from creation
+            from django.utils import timezone
+            self.expires_at = timezone.now() + timezone.timedelta(hours=24)
+        super().save(*args, **kwargs)
+    
+    def clean(self):
+        """Validate story data"""
+        super().clean()
+        
+        # Sanitize text content
+        if self.content:
+            self.content = sanitize_text(self.content, 'story_content')
+        
+        # Validate file uploads
+        if self.image and hasattr(self.image, 'name'):
+            validate_file_extension(self.image, allowed_extensions=['jpg', 'jpeg', 'png', 'gif'])
+            validate_file_size(self.image, max_size_mb=15)
+        
+        if self.video and hasattr(self.video, 'name'):
+            validate_file_extension(self.video, allowed_extensions=['mp4', 'mov', 'avi', 'webm'])
+            validate_file_size(self.video, max_size_mb=50)
+        
+        # Validate colors
+        import re
+        if self.background_color and not re.match(r'^#[0-9A-Fa-f]{6}$', self.background_color):
+            raise ValidationError({'background_color': 'Invalid hex color format'})
+        if self.text_color and not re.match(r'^#[0-9A-Fa-f]{6}$', self.text_color):
+            raise ValidationError({'text_color': 'Invalid hex color format'})
+    
+    @property
+    def is_expired(self):
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+    
+    @property
+    def time_remaining(self):
+        from django.utils import timezone
+        if self.is_expired:
+            return "Expired"
+        
+        remaining = self.expires_at - timezone.now()
+        hours = remaining.seconds // 3600
+        minutes = (remaining.seconds % 3600) // 60
+        
+        if remaining.days > 0:
+            return f"{remaining.days}d {hours}h"
+        return f"{hours}h {minutes}m"
