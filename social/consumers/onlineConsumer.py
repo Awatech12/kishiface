@@ -1,7 +1,6 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from django.utils import timezone
 
 class OnlineStatusConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -16,28 +15,26 @@ class OnlineStatusConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
-        # Update DB and notify others immediately
+        # Update DB to Online and notify others
         await self.update_status(True)
         await self.broadcast_status("Online")
 
     async def disconnect(self, close_code):
         if not self.user.is_anonymous:
+            # Update DB to Offline and notify others
             await self.update_status(False)
             await self.broadcast_status("Offline")
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def receive(self, text_data):
-        # When a 'ping' comes from JS, update last_seen
+        # Keep connection alive, ensure user is marked online
         await self.update_status(True)
 
     @database_sync_to_async
     def update_status(self, is_online):
         from social.models import Profile
-        # Using .update() is fast, but we must provide last_seen manually
-        Profile.objects.filter(user=self.user).update(
-            online=is_online, 
-            last_seen=timezone.now()
-        )
+        # Only update the online boolean
+        Profile.objects.filter(user=self.user).update(online=is_online)
 
     async def broadcast_status(self, status):
         await self.channel_layer.group_send(

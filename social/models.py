@@ -139,11 +139,10 @@ class Profile(models.Model):
     full_name = models.CharField(max_length=200, blank=True)
     is_verify = models.BooleanField(default=False)
     address = models.TextField()
-    website = models.URLField(max_length=500, blank=True, default='')  # Changed from 'address' to 'website'
+    website = models.URLField(max_length=500, blank=True, default='') 
     bio = models.CharField(max_length=300, blank=True, default='')
-    location = models.CharField(max_length=200, blank=True, default='')  # Changed from TextField to CharField
+    location = models.CharField(max_length=200, blank=True, default='') 
     
-    # Conditional picture field from your original code
     if settings.USE_CLOUDINARY:
         picture = CloudinaryField('picture', folder='profile_image', default='logo_iowyea')
     else:
@@ -153,7 +152,7 @@ class Profile(models.Model):
         )
     
     created_at = models.DateTimeField(auto_now_add=True)
-    last_seen = models.DateTimeField(auto_now=True)
+    # Removed last_seen field
     online = models.BooleanField(default=False)
 
     class Meta:
@@ -163,50 +162,39 @@ class Profile(models.Model):
         return self.user.username
 
     def clean(self):
-        """Validate the data before saving"""
         super().clean()
-        
-        # Sanitize all text fields
         self.bio = sanitize_text(self.bio, 'bio')
         self.location = sanitize_text(self.location, 'location')
         self.full_name = sanitize_text(self.full_name)
         self.address = sanitize_text(self.address)
         
-        # Validate website
         if self.website:
             try:
                 self.website = validate_url(self.website)
             except ValidationError as e:
                 raise ValidationError({'website': str(e)})
         
-        # Validate phone number
         if self.phone:
             try:
                 self.phone = validate_phone_number(self.phone)
             except ValidationError as e:
                 raise ValidationError({'phone': str(e)})
         
-        # Validate picture filename
         if self.picture and hasattr(self.picture, 'name'):
             validate_file_extension(self.picture)
             validate_file_size(self.picture, max_size_mb=10)
 
     def save(self, *args, **kwargs):
-        # Clean the data before saving
         self.full_clean()
-        
-        # Capitalize location
         if self.location:
             self.location = self.location.strip().title()
         
-        # Capitalize user names and save User object
         if self.user:
             if self.user.first_name:
                 self.user.first_name = sanitize_text(self.user.first_name).capitalize()
             if self.user.last_name:
                 self.user.last_name = sanitize_text(self.user.last_name).capitalize()
             
-            # Set full name based on updated names
             self.full_name = f'{self.user.first_name} {self.user.last_name}'.strip()
             self.user.save()
         
@@ -214,54 +202,24 @@ class Profile(models.Model):
 
     @property
     def is_online(self):
-        """
-        Returns True if user is marked online AND was seen in the last 60 seconds.
-        This prevents users from appearing 'Online' forever if their connection drops abruptly.
-        """
-        if self.online:
-            # Check if last_seen was within the last 1 minute
-            return self.last_seen > timezone.now() - timedelta(seconds=60)
-        return False
+        """Returns True if user is online, based strictly on the boolean flag"""
+        return self.online
 
     def get_status_display(self):
-        """Returns a string representing the current status (Online or Last Seen)"""
-        if self.is_online:
+        """Returns 'Online' or 'Offline' only"""
+        if self.online:
             return "Online"
-        
-        now = timezone.now()
-        diff = now - self.last_seen
-        
-        if diff.days == 0:
-            if diff.seconds < 60:
-                return "Just now"
-            elif diff.seconds < 3600:
-                return f"{diff.seconds // 60}m ago"
-            else:
-                return f"{diff.seconds // 3600}h ago"
-        elif diff.days == 1:
-            return "Yesterday"
-        else:
-            return f"{diff.days}d ago"
-
-    @property
-    def is_recently_online(self):
-        """Check if user was online in last 5 minutes (for badges/lists)"""
-        diff = timezone.now() - self.last_seen
-        return diff.total_seconds() < 300
+        return "Offline"
 
     def update_online_status(self, online=True):
         """Call this from WebSocket to update status efficiently"""
         self.online = online
-        self.last_seen = timezone.now()
-        self.save(update_fields=['last_seen', 'online'])
+        self.save(update_fields=['online'])
 
     @classmethod
     def mark_user_online(cls, user_id):
-        """Static method to mark user online without loading full object"""
-        cls.objects.filter(user_id=user_id).update(
-            online=True,
-            last_seen=timezone.now()
-        )
+        """Static method to mark user online"""
+        cls.objects.filter(user_id=user_id).update(online=True)
 
     @classmethod
     def mark_user_offline(cls, user_id):
@@ -270,10 +228,8 @@ class Profile(models.Model):
     
     @property
     def safe_website(self):
-        """Return sanitized website URL for display"""
         if not self.website:
             return ""
-        
         try:
             return validate_url(self.website)
         except ValidationError:
@@ -281,7 +237,6 @@ class Profile(models.Model):
     
     @property
     def display_website(self):
-        """Return a display-friendly version of the website"""
         if not self.website:
             return ""
         
@@ -289,13 +244,10 @@ class Profile(models.Model):
         if not website:
             return ""
         
-        # Remove protocol for display
         display_url = website.replace('https://', '').replace('http://', '')
-        # Remove www. if present
         if display_url.startswith('www.'):
             display_url = display_url[4:]
         
-        # Truncate if too long
         if len(display_url) > 30:
             return display_url[:27] + '...'
         return display_url

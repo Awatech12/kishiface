@@ -1,9 +1,8 @@
 <script>
-
 class RealTimeStatus {
     constructor() {
         this.ws = null;
-        this.userId = window.userId; // Make sure this is set in your base.html as: window.userId = "{{ request.user.id }}";
+        this.userId = window.userId; 
         this.pingInterval = null;
         this.reconnectTimeout = 1000;
         this.connect();
@@ -23,15 +22,13 @@ class RealTimeStatus {
         
         this.ws.onopen = () => {
             console.log('✅ Status System Connected');
-            this.reconnectTimeout = 1000; // Reset reconnect timer
+            this.reconnectTimeout = 1000; 
             this.startHeartbeat();
         };
         
         this.ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                
-                // The server broadcasts 'status_update' whenever ANYONE connects or disconnects
                 if (data.type === 'status_update') {
                     this.updateUI(data.user_id, data.status);
                 }
@@ -44,7 +41,7 @@ class RealTimeStatus {
             this.stopHeartbeat();
             console.log(`🔴 Connection closed. Reconnecting in ${this.reconnectTimeout/1000}s...`);
             setTimeout(() => {
-                this.reconnectTimeout = Math.min(this.reconnectTimeout * 2, 30000); // Exponential backoff
+                this.reconnectTimeout = Math.min(this.reconnectTimeout * 2, 30000);
                 this.connect();
             }, this.reconnectTimeout);
         };
@@ -56,8 +53,7 @@ class RealTimeStatus {
     }
     
     startHeartbeat() {
-        // Every 20 seconds, send a ping to the server
-        // This forces the server to update 'last_seen', which prevents the "21d ago" error
+        // Keep the connection alive
         this.pingInterval = setInterval(() => {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify({ type: 'ping' }));
@@ -72,48 +68,37 @@ class RealTimeStatus {
     }
     
     updateUI(userId, status) {
-        // Convert userId to string to ensure matching works correctly
         const targetId = String(userId);
-        
-        // Find ALL status elements for this specific user
         const elements = document.querySelectorAll(`.user-status[data-user-id="${targetId}"]`);
         
         elements.forEach(el => {
-            // Update the text
             el.textContent = status;
             
-            // Update CSS classes for coloring
             if (status.toLowerCase() === 'online') {
                 el.classList.add('online');
                 el.classList.remove('offline');
             } else {
                 el.classList.add('offline');
                 el.classList.remove('online');
-                // If they go offline, we can show "Just now" until the next refresh
-                el.textContent = "Just now"; 
+                // Strictly show Offline
+                el.textContent = "Offline"; 
             }
         });
     }
 }
 
-// Initialize when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Ensure userId is available (Add this to your base.html header if not present)
-
-    
     if (window.userId && window.userId !== 'None') {
         window.statusManager = new RealTimeStatus();
         
-        // Also trigger a ping on user activity to keep the connection "hot"
+        // Ping on activity to keep connection hot
         ['mousedown', 'keydown', 'touchstart'].forEach(event => {
             document.addEventListener(event, () => {
                 if (window.statusManager && window.statusManager.ws && window.statusManager.ws.readyState === WebSocket.OPEN) {
-                    // Throttled ping: Only send if needed (Logic handled by consumer usually)
                     window.statusManager.ws.send(JSON.stringify({ type: 'ping' }));
                 }
             }, { passive: true });
         });
     }
 });
-
 </script>

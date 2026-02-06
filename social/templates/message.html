@@ -1278,17 +1278,31 @@
             font-size: 10px;
         }
 
-        .user-status{
-            font-size: 0.85rem;
-            transition: all 0.3 ease;
-        }
-        .user-status.online{
-            color: #2ecc71;
-            font-weight: bold;
-        }
-        .user-status.offline{
-            color: #95a5a6;
-        }
+/* Update these styles in your <style> block */
+
+.user-status {
+    font-size: 12px; /* Matches Instagram's sub-text size */
+    font-weight: 400;
+    transition: color 0.3s ease;
+}
+
+.user-status.online {
+    color: #0095f6; /* Use your primary blue or a green like #2ecc71 */
+    font-weight: 600;
+}
+
+.user-status.offline {
+    color: #8e8e8e; /* Standard gray for offline */
+}
+
+/* Optional: Add a small dot for online status */
+.user-status.online::before {
+    content: '●';
+    margin-right: 4px;
+    font-size: 8px;
+    vertical-align: middle;
+}
+        
     </style>
 </head>
 <body>
@@ -1309,15 +1323,20 @@
                     <img src="{% if receiver.profile.picture %}{{ receiver.profile.picture.url }}{% else %}https://placehold.co/36x36/0095f6/FFFFFF?text={{ receiver.username|slice:':1'|upper }}{% endif %}" 
                          alt="{{ receiver.username }}" onerror="this.src='https://placehold.co/36x36/0095f6/FFFFFF?text={{ receiver.username|slice:':1'|upper }}'">
                 </div>
-                <div class="kishiface-chat-user-details">
-                    <h3>{{ receiver.username }}</h3>
-                    <div class="kishiface-chat-user-status" id="kishifaceUserStatus">
-                        <span class="kishiface-online-status"></span>
-                        <span class="user-status" data-user-id="{{receiver.id}">
-                            {{receiver.profile.get_status_display}}
-                        </span>
-                    </div>
-                </div>
+<div class="kishiface-chat-user-details">
+    <h3>{{ receiver.username }}</h3>
+    <div class="kishiface-chat-user-status">
+        <!-- 
+           1. We apply the 'online' or 'offline' class immediately based on DB state.
+           2. We fixed the missing '}' in the data-user-id attribute.
+           3. We allow the text to default to the DB state.
+        -->
+        <span class="user-status {% if receiver.profile.online %}online{% else %}offline{% endif %}" 
+              data-user-id="{{ receiver.id }}">
+            {% if receiver.profile.online %}Online{% else %}Offline{% endif %}
+        </span>
+    </div>
+</div>
             </div>
         </div>
 
@@ -3213,7 +3232,111 @@
 
     // online status
      window.userId = "{{ request.user.id|default:'' }}";
+
+class RealTimeStatus {
+    constructor() {
+        this.ws = null;
+        this.userId = window.userId; 
+        this.pingInterval = null;
+        this.reconnectTimeout = 1000;
+        this.connect();
+    }
+    
+    connect() {
+        if (!this.userId || this.userId === 'None') {
+            console.log('🔴 Real-time status: No user ID found, skipping connection.');
+            return;
+        }
+        
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${protocol}${window.location.host}/ws/online-status/`;
+        
+        console.log('📡 Connecting to status server...');
+        this.ws = new WebSocket(wsUrl);
+        
+        this.ws.onopen = () => {
+            console.log('✅ Status System Connected');
+            this.reconnectTimeout = 1000; 
+            this.startHeartbeat();
+        };
+        
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'status_update') {
+                    this.updateUI(data.user_id, data.status);
+                }
+            } catch(e) {
+                console.error("Error parsing status message", e);
+            }
+        };
+        
+        this.ws.onclose = (e) => {
+            this.stopHeartbeat();
+            console.log(`🔴 Connection closed. Reconnecting in ${this.reconnectTimeout/1000}s...`);
+            setTimeout(() => {
+                this.reconnectTimeout = Math.min(this.reconnectTimeout * 2, 30000);
+                this.connect();
+            }, this.reconnectTimeout);
+        };
+
+        this.ws.onerror = (err) => {
+            console.error('WebSocket Error:', err);
+            this.ws.close();
+        };
+    }
+    
+    startHeartbeat() {
+        // Keep the connection alive
+        this.pingInterval = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 20000);
+    }
+    
+    stopHeartbeat() {
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+        }
+    }
+    
+    updateUI(userId, status) {
+        const targetId = String(userId);
+        const elements = document.querySelectorAll(`.user-status[data-user-id="${targetId}"]`);
+        
+        elements.forEach(el => {
+            el.textContent = status;
+            
+            if (status.toLowerCase() === 'online') {
+                el.classList.add('online');
+                el.classList.remove('offline');
+            } else {
+                el.classList.add('offline');
+                el.classList.remove('online');
+                // Strictly show Offline
+                el.textContent = "Offline"; 
+            }
+        });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.userId && window.userId !== 'None') {
+        window.statusManager = new RealTimeStatus();
+        
+        // Ping on activity to keep connection hot
+        ['mousedown', 'keydown', 'touchstart'].forEach(event => {
+            document.addEventListener(event, () => {
+                if (window.statusManager && window.statusManager.ws && window.statusManager.ws.readyState === WebSocket.OPEN) {
+                    window.statusManager.ws.send(JSON.stringify({ type: 'ping' }));
+                }
+            }, { passive: true });
+        });
+    }
+});
+
+     
     </script>
 </body>
 </html>
-{% include 'onlineStatus.html' %}
