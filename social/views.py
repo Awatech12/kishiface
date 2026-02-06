@@ -1604,7 +1604,6 @@ def get_location(request, username):
         'lng': user.longitude
     })
 
-
 @csrf_exempt
 def get_stories(request):
     if request.method == 'GET':
@@ -1658,6 +1657,11 @@ def get_stories(request):
             # Display "You" for current user
             author_name = "You" if story.author == request.user else f"{story.author.first_name} {story.author.last_name}".strip() or story.author.username
             
+            # Get viewer count for current user's stories
+            viewer_count = 0
+            if story.author == request.user:
+                viewer_count = story.viewers.count()
+            
             stories_data.append({
                 'id': str(story.story_id),
                 'author_id': story.author.id,
@@ -1678,6 +1682,7 @@ def get_stories(request):
                 'has_multiple_stories': user_story_count > 1,
                 'story_index': user_story_count,  # Which story number this is
                 'is_current_user': story.author == request.user,  # Add this flag for easier JS handling
+                'viewer_count': viewer_count,  # Add viewer count for current user's stories
             })
         
         return JsonResponse({
@@ -1816,3 +1821,33 @@ def create_story(request):
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
 
+@csrf_exempt
+@login_required
+def get_story_viewers(request, story_id):
+    """Get the number of viewers for a specific story (only for story owner)"""
+    if request.method == 'GET':
+        try:
+            story = Story.objects.get(story_id=story_id)
+            
+            # Only allow story owner to see viewer count
+            if story.author != request.user:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'Unauthorized access to viewer data'
+                })
+            
+            # Get the count of unique viewers
+            viewer_count = story.viewers.count()
+            
+            return JsonResponse({
+                'success': True,
+                'viewer_count': viewer_count,
+                'story_id': str(story_id)
+            })
+            
+        except Story.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Story not found'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid method'})

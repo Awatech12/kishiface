@@ -619,14 +619,21 @@
       color: white;
     }
 
-    /* Story action buttons */.kf-story-actions {
+    /* Story action buttons - UPDATED: initially hidden */
+    .kf-story-actions {
       position: absolute;
-      bottom: 80px; /* Moved up above input */
+      bottom: 80px;
       right: 16px;
       display: flex;
-      flex-direction: column; /* Stack vertically */
+      flex-direction: column;
       gap: 12px;
       z-index: 25;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .kf-story-actions.visible {
+      opacity: 1;
     }
 
     .kf-story-action-btn {
@@ -647,7 +654,8 @@
     .kf-story-action-btn:hover {
       background: rgba(0, 0, 0, 0.7);
     }
-/* Story viewer footer */
+
+    /* Story viewer footer - UPDATED for viewer count */
     .kf-story-viewer-footer {
       position: absolute;
       bottom: 0;
@@ -695,6 +703,23 @@
     .kf-story-send-btn:hover {
       transform: scale(1.1);
       color: var(--kf-primary);
+    }
+
+    /* Viewer count section */
+    .kf-story-viewer-count {
+      display: flex;
+      align-items: center;
+      color: white;
+      font-size: 14px;
+      gap: 8px;
+      padding: 12px 20px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 24px;
+      backdrop-filter: blur(4px);
+    }
+
+    .kf-story-viewer-count i {
+      font-size: 16px;
     }
 
     /* Create story modal - UPDATED RESPONSIVE & SCROLLABLE */
@@ -3922,7 +3947,7 @@
     </div>
   </div>
 
-  <!-- Story Viewer Modal --><!-- Story Viewer Modal -->
+  <!-- Story Viewer Modal -->
   <div class="kf-story-viewer-modal" id="storyViewerModal">
     <div class="kf-story-progress-container" id="storyProgressContainer">
       <!-- Progress bars will be added dynamically -->
@@ -3952,8 +3977,8 @@
       </button>
     </div>
     
-    <!-- Action buttons (Pause/Mute) -->
-    <div class="kf-story-actions">
+    <!-- Action buttons (Pause/Mute) - Initially hidden -->
+    <div class="kf-story-actions" id="storyMediaControls">
       <button class="kf-story-action-btn" onclick="kfPauseStory()" id="storyPauseBtn">
         <i class="fas fa-pause"></i>
       </button>
@@ -3962,16 +3987,27 @@
       </button>
     </div>
     
-    <!-- Footer Input -->
-    <div class="kf-story-viewer-footer">
-      <input type="text" 
-             class="kf-story-reply-input" 
-             id="storyReplyInput" 
-             placeholder="Send message..."
-             autocomplete="off">
-      <button class="kf-story-send-btn" onclick="kfSendStoryReply()">
-        <i class="fas fa-paper-plane"></i>
-      </button>
+    <!-- Footer - Dynamic based on story owner -->
+    <div class="kf-story-viewer-footer" id="storyFooter">
+      <!-- Default state (for other users' stories) -->
+      <div class="kf-story-footer-content" id="storyFooterDefault">
+        <input type="text" 
+               class="kf-story-reply-input" 
+               id="storyReplyInput" 
+               placeholder="Send message..."
+               autocomplete="off">
+        <button class="kf-story-send-btn" onclick="kfSendStoryReply()">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+      
+      <!-- Viewer count (for current user's stories) -->
+      <div class="kf-story-footer-content" id="storyFooterViewerCount" style="display: none;">
+        <div class="kf-story-viewer-count" id="viewerCountDisplay">
+          <i class="fas fa-eye"></i>
+          <span id="viewerCountText">0 viewers</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -4138,6 +4174,7 @@
     let currentStoryTimeout = null;
     let isStoryPaused = false;
     let isStoryMuted = false;
+    let currentStoryIsCurrentUser = false;
     
     // Helper function to show toast
     function showToast(message, type = 'success') {
@@ -4411,9 +4448,17 @@
       const contentArea = document.getElementById('storyContent');
       const userInfo = document.getElementById('storyViewerUser');
       const progressContainer = document.getElementById('storyProgressContainer');
+      const mediaControls = document.getElementById('storyMediaControls');
+      const footerDefault = document.getElementById('storyFooterDefault');
+      const footerCount = document.getElementById('storyFooterViewerCount');
+      const viewerCountText = document.getElementById('viewerCountText');
       
       contentArea.innerHTML = '';
       userInfo.innerHTML = '';
+      
+      // Reset controls
+      mediaControls.classList.remove('visible');
+      mediaControls.style.display = 'none';
       
       if (currentStoryTimeout) {
         clearTimeout(currentStoryTimeout);
@@ -4445,6 +4490,32 @@
         progressContainer.appendChild(progressBar);
       });
       
+      // Check if this is current user's story
+      currentStoryIsCurrentUser = story.is_current_user;
+      
+      // Show/hide reply input based on story ownership
+      if (currentStoryIsCurrentUser) {
+        footerDefault.style.display = 'none';
+        footerCount.style.display = 'flex';
+        
+        // Fetch viewer count for current user's story
+        fetch(`/api/stories/${story.id}/viewers/`, {
+          headers: { 'X-CSRFToken': getCookie('csrftoken') }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            const viewerCount = data.viewer_count || 0;
+            viewerCountText.textContent = `${viewerCount} ${viewerCount === 1 ? 'viewer' : 'viewers'}`;
+          }
+        })
+        .catch(error => console.error('Error fetching viewer count:', error));
+      } else {
+        footerDefault.style.display = 'flex';
+        footerCount.style.display = 'none';
+      }
+      
+      // Load story content
       if (story.story_type === 'text') {
         contentArea.innerHTML = `
           <div class="kf-story-text" 
@@ -4452,10 +4523,14 @@
             <div class="kf-story-text-content">${story.content}</div>
           </div>
         `;
+        // Hide media controls for text stories
+        mediaControls.style.display = 'none';
       } else if (story.story_type === 'image') {
         contentArea.innerHTML = `
           <img src="${story.media_url}" class="kf-story-image" alt="Story image">
         `;
+        // Hide media controls for image stories
+        mediaControls.style.display = 'none';
       } else if (story.story_type === 'video') {
         contentArea.innerHTML = `
           <video class="kf-story-video" 
@@ -4469,6 +4544,25 @@
         `;
         const video = document.getElementById('storyVideo');
         video.volume = isStoryMuted ? 0 : 0.7;
+        
+        // Show media controls for video stories
+        mediaControls.style.display = 'flex';
+        mediaControls.classList.add('visible');
+      } else if (story.story_type === 'audio') {
+        contentArea.innerHTML = `
+          <div class="kf-story-audio-player">
+            <div class="kf-story-audio-visualizer">
+              <canvas id="storyAudioVisualizer"></canvas>
+            </div>
+            <audio id="storyAudio" 
+                   src="${story.media_url}" 
+                   ${isStoryMuted ? 'muted' : ''}
+                   onended="kfNextStory()"></audio>
+          </div>
+        `;
+        // Show media controls for audio stories
+        mediaControls.style.display = 'flex';
+        mediaControls.classList.add('visible');
       }
       
       markStoryAsViewed(story.id);
@@ -4528,12 +4622,17 @@
       const pauseBtn = document.getElementById('storyPauseBtn');
       const progressFill = document.getElementById(`storyProgress-${currentStoryIndex}`);
       
+      const story = currentStories[currentStoryIndex];
+      const video = document.getElementById('storyVideo');
+      const audio = document.getElementById('storyAudio');
+      
       if (isStoryPaused) {
         // Resume
         isStoryPaused = false;
         pauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
-        const video = document.getElementById('storyVideo');
+        
         if (video) video.play();
+        if (audio) audio.play();
         
         if (progressFill) {
           const remainingWidth = 100 - parseFloat(progressFill.style.width);
@@ -4554,8 +4653,9 @@
         // Pause
         isStoryPaused = true;
         pauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-        const video = document.getElementById('storyVideo');
+        
         if (video) video.pause();
+        if (audio) audio.pause();
         
         if (progressFill) {
           progressFill.style.transition = 'none';
@@ -4571,23 +4671,36 @@
     function kfMuteStory() {
       const muteBtn = document.getElementById('storyMuteBtn');
       const video = document.getElementById('storyVideo');
+      const audio = document.getElementById('storyAudio');
       
-      if (video) {
+      if (video || audio) {
         if (isStoryMuted) {
           isStoryMuted = false;
-          video.muted = false;
-          video.volume = 0.7;
+          if (video) {
+            video.muted = false;
+            video.volume = 0.7;
+          }
+          if (audio) {
+            audio.muted = false;
+            audio.volume = 0.7;
+          }
           muteBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
         } else {
           isStoryMuted = true;
-          video.muted = true;
+          if (video) video.muted = true;
+          if (audio) audio.muted = true;
           muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
         }
       }
     }
 
-    // [UPDATED] Send story reply
+    // Send story reply (only for other users' stories)
     function kfSendStoryReply() {
+      if (currentStoryIsCurrentUser) {
+        showToast('You cannot reply to your own story', 'info');
+        return;
+      }
+      
       const input = document.getElementById('storyReplyInput');
       const sendBtn = document.querySelector('.kf-story-send-btn');
       const message = input.value.trim();
@@ -4643,8 +4756,21 @@
         currentStoryTimeout = null;
       }
       
+      // Stop any playing media
+      const video = document.getElementById('storyVideo');
+      const audio = document.getElementById('storyAudio');
+      if (video) {
+        video.pause();
+        video.currentTime = 0;
+      }
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      
       currentStories = [];
       currentStoryIndex = 0;
+      currentStoryIsCurrentUser = false;
       isStoryPaused = false;
       modal.classList.remove('active');
       document.body.style.overflow = '';
@@ -5010,12 +5136,12 @@
         };
       }
       
-      // [UPDATED] Story Input Listeners (Auto-Pause & Enter Key)
+      // Story Input Listeners
       const storyInput = document.getElementById('storyReplyInput');
       if (storyInput) {
-        // Auto-pause when typing
+        // Auto-pause when typing (only for other users' stories)
         storyInput.addEventListener('focus', function() {
-          if (typeof kfPauseStory === 'function' && !isStoryPaused) {
+          if (!currentStoryIsCurrentUser && typeof kfPauseStory === 'function' && !isStoryPaused) {
             kfPauseStory();
           }
         });
@@ -5024,7 +5150,9 @@
         storyInput.addEventListener('keypress', function(e) {
           if (e.key === 'Enter') {
             e.preventDefault();
-            kfSendStoryReply();
+            if (!currentStoryIsCurrentUser) {
+              kfSendStoryReply();
+            }
           }
         });
       }
