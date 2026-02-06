@@ -696,6 +696,107 @@
  <script src="{% static 'js/postcomment.js' %}"></script>
 
 
+ <script>
+   // TEXT SHOW MORE/LESS FUNCTION (from home.html)
+   function kfToggleText(postId) {
+     const textElement = document.getElementById(`kf-text-${postId}`);
+     const button = textElement.nextElementSibling;
+     if (!button || !button.classList.contains('kf-text-toggle')) return;
+     
+     const span = button.querySelector('span');
+     const icon = button.querySelector('i');
+     
+     if (textElement.classList.contains('collapsed')) {
+       // Expand text
+       textElement.classList.remove('collapsed');
+       textElement.classList.add('expanded');
+       span.textContent = 'less';
+       icon.classList.remove('fa-chevron-down');
+       icon.classList.add('fa-chevron-up');
+     } else {
+       // Collapse text
+       textElement.classList.remove('expanded');
+       textElement.classList.add('collapsed');
+       span.textContent = 'more';
+       icon.classList.remove('fa-chevron-up');
+       icon.classList.add('fa-chevron-down');
+     }
+   }
+   
+   // Auto-detect long text and hide/show toggle buttons
+   document.addEventListener('DOMContentLoaded', function() {
+     document.querySelectorAll('.kf-post-text').forEach(textElement => {
+       // Check if text has HTML tags (formatted text)
+       const hasHTML = /<\/?[a-z][\s\S]*>/i.test(textElement.innerHTML);
+       
+       if (hasHTML) {
+         // Count characters in text content (excluding HTML tags)
+         const textContent = textElement.textContent || textElement.innerText;
+         const charCount = textContent.length;
+         
+         // If text is long (more than 150 chars)
+         if (charCount > 150) {
+           textElement.classList.add('collapsed');
+           // Make sure there's a toggle button
+           if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kf-text-toggle')) {
+             const toggleBtn = document.createElement('button');
+             toggleBtn.className = 'kf-text-toggle';
+             toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
+             toggleBtn.onclick = function() {
+               const postId = textElement.id.replace('kf-text-', '');
+               kfToggleText(postId);
+             };
+             textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
+           }
+         }
+       }
+     });
+     
+     // Desktop logout functionality
+     const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
+     if (desktopLogoutIcon) {
+       desktopLogoutIcon.addEventListener('click', function(e) {
+         e.preventDefault();
+         e.stopPropagation();
+         
+         // Show logout confirmation modal
+         const logoutModal = document.getElementById('logoutModal');
+         if (logoutModal) {
+           logoutModal.classList.add('active');
+           
+           // Setup logout modal buttons
+           const cancelLogout = document.getElementById('cancelLogout');
+           const confirmLogout = document.getElementById('confirmLogout');
+           
+           if (cancelLogout) {
+             cancelLogout.onclick = function() {
+               logoutModal.classList.remove('active');
+             };
+           }
+           
+           if (confirmLogout) {
+             confirmLogout.onclick = function() {
+               window.location.href = "{% url 'logout' %}";
+             };
+           }
+           
+           // Close modal when clicking outside
+           logoutModal.addEventListener('click', function(e) {
+             if (e.target === logoutModal) {
+               logoutModal.classList.remove('active');
+             }
+           });
+           
+           // Close modal with Escape key
+           document.addEventListener('keydown', function(e) {
+             if (e.key === 'Escape') {
+               logoutModal.classList.remove('active');
+             }
+           });
+         }
+       });
+     }
+   });
  </script>
 </body>
 </html>

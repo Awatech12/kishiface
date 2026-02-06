@@ -5,7 +5,7 @@ import dj_database_url
 import cloudinary
 BASE_DIR = Path(__file__).resolve().parent.parent
 #load_dotenv(BASE_DIR / '.env')
-SECRET_KEY = os.getenv("SECRET_KEY")   
+SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 USE_CLOUDINARY = True

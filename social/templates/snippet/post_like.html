@@ -6,7 +6,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Post Engagement Block</title>
+    
     
     <link rel="stylesheet" 
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" 
@@ -15,6 +15,7 @@
           referrerpolicy="no-referrer" />
     
     <style>
+        /* ... (keep all existing styles the same) ... */
         /* ANIMATION STYLES */
         @keyframes heartBeat {
             0% { transform: scale(1); }
@@ -66,6 +67,11 @@
                 transform: scale(4);
                 opacity: 0;
             }
+        }
+
+        @keyframes countBounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
         }
 
         /* LIKERS AND ENGAGEMENT COUNTS SECTION */
@@ -172,6 +178,7 @@
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             position: relative;
             overflow: hidden;
+            cursor: pointer;
         }
 
         .horizontal-action-item::before {
@@ -202,6 +209,60 @@
             font-size: 20px;
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             position: relative;
+        }
+
+        /* REPOST BUTTON STYLES - Show count instead of text */
+        .horizontal-action-item.repost-btn {
+            position: relative;
+            gap: 4px; /* Reduce gap since we're showing count next to icon */
+        }
+
+        .horizontal-action-item.repost-btn:hover {
+            background-color: rgba(23, 191, 99, 0.1);
+            color: #17bf63;
+        }
+
+        .horizontal-action-item.repost-btn:hover .horizontal-action-icon {
+            color: #17bf63;
+        }
+
+        /* Repost count displayed next to icon (not as badge) */
+        .repost-count-display {
+            font-size: 14px;
+            font-weight: 500;
+            color: #4b5563;
+            transition: all 0.3s ease;
+            min-width: 20px; /* Ensure consistent spacing */
+            text-align: center;
+        }
+
+        .repost-count-display.count-bounce {
+            animation: countBounce 0.4s ease;
+            color: #17bf63;
+        }
+
+        /* Repost badge for large counts (optional, can remove if not needed) */
+        .repost-count-badge {
+            position: absolute;
+            bottom: -8px;
+            right: -4px;
+            font-size: 10px;
+            background: #17bf63;
+            color: white;
+            border-radius: 8px;
+            padding: 1px 4px;
+            min-width: 16px;
+            text-align: center;
+            display: none;
+        }
+
+        .repost-count-badge.show {
+            display: block;
+        }
+
+        /* Reposted state */
+        .reposted {
+            color: #17bf63 !important;
         }
 
         /* Like button animation classes */
@@ -297,6 +358,11 @@
                 font-size: 18px;
             }
             
+            .repost-count-display {
+                font-size: 13px;
+                min-width: 18px;
+            }
+            
             .engagement {
                 gap: 8px;
             }
@@ -304,12 +370,6 @@
     </style>
 </head>
 <body>
-<!-- Wrapper with metadata for API extraction -->
-<div id="post-engagement-{{ post.post_id }}" 
-     class="engagement-wrapper"
-     data-like-count="{{ post.likes.count }}" 
-     data-is-liked="{% if request.user in post.likes.all %}true{% else %}false{% endif %}">
-  
 <!-- Each post engagement block -->
 <div id="post-engagement-{{ post.post_id }}">
   
@@ -329,10 +389,10 @@
       {% if request.user in post.likes.all %}
       <i class="fa-solid fa-heart horizontal-action-icon heart-animate" 
          style="color: #ff2c55;"></i>
-      <span class="like-text-animated">Liked</span>
+      <span class="like-count-display">{{ post.likes.count|intcomma }}</span>
       {% else %}
       <i class="fa-regular fa-heart horizontal-action-icon"></i>
-      <span>Like</span>
+      <span class="like-count-display">{{ post.likes.count|intcomma }}</span>
       {% endif %}
       
       <!-- Loading indicator -->
@@ -346,8 +406,25 @@
     <!-- COMMENT BUTTON -->
     <a href="{% url 'post_comment' post.post_id %}" class="horizontal-action-item">
       <i class="fa-regular fa-comment horizontal-action-icon"></i>
-      <span class="comment-count">{{ post.comments.count|intcomma }}</span>
+      <span class="comment-count-display">{{ post.comments.count|intcomma }}</span>
     </a>
+
+    <!-- REPOST BUTTON - Shows count instead of text -->
+    <div class="horizontal-action-item repost-btn"
+         onclick="triggerHomePageRepost('{{ post.post_id }}', this)"
+         data-reposted="{% if request.user in post.reposts.all %}true{% else %}false{% endif %}"
+         title="Repost"
+         id="snippet-repost-btn-{{ post.post_id }}">
+      <i class="fas fa-retweet horizontal-action-icon {% if request.user in post.reposts.all %}reposted{% endif %}"></i>
+      <span class="repost-count-display" id="snippet-repost-count-display-{{ post.post_id }}">
+        {{ post.reposts.count|intcomma }}
+      </span>
+      <!-- Optional badge for very large counts (hidden by default) -->
+      <span class="repost-count-badge" 
+            id="snippet-repost-badge-{{ post.post_id }}"
+            style="display: none;">
+      </span>
+    </div>
 
     <!-- FACEBOOK -->
     <a href="https://www.facebook.com/sharer/sharer.php?u=https://kishiface.pythonanywhere.com/{{post.post_id}}" 
@@ -542,6 +619,199 @@
     </div>
   </div>
 </div>
+
+<script>
+// Simple function to trigger home page's repost functionality
+function triggerHomePageRepost(postId, button) {
+    // First, try to find and click the main post's repost button
+    const mainRepostButton = document.querySelector(`.kf-repost-icon[onclick*="${postId}"]`);
+    
+    if (mainRepostButton) {
+        // Found it! Click the main button to trigger home page functionality
+        mainRepostButton.click();
+        
+        // Store reference to update snippet button later
+        window.lastSnippetRepostButton = button;
+        window.lastSnippetPostId = postId;
+        
+        // We'll update the count after a delay to match the home page response
+        setTimeout(() => {
+            updateSnippetRepostCountFromMain(postId, button);
+        }, 500);
+    } else {
+        // Fallback: Use home page's global functions if available
+        if (typeof window.parent !== 'undefined' && window.parent.kfToggleRepost) {
+            window.parent.kfToggleRepost(postId, button);
+        } else if (typeof kfToggleRepost !== 'undefined') {
+            kfToggleRepost(postId, button);
+        } else {
+            // Ultimate fallback: simple prompt
+            simpleRepostFallback(postId, button);
+        }
+    }
+}
+
+// Try to get updated count from main button
+function updateSnippetRepostCountFromMain(postId, button) {
+    const mainRepostButton = document.querySelector(`.kf-repost-icon[onclick*="${postId}"]`);
+    if (mainRepostButton) {
+        const mainCountSpan = mainRepostButton.querySelector('.kf-repost-count');
+        if (mainCountSpan && mainCountSpan.textContent) {
+            const count = mainCountSpan.textContent.trim();
+            const countDisplay = button.querySelector('.repost-count-display');
+            if (countDisplay) {
+                countDisplay.textContent = count;
+                countDisplay.classList.add('count-bounce');
+                setTimeout(() => {
+                    countDisplay.classList.remove('count-bounce');
+                }, 400);
+            }
+        }
+    }
+}
+
+// Fallback function only used if home page functions aren't available
+function simpleRepostFallback(postId, button) {
+    const isReposted = button.getAttribute('data-reposted') === 'true';
+    const caption = prompt(isReposted ? 'Remove repost?' : 'Add a comment to your repost (optional):');
+    
+    if (caption !== null || isReposted) {
+        // Show loading
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        button.disabled = true;
+        
+        // Get CSRF token
+        const csrftoken = getCSRFToken();
+        
+        fetch(`/repost/${postId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                caption: caption || '',
+                undo: isReposted
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update snippet button
+                updateSnippetRepostButton(button, data);
+                
+                // Also try to update main button
+                const mainBtn = document.querySelector(`.kf-repost-icon[onclick*="${postId}"]`);
+                if (mainBtn) {
+                    updateMainRepostButton(mainBtn, data);
+                }
+                
+                // Show message and reload
+                setTimeout(() => location.reload(), 800);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Something went wrong. Please try again.');
+        })
+        .finally(() => {
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        });
+    }
+}
+
+// Helper to update snippet button
+function updateSnippetRepostButton(button, data) {
+    const icon = button.querySelector('i');
+    const countDisplay = button.querySelector('.repost-count-display');
+    
+    if (data.reposted) {
+        button.setAttribute('data-reposted', 'true');
+        icon.classList.add('reposted');
+        if (countDisplay) {
+            countDisplay.textContent = data.repost_count || '0';
+            countDisplay.classList.add('count-bounce');
+            setTimeout(() => {
+                countDisplay.classList.remove('count-bounce');
+            }, 400);
+        }
+    } else {
+        button.setAttribute('data-reposted', 'false');
+        icon.classList.remove('reposted');
+        if (countDisplay) {
+            countDisplay.textContent = data.repost_count || '0';
+            countDisplay.classList.add('count-bounce');
+            setTimeout(() => {
+                countDisplay.classList.remove('count-bounce');
+            }, 400);
+        }
+    }
+}
+
+// Helper to update main button (matches home page styling)
+function updateMainRepostButton(button, data) {
+    const icon = button.querySelector('i');
+    const countSpan = button.querySelector('.kf-repost-count');
+    
+    if (data.reposted) {
+        icon.classList.add('reposted');
+        button.setAttribute('data-reposted', 'true');
+        if (data.repost_count > 0 && countSpan) {
+            countSpan.textContent = data.repost_count;
+            countSpan.classList.add('show');
+        }
+    } else {
+        icon.classList.remove('reposted');
+        button.setAttribute('data-reposted', 'false');
+        if (data.repost_count > 0 && countSpan) {
+            countSpan.textContent = data.repost_count;
+        } else if (countSpan) {
+            countSpan.classList.remove('show');
+        }
+    }
+}
+
+// Helper to get CSRF token
+function getCSRFToken() {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, 10) === ('csrftoken=')) {
+                cookieValue = decodeURIComponent(cookie.substring(10));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Also update like and comment displays to show counts consistently
+document.addEventListener('DOMContentLoaded', function() {
+    // Update like button to show count
+    const likeButtons = document.querySelectorAll('.like-btn');
+    likeButtons.forEach(button => {
+        const likeCount = button.querySelector('.like-count-display');
+        if (likeCount) {
+            // Already showing count
+        }
+    });
+    
+    // Update comment button to show count
+    const commentButtons = document.querySelectorAll('.horizontal-action-item[href*="post_comment"]');
+    commentButtons.forEach(button => {
+        const commentCount = button.querySelector('.comment-count-display');
+        if (commentCount) {
+            // Already showing count
+        }
+    });
+});
+</script>
 
 </body>
 </html>
