@@ -1677,7 +1677,7 @@ def get_stories(request):
                 'font_size': story.font_size,
                 'created_at': story.created_at.isoformat(),
                 'time_ago': story.created_at.strftime('%H:%M'),
-                'duration': 5,  # Default 5 seconds per story
+                'duration': 10,  # Default 10 seconds per story
                 'viewed': request.user in story.viewers.all(),
                 'has_multiple_stories': user_story_count > 1,
                 'story_index': user_story_count,  # Which story number this is
