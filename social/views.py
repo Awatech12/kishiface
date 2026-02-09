@@ -222,7 +222,7 @@ def home(request):
     
 
 from django.views.decorators.http import require_POST
-
+@csrf_exempt
 @require_POST
 def repost_post(request, post_id):
     """Handle reposting a post"""
