@@ -222,7 +222,6 @@ def home(request):
     
 
 from django.views.decorators.http import require_POST
-@csrf_exempt
 @require_POST
 def repost_post(request, post_id):
     """Handle reposting a post"""
@@ -1692,7 +1691,7 @@ def get_stories(request):
         })
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
-@csrf_exempt
+
 def mark_story_viewed(request, story_id):
     if request.method == 'POST':
         try:
@@ -1706,7 +1705,7 @@ def mark_story_viewed(request, story_id):
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
 
-@csrf_exempt
+
 @login_required
 def send_story_reply(request, story_id):
     if request.method == 'POST':
@@ -1776,7 +1775,7 @@ def send_story_reply(request, story_id):
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
 
-@csrf_exempt
+
 def create_story(request):
     if request.method == 'POST':
         try:
@@ -1821,7 +1820,7 @@ def create_story(request):
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
 
-@csrf_exempt
+
 @login_required
 def get_story_viewers(request, story_id):
     """Get the number of viewers for a specific story (only for story owner)"""
