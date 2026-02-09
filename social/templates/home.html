@@ -11,7 +11,7 @@
   
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
   <title>Kishiface - Home</title>
-<script src="{% static 'js/home.js %}"></script>
+<script src="{% static 'js/home.js' %}"></script>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   
@@ -4290,10 +4290,39 @@
 
   <!-- Inline script for immediate initialization -->
 <script>
-  document.body.addEventListener('htmx:configRequest', (event) => {
-        // This grabs the CSRF token from the cookie and adds it to the header
-        event.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
-    });
+ // Add this to your base template
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+const csrftoken = getCookie('csrftoken');
+
+// Secure HTMX
+document.body.addEventListener('htmx:configRequest', (event) => {
+    event.detail.headers['X-CSRFToken'] = csrftoken;
+});
+
+// Secure any other JS 'fetch' calls
+const originalFetch = window.fetch;
+window.fetch = function() {
+    let [resource, config] = arguments;
+    if (config && ['POST', 'PUT', 'DELETE'].includes(config.method)) {
+        config.headers = { ...config.headers, 'X-CSRFToken': csrftoken };
+    }
+    return originalFetch(resource, config);
+};
+
     // ==========================================
     // GLOBAL VARIABLES & HELPERS
     // ==========================================
