@@ -8,7 +8,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
   <title>Kishiface - Home</title>
 <script src="{% static 'js/home.js' %}"></script>
@@ -4290,39 +4290,9 @@
 
   <!-- Inline script for immediate initialization -->
 <script>
- // Add this to your base template
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
-}
-
-const csrftoken = getCookie('csrftoken');
-
-// Secure HTMX
-document.body.addEventListener('htmx:configRequest', (event) => {
-    event.detail.headers['X-CSRFToken'] = csrftoken;
-});
-
-// Secure any other JS 'fetch' calls
-const originalFetch = window.fetch;
-window.fetch = function() {
-    let [resource, config] = arguments;
-    if (config && ['POST', 'PUT', 'DELETE'].includes(config.method)) {
-        config.headers = { ...config.headers, 'X-CSRFToken': csrftoken };
-    }
-    return originalFetch(resource, config);
-};
-
+   function getCsrfFromMeta(){
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+   }
     // ==========================================
     // GLOBAL VARIABLES & HELPERS
     // ==========================================
@@ -4393,7 +4363,7 @@ window.fetch = function() {
       fetch(`/follow/${userId}/`, {
         method: 'POST',
         headers: {
-          'X-CSRFToken': csrftoken,
+          'X-CSRFToken': getCsrfFromMeta(),
           'Content-Type': 'application/json',
         },
       })
@@ -4492,7 +4462,7 @@ window.fetch = function() {
       fetch(`/repost/${postId}/`, {
         method: 'POST',
         headers: {
-          'X-CSRFToken': csrftoken,
+          'X-CSRFToken': getCsrfFromMeta(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -4573,7 +4543,7 @@ window.fetch = function() {
       const csrftoken = getCookie('csrftoken');
       
       fetch('/api/stories/', {
-        headers: { 'X-CSRFToken': csrftoken }
+        headers: { 'X-CSRFToken': getCsrfFromMeta() }
       })
       .then(response => response.json())
       .then(data => {
@@ -4663,7 +4633,7 @@ window.fetch = function() {
         
         // Fetch viewer count for current user's story
         fetch(`/api/stories/${story.id}/viewers/`, {
-          headers: { 'X-CSRFToken': getCookie('csrftoken') }
+          headers: { 'X-CSRFToken': getCsrfFromMeta() }
         })
         .then(response => response.json())
         .then(data => {
@@ -4759,7 +4729,7 @@ window.fetch = function() {
       fetch(`/api/stories/${storyId}/view/`, {
         method: 'POST',
         headers: {
-          'X-CSRFToken': csrftoken,
+          'X-CSRFToken': getCsrfFromMeta(),
           'Content-Type': 'application/json',
         }
       }).catch(error => console.error('Error marking story as viewed:', error));
@@ -4881,7 +4851,7 @@ window.fetch = function() {
       fetch(`/api/stories/${story.id}/reply/`, {
         method: 'POST',
         headers: {
-          'X-CSRFToken': csrftoken,
+          'X-CSRFToken': getCsrfFromMeta(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -4986,7 +4956,7 @@ window.fetch = function() {
         fetch('/api/stories/create/', {
           method: 'POST',
           headers: {
-            'X-CSRFToken': csrftoken,
+            'X-CSRFToken': getCsrfFromMeta(),
           },
           body: JSON.stringify({
             story_type: 'text',
@@ -5041,7 +5011,7 @@ window.fetch = function() {
         fetch('/api/stories/create/', {
           method: 'POST',
           headers: {
-            'X-CSRFToken': csrftoken,
+            'X-CSRFToken': getCsrfFromMeta(),
           },
           body: formData
         })
