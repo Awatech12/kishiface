@@ -1,4 +1,6 @@
-
+ function getCsrfFromMeta(){
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+   }
   let currentRepostPostId = null;
   let currentRepostButton = null;
   
@@ -85,7 +87,7 @@
     const icon = button.querySelector('i');
     const countSpan = button.querySelector('.kf-repost-count');
     
-    const csrftoken = getCookie('csrftoken');
+    
     
     const originalText = button.innerHTML;
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -94,7 +96,7 @@
     fetch(`/repost/${postId}/`, {
       method: 'POST',
       headers: {
-        'X-CSRFToken': csrftoken,
+        'X-CSRFToken': getCsrfFromMeta(),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
