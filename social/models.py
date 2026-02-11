@@ -131,14 +131,14 @@ def validate_file_size(value, max_size_mb=50):
             raise ValidationError(f'File size must be under {max_size_mb}MB')
 
 
-# models.py - Update Profile model
+
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     followings = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
     phone = models.CharField(max_length=20, blank=True, default='')
     full_name = models.CharField(max_length=200, blank=True)
     is_verify = models.BooleanField(default=False)
-    address = models.TextField(blank=True, null=True)
+    address = models.TextField(null=True, blank=True)
     website = models.URLField(max_length=500, blank=True, default='') 
     bio = models.CharField(max_length=300, blank=True, default='')
     location = models.CharField(max_length=200, blank=True, default='') 
@@ -152,7 +152,7 @@ class Profile(models.Model):
         )
     
     created_at = models.DateTimeField(auto_now_add=True)
-    # Removed last_seen field
+    
     online = models.BooleanField(default=False)
 
     class Meta:
@@ -257,15 +257,13 @@ class Post(models.Model):
     post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     likes = models.ManyToManyField(User, related_name='like_post', blank=True)
-    reposts = models.ManyToManyField(User, related_name='repost_post', blank=True)  # NEW
+    reposts = models.ManyToManyField(User, related_name='repost_post', blank=True)  
     view = models.IntegerField(default=0, null=True, blank=True)
     share = models.IntegerField(default=0, null=True, blank=True)
     content = models.TextField(blank=True, null=True)
-    
-    # Repost related fields - NEW
     is_repost = models.BooleanField(default=False)
     original_post = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='reposts_made')
-    repost_content = models.TextField(blank=True, null=True)  # Optional caption for repost
+    repost_content = models.TextField(blank=True, null=True)  
     
     if settings.USE_CLOUDINARY:
         video_file = CloudinaryField('video', resource_type='video', folder='post_files', blank=True)
@@ -286,12 +284,12 @@ class Post(models.Model):
         """Validate post data"""
         super().clean()
         
-        # Sanitize content
+    
         self.content = sanitize_text(self.content, 'content')
         if self.repost_content:
             self.repost_content = sanitize_text(self.repost_content, 'content')
         
-        # Validate file fields
+    
         if self.video_file and hasattr(self.video_file, 'name'):
             validate_file_extension(self.video_file)
             validate_file_size(self.video_file, max_size_mb=100)
@@ -300,7 +298,7 @@ class Post(models.Model):
             validate_file_extension(self.file)
             validate_file_size(self.file, max_size_mb=50)
         
-        # Validate view and share counts (prevent negative values)
+    
         if self.view and self.view < 0:
             self.view = 0
         if self.share and self.share < 0:
@@ -324,7 +322,7 @@ class Post(models.Model):
     
     def preview_url(self):
         if self.is_repost and self.original_post:
-            # For reposts, show the original post's media
+            
             return self.original_post.preview_url()
         if self.images.exists():
             return self.images.first().image.url
@@ -471,15 +469,9 @@ class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sender')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver')
     conversation = models.TextField(blank=True, null=True)
-    
-    # Add reply_to field for message replies
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, 
                                 null=True, blank=True, related_name='replies')
-    
-    # Add file_type field
-    file_type = models.CharField(max_length=20, blank=True, null=True)  # 'image', 'video', 'audio'
-    
-    # Use CloudinaryField if USE_CLOUDINARY is True
+    file_type = models.CharField(max_length=20, blank=True, null=True) 
     if settings.USE_CLOUDINARY:
         from cloudinary.models import CloudinaryField
         file = CloudinaryField(
@@ -494,8 +486,6 @@ class Message(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
-    
-    # Add like field
     like = models.ManyToManyField(User, related_name='liked_messages', blank=True)
     
     def __str__(self):
@@ -505,15 +495,14 @@ class Message(models.Model):
         """Validate message data"""
         super().clean()
         
-        # Sanitize conversation text
+        
         self.conversation = sanitize_text(self.conversation, 'conversation')
         
-        # Validate file
         if self.file and hasattr(self.file, 'name'):
             validate_file_extension(self.file)
             validate_file_size(self.file, max_size_mb=50)
         
-        # Sanitize file_type if provided
+        
         if self.file_type:
             self.file_type = sanitize_text(self.file_type)
             if self.file_type not in ['image', 'video', 'audio', 'document']:
@@ -543,7 +532,6 @@ class Message(models.Model):
 
 
 class Channel(models.Model):
-    # Original Fields
     channel_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     channel_owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_channels')
     channel_name = models.CharField(max_length=200)
@@ -552,11 +540,7 @@ class Channel(models.Model):
     image = models.ImageField(upload_to='channel_image', default='male.png')
     created_at = models.DateTimeField(auto_now_add=True)
     admins = models.ManyToManyField(User, blank=True, related_name='admin_of_channel')
-    # NEW FIELDS for Admin Controls
-    # stores users who are banned/blocked from re-joining or viewing the channel
     blocked_users = models.ManyToManyField(User, blank=True, related_name='blocked_from_channels')
-    
-    # If True, only the channel_owner can send messages. Regular subscribers can only read.
     is_broadcast_only = models.BooleanField(default=False)
 
     def is_user_admin(self, user):
