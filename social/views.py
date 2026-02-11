@@ -222,6 +222,7 @@ def home(request):
     
 
 from django.views.decorators.http import require_POST
+@login_required(login_url='/')
 @require_POST
 def repost_post(request, post_id):
     """Handle reposting a post"""
@@ -286,7 +287,7 @@ def repost_post(request, post_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
-
+@login_required(login_url='/')
 def follow_user(request, user_id):
     if request.method == 'POST':
         try:
@@ -340,7 +341,7 @@ def follow_user(request, user_id):
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
 
-    
+@login_required(login_url='/')
 def post(request):
     if request.method =='POST':
         content = request.POST.get('content','').strip()
@@ -484,6 +485,8 @@ def postcomment(request, post_id):
         'postcomment.html', # Or the specific template fragment containing the list
         {'post': post, 'comments': comments}
     )
+
+@login_required(login_url='/')
 def comment_like(request, comment_id):
     comment=get_object_or_404(PostComment, comment_id=comment_id)
     if request.user in comment.like.all():
@@ -500,6 +503,7 @@ def comment_reply(request, comment_id):
         'comment_id': comment_id
     }
     return render(request, 'comment_reply.html', context)
+
 @login_required(login_url='/')
 def profile(request, username):
     user = get_object_or_404(User, username=username)
@@ -546,6 +550,7 @@ def profile(request, username):
     
     return render(request, 'profile.html', context)
 
+@login_required(login_url='/')
 def profile_videos(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
@@ -1848,6 +1853,9 @@ def get_story_viewers(request, story_id):
 
 def error_404(request, exception):
     return render(request, '404.html', status=404)
+
+def error_500(request, exception):
+    return render(request, '500.html', status=500)
 def logout(request):
     auth.logout(request)
     messages.info(request, 'Logout Successfully')
