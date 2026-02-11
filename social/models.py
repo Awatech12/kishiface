@@ -138,7 +138,7 @@ class Profile(models.Model):
     phone = models.CharField(max_length=20, blank=True, default='')
     full_name = models.CharField(max_length=200, blank=True)
     is_verify = models.BooleanField(default=False)
-    address = models.TextField()
+    address = models.TextField(blank=True, null=True)
     website = models.URLField(max_length=500, blank=True, default='') 
     bio = models.CharField(max_length=300, blank=True, default='')
     location = models.CharField(max_length=200, blank=True, default='') 
