@@ -6,6 +6,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="preload" href="{% static 'images/logo.jpg' %}" as="image">
+   <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
   <title>Explore Users - Kishiface</title>
   
@@ -582,6 +583,9 @@
 {% include 'footer.html' %}
   <!-- JavaScript -->
   <script>
+       function getCsrfFromMeta(){
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+   }
     let notificationsOpen = false;
     
     // Toggle notifications panel
@@ -608,7 +612,7 @@
       fetch('/mark-follow-notifications-read/', {
         method: 'POST',
         headers: {
-          'X-CSRFToken': getCookie('csrftoken'),
+          'X-CSRFToken': getCsrfFromMeta(),
           'Content-Type': 'application/json',
         },
       })
@@ -645,14 +649,12 @@
       button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
       button.disabled = true;
       
-      // Get CSRF token
-      const csrftoken = getCookie('csrftoken');
       
       // Send AJAX request
       fetch(`/follow/${userId}/`, {
         method: 'POST',
         headers: {
-          'X-CSRFToken': csrftoken,
+          'X-CSRFToken': getCsrfFromMeta(),
           'Content-Type': 'application/json',
         },
       })
@@ -748,22 +750,7 @@
       }, 3000);
     }
     
-    // Helper function to get CSRF token
-    function getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-          const cookie = cookies[i].trim();
-          if (cookie.substring(0, name.length + 1) === (name + '=')) {
-            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-            break;
-          }
-        }
-      }
-      return cookieValue;
-    }
-    
+   
     // Close notifications when clicking outside
     document.addEventListener('click', function(e) {
       const panel = document.getElementById('notificationsPanel');
