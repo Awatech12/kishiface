@@ -1537,12 +1537,7 @@ def delete_notification_group(request):
         })
     
     return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=400)
-def error_404(request, exception):
-    return render(request, '404.html', status=404)
-def logout(request):
-    auth.logout(request)
-    messages.info(request, 'Logout Successfully')
-    return redirect('/')
+
 
 def spotlight_view(request):
     # Filter: (Has video) OR (Is a repost AND original has video)
@@ -1603,7 +1598,7 @@ def get_location(request, username):
         'lng': user.longitude
     })
 
-@csrf_exempt
+
 def get_stories(request):
     if request.method == 'GET':
         profile = Profile.objects.get(user=request.user)
@@ -1850,3 +1845,10 @@ def get_story_viewers(request, story_id):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
+
+def error_404(request, exception):
+    return render(request, '404.html', status=404)
+def logout(request):
+    auth.logout(request)
+    messages.info(request, 'Logout Successfully')
+    return redirect('/')
