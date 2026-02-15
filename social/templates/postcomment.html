@@ -151,6 +151,62 @@
     .kf-repost-caption-text {
       color: var(--kf-text);
     }
+    
+    /* AI / Auto Text Generator Styles */
+.kf-ai-btn {
+  color: #8e2de2; /* fallback */
+  background: -webkit-linear-gradient(45deg, #8e2de2, #4a00e0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  transition: transform 0.2s ease;
+}
+
+.kf-ai-btn:hover {
+  transform: scale(1.1);
+}
+
+.kf-ai-suggestions-container {
+  display: none; /* Hidden by default */
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-top: 1px solid #dbdbdb;
+  overflow-x: auto;
+  white-space: nowrap;
+  gap: 8px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.kf-ai-suggestions-container::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.kf-ai-suggestions-container.active {
+  display: flex;
+}
+
+.kf-suggestion-chip {
+  background: white;
+  border: 1px solid #dbdbdb;
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--kf-text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.kf-suggestion-chip:hover {
+  background: var(--kf-primary-fade);
+  border-color: var(--kf-primary);
+  color: var(--kf-primary);
+}
+
+.kf-suggestion-chip i {
+  margin-right: 4px;
+}
   </style>
 </head>
 <body>
@@ -593,12 +649,18 @@
       {% endfor %}
     </div>
 
-    <div class="kf-comment-input-area" id="myForm">
+   <div class="kf-comment-input-area" id="myForm">
+      
+      <!-- NEW: Suggestions Container -->
+      <div id="aiSuggestions" class="kf-ai-suggestions-container">
+        <!-- Chips will be injected here by JS -->
+      </div>
+
       <form id="postForm"
         hx-post="{% url 'postcomment' post.post_id %}" 
         hx-target="#comment_list"
         hx-encoding="multipart/form-data"
-        hx-on::after-request="if(event.detail.successful) { this.reset(); resetInputUI(); }"
+        hx-on::after-request="if(event.detail.successful) { this.reset(); resetInputUI(); closeAiSuggestions(); }"
         hx-swap="afterbegin">
         {% csrf_token %}
         
@@ -614,6 +676,11 @@
               11.5l2.5 3.01L14.5 10l4.5 6H5l3.5-4.5z"/>
             </svg>
           </button>
+
+          <!-- NEW: AI Magic Button -->
+          <button type="button" class="kf-comment-action-btn kf-ai-btn" id="aiGenerateBtn" title="Generate Reply">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+          </button>
           
           <input type="file" id="image" name="image" multiple hidden>
           <input type="file" name="audio_file" id="audio_file" hidden>
@@ -625,6 +692,7 @@
                     autocomplete="off" 
                     rows="1"></textarea>
           
+          <!-- Audio Preview (Existing Code) -->
           <div class="kf-audio-preview-container record-mode-hidden" id="audioPreviewContainer">
             <button id="deleteAudioBtn" type="button" class="kf-comment-action-btn"><i class="fa-solid fa-trash-can"></i></button>
             <button id="stopRecordingBtn" type="button" class="kf-stop-recording-btn" title="Stop recording" style="display: none;">
@@ -791,6 +859,109 @@
        });
      }
    });
+   
+   
+   
+   
+  // AI Text Generator Logic
+  document.addEventListener('DOMContentLoaded', function() {
+    const aiBtn = document.getElementById('aiGenerateBtn');
+    const suggestionsBox = document.getElementById('aiSuggestions');
+    const textInput = document.getElementById('textInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    // List of quick replies categorized
+const quickReplies = [
+      // --- Positive / Hype ---
+      { text: "This is amazing! 🔥", icon: "fire" },
+      { text: "Great post! 👏", icon: "hands-clapping" },
+      { text: "Love the vibe! ❤️", icon: "heart" },
+      { text: "This is gold! 🏆", icon: "trophy" },
+      { text: "Top notch content. 👌", icon: "circle-check" },
+      { text: "Legendary. 👑", icon: "crown" },
+      { text: "To the moon! 🚀", icon: "rocket" },
+      { text: "So inspiring! 💡", icon: "lightbulb" },
+
+      // --- Agreement / Facts ---
+      { text: "Totally agree with this.", icon: "check" },
+      { text: "Facts only. 💯", icon: "check-double" },
+      { text: "Well said!", icon: "quote-left" },
+      { text: "Valid point.", icon: "bullseye" },
+      { text: "Couldn't have said it better.", icon: "thumbs-up" },
+      { text: "Real talk.", icon: "microphone" },
+
+      // --- Engagement / Curiosity ---
+      { text: "Thanks for sharing info.", icon: "share-nodes" },
+      { text: "Interesting perspective.", icon: "eye" },
+      { text: "Waiting for more updates.", icon: "clock" },
+      { text: "Tell me more!", icon: "comment-dots" },
+      { text: "Underrated post.", icon: "arrow-trend-up" },
+
+      // --- Fun / Slang (Global & Naija) ---
+      { text: "Big mood. 😂", icon: "face-laugh-beam" },
+      { text: "Mad o! 🤯", icon: "explosion" }, // Naija slang
+      { text: "We move! 🚶", icon: "person-walking" }, // Naija slang
+      { text: "Omo, you try! 🙌", icon: "hands-praying" }, // Naija slang
+      { text: "Soft life. 🥂", icon: "champagne-glasses" },
+      { text: "No cap. 🧢", icon: "hat-cowboy" }
+    ];
+
+    // Toggle suggestions visibility
+    aiBtn.addEventListener('click', function() {
+      if (suggestionsBox.classList.contains('active')) {
+        closeAiSuggestions();
+      } else {
+        generateSuggestions();
+        suggestionsBox.classList.add('active');
+      }
+    });
+
+    // Function to generate random suggestion chips
+    function generateSuggestions() {
+      suggestionsBox.innerHTML = '';
+      
+      // Shuffle array to show different ones each time
+      const shuffled = quickReplies.sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, 5); // Take first 5
+
+      selected.forEach(reply => {
+        const chip = document.createElement('div');
+        chip.className = 'kf-suggestion-chip';
+        chip.innerHTML = `<i class="fa-solid fa-${reply.icon}"></i> ${reply.text}`;
+        
+        chip.onclick = function() {
+          insertText(reply.text);
+        };
+        
+        suggestionsBox.appendChild(chip);
+      });
+    }
+
+    // Insert text into textarea
+    function insertText(text) {
+      textInput.value = text;
+      
+      // Manually trigger input event so existing logic knows to show Send button
+      const event = new Event('input', { bubbles: true });
+      textInput.dispatchEvent(event);
+      
+      // Focus the input
+      textInput.focus();
+      
+      // Optional: Hide suggestions after selection
+      // closeAiSuggestions(); 
+    }
+  });
+
+  // Global function to close suggestions (called by HTMX on success)
+  function closeAiSuggestions() {
+    const box = document.getElementById('aiSuggestions');
+    if(box) box.classList.remove('active');
+  }
+  
+  // Update your existing resetInputUI function or ensure this runs
+  // Note: HTMX on-request logic in HTML calls `resetInputUI`
+
  </script>
 </body>
 </html>
