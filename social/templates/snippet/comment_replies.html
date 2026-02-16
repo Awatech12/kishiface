@@ -1,11 +1,11 @@
-<!-- snippet/comment_replies.html -->
+<!-- snippet/comment_replies.html - Full updated version with no space between like and edit/delete -->
 {% load humanize %}
 {% load static %}
 {% load time %}
 {% load text_filters %}
 
 {% for reply in replies %}
-<div class="reply-item" id="reply-{{ reply.reply_id }}" style="margin-bottom: 12px; margin-left: 48px;">
+<div class="reply-item" id="reply-{{ reply.reply_id }}" data-author="{{ reply.author.username }}" data-author-name="{{ reply.author.first_name }} {{ reply.author.last_name }}">
     <div style="display: flex; gap: 8px;">
         <!-- Reply Author Avatar -->
         {% if reply.author.profile.picture.url %}
@@ -25,101 +25,148 @@
                         <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓">
                     {% endif %}
                 </a>
-                <span style="font-size: 11px; color: #8e8e8e;">{{ reply.created_at|insta_timesince }}</span>
+                <span style="font-size: 11px; color: #8e8e8e;">
+                    {{ reply.created_at|insta_timesince }}
+                    {% if reply.is_edited %}
+                        <span style="color: #8e8e8e; font-size: 10px;">(edited)</span>
+                    {% endif %}
+                </span>
             </div>
             
             <!-- Reply Content -->
-            <div style="font-size: 14px; line-height: 1.4; color: #262626; margin-top: 2px;">
-                {{ reply.reply_text|format_post_text|safe }}
+            <div class="reply-content" id="reply-content-{{ reply.reply_id }}" style="font-size: 14px; line-height: 1.4; color: #262626; margin-top: 2px;">
+                {{ reply.reply_text|format_comment_text|safe }}
             </div>
             
-            <!-- Reply Actions -->
-            <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
-                <button class="reply-action-btn like-reply-btn" data-reply-id="{{ reply.reply_id }}" style="background: none; border: none; color: #8e8e8e; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                    <i class="far fa-heart"></i>
-                    <span class="reply-likes-count">{{ reply.like.count }}</span>
-                </button>
-                <button class="reply-action-btn" onclick="showNestedReplyForm('{{ reply.reply_id }}')" style="background: none; border: none; color: #8e8e8e; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                    <i class="far fa-comment"></i> Reply
-                </button>
-            </div>
-            
-            <!-- Nested Reply Form (hidden by default) -->
-            <div class="nested-reply-form" id="nested-reply-form-{{ reply.reply_id }}" style="display: none; margin-top: 8px;">
-                <form class="nested-reply-form" 
-                      hx-post="{% url 'add_nested_reply' reply.reply_id %}"
-                      hx-target="#nested-replies-{{ reply.reply_id }}"
-                      hx-swap="afterbegin"
-                      hx-on::after-request="if(event.detail.successful) { this.reset(); document.getElementById('nested-input-{{ reply.reply_id }}').value = ''; hideNestedReplyForm('{{ reply.reply_id }}'); }">
+            <!-- Edit Form (hidden by default) -->
+            <div class="edit-reply-form" id="edit-form-{{ reply.reply_id }}" style="display: none; margin-top: 8px;">
+                <form class="edit-reply-form" 
+                      hx-post="{% url 'edit_reply' reply.reply_id %}"
+                      hx-target="#reply-content-{{ reply.reply_id }}"
+                      hx-swap="outerHTML"
+                      hx-on::after-request="if(event.detail.successful) { hideEditForm('{{ reply.reply_id }}'); }">
                     {% csrf_token %}
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <img src="{{ user.profile.picture.url }}" alt="" style="width: 24px; height: 24px; border-radius: 50%;">
-                        <input type="text" 
-                               id="nested-input-{{ reply.reply_id }}"
-                               name="reply_text" 
-                               placeholder="Write a reply..." 
-                               style="flex: 1; padding: 6px 12px; border: 1px solid #dbdbdb; border-radius: 20px; font-size: 12px;"
-                               autocomplete="off">
-                        <button type="submit" style="background: none; border: none; color: #0095f6; cursor: pointer;">
-                            <i class="fas fa-paper-plane" style="font-size: 14px;"></i>
-                        </button>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <textarea name="reply_text" 
+                                  style="width: 100%; padding: 8px 12px; border: 1px solid #dbdbdb; border-radius: 8px; font-size: 13px; resize: vertical;"
+                                  rows="2">{{ reply.reply_text }}</textarea>
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button type="button" onclick="hideEditForm('{{ reply.reply_id }}')" 
+                                    style="background: none; border: none; color: #8e8e8e; font-size: 12px; cursor: pointer; padding: 4px 8px;">
+                                Cancel
+                            </button>
+                            <button type="submit" 
+                                    style="background: #0095f6; border: none; color: white; font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 12px; border-radius: 4px;">
+                                Save
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
             
-            <!-- View nested replies button (if any) -->
-            {% if reply.child_replies.exists %}
-            <button class="view-nested-replies-btn" id="view-nested-{{ reply.reply_id }}" onclick="toggleNestedReplies('{{ reply.reply_id }}')" style="background: none; border: none; color: #8e8e8e; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-top: 4px; padding: 4px 0;">
-                <i class="fas fa-chevron-down" style="font-size: 10px;"></i> View {{ reply.child_replies.count }} repl{{ reply.child_replies.count|pluralize:"y,ies" }}
-            </button>
-            
-            <!-- Nested replies container -->
-            <div id="nested-replies-{{ reply.reply_id }}" class="nested-replies" style="margin-left: -24px; margin-top: 8px; display: none;">
-                {% include 'snippet/comment_replies.html' with replies=reply.child_replies.all %}
+            <!-- Reply Actions - No space between like and edit/delete -->
+            <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px; flex-wrap: wrap;">
+                <button class="reply-action-btn like-reply-btn" data-reply-id="{{ reply.reply_id }}" style="background: none; border: none; color: #8e8e8e; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 0;">
+                    <i class="far fa-heart"></i>
+                    <span class="reply-likes-count">{{ reply.like.count }}</span>
+                </button>
+                
+                <!-- Edit/Delete buttons (only for author) - directly next to like button -->
+                {% if request.user == reply.author %}
+                    <button class="reply-action-btn" onclick="showEditForm('{{ reply.reply_id }}')" style="color: #8e8e8e; background: none; border: none; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 0; margin-left: 0;">
+                        <i class="far fa-edit"></i> Edit
+                    </button>
+                    
+                    <button class="reply-action-btn" onclick="deleteReply('{{ reply.reply_id }}')" style="color: #ed4956; background: none; border: none; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 0;">
+                        <i class="far fa-trash-alt"></i> Delete
+                    </button>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
 </div>
-{% empty %}
-<!-- No replies yet -->
 {% endfor %}
 
+<!-- Delete Confirmation Modal -->
+<div class="delete-modal" id="deleteModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 16px; padding: 24px; max-width: 320px; width: 90%; box-shadow: 0 8px 24px rgba(0,0,0,0.2);">
+        <h3 style="font-size: 18px; margin-bottom: 8px; font-weight: 600;">Delete Reply?</h3>
+        <p style="color: #8e8e8e; margin-bottom: 24px; font-size: 14px;">This action cannot be undone.</p>
+        <div style="display: flex; gap: 12px;">
+            <button onclick="closeDeleteModal()" style="flex: 1; padding: 10px; background: #efefef; border: none; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;">Cancel</button>
+            <button id="confirmDeleteBtn" style="flex: 1; padding: 10px; background: #ed4956; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;">Delete</button>
+        </div>
+    </div>
+</div>
+
 <script>
-function showNestedReplyForm(replyId) {
-    const form = document.getElementById(`nested-reply-form-${replyId}`);
-    if (form) {
-        if (form.style.display === 'none') {
-            form.style.display = 'block';
-            document.getElementById(`nested-input-${replyId}`).focus();
-        } else {
-            form.style.display = 'none';
-        }
-    }
-}
+// Store current reply to delete
+let currentReplyId = null;
 
-function hideNestedReplyForm(replyId) {
-    const form = document.getElementById(`nested-reply-form-${replyId}`);
-    if (form) {
-        form.style.display = 'none';
-    }
-}
-
-function toggleNestedReplies(replyId) {
-    const nestedContainer = document.getElementById(`nested-replies-${replyId}`);
-    const viewBtn = document.getElementById(`view-nested-${replyId}`);
-    const icon = viewBtn.querySelector('i');
+// Delete functionality
+function deleteReply(replyId) {
+    currentReplyId = replyId;
+    const modal = document.getElementById('deleteModal');
+    modal.style.display = 'flex';
     
-    if (nestedContainer) {
-        if (nestedContainer.style.display === 'none') {
-            nestedContainer.style.display = 'block';
-            icon.className = 'fas fa-chevron-up';
-            viewBtn.innerHTML = `<i class="fas fa-chevron-up"></i> Hide replies`;
-        } else {
-            nestedContainer.style.display = 'none';
-            icon.className = 'fas fa-chevron-down';
-            viewBtn.innerHTML = `<i class="fas fa-chevron-down"></i> View ${nestedContainer.querySelectorAll('.reply-item').length} replies`;
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    confirmBtn.onclick = function() {
+        fetch(`/reply/${currentReplyId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const replyElement = document.getElementById(`reply-${currentReplyId}`);
+                if (replyElement) {
+                    // Fade out animation
+                    replyElement.style.transition = 'opacity 0.3s ease';
+                    replyElement.style.opacity = '0';
+                    setTimeout(() => {
+                        replyElement.remove();
+                    }, 300);
+                }
+                closeDeleteModal();
+            }
+        });
+    };
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteModal');
+    modal.style.display = 'none';
+    currentReplyId = null;
+}
+
+// Edit functionality
+function showEditForm(replyId) {
+    const content = document.getElementById(`reply-content-${replyId}`);
+    const editForm = document.getElementById(`edit-form-${replyId}`);
+    
+    if (content && editForm) {
+        content.style.display = 'none';
+        editForm.style.display = 'block';
+        
+        // Focus the textarea
+        const textarea = editForm.querySelector('textarea');
+        if (textarea) {
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
         }
+    }
+}
+
+function hideEditForm(replyId) {
+    const content = document.getElementById(`reply-content-${replyId}`);
+    const editForm = document.getElementById(`edit-form-${replyId}`);
+    
+    if (content && editForm) {
+        content.style.display = 'block';
+        editForm.style.display = 'none';
     }
 }
 
@@ -133,7 +180,7 @@ document.querySelectorAll('.like-reply-btn').forEach(btn => {
         fetch(`/api/like-reply/${replyId}/`, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
                 'Content-Type': 'application/json'
             }
         })
@@ -142,12 +189,79 @@ document.querySelectorAll('.like-reply-btn').forEach(btn => {
             if (data.liked) {
                 icon.className = 'fas fa-heart';
                 icon.style.color = '#ed4956';
+                // Add pop animation
+                icon.style.transform = 'scale(1.2)';
+                setTimeout(() => {
+                    icon.style.transform = 'scale(1)';
+                }, 200);
             } else {
                 icon.className = 'far fa-heart';
                 icon.style.color = '';
             }
             countSpan.textContent = data.likes_count;
-        });
+        })
+        .catch(error => console.error('Error liking reply:', error));
     });
 });
+
+// Auto-resize textareas
+document.querySelectorAll('textarea').forEach(textarea => {
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+});
+
+// Initialize any dynamic content loaded via HTMX
+if (typeof htmx !== 'undefined') {
+    htmx.onLoad(function(content) {
+        // Re-attach like button listeners
+        content.querySelectorAll('.like-reply-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const replyId = this.dataset.replyId;
+                const icon = this.querySelector('i');
+                const countSpan = this.querySelector('.reply-likes-count');
+                
+                fetch(`/api/like-reply/${replyId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.liked) {
+                        icon.className = 'fas fa-heart';
+                        icon.style.color = '#ed4956';
+                    } else {
+                        icon.className = 'far fa-heart';
+                        icon.style.color = '';
+                    }
+                    countSpan.textContent = data.likes_count;
+                });
+            });
+        });
+        
+        // Auto-resize any new textareas
+        content.querySelectorAll('textarea').forEach(textarea => {
+            textarea.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+        });
+        
+        // Re-attach edit button listeners
+        content.querySelectorAll('[onclick^="showEditForm"]').forEach(btn => {
+            const replyId = btn.getAttribute('onclick').match(/'([^']+)'/)[1];
+            btn.onclick = () => showEditForm(replyId);
+        });
+        
+        // Re-attach delete button listeners
+        content.querySelectorAll('[onclick^="deleteReply"]').forEach(btn => {
+            const replyId = btn.getAttribute('onclick').match(/'([^']+)'/)[1];
+            btn.onclick = () => deleteReply(replyId);
+        });
+    });
+}
 </script>

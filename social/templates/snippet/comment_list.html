@@ -1,4 +1,4 @@
-<!-- snippet/comment_list.html - Updated with inline replies -->
+<!-- snippet/comment_list.html - Full updated version (no nested replies, no mentions) -->
 {% load humanize %}
 {% load static %}
 {% load time %}
@@ -99,8 +99,8 @@
       </div>
 
       <!-- Replies Container -->
-      <div class="replies-container" id="replies-{{ comment.comment_id }}" style="margin-top: 12px; margin-left: -40px;">
-        {% include 'snippet/comment_replies.html' with replies=comment.replies.all comment_id=comment.comment_id %}
+      <div class="replies-container" id="replies-{{ comment.comment_id }}" style="margin-top: 12px; margin-left: -40px; display: none;">
+        {% include 'snippet/comment_replies.html' with replies=comment.replies.all %}
       </div>
     </div>
     
@@ -116,7 +116,7 @@
 function toggleReplyForm(commentId) {
   const form = document.getElementById(`reply-form-${commentId}`);
   if (form) {
-    if (form.style.display === 'none') {
+    if (form.style.display === 'none' || form.style.display === '') {
       form.style.display = 'block';
       document.getElementById(`reply-input-${commentId}`).focus();
     } else {
@@ -135,17 +135,19 @@ function hideReplyForm(commentId) {
 function toggleReplies(commentId) {
   const repliesContainer = document.getElementById(`replies-${commentId}`);
   const viewBtn = document.getElementById(`view-replies-${commentId}`);
-  const icon = viewBtn.querySelector('i');
   
-  if (repliesContainer) {
-    if (repliesContainer.style.display === 'none') {
+  if (repliesContainer && viewBtn) {
+    if (repliesContainer.style.display === 'none' || repliesContainer.style.display === '') {
       repliesContainer.style.display = 'block';
+      const icon = viewBtn.querySelector('i');
       icon.className = 'fas fa-chevron-up';
       viewBtn.innerHTML = `<i class="fas fa-chevron-up"></i> Hide replies`;
     } else {
       repliesContainer.style.display = 'none';
+      const icon = viewBtn.querySelector('i');
       icon.className = 'fas fa-chevron-down';
-      viewBtn.innerHTML = `<i class="fas fa-chevron-down"></i> View ${repliesContainer.querySelectorAll('.reply-item').length} replies`;
+      const replyCount = repliesContainer.querySelectorAll('.reply-item').length;
+      viewBtn.innerHTML = `<i class="fas fa-chevron-down"></i> View ${replyCount} repl${replyCount === 1 ? 'y' : 'ies'}`;
     }
   }
 }
@@ -296,6 +298,128 @@ if (typeof htmx !== 'undefined') {
                 });
             }
         });
+        
+        // Re-attach toggle functions for any new content
+        content.querySelectorAll('.reply-btn').forEach(btn => {
+            const commentId = btn.closest('.comment').id.replace('comment-', '');
+            btn.onclick = () => toggleReplyForm(commentId);
+        });
+        
+        content.querySelectorAll('.view-replies-btn').forEach(btn => {
+            const commentId = btn.id.replace('view-replies-', '');
+            btn.onclick = () => toggleReplies(commentId);
+        });
     });
 }
 </script>
+
+<style>
+/* Additional styles for reply functionality */
+.reply-btn {
+    background: none;
+    border: none;
+    color: #8e8e8e;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 12px;
+}
+
+.reply-btn:hover {
+    color: #262626;
+}
+
+.view-replies-btn {
+    background: none;
+    border: none;
+    color: #8e8e8e;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 0;
+    margin-left: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.view-replies-btn:hover {
+    color: #262626;
+}
+
+.view-replies-btn i {
+    font-size: 10px;
+}
+
+.reply-form-container {
+    margin-top: 12px;
+    padding-left: 48px;
+}
+
+.reply-form input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #dbdbdb;
+    border-radius: 20px;
+    font-size: 13px;
+    transition: border-color 0.2s;
+}
+
+.reply-form input:focus {
+    outline: none;
+    border-color: #0095f6;
+}
+
+.replies-container {
+    margin-top: 12px;
+}
+
+.reply-item {
+    margin-bottom: 12px;
+    position: relative;
+}
+
+.reply-item:last-child {
+    margin-bottom: 0;
+}
+
+.reply-action-btn {
+    background: none;
+    border: none;
+    color: #8e8e8e;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.reply-action-btn:hover {
+    color: #262626;
+}
+
+.reply-action-btn i {
+    font-size: 12px;
+}
+
+.fa-heart {
+    transition: transform 0.2s ease;
+}
+
+.fa-heart:hover {
+    transform: scale(1.1);
+}
+
+.fa-heart[style*="color: #ed4956"] {
+    animation: heartPop 0.3s ease;
+}
+
+@keyframes heartPop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+</style>

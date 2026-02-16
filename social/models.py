@@ -404,6 +404,9 @@ class PostComment(models.Model):
         super().save(*args, **kwargs)
 
 # models.py - Add this model
+# models.py - Update CommentReply model
+
+# models.py - Updated CommentReply model (no nested replies)
 
 class CommentReply(models.Model):
     reply_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -419,7 +422,8 @@ class CommentReply(models.Model):
     
     like = models.ManyToManyField(User, related_name='reply_likes', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    parent_reply = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='child_replies')
+    updated_at = models.DateTimeField(auto_now=True)  # Track edits
+    is_edited = models.BooleanField(default=False)  # Track if edited
     
     def clean(self):
         """Validate reply data"""
@@ -446,7 +450,6 @@ class CommentReply(models.Model):
     
     class Meta:
         ordering = ['-created_at']
-
 class Notification(models.Model):
     LIKE = 'like'
     COMMENT = 'comment'
