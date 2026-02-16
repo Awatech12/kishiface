@@ -1,0 +1,153 @@
+<!-- snippet/comment_replies.html -->
+{% load humanize %}
+{% load static %}
+{% load time %}
+{% load text_filters %}
+
+{% for reply in replies %}
+<div class="reply-item" id="reply-{{ reply.reply_id }}" style="margin-bottom: 12px; margin-left: 48px;">
+    <div style="display: flex; gap: 8px;">
+        <!-- Reply Author Avatar -->
+        {% if reply.author.profile.picture.url %}
+            <img src="{{ reply.author.profile.picture.url }}" alt="" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover;">
+        {% else %}
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(45deg, #833ab4, #fd1d1d, #fcb045); color: white; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">
+                {{ reply.author.first_name|default:"?"|slice:"1" }}
+            </div>
+        {% endif %}
+        
+        <div style="flex: 1;">
+            <!-- Reply Header -->
+            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                <a href="{% url 'profile' reply.author.username %}" style="font-weight: 600; font-size: 13px; color: #262626; text-decoration: none;">
+                    {{ reply.author.first_name }} {{ reply.author.last_name }}
+                    {% if reply.author.profile.is_verify %}
+                        <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓">
+                    {% endif %}
+                </a>
+                <span style="font-size: 11px; color: #8e8e8e;">{{ reply.created_at|insta_timesince }}</span>
+            </div>
+            
+            <!-- Reply Content -->
+            <div style="font-size: 14px; line-height: 1.4; color: #262626; margin-top: 2px;">
+                {{ reply.reply_text|format_post_text|safe }}
+            </div>
+            
+            <!-- Reply Actions -->
+            <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
+                <button class="reply-action-btn like-reply-btn" data-reply-id="{{ reply.reply_id }}" style="background: none; border: none; color: #8e8e8e; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <i class="far fa-heart"></i>
+                    <span class="reply-likes-count">{{ reply.like.count }}</span>
+                </button>
+                <button class="reply-action-btn" onclick="showNestedReplyForm('{{ reply.reply_id }}')" style="background: none; border: none; color: #8e8e8e; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <i class="far fa-comment"></i> Reply
+                </button>
+            </div>
+            
+            <!-- Nested Reply Form (hidden by default) -->
+            <div class="nested-reply-form" id="nested-reply-form-{{ reply.reply_id }}" style="display: none; margin-top: 8px;">
+                <form class="nested-reply-form" 
+                      hx-post="{% url 'add_nested_reply' reply.reply_id %}"
+                      hx-target="#nested-replies-{{ reply.reply_id }}"
+                      hx-swap="afterbegin"
+                      hx-on::after-request="if(event.detail.successful) { this.reset(); document.getElementById('nested-input-{{ reply.reply_id }}').value = ''; hideNestedReplyForm('{{ reply.reply_id }}'); }">
+                    {% csrf_token %}
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <img src="{{ user.profile.picture.url }}" alt="" style="width: 24px; height: 24px; border-radius: 50%;">
+                        <input type="text" 
+                               id="nested-input-{{ reply.reply_id }}"
+                               name="reply_text" 
+                               placeholder="Write a reply..." 
+                               style="flex: 1; padding: 6px 12px; border: 1px solid #dbdbdb; border-radius: 20px; font-size: 12px;"
+                               autocomplete="off">
+                        <button type="submit" style="background: none; border: none; color: #0095f6; cursor: pointer;">
+                            <i class="fas fa-paper-plane" style="font-size: 14px;"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- View nested replies button (if any) -->
+            {% if reply.child_replies.exists %}
+            <button class="view-nested-replies-btn" id="view-nested-{{ reply.reply_id }}" onclick="toggleNestedReplies('{{ reply.reply_id }}')" style="background: none; border: none; color: #8e8e8e; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-top: 4px; padding: 4px 0;">
+                <i class="fas fa-chevron-down" style="font-size: 10px;"></i> View {{ reply.child_replies.count }} repl{{ reply.child_replies.count|pluralize:"y,ies" }}
+            </button>
+            
+            <!-- Nested replies container -->
+            <div id="nested-replies-{{ reply.reply_id }}" class="nested-replies" style="margin-left: -24px; margin-top: 8px; display: none;">
+                {% include 'snippet/comment_replies.html' with replies=reply.child_replies.all %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% empty %}
+<!-- No replies yet -->
+{% endfor %}
+
+<script>
+function showNestedReplyForm(replyId) {
+    const form = document.getElementById(`nested-reply-form-${replyId}`);
+    if (form) {
+        if (form.style.display === 'none') {
+            form.style.display = 'block';
+            document.getElementById(`nested-input-${replyId}`).focus();
+        } else {
+            form.style.display = 'none';
+        }
+    }
+}
+
+function hideNestedReplyForm(replyId) {
+    const form = document.getElementById(`nested-reply-form-${replyId}`);
+    if (form) {
+        form.style.display = 'none';
+    }
+}
+
+function toggleNestedReplies(replyId) {
+    const nestedContainer = document.getElementById(`nested-replies-${replyId}`);
+    const viewBtn = document.getElementById(`view-nested-${replyId}`);
+    const icon = viewBtn.querySelector('i');
+    
+    if (nestedContainer) {
+        if (nestedContainer.style.display === 'none') {
+            nestedContainer.style.display = 'block';
+            icon.className = 'fas fa-chevron-up';
+            viewBtn.innerHTML = `<i class="fas fa-chevron-up"></i> Hide replies`;
+        } else {
+            nestedContainer.style.display = 'none';
+            icon.className = 'fas fa-chevron-down';
+            viewBtn.innerHTML = `<i class="fas fa-chevron-down"></i> View ${nestedContainer.querySelectorAll('.reply-item').length} replies`;
+        }
+    }
+}
+
+// Like reply functionality
+document.querySelectorAll('.like-reply-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const replyId = this.dataset.replyId;
+        const icon = this.querySelector('i');
+        const countSpan = this.querySelector('.reply-likes-count');
+        
+        fetch(`/api/like-reply/${replyId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.liked) {
+                icon.className = 'fas fa-heart';
+                icon.style.color = '#ed4956';
+            } else {
+                icon.className = 'far fa-heart';
+                icon.style.color = '';
+            }
+            countSpan.textContent = data.likes_count;
+        });
+    });
+});
+</script>

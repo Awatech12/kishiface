@@ -20,6 +20,9 @@ urlpatterns = [
   path('delete_message/<int:message_id>/', views.delete_message, name='delete_message'),
     
     # If you want both /explore/ and /explore-users/ to work:
+    path('comment/<uuid:comment_id>/add-reply/', views.add_comment_reply, name='add_comment_reply'),
+    path('reply/<uuid:reply_id>/add-nested/', views.add_nested_reply, name='add_nested_reply'),
+    path('api/like-reply/<uuid:reply_id>/', views.like_reply, name='like_reply'),
     path('explore-users/', views.explore_users, name='explore_users'),
     path('inbox',views.inbox, name='inbox'),
     path('followers/<str:username>', views.follower_list, name="followers"),

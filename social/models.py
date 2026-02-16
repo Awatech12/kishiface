@@ -367,6 +367,7 @@ class PostImage(models.Model):
         super().save(*args, **kwargs)
 
 
+
 class PostComment(models.Model):
     comment_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
@@ -402,6 +403,49 @@ class PostComment(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+# models.py - Add this model
+
+class CommentReply(models.Model):
+    reply_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    comment = models.ForeignKey(PostComment, on_delete=models.CASCADE, related_name='replies')
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    reply_text = models.TextField(blank=True, null=True)
+    image = models.ImageField(upload_to='reply_image/', blank=True)
+    
+    if settings.USE_CLOUDINARY:
+        file = CloudinaryField('audio', resource_type='video', folder='reply_files', blank=True)
+    else:
+        file = models.FileField(upload_to='reply_file', blank=True)
+    
+    like = models.ManyToManyField(User, related_name='reply_likes', blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    parent_reply = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='child_replies')
+    
+    def clean(self):
+        """Validate reply data"""
+        super().clean()
+        
+        # Sanitize reply text
+        self.reply_text = sanitize_text(self.reply_text, 'reply')
+        
+        # Validate files
+        if self.image and hasattr(self.image, 'name'):
+            validate_file_extension(self.image)
+            validate_file_size(self.image, max_size_mb=10)
+        
+        if self.file and hasattr(self.file, 'name'):
+            validate_file_extension(self.file)
+            validate_file_size(self.file, max_size_mb=20)
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f'Reply by {self.author.username} on {self.created_at}'
+    
+    class Meta:
+        ordering = ['-created_at']
 
 class Notification(models.Model):
     LIKE = 'like'

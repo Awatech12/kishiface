@@ -1,8 +1,9 @@
+<!-- snippet/comment_list.html - Updated with inline replies -->
 {% load humanize %}
 {% load static %}
 {% load time %}
 {% load text_filters %}  
-<div class="comment">
+<div class="comment" id="comment-{{ comment.comment_id }}">
     
     {% if comment.author.profile.picture.url %}
         <img src="{{ comment.author.profile.picture.url }}" alt="Profile" class="avatar-img">
@@ -64,7 +65,42 @@
 
       <div class="comment-meta">
         <span>{{comment.created_at|insta_timesince}}</span>
-        <a href="{% url 'comment_reply' comment.comment_id %}">Reply</a>
+        <button class="reply-btn" onclick="toggleReplyForm('{{ comment.comment_id }}')">Reply</button>
+        
+        <!-- View replies button (if there are replies) -->
+        {% if comment.replies.exists %}
+        <button class="view-replies-btn" id="view-replies-{{ comment.comment_id }}" onclick="toggleReplies('{{ comment.comment_id }}')">
+          <i class="fas fa-chevron-down"></i> View {{ comment.replies.count }} repl{{ comment.replies.count|pluralize:"y,ies" }}
+        </button>
+        {% endif %}
+      </div>
+
+      <!-- Inline Reply Form (hidden by default) -->
+      <div class="reply-form-container" id="reply-form-{{ comment.comment_id }}" style="display: none; margin-top: 12px;">
+        <form class="reply-form" 
+              hx-post="{% url 'add_comment_reply' comment.comment_id %}"
+              hx-target="#replies-{{ comment.comment_id }}"
+              hx-swap="afterbegin"
+              hx-on::after-request="if(event.detail.successful) { this.reset(); document.getElementById('reply-input-{{ comment.comment_id }}').value = ''; hideReplyForm('{{ comment.comment_id }}'); }">
+          {% csrf_token %}
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <img src="{{ user.profile.picture.url }}" alt="" style="width: 28px; height: 28px; border-radius: 50%;">
+            <input type="text" 
+                   id="reply-input-{{ comment.comment_id }}"
+                   name="reply_text" 
+                   placeholder="Write a reply..." 
+                   style="flex: 1; padding: 8px 12px; border: 1px solid #dbdbdb; border-radius: 20px; font-size: 13px;"
+                   autocomplete="off">
+            <button type="submit" style="background: none; border: none; color: #0095f6; cursor: pointer;">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Replies Container -->
+      <div class="replies-container" id="replies-{{ comment.comment_id }}" style="margin-top: 12px; margin-left: -40px;">
+        {% include 'snippet/comment_replies.html' with replies=comment.replies.all comment_id=comment.comment_id %}
       </div>
     </div>
     
@@ -76,6 +112,44 @@
 </div>
 
 <script>
+// Functions for inline replies
+function toggleReplyForm(commentId) {
+  const form = document.getElementById(`reply-form-${commentId}`);
+  if (form) {
+    if (form.style.display === 'none') {
+      form.style.display = 'block';
+      document.getElementById(`reply-input-${commentId}`).focus();
+    } else {
+      form.style.display = 'none';
+    }
+  }
+}
+
+function hideReplyForm(commentId) {
+  const form = document.getElementById(`reply-form-${commentId}`);
+  if (form) {
+    form.style.display = 'none';
+  }
+}
+
+function toggleReplies(commentId) {
+  const repliesContainer = document.getElementById(`replies-${commentId}`);
+  const viewBtn = document.getElementById(`view-replies-${commentId}`);
+  const icon = viewBtn.querySelector('i');
+  
+  if (repliesContainer) {
+    if (repliesContainer.style.display === 'none') {
+      repliesContainer.style.display = 'block';
+      icon.className = 'fas fa-chevron-up';
+      viewBtn.innerHTML = `<i class="fas fa-chevron-up"></i> Hide replies`;
+    } else {
+      repliesContainer.style.display = 'none';
+      icon.className = 'fas fa-chevron-down';
+      viewBtn.innerHTML = `<i class="fas fa-chevron-down"></i> View ${repliesContainer.querySelectorAll('.reply-item').length} replies`;
+    }
+  }
+}
+
 // Initialize audio wave animation for Instagram-style player
 function initAudioWave(container, audioId) {
     const wave = container.querySelector('.audio-wave');

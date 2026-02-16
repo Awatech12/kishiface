@@ -4,7 +4,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage,ChannelUserLastSeen,Story, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
+from social.models import Profile, Post,CommentReply, PostImage,ChannelUserLastSeen,Story, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -1860,3 +1860,64 @@ def logout(request):
     auth.logout(request)
     messages.info(request, 'Logout Successfully')
     return redirect('/')
+    
+@login_required
+@require_POST
+def add_comment_reply(request, comment_id):
+    """Add a reply to a comment (inline)"""
+    comment = get_object_or_404(PostComment, comment_id=comment_id)
+    reply_text = request.POST.get('reply_text', '').strip()
+    
+    if reply_text:
+        reply = CommentReply.objects.create(
+            comment=comment,
+            author=request.user,
+            reply_text=reply_text
+        )
+        
+        # Return just the new reply HTML
+        return render(request, 'snippet/comment_replies.html', {
+            'replies': [reply]
+        })
+    
+    return JsonResponse({'error': 'Reply text is required'}, status=400)
+
+@login_required
+@require_POST
+def add_nested_reply(request, reply_id):
+    """Add a nested reply to another reply"""
+    parent_reply = get_object_or_404(CommentReply, reply_id=reply_id)
+    reply_text = request.POST.get('reply_text', '').strip()
+    
+    if reply_text:
+        reply = CommentReply.objects.create(
+            comment=parent_reply.comment,
+            author=request.user,
+            reply_text=reply_text,
+            parent_reply=parent_reply
+        )
+        
+        # Return just the new reply HTML
+        return render(request, 'snippet/comment_replies.html', {
+            'replies': [reply]
+        })
+    
+    return JsonResponse({'error': 'Reply text is required'}, status=400)
+
+@login_required
+@require_POST
+def like_reply(request, reply_id):
+    """Like/unlike a reply"""
+    reply = get_object_or_404(CommentReply, reply_id=reply_id)
+    
+    if request.user in reply.like.all():
+        reply.like.remove(request.user)
+        liked = False
+    else:
+        reply.like.add(request.user)
+        liked = True
+    
+    return JsonResponse({
+        'liked': liked,
+        'likes_count': reply.like.count()
+    })
