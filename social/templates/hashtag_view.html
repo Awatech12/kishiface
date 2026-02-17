@@ -1,0 +1,1639 @@
+{% load static %}
+{% load humanize %}
+{% load time %}
+{% load text_filters %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>#{{ tag_name }} - Kvibe</title>
+    <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="{% static 'js/home.js' %}"></script>
+    <style>
+        /* Copy all the same styles from home.html */
+        :root {
+            --kf-bg: #fafafa;
+            --kf-white: #ffffff;
+            --kf-text: #262626;
+            --kf-text-light: #8e8e8e;
+            --kf-primary: #0095f6;
+            --kf-border: #dbdbdb;
+            --kf-repost: #0095f6;
+            --kf-repost-bg: #ffffff;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--kf-bg);
+            color: var(--kf-text);
+            line-height: 1.4;
+        }
+        
+        .kf-container {
+            max-width: 935px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* Header styling */
+        .kf-hashtag-header {
+            background: var(--kf-white);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .kf-hashtag-title {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--kf-primary);
+            margin-bottom: 10px;
+        }
+        
+        .kf-hashtag-stats {
+            color: var(--kf-text-light);
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .kf-back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--kf-white);
+            color: var(--kf-text);
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            transition: all 0.2s ease;
+            border: 1px solid var(--kf-border);
+        }
+        
+        .kf-back-btn:hover {
+            background: var(--kf-bg);
+            color: var(--kf-primary);
+        }
+        
+        /* Post styling - exactly like home page */
+        .kf-post {
+            background: var(--kf-white);
+            margin-bottom: 20px;
+            border: 1px solid var(--kf-border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .kf-repost-header {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: var(--kf-bg);
+            border-bottom: var(--kf-border);
+            font-size: 12px;
+            color: var(--kf-repost);
+        }
+        
+        .kf-repost-header i {
+            color: var(--kf-repost);
+            margin-right: 6px;
+        }
+        
+        .kf-repost-header a {
+            color: var(--kf-primary);
+            text-decoration: none;
+            font-weight: 500;
+            margin: 0 4px;
+        }
+        
+        .kf-repost-header a:hover {
+            text-decoration: underline;
+        }
+        
+        .kf-post-header {
+            display: flex;
+            align-items: center;
+            padding: 14px 16px;
+        }
+        
+        .kf-profile-pic {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 12px;
+        }
+        
+        .kf-username {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--kf-text);
+            text-decoration: none;
+        }
+        
+        .kf-username:hover {
+            color: var(--kf-primary);
+        }
+        
+        .kf-post-time {
+            font-size: 12px;
+            color: var(--kf-text-light);
+            margin-top: 2px;
+        }
+        
+        .kf-post-actions-header {
+            margin-left: auto;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .kf-edit-icon {
+            color: var(--kf-text);
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.15s ease-in-out;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .kf-edit-icon:hover {
+            color: var(--kf-primary);
+            background-color: #f3f4f6;
+        }
+        
+        .kf-post-content {
+            padding: 0 16px 12px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .kf-post-text {
+            overflow: hidden;
+        }
+        
+        .kf-post-paragraph {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        
+        .kf-post-paragraph:last-child {
+            margin-bottom: 0;
+        }
+        
+        .kf-post-paragraph a,
+        .kf-post-content a {
+            color: var(--kf-primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .kf-post-paragraph a:hover,
+        .kf-post-content a:hover {
+            text-decoration: underline;
+        }
+        
+        .kf-mention-link {
+            color: var(--kf-primary);
+            text-decoration: none;
+            font-weight: 600;
+            background: rgba(0, 149, 246, 0.1);
+            padding: 0 2px;
+            border-radius: 3px;
+        }
+        
+        .kf-mention-link:hover {
+            text-decoration: underline;
+            background: rgba(0, 149, 246, 0.2);
+        }
+        
+        .kf-hashtag {
+            color: var(--kf-primary);
+            text-decoration: none;
+            font-weight: 600;
+            background: rgba(0, 149, 246, 0.1);
+            padding: 0 2px;
+            border-radius: 3px;
+        }
+        
+        .kf-hashtag:hover {
+            text-decoration: underline;
+            background: rgba(0, 149, 246, 0.2);
+        }
+        
+        .kf-url-link {
+            color: var(--kf-primary);
+            text-decoration: none;
+            font-weight: 500;
+            word-break: break-word;
+        }
+        
+        .kf-url-link:hover {
+            text-decoration: underline;
+        }
+        
+        /* Media container */
+        .kf-media-container {
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Image styling */
+        .kf-image-slide {
+            width: 100%;
+            position: relative;
+            background: #fafafa;
+        }
+        
+        .kf-image-slide img {
+            width: 100%;
+            max-height: 600px;
+            object-fit: contain;
+            display: block;
+        }
+        
+        /* Video container */
+        .kf-video-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            min-height: 200px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .kf-video {
+            max-width: 100%;
+            max-height: 600px;
+            object-fit: contain;
+        }
+        
+        .kf-play-pause-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4em;
+            color: white;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 50%;
+            padding: 15px 20px 15px 23px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .kf-video-container.paused .kf-play-pause-icon {
+            opacity: 1;
+        }
+        
+        .kf-seek-overlay-btn {
+            position: absolute;
+            bottom: 10px;
+            background: rgba(0, 0, 0, 0.4);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 10px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .kf-seek-overlay-btn:hover {
+            background: rgba(0, 0, 0, 0.6);
+        }
+        
+        .kf-backward-btn {
+            left: 10px;
+        }
+        
+        .kf-forward-btn {
+            right: 10px;
+        }
+        
+        .kf-video-container.paused .kf-seek-overlay-btn,
+        .kf-video-container:hover .kf-seek-overlay-btn {
+            opacity: 1;
+        }
+        
+        .kf-video-download-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 36px;
+            height: 36px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.3s ease, background 0.3s ease;
+        }
+        
+        .kf-video-container:hover .kf-video-download-btn {
+            opacity: 1;
+        }
+        
+        .kf-video-download-btn:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+        
+        /* Audio player */
+        .kf-audio-player {
+            width: 100%;
+            background: var(--kf-white);
+            position: relative;
+        }
+        
+        .kf-audio-cover {
+            width: 100%;
+            height: 400px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        
+        .kf-audio-play-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70px;
+            height: 70px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .kf-audio-controls {
+            padding: 16px;
+        }
+        
+        .kf-audio-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .kf-audio-title {
+            font-weight: 600;
+            font-size: 15px;
+        }
+        
+        .kf-audio-time {
+            font-size: 13px;
+            color: var(--kf-text-light);
+            font-family: monospace;
+        }
+        
+        .kf-audio-progress {
+            width: 100%;
+            height: 2px;
+            background: var(--kf-border);
+            margin: 16px 0;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .kf-audio-progress-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--kf-primary);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        
+        .kf-audio-seek-buttons {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .kf-seek-btn {
+            padding: 8px 16px;
+            background: none;
+            border: 1px solid var(--kf-border);
+            border-radius: 4px;
+            color: var(--kf-text);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .kf-audio-download-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 36px;
+            height: 36px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.3s ease, background 0.3s ease;
+        }
+        
+        .kf-audio-player:hover .kf-audio-download-btn {
+            opacity: 1;
+        }
+        
+        .kf-audio-download-btn:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+        
+        .kf-audio-hidden {
+            display: none;
+        }
+        
+        /* Post actions - exactly like home page */
+        .kf-post-actions {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-top: 1px solid var(--kf-border);
+            gap: 16px;
+        }
+        
+        /* Repost button styles */
+        .kf-repost-icon {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            color: #4b5563;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-family: inherit;
+        }
+        
+        .kf-repost-icon::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(23, 191, 99, 0.1);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .kf-repost-icon:active::before {
+            width: 120px;
+            height: 120px;
+        }
+        
+        .kf-repost-icon:hover {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            transform: translateY(-2px);
+        }
+        
+        .kf-repost-icon:hover i {
+            color: #0095f6;
+            transform: scale(1.1) rotate(5deg);
+        }
+        
+        .kf-repost-icon i.reposted {
+            color: #0095f6 !important;
+        }
+        
+        .kf-repost-icon:hover i.reposted {
+            color: #0095f6 !important;
+            transform: scale(1.1) rotate(5deg);
+        }
+        
+        .kf-repost-count {
+            display: inline-block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #4b5563;
+            transition: color 0.3s ease;
+        }
+        
+        /* Image download button */
+        .kf-image-download-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 36px;
+            height: 36px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.3s ease, background 0.3s ease;
+        }
+        
+        .kf-image-slide:hover .kf-image-download-btn {
+            opacity: 1;
+        }
+        
+        .kf-image-download-btn:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+        
+        /* Related hashtags sidebar */
+        .kf-layout {
+            display: flex;
+            gap: 30px;
+        }
+        
+        .kf-main-content {
+            flex: 1;
+        }
+        
+        .kf-sidebar {
+            width: 300px;
+            flex-shrink: 0;
+        }
+        
+        .kf-related-hashtags {
+            background: var(--kf-white);
+            border-radius: 16px;
+            overflow: hidden;
+            position: sticky;
+            top: 80px;
+            border: 1px solid var(--kf-border);
+        }
+        
+        .kf-related-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--kf-border);
+        }
+        
+        .kf-related-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .kf-related-list {
+            padding: 8px;
+        }
+        
+        .kf-related-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-radius: 8px;
+            transition: background 0.2s ease;
+            text-decoration: none;
+            color: var(--kf-text);
+        }
+        
+        .kf-related-item:hover {
+            background: var(--kf-bg);
+        }
+        
+        .kf-related-hashtag {
+            font-weight: 600;
+            color: var(--kf-primary);
+            margin-right: 8px;
+        }
+        
+        .kf-related-count {
+            font-size: 12px;
+            color: var(--kf-text-light);
+            margin-left: auto;
+        }
+        
+        .kf-empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: var(--kf-white);
+            border-radius: 16px;
+            border: 1px solid var(--kf-border);
+        }
+        
+        .kf-empty-state i {
+            font-size: 48px;
+            color: var(--kf-text-light);
+            margin-bottom: 16px;
+        }
+        
+        .kf-empty-state h3 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: var(--kf-text);
+        }
+        
+        .kf-empty-state p {
+            color: var(--kf-text-light);
+        }
+        
+        /* Repost caption */
+        .kf-repost-caption-container {
+            padding: 12px 16px 0 16px;
+            background: white;
+        }
+        
+        .kf-repost-caption {
+            padding: 10px;
+            background: var(--kf-white);
+            border: 1px solid whitesmoke;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--kf-text);
+        }
+        
+        .kf-repost-caption-author {
+            font-weight: 600;
+            color: var(--kf-repost);
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .kf-repost-caption-text {
+            color: var(--kf-text);
+        }
+        
+        /* Mixed media carousel */
+        .kf-mixed-media-carousel {
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .kf-mixed-media-track {
+            display: flex;
+            transition: transform 0.3s ease;
+        }
+        
+        .kf-mixed-media-slide {
+            width: 100%;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: #000;
+        }
+        
+        .kf-media-type-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 25;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .kf-mixed-carousel-controls {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 12px;
+            pointer-events: none;
+        }
+        
+        .kf-mixed-carousel-prev,
+        .kf-mixed-carousel-next {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            pointer-events: all;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+            z-index: 30;
+        }
+        
+        .kf-mixed-carousel-prev:hover,
+        .kf-mixed-carousel-next:hover {
+            opacity: 1;
+        }
+        
+        .kf-mixed-carousel-indicators {
+            position: absolute;
+            bottom: 16px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            z-index: 30;
+        }
+        
+        .kf-mixed-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            transition: background 0.2s, transform 0.2s;
+            cursor: pointer;
+        }
+        
+        .kf-mixed-indicator.active {
+            background: white;
+            transform: scale(1.2);
+        }
+        
+        .kf-image-carousel {
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .kf-image-track {
+            display: flex;
+            transition: transform 0.3s ease;
+        }
+        
+        .kf-carousel-controls {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 12px;
+            pointer-events: none;
+        }
+        
+        .kf-carousel-prev,
+        .kf-carousel-next {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            pointer-events: all;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        
+        .kf-carousel-indicators {
+            position: absolute;
+            bottom: 16px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .kf-indicator {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            transition: background 0.2s;
+        }
+        
+        .kf-indicator.active {
+            background: white;
+        }
+        
+        /* Download icon styling */
+        .kf-download-icon {
+            color: var(--kf-text);
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.15s ease-in-out;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .kf-download-icon:hover {
+            color: var(--kf-primary);
+            background-color: #f3f4f6;
+        }
+        
+        /* Repost modal */
+        .kf-repost-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        .kf-repost-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .kf-repost-modal-content {
+            background: var(--kf-white);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            overflow: hidden;
+        }
+        
+        .kf-repost-modal-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--kf-border);
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .kf-repost-modal-body {
+            padding: 16px;
+        }
+        
+        .kf-repost-textarea {
+            width: 100%;
+            border: 1px solid var(--kf-border);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 80px;
+            margin-bottom: 16px;
+        }
+        
+        .kf-repost-modal-footer {
+            padding: 16px;
+            border-top: 1px solid var(--kf-border);
+            display: flex;
+            gap: 12px;
+        }
+        
+        .kf-repost-btn {
+            flex: 1;
+            padding: 10px;
+            background: var(--kf-repost);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .kf-repost-cancel-btn {
+            flex: 1;
+            padding: 10px;
+            background: transparent;
+            color: var(--kf-text);
+            border: 1px solid var(--kf-border);
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        
+        .kf-repost-btn:hover {
+            opacity: 0.9;
+        }
+        
+        .kf-repost-cancel-btn:hover {
+            background: var(--kf-bg);
+        }
+        
+        @media (max-width: 768px) {
+            .kf-layout {
+                flex-direction: column;
+            }
+            
+            .kf-sidebar {
+                width: 100%;
+            }
+            
+            .kf-container {
+                padding: 10px;
+            }
+            
+            .kf-hashtag-header {
+                padding: 20px;
+            }
+            
+            .kf-hashtag-title {
+                font-size: 28px;
+            }
+            
+            .kf-repost-icon {
+                padding: 6px 10px;
+                gap: 6px;
+                font-size: 13px;
+            }
+            
+            .kf-repost-count {
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    {% include 'header.html' %}
+    
+    <!-- Repost Modal -->
+    <div class="kf-repost-modal" id="kf-repost-modal">
+        <div class="kf-repost-modal-content">
+            <div class="kf-repost-modal-header">
+                Repost
+            </div>
+            <div class="kf-repost-modal-body">
+                <textarea 
+                    class="kf-repost-textarea" 
+                    id="kf-repost-caption" 
+                    placeholder="Add a comment to your repost (optional)"
+                    maxlength="500"></textarea>
+                <div style="font-size: 12px; color: var(--kf-text-light); text-align: right;">
+                    <span id="kf-repost-char-count">0</span>/500
+                </div>
+            </div>
+            <div class="kf-repost-modal-footer">
+                <button class="kf-repost-cancel-btn" onclick="kfCloseRepostModal()">Cancel</button>
+                <button class="kf-repost-btn" id="kf-repost-confirm-btn">
+                    <i class="fas fa-retweet"></i> Repost
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="kf-container">
+        <a href="javascript:history.back()" class="kf-back-btn">
+            <i class="fas fa-arrow-left"></i> Back to Home
+        </a>
+        
+        <div class="kf-layout">
+            <div class="kf-main-content">
+                <div class="kf-hashtag-header">
+                    <h1 class="kf-hashtag-title">#{{ tag_name }}</h1>
+                    <div class="kf-hashtag-stats">
+                        <i class="fas fa-file-alt"></i> {{ post_count }} post{{ post_count|pluralize }}
+                    </div>
+                </div>
+                
+                {% if posts %}
+                    {% for post in posts %}
+                    <!-- Regular Post -->
+                    <article class="kf-post" data-post-id="{{ post.post_id }}">
+                        <!-- Repost Header (if this is a repost) -->
+                        {% if post.is_repost %}
+                        <div class="kf-repost-header">
+                            <i class="fas fa-retweet"></i>
+                            <span>
+                                <a href="{% url 'profile' post.author.username %}">{{ post.author.first_name }} {{ post.author.last_name }}</a>
+                                reposted
+                            </span>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Post Header -->
+                        <div class="kf-post-header">
+                            <img 
+                                src="{% if post.is_repost and post.original_post %}{{ post.original_post.author.profile.picture.url }}{% else %}{{ post.author.profile.picture.url }}{% endif %}" 
+                                class="kf-profile-pic"
+                                alt="{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}"
+                                loading="lazy"
+                            >
+                            <div>
+                                <a href="{% url 'profile' username=post.get_original_author.username %}" class="kf-username" data-user="{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}">
+                                    {% if post.is_repost and post.original_post %}
+                                        {{ post.original_post.author.first_name }} {{ post.original_post.author.last_name }}
+                                    {% else %}
+                                        {{ post.author.first_name }} {{ post.author.last_name }}
+                                    {% endif %}
+                                    {% if post.is_repost and post.original_post %}
+                                        {% if post.original_post.author.profile.is_verify %} 
+                                            <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                                        {% endif %}
+                                    {% else %}
+                                        {% if post.author.profile.is_verify %} 
+                                            <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                                        {% endif %}
+                                    {% endif %}
+                                </a>
+                                <div class="kf-post-time">
+                                    {% if post.is_repost %}
+                                        @{% if post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}
+                                        · Original post: {{ post.original_post.created_at|insta_timesince }}
+                                        · Reposted: {{ post.created_at|insta_timesince }}
+                                    {% else %}
+                                        @{{ post.author.username }} · {{ post.created_at|insta_timesince }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="kf-post-actions-header">
+                                {% if request.user == post.author and not post.is_repost %}
+                                    <a href="{% url 'editpost' post.post_id %}" title="Edit" class="kf-edit-icon">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Repost caption (if exists) -->
+                        {% if post.is_repost and post.repost_content %}
+                        <div class="kf-repost-caption-container">
+                            <div class="kf-repost-caption">
+                                <span class="kf-repost-caption-author">
+                                    {{ post.author.first_name }} {{ post.author.last_name }}
+                                    {% if post.author.profile.is_verify %} 
+                                        <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align: middle;">
+                                    {% endif %}
+                                </span>
+                                <div class="kf-repost-caption-text">
+                                    {{ post.repost_content|format_post_text|safe }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Post Content -->
+                        {% if post.content or post.is_repost %}
+                        <div class="kf-post-content">
+                            <div class="kf-post-text" id="kf-text-{{ post.post_id }}">
+                                {% if post.is_repost and post.original_post %}
+                                    {{ post.original_post.content|format_post_text|safe }}
+                                {% else %}
+                                    {{ post.content|format_post_text|safe }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Media Container -->
+                        {% if post.file or post.video_file or post.images.all or post.is_repost %}
+                        <div class="kf-media-container">
+                            {% if post.is_repost and post.original_post %}
+                                {% with original_post=post.original_post %}
+                                    {% if original_post.video_file %}
+                                        <!-- Single Video -->
+                                        <div class="kf-video-container" id="kf-container-{{ post.post_id }}">
+                                            <button class="kf-video-download-btn" 
+                                                    title="Download Video" 
+                                                    onclick="event.stopPropagation(); kfDownloadVideo('{{ post.post_id }}', '{{ original_post.video_file.url }}')">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                            
+                                            <video class="kf-video" 
+                                                   id="kf-post-video-{{ post.post_id }}" 
+                                                   preload="metadata"
+                                                   poster="{% if original_post.video_thumbnail %}{{ original_post.video_thumbnail.url }}{% endif %}"
+                                                   data-src="{{ original_post.video_file.url }}"
+                                                   onclick="kfTogglePlayPause('kf-post-video-{{ post.post_id }}', event)">
+                                                <source data-src="{{ original_post.video_file.url }}#t=0.5" type="video/mp4">
+                                            </video>
+                                            
+                                            <i class="fa-solid fa-play kf-play-pause-icon" id="kf-play-icon-{{ post.post_id }}"></i>
+                                            
+                                            <button class="kf-seek-overlay-btn kf-backward-btn" 
+                                                    onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ post.post_id }}', -10)">
+                                                <i class="fa-solid fa-backward-step"></i> 10s
+                                            </button>
+                                            <button class="kf-seek-overlay-btn kf-forward-btn" 
+                                                    onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ post.post_id }}', 10)">
+                                                10s <i class="fa-solid fa-forward-step"></i>
+                                            </button>
+                                        </div>
+                                    {% elif original_post.file %}
+                                        <!-- Single Audio -->
+                                        <div class="kf-audio-player" id="kf-audio-{{ post.post_id }}">
+                                            <button class="kf-audio-download-btn" 
+                                                    title="Download Audio" 
+                                                    onclick="event.stopPropagation(); kfDownloadAudio('{{ post.post_id }}', '{{ original_post.file.url }}')">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                            
+                                            <div class="kf-audio-cover" 
+                                                 style="background-image: url('{% if original_post.images.first %}{{ original_post.images.first.image.url }}{% else %}{{ original_post.author.profile.picture.url }}{% endif %}');">
+                                                <button class="kf-audio-play-btn" onclick="kfToggleAudio('{{ post.post_id }}')">
+                                                    <i class="fas fa-play" id="kf-audio-icon-{{ post.post_id }}"></i>
+                                                </button>
+                                            </div>
+                                            <div class="kf-audio-controls">
+                                                <div class="kf-audio-info">
+                                                    <span class="kf-audio-title">Audio Post</span>
+                                                    <span class="kf-audio-time" id="kf-audio-time-{{ post.post_id }}">0:00</span>
+                                                </div>
+                                                <div class="kf-audio-progress" onclick="kfSeekAudio(event, '{{ post.post_id }}')">
+                                                    <div class="kf-audio-progress-bar" id="kf-audio-progress-{{ post.post_id }}"></div>
+                                                </div>
+                                                <div class="kf-audio-seek-buttons">
+                                                    <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ post.post_id }}', -10)">
+                                                        <i class="fas fa-backward-step"></i> 10s
+                                                    </button>
+                                                    <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ post.post_id }}', 10)">
+                                                        10s <i class="fas fa-forward-step"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <audio id="kf-audio-element-{{ post.post_id }}" preload="metadata" class="kf-audio-hidden">
+                                                <source src="{{ original_post.file.url }}" type="audio/webm">
+                                            </audio>
+                                        </div>
+                                    {% elif original_post.images.all %}
+                                        {% if original_post.images.all|length > 1 %}
+                                            <!-- Image Carousel -->
+                                            <div class="kf-image-carousel" id="kf-carousel-{{ post.post_id }}" data-slide="0" data-total="{{ original_post.images.all|length }}">
+                                                <div class="kf-image-track" id="kf-track-{{ post.post_id }}">
+                                                    {% for image in original_post.images.all %}
+                                                    <div class="kf-image-slide">
+                                                        <img 
+                                                            src="{{ image.image.url }}" 
+                                                            alt="Post image {{ forloop.counter }}"
+                                                            loading="lazy"
+                                                            onload="this.classList.add('loaded')"
+                                                        />
+                                                        <button class="kf-image-download-btn" 
+                                                                title="Download Image" 
+                                                                onclick="event.stopPropagation(); kfDownloadImage('{{ post.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
+                                                            <i class="fas fa-download"></i>
+                                                        </button>
+                                                    </div>
+                                                    {% endfor %}
+                                                </div>
+                                                
+                                                <div class="kf-carousel-controls">
+                                                    <button class="kf-carousel-prev" onclick="kfSlideCarousel('{{ post.post_id }}', -1)">
+                                                        <i class="fas fa-chevron-left"></i>
+                                                    </button>
+                                                    <button class="kf-carousel-next" onclick="kfSlideCarousel('{{ post.post_id }}', 1)">
+                                                        <i class="fas fa-chevron-right"></i>
+                                                    </button>
+                                                </div>
+                                                
+                                                <div class="kf-carousel-indicators">
+                                                    {% for image in original_post.images.all %}
+                                                    <span class="kf-indicator {% if forloop.first %}active{% endif %}"></span>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <!-- Single Image -->
+                                            {% with image=original_post.images.first %}
+                                            <div class="kf-image-slide">
+                                                <img 
+                                                    src="{{ image.image.url }}" 
+                                                    alt="Post image"
+                                                    loading="lazy"
+                                                    onload="this.classList.add('loaded')"
+                                                />
+                                                <button class="kf-image-download-btn" 
+                                                        title="Download Image" 
+                                                        onclick="event.stopPropagation(); kfDownloadImage('{{ post.post_id }}', '{{ image.image.url }}', 'image')">
+                                                    <i class="fas fa-download"></i>
+                                                </button>
+                                            </div>
+                                            {% endwith %}
+                                        {% endif %}
+                                    {% endif %}
+                                {% endwith %}
+                            {% else %}
+                                {% if post.video_file %}
+                                    <!-- Single Video -->
+                                    <div class="kf-video-container" id="kf-container-{{ post.post_id }}">
+                                        <button class="kf-video-download-btn" 
+                                                title="Download Video" 
+                                                onclick="event.stopPropagation(); kfDownloadVideo('{{ post.post_id }}', '{{ post.video_file.url }}')">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                        
+                                        <video class="kf-video" 
+                                               id="kf-post-video-{{ post.post_id }}" 
+                                               preload="metadata"
+                                               poster="{% if post.video_thumbnail %}{{ post.video_thumbnail.url }}{% endif %}"
+                                               data-src="{{ post.video_file.url }}"
+                                               onclick="kfTogglePlayPause('kf-post-video-{{ post.post_id }}', event)">
+                                            <source data-src="{{ post.video_file.url }}#t=0.5" type="video/mp4">
+                                        </video>
+                                        
+                                        <i class="fa-solid fa-play kf-play-pause-icon" id="kf-play-icon-{{ post.post_id }}"></i>
+                                        
+                                        <button class="kf-seek-overlay-btn kf-backward-btn" 
+                                                onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ post.post_id }}', -10)">
+                                            <i class="fa-solid fa-backward-step"></i> 10s
+                                        </button>
+                                        <button class="kf-seek-overlay-btn kf-forward-btn" 
+                                                onclick="event.stopPropagation(); kfSeekVideo('kf-post-video-{{ post.post_id }}', 10)">
+                                            10s <i class="fa-solid fa-forward-step"></i>
+                                        </button>
+                                    </div>
+                                {% elif post.file %}
+                                    <!-- Single Audio -->
+                                    <div class="kf-audio-player" id="kf-audio-{{ post.post_id }}">
+                                        <button class="kf-audio-download-btn" 
+                                                title="Download Audio" 
+                                                onclick="event.stopPropagation(); kfDownloadAudio('{{ post.post_id }}', '{{ post.file.url }}')">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                        
+                                        <div class="kf-audio-cover" 
+                                             style="background-image: url('{% if post.images.first %}{{ post.images.first.image.url }}{% else %}{{ post.author.profile.picture.url }}{% endif %}');">
+                                            <button class="kf-audio-play-btn" onclick="kfToggleAudio('{{ post.post_id }}')">
+                                                <i class="fas fa-play" id="kf-audio-icon-{{ post.post_id }}"></i>
+                                            </button>
+                                        </div>
+                                        <div class="kf-audio-controls">
+                                            <div class="kf-audio-info">
+                                                <span class="kf-audio-title">Audio Post</span>
+                                                <span class="kf-audio-time" id="kf-audio-time-{{ post.post_id }}">0:00</span>
+                                            </div>
+                                            <div class="kf-audio-progress" onclick="kfSeekAudio(event, '{{ post.post_id }}')">
+                                                <div class="kf-audio-progress-bar" id="kf-audio-progress-{{ post.post_id }}"></div>
+                                            </div>
+                                            <div class="kf-audio-seek-buttons">
+                                                <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ post.post_id }}', -10)">
+                                                    <i class="fas fa-backward-step"></i> 10s
+                                                </button>
+                                                <button class="kf-seek-btn" onclick="kfSeekAudioBy('{{ post.post_id }}', 10)">
+                                                    10s <i class="fas fa-forward-step"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <audio id="kf-audio-element-{{ post.post_id }}" preload="metadata" class="kf-audio-hidden">
+                                            <source src="{{ post.file.url }}" type="audio/webm">
+                                        </audio>
+                                    </div>
+                                {% elif post.images.all %}
+                                    {% if post.images.all|length > 1 %}
+                                        <!-- Image Carousel -->
+                                        <div class="kf-image-carousel" id="kf-carousel-{{ post.post_id }}" data-slide="0" data-total="{{ post.images.all|length }}">
+                                            <div class="kf-image-track" id="kf-track-{{ post.post_id }}">
+                                                {% for image in post.images.all %}
+                                                <div class="kf-image-slide">
+                                                    <img 
+                                                        src="{{ image.image.url }}" 
+                                                        alt="Post image {{ forloop.counter }}"
+                                                        loading="lazy"
+                                                        onload="this.classList.add('loaded')"
+                                                    />
+                                                    <button class="kf-image-download-btn" 
+                                                            title="Download Image" 
+                                                            onclick="event.stopPropagation(); kfDownloadImage('{{ post.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
+                                                        <i class="fas fa-download"></i>
+                                                    </button>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            
+                                            <div class="kf-carousel-controls">
+                                                <button class="kf-carousel-prev" onclick="kfSlideCarousel('{{ post.post_id }}', -1)">
+                                                    <i class="fas fa-chevron-left"></i>
+                                                </button>
+                                                <button class="kf-carousel-next" onclick="kfSlideCarousel('{{ post.post_id }}', 1)">
+                                                    <i class="fas fa-chevron-right"></i>
+                                                </button>
+                                            </div>
+                                            
+                                            <div class="kf-carousel-indicators">
+                                                {% for image in post.images.all %}
+                                                <span class="kf-indicator {% if forloop.first %}active{% endif %}"></span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <!-- Single Image -->
+                                        {% with image=post.images.first %}
+                                        <div class="kf-image-slide">
+                                            <img 
+                                                src="{{ image.image.url }}" 
+                                                alt="Post image"
+                                                loading="lazy"
+                                                onload="this.classList.add('loaded')"
+                                            />
+                                            <button class="kf-image-download-btn" 
+                                                    title="Download Image" 
+                                                    onclick="event.stopPropagation(); kfDownloadImage('{{ post.post_id }}', '{{ image.image.url }}', 'image')">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                        </div>
+                                        {% endwith %}
+                                    {% endif %}
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Post Actions (Likes, Comments, Repost) - Using snippets like home page -->
+                        <div class="kf-post-actions">
+                            {% include 'snippet/post_like.html' with post=post %}
+                            
+                            <!-- Repost button -->
+                            <button class="kf-repost-icon" 
+                                    onclick="kfToggleRepost('{{ post.post_id }}', this)" 
+                                    data-reposted="{% if request.user in post.reposts.all %}true{% else %}false{% endif %}">
+                                <i class="fas fa-retweet {% if request.user in post.reposts.all %}reposted{% endif %}"></i>
+                                <span class="kf-repost-count {% if post.reposts.count > 0 %}show{% endif %}">
+                                    {{ post.reposts.count }}
+                                </span>
+                            </button>
+                        </div>
+                    </article>
+                    {% endfor %}
+                {% else %}
+                <div class="kf-empty-state">
+                    <i class="fas fa-hashtag"></i>
+                    <h3>No posts found</h3>
+                    <p>There are no posts with #{{ tag_name }} yet.<br>Be the first to use this hashtag!</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if related_hashtags %}
+            <div class="kf-sidebar">
+                <div class="kf-related-hashtags">
+                    <div class="kf-related-header">
+                        <h3 class="kf-related-title">Related Hashtags</h3>
+                    </div>
+                    <div class="kf-related-list">
+                        {% for tag, count in related_hashtags|slice:":8" %}
+                        <a href="{% url 'hashtag_view' tag %}" class="kf-related-item">
+                            <span class="kf-related-hashtag">#{{ tag }}</span>
+                            <span class="kf-related-count">{{ count }} posts</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    {% include 'footer.html' %}
+    
+    <script>
+        // Variables for repost modal
+        let currentRepostPostId = null;
+        let currentRepostButton = null;
+        
+        function getCsrfFromMeta() {
+            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        }
+        
+        // Repost functionality
+        function kfToggleRepost(postId, button) {
+            currentRepostPostId = postId;
+            currentRepostButton = button;
+            
+            const isReposted = button.getAttribute('data-reposted') === 'true';
+            
+            if (isReposted) {
+                kfPerformRepost(postId, '', true);
+            } else {
+                kfOpenRepostModal();
+            }
+        }
+        
+        function kfOpenRepostModal() {
+            const modal = document.getElementById('kf-repost-modal');
+            const textarea = document.getElementById('kf-repost-caption');
+            const charCount = document.getElementById('kf-repost-char-count');
+            
+            textarea.value = '';
+            charCount.textContent = '0';
+            
+            modal.classList.add('show');
+            textarea.focus();
+            
+            textarea.addEventListener('input', function() {
+                charCount.textContent = this.value.length;
+            });
+            
+            const confirmBtn = document.getElementById('kf-repost-confirm-btn');
+            confirmBtn.onclick = function() {
+                kfPerformRepost(currentRepostPostId, textarea.value, false);
+                kfCloseRepostModal();
+            };
+        }
+        
+        function kfCloseRepostModal() {
+            const modal = document.getElementById('kf-repost-modal');
+            modal.classList.remove('show');
+            currentRepostPostId = null;
+            currentRepostButton = null;
+        }
+        
+        function kfPerformRepost(postId, caption, undo = false) {
+            const button = currentRepostButton;
+            const icon = button.querySelector('i');
+            const countSpan = button.querySelector('.kf-repost-count');
+            const originalText = button.innerHTML;
+            
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            button.disabled = true;
+            
+            fetch(`/repost/${postId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfFromMeta(),
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    caption: caption,
+                    undo: undo
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.reposted) {
+                        showToast(data.message || 'Post reposted successfully!', 'success');
+                        button.setAttribute('data-reposted', 'true');
+                        icon.classList.add('reposted');
+                        
+                        if (data.repost_count > 0) {
+                            countSpan.textContent = data.repost_count;
+                            countSpan.classList.add('show');
+                        }
+                    } else {
+                        showToast(data.message || 'Repost removed', 'info');
+                        button.setAttribute('data-reposted', 'false');
+                        icon.classList.remove('reposted');
+                        
+                        if (data.repost_count > 0) {
+                            countSpan.textContent = data.repost_count;
+                        } else {
+                            countSpan.classList.remove('show');
+                        }
+                    }
+                } else {
+                    showToast('Error: ' + data.error, 'error');
+                    button.innerHTML = originalText;
+                }
+                button.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Something went wrong. Please try again.', 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            });
+        }
+        
+        // Helper function to show toast
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = 'kf-toast';
+            toast.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                <span>${message}</span>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.style.animation = 'kfSlideOut 0.3s ease';
+                setTimeout(() => {
+                    document.body.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
+        
+        // Initialize media players
+        document.addEventListener('DOMContentLoaded', function() {
+            // Lazy load video metadata
+            const lazyVideos = document.querySelectorAll('video[data-src]');
+            const videoObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const video = entry.target;
+                        const source = video.querySelector('source[data-src]');
+                        
+                        if (source) {
+                            source.src = source.dataset.src;
+                            video.load();
+                            video.removeAttribute('data-src');
+                        }
+                        videoObserver.unobserve(video);
+                    }
+                });
+            }, { rootMargin: '300px' });
+            
+            lazyVideos.forEach(video => videoObserver.observe(video));
+            
+            // Initialize video containers with paused state
+            document.querySelectorAll('.kf-video-container').forEach(container => {
+                container.classList.add('paused');
+                
+                const video = container.querySelector('.kf-video');
+                if (video) {
+                    video.addEventListener('play', () => {
+                        container.classList.remove('paused');
+                    });
+                    
+                    video.addEventListener('pause', () => {
+                        container.classList.add('paused');
+                    });
+                    
+                    video.addEventListener('ended', () => {
+                        container.classList.add('paused');
+                    });
+                }
+            });
+            
+            // Close modals when clicking outside
+            document.addEventListener('click', function(e) {
+                const repostModal = document.getElementById('kf-repost-modal');
+                if (repostModal && e.target === repostModal) {
+                    kfCloseRepostModal();
+                }
+            });
+            
+            // Global keydown listeners (Escape key)
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    kfCloseRepostModal();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

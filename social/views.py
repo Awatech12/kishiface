@@ -75,12 +75,20 @@ def register(request):
 
     return render(request, 'register.html')
 
+# Add this function to extract hashtags from content
+def extract_hashtags(content):
+    """Extract hashtags from post content"""
+    import re
+    hashtags = re.findall(r'#(\w+)', content)
+    return hashtags
+
+# Update the home view function
 @login_required(login_url='/')
 def home(request):
     profile = Profile.objects.get(user=request.user)
     following = profile.followings.values_list('user', flat=True)
     
-    # Get channel data
+    # Get channel data (keep existing code)
     followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
         last_app_activity=Max('channel_messages__created_at')
     ).order_by('-last_app_activity', '-created_at')
@@ -118,7 +126,7 @@ def home(request):
         Q(author__in=following) | 
         Q(author=request.user) |
         Q(is_repost=True, author__in=following)  # Include reposts by followed users
-    ).order_by('?')
+    ).order_by('?')  # Changed from '?' to '-created_at' for chronological order
     
     products = list(Market.objects.exclude(product_owner_id=request.user.id).order_by('?'))
     users = list(User.objects.exclude(id__in=following).exclude(id=request.user.id).order_by('?'))
@@ -187,6 +195,24 @@ def home(request):
     # ===== BUILD FEED =====
     feed = []
     
+    # Get trending hashtags (optional - for right sidebar)
+    from django.db.models import Count
+    trending_hashtags = []
+    
+    # Extract hashtags from recent posts
+    recent_posts = Post.objects.filter(
+        Q(author__in=following) | Q(author=request.user)
+    )[:100]
+    
+    hashtag_counts = {}
+    for post in recent_posts:
+        hashtags = extract_hashtags(post.content)
+        for tag in hashtags:
+            hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
+    
+    # Get top 5 trending hashtags
+    trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+    
     if not following:  # New user - hasn't followed anyone yet
         # Always show welcome message for new users
         feed.append({'type': 'welcome'})
@@ -219,8 +245,8 @@ def home(request):
         'active_stories': active_stories,
         'stories_available': stories_available,
         'user_has_unviewed_stories': user_has_unviewed,
+        'trending_hashtags': trending_hashtags,  # Add trending hashtags to context
     })
-    
 
 from django.views.decorators.http import require_POST
 @login_required(login_url='/')
@@ -1928,3 +1954,31 @@ def delete_reply(request, reply_id):
     reply = get_object_or_404(CommentReply, reply_id=reply_id, author=request.user)
     reply.delete()
     return JsonResponse({'success': True})
+
+@login_required(login_url='/')
+def hashtag_view(request, tag_name):
+    """View posts containing a specific hashtag"""
+    from django.db.models import Q
+    
+    # Search for posts containing the hashtag (both original posts and reposts)
+    posts = Post.objects.filter(
+        Q(content__icontains=f'#{tag_name}') | 
+        Q(original_post__content__icontains=f'#{tag_name}')
+    ).order_by('-created_at').select_related('author', 'original_post')
+    
+    # Get related hashtags
+    all_hashtags = {}
+    recent_posts = Post.objects.all()[:100]
+    for post in recent_posts:
+        hashtags = extract_hashtags(post.content)
+        for tag in hashtags:
+            all_hashtags[tag] = all_hashtags.get(tag, 0) + 1
+    
+    related_hashtags = sorted(all_hashtags.items(), key=lambda x: x[1], reverse=True)[:10]
+    
+    return render(request, 'hashtag_view.html', {
+        'tag_name': tag_name,
+        'posts': posts,
+        'related_hashtags': related_hashtags,
+        'post_count': posts.count()
+    })

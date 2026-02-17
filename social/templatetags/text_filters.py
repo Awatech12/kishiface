@@ -2,6 +2,7 @@ import re
 from django import template
 from django.utils.safestring import mark_safe
 from django.contrib.auth.models import User
+from django.urls import reverse
 
 register = template.Library()
 
@@ -28,7 +29,15 @@ def format_post_text(text):
     
     text = re.sub(mention_pattern, replace_mention, text)
     
-    # 4. Process URLs
+    # 4. Process #hashtags
+    hashtag_pattern = r'#(\w+)'
+    def replace_hashtag(match):
+        tag = match.group(1)
+        return f'<a href="/hashtag/{tag}/" class="kf-hashtag">#{tag}</a>'
+    
+    text = re.sub(hashtag_pattern, replace_hashtag, text)
+    
+    # 5. Process URLs
     # Updated regex: Stops before trailing punctuation like . , ! ? : ;
     url_pattern = r'(https?://[^\s<>"\']+|www\.[^\s<>"\']+)(?=[^.,?!:\s]|$)'
     
@@ -41,7 +50,7 @@ def format_post_text(text):
     
     text = re.sub(url_pattern, replace_url, text)
     
-    # 5. Split into paragraphs and wrap in <p> tags
+    # 6. Split into paragraphs and wrap in <p> tags
     paragraphs = text.split('\n\n')
     formatted_paragraphs = []
     
@@ -88,6 +97,14 @@ def format_comment_text(text):
         return match.group(0)
     
     text = re.sub(mention_pattern, replace_mention, text)
+    
+    # Process #hashtags (for comments too)
+    hashtag_pattern = r'#(\w+)'
+    def replace_hashtag(match):
+        tag = match.group(1)
+        return f'<a href="/hashtag/{tag}/" class="kf-hashtag">#{tag}</a>'
+    
+    text = re.sub(hashtag_pattern, replace_hashtag, text)
     
     return mark_safe(text)
 

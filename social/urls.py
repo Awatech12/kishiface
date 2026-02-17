@@ -20,6 +20,7 @@ urlpatterns = [
   path('delete_message/<int:message_id>/', views.delete_message, name='delete_message'),
     
     # If you want both /explore/ and /explore-users/ to work: and nexted comments
+    path('hashtag/<str:tag_name>/', views.hashtag_view, name='hashtag_view'),
     path('comment/<uuid:comment_id>/add-reply/', views.add_comment_reply, name='add_comment_reply'),
     path('api/like-reply/<uuid:reply_id>/', views.like_reply, name='like_reply'),
     path('reply/<uuid:reply_id>/edit/', views.edit_reply, name='edit_reply'),
