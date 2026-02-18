@@ -484,13 +484,13 @@
             color: var(--ig-text-light);
         }
 
-        .kf-media-option.record .kf-media-card {
+        .kf-media-option.camera .kf-media-card {
             background: linear-gradient(145deg, #fff0f0, #ffe5e5);
-            border-color: var(--ig-danger);
+            border-color: var(--ig-primary);
         }
 
-        .kf-media-option.record .kf-media-card i {
-            color: var(--ig-danger);
+        .kf-media-option.camera .kf-media-card i {
+            color: var(--ig-primary);
         }
 
         /* Image Preview Grid */
@@ -556,6 +556,167 @@
 
         .kf-image-preview-item:hover .kf-image-preview-remove {
             opacity: 1;
+        }
+
+        /* Camera Modal */
+        .kf-camera-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 2000;
+            flex-direction: column;
+        }
+
+        .kf-camera-modal.active {
+            display: flex;
+        }
+
+        .kf-camera-header {
+            padding: 16px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: absolute;
+            top: 0;
+            width: 100%;
+            z-index: 10;
+        }
+
+        .kf-camera-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .kf-camera-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .kf-camera-preview {
+            width: 100%;
+            height: 100%;
+            background: #000;
+            position: relative;
+        }
+
+        .kf-camera-live {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .kf-camera-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            padding: 30px 20px 20px;
+        }
+
+        .kf-camera-capture-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: white;
+            border: 5px solid rgba(255,255,255,0.3);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .kf-camera-capture-btn:active {
+            transform: scale(0.95);
+        }
+
+        .kf-camera-flip-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+        .kf-captured-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .kf-captured-image.hidden {
+            display: none;
+        }
+
+        .kf-captured-image img {
+            flex: 1;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .kf-captured-actions {
+            display: flex;
+            gap: 16px;
+            padding: 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .kf-captured-action-btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .kf-captured-action-btn.keep {
+            background: var(--ig-primary);
+            color: white;
+        }
+
+        .kf-captured-action-btn.retake {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            backdrop-filter: blur(4px);
         }
 
         /* Recording Status */
@@ -1484,6 +1645,45 @@
         </div>
     </div>
 
+    <!-- Camera Modal -->
+    <div id="cameraModal" class="kf-camera-modal">
+        <div class="kf-camera-header">
+            <button class="kf-camera-close" onclick="closeCamera()">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="kf-camera-title">
+                <i class="fas fa-camera"></i> take a snap
+            </div>
+            <div style="width: 40px;"></div>
+        </div>
+        
+        <div class="kf-camera-preview">
+            <video id="cameraLive" class="kf-camera-live" autoplay playsinline></video>
+            
+            <div id="capturedImageContainer" class="kf-captured-image hidden">
+                <img id="capturedImage" src="" alt="Captured">
+                <div class="kf-captured-actions">
+                    <button class="kf-captured-action-btn retake" onclick="retakePhoto()">
+                        <i class="fas fa-redo"></i> retake
+                    </button>
+                    <button class="kf-captured-action-btn keep" onclick="keepPhoto()">
+                        <i class="fas fa-check"></i> keep
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="kf-camera-controls">
+            <button class="kf-camera-flip-btn" onclick="flipCamera()">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            
+            <button class="kf-camera-capture-btn" id="cameraCaptureBtn" onclick="capturePhoto()"></button>
+            
+            <div style="width: 44px;"></div>
+        </div>
+    </div>
+
     <!-- Media Editor Modal -->
     <div class="kf-media-editor-modal" id="mediaEditorModal">
         <div class="kf-editor-header">
@@ -1822,16 +2022,16 @@
                         <i class="fas fa-plus"></i> add media
                     </div>
                     
-                    <!-- Media Options Grid - Using Font Awesome 5/6 solid icons for maximum compatibility -->
+                    <!-- Media Options Grid - Camera instead of Photos -->
                     <div class="kf-media-grid">
-                        <label class="kf-media-option">
-                            <input type="file" id="images" name="images" accept="image/*" multiple onchange="handleImageSelect(this)" style="display: none;">
+                        <!-- Camera Option (New) -->
+                        <div class="kf-media-option camera" onclick="openCamera()">
                             <div class="kf-media-card">
-                                <i class="fas fa-images"></i>
-                                <span class="kf-media-label">photos</span>
-                                <span class="kf-media-sub-label">pic dump</span>
+                                <i class="fas fa-camera"></i>
+                                <span class="kf-media-label">camera</span>
+                                <span class="kf-media-sub-label">take a snap</span>
                             </div>
-                        </label>
+                        </div>
                         
                         <div class="kf-media-option record" onclick="openVideoRecorder()">
                             <div class="kf-media-card">
@@ -1867,13 +2067,14 @@
                             </div>
                         </label>
                         
-                        <div class="kf-media-option" onclick="openGallery()">
+                        <label class="kf-media-option">
+                            <input type="file" id="images" name="images" accept="image/*" multiple onchange="handleImageSelect(this)" style="display: none;">
                             <div class="kf-media-card">
                                 <i class="fas fa-folder-open"></i>
                                 <span class="kf-media-label">gallery</span>
                                 <span class="kf-media-sub-label">choose</span>
                             </div>
-                        </div>
+                        </label>
                     </div>
                     
                     <!-- Hidden file inputs -->
@@ -2008,7 +2209,7 @@
         
         <div class="kf-video-controls">
             <div class="kf-video-main-controls">
-                <button class="kf-video-control-btn" onclick="flipCamera()">
+                <button class="kf-video-control-btn" onclick="flipVideoCamera()">
                     <i class="fas fa-sync-alt"></i>
                 </button>
                 
@@ -2074,6 +2275,11 @@
         let currentVideoBlob = null;
         let currentAudioBlob = null;
         
+        // Camera state
+        let cameraStream = null;
+        let isFrontCameraCamera = true;
+        let capturedPhotoBlob = null;
+        
         // Video recording state
         let videoStream = null;
         let videoMediaRecorder = null;
@@ -2081,7 +2287,7 @@
         let isRecordingVideo = false;
         let videoRecordingStartTime = null;
         let videoRecordingTimer = null;
-        let isFrontCamera = true;
+        let isFrontCameraVideo = true;
         let isMicOn = true;
         const MAX_RECORDING_TIME = 3 * 60 * 1000;
         
@@ -2132,6 +2338,14 @@
             bitrate: 1000000,
             width: 640,
             height: 360
+        };
+        
+        // High quality image settings
+        const IMAGE_QUALITY = {
+            quality: 0.95, // Higher quality (0.95 = 95% quality)
+            format: 'image/jpeg',
+            maxWidth: 1920, // Max width for high quality
+            maxHeight: 1920 // Max height for high quality
         };
         
         // Gen Z messages
@@ -2209,6 +2423,11 @@
         const videoUploadInput = document.getElementById('video_file_upload');
         const audioFileInput = document.getElementById('audio_file');
         const audioUploadInput = document.getElementById('audio_file_upload');
+        
+        const cameraModal = document.getElementById('cameraModal');
+        const cameraLive = document.getElementById('cameraLive');
+        const capturedImageContainer = document.getElementById('capturedImageContainer');
+        const capturedImage = document.getElementById('capturedImage');
         
         const videoRecorderModal = document.getElementById('videoRecorderModal');
         const videoLive = document.getElementById('videoLive');
@@ -2411,6 +2630,119 @@
             }
         });
 
+        // =================== Camera Functions ===================
+        async function openCamera() {
+            cameraModal.classList.add('active');
+            capturedImageContainer.classList.add('hidden');
+            await startCameraPreview();
+        }
+
+        function closeCamera() {
+            cameraModal.classList.remove('active');
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+        }
+
+        async function startCameraPreview() {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: isFrontCameraCamera ? 'user' : 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1920 }
+                    }
+                });
+                
+                cameraLive.srcObject = cameraStream;
+                await cameraLive.play();
+                
+            } catch (err) {
+                console.error('Camera error:', err);
+                showAlert('camera access', 'Camera access is required to take photos.', '📷', [
+                    {text: 'got it', type: 'primary'}
+                ]);
+                closeCamera();
+            }
+        }
+
+        async function flipCamera() {
+            isFrontCameraCamera = !isFrontCameraCamera;
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                await startCameraPreview();
+            }
+        }
+
+        function capturePhoto() {
+            // Create a canvas element to capture the photo at high resolution
+            const canvas = document.createElement('canvas');
+            canvas.width = cameraLive.videoWidth;
+            canvas.height = cameraLive.videoHeight;
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Flip the image if using front camera (mirror effect)
+            if (isFrontCameraCamera) {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+            
+            ctx.drawImage(cameraLive, 0, 0, canvas.width, canvas.height);
+            
+            // Convert to high quality blob
+            canvas.toBlob(function(blob) {
+                capturedPhotoBlob = blob;
+                
+                // Show the captured image
+                const imageUrl = URL.createObjectURL(blob);
+                capturedImage.src = imageUrl;
+                capturedImageContainer.classList.remove('hidden');
+                
+                // Stop the camera preview
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => track.stop());
+                    cameraStream = null;
+                }
+                
+                createFloatingEmoji('📸', window.innerWidth/2, 100);
+                vibeVibrate(50);
+                
+            }, IMAGE_QUALITY.format, IMAGE_QUALITY.quality);
+        }
+
+        function retakePhoto() {
+            capturedImageContainer.classList.add('hidden');
+            capturedPhotoBlob = null;
+            startCameraPreview();
+        }
+
+        function keepPhoto() {
+            if (capturedPhotoBlob) {
+                // Create a file from the blob
+                const file = new File([capturedPhotoBlob], `camera_photo_${Date.now()}.jpg`, { type: IMAGE_QUALITY.format });
+                
+                // Add to selected images
+                selectedImages = [...selectedImages, file];
+                
+                // Update file input
+                const dt = new DataTransfer();
+                selectedImages.forEach(f => dt.items.add(f));
+                imageInput.files = dt.files;
+                
+                // Render previews
+                renderImagePreviews();
+                updatePreview();
+                updateFileSizeDisplay();
+                
+                closeCamera();
+                
+                createFloatingEmoji('💾', window.innerWidth/2, 100);
+                vibeVibrate(20);
+            }
+        }
+
         // =================== Image Functions ===================
         function handleImageSelect(input) {
             const files = Array.from(input.files);
@@ -2459,10 +2791,6 @@
             createFloatingEmoji('🗑️', window.innerWidth/2, 100);
         }
 
-        function openGallery() {
-            imageInput.click();
-        }
-
         // =================== VIDEO RECORDING FUNCTIONS ===================
         function openVideoRecorder() {
             videoRecorderModal.classList.add('active');
@@ -2482,7 +2810,7 @@
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        facingMode: isFrontCamera ? 'user' : 'environment',
+                        facingMode: isFrontCameraVideo ? 'user' : 'environment',
                         width: { ideal: VIDEO_SETTINGS.width },
                         height: { ideal: VIDEO_SETTINGS.height }
                     },
@@ -2727,8 +3055,8 @@
             stopBackgroundMusic();
         }
 
-        async function flipCamera() {
-            isFrontCamera = !isFrontCamera;
+        async function flipVideoCamera() {
+            isFrontCameraVideo = !isFrontCameraVideo;
             if (videoStream) {
                 videoStream.getTracks().forEach(track => track.stop());
                 await startVideoPreview();
@@ -3162,6 +3490,7 @@
                 const maxWidth = container.clientWidth - 40;
                 const maxHeight = container.clientHeight - 40;
                 
+                // Maintain original image dimensions for editing but scale for display
                 let width = img.width;
                 let height = img.height;
                 const ratio = Math.min(maxWidth / width, maxHeight / height, 1);
@@ -3170,6 +3499,8 @@
                 editorCanvas.height = height * ratio;
                 
                 canvasContext = editorCanvas.getContext('2d');
+                canvasContext.imageSmoothingEnabled = true;
+                canvasContext.imageSmoothingQuality = 'high';
                 canvasContext.drawImage(img, 0, 0, editorCanvas.width, editorCanvas.height);
             };
             img.src = url;
@@ -3584,28 +3915,48 @@
             document.querySelector('.kf-filter-option:first-child').classList.add('active');
         }
 
-        // =================== Save Edited Media with Overlays ===================
+        // =================== Save Edited Media with Overlays (High Quality) ===================
         function saveEditedMedia() {
             if (currentEditingType === 'image') {
-                // Create a temporary canvas to combine everything
+                // Create a temporary canvas to combine everything at full resolution
                 const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = editorCanvas.width;
-                tempCanvas.height = editorCanvas.height;
+                
+                // Use original image dimensions for high quality
+                tempCanvas.width = originalImage.width;
+                tempCanvas.height = originalImage.height;
                 const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.imageSmoothingEnabled = true;
+                tempCtx.imageSmoothingQuality = 'high';
                 
-                // Draw the edited image (with filters/drawings)
-                tempCtx.drawImage(editorCanvas, 0, 0);
+                // Draw the original image
+                tempCtx.drawImage(originalImage, 0, 0, tempCanvas.width, tempCanvas.height);
                 
-                // Draw all overlays (text and stickers)
+                // Apply filters/drawings by scaling the editor canvas content
+                // First, get the editor canvas content (with filters and drawings)
+                const scaledEditorCanvas = document.createElement('canvas');
+                scaledEditorCanvas.width = tempCanvas.width;
+                scaledEditorCanvas.height = tempCanvas.height;
+                const scaledCtx = scaledEditorCanvas.getContext('2d');
+                scaledCtx.imageSmoothingEnabled = true;
+                scaledCtx.imageSmoothingQuality = 'high';
+                
+                // Scale the editor canvas to full size
+                scaledCtx.drawImage(editorCanvas, 0, 0, scaledEditorCanvas.width, scaledEditorCanvas.height);
+                
+                // Composite the scaled editor content (for filters and drawings) onto the temp canvas
+                tempCtx.globalCompositeOperation = 'source-over';
+                tempCtx.drawImage(scaledEditorCanvas, 0, 0);
+                
+                // Get container and canvas dimensions for overlay positioning
+                const containerRect = editorCanvasContainer.getBoundingClientRect();
+                const canvasRect = editorCanvas.getBoundingClientRect();
+                
+                // Draw all overlays (text and stickers) at full resolution
                 overlayElements.forEach(el => {
                     const style = window.getComputedStyle(el);
                     const text = el.textContent.replace('✕', '').trim(); // Remove delete button text
                     
                     // Get position relative to canvas
-                    const containerRect = editorCanvasContainer.getBoundingClientRect();
-                    const canvasRect = editorCanvas.getBoundingClientRect();
-                    
-                    // Calculate position relative to canvas
                     const elRect = el.getBoundingClientRect();
                     
                     // Check if element is within canvas bounds
@@ -3614,26 +3965,36 @@
                         return; // Skip if outside canvas
                     }
                     
-                    // Calculate position on canvas
+                    // Calculate position relative to displayed canvas
                     let x = elRect.left - canvasRect.left;
                     let y = elRect.top - canvasRect.top;
                     
-                    // Scale to canvas dimensions
-                    x = (x / canvasRect.width) * editorCanvas.width;
-                    y = (y / canvasRect.height) * editorCanvas.height;
+                    // Scale to full resolution
+                    const scaleX = tempCanvas.width / canvasRect.width;
+                    const scaleY = tempCanvas.height / canvasRect.height;
+                    
+                    x = x * scaleX;
+                    y = y * scaleY;
+                    
+                    // Scale font size
+                    const fontSize = parseInt(style.fontSize) * (scaleX);
                     
                     // Get text properties
-                    tempCtx.font = `${style.fontSize} ${style.fontFamily}`;
+                    tempCtx.font = `${fontSize}px ${style.fontFamily}`;
                     tempCtx.fillStyle = style.color;
                     tempCtx.textBaseline = 'top';
+                    tempCtx.shadowColor = 'rgba(0,0,0,0.5)';
+                    tempCtx.shadowBlur = fontSize * 0.1;
+                    tempCtx.shadowOffsetX = fontSize * 0.05;
+                    tempCtx.shadowOffsetY = fontSize * 0.05;
                     
                     // Draw the text/sticker
                     tempCtx.fillText(text, x, y);
                 });
                 
-                // Save the combined image
+                // Save the combined image at high quality
                 tempCanvas.toBlob(function(blob) {
-                    const file = new File([blob], 'edited_image.jpg', { type: 'image/jpeg' });
+                    const file = new File([blob], 'edited_image.jpg', { type: IMAGE_QUALITY.format });
                     
                     const index = selectedImages.findIndex(f => f === currentEditingFile);
                     if (index !== -1) {
@@ -3653,7 +4014,7 @@
                     createFloatingEmoji('✨', window.innerWidth/2, 100);
                     vibeVibrate(30);
                     
-                }, 'image/jpeg', 0.95);
+                }, IMAGE_QUALITY.format, IMAGE_QUALITY.quality);
             } else if (currentEditingType === 'video') {
                 // For video, we'll just save the trim settings for now
                 if (videoTrimStart > 0 || videoTrimEnd < 100) {
@@ -3762,6 +4123,9 @@
 
         // Clean up on page unload
         window.addEventListener('beforeunload', function() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
             if (videoStream) {
                 videoStream.getTracks().forEach(track => track.stop());
             }
