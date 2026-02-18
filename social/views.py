@@ -368,6 +368,7 @@ def follow_user(request, user_id):
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
 
+
 @login_required(login_url='/')
 def post(request):
     if request.method =='POST':
@@ -375,21 +376,52 @@ def post(request):
         images = request.FILES.getlist('images')
         audio = request.FILES.get('audio_file')
         video = request.FILES.get('video_file')
+        
+        # Get mood data
+        mood = request.POST.get('mood', '')
+        custom_mood = request.POST.get('custom_mood', '').strip()
+        
+        # Mood emoji mapping
+        mood_emojis = {
+            'slay': '💅',
+            'vibing': '🎵',
+            'sheesh': '🥶',
+            'periodt': '⏸️',
+            'no-cap': '🎯',
+            'bussin': '🔥',
+            'mid': '😐',
+            'cringe': '😬'
+        }
+        
+        # Determine final mood and emoji
+        final_mood = custom_mood if custom_mood else mood
+        emoji = mood_emojis.get(mood, '✨') if not custom_mood else '✨'
+        
+        # If no content but has mood, create a mood-only post
+        if not content and not images and not audio and not video and final_mood:
+            content = f"{emoji} feeling {final_mood}"
+        
         if not content and not images and not audio and not video:
-            return 
+            messages.error(request, 'Add something to your post bestie ✨')
+            return redirect('post')
+        
+        # Create post with mood data
         post = Post.objects.create(
-            author = request.user,
-            content = content if content else '',
-            file = audio if audio else None,
-            video_file = video if video else None
+            author=request.user,
+            content=content if content else '',
+            file=audio if audio else None,
+            video_file=video if video else None,
+            mood=mood if mood else None,
+            custom_mood=custom_mood if custom_mood else None,
+            mood_emoji=emoji
         )
+        
         for image in images:
             PostImage.objects.create(post=post, image=image)
         
-        messages.success(request, 'Post Successfully Shared')
+        messages.success(request, 'Post dropped successfully! ✨')
         return redirect('home')
     
-
     return render(request, 'post.html')
 
 @login_required(login_url='/')

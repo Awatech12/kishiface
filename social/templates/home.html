@@ -27,6 +27,16 @@
       --kf-repost: #0095f6;
       --kf-repost-bg: #ffffff;
       --kf-story-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+      
+      /* Mood Colors */
+      --mood-slay: #ff1493;
+      --mood-vibing: #9933ff;
+      --mood-sheesh: #00cc66;
+      --mood-periodt: #ff6b00;
+      --mood-no-cap: #ff4444;
+      --mood-bussin: #ffd700;
+      --mood-mid: #808080;
+      --mood-cringe: #8b4513;
     }
     
     * {
@@ -1241,6 +1251,58 @@
       margin-bottom: 20px;
     }
     
+    /* ===== MOOD BADGE STYLES - NEW ===== */
+    .kf-mood-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, var(--mood-color), color-mix(in srgb, var(--mood-color) 70%, white));
+      border-radius: 20px;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+      animation: moodAppear 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    @keyframes moodAppear {
+      0% {
+        opacity: 0;
+        transform: scale(0.8);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .kf-mood-badge i {
+      font-size: 14px;
+    }
+
+    /* Mood-specific colors */
+    .kf-mood-slay { --mood-color: #ff1493; }
+    .kf-mood-vibing { --mood-color: #9933ff; }
+    .kf-mood-sheesh { --mood-color: #00cc66; }
+    .kf-mood-periodt { --mood-color: #ff6b00; }
+    .kf-mood-no-cap { --mood-color: #ff4444; }
+    .kf-mood-bussin { --mood-color: #ffd700; }
+    .kf-mood-mid { --mood-color: #808080; }
+    .kf-mood-cringe { --mood-color: #8b4513; }
+    
+    /* Mood hover effect */
+    .kf-mood-badge:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    /* Mood in header */
+    .kf-post-header .kf-mood-badge {
+      margin-left: 12px;
+    }
+
     /* Post - Plane Design */
     .kf-post {
       background: var(--kf-white);
@@ -1281,6 +1343,7 @@
       display: flex;
       align-items: center;
       padding: 14px 16px;
+      flex-wrap: wrap;
     }
     
     .kf-profile-pic {
@@ -3182,23 +3245,37 @@
                   alt="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}"
                   loading="lazy"
                 >
-                <div>
-                  <a href="{% url 'profile' username=item.data.get_original_author.username %}" class="kf-username" data-user="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}">
-                    {% if item.data.is_repost and item.data.original_post %}
-                      {{ item.data.original_post.author.first_name }} {{ item.data.original_post.author.last_name }}
-                    {% else %}
-                      {{ item.data.author.first_name }} {{ item.data.author.last_name }}
-                    {% endif %}
-                    {% if item.data.is_repost and item.data.original_post %}
-                      {% if item.data.original_post.author.profile.is_verify %} 
-                        <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                <div style="flex: 1;">
+                  <div style="display: flex; align-items: center; flex-wrap: wrap;">
+                    <a href="{% url 'profile' username=item.data.get_original_author.username %}" class="kf-username" data-user="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}">
+                      {% if item.data.is_repost and item.data.original_post %}
+                        {{ item.data.original_post.author.first_name }} {{ item.data.original_post.author.last_name }}
+                      {% else %}
+                        {{ item.data.author.first_name }} {{ item.data.author.last_name }}
                       {% endif %}
-                    {% else %}
-                      {% if item.data.author.profile.is_verify and item.data.author.first_name %} 
-                        <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                      {% if item.data.is_repost and item.data.original_post %}
+                        {% if item.data.original_post.author.profile.is_verify %} 
+                          <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                        {% endif %}
+                      {% else %}
+                        {% if item.data.author.profile.is_verify and item.data.author.first_name %} 
+                          <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                        {% endif %}
                       {% endif %}
+                    </a>
+                    
+                    <!-- ===== MOOD BADGE - NEW ===== -->
+                    {% if item.data.has_mood %}
+                      {% with mood_data=item.data.get_mood_data %}
+                        <span class="kf-mood-badge kf-mood-{{ item.data.mood|default:'custom' }}" 
+                              style="{% if mood_data.color %}--mood-color: {{ mood_data.color }};{% endif %}">
+                          <i class="fa-regular fa-face-smile"></i>
+                          {{ mood_data.display }}
+                        </span>
+                      {% endwith %}
                     {% endif %}
-                  </a>
+                  </div>
+                  
                   <div class="kf-post-time">
                     {% if item.data.is_repost %}
                       @{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}

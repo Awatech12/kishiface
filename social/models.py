@@ -252,7 +252,6 @@ class Profile(models.Model):
             return display_url[:27] + '...'
         return display_url
 
-
 class Post(models.Model):
     post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -261,6 +260,12 @@ class Post(models.Model):
     view = models.IntegerField(default=0, null=True, blank=True)
     share = models.IntegerField(default=0, null=True, blank=True)
     content = models.TextField(blank=True, null=True)
+    
+    # NEW: Mood fields
+    mood = models.CharField(max_length=50, blank=True, null=True)  # e.g., 'slay', 'vibing'
+    custom_mood = models.CharField(max_length=50, blank=True, null=True)  # for custom moods
+    mood_emoji = models.CharField(max_length=10, blank=True, null=True)  # store the emoji
+    
     is_repost = models.BooleanField(default=False)
     original_post = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='reposts_made')
     repost_content = models.TextField(blank=True, null=True)  
@@ -284,12 +289,12 @@ class Post(models.Model):
         """Validate post data"""
         super().clean()
         
-    
+        # Sanitize text content
         self.content = sanitize_text(self.content, 'content')
         if self.repost_content:
             self.repost_content = sanitize_text(self.repost_content, 'content')
         
-    
+        # Validate files
         if self.video_file and hasattr(self.video_file, 'name'):
             validate_file_extension(self.video_file)
             validate_file_size(self.video_file, max_size_mb=100)
@@ -298,17 +303,26 @@ class Post(models.Model):
             validate_file_extension(self.file)
             validate_file_size(self.file, max_size_mb=50)
         
-    
+        # Validate view and share counts
         if self.view and self.view < 0:
             self.view = 0
         if self.share and self.share < 0:
             self.share = 0
+        
+        # Validate mood fields
+        valid_moods = ['slay', 'vibing', 'sheesh', 'periodt', 'no-cap', 'bussin', 'mid', 'cringe']
+        if self.mood and self.mood not in valid_moods:
+            self.mood = None
+        
+        if self.custom_mood and len(self.custom_mood) > 50:
+            self.custom_mood = self.custom_mood[:50]
 
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
     
     def preview_type(self):
+        """Get preview type for the post"""
         if self.is_repost and self.original_post:
             # For reposts, show the original post's media type
             return self.original_post.preview_type()
@@ -318,11 +332,15 @@ class Post(models.Model):
             return 'video'
         if self.file:
             return 'audio'
-        return 'text'
+        if self.content:
+            return 'text'
+        if self.mood or self.custom_mood:
+            return 'mood'
+        return 'empty'
     
     def preview_url(self):
+        """Get preview URL for the post"""
         if self.is_repost and self.original_post:
-            
             return self.original_post.preview_url()
         if self.images.exists():
             return self.images.first().image.url
@@ -349,6 +367,144 @@ class Post(models.Model):
         if self.is_repost and self.original_post:
             return self.original_post.content
         return self.content
+    
+    # =================== NEW MOOD-RELATED METHODS ===================
+    
+    def get_mood_display(self):
+        """Get the mood with emoji for display"""
+        mood_emojis = {
+            'slay': '💅',
+            'vibing': '🎵',
+            'sheesh': '🥶',
+            'periodt': '⏸️',
+            'no-cap': '🎯',
+            'bussin': '🔥',
+            'mid': '😐',
+            'cringe': '😬'
+        }
+        
+        if self.custom_mood:
+            # Check if custom mood already has emoji
+            import re
+            emoji_pattern = re.compile("["
+                u"\U0001F300-\U0001F6FF"  # symbols & pictographs
+                u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                u"\U00002700-\U000027BF"  # dingbats
+                u"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+                u"\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+                u"\U00002600-\U000026FF"  # Miscellaneous Symbols
+                u"\U00002B50-\U00002B50"  # star
+                u"\U0001F004-\U0001F0CF"  # playing cards
+                "]+", flags=re.UNICODE)
+            
+            if emoji_pattern.search(self.custom_mood):
+                return self.custom_mood
+            else:
+                # Add emoji if none present
+                return f"{self.mood_emoji or '✨'} {self.custom_mood}"
+        elif self.mood:
+            emoji = mood_emojis.get(self.mood, '✨')
+            return f"{emoji} {self.mood}"
+        return None
+    
+    def get_mood_color(self):
+        """Get color for mood badge"""
+        mood_colors = {
+            'slay': '#ff1493',
+            'vibing': '#9933ff',
+            'sheesh': '#00cc66',
+            'periodt': '#ff6b00',
+            'no-cap': '#ff4444',
+            'bussin': '#ffd700',
+            'mid': '#808080',
+            'cringe': '#8b4513'
+        }
+        
+        if self.custom_mood:
+            # Return a default gradient for custom moods
+            return '#0095f6'
+        return mood_colors.get(self.mood, '#0095f6')
+    
+    def get_mood_hashtag(self):
+        """Get mood as hashtag for SEO/search"""
+        if self.custom_mood:
+            # Remove emojis and special characters for hashtag
+            import re
+            clean_mood = re.sub(r'[^\w\s]', '', self.custom_mood)
+            clean_mood = clean_mood.replace(' ', '')
+            return f"#{clean_mood}"
+        elif self.mood:
+            return f"#{self.mood}"
+        return None
+    
+    def get_mood_emoji_only(self):
+        """Get only the mood emoji"""
+        mood_emojis = {
+            'slay': '💅',
+            'vibing': '🎵',
+            'sheesh': '🥶',
+            'periodt': '⏸️',
+            'no-cap': '🎯',
+            'bussin': '🔥',
+            'mid': '😐',
+            'cringe': '😬'
+        }
+        
+        if self.mood_emoji:
+            return self.mood_emoji
+        elif self.mood:
+            return mood_emojis.get(self.mood, '✨')
+        return '✨'
+    
+    def has_mood(self):
+        """Check if post has any mood set"""
+        return bool(self.mood or self.custom_mood)
+    
+    def get_mood_type(self):
+        """Get the type of mood (predefined or custom)"""
+        if self.custom_mood:
+            return 'custom'
+        elif self.mood:
+            return 'predefined'
+        return None
+    
+    def get_mood_data(self):
+        """Get all mood data as a dictionary"""
+        return {
+            'has_mood': self.has_mood(),
+            'mood': self.mood,
+            'custom_mood': self.custom_mood,
+            'emoji': self.get_mood_emoji_only(),
+            'display': self.get_mood_display(),
+            'color': self.get_mood_color(),
+            'hashtag': self.get_mood_hashtag(),
+            'type': self.get_mood_type()
+        }
+    
+    # =================== ANALYTICS METHODS ===================
+    
+    def get_engagement_rate(self):
+        """Calculate engagement rate for the post"""
+        total_engagement = self.likes.count() + self.reposts.count() + (self.comments.count() if hasattr(self, 'comments') else 0)
+        if self.view and self.view > 0:
+            return (total_engagement / self.view) * 100
+        return 0
+    
+    def get_vibe_score(self):
+        """Calculate a vibe score based on engagement and mood"""
+        base_score = self.likes.count() * 1 + self.reposts.count() * 2
+        if self.has_mood():
+            base_score *= 1.2  # 20% boost for posts with mood
+        return round(base_score, 1)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['author', '-created_at']),
+            models.Index(fields=['mood']),  # For mood filtering
+            models.Index(fields=['custom_mood']),  # For custom mood filtering
+        ]
 
 
 class PostImage(models.Model):
