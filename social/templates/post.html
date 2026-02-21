@@ -558,165 +558,304 @@
             opacity: 1;
         }
 
-        /* Camera Modal */
+        /* ===== ENHANCED AR CAMERA MODAL (Snapchat-style) ===== */
         .kf-camera-modal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             background: #000;
             z-index: 2000;
             flex-direction: column;
         }
+        .kf-camera-modal.active { display: flex; }
 
-        .kf-camera-modal.active {
-            display: flex;
-        }
-
+        /* Top bar */
         .kf-camera-header {
-            padding: 16px;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
+            padding: 12px 16px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
             color: white;
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: absolute;
-            top: 0;
-            width: 100%;
-            z-index: 10;
+            top: 0; width: 100%;
+            z-index: 20;
         }
-
         .kf-camera-close {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 24px;
+            background: none; border: none;
+            color: white; font-size: 22px;
             cursor: pointer;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
         }
-
         .kf-camera-title {
-            font-size: 16px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            font-size: 15px; font-weight: 700;
+            display: flex; align-items: center; gap: 6px;
         }
 
+        /* Flash / Timer top-right buttons */
+        .kf-cam-top-actions {
+            display: flex; gap: 8px; align-items: center;
+        }
+        .kf-cam-icon-btn {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(6px);
+            border: none; color: white;
+            width: 36px; height: 36px;
+            border-radius: 50%; font-size: 16px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s;
+        }
+        .kf-cam-icon-btn.active { background: rgba(255,220,0,0.5); }
+        .kf-cam-icon-btn:active { transform: scale(0.9); }
+
+        /* Camera preview area */
         .kf-camera-preview {
-            width: 100%;
-            height: 100%;
+            width: 100%; height: 100%;
             background: #000;
             position: relative;
+            overflow: hidden;
         }
-
         .kf-camera-live {
-            width: 100%;
-            height: 100%;
+            width: 100%; height: 100%;
             object-fit: cover;
+            display: block;
         }
-
-        .kf-camera-controls {
+        /* AR canvas overlay - sits exactly over the video */
+        #arCanvas {
             position: absolute;
-            bottom: 30px;
-            left: 0;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 40px;
-            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-            padding: 30px 20px 20px;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 5;
         }
-
-        .kf-camera-capture-btn {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
+        /* Flash overlay */
+        #flashOverlay {
+            position: absolute;
+            top:0; left:0; width:100%; height:100%;
             background: white;
-            border: 5px solid rgba(255,255,255,0.3);
-            cursor: pointer;
-            transition: transform 0.2s;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 30;
+            transition: opacity 0.05s;
         }
-
-        .kf-camera-capture-btn:active {
-            transform: scale(0.95);
-        }
-
-        .kf-camera-flip-btn {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.15);
-            border: none;
-            color: white;
-            font-size: 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(4px);
-        }
-
-        .kf-captured-image {
+        /* Timer countdown */
+        #timerCountdown {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .kf-captured-image.hidden {
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 96px;
+            font-weight: 900;
+            color: white;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.7);
+            z-index: 25;
             display: none;
         }
 
+        /* ---- AR Lens / Filter strip ---- */
+        .kf-ar-lens-strip {
+            position: absolute;
+            bottom: 170px;
+            left: 0; width: 100%;
+            display: flex;
+            gap: 12px;
+            padding: 0 16px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            z-index: 15;
+            -webkit-overflow-scrolling: touch;
+        }
+        .kf-ar-lens-strip::-webkit-scrollbar { display: none; }
+
+        .kf-ar-lens-item {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .kf-ar-lens-thumb {
+            width: 54px; height: 54px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.4);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px;
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(4px);
+            transition: border-color 0.2s, transform 0.15s;
+        }
+        .kf-ar-lens-item.active .kf-ar-lens-thumb {
+            border-color: #fff;
+            transform: scale(1.1);
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.5);
+        }
+        .kf-ar-lens-label {
+            font-size: 10px; color: white;
+            font-weight: 600;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        }
+
+        /* ---- Live emoji sticker overlays ---- */
+        .ar-sticker-live {
+            position: absolute;
+            font-size: 40px;
+            cursor: move;
+            user-select: none;
+            touch-action: none;
+            z-index: 18;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            transition: transform 0.15s;
+        }
+
+        /* ---- Bottom controls ---- */
+        .kf-camera-controls {
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 100%;
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 60%, transparent);
+            padding: 20px 20px 34px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            z-index: 15;
+        }
+
+        /* Secondary row: beauty / sticker / boomerang */
+        .kf-cam-secondary-row {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            align-items: center;
+        }
+        .kf-cam-secondary-btn {
+            display: flex; flex-direction: column;
+            align-items: center; gap: 4px;
+            cursor: pointer;
+        }
+        .kf-cam-secondary-btn .kf-cam-icon-btn { width: 42px; height: 42px; font-size: 18px; }
+        .kf-cam-secondary-label { font-size: 10px; color: rgba(255,255,255,0.85); font-weight: 600; }
+        .kf-cam-secondary-btn.active .kf-cam-icon-btn { background: rgba(255,100,200,0.5); }
+
+        /* Main shutter row */
+        .kf-cam-main-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 44px;
+        }
+        .kf-camera-flip-btn {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.18);
+            border: none; color: white; font-size: 22px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .kf-camera-capture-btn {
+            width: 76px; height: 76px;
+            border-radius: 50%;
+            background: white;
+            border: 5px solid rgba(255,255,255,0.35);
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.15s;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        .kf-camera-capture-btn::after {
+            content: '';
+            position: absolute;
+            inset: 5px;
+            border-radius: 50%;
+            background: white;
+        }
+        .kf-camera-capture-btn:active { transform: scale(0.92); }
+
+        /* Gallery thumbnail button */
+        .kf-cam-gallery-btn {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.5);
+            cursor: pointer;
+            background: rgba(255,255,255,0.15);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 20px;
+        }
+
+        /* ---- Captured image preview ---- */
+        .kf-captured-image {
+            position: absolute;
+            top:0; left:0;
+            width:100%; height:100%;
+            background: #000;
+            display: flex; flex-direction: column;
+            z-index: 50;
+        }
+        .kf-captured-image.hidden { display: none; }
         .kf-captured-image img {
             flex: 1;
             object-fit: contain;
             background: #000;
         }
-
-        .kf-captured-actions {
-            display: flex;
-            gap: 16px;
-            padding: 20px;
-            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+        .kf-captured-top-actions {
             position: absolute;
-            bottom: 0;
-            width: 100%;
-            justify-content: center;
+            top: 16px; right: 16px;
+            display: flex; gap: 10px;
+            z-index: 55;
         }
-
-        .kf-captured-action-btn {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 30px;
-            font-size: 16px;
-            font-weight: 600;
+        .kf-captured-top-btn {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.55);
+            border: none; color: white; font-size: 16px;
             cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .kf-captured-actions {
+            position: absolute;
+            bottom: 0; width: 100%;
+            display: flex; gap: 14px;
+            padding: 20px 24px 34px;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            justify-content: center;
+            z-index: 55;
+        }
+        .kf-captured-action-btn {
+            padding: 13px 32px;
+            border: none; border-radius: 30px;
+            font-size: 15px; font-weight: 700;
+            cursor: pointer;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .kf-captured-action-btn.keep { background: var(--ig-primary); color: white; }
+        .kf-captured-action-btn.retake { background: rgba(255,255,255,0.2); color: white; backdrop-filter: blur(4px); }
+
+        /* Beauty filter intensity slider */
+        .kf-beauty-bar {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
             display: flex;
+            flex-direction: column;
             align-items: center;
             gap: 8px;
+            z-index: 20;
         }
-
-        .kf-captured-action-btn.keep {
-            background: var(--ig-primary);
-            color: white;
-        }
-
-        .kf-captured-action-btn.retake {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            backdrop-filter: blur(4px);
+        .kf-beauty-bar.hidden { display: none; }
+        .kf-beauty-label { color: white; font-size: 10px; font-weight: 700; writing-mode: vertical-rl; text-orientation: mixed; }
+        input[type=range].kf-beauty-slider {
+            -webkit-appearance: slider-vertical;
+            writing-mode: vertical-lr;
+            direction: rtl;
+            width: 28px; height: 120px;
+            cursor: pointer;
+            accent-color: white;
         }
 
         /* Recording Status */
@@ -1645,42 +1784,181 @@
         </div>
     </div>
 
-    <!-- Camera Modal -->
+    <!-- Enhanced AR Camera Modal (Snapchat-style) -->
     <div id="cameraModal" class="kf-camera-modal">
+        <!-- Top header: close / title / flash+timer -->
         <div class="kf-camera-header">
             <button class="kf-camera-close" onclick="closeCamera()">
                 <i class="fas fa-times"></i>
             </button>
             <div class="kf-camera-title">
-                <i class="fas fa-camera"></i> take a snap
+                <i class="fas fa-camera"></i> snap cam ✨
             </div>
-            <div style="width: 40px;"></div>
+            <div class="kf-cam-top-actions">
+                <!-- Flash -->
+                <button class="kf-cam-icon-btn" id="flashBtn" onclick="toggleFlash()" title="Flash">
+                    <i class="fas fa-bolt"></i>
+                </button>
+                <!-- Timer -->
+                <button class="kf-cam-icon-btn" id="timerBtn" onclick="cycleTimer()" title="Timer">
+                    <i class="fas fa-clock"></i>
+                </button>
+                <!-- Grid lines -->
+                <button class="kf-cam-icon-btn" id="gridBtn" onclick="toggleGrid()" title="Grid">
+                    <i class="fas fa-th"></i>
+                </button>
+            </div>
         </div>
-        
+
+        <!-- Camera Preview -->
         <div class="kf-camera-preview">
             <video id="cameraLive" class="kf-camera-live" autoplay playsinline></video>
-            
+
+            <!-- AR Canvas (filters + lenses drawn here) -->
+            <canvas id="arCanvas"></canvas>
+
+            <!-- Grid overlay -->
+            <svg id="gridOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:6;pointer-events:none;display:none;" xmlns="http://www.w3.org/2000/svg">
+                <line x1="33.3%" y1="0" x2="33.3%" y2="100%" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                <line x1="66.6%" y1="0" x2="66.6%" y2="100%" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                <line x1="0" y1="33.3%" x2="100%" y2="33.3%" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                <line x1="0" y1="66.6%" x2="100%" y2="66.6%" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+            </svg>
+
+            <!-- Flash overlay -->
+            <div id="flashOverlay"></div>
+
+            <!-- Timer countdown -->
+            <div id="timerCountdown"></div>
+
+            <!-- Timer badge -->
+            <div id="timerBadge" style="position:absolute;top:68px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.5);color:#ffd700;font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px;z-index:16;display:none;backdrop-filter:blur(4px);">⏱ 3s</div>
+
+            <!-- Beauty intensity slider -->
+            <div class="kf-beauty-bar hidden" id="beautyBar">
+                <span class="kf-beauty-label">BEAUTY</span>
+                <input type="range" class="kf-beauty-slider" id="beautySlider" min="0" max="100" value="40" orient="vertical">
+                <i class="fas fa-star" style="color:white;font-size:12px;"></i>
+            </div>
+
+            <!-- AR Lens Strip -->
+            <div class="kf-ar-lens-strip" id="arLensStrip">
+                <div class="kf-ar-lens-item active" onclick="setARLens('normal', this)">
+                    <div class="kf-ar-lens-thumb">😊</div>
+                    <span class="kf-ar-lens-label">Normal</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('dog', this)">
+                    <div class="kf-ar-lens-thumb">🐶</div>
+                    <span class="kf-ar-lens-label">Doggo</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('flowers', this)">
+                    <div class="kf-ar-lens-thumb">🌸</div>
+                    <span class="kf-ar-lens-label">Flowers</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('sunglasses', this)">
+                    <div class="kf-ar-lens-thumb">😎</div>
+                    <span class="kf-ar-lens-label">Shades</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('crown', this)">
+                    <div class="kf-ar-lens-thumb">👑</div>
+                    <span class="kf-ar-lens-label">Crown</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('fire', this)">
+                    <div class="kf-ar-lens-thumb">🔥</div>
+                    <span class="kf-ar-lens-label">Fire</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('vintage', this)">
+                    <div class="kf-ar-lens-thumb" style="background:linear-gradient(135deg,#8B4513,#D2691E);">📷</div>
+                    <span class="kf-ar-lens-label">Vintage</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('neon', this)">
+                    <div class="kf-ar-lens-thumb" style="background:linear-gradient(135deg,#00FFFF,#FF00FF);">⚡</div>
+                    <span class="kf-ar-lens-label">Neon</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('glitter', this)">
+                    <div class="kf-ar-lens-thumb">✨</div>
+                    <span class="kf-ar-lens-label">Glitter</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('rainbow', this)">
+                    <div class="kf-ar-lens-thumb">🌈</div>
+                    <span class="kf-ar-lens-label">Rainbow</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('bw', this)">
+                    <div class="kf-ar-lens-thumb" style="background:linear-gradient(135deg,#111,#888);">◼</div>
+                    <span class="kf-ar-lens-label">B&W</span>
+                </div>
+                <div class="kf-ar-lens-item" onclick="setARLens('hearts', this)">
+                    <div class="kf-ar-lens-thumb">💕</div>
+                    <span class="kf-ar-lens-label">Hearts</span>
+                </div>
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="kf-camera-controls">
+                <!-- Secondary row -->
+                <div class="kf-cam-secondary-row">
+                    <div class="kf-cam-secondary-btn" id="beautyToggleBtn" onclick="toggleBeauty()">
+                        <button class="kf-cam-icon-btn"><i class="fas fa-magic"></i></button>
+                        <span class="kf-cam-secondary-label">Beauty</span>
+                    </div>
+                    <div class="kf-cam-secondary-btn" onclick="addLiveStickerPicker()">
+                        <button class="kf-cam-icon-btn"><i class="fas fa-grin-stars"></i></button>
+                        <span class="kf-cam-secondary-label">Sticker</span>
+                    </div>
+                    <div class="kf-cam-secondary-btn" id="boomerangBtn" onclick="toggleBoomerang()">
+                        <button class="kf-cam-icon-btn"><i class="fas fa-redo-alt"></i></button>
+                        <span class="kf-cam-secondary-label">Boomerang</span>
+                    </div>
+                    <div class="kf-cam-secondary-btn" onclick="downloadSnapPhoto()">
+                        <button class="kf-cam-icon-btn"><i class="fas fa-download"></i></button>
+                        <span class="kf-cam-secondary-label">Save</span>
+                    </div>
+                </div>
+
+                <!-- Main shutter row -->
+                <div class="kf-cam-main-row">
+                    <label class="kf-cam-gallery-btn" title="Gallery">
+                        <i class="fas fa-images"></i>
+                        <input type="file" accept="image/*" style="display:none;" onchange="loadFromGallery(this)">
+                    </label>
+                    <button class="kf-camera-capture-btn" id="cameraCaptureBtn" onclick="capturePhoto()"></button>
+                    <button class="kf-camera-flip-btn" onclick="flipCamera()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Captured Image Preview -->
             <div id="capturedImageContainer" class="kf-captured-image hidden">
                 <img id="capturedImage" src="" alt="Captured">
+                <!-- Top actions on captured photo -->
+                <div class="kf-captured-top-actions">
+                    <button class="kf-captured-top-btn" onclick="downloadSnapPhoto()" title="Download">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button class="kf-captured-top-btn" onclick="shareSnapPhoto()" title="Share">
+                        <i class="fas fa-share-alt"></i>
+                    </button>
+                </div>
                 <div class="kf-captured-actions">
                     <button class="kf-captured-action-btn retake" onclick="retakePhoto()">
                         <i class="fas fa-redo"></i> retake
                     </button>
                     <button class="kf-captured-action-btn keep" onclick="keepPhoto()">
-                        <i class="fas fa-check"></i> keep
+                        <i class="fas fa-check"></i> use photo
                     </button>
                 </div>
             </div>
         </div>
-        
-        <div class="kf-camera-controls">
-            <button class="kf-camera-flip-btn" onclick="flipCamera()">
-                <i class="fas fa-sync-alt"></i>
-            </button>
-            
-            <button class="kf-camera-capture-btn" id="cameraCaptureBtn" onclick="capturePhoto()"></button>
-            
-            <div style="width: 44px;"></div>
+    </div>
+
+    <!-- Live Sticker Picker sheet -->
+    <div id="liveStickerSheet" style="
+        display:none;position:fixed;bottom:0;left:0;right:0;
+        background:rgba(20,20,20,0.95);border-radius:20px 20px 0 0;
+        padding:16px;z-index:2100;max-height:260px;overflow-y:auto;
+        backdrop-filter:blur(10px);">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;">
         </div>
     </div>
 
@@ -2340,12 +2618,12 @@
             height: 360
         };
         
-        // High quality image settings
+        // High quality image settings (max resolution for sharpness)
         const IMAGE_QUALITY = {
-            quality: 0.95, // Higher quality (0.95 = 95% quality)
+            quality: 0.97, // 97% quality - very sharp
             format: 'image/jpeg',
-            maxWidth: 1920, // Max width for high quality
-            maxHeight: 1920 // Max height for high quality
+            maxWidth: 4096,  // Support up to 4K width
+            maxHeight: 4096  // Support up to 4K height
         };
         
         // Gen Z messages
@@ -2630,117 +2908,534 @@
             }
         });
 
-        // =================== Camera Functions ===================
-        async function openCamera() {
-            cameraModal.classList.add('active');
-            capturedImageContainer.classList.add('hidden');
-            await startCameraPreview();
+        // =================== AR Camera Functions (Snapchat-style) ===================
+        
+        // --- State ---
+        let arLens = 'normal';
+        let flashEnabled = false;
+        let timerSeconds = 0; // 0 = off, 3, 5, 10
+        let beautyEnabled = false;
+        let beautyLevel = 40;
+        let gridEnabled = false;
+        let boomerangMode = false;
+        let liveStickersDragging = null;
+        let liveStickerOffset = {x:0, y:0};
+        let arAnimFrame = null;
+        
+        // Glitter / heart particle arrays
+        let particles = [];
+        
+        // AR Lens emoji overlays (drawn on canvas)
+        const LENS_OVERLAYS = {
+            normal:     { filter:'none', overlay:null, top:null, bottom:null },
+            dog:        { filter:'none', overlay:'🐾', top:'🐶👂', bottom:'👅' },
+            flowers:    { filter:'saturate(1.4) brightness(1.05)', overlay:null, top:'🌸🌺🌸', bottom:null },
+            sunglasses: { filter:'contrast(1.1) brightness(1.05)', overlay:'😎', top:null, bottom:null },
+            crown:      { filter:'none', overlay:null, top:'👑', bottom:null },
+            fire:       { filter:'saturate(1.5) hue-rotate(5deg)', overlay:null, top:'🔥', bottom:'🔥' },
+            vintage:    { filter:'sepia(0.7) brightness(0.9) contrast(1.1)', overlay:null, top:null, bottom:null },
+            neon:       { filter:'saturate(2) contrast(1.3) brightness(0.9)', overlay:null, top:null, bottom:null, neon:true },
+            glitter:    { filter:'brightness(1.1) saturate(1.3)', overlay:null, top:null, bottom:null, glitter:true },
+            rainbow:    { filter:'saturate(1.8) brightness(1.05)', overlay:null, top:'🌈', bottom:null },
+            bw:         { filter:'grayscale(1) contrast(1.15)', overlay:null, top:null, bottom:null },
+            hearts:     { filter:'saturate(1.3) hue-rotate(-15deg)', overlay:null, top:'💕', bottom:null, hearts:true }
+        };
+
+        function openCamera() {
+            document.getElementById('cameraModal').classList.add('active');
+            document.getElementById('capturedImageContainer').classList.add('hidden');
+            particles = [];
+            startCameraPreview();
         }
 
         function closeCamera() {
-            cameraModal.classList.remove('active');
+            document.getElementById('cameraModal').classList.remove('active');
             if (cameraStream) {
-                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream.getTracks().forEach(t => t.stop());
                 cameraStream = null;
             }
+            if (arAnimFrame) { cancelAnimationFrame(arAnimFrame); arAnimFrame = null; }
         }
 
         async function startCameraPreview() {
             try {
+                if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
+                // Request max resolution for sharpness
                 cameraStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: isFrontCameraCamera ? 'user' : 'environment',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1920 }
-                    }
+                        width: { ideal: 3840 },
+                        height: { ideal: 2160 },
+                        frameRate: { ideal: 60, min: 30 },
+                        aspectRatio: { ideal: 16/9 }
+                    },
+                    audio: false
                 });
-                
+                const cameraLive = document.getElementById('cameraLive');
                 cameraLive.srcObject = cameraStream;
                 await cameraLive.play();
-                
-            } catch (err) {
+                // Apply front-camera mirror
+                cameraLive.style.transform = isFrontCameraCamera ? 'scaleX(-1)' : 'scaleX(1)';
+                // Start AR loop
+                startARLoop();
+            } catch(err) {
                 console.error('Camera error:', err);
-                showAlert('camera access', 'Camera access is required to take photos.', '📷', [
-                    {text: 'got it', type: 'primary'}
-                ]);
+                showAlert('camera access', 'Camera access needed 📷', '📷', [{text:'got it', type:'primary'}]);
                 closeCamera();
             }
         }
 
         async function flipCamera() {
             isFrontCameraCamera = !isFrontCameraCamera;
+            await startCameraPreview();
+        }
+
+        // Flash toggle
+        function toggleFlash() {
+            flashEnabled = !flashEnabled;
+            const btn = document.getElementById('flashBtn');
+            btn.classList.toggle('active', flashEnabled);
+            btn.innerHTML = flashEnabled ? '<i class="fas fa-bolt" style="color:#ffd700"></i>' : '<i class="fas fa-bolt"></i>';
+            // Try to use torch if available
             if (cameraStream) {
-                cameraStream.getTracks().forEach(track => track.stop());
-                await startCameraPreview();
+                const track = cameraStream.getVideoTracks()[0];
+                if (track && track.getCapabilities && track.getCapabilities().torch) {
+                    track.applyConstraints({ advanced: [{ torch: flashEnabled }] });
+                }
             }
         }
 
-        function capturePhoto() {
-            // Create a canvas element to capture the photo at high resolution
-            const canvas = document.createElement('canvas');
-            canvas.width = cameraLive.videoWidth;
-            canvas.height = cameraLive.videoHeight;
-            
+        // Timer cycle: 0 -> 3 -> 5 -> 10 -> 0
+        const TIMER_OPTIONS = [0, 3, 5, 10];
+        let timerIndex = 0;
+        function cycleTimer() {
+            timerIndex = (timerIndex + 1) % TIMER_OPTIONS.length;
+            timerSeconds = TIMER_OPTIONS[timerIndex];
+            const btn = document.getElementById('timerBtn');
+            const badge = document.getElementById('timerBadge');
+            if (timerSeconds === 0) {
+                btn.classList.remove('active');
+                btn.innerHTML = '<i class="fas fa-clock"></i>';
+                badge.style.display = 'none';
+            } else {
+                btn.classList.add('active');
+                btn.innerHTML = `<span style="font-size:12px;font-weight:800;">${timerSeconds}s</span>`;
+                badge.textContent = `⏱ ${timerSeconds}s`;
+                badge.style.display = 'block';
+            }
+        }
+
+        // Grid toggle
+        function toggleGrid() {
+            gridEnabled = !gridEnabled;
+            document.getElementById('gridBtn').classList.toggle('active', gridEnabled);
+            document.getElementById('gridOverlay').style.display = gridEnabled ? 'block' : 'none';
+        }
+
+        // Beauty mode
+        function toggleBeauty() {
+            beautyEnabled = !beautyEnabled;
+            const btn = document.getElementById('beautyToggleBtn');
+            const bar = document.getElementById('beautyBar');
+            btn.classList.toggle('active', beautyEnabled);
+            bar.classList.toggle('hidden', !beautyEnabled);
+        }
+        document.getElementById('beautySlider').addEventListener('input', function() {
+            beautyLevel = parseInt(this.value);
+        });
+
+        // Boomerang
+        function toggleBoomerang() {
+            boomerangMode = !boomerangMode;
+            document.getElementById('boomerangBtn').classList.toggle('active', boomerangMode);
+            showAlert(
+                boomerangMode ? 'boomerang on 🔄' : 'boomerang off',
+                boomerangMode ? 'next photo will bounce back & forth as GIF ✨' : 'normal photo mode',
+                boomerangMode ? '🔄' : '📷',
+                [{text:'ok', type:'primary'}]
+            );
+        }
+
+        // AR Lens selection
+        function setARLens(lens, el) {
+            arLens = lens;
+            particles = [];
+            document.querySelectorAll('.kf-ar-lens-item').forEach(i => i.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        // Particle helpers
+        function spawnParticles(type, canvas) {
+            if (type === 'glitter') {
+                for (let i = 0; i < 3; i++) {
+                    particles.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        vx: (Math.random() - 0.5) * 2,
+                        vy: -Math.random() * 3 - 1,
+                        size: Math.random() * 8 + 4,
+                        alpha: 1,
+                        color: `hsl(${Math.random()*360},100%,70%)`,
+                        type: 'star'
+                    });
+                }
+            } else if (type === 'hearts') {
+                if (Math.random() < 0.1) {
+                    particles.push({
+                        x: Math.random() * canvas.width,
+                        y: canvas.height + 20,
+                        vx: (Math.random() - 0.5) * 1.5,
+                        vy: -Math.random() * 2 - 1,
+                        size: Math.random() * 18 + 10,
+                        alpha: 1,
+                        type: 'heart'
+                    });
+                }
+            }
+        }
+
+        function updateParticles(ctx) {
+            particles = particles.filter(p => p.alpha > 0.05);
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                p.alpha -= 0.018;
+                ctx.globalAlpha = p.alpha;
+                ctx.font = `${p.size}px serif`;
+                ctx.fillStyle = p.color || 'white';
+                ctx.fillText(p.type === 'heart' ? '💕' : '✨', p.x, p.y);
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        // AR rendering loop
+        function startARLoop() {
+            if (arAnimFrame) cancelAnimationFrame(arAnimFrame);
+            const video = document.getElementById('cameraLive');
+            const canvas = document.getElementById('arCanvas');
             const ctx = canvas.getContext('2d');
             
-            // Flip the image if using front camera (mirror effect)
+            function drawFrame() {
+                const vw = video.videoWidth || video.clientWidth;
+                const vh = video.videoHeight || video.clientHeight;
+                const dw = video.clientWidth;
+                const dh = video.clientHeight;
+                
+                canvas.width = dw;
+                canvas.height = dh;
+                ctx.clearRect(0, 0, dw, dh);
+                
+                const lens = LENS_OVERLAYS[arLens] || LENS_OVERLAYS['normal'];
+                
+                // Apply beauty filter via canvas (softening)
+                if (beautyEnabled) {
+                    const b = beautyLevel;
+                    ctx.filter = `blur(${b * 0.008}px) brightness(${1 + b * 0.001}) saturate(${1 + b * 0.003})`;
+                    ctx.drawImage(video, 0, 0, dw, dh);
+                    ctx.filter = 'none';
+                    // Smooth skin via multiply
+                    ctx.globalAlpha = Math.min(beautyLevel / 300, 0.25);
+                    ctx.drawImage(canvas, 0, 0, dw, dh);
+                    ctx.globalAlpha = 1;
+                }
+                
+                // Lens overlay emoji at top center (crown, dog ears, flowers etc)
+                const fontSize = Math.min(dw, dh) * 0.13;
+                ctx.font = `${fontSize}px serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                
+                if (lens.top) {
+                    ctx.font = `${fontSize * 1.1}px serif`;
+                    ctx.fillText(lens.top, dw / 2, dh * 0.04);
+                }
+                if (lens.bottom) {
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(lens.bottom, dw / 2, dh * 0.72);
+                    ctx.textBaseline = 'top';
+                }
+                
+                // Neon edge effect
+                if (lens.neon) {
+                    ctx.globalCompositeOperation = 'screen';
+                    const grad = ctx.createLinearGradient(0, 0, dw, dh);
+                    grad.addColorStop(0, 'rgba(0,255,255,0.08)');
+                    grad.addColorStop(0.5, 'rgba(255,0,255,0.08)');
+                    grad.addColorStop(1, 'rgba(0,255,255,0.08)');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, dw, dh);
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+                
+                // Rainbow arch at top
+                if (arLens === 'rainbow') {
+                    ctx.lineWidth = dw * 0.025;
+                    ctx.strokeStyle = 'rgba(255,0,0,0.55)';
+                    ctx.beginPath(); ctx.arc(dw/2, dh*0.1, dw*0.42, Math.PI, 0); ctx.stroke();
+                    ctx.strokeStyle = 'rgba(255,165,0,0.5)';
+                    ctx.beginPath(); ctx.arc(dw/2, dh*0.1, dw*0.39, Math.PI, 0); ctx.stroke();
+                    ctx.strokeStyle = 'rgba(255,255,0,0.45)';
+                    ctx.beginPath(); ctx.arc(dw/2, dh*0.1, dw*0.36, Math.PI, 0); ctx.stroke();
+                    ctx.strokeStyle = 'rgba(0,200,0,0.45)';
+                    ctx.beginPath(); ctx.arc(dw/2, dh*0.1, dw*0.33, Math.PI, 0); ctx.stroke();
+                    ctx.strokeStyle = 'rgba(0,100,255,0.45)';
+                    ctx.beginPath(); ctx.arc(dw/2, dh*0.1, dw*0.30, Math.PI, 0); ctx.stroke();
+                    ctx.strokeStyle = 'rgba(150,0,255,0.45)';
+                    ctx.beginPath(); ctx.arc(dw/2, dh*0.1, dw*0.27, Math.PI, 0); ctx.stroke();
+                }
+                
+                // Particles (glitter / hearts)
+                if (lens.glitter) spawnParticles('glitter', canvas);
+                if (lens.hearts) spawnParticles('hearts', canvas);
+                if (particles.length > 0) updateParticles(ctx);
+                
+                arAnimFrame = requestAnimationFrame(drawFrame);
+            }
+            drawFrame();
+        }
+
+        // Capture photo at FULL native resolution
+        async function capturePhoto() {
+            if (timerSeconds > 0) {
+                await runTimer();
+            }
+            _doCapture();
+        }
+
+        function runTimer() {
+            return new Promise(resolve => {
+                let remaining = timerSeconds;
+                const el = document.getElementById('timerCountdown');
+                el.style.display = 'block';
+                el.textContent = remaining;
+                const iv = setInterval(() => {
+                    remaining--;
+                    if (remaining <= 0) {
+                        clearInterval(iv);
+                        el.style.display = 'none';
+                        resolve();
+                    } else {
+                        el.textContent = remaining;
+                    }
+                    vibeVibrate(30);
+                }, 1000);
+            });
+        }
+
+        function _doCapture() {
+            const video = document.getElementById('cameraLive');
+            
+            // Flash effect
+            if (flashEnabled) {
+                const fo = document.getElementById('flashOverlay');
+                fo.style.opacity = '1';
+                setTimeout(() => fo.style.opacity = '0', 120);
+            }
+            
+            // Use native video resolution for sharpest image
+            const nativeW = video.videoWidth;
+            const nativeH = video.videoHeight;
+            const canvas = document.createElement('canvas');
+            canvas.width  = nativeW  || 1920;
+            canvas.height = nativeH || 1080;
+            
+            const ctx = canvas.getContext('2d', { alpha: false });
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            // Mirror for front camera
             if (isFrontCameraCamera) {
                 ctx.translate(canvas.width, 0);
                 ctx.scale(-1, 1);
             }
             
-            ctx.drawImage(cameraLive, 0, 0, canvas.width, canvas.height);
+            // Apply CSS filter (lens) to captured frame
+            const lens = LENS_OVERLAYS[arLens] || LENS_OVERLAYS['normal'];
+            if (lens.filter && lens.filter !== 'none') {
+                ctx.filter = lens.filter;
+            }
             
-            // Convert to high quality blob
+            // Apply beauty filter
+            if (beautyEnabled) {
+                ctx.filter = (lens.filter && lens.filter !== 'none' ? lens.filter + ' ' : '') +
+                    `blur(${beautyLevel * 0.008}px) brightness(${1 + beautyLevel * 0.001})`;
+            }
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.filter = 'none';
+            if (isFrontCameraCamera) { ctx.setTransform(1,0,0,1,0,0); }
+            
+            // Draw lens AR overlays at full res
+            const scaleX = canvas.width / video.clientWidth;
+            const scaleY = canvas.height / video.clientHeight;
+            const scaledFontSize = Math.min(canvas.width, canvas.height) * 0.12;
+            ctx.font = `${scaledFontSize * 1.1}px serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            
+            if (lens.top) ctx.fillText(lens.top, canvas.width / 2, canvas.height * 0.04);
+            if (lens.bottom) {
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(lens.bottom, canvas.width / 2, canvas.height * 0.72);
+            }
+            
+            // Neon overlay at capture
+            if (lens.neon) {
+                ctx.globalCompositeOperation = 'screen';
+                const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                g.addColorStop(0, 'rgba(0,255,255,0.1)');
+                g.addColorStop(1, 'rgba(255,0,255,0.1)');
+                ctx.fillStyle = g; ctx.fillRect(0,0,canvas.width, canvas.height);
+                ctx.globalCompositeOperation = 'source-over';
+            }
+            
+            // High-quality JPEG export (0.97 = very sharp)
             canvas.toBlob(function(blob) {
                 capturedPhotoBlob = blob;
+                const url = URL.createObjectURL(blob);
+                document.getElementById('capturedImage').src = url;
+                document.getElementById('capturedImageContainer').classList.remove('hidden');
                 
-                // Show the captured image
-                const imageUrl = URL.createObjectURL(blob);
-                capturedImage.src = imageUrl;
-                capturedImageContainer.classList.remove('hidden');
-                
-                // Stop the camera preview
                 if (cameraStream) {
-                    cameraStream.getTracks().forEach(track => track.stop());
+                    cameraStream.getTracks().forEach(t => t.stop());
                     cameraStream = null;
                 }
+                if (arAnimFrame) { cancelAnimationFrame(arAnimFrame); arAnimFrame = null; }
                 
                 createFloatingEmoji('📸', window.innerWidth/2, 100);
                 vibeVibrate(50);
-                
-            }, IMAGE_QUALITY.format, IMAGE_QUALITY.quality);
+            }, 'image/jpeg', 0.97);
         }
 
         function retakePhoto() {
-            capturedImageContainer.classList.add('hidden');
+            document.getElementById('capturedImageContainer').classList.add('hidden');
             capturedPhotoBlob = null;
+            particles = [];
             startCameraPreview();
         }
 
         function keepPhoto() {
             if (capturedPhotoBlob) {
-                // Create a file from the blob
-                const file = new File([capturedPhotoBlob], `camera_photo_${Date.now()}.jpg`, { type: IMAGE_QUALITY.format });
-                
-                // Add to selected images
+                const file = new File([capturedPhotoBlob], `snap_${Date.now()}.jpg`, { type: 'image/jpeg' });
                 selectedImages = [...selectedImages, file];
-                
-                // Update file input
                 const dt = new DataTransfer();
                 selectedImages.forEach(f => dt.items.add(f));
-                imageInput.files = dt.files;
-                
-                // Render previews
+                const imageInput = document.getElementById('images');
+                if (imageInput) imageInput.files = dt.files;
                 renderImagePreviews();
                 updatePreview();
                 updateFileSizeDisplay();
-                
                 closeCamera();
-                
                 createFloatingEmoji('💾', window.innerWidth/2, 100);
                 vibeVibrate(20);
             }
+        }
+
+        function downloadSnapPhoto() {
+            if (!capturedPhotoBlob) {
+                showAlert('no photo', 'take a photo first! 📷', '📷', [{text:'ok', type:'primary'}]);
+                return;
+            }
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(capturedPhotoBlob);
+            a.download = `kishiface_snap_${Date.now()}.jpg`;
+            a.click();
+            createFloatingEmoji('💾', window.innerWidth/2, 100);
+        }
+
+        async function shareSnapPhoto() {
+            if (!capturedPhotoBlob) return;
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        files: [new File([capturedPhotoBlob], 'snap.jpg', { type: 'image/jpeg' })],
+                        title: 'Kishiface Snap ✨'
+                    });
+                } catch(e) { /* cancelled */ }
+            } else {
+                downloadSnapPhoto();
+            }
+        }
+
+        function loadFromGallery(input) {
+            const file = input.files[0];
+            if (!file) return;
+            capturedPhotoBlob = file;
+            const url = URL.createObjectURL(file);
+            document.getElementById('capturedImage').src = url;
+            document.getElementById('capturedImageContainer').classList.remove('hidden');
+            if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+            if (arAnimFrame) { cancelAnimationFrame(arAnimFrame); arAnimFrame = null; }
+        }
+
+        // Live sticker picker
+        const LIVE_STICKERS = ['😂','🔥','💯','🥶','💅','✨','🎉','🥳','😎','🤩','😍','🤙','💀','🫶','🎵','⭐','🌈','💕','🐶','🐱','🦋'];
+        function addLiveStickerPicker() {
+            const sheet = document.getElementById('liveStickerSheet');
+            const grid = sheet.querySelector('div');
+            grid.innerHTML = '';
+            LIVE_STICKERS.forEach(emoji => {
+                const btn = document.createElement('button');
+                btn.style.cssText = 'background:none;border:none;font-size:32px;cursor:pointer;padding:4px;';
+                btn.textContent = emoji;
+                btn.onclick = () => { addLiveStickerToCamera(emoji); sheet.style.display = 'none'; };
+                grid.appendChild(btn);
+            });
+            // Close button
+            const close = document.createElement('button');
+            close.style.cssText = 'position:absolute;top:12px;right:16px;background:none;border:none;color:white;font-size:22px;cursor:pointer;';
+            close.innerHTML = '&times;';
+            close.onclick = () => sheet.style.display = 'none';
+            sheet.style.position = 'fixed';
+            sheet.appendChild(close);
+            sheet.style.display = 'block';
+        }
+
+        function addLiveStickerToCamera(emoji) {
+            const preview = document.querySelector('.kf-camera-preview');
+            const sticker = document.createElement('div');
+            sticker.className = 'ar-sticker-live';
+            sticker.textContent = emoji;
+            sticker.style.left = (Math.random() * 60 + 20) + '%';
+            sticker.style.top = (Math.random() * 40 + 20) + '%';
+            
+            // Drag support
+            let isDrag = false, ox=0, oy=0;
+            const onStart = (e) => {
+                isDrag = true;
+                const t = e.touches ? e.touches[0] : e;
+                const r = sticker.getBoundingClientRect();
+                ox = t.clientX - r.left; oy = t.clientY - r.top;
+                sticker.style.transition = 'none';
+            };
+            const onMove = (e) => {
+                if (!isDrag) return;
+                e.preventDefault();
+                const t = e.touches ? e.touches[0] : e;
+                const pr = preview.getBoundingClientRect();
+                let nx = t.clientX - pr.left - ox;
+                let ny = t.clientY - pr.top - oy;
+                sticker.style.left = nx + 'px';
+                sticker.style.top  = ny + 'px';
+                sticker.style.transform = 'none';
+            };
+            const onEnd = () => { isDrag = false; };
+            sticker.addEventListener('mousedown', onStart);
+            sticker.addEventListener('touchstart', onStart, {passive:false});
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('touchmove', onMove, {passive:false});
+            document.addEventListener('mouseup', onEnd);
+            document.addEventListener('touchend', onEnd);
+            
+            // Double-tap to remove
+            let lastTap = 0;
+            sticker.addEventListener('touchend', (e) => {
+                const now = Date.now();
+                if (now - lastTap < 300) sticker.remove();
+                lastTap = now;
+            });
+            sticker.addEventListener('dblclick', () => sticker.remove());
+            
+            preview.appendChild(sticker);
         }
 
         // =================== Image Functions ===================
