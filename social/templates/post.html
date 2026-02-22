@@ -2656,6 +2656,42 @@
             color: white;
             font-family: monospace;
         }
+        /* Per-clip settings panel buttons */
+        .ss-dur-chip {
+            padding: 4px 8px; border-radius: 10px;
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.7); font-size: 10px; font-weight: 700; cursor: pointer;
+            transition: all 0.15s;
+        }
+        .ss-dur-chip:active, .ss-dur-chip.active { background: rgba(254,44,85,0.8); border-color: #fe2c55; color: white; }
+        .ss-kb-btn {
+            padding: 6px 8px; border-radius: 8px;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.6); font-size: 10px; font-weight: 700; cursor: pointer;
+            text-align: left; transition: all 0.15s; width: 100%;
+        }
+        .ss-kb-btn.active { background: rgba(254,44,85,0.8); border-color: #fe2c55; color: white; }
+        .ss-clip-filter-btn {
+            padding: 5px 7px; border-radius: 7px;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.55); font-size: 9px; font-weight: 700; cursor: pointer;
+            text-align: left; transition: all 0.15s; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .ss-clip-filter-btn.active { background: rgba(37,244,238,0.2); border-color: #25f4ee; color: #25f4ee; }
+        .ss-clip-trans-btn {
+            padding: 5px 7px; border-radius: 7px;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.55); font-size: 9px; font-weight: 700; cursor: pointer;
+            text-align: left; transition: all 0.15s; width: 100%;
+        }
+        .ss-clip-trans-btn.active { background: rgba(255,107,53,0.25); border-color: #ff6b35; color: #ff6b35; }
+        .ss-quality-btn {
+            flex: 1; padding: 10px 6px; border-radius: 12px;
+            background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.6); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+        }
+        .ss-quality-btn.active-q { background: rgba(254,44,85,0.2); border-color: #fe2c55; color: white; }
+        #ssExportSheet.show { display: flex !important; flex-direction: column; justify-content: flex-end; }
     </style>
 </head>
 <body>
@@ -3221,50 +3257,212 @@
 
     <!-- ===== SLIDESHOW / CAPCUT-STYLE VIDEO BUILDER ===== -->
     <div class="kf-slideshow-modal" id="slideshowModal">
+
+        <!-- Header -->
         <div class="kf-ss-header">
             <button class="kf-ss-close-btn" onclick="closeSlideshowBuilder()"><i class="fas fa-times"></i></button>
             <div class="kf-ss-title"><i class="fas fa-film"></i> Video Maker</div>
-            <button class="kf-ss-export-btn" id="ssExportBtn" onclick="exportSlideshowVideo()"><i class="fas fa-video"></i> Export</button>
+            <button class="kf-ss-export-btn" id="ssExportBtn" onclick="openSsExportSheet()"><i class="fas fa-video"></i> Export</button>
         </div>
-        <div class="kf-ss-preview-area">
-            <canvas id="ssPreviewCanvas" width="540" height="960"></canvas>
-            <div class="kf-ss-play-overlay">
-                <button class="kf-ss-play-btn-big" id="ssPlayBtn" onclick="toggleSlideshowPreview()">
-                    <i class="fas fa-play" id="ssPlayIcon"></i>
+
+        <!-- Top bar: orientation + watermark + global sound -->
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:rgba(0,0,0,0.8);border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;overflow-x:auto;scrollbar-width:none;">
+            <!-- Orientation toggle -->
+            <div style="display:flex;gap:4px;flex-shrink:0;">
+                <button id="ssOrientPortrait" onclick="setSsOrientation('portrait')" style="padding:6px 12px;border-radius:18px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(254,44,85,0.8);color:white;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;">
+                    <i class="fas fa-mobile-alt"></i> 9:16
+                </button>
+                <button id="ssOrientLandscape" onclick="setSsOrientation('landscape')" style="padding:6px 12px;border-radius:18px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;">
+                    <i class="fas fa-tablet-alt" style="transform:rotate(90deg)"></i> 16:9
+                </button>
+                <button id="ssOrientSquare" onclick="setSsOrientation('square')" style="padding:6px 12px;border-radius:18px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;">
+                    <i class="fas fa-square"></i> 1:1
                 </button>
             </div>
-            <div class="kf-ss-exporting" id="ssExportingOverlay">
-                <div class="kf-ss-exp-title">✨ Exporting...</div>
-                <div class="kf-ss-exp-pct" id="ssExpPct">0%</div>
-                <div class="kf-ss-exp-bar-wrap"><div class="kf-ss-exp-bar" id="ssExpBar"></div></div>
-                <div class="kf-ss-exp-sub" id="ssExpStatus">Rendering frames...</div>
+            <!-- Divider -->
+            <div style="width:1px;height:28px;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>
+            <!-- Watermark toggle -->
+            <button id="ssWatermarkBtn" onclick="toggleSsWatermark()" style="padding:6px 12px;border-radius:18px;border:1.5px solid rgba(37,244,238,0.5);background:rgba(37,244,238,0.15);color:#25f4ee;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;flex-shrink:0;">
+                <i class="fas fa-copyright"></i> KVibe ✓
+            </button>
+            <!-- Divider -->
+            <div style="width:1px;height:28px;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>
+            <!-- Sound btn -->
+            <label class="kf-ss-sound-btn" id="ssSoundBtn" style="cursor:pointer;flex-shrink:0;">
+                <i class="fas fa-music"></i> <span id="ssSoundBtnLabel">Add Sound</span>
+                <input type="file" accept="audio/*" id="ssSoundInput" onchange="loadSsSound(this)" style="display:none;">
+            </label>
+            <span class="kf-ss-sound-name" id="ssSoundName" style="max-width:100px;"></span>
+            <button id="ssSoundRemoveBtn" onclick="removeSsSound()" style="display:none;background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:16px;flex-shrink:0;">✕</button>
+        </div>
+
+        <!-- Main body: preview + clip editor side by side on wide, stacked on mobile -->
+        <div style="display:flex;flex:1;min-height:0;overflow:hidden;">
+
+            <!-- Preview canvas area -->
+            <div class="kf-ss-preview-area" style="flex:1;min-width:0;">
+                <canvas id="ssPreviewCanvas" width="540" height="960"></canvas>
+                <div class="kf-ss-play-overlay">
+                    <button class="kf-ss-play-btn-big" id="ssPlayBtn" onclick="toggleSlideshowPreview()">
+                        <i class="fas fa-play" id="ssPlayIcon"></i>
+                    </button>
+                </div>
+                <!-- Export progress overlay -->
+                <div class="kf-ss-exporting" id="ssExportingOverlay">
+                    <div class="kf-ss-exp-title">✨ Exporting Video...</div>
+                    <div class="kf-ss-exp-pct" id="ssExpPct">0%</div>
+                    <div class="kf-ss-exp-bar-wrap"><div class="kf-ss-exp-bar" id="ssExpBar"></div></div>
+                    <div class="kf-ss-exp-sub" id="ssExpStatus">Rendering frames...</div>
+                    <button onclick="ssExportCancelled=true;" style="margin-top:12px;padding:8px 20px;border-radius:20px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:white;cursor:pointer;font-size:12px;font-weight:700;">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Clip settings panel (shows when a clip is selected) -->
+            <div id="ssClipPanel" style="width:190px;background:#0d0d0d;border-left:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;">
+                <div style="padding:12px 12px 6px;font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);letter-spacing:1.2px;text-transform:uppercase;">
+                    Clip Settings
+                </div>
+
+                <!-- Clip thumbnail preview -->
+                <div style="padding:0 10px 10px;">
+                    <div id="ssClipPanelThumb" style="width:100%;aspect-ratio:1;border-radius:10px;background:#1a1a1a;overflow:hidden;position:relative;">
+                        <img id="ssClipPanelImg" src="" style="width:100%;height:100%;object-fit:cover;display:none;">
+                        <div id="ssClipPanelEmpty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.2);font-size:24px;">🖼️</div>
+                    </div>
+                    <div id="ssClipPanelName" style="font-size:10px;color:rgba(255,255,255,0.4);text-align:center;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+                </div>
+
+                <!-- Duration -->
+                <div style="padding:0 10px 10px;">
+                    <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">⏱ Duration</div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input type="range" id="ssClipDurSlider" min="0.5" max="15" step="0.5" value="3" class="kf-ss-dur-slider" style="flex:1;" oninput="updateActiveClipDur()">
+                        <span id="ssClipDurVal" style="font-size:12px;color:#fe2c55;font-weight:800;font-family:monospace;width:32px;">3s</span>
+                    </div>
+                    <!-- Quick duration chips -->
+                    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
+                        <button onclick="setClipDurQuick(1)" class="ss-dur-chip">1s</button>
+                        <button onclick="setClipDurQuick(2)" class="ss-dur-chip">2s</button>
+                        <button onclick="setClipDurQuick(3)" class="ss-dur-chip">3s</button>
+                        <button onclick="setClipDurQuick(5)" class="ss-dur-chip">5s</button>
+                        <button onclick="setClipDurQuick(8)" class="ss-dur-chip">8s</button>
+                        <button onclick="setClipDurQuick(10)" class="ss-dur-chip">10s</button>
+                    </div>
+                </div>
+
+                <!-- Ken Burns effect -->
+                <div style="padding:0 10px 10px;">
+                    <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">🎬 Ken Burns</div>
+                    <div style="display:flex;flex-direction:column;gap:4px;">
+                        <button onclick="setClipKenBurns('none')" class="ss-kb-btn" id="ssKB_none">None</button>
+                        <button onclick="setClipKenBurns('zoom_in')" class="ss-kb-btn" id="ssKB_zoom_in">🔍 Zoom In</button>
+                        <button onclick="setClipKenBurns('zoom_out')" class="ss-kb-btn" id="ssKB_zoom_out">🔎 Zoom Out</button>
+                        <button onclick="setClipKenBurns('pan_right')" class="ss-kb-btn" id="ssKB_pan_right">➡️ Pan Right</button>
+                        <button onclick="setClipKenBurns('pan_left')" class="ss-kb-btn" id="ssKB_pan_left">⬅️ Pan Left</button>
+                        <button onclick="setClipKenBurns('pan_up')" class="ss-kb-btn" id="ssKB_pan_up">⬆️ Pan Up</button>
+                        <button onclick="setClipKenBurns('pan_down')" class="ss-kb-btn" id="ssKB_pan_down">⬇️ Pan Down</button>
+                        <button onclick="setClipKenBurns('diagonal')" class="ss-kb-btn" id="ssKB_diagonal">↗️ Diagonal</button>
+                    </div>
+                </div>
+
+                <!-- Clip filter -->
+                <div style="padding:0 10px 10px;">
+                    <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">✨ Filter</div>
+                    <div style="display:flex;flex-direction:column;gap:4px;" id="ssClipFilterList"></div>
+                </div>
+
+                <!-- Brightness/contrast quick adjust -->
+                <div style="padding:0 10px 12px;">
+                    <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">🌟 Adjust</div>
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                        <span style="font-size:9px;color:rgba(255,255,255,0.4);width:28px;font-weight:700;">BRT</span>
+                        <input type="range" min="-50" max="50" value="0" class="kf-ss-dur-slider" style="flex:1;" id="ssClipBright" oninput="updateClipAdjust()">
+                        <span id="ssClipBrightVal" style="font-size:10px;color:#fe2c55;font-family:monospace;width:26px;">0</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:9px;color:rgba(255,255,255,0.4);width:28px;font-weight:700;">SAT</span>
+                        <input type="range" min="-50" max="50" value="0" class="kf-ss-dur-slider" style="flex:1;" id="ssClipSat" oninput="updateClipAdjust()">
+                        <span id="ssClipSatVal" style="font-size:10px;color:#fe2c55;font-family:monospace;width:26px;">0</span>
+                    </div>
+                </div>
+
+                <!-- Clip transition override -->
+                <div style="padding:0 10px 14px;">
+                    <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">🔀 Transition Out</div>
+                    <div style="display:flex;flex-direction:column;gap:3px;" id="ssClipTransList"></div>
+                </div>
             </div>
         </div>
-        <div class="kf-ss-settings">
-            <div style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:7px;">Transition Effect</div>
+
+        <!-- Global settings bar -->
+        <div class="kf-ss-settings" style="padding:10px 14px 6px;">
+            <div style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:7px;">Global Transition</div>
             <div class="kf-ss-settings-row" id="ssTransitionRow"></div>
-            <div class="kf-ss-dur-row">
-                <span class="kf-ss-dur-label">Slide Time</span>
-                <input type="range" class="kf-ss-dur-slider" id="ssSlideDur" min="1" max="10" value="3" step="0.5" oninput="updateSsSlideDur()">
-                <span class="kf-ss-dur-val" id="ssSlideDurVal">3s</span>
-            </div>
-            <div class="kf-ss-dur-row" style="margin-bottom:0;">
-                <span class="kf-ss-dur-label">Fade Time</span>
-                <input type="range" class="kf-ss-dur-slider" id="ssTransDur" min="0.2" max="1.5" value="0.6" step="0.1" oninput="updateSsTransDur()">
+            <div class="kf-ss-dur-row" style="margin-top:6px;margin-bottom:0;">
+                <span class="kf-ss-dur-label">Trans. Time</span>
+                <input type="range" class="kf-ss-dur-slider" id="ssTransDur" min="0.1" max="1.5" value="0.6" step="0.1" oninput="updateSsTransDur()">
                 <span class="kf-ss-dur-val" id="ssTransDurVal">0.6s</span>
             </div>
-            <div class="kf-ss-sound-row">
-                <label class="kf-ss-sound-btn" id="ssSoundBtn" style="cursor:pointer;">
-                    <i class="fas fa-music"></i> Add Sound
-                    <input type="file" accept="audio/*" id="ssSoundInput" onchange="loadSsSound(this)" style="display:none;">
-                </label>
-                <span class="kf-ss-sound-name" id="ssSoundName">No audio selected</span>
-                <button id="ssSoundRemoveBtn" onclick="removeSsSound()" style="display:none;background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:16px;">✕</button>
-            </div>
         </div>
+
+        <!-- Timeline strip -->
         <div class="kf-ss-timeline">
-            <div class="kf-ss-timeline-label">Timeline · <span id="ssTotalDurLabel">0s</span></div>
+            <div class="kf-ss-timeline-label">Timeline · <span id="ssTotalDurLabel">0s</span> · <span id="ssClipCountLabel" style="color:rgba(255,255,255,0.3);">0 clips</span></div>
             <div class="kf-ss-timeline-strip" id="ssTimelineStrip"></div>
+        </div>
+    </div>
+
+    <!-- Export options sheet (orientation + quality) -->
+    <div id="ssExportSheet" style="display:none;position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);align-items:flex-end;justify-content:center;">
+        <div style="background:#111;border-radius:24px 24px 0 0;width:100%;max-width:480px;padding:24px 20px 36px;border-top:1px solid rgba(255,255,255,0.1);">
+            <div style="width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:0 auto 20px;"></div>
+            <div style="font-size:18px;font-weight:800;color:white;margin-bottom:4px;">🎬 Export Video</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:20px;"><span id="ssExpSheetInfo"></span></div>
+
+            <!-- Orientation row -->
+            <div style="margin-bottom:16px;">
+                <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Format</div>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="setSsOrientation('portrait');updateExportSheetInfo();" id="expSheetPortrait" style="flex:1;padding:12px 8px;border-radius:14px;border:2px solid #fe2c55;background:rgba(254,44,85,0.15);color:white;cursor:pointer;font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:4px;">
+                        <span style="font-size:22px;">📱</span> Portrait<br><span style="font-size:10px;opacity:0.6;">9:16</span>
+                    </button>
+                    <button onclick="setSsOrientation('landscape');updateExportSheetInfo();" id="expSheetLandscape" style="flex:1;padding:12px 8px;border-radius:14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.7);cursor:pointer;font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:4px;">
+                        <span style="font-size:22px;">🖥️</span> Landscape<br><span style="font-size:10px;opacity:0.6;">16:9</span>
+                    </button>
+                    <button onclick="setSsOrientation('square');updateExportSheetInfo();" id="expSheetSquare" style="flex:1;padding:12px 8px;border-radius:14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.7);cursor:pointer;font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:4px;">
+                        <span style="font-size:22px;">⬜</span> Square<br><span style="font-size:10px;opacity:0.6;">1:1</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quality row -->
+            <div style="margin-bottom:16px;">
+                <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Quality</div>
+                <div style="display:flex;gap:8px;" id="ssQualityRow">
+                    <button onclick="setSsQuality('720')" id="ssQ720" class="ss-quality-btn active-q">720p</button>
+                    <button onclick="setSsQuality('1080')" id="ssQ1080" class="ss-quality-btn">1080p</button>
+                    <button onclick="setSsQuality('480')" id="ssQ480" class="ss-quality-btn">480p</button>
+                </div>
+            </div>
+
+            <!-- Watermark row -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid rgba(255,255,255,0.07);margin-bottom:16px;">
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:white;">KVibe Watermark</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.4);">Show "KVibe" logo on video</div>
+                </div>
+                <button id="ssWmToggleBtn" onclick="toggleSsWatermark()" style="width:48px;height:26px;border-radius:13px;border:none;cursor:pointer;background:#fe2c55;position:relative;transition:background 0.2s;">
+                    <div id="ssWmKnob" style="position:absolute;top:3px;left:24px;width:20px;height:20px;border-radius:50%;background:white;transition:left 0.2s;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>
+                </button>
+            </div>
+
+            <!-- Export button -->
+            <button onclick="closeSsExportSheet();exportSlideshowVideo();" style="width:100%;padding:16px;border-radius:16px;background:linear-gradient(135deg,#fe2c55,#ff6b35);border:none;color:white;font-size:16px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;">
+                <i class="fas fa-video"></i> Export Video
+            </button>
+            <button onclick="closeSsExportSheet();" style="width:100%;padding:13px;border-radius:14px;background:rgba(255,255,255,0.07);border:none;color:rgba(255,255,255,0.6);font-size:14px;font-weight:700;cursor:pointer;">
+                Cancel
+            </button>
         </div>
     </div>
 
@@ -6866,53 +7064,98 @@
 
 
         // =====================================================================
-        // SLIDESHOW / VIDEO MAKER  (CapCut-style)
+        // SLIDESHOW / VIDEO MAKER — Full Upgrade (per-clip settings, orientation, watermark)
         // =====================================================================
-        let ssClips = [];          // Array of { img: Image, file: File, dur: number }
+
+        // ---- State ----
+        let ssClips = [];          // { img, file, dur, kenBurns, filter, bright, sat, transition }
         let ssActiveClipIdx = 0;
         let ssSoundBlob = null;
         let ssSoundAudio = null;
-        let ssTransition = 'fade'; // current transition name
-        let ssSlideDur = 3;        // seconds per slide
-        let ssTransDur = 0.6;      // transition duration
+        let ssTransition = 'fade';
+        let ssTransDur = 0.6;
+        let ssOrientation = 'portrait'; // 'portrait' | 'landscape' | 'square'
+        let ssWatermarkOn = true;
+        let ssQuality = '720';
         let ssPlaying = false;
         let ssPlayRAF = null;
         let ssPlayStartTime = null;
         let ssPreviewCtx = null;
         let ssExportCancelled = false;
 
+        // Canvas dimensions per orientation
+        const SS_DIMS = {
+            portrait:  { w: 540,  h: 960  },
+            landscape: { w: 960,  h: 540  },
+            square:    { w: 720,  h: 720  },
+        };
+        // Quality multipliers
+        const SS_QUALITY_SCALE = { '480': 0.67, '720': 1, '1080': 1.5 };
+
         const SS_TRANSITIONS = [
-            { id: 'fade',     name: '✨ Fade',     emoji: '✨' },
-            { id: 'slide',    name: '➡️ Slide',    emoji: '➡️' },
-            { id: 'zoom',     name: '🔍 Zoom',     emoji: '🔍' },
-            { id: 'wipe',     name: '🪣 Wipe',     emoji: '🪣' },
-            { id: 'rotate',   name: '🌀 Spin',     emoji: '🌀' },
-            { id: 'blur',     name: '💨 Blur',     emoji: '💨' },
-            { id: 'flash',    name: '⚡ Flash',    emoji: '⚡' },
-            { id: 'glitch',   name: '🎮 Glitch',   emoji: '🎮' },
+            { id: 'fade',    name: '✨ Fade'    },
+            { id: 'slide',   name: '➡️ Slide'   },
+            { id: 'zoom',    name: '🔍 Zoom'    },
+            { id: 'wipe',    name: '🪣 Wipe'    },
+            { id: 'rotate',  name: '🌀 Spin'    },
+            { id: 'blur',    name: '💨 Blur'    },
+            { id: 'flash',   name: '⚡ Flash'   },
+            { id: 'glitch',  name: '🎮 Glitch'  },
         ];
 
+        const SS_CLIP_FILTERS = [
+            { id: 'none',   name: '🚫 None',    css: '' },
+            { id: 'vivid',  name: '🎨 Vivid',   css: 'saturate(1.8) contrast(1.1)' },
+            { id: 'cool',   name: '❄️ Cool',    css: 'saturate(1.2) hue-rotate(20deg)' },
+            { id: 'warm',   name: '🔥 Warm',    css: 'sepia(0.4) saturate(1.5)' },
+            { id: 'mono',   name: '⬛ Mono',    css: 'grayscale(1)' },
+            { id: 'drama',  name: '🌑 Drama',   css: 'contrast(1.5) saturate(1.2) brightness(0.9)' },
+            { id: 'golden', name: '✨ Golden',  css: 'sepia(0.6) saturate(1.4)' },
+            { id: 'neon',   name: '💜 Neon',    css: 'saturate(2.5) hue-rotate(30deg)' },
+            { id: 'retro',  name: '📼 Retro',   css: 'sepia(0.5) contrast(1.1)' },
+        ];
+
+        const SS_KB_OPTIONS = [
+            { id: 'none',      name: 'None' },
+            { id: 'zoom_in',   name: '🔍 Zoom In' },
+            { id: 'zoom_out',  name: '🔎 Zoom Out' },
+            { id: 'pan_right', name: '➡️ Pan Right' },
+            { id: 'pan_left',  name: '⬅️ Pan Left' },
+            { id: 'pan_up',    name: '⬆️ Pan Up' },
+            { id: 'pan_down',  name: '⬇️ Pan Down' },
+            { id: 'diagonal',  name: '↗️ Diagonal' },
+        ];
+
+        function makeDefaultClip(img, file) {
+            return { img, file, dur: 3, kenBurns: 'zoom_in', filter: 'none', bright: 0, sat: 0, transition: null };
+        }
+
+        // ---- Open / Close ----
         function openSlideshowBuilder() {
             const modal = document.getElementById('slideshowModal');
             modal.classList.add('active');
             const canvas = document.getElementById('ssPreviewCanvas');
             ssPreviewCtx = canvas.getContext('2d');
+            applyOrientationToCanvas();
 
-            // Pre-load existing selected images as clips
             if (ssClips.length === 0 && selectedImages.length > 0) {
                 Promise.all(selectedImages.map(f => new Promise(res => {
                     const img = new Image();
                     const url = URL.createObjectURL(f);
-                    img.onload = () => { URL.revokeObjectURL(url); res({ img, file: f, dur: ssSlideDur }); };
+                    img.onload = () => { URL.revokeObjectURL(url); res(makeDefaultClip(img, f)); };
                     img.src = url;
-                }))).then(clips => { ssClips = clips; renderSsTimeline(); renderSsPreviewFrame(0, 0); });
+                }))).then(clips => { ssClips = clips; renderSsTimeline(); selectSsClip(0); });
             } else {
                 renderSsTimeline();
-                if (ssClips.length > 0) renderSsPreviewFrame(0, 0);
+                if (ssClips.length > 0) { selectSsClip(ssActiveClipIdx); }
+                else { updateSsClipPanel(); }
             }
 
             buildSsTransitionBtns();
+            buildSsClipFilterBtns();
+            buildSsClipTransBtns();
             updateSsTotalDur();
+            updateOrientationUI();
         }
 
         function closeSlideshowBuilder() {
@@ -6920,6 +7163,95 @@
             document.getElementById('slideshowModal').classList.remove('active');
         }
 
+        // ---- Orientation ----
+        function setSsOrientation(o) {
+            ssOrientation = o;
+            applyOrientationToCanvas();
+            updateOrientationUI();
+            updateExportSheetInfo();
+            if (ssClips.length > 0) renderSsPreviewFrame(0, 0);
+        }
+
+        function applyOrientationToCanvas() {
+            const canvas = document.getElementById('ssPreviewCanvas');
+            if (!canvas) return;
+            const { w, h } = SS_DIMS[ssOrientation];
+            canvas.width = w; canvas.height = h;
+        }
+
+        function updateOrientationUI() {
+            ['portrait','landscape','square'].forEach(o => {
+                const btn = document.getElementById('ssOrient' + o.charAt(0).toUpperCase() + o.slice(1));
+                if (!btn) return;
+                const active = o === ssOrientation;
+                btn.style.background = active ? 'rgba(254,44,85,0.8)' : 'rgba(255,255,255,0.08)';
+                btn.style.borderColor = active ? '#fe2c55' : 'rgba(255,255,255,0.2)';
+                btn.style.color = active ? 'white' : 'rgba(255,255,255,0.6)';
+            });
+            // Export sheet buttons
+            ['portrait','landscape','square'].forEach(o => {
+                const id = 'expSheet' + o.charAt(0).toUpperCase() + o.slice(1);
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                const active = o === ssOrientation;
+                btn.style.borderColor = active ? '#fe2c55' : 'rgba(255,255,255,0.15)';
+                btn.style.background = active ? 'rgba(254,44,85,0.15)' : 'rgba(255,255,255,0.05)';
+                btn.style.color = active ? 'white' : 'rgba(255,255,255,0.7)';
+            });
+        }
+
+        // ---- Quality ----
+        function setSsQuality(q) {
+            ssQuality = q;
+            document.querySelectorAll('.ss-quality-btn').forEach(b => b.classList.remove('active-q'));
+            const btn = document.getElementById('ssQ' + q);
+            if (btn) btn.classList.add('active-q');
+        }
+
+        // ---- Watermark ----
+        function toggleSsWatermark() {
+            ssWatermarkOn = !ssWatermarkOn;
+            // top bar button
+            const topBtn = document.getElementById('ssWatermarkBtn');
+            if (topBtn) {
+                topBtn.style.background = ssWatermarkOn ? 'rgba(37,244,238,0.15)' : 'rgba(255,255,255,0.07)';
+                topBtn.style.borderColor = ssWatermarkOn ? 'rgba(37,244,238,0.5)' : 'rgba(255,255,255,0.15)';
+                topBtn.style.color = ssWatermarkOn ? '#25f4ee' : 'rgba(255,255,255,0.5)';
+                topBtn.innerHTML = `<i class="fas fa-copyright"></i> KVibe ${ssWatermarkOn ? '✓' : '✗'}`;
+            }
+            // sheet toggle
+            const knob = document.getElementById('ssWmKnob');
+            const toggleBtn = document.getElementById('ssWmToggleBtn');
+            if (knob && toggleBtn) {
+                knob.style.left = ssWatermarkOn ? '24px' : '4px';
+                toggleBtn.style.background = ssWatermarkOn ? '#fe2c55' : 'rgba(255,255,255,0.2)';
+            }
+            if (ssClips.length > 0) renderSsPreviewFrame(0, 0);
+        }
+
+        // ---- Export sheet ----
+        function openSsExportSheet() {
+            if (ssClips.length === 0) {
+                showAlert('Add photos!', 'Add at least 1 photo to export.', '🖼️', [{text:'OK',type:'primary'}]);
+                return;
+            }
+            updateExportSheetInfo();
+            updateOrientationUI();
+            document.getElementById('ssExportSheet').classList.add('show');
+        }
+        function closeSsExportSheet() {
+            document.getElementById('ssExportSheet').classList.remove('show');
+        }
+        function updateExportSheetInfo() {
+            const totalDur = ssClips.reduce((s,c)=>s+c.dur,0) + ssTransDur * Math.max(0,ssClips.length-1);
+            const { w, h } = SS_DIMS[ssOrientation];
+            const scale = SS_QUALITY_SCALE[ssQuality] || 1;
+            const outW = Math.round(w * scale), outH = Math.round(h * scale);
+            const el = document.getElementById('ssExpSheetInfo');
+            if (el) el.textContent = `${ssClips.length} clips · ${Math.round(totalDur*10)/10}s · ${outW}×${outH}`;
+        }
+
+        // ---- Transitions ----
         function buildSsTransitionBtns() {
             const row = document.getElementById('ssTransitionRow');
             if (!row) return;
@@ -6927,32 +7259,33 @@
             SS_TRANSITIONS.forEach(t => {
                 const btn = document.createElement('button');
                 btn.className = 'kf-ss-transition-btn' + (t.id === ssTransition ? ' active' : '');
-                btn.innerHTML = t.name;
+                btn.textContent = t.name;
                 btn.onclick = () => {
                     ssTransition = t.id;
                     document.querySelectorAll('.kf-ss-transition-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
+                    renderSsTimeline();
                 };
                 row.appendChild(btn);
             });
         }
 
-        function updateSsSlideDur() {
-            ssSlideDur = parseFloat(document.getElementById('ssSlideDur').value);
-            document.getElementById('ssSlideDurVal').textContent = ssSlideDur + 's';
-            ssClips.forEach(c => c.dur = ssSlideDur);
-            updateSsTotalDur();
-            renderSsTimeline();
-        }
         function updateSsTransDur() {
             ssTransDur = parseFloat(document.getElementById('ssTransDur').value);
             document.getElementById('ssTransDurVal').textContent = ssTransDur + 's';
-        }
-        function updateSsTotalDur() {
-            const total = ssClips.reduce((s, c) => s + c.dur, 0) + ssTransDur * Math.max(0, ssClips.length - 1);
-            document.getElementById('ssTotalDurLabel').textContent = Math.round(total * 10) / 10 + 's';
+            updateSsTotalDur();
+            renderSsTimeline();
         }
 
+        function updateSsTotalDur() {
+            const total = ssClips.reduce((s,c)=>s+c.dur,0) + ssTransDur * Math.max(0,ssClips.length-1);
+            const el = document.getElementById('ssTotalDurLabel');
+            if (el) el.textContent = Math.round(total*10)/10 + 's';
+            const cl = document.getElementById('ssClipCountLabel');
+            if (cl) cl.textContent = ssClips.length + ' clip' + (ssClips.length!==1?'s':'');
+        }
+
+        // ---- Sound ----
         function loadSsSound(input) {
             if (!input.files || !input.files[0]) return;
             ssSoundBlob = input.files[0];
@@ -6960,7 +7293,9 @@
             ssSoundAudio = new Audio(URL.createObjectURL(ssSoundBlob));
             const btn = document.getElementById('ssSoundBtn');
             if (btn) btn.classList.add('has-sound');
-            document.getElementById('ssSoundName').textContent = ssSoundBlob.name.length > 30 ? ssSoundBlob.name.slice(0,27)+'...' : ssSoundBlob.name;
+            const label = document.getElementById('ssSoundBtnLabel');
+            if (label) label.textContent = 'Sound ✓';
+            document.getElementById('ssSoundName').textContent = ssSoundBlob.name.length > 20 ? ssSoundBlob.name.slice(0,18)+'...' : ssSoundBlob.name;
             document.getElementById('ssSoundRemoveBtn').style.display = 'block';
             createFloatingEmoji('🎵', window.innerWidth/2, 100);
         }
@@ -6969,7 +7304,9 @@
             ssSoundBlob = null;
             const btn = document.getElementById('ssSoundBtn');
             if (btn) btn.classList.remove('has-sound');
-            document.getElementById('ssSoundName').textContent = 'No audio selected';
+            const label = document.getElementById('ssSoundBtnLabel');
+            if (label) label.textContent = 'Add Sound';
+            document.getElementById('ssSoundName').textContent = '';
             document.getElementById('ssSoundRemoveBtn').style.display = 'none';
             document.getElementById('ssSoundInput').value = '';
         }
@@ -6981,12 +7318,13 @@
             strip.innerHTML = '';
 
             ssClips.forEach((clip, i) => {
-                // Transition connector (before each clip except first)
                 if (i > 0) {
+                    const trans = clip.transition || ssTransition;
+                    const tData = SS_TRANSITIONS.find(t => t.id === trans);
                     const conn = document.createElement('div');
                     conn.className = 'kf-ss-transition-connector';
-                    const tName = SS_TRANSITIONS.find(t => t.id === ssTransition)?.emoji || '✨';
-                    conn.innerHTML = `<div class="kf-ss-tc-icon" title="Change transition" onclick="cycleTransition()">${tName}</div><span class="kf-ss-tc-label">${ssTransDur}s</span>`;
+                    conn.title = 'Clip transition: ' + (tData?.name || trans);
+                    conn.innerHTML = `<div class="kf-ss-tc-icon" onclick="cycleSsClipTransition(${i})">${tData?.name?.split(' ')[0] || '✨'}</div><span class="kf-ss-tc-label">${ssTransDur}s</span>`;
                     strip.appendChild(conn);
                 }
 
@@ -6996,13 +7334,12 @@
                     <img src="${clip.img.src}" loading="lazy">
                     <span class="kf-ss-clip-idx">${i+1}</span>
                     <span class="kf-ss-clip-dur">${clip.dur}s</span>
-                    <span class="kf-ss-clip-del" onclick="removeSsClip(${i})">✕</span>
+                    <span class="kf-ss-clip-del" onclick="removeSsClip(event,${i})">✕</span>
                 `;
                 clipEl.onclick = (e) => { if(e.target.classList.contains('kf-ss-clip-del')) return; selectSsClip(i); };
                 strip.appendChild(clipEl);
             });
 
-            // Add clip button
             const addBtn = document.createElement('label');
             addBtn.className = 'kf-ss-add-clip';
             addBtn.title = 'Add photos';
@@ -7013,17 +7350,19 @@
         }
 
         function selectSsClip(i) {
-            ssActiveClipIdx = i;
+            ssActiveClipIdx = Math.max(0, Math.min(i, ssClips.length - 1));
             renderSsTimeline();
+            updateSsClipPanel();
             renderSsPreviewFrame(0, 0);
         }
 
-        function removeSsClip(i) {
+        function removeSsClip(e, i) {
+            e.stopPropagation();
             ssClips.splice(i, 1);
             ssActiveClipIdx = Math.min(ssActiveClipIdx, Math.max(0, ssClips.length - 1));
             renderSsTimeline();
-            if (ssClips.length > 0) renderSsPreviewFrame(0, 0);
-            else { ssPreviewCtx && ssPreviewCtx.clearRect(0, 0, 540, 960); }
+            if (ssClips.length > 0) { updateSsClipPanel(); renderSsPreviewFrame(0, 0); }
+            else { ssPreviewCtx && ssPreviewCtx.clearRect(0,0,SS_DIMS[ssOrientation].w, SS_DIMS[ssOrientation].h); updateSsClipPanel(); }
         }
 
         function addSsClipsFromFiles(input) {
@@ -7031,13 +7370,23 @@
             Promise.all(files.map(f => new Promise(res => {
                 const img = new Image();
                 const url = URL.createObjectURL(f);
-                img.onload = () => { URL.revokeObjectURL(url); res({ img, file: f, dur: ssSlideDur }); };
+                img.onload = () => { URL.revokeObjectURL(url); res(makeDefaultClip(img, f)); };
                 img.src = url;
             }))).then(clips => {
+                const wasEmpty = ssClips.length === 0;
                 ssClips = [...ssClips, ...clips];
                 renderSsTimeline();
-                if (ssClips.length === clips.length) renderSsPreviewFrame(0, 0); // first add
+                if (wasEmpty) { selectSsClip(0); }
+                else { updateSsTotalDur(); }
             });
+        }
+
+        function cycleSsClipTransition(i) {
+            if (!ssClips[i]) return;
+            const cur = ssClips[i].transition || ssTransition;
+            const idx = SS_TRANSITIONS.findIndex(t => t.id === cur);
+            ssClips[i].transition = SS_TRANSITIONS[(idx+1) % SS_TRANSITIONS.length].id;
+            renderSsTimeline();
         }
 
         function cycleTransition() {
@@ -7047,8 +7396,212 @@
             renderSsTimeline();
         }
 
+        // ---- Per-clip settings panel ----
+        function updateSsClipPanel() {
+            const clip = ssClips[ssActiveClipIdx];
+            const img = document.getElementById('ssClipPanelImg');
+            const empty = document.getElementById('ssClipPanelEmpty');
+            const name = document.getElementById('ssClipPanelName');
+            if (!clip) {
+                if (img) { img.style.display='none'; img.src=''; }
+                if (empty) empty.style.display='flex';
+                if (name) name.textContent = 'Select a clip';
+                return;
+            }
+            if (img) { img.src = clip.img.src; img.style.display='block'; }
+            if (empty) empty.style.display='none';
+            if (name) name.textContent = clip.file?.name || ('Clip ' + (ssActiveClipIdx+1));
+
+            // Duration
+            const durSlider = document.getElementById('ssClipDurSlider');
+            const durVal = document.getElementById('ssClipDurVal');
+            if (durSlider) durSlider.value = clip.dur;
+            if (durVal) durVal.textContent = clip.dur + 's';
+
+            // Bright / Sat
+            const b = document.getElementById('ssClipBright');
+            const bv = document.getElementById('ssClipBrightVal');
+            if (b) { b.value = clip.bright || 0; }
+            if (bv) bv.textContent = clip.bright || 0;
+            const s = document.getElementById('ssClipSat');
+            const sv = document.getElementById('ssClipSatVal');
+            if (s) { s.value = clip.sat || 0; }
+            if (sv) sv.textContent = clip.sat || 0;
+
+            // Ken Burns active
+            document.querySelectorAll('.ss-kb-btn').forEach(btn => btn.classList.remove('active'));
+            const kbBtn = document.getElementById('ssKB_' + (clip.kenBurns || 'none'));
+            if (kbBtn) kbBtn.classList.add('active');
+
+            // Filter active
+            document.querySelectorAll('.ss-clip-filter-btn').forEach(btn => btn.classList.remove('active'));
+            const fBtn = document.getElementById('ssCF_' + (clip.filter || 'none'));
+            if (fBtn) fBtn.classList.add('active');
+
+            // Transition active
+            document.querySelectorAll('.ss-clip-trans-btn').forEach(btn => btn.classList.remove('active'));
+            const tId = clip.transition || ssTransition;
+            const tBtn = document.getElementById('ssCT_' + tId);
+            if (tBtn) tBtn.classList.add('active');
+        }
+
+        function buildSsClipFilterBtns() {
+            const list = document.getElementById('ssClipFilterList');
+            if (!list) return;
+            list.innerHTML = '';
+            SS_CLIP_FILTERS.forEach(f => {
+                const btn = document.createElement('button');
+                btn.className = 'ss-clip-filter-btn';
+                btn.id = 'ssCF_' + f.id;
+                btn.textContent = f.name;
+                btn.onclick = () => {
+                    if (!ssClips[ssActiveClipIdx]) return;
+                    ssClips[ssActiveClipIdx].filter = f.id;
+                    document.querySelectorAll('.ss-clip-filter-btn').forEach(b=>b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderSsPreviewFrame(0, 0);
+                };
+                list.appendChild(btn);
+            });
+        }
+
+        function buildSsClipTransBtns() {
+            const list = document.getElementById('ssClipTransList');
+            if (!list) return;
+            list.innerHTML = '';
+            SS_TRANSITIONS.forEach(t => {
+                const btn = document.createElement('button');
+                btn.className = 'ss-clip-trans-btn';
+                btn.id = 'ssCT_' + t.id;
+                btn.textContent = t.name;
+                btn.onclick = () => {
+                    if (!ssClips[ssActiveClipIdx]) return;
+                    ssClips[ssActiveClipIdx].transition = t.id;
+                    document.querySelectorAll('.ss-clip-trans-btn').forEach(b=>b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderSsTimeline();
+                };
+                list.appendChild(btn);
+            });
+        }
+
+        function updateActiveClipDur() {
+            const clip = ssClips[ssActiveClipIdx];
+            if (!clip) return;
+            const val = parseFloat(document.getElementById('ssClipDurSlider').value);
+            clip.dur = val;
+            const durVal = document.getElementById('ssClipDurVal');
+            if (durVal) durVal.textContent = val + 's';
+            renderSsTimeline();
+        }
+
+        function setClipDurQuick(dur) {
+            const clip = ssClips[ssActiveClipIdx];
+            if (!clip) return;
+            clip.dur = dur;
+            const durSlider = document.getElementById('ssClipDurSlider');
+            const durVal = document.getElementById('ssClipDurVal');
+            if (durSlider) durSlider.value = dur;
+            if (durVal) durVal.textContent = dur + 's';
+            renderSsTimeline();
+            // Flash the chip
+            document.querySelectorAll('.ss-dur-chip').forEach(b => {
+                b.classList.toggle('active', parseFloat(b.textContent) === dur);
+            });
+        }
+
+        function setClipKenBurns(kb) {
+            const clip = ssClips[ssActiveClipIdx];
+            if (!clip) return;
+            clip.kenBurns = kb;
+            document.querySelectorAll('.ss-kb-btn').forEach(b=>b.classList.remove('active'));
+            const btn = document.getElementById('ssKB_'+kb);
+            if (btn) btn.classList.add('active');
+            renderSsPreviewFrame(0.5, 0); // preview midpoint
+        }
+
+        function updateClipAdjust() {
+            const clip = ssClips[ssActiveClipIdx];
+            if (!clip) return;
+            const b = parseFloat(document.getElementById('ssClipBright').value);
+            const s = parseFloat(document.getElementById('ssClipSat').value);
+            clip.bright = b; clip.sat = s;
+            document.getElementById('ssClipBrightVal').textContent = b;
+            document.getElementById('ssClipSatVal').textContent = s;
+            renderSsPreviewFrame(0.5, 0);
+        }
+
+        // ---- Canvas rendering helpers ----
+        function getClipFilter(clip) {
+            const f = SS_CLIP_FILTERS.find(x => x.id === (clip?.filter||'none'));
+            const b = clip?.bright || 0;
+            const s = clip?.sat || 0;
+            let parts = [];
+            if (b !== 0) parts.push(`brightness(${1 + b/100})`);
+            if (s !== 0) parts.push(`saturate(${1 + s/100})`);
+            if (f?.css) parts.push(f.css);
+            return parts.join(' ') || 'none';
+        }
+
+        function drawClipToCtx(ctx, clip, clipProgress, W, H) {
+            const img = clip.img;
+            const iw = img.naturalWidth||img.width, ih = img.naturalHeight||img.height;
+            const iAsp = iw/ih, cAsp = W/H;
+            let dw, dh;
+            if (iAsp > cAsp) { dh=H; dw=H*iAsp; } else { dw=W; dh=W/iAsp; }
+            const baseDx=(W-dw)/2, baseDy=(H-dh)/2;
+
+            const t = Math.max(0, Math.min(1, clipProgress));
+            const kb = clip.kenBurns || 'zoom_in';
+            let zoom = 1, ox = 0, oy = 0;
+
+            switch(kb) {
+                case 'zoom_in':   zoom = 1 + t*0.08; break;
+                case 'zoom_out':  zoom = 1.08 - t*0.08; break;
+                case 'pan_right': ox = t * W * 0.06; break;
+                case 'pan_left':  ox = -t * W * 0.06; break;
+                case 'pan_up':    oy = -t * H * 0.06; break;
+                case 'pan_down':  oy = t * H * 0.06; break;
+                case 'diagonal':  zoom = 1 + t*0.05; ox = t*W*0.04; oy = -t*H*0.03; break;
+                case 'none': default: break;
+            }
+
+            const filterStr = getClipFilter(clip);
+            ctx.save();
+            ctx.filter = filterStr;
+            if (zoom !== 1 || ox || oy) {
+                ctx.translate(W/2 + ox, H/2 + oy);
+                ctx.scale(zoom, zoom);
+                ctx.drawImage(img, baseDx-W/2, baseDy-H/2, dw, dh);
+            } else {
+                ctx.drawImage(img, baseDx, baseDy, dw, dh);
+            }
+            ctx.filter = 'none';
+            ctx.restore();
+        }
+
+        function drawWatermark(ctx, W, H) {
+            if (!ssWatermarkOn) return;
+            ctx.save();
+            const fs = Math.max(14, W * 0.03);
+            ctx.font = `bold ${fs}px 'Pacifico', cursive, sans-serif`;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            // shadow
+            ctx.shadowColor = 'rgba(0,0,0,0.7)';
+            ctx.shadowBlur = 6;
+            // Gradient text colour
+            const grad = ctx.createLinearGradient(W-fs*5, H-fs*2.5, W, H);
+            grad.addColorStop(0, '#fe2c55');
+            grad.addColorStop(1, '#25f4ee');
+            ctx.fillStyle = grad;
+            ctx.globalAlpha = 0.82;
+            ctx.fillText('KVibe', W - W*0.025, H - H*0.015);
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+
         // ---- Preview rendering ----
-        // progress: 0..1 (within a single clip), transProgress: 0..1 (transition to next)
         function renderSsPreviewFrame(clipProgress, transProgress) {
             if (!ssPreviewCtx || ssClips.length === 0) return;
             const canvas = document.getElementById('ssPreviewCanvas');
@@ -7057,110 +7610,77 @@
             const clip = ssClips[ssActiveClipIdx];
             const nextClip = ssClips[ssActiveClipIdx + 1];
 
-            ctx.clearRect(0, 0, W, H);
+            ctx.clearRect(0,0,W,H);
             ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, W, H);
-
-            const drawCoverFit = (img, alpha, transform) => {
-                ctx.save();
-                ctx.globalAlpha = alpha;
-                if (transform) transform();
-                const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
-                const iAsp = iw/ih, cAsp = W/H;
-                let dw, dh, dx, dy;
-                if (iAsp > cAsp) { dh=H; dw=H*iAsp; } else { dw=W; dh=W/iAsp; }
-                dx=(W-dw)/2; dy=(H-dh)/2;
-                // Ken Burns: subtle zoom
-                const zoom = 1 + clipProgress * 0.06;
-                ctx.translate(W/2, H/2);
-                ctx.scale(zoom, zoom);
-                ctx.drawImage(img, dx-W/2, dy-H/2, dw, dh);
-                ctx.restore();
-            };
+            ctx.fillRect(0,0,W,H);
 
             if (transProgress > 0 && nextClip) {
-                const t = transProgress;
-                applyTransition(ctx, clip.img, nextClip.img, t, W, H, clipProgress, drawCoverFit);
+                applyTransition(ctx, clip, nextClip, transProgress, W, H, clipProgress);
             } else {
-                drawCoverFit(clip.img, 1, null);
+                drawClipToCtx(ctx, clip, clipProgress, W, H);
             }
+
+            drawWatermark(ctx, W, H);
         }
 
-        function applyTransition(ctx, imgA, imgB, t, W, H, clipProg, drawCoverFit) {
-            const drawImg = (img, alpha, customFn) => {
-                ctx.save(); ctx.globalAlpha = alpha;
-                const iw = img.naturalWidth||img.width, ih = img.naturalHeight||img.height;
-                const iAsp = iw/ih, cAsp = W/H;
-                let dw,dh,dx,dy;
-                if(iAsp>cAsp){dh=H;dw=H*iAsp;}else{dw=W;dh=W/iAsp;}
-                dx=(W-dw)/2; dy=(H-dh)/2;
-                if(customFn) customFn(img,dx,dy,dw,dh);
-                else ctx.drawImage(img,dx,dy,dw,dh);
-                ctx.restore();
-            };
-
+        function applyTransition(ctx, clipA, clipB, t, W, H, clipProg) {
+            const trans = clipB.transition || ssTransition;
             ctx.clearRect(0,0,W,H);
             ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
 
-            switch(ssTransition) {
-                case 'fade':
-                    drawImg(imgA, 1-t); drawImg(imgB, t); break;
+            const drawA = (alpha=1, customFn=null) => {
+                ctx.save(); ctx.globalAlpha=alpha;
+                if (customFn) customFn(); else drawClipToCtx(ctx, clipA, clipProg, W, H);
+                ctx.restore();
+            };
+            const drawB = (alpha=1, customFn=null) => {
+                ctx.save(); ctx.globalAlpha=alpha;
+                if (customFn) customFn(); else drawClipToCtx(ctx, clipB, 0, W, H);
+                ctx.restore();
+            };
+
+            switch(trans) {
+                case 'fade':   drawA(1-t); drawB(t); break;
                 case 'slide':
-                    drawImg(imgA, 1, (img,dx,dy,dw,dh)=>{ ctx.drawImage(img,dx-W*t,dy,dw,dh); });
-                    drawImg(imgB, 1, (img,dx,dy,dw,dh)=>{ ctx.drawImage(img,dx+W*(1-t),dy,dw,dh); }); break;
+                    ctx.save(); ctx.translate(-W*t,0); drawA(); ctx.restore();
+                    ctx.save(); ctx.translate(W*(1-t),0); drawB(); ctx.restore(); break;
                 case 'zoom':
-                    drawImg(imgA, 1-t, (img,dx,dy,dw,dh)=>{ const z=1+t*0.4; ctx.save();ctx.translate(W/2,H/2);ctx.scale(z,z);ctx.drawImage(img,dx-W/2,dy-H/2,dw,dh);ctx.restore(); });
-                    drawImg(imgB, t); break;
+                    drawA(1-t, ()=>{ ctx.save();ctx.translate(W/2,H/2);ctx.scale(1+t*0.5,1+t*0.5);ctx.translate(-W/2,-H/2);drawClipToCtx(ctx,clipA,clipProg,W,H);ctx.restore(); });
+                    drawB(t); break;
                 case 'wipe': {
-                    const clip_x = W * t;
-                    drawImg(imgA, 1);
-                    ctx.save(); ctx.beginPath(); ctx.rect(0,0,clip_x,H); ctx.clip();
-                    drawImg(imgB, 1); ctx.restore(); break;
+                    drawA();
+                    ctx.save();ctx.beginPath();ctx.rect(0,0,W*t,H);ctx.clip();drawB();ctx.restore(); break;
                 }
-                case 'rotate': {
-                    const angle = t * Math.PI * 0.3;
-                    ctx.save(); ctx.translate(W/2,H/2); ctx.rotate(angle); ctx.translate(-W/2,-H/2);
-                    drawImg(imgA, 1-t); ctx.restore();
-                    ctx.save(); ctx.translate(W/2,H/2); ctx.rotate(angle-Math.PI*0.3); ctx.translate(-W/2,-H/2);
-                    drawImg(imgB, t); ctx.restore(); break;
-                }
+                case 'rotate':
+                    ctx.save();ctx.translate(W/2,H/2);ctx.rotate(t*Math.PI*0.25);ctx.translate(-W/2,-H/2);drawA(1-t);ctx.restore();
+                    ctx.save();ctx.translate(W/2,H/2);ctx.rotate((t-1)*Math.PI*0.25);ctx.translate(-W/2,-H/2);drawB(t);ctx.restore(); break;
                 case 'blur':
-                    drawImg(imgA, 1-t);
-                    ctx.filter = `blur(${t*12}px)`; ctx.globalAlpha=t;
-                    { const iw=imgB.naturalWidth||imgB.width,ih=imgB.naturalHeight||imgB.height;const iAsp=iw/ih,cAsp=W/H;let dw,dh,dx,dy;if(iAsp>cAsp){dh=H;dw=H*iAsp;}else{dw=W;dh=W/iAsp;}dx=(W-dw)/2;dy=(H-dh)/2;ctx.drawImage(imgB,dx,dy,dw,dh);}
-                    ctx.filter='none'; ctx.globalAlpha=1; break;
+                    drawA(1-t);
+                    ctx.save();ctx.filter=`blur(${t*14}px)`;ctx.globalAlpha=t;drawClipToCtx(ctx,clipB,0,W,H);ctx.filter='none';ctx.restore(); break;
                 case 'flash': {
-                    const flashT = t < 0.5 ? t*2 : (1-t)*2;
-                    drawImg(imgA, t < 0.5 ? 1 : 0);
-                    drawImg(imgB, t >= 0.5 ? 1 : 0);
-                    ctx.fillStyle=`rgba(255,255,255,${flashT*0.9})`;ctx.fillRect(0,0,W,H); break;
+                    const f = t < 0.5 ? t*2 : (1-t)*2;
+                    if(t<0.5) drawA(); else drawB();
+                    ctx.fillStyle=`rgba(255,255,255,${f*0.95})`;ctx.fillRect(0,0,W,H); break;
                 }
                 case 'glitch': {
-                    // Horizontal slice glitch
-                    drawImg(imgA, 1-t);
-                    if(t > 0.3) {
-                        const slices = 8;
-                        for(let i=0;i<slices;i++){
-                            const sy = (H/slices)*i, sh = H/slices;
-                            const offset = (Math.random()-0.5) * W * t * 0.4;
-                            const iw=imgB.naturalWidth||imgB.width,ih=imgB.naturalHeight||imgB.height;
-                            const iAsp=iw/ih,cAsp=W/H;let dw,dh,dx,dy;
-                            if(iAsp>cAsp){dh=H;dw=H*iAsp;}else{dw=W;dh=W/iAsp;}dx=(W-dw)/2;dy=(H-dh)/2;
+                    drawA(1-t);
+                    if (t > 0.25) {
+                        for(let i=0;i<8;i++){
+                            const sy=(H/8)*i,sh=H/8,off=(Math.random()-0.5)*W*t*0.35;
                             ctx.save();ctx.globalAlpha=t;ctx.beginPath();ctx.rect(0,sy,W,sh);ctx.clip();
-                            ctx.drawImage(imgB,dx+offset,dy,dw,dh);ctx.restore();
+                            ctx.translate(off,0);drawClipToCtx(ctx,clipB,0,W,H);ctx.restore();
                         }
                     }
                     break;
                 }
-                default: drawImg(imgA, 1-t); drawImg(imgB, t);
+                default: drawA(1-t); drawB(t);
             }
         }
 
-        // ---- Playback preview ----
+        // ---- Playback ----
         function toggleSlideshowPreview() {
-            if (ssClips.length === 0) { showAlert('Add photos!', 'Add at least one photo to the timeline.', '🖼️', [{text:'OK',type:'primary'}]); return; }
-            if (ssPlaying) stopSlideshowPreview();
-            else startSlideshowPreview();
+            if (ssClips.length===0){showAlert('Add photos!','Add at least one photo.','🖼️',[{text:'OK',type:'primary'}]);return;}
+            if (ssPlaying) stopSlideshowPreview(); else startSlideshowPreview();
         }
 
         function startSlideshowPreview() {
@@ -7168,37 +7688,33 @@
             ssActiveClipIdx = 0;
             document.getElementById('ssPlayIcon').className = 'fas fa-stop';
             if (ssSoundAudio) { ssSoundAudio.currentTime=0; ssSoundAudio.play(); }
-
-            const totalDur = ssClips.reduce((s,c)=>s+c.dur,0) + ssTransDur * Math.max(0,ssClips.length-1);
             ssPlayStartTime = performance.now();
 
             const tick = () => {
                 if (!ssPlaying) return;
-                const elapsed = (performance.now() - ssPlayStartTime) / 1000; // seconds
+                const elapsed = (performance.now() - ssPlayStartTime) / 1000;
+                const totalDur = ssClips.reduce((s,c)=>s+c.dur,0) + ssTransDur * Math.max(0,ssClips.length-1);
                 if (elapsed >= totalDur) { stopSlideshowPreview(); return; }
 
-                // Figure out which clip and progress we're in
                 let t = elapsed;
-                let ci = 0;
                 for(let i=0;i<ssClips.length;i++){
-                    const clipEnd = ssClips[i].dur;
-                    if (t <= clipEnd) { ci=i; break; }
-                    t -= clipEnd;
-                    // Transition gap
-                    if (i < ssClips.length-1) {
-                        if (t <= ssTransDur) {
-                            // In transition between clip i and i+1
-                            const tp = t / ssTransDur;
+                    if (t <= ssClips[i].dur) {
+                        ssActiveClipIdx = i;
+                        renderSsPreviewFrame(t/ssClips[i].dur, 0);
+                        ssPlayRAF = requestAnimationFrame(tick);
+                        return;
+                    }
+                    t -= ssClips[i].dur;
+                    if (i < ssClips.length-1){
+                        if (t <= ssTransDur){
                             ssActiveClipIdx = i;
-                            renderSsPreviewFrame(1, tp);
+                            renderSsPreviewFrame(1, t/ssTransDur);
                             ssPlayRAF = requestAnimationFrame(tick);
                             return;
                         }
                         t -= ssTransDur;
                     }
                 }
-                ssActiveClipIdx = ci;
-                renderSsPreviewFrame(t / ssClips[ci].dur, 0);
                 ssPlayRAF = requestAnimationFrame(tick);
             };
             ssPlayRAF = requestAnimationFrame(tick);
@@ -7206,18 +7722,15 @@
 
         function stopSlideshowPreview() {
             ssPlaying = false;
-            if (ssPlayRAF) { cancelAnimationFrame(ssPlayRAF); ssPlayRAF=null; }
+            if (ssPlayRAF){cancelAnimationFrame(ssPlayRAF);ssPlayRAF=null;}
             if (ssSoundAudio) ssSoundAudio.pause();
             document.getElementById('ssPlayIcon').className = 'fas fa-play';
-            renderSsPreviewFrame(0, 0);
+            if (ssClips.length > 0) renderSsPreviewFrame(0, 0);
         }
 
-        // ---- Export slideshow to video ----
+        // ---- Export ----
         async function exportSlideshowVideo() {
-            if (ssClips.length < 1) {
-                showAlert('Need photos!', 'Add at least 1 photo to export.', '🖼️', [{text:'OK',type:'primary'}]);
-                return;
-            }
+            if (ssClips.length < 1) return;
             stopSlideshowPreview();
             ssExportCancelled = false;
 
@@ -7231,98 +7744,164 @@
             };
 
             try {
-                const canvas = document.getElementById('ssPreviewCanvas');
-                const W = canvas.width, H = canvas.height;
+                // Set up export canvas at full quality
+                const { w: bW, h: bH } = SS_DIMS[ssOrientation];
+                const scale = SS_QUALITY_SCALE[ssQuality] || 1;
+                const outW = Math.round(bW * scale) % 2 === 0 ? Math.round(bW*scale) : Math.round(bW*scale)-1;
+                const outH = Math.round(bH * scale) % 2 === 0 ? Math.round(bH*scale) : Math.round(bH*scale)-1;
+
+                // Use an offscreen render canvas so preview canvas keeps showing
+                const renderCanvas = document.createElement('canvas');
+                renderCanvas.width = outW; renderCanvas.height = outH;
+                const rctx = renderCanvas.getContext('2d');
+
                 const FPS = 30;
                 const totalDur = ssClips.reduce((s,c)=>s+c.dur,0) + ssTransDur * Math.max(0,ssClips.length-1);
                 const totalFrames = Math.ceil(totalDur * FPS);
 
                 setSsProgress(5, 'Setting up audio...');
 
-                // Audio pipeline
-                let audioTrack = null;
-                let audioCtxSs = null;
-                let audioSourceSs = null;
+                // Audio
+                let audioTrack = null, audioCtxSs = null, audioSourceSs = null;
                 if (ssSoundBlob) {
-                    audioCtxSs = new (window.AudioContext || window.webkitAudioContext)();
+                    audioCtxSs = new (window.AudioContext||window.webkitAudioContext)();
                     const ab = await fetch(URL.createObjectURL(ssSoundBlob)).then(r=>r.arrayBuffer()).then(b=>audioCtxSs.decodeAudioData(b));
                     const dest = audioCtxSs.createMediaStreamDestination();
-                    const gain = audioCtxSs.createGain(); gain.gain.value = 0.9;
-                    gain.connect(dest);
+                    const gain = audioCtxSs.createGain(); gain.gain.value=0.9; gain.connect(dest);
                     audioSourceSs = audioCtxSs.createBufferSource();
-                    audioSourceSs.buffer = ab;
-                    audioSourceSs.connect(gain);
+                    audioSourceSs.buffer=ab; audioSourceSs.connect(gain);
                     audioTrack = dest.stream.getAudioTracks()[0];
                 }
 
-                // Stream from canvas
-                const canvasStream = canvas.captureStream(FPS);
+                // Stream from render canvas
+                const canvasStream = renderCanvas.captureStream(FPS);
                 const tracks = [canvasStream.getVideoTracks()[0]];
                 if (audioTrack) tracks.push(audioTrack);
                 const combined = new MediaStream(tracks);
-
-                const mimeType = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || '';
-                const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 5_000_000 });
+                const mimeType = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m))||'';
+                const bitsPerSec = ssQuality === '1080' ? 8_000_000 : ssQuality === '720' ? 5_000_000 : 2_500_000;
+                const recorder = new MediaRecorder(combined,{mimeType,videoBitsPerSecond:bitsPerSec});
                 const chunks = [];
-                recorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
-
+                recorder.ondataavailable = e=>{if(e.data.size>0)chunks.push(e.data);};
                 recorder.onstop = () => {
                     if(audioCtxSs) audioCtxSs.close();
                     exportOverlay.classList.remove('show');
-                    if (ssExportCancelled) return;
-                    const blob = new Blob(chunks, { type: 'video/webm' });
-                    // Show download + use
+                    if(ssExportCancelled) return;
+                    const blob = new Blob(chunks,{type:'video/webm'});
                     showSsExportDone(blob);
                 };
 
                 recorder.start(100);
                 if (audioSourceSs) audioSourceSs.start();
+                setSsProgress(10,'Rendering frames...');
 
-                setSsProgress(10, 'Rendering slideshow...');
+                // Helper to draw a frame on the offscreen render canvas
+                const drawExportFrame = (clipIdx, clipProgress, transProgress) => {
+                    rctx.clearRect(0,0,outW,outH);
+                    rctx.fillStyle='#000';rctx.fillRect(0,0,outW,outH);
 
-                // Frame rendering loop
-                let frameIdx = 0;
-                const renderNextFrame = () => {
-                    if (ssExportCancelled) { recorder.stop(); if(audioSourceSs){try{audioSourceSs.stop();}catch(e){}} return; }
+                    const clip = ssClips[clipIdx];
+                    const nextClip = ssClips[clipIdx+1];
 
-                    const elapsed = frameIdx / FPS;
-                    let t = elapsed;
-                    let ci = 0, clipT = 0, transT = 0;
-                    for(let i=0;i<ssClips.length;i++){
-                        if (t <= ssClips[i].dur) { ci=i; clipT=t/ssClips[i].dur; break; }
-                        t -= ssClips[i].dur;
-                        if (i < ssClips.length-1){
-                            if (t <= ssTransDur){ ci=i; clipT=1; transT=t/ssTransDur; break; }
-                            t -= ssTransDur;
+                    if (transProgress > 0 && nextClip) {
+                        // Draw transition on rctx using the same logic but with rctx
+                        const trans = nextClip.transition || ssTransition;
+                        const t = transProgress;
+                        const drawA2=(alpha)=>{rctx.save();rctx.globalAlpha=alpha;drawClipOnCtx(rctx,clip,clipProgress,outW,outH);rctx.restore();};
+                        const drawB2=(alpha)=>{rctx.save();rctx.globalAlpha=alpha;drawClipOnCtx(rctx,nextClip,0,outW,outH);rctx.restore();};
+                        switch(trans){
+                            case 'fade': drawA2(1-t);drawB2(t);break;
+                            case 'slide': rctx.save();rctx.translate(-outW*t,0);drawA2(1);rctx.restore();rctx.save();rctx.translate(outW*(1-t),0);drawB2(1);rctx.restore();break;
+                            case 'zoom': drawA2(1-t);drawB2(t);break;
+                            case 'wipe': drawA2(1);rctx.save();rctx.beginPath();rctx.rect(0,0,outW*t,outH);rctx.clip();drawB2(1);rctx.restore();break;
+                            case 'flash': {const f=t<0.5?t*2:(1-t)*2;if(t<0.5)drawA2(1);else drawB2(1);rctx.fillStyle=`rgba(255,255,255,${f*0.95})`;rctx.fillRect(0,0,outW,outH);break;}
+                            case 'glitch': drawA2(1-t);if(t>0.25){for(let gi=0;gi<8;gi++){const sy=(outH/8)*gi,off=(Math.random()-0.5)*outW*t*0.35;rctx.save();rctx.globalAlpha=t;rctx.beginPath();rctx.rect(0,sy,outW,outH/8);rctx.clip();rctx.translate(off,0);drawClipOnCtx(rctx,nextClip,0,outW,outH);rctx.restore();}}break;
+                            default: drawA2(1-t);drawB2(t);
                         }
-                        if (i === ssClips.length-1) ci=i;
+                    } else {
+                        drawClipOnCtx(rctx, clip, clipProgress, outW, outH);
                     }
 
-                    ssActiveClipIdx = ci;
-                    renderSsPreviewFrame(clipT, transT);
+                    // Watermark
+                    if(ssWatermarkOn){
+                        rctx.save();
+                        const fs=Math.max(14,outW*0.03);
+                        rctx.font=`bold ${fs}px Pacifico,cursive,sans-serif`;
+                        rctx.textAlign='right';rctx.textBaseline='bottom';
+                        rctx.shadowColor='rgba(0,0,0,0.7)';rctx.shadowBlur=8;
+                        const gr=rctx.createLinearGradient(outW-fs*5,outH-fs*2.5,outW,outH);
+                        gr.addColorStop(0,'#fe2c55');gr.addColorStop(1,'#25f4ee');
+                        rctx.fillStyle=gr;rctx.globalAlpha=0.85;
+                        rctx.fillText('KVibe',outW-outW*0.025,outH-outH*0.015);
+                        rctx.shadowBlur=0;rctx.restore();
+                    }
+                };
+
+                let frameIdx = 0;
+                const renderNextFrame = () => {
+                    if (ssExportCancelled){recorder.stop();if(audioSourceSs){try{audioSourceSs.stop();}catch(e){}}return;}
+                    const elapsed = frameIdx/FPS;
+                    let t=elapsed, ci=0, clipT=0, transT=0;
+                    for(let i=0;i<ssClips.length;i++){
+                        if(t<=ssClips[i].dur){ci=i;clipT=t/ssClips[i].dur;break;}
+                        t-=ssClips[i].dur;
+                        if(i<ssClips.length-1){
+                            if(t<=ssTransDur){ci=i;clipT=1;transT=t/ssTransDur;break;}
+                            t-=ssTransDur;
+                        }
+                        if(i===ssClips.length-1)ci=i;
+                    }
+                    drawExportFrame(ci,clipT,transT);
                     frameIdx++;
-
-                    const pct = 10 + (frameIdx/totalFrames)*80;
-                    if (frameIdx % FPS === 0) setSsProgress(pct, `Frame ${frameIdx}/${totalFrames}`);
-
-                    if (frameIdx < totalFrames) {
-                        setTimeout(renderNextFrame, 1000/FPS);
+                    const pct=10+(frameIdx/totalFrames)*82;
+                    if(frameIdx%FPS===0) setSsProgress(pct,`Frame ${frameIdx}/${totalFrames}`);
+                    if(frameIdx<totalFrames){
+                        setTimeout(renderNextFrame,1000/FPS);
                     } else {
-                        setSsProgress(95, 'Finishing up...');
-                        setTimeout(() => { recorder.stop(); if(audioSourceSs){try{audioSourceSs.stop();}catch(e){}} }, 400);
+                        setSsProgress(95,'Finishing...');
+                        setTimeout(()=>{recorder.stop();if(audioSourceSs){try{audioSourceSs.stop();}catch(e){}}},400);
                     }
                 };
                 renderNextFrame();
 
             } catch(err) {
-                console.error('Slideshow export error:', err);
-                exportOverlay.classList.remove('show');
-                showAlert('Export failed', err.message, '❌', [{text:'OK',type:'primary'}]);
+                console.error('Slideshow export error:',err);
+                document.getElementById('ssExportingOverlay').classList.remove('show');
+                showAlert('Export failed',err.message,'❌',[{text:'OK',type:'primary'}]);
             }
         }
 
+        // Helper: draw clip on any context (used for export)
+        function drawClipOnCtx(ctx, clip, clipProgress, W, H) {
+            const img = clip.img;
+            const iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
+            const iAsp=iw/ih, cAsp=W/H;
+            let dw,dh;
+            if(iAsp>cAsp){dh=H;dw=H*iAsp;}else{dw=W;dh=W/iAsp;}
+            const baseDx=(W-dw)/2, baseDy=(H-dh)/2;
+            const t=Math.max(0,Math.min(1,clipProgress));
+            const kb=clip.kenBurns||'zoom_in';
+            let zoom=1,ox=0,oy=0;
+            switch(kb){
+                case 'zoom_in':  zoom=1+t*0.08;break;
+                case 'zoom_out': zoom=1.08-t*0.08;break;
+                case 'pan_right':ox=t*W*0.06;break;
+                case 'pan_left': ox=-t*W*0.06;break;
+                case 'pan_up':   oy=-t*H*0.06;break;
+                case 'pan_down': oy=t*H*0.06;break;
+                case 'diagonal': zoom=1+t*0.05;ox=t*W*0.04;oy=-t*H*0.03;break;
+                default:break;
+            }
+            const filterStr=getClipFilter(clip);
+            ctx.save();
+            ctx.filter=filterStr;
+            if(zoom!==1||ox||oy){ctx.translate(W/2+ox,H/2+oy);ctx.scale(zoom,zoom);ctx.drawImage(img,baseDx-W/2,baseDy-H/2,dw,dh);}
+            else{ctx.drawImage(img,baseDx,baseDy,dw,dh);}
+            ctx.filter='none';
+            ctx.restore();
+        }
         function showSsExportDone(blob) {
-            showAlert('Video Ready! 🎬', 'Your slideshow video is ready to save or use in your post.', '✨', [
+            showAlert('Video Ready! 🎬', `Your ${ssOrientation} video is ready.`, '✨', [
                 { text: '💾 Save', type: 'primary' },
                 { text: '📌 Use in Post', type: 'primary' },
                 { text: 'Close', type: 'secondary' }
@@ -7330,10 +7909,11 @@
                 if (action === '💾 Save') {
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob);
-                    a.download = `slideshow_${Date.now()}.webm`;
+                    a.download = `kvibe_${ssOrientation}_${ssQuality}_${Date.now()}.webm`;
                     a.click();
+                    createFloatingEmoji('💾', window.innerWidth/2, 100);
                 } else if (action === '📌 Use in Post') {
-                    const file = new File([blob], `slideshow_${Date.now()}.webm`, {type:'video/webm'});
+                    const file = new File([blob], `kvibe_video_${Date.now()}.webm`, {type:'video/webm'});
                     currentVideoBlob = blob;
                     const url = URL.createObjectURL(blob);
                     document.getElementById('videoElement').src = url;
@@ -7342,8 +7922,8 @@
                     document.getElementById('video_file').files = dt.files;
                     closeSlideshowBuilder();
                     updatePreview(); updateShareButtonState();
+                    createFloatingEmoji('🎬', window.innerWidth/2, 100);
                 }
-                createFloatingEmoji('🎬', window.innerWidth/2, 100);
                 vibeVibrate(60);
             });
         }
@@ -7351,5 +7931,4 @@
     </script>
 </body>
 </html>
-
 
