@@ -404,6 +404,55 @@
             100% { transform: scale(1); }
         }
 
+        /* ===== Slideshow Text Overlay Modal Styles ===== */
+        .ssov-font-btn {
+            padding: 7px 14px;
+            border-radius: 10px;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.07);
+            color: rgba(255,255,255,0.65);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .ssov-font-btn.ssov-font-active {
+            border-color: #fe2c55;
+            background: rgba(254,44,85,0.2);
+            color: white;
+        }
+        .ssov-color-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+        .ssov-color-swatch.ssov-color-active {
+            border-color: #fe2c55;
+            transform: scale(1.15);
+        }
+        .ssov-pos-btn {
+            padding: 7px 14px;
+            border-radius: 10px;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.07);
+            color: rgba(255,255,255,0.65);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .ssov-pos-btn.ssov-pos-active {
+            border-color: #25f4ee;
+            background: rgba(37,244,238,0.15);
+            color: white;
+        }
+        .ssov-style-active {
+            border-color: #fe2c55 !important;
+            background: rgba(254,44,85,0.2) !important;
+            color: white !important;
+        }
+
         /* Textarea */
         .kf-textarea-container {
             padding: 12px 16px;
@@ -1945,24 +1994,30 @@
             bottom: 120px;
             left: 20px;
             color: white;
-            font-size: 14px;
+            font-size: 18px;
             font-weight: 700;
-            text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+            text-shadow: 0 2px 10px rgba(0,0,0,0.95);
             z-index: 5;
         }
 
         .kf-watermark-brand {
-            font-size: 16px;
-            font-weight: 800;
+            font-size: 22px;
+            font-weight: 900;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 5px;
+            background: linear-gradient(135deg, #fe2c55, #25f4ee);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 2px 6px rgba(0,0,0,0.8));
         }
 
         .kf-watermark-username {
-            font-size: 12px;
-            font-weight: 600;
-            opacity: 0.95;
+            font-size: 15px;
+            font-weight: 700;
+            opacity: 0.98;
+            letter-spacing: 0.3px;
         }
 
         .kf-video-controls {
@@ -3287,6 +3342,12 @@
             </button>
             <!-- Divider -->
             <div style="width:1px;height:28px;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>
+            <!-- Add Text Overlay button for slideshow -->
+            <button id="ssAddTextBtn" onclick="openSsTextOverlay()" style="padding:6px 12px;border-radius:18px;border:1.5px solid rgba(254,44,85,0.5);background:rgba(254,44,85,0.15);color:#fe2c55;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;flex-shrink:0;">
+                <i class="fas fa-font"></i> Add Text
+            </button>
+            <!-- Divider -->
+            <div style="width:1px;height:28px;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>
             <!-- Sound btn -->
             <label class="kf-ss-sound-btn" id="ssSoundBtn" style="cursor:pointer;flex-shrink:0;">
                 <i class="fas fa-music"></i> <span id="ssSoundBtnLabel">Add Sound</span>
@@ -3412,7 +3473,108 @@
         </div>
     </div>
 
-    <!-- Export options sheet (orientation + quality) -->
+    <!-- ===== Slideshow Text Overlay Modal ===== -->
+    <div id="ssTextOverlayModal" style="display:none;position:fixed;inset:0;z-index:4100;background:rgba(0,0,0,0.88);backdrop-filter:blur(12px);align-items:flex-end;justify-content:center;">
+        <div style="background:#111;border-radius:24px 24px 0 0;width:100%;max-width:480px;padding:20px 18px 36px;border-top:1px solid rgba(255,255,255,0.1);max-height:90vh;overflow-y:auto;">
+            <div style="width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:0 auto 16px;"></div>
+            <div style="font-size:17px;font-weight:800;color:white;margin-bottom:4px;">✏️ Add Text Overlay</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Text will appear on your video</div>
+
+            <!-- Text Input -->
+            <div style="margin-bottom:14px;">
+                <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Your Text</div>
+                <input id="ssOvTextInput" type="text" placeholder="Type something vibes..." maxlength="80"
+                    style="width:100%;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.15);color:white;font-size:15px;outline:none;"
+                    oninput="updateSsOvPreview()">
+            </div>
+
+            <!-- Font Family -->
+            <div style="margin-bottom:14px;">
+                <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Font</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;" id="ssOvFontRow">
+                    <button class="ssov-font-btn ssov-font-active" data-font="Arial, sans-serif" onclick="selectSsOvFont(this)" style="font-family:Arial,sans-serif;">Arial</button>
+                    <button class="ssov-font-btn" data-font="Georgia, serif" onclick="selectSsOvFont(this)" style="font-family:Georgia,serif;">Georgia</button>
+                    <button class="ssov-font-btn" data-font="'Courier New', monospace" onclick="selectSsOvFont(this)" style="font-family:'Courier New',monospace;">Courier</button>
+                    <button class="ssov-font-btn" data-font="Impact, sans-serif" onclick="selectSsOvFont(this)" style="font-family:Impact,sans-serif;letter-spacing:1px;">Impact</button>
+                    <button class="ssov-font-btn" data-font="'Trebuchet MS', sans-serif" onclick="selectSsOvFont(this)" style="font-family:'Trebuchet MS',sans-serif;">Trebuchet</button>
+                    <button class="ssov-font-btn" data-font="'Comic Sans MS', cursive" onclick="selectSsOvFont(this)" style="font-family:'Comic Sans MS',cursive;">Comic</button>
+                    <button class="ssov-font-btn" data-font="Pacifico, cursive" onclick="selectSsOvFont(this)" style="font-family:Pacifico,cursive;">Pacifico</button>
+                    <button class="ssov-font-btn" data-font="'Palatino Linotype', serif" onclick="selectSsOvFont(this)" style="font-family:'Palatino Linotype',serif;">Palatino</button>
+                </div>
+            </div>
+
+            <!-- Font Size -->
+            <div style="margin-bottom:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;">Font Size</div>
+                    <span id="ssOvSizeVal" style="font-size:12px;color:rgba(255,255,255,0.7);font-weight:700;">36px</span>
+                </div>
+                <input type="range" id="ssOvSize" min="16" max="120" value="36" step="2"
+                    style="width:100%;accent-color:#fe2c55;" oninput="document.getElementById('ssOvSizeVal').textContent=this.value+'px';updateSsOvPreview();">
+            </div>
+
+            <!-- Color -->
+            <div style="margin-bottom:14px;">
+                <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Color</div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                    <div class="ssov-color-swatch ssov-color-active" data-color="#ffffff" onclick="selectSsOvColor(this)" style="background:#fff;"></div>
+                    <div class="ssov-color-swatch" data-color="#fe2c55" onclick="selectSsOvColor(this)" style="background:#fe2c55;"></div>
+                    <div class="ssov-color-swatch" data-color="#25f4ee" onclick="selectSsOvColor(this)" style="background:#25f4ee;"></div>
+                    <div class="ssov-color-swatch" data-color="#ffd700" onclick="selectSsOvColor(this)" style="background:#ffd700;"></div>
+                    <div class="ssov-color-swatch" data-color="#00e676" onclick="selectSsOvColor(this)" style="background:#00e676;"></div>
+                    <div class="ssov-color-swatch" data-color="#ff9100" onclick="selectSsOvColor(this)" style="background:#ff9100;"></div>
+                    <div class="ssov-color-swatch" data-color="#aa00ff" onclick="selectSsOvColor(this)" style="background:#aa00ff;"></div>
+                    <div class="ssov-color-swatch" data-color="#000000" onclick="selectSsOvColor(this)" style="background:#000;border:2px solid rgba(255,255,255,0.3);"></div>
+                    <label title="Custom color" style="width:32px;height:32px;border-radius:50%;overflow:hidden;cursor:pointer;border:2px dashed rgba(255,255,255,0.4);display:flex;align-items:center;justify-content:center;">
+                        <input type="color" id="ssOvColorPicker" value="#ffffff" style="width:40px;height:40px;border:none;padding:0;cursor:pointer;opacity:0;position:absolute;" oninput="selectSsOvColorCustom(this.value)">
+                        <i class="fas fa-eyedropper" style="color:rgba(255,255,255,0.6);font-size:12px;pointer-events:none;"></i>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Style Options -->
+            <div style="margin-bottom:14px;">
+                <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Style</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button id="ssOvBoldBtn" onclick="toggleSsOvBold()" style="padding:8px 16px;border-radius:10px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);font-weight:800;font-size:13px;cursor:pointer;">B</button>
+                    <button id="ssOvItalicBtn" onclick="toggleSsOvItalic()" style="padding:8px 16px;border-radius:10px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);font-style:italic;font-size:13px;cursor:pointer;"><i>I</i></button>
+                    <button id="ssOvShadowBtn" onclick="toggleSsOvShadow()" style="padding:8px 16px;border-radius:10px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);font-size:13px;cursor:pointer;"><i class="fas fa-adjust"></i> Shadow</button>
+                    <button id="ssOvOutlineBtn" onclick="toggleSsOvOutline()" style="padding:8px 16px;border-radius:10px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.6);font-size:13px;cursor:pointer;"><i class="fas fa-pen-nib"></i> Outline</button>
+                </div>
+            </div>
+
+            <!-- Position -->
+            <div style="margin-bottom:14px;">
+                <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Position</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <button class="ssov-pos-btn ssov-pos-active" data-pos="center" onclick="selectSsOvPos(this)"><i class="fas fa-align-center"></i> Center</button>
+                    <button class="ssov-pos-btn" data-pos="top" onclick="selectSsOvPos(this)"><i class="fas fa-arrow-up"></i> Top</button>
+                    <button class="ssov-pos-btn" data-pos="bottom" onclick="selectSsOvPos(this)"><i class="fas fa-arrow-down"></i> Bottom</button>
+                    <button class="ssov-pos-btn" data-pos="topleft" onclick="selectSsOvPos(this)"><i class="fas fa-expand-arrows-alt"></i> Top-Left</button>
+                    <button class="ssov-pos-btn" data-pos="topright" onclick="selectSsOvPos(this)">Top-Right</button>
+                    <button class="ssov-pos-btn" data-pos="bottomleft" onclick="selectSsOvPos(this)">Bot-Left</button>
+                    <button class="ssov-pos-btn" data-pos="bottomright" onclick="selectSsOvPos(this)">Bot-Right</button>
+                </div>
+            </div>
+
+            <!-- Preview strip -->
+            <div style="background:rgba(0,0,0,0.5);border-radius:12px;padding:16px;margin-bottom:16px;min-height:60px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.08);">
+                <div id="ssOvPreviewText" style="font-size:24px;color:white;text-shadow:0 2px 8px rgba(0,0,0,0.8);font-family:Arial,sans-serif;word-break:break-word;text-align:center;">Preview text here...</div>
+            </div>
+
+            <!-- Actions -->
+            <button onclick="addSsTextOverlay()" style="width:100%;padding:15px;border-radius:16px;background:linear-gradient(135deg,#fe2c55,#ff6b35);border:none;color:white;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:10px;">
+                <i class="fas fa-plus"></i> Add to Video
+            </button>
+
+            <!-- Existing overlays list -->
+            <div id="ssOvList" style="margin-top:8px;"></div>
+
+            <button onclick="closeSsTextOverlay()" style="width:100%;padding:12px;border-radius:14px;background:rgba(255,255,255,0.07);border:none;color:rgba(255,255,255,0.6);font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;">
+                Done
+            </button>
+        </div>
+    </div>
     <div id="ssExportSheet" style="display:none;position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);align-items:flex-end;justify-content:center;">
         <div style="background:#111;border-radius:24px 24px 0 0;width:100%;max-width:480px;padding:24px 20px 36px;border-top:1px solid rgba(255,255,255,0.1);">
             <div style="width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:0 auto 20px;"></div>
@@ -3795,10 +3957,10 @@
             </div>
             <div class="kf-video-watermark">
                 <div class="kf-watermark-brand">
-                    <i class="fas fa-star"></i> @Kishiface
+                    <i class="fas fa-star"></i> kvibe
                 </div>
                 <div class="kf-watermark-username">
-                    <i class="fas fa-at"></i> {{request.user.username}}
+                    @{{request.user.username}}
                 </div>
             </div>
         </div>
@@ -7076,6 +7238,8 @@
         let ssTransDur = 0.6;
         let ssOrientation = 'portrait'; // 'portrait' | 'landscape' | 'square'
         let ssWatermarkOn = true;
+        let ssWatermarkUsername = ''; // Will be set from Django template
+        let ssTextOverlays = []; // Array of {text, font, color, size, x, y, bold, italic, shadow}
         let ssQuality = '720';
         let ssPlaying = false;
         let ssPlayRAF = null;
@@ -7142,7 +7306,20 @@
                 Promise.all(selectedImages.map(f => new Promise(res => {
                     const img = new Image();
                     const url = URL.createObjectURL(f);
-                    img.onload = () => { URL.revokeObjectURL(url); res(makeDefaultClip(img, f)); };
+                    img.onload = () => {
+                        // Generate a persistent data URL thumbnail so preview always works
+                        try {
+                            const c = document.createElement('canvas');
+                            const maxSide = 400;
+                            const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+                            c.width = Math.round(img.naturalWidth * scale);
+                            c.height = Math.round(img.naturalHeight * scale);
+                            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                            img._thumbDataURL = c.toDataURL('image/jpeg', 0.85);
+                        } catch(e) { img._thumbDataURL = url; }
+                        // Keep the blob URL alive (don't revoke) so img.src stays valid for canvas rendering
+                        res(makeDefaultClip(img, f));
+                    };
                     img.src = url;
                 }))).then(clips => { ssClips = clips; renderSsTimeline(); selectSsClip(0); });
             } else {
@@ -7227,6 +7404,177 @@
                 toggleBtn.style.background = ssWatermarkOn ? '#fe2c55' : 'rgba(255,255,255,0.2)';
             }
             if (ssClips.length > 0) renderSsPreviewFrame(0, 0);
+        }
+
+        // ---- Text Overlay System ----
+        let _ssOvFont = 'Arial, sans-serif';
+        let _ssOvColor = '#ffffff';
+        let _ssOvBold = false;
+        let _ssOvItalic = false;
+        let _ssOvShadow = true;
+        let _ssOvOutline = false;
+        let _ssOvPos = 'center';
+
+        function openSsTextOverlay() {
+            // Init username from page if possible
+            if (!ssWatermarkUsername) {
+                const wmEl = document.querySelector('.kf-watermark-username');
+                if (wmEl) ssWatermarkUsername = wmEl.textContent.trim().replace('@','');
+            }
+            document.getElementById('ssTextOverlayModal').style.display = 'flex';
+            renderSsOvList();
+            updateSsOvPreview();
+        }
+
+        function closeSsTextOverlay() {
+            document.getElementById('ssTextOverlayModal').style.display = 'none';
+        }
+
+        function selectSsOvFont(btn) {
+            document.querySelectorAll('.ssov-font-btn').forEach(b => b.classList.remove('ssov-font-active'));
+            btn.classList.add('ssov-font-active');
+            _ssOvFont = btn.dataset.font;
+            updateSsOvPreview();
+        }
+
+        function selectSsOvColor(swatch) {
+            document.querySelectorAll('.ssov-color-swatch').forEach(s => s.classList.remove('ssov-color-active'));
+            swatch.classList.add('ssov-color-active');
+            _ssOvColor = swatch.dataset.color;
+            document.getElementById('ssOvColorPicker').value = _ssOvColor;
+            updateSsOvPreview();
+        }
+
+        function selectSsOvColorCustom(val) {
+            document.querySelectorAll('.ssov-color-swatch').forEach(s => s.classList.remove('ssov-color-active'));
+            _ssOvColor = val;
+            updateSsOvPreview();
+        }
+
+        function toggleSsOvBold() {
+            _ssOvBold = !_ssOvBold;
+            const btn = document.getElementById('ssOvBoldBtn');
+            btn.classList.toggle('ssov-style-active', _ssOvBold);
+            updateSsOvPreview();
+        }
+
+        function toggleSsOvItalic() {
+            _ssOvItalic = !_ssOvItalic;
+            const btn = document.getElementById('ssOvItalicBtn');
+            btn.classList.toggle('ssov-style-active', _ssOvItalic);
+            updateSsOvPreview();
+        }
+
+        function toggleSsOvShadow() {
+            _ssOvShadow = !_ssOvShadow;
+            const btn = document.getElementById('ssOvShadowBtn');
+            btn.classList.toggle('ssov-style-active', _ssOvShadow);
+            updateSsOvPreview();
+        }
+
+        function toggleSsOvOutline() {
+            _ssOvOutline = !_ssOvOutline;
+            const btn = document.getElementById('ssOvOutlineBtn');
+            btn.classList.toggle('ssov-style-active', _ssOvOutline);
+            updateSsOvPreview();
+        }
+
+        function selectSsOvPos(btn) {
+            document.querySelectorAll('.ssov-pos-btn').forEach(b => b.classList.remove('ssov-pos-active'));
+            btn.classList.add('ssov-pos-active');
+            _ssOvPos = btn.dataset.pos;
+        }
+
+        function updateSsOvPreview() {
+            const txt = document.getElementById('ssOvTextInput').value || 'Preview text here...';
+            const size = document.getElementById('ssOvSize').value;
+            const el = document.getElementById('ssOvPreviewText');
+            el.textContent = txt;
+            el.style.fontFamily = _ssOvFont;
+            el.style.fontSize = Math.min(size, 48) + 'px';
+            el.style.color = _ssOvColor;
+            el.style.fontWeight = _ssOvBold ? '800' : '600';
+            el.style.fontStyle = _ssOvItalic ? 'italic' : 'normal';
+            el.style.textShadow = _ssOvShadow ? '0 2px 10px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.6)' : 'none';
+            el.style.webkitTextStroke = _ssOvOutline ? '1.5px rgba(0,0,0,0.8)' : '';
+        }
+
+        function addSsTextOverlay() {
+            const txt = document.getElementById('ssOvTextInput').value.trim();
+            if (!txt) { showAlert('No text', 'Please type something first!', '✏️', [{text:'OK',type:'primary'}]); return; }
+            const size = parseInt(document.getElementById('ssOvSize').value);
+            ssTextOverlays.push({
+                text: txt, font: _ssOvFont, color: _ssOvColor,
+                size, bold: _ssOvBold, italic: _ssOvItalic,
+                shadow: _ssOvShadow, outline: _ssOvOutline, pos: _ssOvPos
+            });
+            document.getElementById('ssOvTextInput').value = '';
+            renderSsOvList();
+            if (ssClips.length > 0) renderSsPreviewFrame(0, 0);
+            createFloatingEmoji('✨', window.innerWidth/2, window.innerHeight/2);
+        }
+
+        function removeSsTextOverlay(idx) {
+            ssTextOverlays.splice(idx, 1);
+            renderSsOvList();
+            if (ssClips.length > 0) renderSsPreviewFrame(0, 0);
+        }
+
+        function renderSsOvList() {
+            const list = document.getElementById('ssOvList');
+            if (!ssTextOverlays.length) { list.innerHTML = ''; return; }
+            list.innerHTML = `<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Added Texts</div>` +
+                ssTextOverlays.map((ov, i) => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;border:1px solid rgba(255,255,255,0.08);">
+                    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+                        <div style="width:10px;height:10px;border-radius:50%;background:${ov.color};flex-shrink:0;"></div>
+                        <span style="font-size:13px;color:white;font-family:${ov.font};font-weight:${ov.bold?'800':'600'};font-style:${ov.italic?'italic':'normal'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ov.text}</span>
+                        <span style="font-size:10px;color:rgba(255,255,255,0.3);flex-shrink:0;">${ov.size}px · ${ov.pos}</span>
+                    </div>
+                    <button onclick="removeSsTextOverlay(${i})" style="background:none;border:none;color:rgba(255,44,85,0.7);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0;">✕</button>
+                </div>`).join('');
+        }
+
+        // Draw all text overlays onto canvas
+        function drawSsTextOverlays(ctx, W, H) {
+            if (!ssTextOverlays.length) return;
+            ssTextOverlays.forEach(ov => {
+                ctx.save();
+                const weight = ov.bold ? '900' : '600';
+                const style = ov.italic ? 'italic' : 'normal';
+                ctx.font = `${style} ${weight} ${ov.size}px ${ov.font}`;
+                ctx.fillStyle = ov.color;
+                ctx.textBaseline = 'middle';
+
+                // Position
+                let x = W / 2, y = H / 2, align = 'center';
+                switch (ov.pos) {
+                    case 'top':         x = W/2; y = H * 0.12; align = 'center'; break;
+                    case 'bottom':      x = W/2; y = H * 0.88; align = 'center'; break;
+                    case 'topleft':     x = W * 0.05; y = H * 0.10; align = 'left'; break;
+                    case 'topright':    x = W * 0.95; y = H * 0.10; align = 'right'; break;
+                    case 'bottomleft':  x = W * 0.05; y = H * 0.90; align = 'left'; break;
+                    case 'bottomright': x = W * 0.95; y = H * 0.90; align = 'right'; break;
+                    default:            x = W/2; y = H/2; align = 'center'; break;
+                }
+                ctx.textAlign = align;
+
+                // Shadow
+                if (ov.shadow) {
+                    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                    ctx.shadowBlur = 12;
+                    ctx.shadowOffsetX = 1;
+                    ctx.shadowOffsetY = 2;
+                }
+                // Outline
+                if (ov.outline) {
+                    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+                    ctx.lineWidth = Math.max(2, ov.size * 0.06);
+                    ctx.strokeText(ov.text, x, y);
+                }
+                ctx.fillText(ov.text, x, y);
+                ctx.restore();
+            });
         }
 
         // ---- Export sheet ----
@@ -7331,7 +7679,7 @@
                 const clipEl = document.createElement('div');
                 clipEl.className = 'kf-ss-clip' + (i === ssActiveClipIdx ? ' active' : '');
                 clipEl.innerHTML = `
-                    <img src="${clip.img.src}" loading="lazy">
+                    <img src="${clip.img._thumbDataURL || clip.img.src}" loading="lazy">
                     <span class="kf-ss-clip-idx">${i+1}</span>
                     <span class="kf-ss-clip-dur">${clip.dur}s</span>
                     <span class="kf-ss-clip-del" onclick="removeSsClip(event,${i})">✕</span>
@@ -7370,7 +7718,20 @@
             Promise.all(files.map(f => new Promise(res => {
                 const img = new Image();
                 const url = URL.createObjectURL(f);
-                img.onload = () => { URL.revokeObjectURL(url); res(makeDefaultClip(img, f)); };
+                img.onload = () => {
+                    // Generate a persistent data URL thumbnail so preview always works
+                    try {
+                        const c = document.createElement('canvas');
+                        const maxSide = 400;
+                        const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+                        c.width = Math.round(img.naturalWidth * scale);
+                        c.height = Math.round(img.naturalHeight * scale);
+                        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                        img._thumbDataURL = c.toDataURL('image/jpeg', 0.85);
+                    } catch(e) { img._thumbDataURL = url; }
+                    // Keep blob URL alive for canvas rendering
+                    res(makeDefaultClip(img, f));
+                };
                 img.src = url;
             }))).then(clips => {
                 const wasEmpty = ssClips.length === 0;
@@ -7408,7 +7769,7 @@
                 if (name) name.textContent = 'Select a clip';
                 return;
             }
-            if (img) { img.src = clip.img.src; img.style.display='block'; }
+            if (img) { img.src = clip.img._thumbDataURL || clip.img.src; img.style.display='block'; }
             if (empty) empty.style.display='none';
             if (name) name.textContent = clip.file?.name || ('Clip ' + (ssActiveClipIdx+1));
 
@@ -7583,20 +7944,27 @@
         function drawWatermark(ctx, W, H) {
             if (!ssWatermarkOn) return;
             ctx.save();
-            const fs = Math.max(14, W * 0.03);
-            ctx.font = `bold ${fs}px 'Pacifico', cursive, sans-serif`;
+            const fs = Math.max(18, W * 0.042);
             ctx.textAlign = 'right';
             ctx.textBaseline = 'bottom';
-            // shadow
-            ctx.shadowColor = 'rgba(0,0,0,0.7)';
-            ctx.shadowBlur = 6;
-            // Gradient text colour
-            const grad = ctx.createLinearGradient(W-fs*5, H-fs*2.5, W, H);
+            ctx.shadowColor = 'rgba(0,0,0,0.85)';
+            ctx.shadowBlur = 10;
+
+            // Draw "kvibe" with gradient
+            ctx.font = `900 ${fs}px 'Pacifico', cursive, sans-serif`;
+            const grad = ctx.createLinearGradient(W - fs * 6, H - fs * 3.5, W, H - fs * 1.5);
             grad.addColorStop(0, '#fe2c55');
             grad.addColorStop(1, '#25f4ee');
             ctx.fillStyle = grad;
-            ctx.globalAlpha = 0.82;
-            ctx.fillText('KVibe', W - W*0.025, H - H*0.015);
+            ctx.globalAlpha = 0.95;
+            ctx.fillText('kvibe', W - W * 0.025, H - H * 0.015 - fs * 1.1);
+
+            // Draw "@username" below
+            const usernameFs = Math.max(13, W * 0.028);
+            ctx.font = `700 ${usernameFs}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+            ctx.fillStyle = 'rgba(255,255,255,0.95)';
+            ctx.globalAlpha = 0.92;
+            ctx.fillText(`@${ssWatermarkUsername || 'kvibe'}`, W - W * 0.025, H - H * 0.015);
             ctx.shadowBlur = 0;
             ctx.restore();
         }
@@ -7621,6 +7989,7 @@
             }
 
             drawWatermark(ctx, W, H);
+            drawSsTextOverlays(ctx, W, H);
         }
 
         function applyTransition(ctx, clipA, clipB, t, W, H, clipProg) {
@@ -7825,16 +8194,24 @@
                     // Watermark
                     if(ssWatermarkOn){
                         rctx.save();
-                        const fs=Math.max(14,outW*0.03);
-                        rctx.font=`bold ${fs}px Pacifico,cursive,sans-serif`;
+                        const fs=Math.max(18,outW*0.042);
                         rctx.textAlign='right';rctx.textBaseline='bottom';
-                        rctx.shadowColor='rgba(0,0,0,0.7)';rctx.shadowBlur=8;
-                        const gr=rctx.createLinearGradient(outW-fs*5,outH-fs*2.5,outW,outH);
+                        rctx.shadowColor='rgba(0,0,0,0.85)';rctx.shadowBlur=10;
+                        // "kvibe" with gradient
+                        rctx.font=`900 ${fs}px 'Pacifico',cursive,sans-serif`;
+                        const gr=rctx.createLinearGradient(outW-fs*6,outH-fs*3.5,outW,outH-fs*1.5);
                         gr.addColorStop(0,'#fe2c55');gr.addColorStop(1,'#25f4ee');
-                        rctx.fillStyle=gr;rctx.globalAlpha=0.85;
-                        rctx.fillText('KVibe',outW-outW*0.025,outH-outH*0.015);
+                        rctx.fillStyle=gr;rctx.globalAlpha=0.95;
+                        rctx.fillText('kvibe',outW-outW*0.025,outH-outH*0.015-fs*1.1);
+                        // "@username" below
+                        const ufs=Math.max(13,outW*0.028);
+                        rctx.font=`700 ${ufs}px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
+                        rctx.fillStyle='rgba(255,255,255,0.95)';rctx.globalAlpha=0.92;
+                        rctx.fillText(`@${ssWatermarkUsername||'kvibe'}`,outW-outW*0.025,outH-outH*0.015);
                         rctx.shadowBlur=0;rctx.restore();
                     }
+                    // Text overlays
+                    drawSsTextOverlays(rctx, outW, outH);
                 };
 
                 let frameIdx = 0;
@@ -7931,4 +8308,5 @@
     </script>
 </body>
 </html>
+
 
