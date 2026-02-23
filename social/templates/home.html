@@ -5671,7 +5671,7 @@
     function kfPublishStory() {
       const activeTab = document.querySelector('.kf-create-story-tab.active').getAttribute('data-tab');
 
-      // ── Prevent double-submit ──
+      // Prevent double-submit
       const publishBtn = document.querySelector('.kf-story-publish-btn');
       if (publishBtn.disabled) return;
       publishBtn.disabled = true;
@@ -5682,70 +5682,9 @@
         publishBtn.innerHTML = 'Share Story \uD83D\uDE80';
       };
 
-      // ── Helper: inject new story card into the stories list without reload ──
-      function injectStoryCard(story) {
-        const list = document.querySelector('.kf-stories-list');
-        if (!list) return;
-
-        // Build inner preview HTML based on type
-        let previewHtml = '';
-        if (story.story_type === 'text') {
-          previewHtml = `<div class="kf-story-preview-text"
-                              style="background:${story.background_color};color:${story.text_color};font-family:${story.font_family}">
-                           ${story.content ? story.content.substring(0, 25) : ''}
-                         </div>`;
-        } else if (story.story_type === 'image' && story.image_url) {
-          previewHtml = `<img src="${story.image_url}" class="kf-story-preview-media" alt="Story">`;
-        } else if (story.story_type === 'video' && story.video_url) {
-          previewHtml = `<video class="kf-story-preview-media" muted preload="metadata">
-                           <source src="${story.video_url}#t=0.1" type="video/mp4">
-                         </video>`;
-        } else {
-          // Fallback: use author profile pic
-          const profileImg = document.querySelector('.kf-story-add .kf-story-preview-media');
-          const src = profileImg ? profileImg.src : '';
-          previewHtml = `<img src="${src}" class="kf-story-preview-media" alt="Story">`;
-        }
-
-        // Profile pic for ring
-        const profileImg = document.querySelector('.kf-story-add .kf-story-preview-media');
-        const profileSrc = profileImg ? profileImg.src : '';
-
-        const storyEl = document.createElement('a');
-        storyEl.href = '#';
-        storyEl.className = 'kf-story-item kf-story-unseen';
-        storyEl.setAttribute('onclick', `kfOpenStoryViewer('${story.story_id}')`);
-        storyEl.innerHTML = `
-          ${previewHtml}
-          <div class="kf-story-overlay"></div>
-          <div class="kf-story-profile-ring">
-            <img src="${profileSrc}" class="kf-story-profile-img" alt="You">
-          </div>
-          <div class="kf-story-username">You</div>
-        `;
-
-        // Insert right after the "Create story" button (first child)
-        const addBtn = list.querySelector('.kf-story-add');
-        if (addBtn && addBtn.nextSibling) {
-          list.insertBefore(storyEl, addBtn.nextSibling);
-        } else {
-          list.appendChild(storyEl);
-        }
-      }
-
       // ── TEXT STORY ────────────────────────────────────────────────────────
       if (activeTab === 'text') {
         const text = document.getElementById('storyTextInput').value.trim();
-
-        // Safely read active swatches — fall back to defaults if selector fails
-        const bgEl    = document.querySelector('#colorOptions .kf-story-color-option.active')
-                     || document.querySelector('#gradientOptions .csm-gradient-option.active');
-        const textEl  = document.querySelector('#textColorOptions .csm-textcolor-option.active');
-        const fontEl  = document.querySelector('#fontOptions .kf-story-font-option.active');
-
-        const bgColor   = bgEl   ? (bgEl.getAttribute('data-color') || bgEl.getAttribute('data-gradient') || '#0095f6') : '#0095f6';
-        const textColor = textEl ? textEl.getAttribute('data-color') : '#ffffff';
-        const fontFamily = fontEl ? fontEl.getAttribute('data-font') : 'Arial';
 
         if (!text) {
           showToast('Please enter story text', 'error');
@@ -5753,42 +5692,79 @@
           return;
         }
 
+        // Read active background (solid color wins over gradient)
+        const solidEl    = document.querySelector('#colorOptions .kf-story-color-option.active');
+        const gradientEl = document.querySelector('#gradientOptions .csm-gradient-option.active');
+        const textEl     = document.querySelector('#textColorOptions .csm-textcolor-option.active');
+        const fontEl     = document.querySelector('#fontOptions .kf-story-font-option.active');
+
+        // FIX: background_color must be a plain hex color — never send a gradient
+        // string (e.g. "linear-gradient(...)") because that exceeds the DB column size.
+        // If only a gradient is selected, extract its first hex color as the DB value.
+        let bgColor = '#0095f6';
+        if (solidEl) {
+          bgColor = solidEl.getAttribute('data-color') || '#0095f6';
+        } else if (gradientEl) {
+          const gradVal = gradientEl.getAttribute('data-gradient') || '';
+          // Extract first hex code from the gradient string, e.g. "#667eea"
+          const hexMatch = gradVal.match(/#[0-9a-fA-F]{3,6}/);
+          bgColor = hexMatch ? hexMatch[0] : '#0095f6';
+        }
+
+        // FIX: text_color is always a plain hex — safe as-is
+        const textColor = textEl ? (textEl.getAttribute('data-color') || '#ffffff') : '#ffffff';
+
+        // FIX: font_family values like "Permanent Marker", "Dancing Script",
+        // "Abril Fatface" are too long for the DB VARCHAR column.
+        // Map each full name to a safe short alias that the backend can store.
+        const fontRaw = fontEl ? (fontEl.getAttribute('data-font') || 'Arial') : 'Arial';
+        const fontMap = {
+          'Space Grotesk':    'Grotesk',
+          'Bebas Neue':       'Bebas',
+          'Pacifico':         'Pacifico',
+          'Permanent Marker': 'Marker',
+          'Abril Fatface':    'Abril',
+          'Dancing Script':   'Dancing',
+          'Righteous':        'Righteous',
+          'Courier New':      'Courier',
+          'Arial':            'Arial',
+          'Helvetica':        'Helvetica',
+          'Georgia':          'Georgia',
+          'Impact':           'Impact',
+          'Comic Sans MS':    'Comic',
+        };
+        const fontFamily = fontMap[fontRaw] || fontRaw.split(' ')[0].substring(0, 20);
+
+        // FIX: font_size must be sent as a string/integer that fits the DB field.
+        // Read from slider if available, otherwise default to 24.
+        const sizeSlider = document.getElementById('textSizeSlider');
+        const fontSize   = sizeSlider ? parseInt(sizeSlider.value, 10) : 24;
+
+        // FIX: content must not exceed 500 chars (typical DB text field limit)
+        const safeContent = text.substring(0, 500);
+
         fetch('/api/stories/create/', {
           method: 'POST',
-          // ✅ FIX: Content-Type header was missing — server could not parse JSON body
           headers: {
             'X-CSRFToken': getCsrfFromMeta(),
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json',   // FIX: was missing — server could not parse body
           },
           body: JSON.stringify({
-            story_type: 'text',
-            content: text,
+            story_type:       'text',
+            content:          safeContent,
             background_color: bgColor,
-            text_color: textColor,
-            font_family: fontFamily,
-            font_size: 24
+            text_color:       textColor,
+            font_family:      fontFamily,
+            font_size:        fontSize
           })
         })
-        .then(response => {
-          // ✅ FIX: Check HTTP status before parsing JSON
-          if (!response.ok && response.status !== 400) {
-            throw new Error('Server error: ' + response.status);
-          }
-          return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
           if (data.success) {
             showToast('Story shared! \u2728', 'success');
-            // ✅ FIX: Inject story card into DOM immediately, no reload needed
-            injectStoryCard(data.story || {
-              story_type: 'text',
-              story_id: data.story_id || '',
-              content: text,
-              background_color: bgColor,
-              text_color: textColor,
-              font_family: fontFamily
-            });
             kfCloseCreateStoryModal();
+            // Reload so the new story appears correctly in the list
+            setTimeout(() => location.reload(), 800);
           } else {
             showToast('Could not share story: ' + (data.error || 'Unknown error'), 'error');
             resetBtn();
@@ -5804,10 +5780,10 @@
       } else if (activeTab === 'upload') {
         const fileInput = document.getElementById('storyMediaInput');
 
-        // ✅ FIX: Also check video caption field used in the new modal
-        const caption = (document.getElementById('storyMediaCaption') || {}).value
-                      || (document.getElementById('storyVideoCaptionField') || {}).value
-                      || '';
+        // Check both caption fields (original modal + updated modal)
+        const captionEl = document.getElementById('storyMediaCaption')
+                       || document.getElementById('storyVideoCaptionField');
+        const caption   = captionEl ? captionEl.value.trim() : '';
 
         if (!fileInput || !fileInput.files.length) {
           showToast('Please select a file to upload', 'error');
@@ -5815,7 +5791,7 @@
           return;
         }
 
-        const file = fileInput.files[0];
+        const file    = fileInput.files[0];
         const isImage = file.type.match('image.*');
         const isVideo = file.type.match('video.*');
 
@@ -5831,41 +5807,28 @@
           return;
         }
 
-        // ✅ FIX: Build a fresh FormData — do NOT reuse the one from the top
-        // of the function which was created before the file was validated.
+        // FIX: Build fresh FormData after validation and append file explicitly.
+        // The original code reused a FormData created at the top of the function
+        // before the file field was known — the file was never actually appended.
         const uploadData = new FormData();
-        uploadData.append('csrfmiddlewaretoken', getCsrfFromMeta());
-        uploadData.append('story_type', isImage ? 'image' : 'video');
+        uploadData.append('story_type',  isImage ? 'image' : 'video');
         uploadData.append('story_media', file);
-        if (caption.trim()) uploadData.append('content', caption.trim());
+        if (caption) uploadData.append('content', caption.substring(0, 500));
 
-        // ✅ FIX: Do NOT set Content-Type when sending FormData —
-        // the browser must set it automatically with the correct boundary.
+        // FIX: Do NOT manually set Content-Type with FormData —
+        // the browser sets it automatically with the correct multipart boundary.
         fetch('/api/stories/create/', {
           method: 'POST',
-          headers: {
-            'X-CSRFToken': getCsrfFromMeta(),
-          },
+          headers: { 'X-CSRFToken': getCsrfFromMeta() },
           body: uploadData
         })
-        .then(response => {
-          // ✅ FIX: Check HTTP status first
-          if (!response.ok && response.status !== 400) {
-            throw new Error('Server error: ' + response.status);
-          }
-          return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
           if (data.success) {
             showToast('Story shared! \u2728', 'success');
-            // ✅ FIX: Inject story card immediately so user sees it without refresh
-            injectStoryCard(data.story || {
-              story_type: isImage ? 'image' : 'video',
-              story_id: data.story_id || '',
-              image_url: data.image_url || '',
-              video_url: data.video_url || ''
-            });
             kfCloseCreateStoryModal();
+            // Reload so the new story appears correctly in the list
+            setTimeout(() => location.reload(), 800);
           } else {
             showToast('Could not share story: ' + (data.error || 'Unknown error'), 'error');
             resetBtn();
