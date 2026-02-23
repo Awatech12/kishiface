@@ -5623,16 +5623,45 @@
       const modal = document.getElementById('createStoryModal');
       modal.classList.remove('active');
       document.body.style.overflow = '';
-      
-      document.getElementById('storyTextInput').value = '';
-      document.getElementById('storyMediaInput').value = '';
-      document.getElementById('storyUploadPreview').innerHTML = '';
-      document.getElementById('storyUploadPreview').classList.remove('active');
-      document.getElementById('storyMediaCaption').value = '';
-      
-      document.querySelectorAll('.kf-create-story-tab').forEach(tab => {
-        tab.classList.remove('active');
-      });
+
+      // Reset text tab
+      const textInput = document.getElementById('storyTextInput');
+      if (textInput) textInput.value = '';
+      const previewContent = document.getElementById('storyTextPreviewContent');
+      if (previewContent) previewContent.textContent = 'Type your story here';
+
+      // Reset upload tab inputs
+      const mediaInput = document.getElementById('storyMediaInput');
+      if (mediaInput) mediaInput.value = '';
+      const mediaCap = document.getElementById('storyMediaCaption');
+      if (mediaCap) mediaCap.value = '';
+      const videoCap = document.getElementById('storyVideoCaptionField');
+      if (videoCap) videoCap.value = '';
+
+      // Reset image editor state
+      const imageEditor = document.getElementById('imageEditor');
+      if (imageEditor) imageEditor.classList.remove('visible');
+      const videoContainer = document.getElementById('videoPreviewContainer');
+      if (videoContainer) videoContainer.style.display = 'none';
+      const dropzone = document.getElementById('storyDropzone');
+      if (dropzone) dropzone.style.display = '';
+
+      // Clear canvas
+      const canvas = document.getElementById('storyEditCanvas');
+      if (canvas && canvas.getContext) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // Re-enable publish button
+      const publishBtn = document.querySelector('.kf-story-publish-btn');
+      if (publishBtn) {
+        publishBtn.disabled = false;
+        publishBtn.innerHTML = 'Share Story \uD83D\uDE80';
+      }
+
+      // Switch back to text tab
+      document.querySelectorAll('.kf-create-story-tab').forEach(tab => tab.classList.remove('active'));
       document.querySelector('.kf-create-story-tab[data-tab="text"]').classList.add('active');
       document.getElementById('textStoryTab').style.display = 'block';
       document.getElementById('uploadStoryTab').style.display = 'none';
@@ -5641,22 +5670,95 @@
     // Publish story
     function kfPublishStory() {
       const activeTab = document.querySelector('.kf-create-story-tab.active').getAttribute('data-tab');
-      const formData = new FormData(document.getElementById('createStoryForm'));
+
+      // ── Prevent double-submit ──
+      const publishBtn = document.querySelector('.kf-story-publish-btn');
+      if (publishBtn.disabled) return;
+      publishBtn.disabled = true;
+      publishBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sharing...';
+
+      const resetBtn = () => {
+        publishBtn.disabled = false;
+        publishBtn.innerHTML = 'Share Story \uD83D\uDE80';
+      };
+
+      // ── Helper: inject new story card into the stories list without reload ──
+      function injectStoryCard(story) {
+        const list = document.querySelector('.kf-stories-list');
+        if (!list) return;
+
+        // Build inner preview HTML based on type
+        let previewHtml = '';
+        if (story.story_type === 'text') {
+          previewHtml = `<div class="kf-story-preview-text"
+                              style="background:${story.background_color};color:${story.text_color};font-family:${story.font_family}">
+                           ${story.content ? story.content.substring(0, 25) : ''}
+                         </div>`;
+        } else if (story.story_type === 'image' && story.image_url) {
+          previewHtml = `<img src="${story.image_url}" class="kf-story-preview-media" alt="Story">`;
+        } else if (story.story_type === 'video' && story.video_url) {
+          previewHtml = `<video class="kf-story-preview-media" muted preload="metadata">
+                           <source src="${story.video_url}#t=0.1" type="video/mp4">
+                         </video>`;
+        } else {
+          // Fallback: use author profile pic
+          const profileImg = document.querySelector('.kf-story-add .kf-story-preview-media');
+          const src = profileImg ? profileImg.src : '';
+          previewHtml = `<img src="${src}" class="kf-story-preview-media" alt="Story">`;
+        }
+
+        // Profile pic for ring
+        const profileImg = document.querySelector('.kf-story-add .kf-story-preview-media');
+        const profileSrc = profileImg ? profileImg.src : '';
+
+        const storyEl = document.createElement('a');
+        storyEl.href = '#';
+        storyEl.className = 'kf-story-item kf-story-unseen';
+        storyEl.setAttribute('onclick', `kfOpenStoryViewer('${story.story_id}')`);
+        storyEl.innerHTML = `
+          ${previewHtml}
+          <div class="kf-story-overlay"></div>
+          <div class="kf-story-profile-ring">
+            <img src="${profileSrc}" class="kf-story-profile-img" alt="You">
+          </div>
+          <div class="kf-story-username">You</div>
+        `;
+
+        // Insert right after the "Create story" button (first child)
+        const addBtn = list.querySelector('.kf-story-add');
+        if (addBtn && addBtn.nextSibling) {
+          list.insertBefore(storyEl, addBtn.nextSibling);
+        } else {
+          list.appendChild(storyEl);
+        }
+      }
+
+      // ── TEXT STORY ────────────────────────────────────────────────────────
       if (activeTab === 'text') {
         const text = document.getElementById('storyTextInput').value.trim();
-        const bgColor = document.querySelector('#colorOptions .kf-story-color-option.active').getAttribute('data-color');
-        const textColor = document.querySelector('#textColorOptions .kf-story-color-option.active').getAttribute('data-color');
-        const fontFamily = document.querySelector('#fontOptions .kf-story-font-option.active').getAttribute('data-font');
-        
+
+        // Safely read active swatches — fall back to defaults if selector fails
+        const bgEl    = document.querySelector('#colorOptions .kf-story-color-option.active')
+                     || document.querySelector('#gradientOptions .csm-gradient-option.active');
+        const textEl  = document.querySelector('#textColorOptions .csm-textcolor-option.active');
+        const fontEl  = document.querySelector('#fontOptions .kf-story-font-option.active');
+
+        const bgColor   = bgEl   ? (bgEl.getAttribute('data-color') || bgEl.getAttribute('data-gradient') || '#0095f6') : '#0095f6';
+        const textColor = textEl ? textEl.getAttribute('data-color') : '#ffffff';
+        const fontFamily = fontEl ? fontEl.getAttribute('data-font') : 'Arial';
+
         if (!text) {
           showToast('Please enter story text', 'error');
+          resetBtn();
           return;
         }
-        
+
         fetch('/api/stories/create/', {
           method: 'POST',
+          // ✅ FIX: Content-Type header was missing — server could not parse JSON body
           headers: {
             'X-CSRFToken': getCsrfFromMeta(),
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             story_type: 'text',
@@ -5667,67 +5769,112 @@
             font_size: 24
           })
         })
-        .then(response => response.json())
+        .then(response => {
+          // ✅ FIX: Check HTTP status before parsing JSON
+          if (!response.ok && response.status !== 400) {
+            throw new Error('Server error: ' + response.status);
+          }
+          return response.json();
+        })
         .then(data => {
           if (data.success) {
-            showToast('Story published!', 'success');
+            showToast('Story shared! \u2728', 'success');
+            // ✅ FIX: Inject story card into DOM immediately, no reload needed
+            injectStoryCard(data.story || {
+              story_type: 'text',
+              story_id: data.story_id || '',
+              content: text,
+              background_color: bgColor,
+              text_color: textColor,
+              font_family: fontFamily
+            });
             kfCloseCreateStoryModal();
-            setTimeout(() => location.reload(), 1000);
           } else {
-            showToast('Failed to publish story: ' + data.error, 'error');
+            showToast('Could not share story: ' + (data.error || 'Unknown error'), 'error');
+            resetBtn();
           }
         })
         .catch(error => {
-          console.error('Error publishing story:', error);
-          showToast('Failed to publish story', 'error');
+          console.error('Error publishing text story:', error);
+          showToast('Connection error. Please try again.', 'error');
+          resetBtn();
         });
-        
+
+      // ── IMAGE / VIDEO STORY ───────────────────────────────────────────────
       } else if (activeTab === 'upload') {
         const fileInput = document.getElementById('storyMediaInput');
-        const caption = document.getElementById('storyMediaCaption').value.trim();
-        
-        if (!fileInput.files.length) {
+
+        // ✅ FIX: Also check video caption field used in the new modal
+        const caption = (document.getElementById('storyMediaCaption') || {}).value
+                      || (document.getElementById('storyVideoCaptionField') || {}).value
+                      || '';
+
+        if (!fileInput || !fileInput.files.length) {
           showToast('Please select a file to upload', 'error');
+          resetBtn();
           return;
         }
-        
+
         const file = fileInput.files[0];
         const isImage = file.type.match('image.*');
         const isVideo = file.type.match('video.*');
-        
+
         if (!isImage && !isVideo) {
           showToast('Please upload an image or video file', 'error');
+          resetBtn();
           return;
         }
-        
+
         if (file.size > 50 * 1024 * 1024) {
           showToast('File size must be less than 50MB', 'error');
+          resetBtn();
           return;
         }
-        
-        formData.append('story_type', isImage ? 'image' : 'video');
-        if (caption) formData.append('content', caption);
-        
+
+        // ✅ FIX: Build a fresh FormData — do NOT reuse the one from the top
+        // of the function which was created before the file was validated.
+        const uploadData = new FormData();
+        uploadData.append('csrfmiddlewaretoken', getCsrfFromMeta());
+        uploadData.append('story_type', isImage ? 'image' : 'video');
+        uploadData.append('story_media', file);
+        if (caption.trim()) uploadData.append('content', caption.trim());
+
+        // ✅ FIX: Do NOT set Content-Type when sending FormData —
+        // the browser must set it automatically with the correct boundary.
         fetch('/api/stories/create/', {
           method: 'POST',
           headers: {
             'X-CSRFToken': getCsrfFromMeta(),
           },
-          body: formData
+          body: uploadData
         })
-        .then(response => response.json())
+        .then(response => {
+          // ✅ FIX: Check HTTP status first
+          if (!response.ok && response.status !== 400) {
+            throw new Error('Server error: ' + response.status);
+          }
+          return response.json();
+        })
         .then(data => {
           if (data.success) {
-            showToast('Story published!', 'success');
+            showToast('Story shared! \u2728', 'success');
+            // ✅ FIX: Inject story card immediately so user sees it without refresh
+            injectStoryCard(data.story || {
+              story_type: isImage ? 'image' : 'video',
+              story_id: data.story_id || '',
+              image_url: data.image_url || '',
+              video_url: data.video_url || ''
+            });
             kfCloseCreateStoryModal();
-            setTimeout(() => location.reload(), 1000);
           } else {
-            showToast('Failed to publish story: ' + data.error, 'error');
+            showToast('Could not share story: ' + (data.error || 'Unknown error'), 'error');
+            resetBtn();
           }
         })
         .catch(error => {
-          console.error('Error publishing story:', error);
-          showToast('Failed to publish story', 'error');
+          console.error('Error publishing media story:', error);
+          showToast('Connection error. Please try again.', 'error');
+          resetBtn();
         });
       }
     }
