@@ -7308,6 +7308,18 @@
 
         // Form submission
         document.getElementById('postForm').addEventListener('submit', function(e) {
+            // If text style mode is ON and no image has been generated yet, auto-generate it first
+            if (textStyleMode && !textImageBlob) {
+                const preview = document.getElementById('textPreviewContent');
+                const text = preview.innerText.trim();
+                if (text) {
+                    e.preventDefault();
+                    // Auto-generate the image then resubmit
+                    generateTextImageThenSubmit(this);
+                    return;
+                }
+            }
+
             const hasContent = textarea.value.trim().length > 0 || selectedImages.length > 0 || currentVideoBlob || currentAudioBlob;
             
             if (!hasContent) {
@@ -8666,6 +8678,7 @@
         }
 
         // =================== TEXT STYLE MODE ===================
+        // Must run after DOM is ready so imageInput etc. are accessible
         const TEXT_BACKGROUNDS = [
             { label: 'Blue', style: 'linear-gradient(135deg, #1877f2, #0a52c4)' },
             { label: 'Purple', style: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' },
@@ -8896,13 +8909,14 @@
                     const url = URL.createObjectURL(blob);
                     document.getElementById('textImageThumb').src = url;
                     document.getElementById('textImagePreviewWrap').classList.add('show');
-                    
-                    // Set hidden input with data URL for form submission
+
+                    // Set hidden input (optional backup)
                     const dataUrl = canvas.toDataURL('image/png');
                     document.getElementById('textImageDataInput').value = dataUrl;
 
-                    // Also add to selectedImages for preview
-                    addTextImageToPost(blob, url);
+                    // Create a proper File and inject into the images input
+                    const file = new File([blob], `text_style_${Date.now()}.png`, { type: 'image/png' });
+                    addTextImageToPost(file);
 
                     showAlert('image ready! 🎨', 'your text has been turned into a beautiful image ✨', '🎨', [
                         { text: 'nice! 🔥', type: 'primary' }
@@ -8918,13 +8932,23 @@
             return gradientStr.match(colorRegex) || ['#1877f2'];
         }
 
-        function addTextImageToPost(blob, url) {
-            const file = new File([blob], `text_image_${Date.now()}.png`, { type: 'image/png' });
-            if (typeof selectedImages !== 'undefined') {
-                selectedImages.push({ file, url, isTextImage: true });
-                if (typeof updatePreview === 'function') updatePreview();
-                if (typeof updateShareButtonState === 'function') updateShareButtonState();
-            }
+        function addTextImageToPost(file) {
+            // Remove any previous text image first
+            selectedImages = selectedImages.filter(f => !f._isTextImage);
+
+            // Tag this file so we can identify it later
+            file._isTextImage = true;
+            selectedImages.push(file);
+
+            // Sync into the actual file input so Django receives it
+            const dt = new DataTransfer();
+            selectedImages.forEach(f => dt.items.add(f));
+            document.getElementById('images').files = dt.files;
+
+            renderImagePreviews();
+            if (typeof updatePreview === 'function') updatePreview();
+            if (typeof updateShareButtonState === 'function') updateShareButtonState();
+            if (typeof updateFileSizeDisplay === 'function') updateFileSizeDisplay();
         }
 
         function removeTextImage() {
@@ -8932,14 +8956,93 @@
             document.getElementById('textImageThumb').src = '';
             document.getElementById('textImagePreviewWrap').classList.remove('show');
             document.getElementById('textImageDataInput').value = '';
-            if (typeof selectedImages !== 'undefined') {
-                selectedImages = selectedImages.filter(img => !img.isTextImage);
-                if (typeof updatePreview === 'function') updatePreview();
-                if (typeof updateShareButtonState === 'function') updateShareButtonState();
-            }
+
+            selectedImages = selectedImages.filter(f => !f._isTextImage);
+            const dt = new DataTransfer();
+            selectedImages.forEach(f => dt.items.add(f));
+            document.getElementById('images').files = dt.files;
+
+            renderImagePreviews();
+            if (typeof updatePreview === 'function') updatePreview();
+            if (typeof updateShareButtonState === 'function') updateShareButtonState();
+            if (typeof updateFileSizeDisplay === 'function') updateFileSizeDisplay();
         }
 
-        // Initialize on DOM ready
+        function generateTextImageThenSubmit(form) {
+            const preview = document.getElementById('textPreviewContent');
+            const text = preview.innerText.trim();
+            const bg = TEXT_BACKGROUNDS[currentBgIndex];
+            const font = TEXT_FONTS[currentFontIndex];
+            const canvas = document.createElement('canvas');
+            const size = 800;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            // Draw background
+            if (bg.style.startsWith('linear-gradient') || bg.style.startsWith('radial-gradient')) {
+                const colors = extractGradientColors(bg.style);
+                if (colors.length >= 2) {
+                    const grad = ctx.createLinearGradient(0, 0, size, size);
+                    colors.forEach((c, i) => grad.addColorStop(i / (colors.length - 1), c));
+                    ctx.fillStyle = grad;
+                } else {
+                    ctx.fillStyle = colors[0] || '#1877f2';
+                }
+            } else {
+                ctx.fillStyle = bg.style;
+            }
+            ctx.fillRect(0, 0, size, size);
+
+            document.fonts.ready.then(() => {
+                const textColor = bg.textColor || 'white';
+                const fontSize = Math.round((currentFontSize / 24) * 72);
+                ctx.fillStyle = textColor;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                let fontFamily = font.family.replace(/'/g, '"');
+                ctx.font = `bold ${fontSize}px ${fontFamily}`;
+
+                const maxWidth = size * 0.8;
+                const lineHeight = fontSize * 1.35;
+                const words = text.split(/\s+/);
+                const lines = [];
+                let currentLine = '';
+                for (const word of words) {
+                    const testLine = currentLine ? currentLine + ' ' + word : word;
+                    if (ctx.measureText(testLine).width > maxWidth && currentLine) {
+                        lines.push(currentLine);
+                        currentLine = word;
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                if (currentLine) lines.push(currentLine);
+
+                const totalHeight = lines.length * lineHeight;
+                const startY = (size - totalHeight) / 2 + lineHeight / 2;
+                ctx.shadowColor = 'rgba(0,0,0,0.25)';
+                ctx.shadowBlur = 8;
+                ctx.shadowOffsetY = 2;
+                lines.forEach((line, i) => ctx.fillText(line, size / 2, startY + i * lineHeight));
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = textColor === '#262626' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.4)';
+                ctx.font = `700 20px -apple-system, sans-serif`;
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText('kishiface ✨', size - 24, size - 20);
+
+                canvas.toBlob((blob) => {
+                    textImageBlob = blob;
+                    const file = new File([blob], `text_style_${Date.now()}.png`, { type: 'image/png' });
+                    addTextImageToPost(file);
+                    // Now actually submit the form
+                    form.submit();
+                }, 'image/png');
+            });
+        }
+
+        // Initialize text style UI on DOM ready
         document.addEventListener('DOMContentLoaded', function() {
             initTextStyle();
 
@@ -8952,6 +9055,7 @@
     </script>
 </body>
 </html>
+
 
 
 
