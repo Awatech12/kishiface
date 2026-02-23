@@ -1892,6 +1892,7 @@
             position: relative; z-index: 1;
         }
         .kf-editor-canvas.draw-mode { cursor: crosshair; }
+        .kf-editor-canvas.hidden { display: none !important; }
 
         /* Right side quick-tools (Kvibe style vertical bar) */
         .kf-editor-side-tools {
@@ -3786,8 +3787,55 @@
 
             <!-- Face Filters Panel -->
             <div class="kf-editor-panel" id="facefilterPanel">
-                <div class="kf-face-filter-scroll" id="faceFilterScroll">
-                    <!-- Dynamically built by JS -->
+                <div class="kf-face-filter-scroll">
+                    <div class="kf-face-filter-btn active" onclick="applyFaceFilter('none', this)">
+                        <div class="kf-face-filter-preview">🚫</div>
+                        <span class="kf-face-filter-name">None</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('dog', this)">
+                        <div class="kf-face-filter-preview">🐶</div>
+                        <span class="kf-face-filter-name">Dog</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('cat', this)">
+                        <div class="kf-face-filter-preview">🐱</div>
+                        <span class="kf-face-filter-name">Cat</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('bunny', this)">
+                        <div class="kf-face-filter-preview">🐰</div>
+                        <span class="kf-face-filter-name">Bunny</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('alien', this)">
+                        <div class="kf-face-filter-preview">👽</div>
+                        <span class="kf-face-filter-name">Alien</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('crown', this)">
+                        <div class="kf-face-filter-preview">👑</div>
+                        <span class="kf-face-filter-name">Crown</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('glasses', this)">
+                        <div class="kf-face-filter-preview">🕶️</div>
+                        <span class="kf-face-filter-name">Shades</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('fire', this)">
+                        <div class="kf-face-filter-preview">🔥</div>
+                        <span class="kf-face-filter-name">Fire</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('rainbow', this)">
+                        <div class="kf-face-filter-preview">🌈</div>
+                        <span class="kf-face-filter-name">Rainbow</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('stars', this)">
+                        <div class="kf-face-filter-preview">⭐</div>
+                        <span class="kf-face-filter-name">Stars</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('hearts', this)">
+                        <div class="kf-face-filter-preview">💕</div>
+                        <span class="kf-face-filter-name">Hearts</span>
+                    </div>
+                    <div class="kf-face-filter-btn" onclick="applyFaceFilter('clown', this)">
+                        <div class="kf-face-filter-preview">🤡</div>
+                        <span class="kf-face-filter-name">Clown</span>
+                    </div>
                 </div>
             </div>
 
@@ -5542,7 +5590,7 @@
             el.appendChild(del);
 
             // Make draggable
-            makeDraggable(el, layer);
+            makeCameraTextDraggable(el, layer);
 
             // Select on tap
             el.addEventListener('pointerdown', (ev) => {
@@ -5586,7 +5634,7 @@
             if(camSelectedTextEl) camSelectedTextEl.style.fontSize = camTextSize + 'px';
         }
 
-        function makeDraggable(el, container) {
+        function makeCameraTextDraggable(el, container) {
             let startX, startY, elX, elY, isDragging=false;
             const getXY = e => e.touches ? {x:e.touches[0].clientX,y:e.touches[0].clientY} : {x:e.clientX,y:e.clientY};
 
@@ -5634,7 +5682,7 @@
             del.style.cssText='position:absolute;top:-12px;right:-12px;width:22px;height:22px;background:#fe2c55;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:10px;cursor:pointer;z-index:20;border:2px solid white;opacity:0;transition:opacity 0.15s;';
             del.onclick = ev => { ev.stopPropagation(); el.remove(); };
             el.appendChild(del);
-            makeDraggable(el, layer);
+            makeCameraTextDraggable(el, layer);
             el.addEventListener('pointerdown', ev => { if(ev.target===del)return; selectTextEl(el); });
             layer.style.pointerEvents = 'auto';
             layer.appendChild(el);
@@ -6446,7 +6494,10 @@
                 if (currentEditingType === 'image') {
                     document.getElementById('editorHeaderTitle').textContent = '✦ Edit Photo';
                     editorCanvas.classList.remove('hidden');
-                    videoEditorElement.parentElement.style.display = 'none'; // hide kv-video-wrapper
+                    editorCanvas.style.display = 'block';
+                    // Hide video wrapper
+                    const wrapper = document.getElementById('kvVideoWrapper');
+                    if (wrapper) wrapper.style.display = 'none';
                     // Show image-only tabs, hide video-only tabs
                     document.querySelectorAll('.kv-video-only-tab').forEach(t => t.style.display = 'none');
                     document.getElementById('faceTabBtn').style.display = '';
@@ -6534,8 +6585,13 @@
                 videoEditorElement.src = '';
                 videoEditorElement.style.filter = '';
             }
-            if (editorSoundAudio) { editorSoundAudio.pause(); editorSoundAudio = null; }
+            // Hide video wrapper again
+            const wrapper = document.getElementById('kvVideoWrapper');
+            if (wrapper) wrapper.style.display = 'none';
+            // Reset canvas visibility
+            editorCanvas.classList.remove('hidden');
             editorCanvas.classList.remove('draw-mode');
+            if (editorSoundAudio) { editorSoundAudio.pause(); editorSoundAudio = null; }
             isDrawModeActive = false;
             clearFaceFilter();
             kvFilmstripReady = false;
@@ -7104,7 +7160,10 @@
             div.appendChild(deleteBtn);
             makeDraggable(div);
             div.addEventListener('click', (e) => { e.stopPropagation(); selectOverlay(div); });
-            editorCanvasContainer.appendChild(div);
+            const faceOverlayTarget = (currentEditingType === 'video')
+                ? (document.getElementById('kvVideoWrapper') || editorCanvasContainer)
+                : editorCanvasContainer;
+            faceOverlayTarget.appendChild(div);
             overlayElements.push(div);
             selectOverlay(div);
             createFloatingEmoji(emoji, window.innerWidth/2, 100);
@@ -7159,6 +7218,464 @@
         }
 
         // =================== RESET ===================
+
+
+        // =================== OVERLAY & DRAWING HELPER FUNCTIONS ===================
+        function addSticker(emoji) {
+            createDraggableElement(emoji, 'sticker');
+            createFloatingEmoji(emoji, window.innerWidth/2, 120);
+            vibeVibrate(20);
+        }
+
+        function addStickerImage(emoji, name) {
+            createDraggableElement(emoji, 'sticker');
+        }
+
+        // =================== IMAGE OVERLAY ===================
+        function addImageOverlay(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+                const div = document.createElement('div');
+                div.className = 'kf-editor-overlay-text';
+                div.style.background = 'transparent';
+                div.style.border = '2px dashed rgba(255,255,255,0.4)';
+                div.style.padding = '4px';
+                div.style.left = '50%';
+                div.style.top = '50%';
+                div.style.lineHeight = '0';
+                div.dataset.overlayType = 'image';
+
+                const imgEl = document.createElement('img');
+                imgEl.src = url;
+                imgEl.style.cssText = 'width:80px;height:80px;object-fit:contain;display:block;border-radius:4px;';
+                div.appendChild(imgEl);
+
+                const deleteBtn = document.createElement('div');
+                deleteBtn.className = 'kf-overlay-delete';
+                deleteBtn.innerHTML = '✕';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    div.remove();
+                    overlayElements = overlayElements.filter(el => el !== div);
+                };
+                div.appendChild(deleteBtn);
+
+                // Resize handle
+                const resizeHandle = document.createElement('div');
+                resizeHandle.className = 'kf-overlay-resize';
+                resizeHandle.innerHTML = '↔';
+                resizeHandle.addEventListener('mousedown', startResizeOverlay);
+                resizeHandle.addEventListener('touchstart', startResizeOverlay, { passive: false });
+                div.appendChild(resizeHandle);
+
+                makeDraggable(div);
+                div.addEventListener('click', (e) => { e.stopPropagation(); selectOverlay(div); });
+                const imgOverlayTarget = (currentEditingType === 'video')
+                    ? (document.getElementById('kvVideoWrapper') || editorCanvasContainer)
+                    : editorCanvasContainer;
+                imgOverlayTarget.appendChild(div);
+                overlayElements.push(div);
+                selectOverlay(div);
+            };
+            img.src = url;
+            input.value = '';
+        }
+
+        // Resize overlay
+        let isResizing = false, resizeEl = null, resizeStartX = 0, resizeStartSize = 0;
+        function startResizeOverlay(e) {
+            e.preventDefault(); e.stopPropagation();
+            isResizing = true;
+            resizeEl = e.currentTarget.closest('.kf-editor-overlay-text');
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            resizeStartX = clientX;
+            const img = resizeEl.querySelector('img');
+            resizeStartSize = img ? parseInt(img.style.width) || 80 : 80;
+            document.addEventListener('mousemove', doResize);
+            document.addEventListener('touchmove', doResize, { passive: false });
+            document.addEventListener('mouseup', stopResize);
+            document.addEventListener('touchend', stopResize);
+        }
+        function doResize(e) {
+            if (!isResizing || !resizeEl) return;
+            e.preventDefault();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const delta = clientX - resizeStartX;
+            const newSize = Math.max(40, Math.min(300, resizeStartSize + delta));
+            const img = resizeEl.querySelector('img');
+            if (img) { img.style.width = newSize + 'px'; img.style.height = newSize + 'px'; }
+        }
+        function stopResize() {
+            isResizing = false; resizeEl = null;
+            document.removeEventListener('mousemove', doResize);
+            document.removeEventListener('touchmove', doResize);
+            document.removeEventListener('mouseup', stopResize);
+            document.removeEventListener('touchend', stopResize);
+        }
+
+        // =================== CREATE DRAGGABLE ELEMENT ===================
+        function createDraggableElement(content, type) {
+            const div = document.createElement('div');
+            div.className = 'kf-editor-overlay-text';
+            div.dataset.overlayType = type;
+
+            if (type === 'sticker') {
+                div.textContent = content;
+                div.style.fontSize = '48px';
+                div.style.background = 'transparent';
+                div.style.border = '2px dashed rgba(255,255,255,0.4)';
+                div.style.padding = '4px';
+            } else {
+                // text
+                div.textContent = content;
+                div.style.fontSize = '28px';
+                div.style.fontFamily = currentTextFont;
+                div.style.color = currentTextColor;
+                // Apply current bg style
+                if (currentTextBgStyle !== 'none') {
+                    div.classList.add(currentTextBgStyle);
+                    if (currentTextBgStyle === 'bg-color') {
+                        div.style.backgroundColor = currentTextColor + '99';
+                    }
+                }
+            }
+
+            div.style.left = '50%';
+            div.style.top = '50%';
+
+            // Delete button
+            const deleteBtn = document.createElement('div');
+            deleteBtn.className = 'kf-overlay-delete';
+            deleteBtn.innerHTML = '✕';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                div.remove();
+                overlayElements = overlayElements.filter(el => el !== div);
+                if (activeOverlayElement === div) activeOverlayElement = null;
+            };
+            div.appendChild(deleteBtn);
+
+            // Resize handle for text/stickers
+            const resizeHandle = document.createElement('div');
+            resizeHandle.className = 'kf-overlay-resize';
+            resizeHandle.innerHTML = '↔';
+            resizeHandle.addEventListener('mousedown', (e) => { e.stopPropagation(); startTextResize(e, div); });
+            resizeHandle.addEventListener('touchstart', (e) => { e.stopPropagation(); startTextResize(e, div); }, { passive: false });
+            div.appendChild(resizeHandle);
+
+            makeDraggable(div);
+            div.addEventListener('click', (e) => { e.stopPropagation(); selectOverlay(div); });
+            // For video editing, add overlay to video wrapper; for image, add to canvas container
+            const overlayTarget = (currentEditingType === 'video')
+                ? (document.getElementById('kvVideoWrapper') || editorCanvasContainer)
+                : editorCanvasContainer;
+            overlayTarget.appendChild(div);
+            overlayElements.push(div);
+            selectOverlay(div);
+        }
+
+        // Text/sticker resize
+        let textResizeEl = null, textResizeStartX = 0, textResizeStartSize = 0;
+        function startTextResize(e, el) {
+            e.preventDefault();
+            textResizeEl = el;
+            textResizeStartX = e.clientX || (e.touches && e.touches[0].clientX);
+            textResizeStartSize = parseInt(el.style.fontSize) || 28;
+            document.addEventListener('mousemove', doTextResize);
+            document.addEventListener('touchmove', doTextResize, { passive: false });
+            document.addEventListener('mouseup', stopTextResize);
+            document.addEventListener('touchend', stopTextResize);
+        }
+        function doTextResize(e) {
+            if (!textResizeEl) return;
+            e.preventDefault();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const delta = clientX - textResizeStartX;
+            const newSize = Math.max(12, Math.min(120, textResizeStartSize + delta / 2));
+            textResizeEl.style.fontSize = newSize + 'px';
+        }
+        function stopTextResize() {
+            textResizeEl = null;
+            document.removeEventListener('mousemove', doTextResize);
+            document.removeEventListener('touchmove', doTextResize);
+            document.removeEventListener('mouseup', stopTextResize);
+            document.removeEventListener('touchend', stopTextResize);
+        }
+
+        // =================== DRAGGABLE OVERLAYS ===================
+        function makeDraggable(element) {
+            element.addEventListener('mousedown', startDrag);
+            element.addEventListener('touchstart', startDrag, { passive: false });
+        }
+
+        function selectOverlay(element) {
+            overlayElements.forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+            activeOverlayElement = element;
+        }
+
+        function deselectOverlay() {
+            overlayElements.forEach(el => el.classList.remove('selected'));
+            activeOverlayElement = null;
+        }
+
+        function startDrag(e) {
+            if (e.target.classList.contains('kf-overlay-delete') || e.target.classList.contains('kf-overlay-resize')) return;
+            e.preventDefault();
+            const element = e.currentTarget;
+            isDragging = true;
+            selectOverlay(element);
+            element.classList.add('dragging');
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            const rect = element.getBoundingClientRect();
+            dragOffset.x = clientX - rect.left;
+            dragOffset.y = clientY - rect.top;
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('touchmove', onDrag, { passive: false });
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchend', stopDrag);
+        }
+
+        function onDrag(e) {
+            if (!isDragging || !activeOverlayElement) return;
+            e.preventDefault();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            const dragContainer = (currentEditingType === 'video') ? (document.getElementById('kvVideoWrapper') || editorCanvasContainer) : editorCanvasContainer;
+            const containerRect = dragContainer.getBoundingClientRect();
+            const elRect = activeOverlayElement.getBoundingClientRect();
+            let x = clientX - containerRect.left - dragOffset.x;
+            let y = clientY - containerRect.top - dragOffset.y;
+            x = Math.max(0, Math.min(x, containerRect.width - elRect.width));
+            y = Math.max(0, Math.min(y, containerRect.height - elRect.height));
+            activeOverlayElement.style.left = x + 'px';
+            activeOverlayElement.style.top = y + 'px';
+            activeOverlayElement.style.transform = 'none';
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            if (activeOverlayElement) activeOverlayElement.classList.remove('dragging');
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('touchmove', onDrag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.removeEventListener('touchend', stopDrag);
+        }
+
+        // =================== DRAWING ===================
+        editorCanvas.addEventListener('mousedown', startDrawing);
+        editorCanvas.addEventListener('mousemove', draw);
+        editorCanvas.addEventListener('mouseup', stopDrawing);
+        editorCanvas.addEventListener('mouseleave', stopDrawing);
+        editorCanvas.addEventListener('touchstart', startDrawingTouch, { passive: false });
+        editorCanvas.addEventListener('touchmove', drawTouch, { passive: false });
+        editorCanvas.addEventListener('touchend', stopDrawing);
+
+        function getCanvasPos(e) {
+            const rect = editorCanvas.getBoundingClientRect();
+            const scaleX = editorCanvas.width / rect.width;
+            const scaleY = editorCanvas.height / rect.height;
+            return {
+                x: ((e.clientX || e.touches[0].clientX) - rect.left) * scaleX,
+                y: ((e.clientY || e.touches[0].clientY) - rect.top) * scaleY
+            };
+        }
+
+        function startDrawing(e) {
+            if (!isDrawModeActive || !canvasContext) return;
+            e.preventDefault();
+            isDrawing = true;
+            const pos = getCanvasPos(e);
+            lastX = pos.x; lastY = pos.y;
+            // Save hi-res snapshot for undo (ImageData is full resolution)
+            editorDrawingStrokes.push(hiResCtx.getImageData(0, 0, hiResCanvas.width, hiResCanvas.height));
+        }
+        function startDrawingTouch(e) { startDrawing(e); }
+
+        function applyBrushStyle() {
+            if (!canvasContext) return;
+            if (currentBrushType === 'pen') {
+                canvasContext.globalAlpha = 1;
+                canvasContext.globalCompositeOperation = 'source-over';
+                canvasContext.shadowBlur = 0;
+            } else if (currentBrushType === 'highlight') {
+                canvasContext.globalAlpha = 0.35;
+                canvasContext.globalCompositeOperation = 'source-over';
+                canvasContext.shadowBlur = 0;
+            } else if (currentBrushType === 'neon') {
+                canvasContext.globalAlpha = 0.85;
+                canvasContext.globalCompositeOperation = 'source-over';
+                canvasContext.shadowBlur = 16;
+                canvasContext.shadowColor = drawColor;
+            } else if (currentBrushType === 'eraser') {
+                canvasContext.globalAlpha = 1;
+                canvasContext.globalCompositeOperation = 'destination-out';
+                canvasContext.shadowBlur = 0;
+            }
+        }
+
+        function applyBrushStyleCtx(ctx, shadowBlurPx) {
+            if (currentBrushType === 'pen') {
+                ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.shadowBlur = 0;
+            } else if (currentBrushType === 'highlight') {
+                ctx.globalAlpha = 0.35;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.shadowBlur = 0;
+            } else if (currentBrushType === 'neon') {
+                ctx.globalAlpha = 0.85;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.shadowBlur = shadowBlurPx;
+                ctx.shadowColor = drawColor;
+            } else if (currentBrushType === 'eraser') {
+                ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function draw(e) {
+            if (!isDrawing || !isDrawModeActive || !canvasContext) return;
+            e.preventDefault();
+            const pos = getCanvasPos(e);
+
+            // --- Draw on the DISPLAY canvas (CSS coordinate space) ---
+            canvasContext.beginPath();
+            applyBrushStyle();
+            canvasContext.strokeStyle = currentBrushType === 'eraser' ? 'rgba(0,0,0,1)' : drawColor;
+            canvasContext.lineWidth = drawSize;
+            canvasContext.lineCap = 'round';
+            canvasContext.lineJoin = 'round';
+            canvasContext.moveTo(lastX, lastY);
+            canvasContext.lineTo(pos.x, pos.y);
+            canvasContext.stroke();
+            canvasContext.shadowBlur = 0;
+            canvasContext.globalAlpha = 1;
+            canvasContext.globalCompositeOperation = 'source-over';
+
+            // --- Mirror stroke on HI-RES canvas at full original scale ---
+            if (hiResCtx) {
+                const cssW = parseInt(editorCanvas.style.width)  || editorCanvas.width;
+                const cssH = parseInt(editorCanvas.style.height) || editorCanvas.height;
+                const scaleX = hiResCanvas.width  / cssW;
+                const scaleY = hiResCanvas.height / cssH;
+                hiResCtx.beginPath();
+                const neonBlur = Math.round(drawSize * scaleX * 3);
+                applyBrushStyleCtx(hiResCtx, neonBlur);
+                hiResCtx.strokeStyle = currentBrushType === 'eraser' ? 'rgba(0,0,0,1)' : drawColor;
+                hiResCtx.lineWidth = drawSize * ((scaleX + scaleY) / 2);
+                hiResCtx.lineCap = 'round';
+                hiResCtx.lineJoin = 'round';
+                hiResCtx.moveTo(lastX * scaleX, lastY * scaleY);
+                hiResCtx.lineTo(pos.x * scaleX, pos.y * scaleY);
+                hiResCtx.stroke();
+                hiResCtx.shadowBlur = 0;
+                hiResCtx.globalAlpha = 1;
+                hiResCtx.globalCompositeOperation = 'source-over';
+            }
+
+            lastX = pos.x; lastY = pos.y;
+        }
+        function drawTouch(e) { draw(e); }
+
+        function stopDrawing() { isDrawing = false; }
+
+        function setDrawColor(color, dot) {
+            drawColor = color;
+            if (dot) {
+                document.querySelectorAll('.kf-draw-color-row .kf-color-dot').forEach(d => d.classList.remove('active'));
+                dot.classList.add('active');
+            }
+        }
+        function setDrawSize(size) { drawSize = parseInt(size); }
+
+        function setBrushType(type, btn) {
+            currentBrushType = type;
+            document.querySelectorAll('.kf-brush-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+        }
+
+        function clearDraw() {
+            if (!hiResCtx || !originalImage) return;
+            // Reset hi-res canvas
+            hiResCtx.drawImage(originalImage, 0, 0, hiResCanvas.width, hiResCanvas.height);
+            const filter = EDITOR_FILTERS.find(f => f.id === editorCurrentFilter);
+            if (filter && filter.fn) {
+                const id = hiResCtx.getImageData(0, 0, hiResCanvas.width, hiResCanvas.height);
+                filter.fn(id); hiResCtx.putImageData(id, 0, 0);
+            }
+            applyAdjustments(false);
+            syncHiResToDisplay();
+            editorDrawingStrokes = [];
+        }
+
+        function undoLastStroke() {
+            if (editorDrawingStrokes.length === 0) return;
+            const prev = editorDrawingStrokes.pop();
+            // Restore hi-res canvas
+            hiResCtx.putImageData(prev, 0, 0);
+            // Sync to display
+            syncHiResToDisplay();
+            createFloatingEmoji('↩', window.innerWidth/2, 100);
+        }
+
+        // =================== SOUND ===================
+        function loadEditorSound(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            editorSoundBlob = file;
+            if (editorSoundAudio) { editorSoundAudio.pause(); editorSoundAudio = null; }
+            editorSoundAudio = new Audio(URL.createObjectURL(file));
+            editorSoundAudio.volume = 0.8;
+            document.getElementById('soundUploadLabel').textContent = file.name.length > 28 ? file.name.slice(0,25)+'...' : file.name;
+            document.getElementById('soundUploadTrack').classList.add('active');
+            document.getElementById('soundVolRow').style.display = 'flex';
+            // Show video export CTA when sound is loaded on an image
+            if (currentEditingType === 'image') {
+                const exportRow = document.getElementById('soundExportVideoRow');
+                if (exportRow) exportRow.style.display = 'block';
+            }
+            createFloatingEmoji('🎵', window.innerWidth/2, 100);
+        }
+
+        function setSoundVolume(v) {
+            document.getElementById('soundVolVal').textContent = v;
+            if (editorSoundAudio) editorSoundAudio.volume = v / 100;
+        }
+
+        function playEditorSound() {
+            if (!editorSoundAudio) return;
+            const btn = document.getElementById('soundPlayBtn');
+            if (!editorSoundAudio.paused) {
+                editorSoundAudio.pause();
+                btn.textContent = '▶ Play';
+            } else {
+                editorSoundAudio.currentTime = 0;
+                editorSoundAudio.play();
+                btn.textContent = '⏸ Pause';
+                editorSoundAudio.onended = () => { btn.textContent = '▶ Play'; };
+            }
+        }
+
+        function removeEditorSound() {
+            if (editorSoundAudio) { editorSoundAudio.pause(); editorSoundAudio = null; }
+            editorSoundBlob = null;
+            document.getElementById('soundUploadLabel').textContent = 'Upload audio file...';
+            document.getElementById('soundUploadTrack').classList.remove('active');
+            document.getElementById('soundVolRow').style.display = 'none';
+            document.getElementById('soundPlayBtn').textContent = '▶ Play';
+            document.getElementById('soundFileInput').value = '';
+            const exportRow = document.getElementById('soundExportVideoRow');
+            if (exportRow) exportRow.style.display = 'none';
+        }
+
+        // =================== RESET ===================
+
         function resetEdits() {
             if (currentEditingType === 'image' && originalImage && hiResCtx) {
                 hiResCtx.drawImage(originalImage, 0, 0, hiResCanvas.width, hiResCanvas.height);
@@ -7259,8 +7776,7 @@
                 }, IMAGE_QUALITY.format, IMAGE_QUALITY.quality);
 
             } else if (currentEditingType === 'video') {
-                // Save video edit metadata for post (filter, speed, trim points, volume)
-                // These values are stored and can be passed to backend for processing
+                // Save video edit metadata (filter, speed, trim, volume, aspect)
                 const videoEditMeta = {
                     filter: kvVideoFilter,
                     filterCss: KV_VIDEO_FILTERS.find(f => f.id === kvVideoFilter)?.css || '',
@@ -7272,24 +7788,51 @@
                     aspect: kvVideoAspect,
                     adjustments: { ...kvVideoAdjust },
                 };
-                // Store meta in a hidden input so form can receive it
+
+                // Store metadata in a hidden input for backend processing
                 let metaInput = document.getElementById('videoEditMetaInput');
                 if (!metaInput) {
                     metaInput = document.createElement('input');
                     metaInput.type = 'hidden';
                     metaInput.name = 'video_edit_meta';
                     metaInput.id = 'videoEditMetaInput';
-                    document.querySelector('form')?.appendChild(metaInput);
+                    const form = document.querySelector('form');
+                    if (form) form.appendChild(metaInput);
                 }
                 metaInput.value = JSON.stringify(videoEditMeta);
 
-                showAlert('video edits saved ✨', `Filter: ${kvVideoFilter} · Speed: ${kvVideoSpeed}× · Trim: ${formatTime((kvTrimStartPct/100)*videoDuration)}–${formatTime((kvTrimEndPct/100)*videoDuration)}`, '🎬', [
-                    { text: 'nice! 🎬', type: 'primary' }
-                ]);
+                // Apply video CSS filter visually on the main video player element (if present)
+                const mainVideoPlayer = document.querySelector('.kf-video-player video') || document.querySelector('#videoPlayerSection video');
+                if (mainVideoPlayer) {
+                    const filterCss = KV_VIDEO_FILTERS.find(f => f.id === kvVideoFilter)?.css || '';
+                    mainVideoPlayer.style.filter = filterCss;
+                    mainVideoPlayer.playbackRate = kvVideoSpeed;
+                }
+
+                // Update the video player display badge to show edits applied
+                const videoEditBadge = document.getElementById('videoEditBadge');
+                if (videoEditBadge) videoEditBadge.style.display = 'flex';
+
+                // Build summary
+                const filterName = KV_VIDEO_FILTERS.find(f => f.id === kvVideoFilter)?.name || 'Normal';
+                const trimInfo = (kvTrimStartPct > 0 || kvTrimEndPct < 100) 
+                    ? ` · Trim: ${formatTime((kvTrimStartPct/100)*videoDuration)}–${formatTime((kvTrimEndPct/100)*videoDuration)}`
+                    : '';
+                const speedInfo = kvVideoSpeed !== 1 ? ` · ${kvVideoSpeed}×` : '';
+                const summary = `Filter: ${filterName}${speedInfo}${trimInfo}`;
+
                 closeMediaEditor();
-                updatePreview(); updateFileSizeDisplay();
+                updatePreview();
+                updateFileSizeDisplay();
                 createFloatingEmoji('🎬', window.innerWidth/2, 100);
                 vibeVibrate(30);
+
+                // Show brief success toast
+                const toast = document.createElement('div');
+                toast.style.cssText = `position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:white;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:700;z-index:9999;backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.12);max-width:300px;text-align:center;animation:floatEmoji 2.5s ease-out forwards;`;
+                toast.textContent = `✅ Video edits saved — ${summary}`;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2500);
             }
         }
 
