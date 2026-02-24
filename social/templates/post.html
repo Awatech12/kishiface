@@ -1519,6 +1519,81 @@
             pointer-events: none; z-index: 10;
         }
 
+        /* Flash Torch Toggle */
+        .kf-cam-tool-btn.flash-on {
+            background: rgba(255, 220, 50, 0.9);
+            border-color: #ffd700;
+            color: #1a1a00;
+        }
+        .kf-cam-tool-btn.flash-on span { color: #1a1a00; }
+
+        /* Virtual Background Panel */
+        #camPanelBg {
+            padding: 10px 16px 6px;
+        }
+        .kf-cam-bg-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .kf-cam-bg-row {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            padding-bottom: 4px;
+        }
+        .kf-cam-bg-row::-webkit-scrollbar { display: none; }
+        .kf-cam-bg-swatch {
+            flex-shrink: 0;
+            width: 56px; height: 56px;
+            border-radius: 12px;
+            cursor: pointer;
+            border: 2.5px solid transparent;
+            transition: all 0.15s;
+            position: relative;
+            overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .kf-cam-bg-swatch.active {
+            border-color: #fe2c55;
+            box-shadow: 0 0 0 2px rgba(254,44,85,0.4);
+        }
+        .kf-cam-bg-swatch img {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        .kf-cam-bg-swatch span {
+            font-size: 20px;
+        }
+        .kf-cam-bg-upload-btn {
+            flex-shrink: 0;
+            width: 56px; height: 56px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.08);
+            border: 2px dashed rgba(255,255,255,0.35);
+            color: rgba(255,255,255,0.8);
+            font-size: 22px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s;
+        }
+        .kf-cam-bg-upload-btn:active { transform: scale(0.9); background: rgba(254,44,85,0.2); }
+        .kf-cam-bg-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.55);
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            padding: 0 2px;
+        }
+        /* Virtual BG canvas overlay */
+        #camVirtualBgCanvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
         /* Flash */
         .kf-camera-flash {
             position: absolute;
@@ -3481,6 +3556,9 @@
         </div>
     </div>
 
+    <!-- Hidden input for virtual background from gallery -->
+    <input type="file" id="camBgGalleryInput" accept="image/*" style="display:none" onchange="loadCustomCameraBackground(this)">
+
     <!-- Camera Modal — Full Real-Time Editor -->
     <div id="cameraModal" class="kf-camera-modal">
 
@@ -3498,6 +3576,7 @@
         <!-- Preview area -->
         <div id="camPreviewArea" style="position:relative;flex:1;overflow:hidden;background:#000;">
             <video id="cameraLive" autoplay playsinline style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1;visibility:hidden;"></video>
+            <canvas id="camVirtualBgCanvas"></canvas>
             <canvas id="cameraFilterCanvas"></canvas>
             <canvas id="camFaceCanvas"></canvas>
             <svg id="cameraGrid">
@@ -3512,6 +3591,14 @@
 
             <!-- Right-side tool buttons -->
             <div class="kf-cam-right-tools">
+                <button class="kf-cam-tool-btn" id="camFlashBtn" onclick="toggleCameraFlashTorch()" title="Flash">
+                    <i class="fas fa-bolt"></i>
+                    <span id="camFlashLabel">OFF</span>
+                </button>
+                <button class="kf-cam-tool-btn" id="camBgBtn" onclick="switchCamPanel('Bg', document.querySelector('[data-panel=Bg]'))" title="Background">
+                    <i class="fas fa-image"></i>
+                    <span>BG</span>
+                </button>
                 <button class="kf-cam-tool-btn" id="camTimerBtn" onclick="toggleCameraTimer()" title="Timer">
                     <i class="fas fa-clock"></i>
                     <span id="camTimerLabel">OFF</span>
@@ -3601,6 +3688,16 @@
                 </div>
             </div>
 
+            <!-- BACKGROUND panel -->
+            <div id="camPanelBg" class="kf-cam-sub-panel">
+                <div class="kf-cam-bg-panel">
+                    <div class="kf-cam-bg-label">Virtual Background</div>
+                    <div class="kf-cam-bg-row" id="camBgRow">
+                        <!-- populated by JS -->
+                    </div>
+                </div>
+            </div>
+
             <!-- Mode tabs -->
             <div class="kf-cam-mode-bar" id="camModeBar">
                 <div class="kf-cam-mode-tab active" data-panel="Filters" onclick="switchCamPanel('Filters', this)">🎨 Filters</div>
@@ -3608,6 +3705,7 @@
                 <div class="kf-cam-mode-tab" data-panel="Face" onclick="switchCamPanel('Face', this)">😜 Effects</div>
                 <div class="kf-cam-mode-tab" data-panel="Text" onclick="switchCamPanel('Text', this)">Aa Text</div>
                 <div class="kf-cam-mode-tab" data-panel="Stickers" onclick="switchCamPanel('Stickers', this)">🔥 Stickers</div>
+                <div class="kf-cam-mode-tab" data-panel="Bg" onclick="switchCamPanel('Bg', this)">🖼️ BG</div>
             </div>
 
             <!-- Capture controls row -->
@@ -5755,6 +5853,218 @@
         }
 
         // ==============================
+        // ==============================
+        // Flash Torch Toggle
+        // ==============================
+        let camFlashTorchOn = false;
+        async function toggleCameraFlashTorch() {
+            const btn = document.getElementById('camFlashBtn');
+            const label = document.getElementById('camFlashLabel');
+            if (!cameraStream) return;
+            const track = cameraStream.getVideoTracks()[0];
+            if (!track) return;
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+            if (!capabilities.torch) {
+                showAlert('flash unavailable', 'torch flash is not supported on this device 😢', '⚡', [{text:'ok',type:'primary'}]);
+                return;
+            }
+            camFlashTorchOn = !camFlashTorchOn;
+            try {
+                await track.applyConstraints({ advanced: [{ torch: camFlashTorchOn }] });
+                if (camFlashTorchOn) {
+                    btn.classList.add('flash-on');
+                    if (label) label.textContent = 'ON';
+                } else {
+                    btn.classList.remove('flash-on');
+                    if (label) label.textContent = 'OFF';
+                }
+            } catch(e) {
+                showAlert('flash error', 'could not toggle flash on this device 😢', '⚡', [{text:'ok',type:'primary'}]);
+                camFlashTorchOn = false;
+                btn.classList.remove('flash-on');
+                if (label) label.textContent = 'OFF';
+            }
+        }
+
+        function resetCameraFlashTorch() {
+            camFlashTorchOn = false;
+            const btn = document.getElementById('camFlashBtn');
+            const label = document.getElementById('camFlashLabel');
+            if (btn) btn.classList.remove('flash-on');
+            if (label) label.textContent = 'OFF';
+        }
+
+        // ==============================
+        // Virtual Backgrounds
+        // ==============================
+        const CAM_VIRTUAL_BGS = [
+            { id: 'none',     label: '❌',  type: 'none' },
+            { id: 'blur',     label: '🌫️', type: 'blur' },
+            { id: 'gradient1',label: '🌅', type: 'gradient', value: 'linear-gradient(135deg,#ff9a9e,#fecfef)' },
+            { id: 'gradient2',label: '🌊', type: 'gradient', value: 'linear-gradient(135deg,#a18cd1,#fbc2eb)' },
+            { id: 'gradient3',label: '🌿', type: 'gradient', value: 'linear-gradient(135deg,#d4fc79,#96e6a1)' },
+            { id: 'gradient4',label: '🔥', type: 'gradient', value: 'linear-gradient(135deg,#fe2c55,#ff6b35)' },
+            { id: 'gradient5',label: '🌙', type: 'gradient', value: 'linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)' },
+            { id: 'gradient6',label: '☀️', type: 'gradient', value: 'linear-gradient(135deg,#f7971e,#ffd200)' },
+            { id: 'gradient7',label: '💜', type: 'gradient', value: 'linear-gradient(135deg,#9b59b6,#6c3483)' },
+            { id: 'gradient8',label: '🩵', type: 'gradient', value: 'linear-gradient(135deg,#0099f7,#00d2ff)' },
+            { id: 'custom',   label: '📷',  type: 'gallery' },
+        ];
+
+        let camActiveBgId = 'none';
+        let camCustomBgImg = null;
+        let camVirtualBgLoop = null;
+
+        function buildCameraBgPanel() {
+            const row = document.getElementById('camBgRow');
+            if (!row) return;
+            row.innerHTML = '';
+            CAM_VIRTUAL_BGS.forEach(bg => {
+                if (bg.type === 'gallery') {
+                    const btn = document.createElement('button');
+                    btn.className = 'kf-cam-bg-upload-btn';
+                    btn.innerHTML = '➕';
+                    btn.title = 'Upload from gallery';
+                    btn.onclick = () => document.getElementById('camBgGalleryInput').click();
+                    // Also show thumbnail if custom bg is loaded
+                    if (camCustomBgImg) {
+                        const swatch = document.createElement('div');
+                        swatch.className = 'kf-cam-bg-swatch' + (camActiveBgId === 'custom' ? ' active' : '');
+                        swatch.id = 'camBgSwatch_custom';
+                        const img = document.createElement('img');
+                        img.src = camCustomBgImg.src;
+                        swatch.appendChild(img);
+                        swatch.onclick = () => selectCameraBackground('custom');
+                        row.appendChild(swatch);
+                    }
+                    row.appendChild(btn);
+                    return;
+                }
+
+                const swatch = document.createElement('div');
+                swatch.className = 'kf-cam-bg-swatch' + (camActiveBgId === bg.id ? ' active' : '');
+                swatch.id = 'camBgSwatch_' + bg.id;
+
+                if (bg.type === 'none') {
+                    swatch.style.background = '#1a1a1a';
+                    swatch.style.border = '2px solid rgba(255,255,255,0.2)';
+                    swatch.innerHTML = `<span style="font-size:18px">❌</span>`;
+                } else if (bg.type === 'blur') {
+                    swatch.style.background = 'rgba(255,255,255,0.08)';
+                    swatch.style.backdropFilter = 'blur(4px)';
+                    swatch.innerHTML = `<span style="font-size:18px">🌫️</span>`;
+                } else if (bg.type === 'gradient') {
+                    swatch.style.background = bg.value;
+                    swatch.innerHTML = `<span style="font-size:18px">${bg.label}</span>`;
+                }
+                swatch.onclick = () => selectCameraBackground(bg.id);
+                row.appendChild(swatch);
+            });
+        }
+
+        function selectCameraBackground(id) {
+            camActiveBgId = id;
+            // Update active styles
+            document.querySelectorAll('.kf-cam-bg-swatch').forEach(s => s.classList.remove('active'));
+            const active = document.getElementById('camBgSwatch_' + id);
+            if (active) active.classList.add('active');
+
+            if (id === 'none') {
+                stopVirtualBgLoop();
+            } else {
+                startVirtualBgLoop();
+            }
+        }
+
+        function loadCustomCameraBackground(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const img = new Image();
+            img.onload = () => {
+                camCustomBgImg = img;
+                camActiveBgId = 'custom';
+                buildCameraBgPanel();
+                startVirtualBgLoop();
+            };
+            img.src = URL.createObjectURL(file);
+            input.value = '';
+        }
+
+        function startVirtualBgLoop() {
+            stopVirtualBgLoop();
+            const canvas = document.getElementById('camVirtualBgCanvas');
+            if (!canvas) return;
+            canvas.style.display = 'block';
+
+            function drawBgFrame() {
+                if (!cameraLive || cameraLive.readyState < 2) {
+                    camVirtualBgLoop = requestAnimationFrame(drawBgFrame);
+                    return;
+                }
+                const W = canvas.offsetWidth, H = canvas.offsetHeight;
+                canvas.width = W; canvas.height = H;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, W, H);
+
+                const bg = CAM_VIRTUAL_BGS.find(b => b.id === camActiveBgId);
+                if (!bg || bg.type === 'none') { stopVirtualBgLoop(); return; }
+
+                // Draw background
+                if (bg.type === 'blur') {
+                    // Simple blur: draw the video frame blurred as bg
+                    ctx.filter = 'blur(20px) saturate(1.5)';
+                    ctx.drawImage(cameraLive, -20, -20, W + 40, H + 40);
+                    ctx.filter = 'none';
+                } else if (bg.type === 'gradient') {
+                    // Parse and draw gradient
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = W; tempCanvas.height = H;
+                    const tmpCtx = tempCanvas.getContext('2d');
+                    // Extract colors from gradient string
+                    const colorMatches = bg.value.match(/#[0-9a-fA-F]{3,8}/g) || ['#1a1a2e','#16213e'];
+                    const grad = tmpCtx.createLinearGradient(0, 0, W, H);
+                    colorMatches.forEach((c, i) => grad.addColorStop(i / Math.max(colorMatches.length - 1, 1), c));
+                    tmpCtx.fillStyle = grad;
+                    tmpCtx.fillRect(0, 0, W, H);
+                    ctx.drawImage(tempCanvas, 0, 0);
+                } else if (bg.type === 'gallery' && camCustomBgImg) {
+                    // Cover-fit the custom image
+                    const imgAr = camCustomBgImg.width / camCustomBgImg.height;
+                    const canAr = W / H;
+                    let sx = 0, sy = 0, sw = camCustomBgImg.width, sh = camCustomBgImg.height;
+                    if (imgAr > canAr) {
+                        sw = sh * canAr; sx = (camCustomBgImg.width - sw) / 2;
+                    } else {
+                        sh = sw / canAr; sy = (camCustomBgImg.height - sh) / 2;
+                    }
+                    ctx.drawImage(camCustomBgImg, sx, sy, sw, sh, 0, 0, W, H);
+                }
+
+                // Draw the actual camera feed on top with a gentle oval mask for "portrait" effect
+                ctx.save();
+                // Create oval clipping region centered on frame
+                const cx = W / 2, cy = H * 0.42;
+                const rx = W * 0.38, ry = H * 0.5;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+                ctx.clip();
+                // Mirror for front camera
+                const shouldMirror = isFrontCameraCamera !== cameraMirrorForce;
+                if (shouldMirror) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+                ctx.drawImage(cameraLive, 0, 0, W, H);
+                ctx.restore();
+
+                camVirtualBgLoop = requestAnimationFrame(drawBgFrame);
+            }
+            camVirtualBgLoop = requestAnimationFrame(drawBgFrame);
+        }
+
+        function stopVirtualBgLoop() {
+            if (camVirtualBgLoop) { cancelAnimationFrame(camVirtualBgLoop); camVirtualBgLoop = null; }
+            const canvas = document.getElementById('camVirtualBgCanvas');
+            if (canvas) { canvas.style.display = 'none'; canvas.width = 0; canvas.height = 0; }
+        }
+
         // Camera core functions
         // ==============================
         async function openCamera() {
@@ -5769,12 +6079,16 @@
             buildCameraFacePanel();
             buildCameraTextPanel();
             buildCameraStickers();
+            buildCameraBgPanel();
+            resetCameraFlashTorch();
             updateCameraFilter();
             await startCameraPreview();
         }
 
         function closeCamera() {
             stopCameraFilterLoop();
+            stopVirtualBgLoop();
+            resetCameraFlashTorch();
             cameraModal.classList.remove('active');
             if (cameraStream) { cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null; }
         }
@@ -5839,11 +6153,46 @@
             const off = document.createElement('canvas'); off.width=W; off.height=H;
             const ctx = off.getContext('2d');
 
-            ctx.filter = getFullCameraFilter();
-            const shouldMirror = isFrontCameraCamera !== cameraMirrorForce;
-            if(shouldMirror){ctx.translate(W,0);ctx.scale(-1,1);}
-            ctx.drawImage(cameraLive,0,0,W,H);
-            ctx.filter='none'; if(shouldMirror){ctx.setTransform(1,0,0,1,0,0);}
+            // Draw virtual background if active
+            if (camActiveBgId !== 'none') {
+                const activeBg = CAM_VIRTUAL_BGS.find(b => b.id === camActiveBgId);
+                if (activeBg && activeBg.type === 'blur') {
+                    ctx.filter = 'blur(20px) saturate(1.5)';
+                    ctx.drawImage(cameraLive, -40, -40, W+80, H+80);
+                    ctx.filter = 'none';
+                } else if (activeBg && activeBg.type === 'gradient') {
+                    const colorMatches = activeBg.value.match(/#[0-9a-fA-F]{3,8}/g) || ['#1a1a2e','#16213e'];
+                    const grad = ctx.createLinearGradient(0, 0, W, H);
+                    colorMatches.forEach((c, i) => grad.addColorStop(i / Math.max(colorMatches.length-1,1), c));
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, W, H);
+                } else if (activeBg && activeBg.type === 'gallery' && camCustomBgImg) {
+                    const imgAr = camCustomBgImg.width / camCustomBgImg.height;
+                    const canAr = W / H;
+                    let sx=0,sy=0,sw=camCustomBgImg.width,sh=camCustomBgImg.height;
+                    if(imgAr>canAr){sw=sh*canAr;sx=(camCustomBgImg.width-sw)/2;}else{sh=sw/canAr;sy=(camCustomBgImg.height-sh)/2;}
+                    ctx.drawImage(camCustomBgImg,sx,sy,sw,sh,0,0,W,H);
+                }
+                // Draw camera feed in oval mask
+                ctx.save();
+                const cx=W/2,cy=H*0.42,rx=W*0.38,ry=H*0.5;
+                ctx.beginPath();
+                ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
+                ctx.clip();
+                const shouldMirrorBg = isFrontCameraCamera !== cameraMirrorForce;
+                if(shouldMirrorBg){ctx.translate(W,0);ctx.scale(-1,1);}
+                ctx.filter = getFullCameraFilter();
+                ctx.drawImage(cameraLive,0,0,W,H);
+                ctx.filter = 'none';
+                ctx.restore();
+            } else {
+                ctx.filter = getFullCameraFilter();
+                const shouldMirror = isFrontCameraCamera !== cameraMirrorForce;
+                if(shouldMirror){ctx.translate(W,0);ctx.scale(-1,1);}
+                ctx.drawImage(cameraLive,0,0,W,H);
+                ctx.filter='none'; if(shouldMirror){ctx.setTransform(1,0,0,1,0,0);}
+            }
+            // (skip the redundant lines below for no-bg case)
 
             // Vignette
             const vig=parseFloat(document.getElementById('camVignette')?.value||0);
@@ -9655,6 +10004,11 @@
     </script>
 </body>
 </html>
+
+
+
+
+
 
 
 
