@@ -3909,6 +3909,141 @@
         }
         .ss-quality-btn.active-q { background: rgba(254,44,85,0.2); border-color: #fe2c55; color: white; }
         #ssExportSheet.show { display: flex !important; flex-direction: column; justify-content: flex-end; }
+
+        /* ===== AVATAR / ART STYLE CONVERSION STYLES ===== */
+        .kf-avatar-style-scroll {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 4px 2px;
+            scrollbar-width: none;
+            align-items: flex-start;
+        }
+        .kf-avatar-style-scroll::-webkit-scrollbar { display: none; }
+
+        .kf-avatar-style-btn {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            padding: 0;
+            background: none;
+            border: none;
+            min-width: 68px;
+        }
+        .kf-avatar-style-preview {
+            width: 62px; height: 62px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2.5px solid transparent;
+            transition: border-color 0.18s, transform 0.15s;
+            background: #222;
+            position: relative;
+        }
+        .kf-avatar-style-preview canvas,
+        .kf-avatar-style-preview img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
+            border-radius: 9px;
+        }
+        .kf-avatar-style-btn.active .kf-avatar-style-preview {
+            border-color: #fe2c55;
+            transform: scale(1.06);
+        }
+        .kf-avatar-style-name {
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.75);
+            text-align: center;
+            letter-spacing: 0.3px;
+        }
+        .kf-avatar-style-btn.active .kf-avatar-style-name { color: #fe2c55; }
+
+        /* Avatar intensity row */
+        .kf-avatar-intensity {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 2px 0;
+            width: 100%;
+        }
+        .kf-avatar-intensity label {
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.45);
+            white-space: nowrap;
+            letter-spacing: 0.5px;
+        }
+        .kf-avatar-intensity input[type=range] {
+            flex: 1;
+            height: 3px;
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+            outline: none;
+            accent-color: #fe2c55;
+        }
+        .kf-avatar-intensity span {
+            font-size: 10px;
+            font-weight: 700;
+            color: #fe2c55;
+            font-family: monospace;
+            min-width: 22px;
+            text-align: right;
+        }
+
+        /* Camera/Video avatar live panel - vertical */
+        .kf-cam-avatar-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: center;
+            width: 100%;
+            padding: 2px;
+        }
+        .kf-cam-avatar-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            cursor: pointer;
+        }
+        .kf-cam-avatar-icon {
+            width: 52px; height: 52px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.08);
+            border: 2px solid transparent;
+            overflow: hidden;
+            transition: all 0.18s;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px;
+            font-weight: 800;
+            color: white;
+        }
+        .kf-cam-avatar-item.active .kf-cam-avatar-icon {
+            border-color: #fe2c55;
+            transform: scale(1.08);
+        }
+        .kf-cam-avatar-label {
+            font-size: 8px;
+            color: rgba(255,255,255,0.7);
+            font-weight: 700;
+            text-align: center;
+        }
+        .kf-cam-avatar-item.active .kf-cam-avatar-label { color: #fe2c55; }
+
+        /* Live avatar canvas overlaying the camera/video feed */
+        #camAvatarCanvas, #vidAvatarCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 4;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -3943,6 +4078,7 @@
             <canvas id="camVirtualBgCanvas"></canvas>
             <canvas id="cameraFilterCanvas"></canvas>
             <canvas id="camFaceCanvas"></canvas>
+            <canvas id="camAvatarCanvas"></canvas>
             <svg id="cameraGrid">
                 <line x1="33.33%" y1="0" x2="33.33%" y2="100%" stroke="white" stroke-width="0.8"/>
                 <line x1="66.66%" y1="0" x2="66.66%" y2="100%" stroke="white" stroke-width="0.8"/>
@@ -4003,6 +4139,10 @@
                 <button class="kf-cam-tool-btn" id="camGridBtn" onclick="toggleCameraGrid()" title="Grid">
                     <div class="kf-cam-tool-icon"><i class="fas fa-th"></i></div>
                     <span>Grid</span>
+                </button>
+                <button class="kf-cam-tool-btn" onclick="switchCamPanel('Avatar', this)" data-panel="Avatar" title="Avatar">
+                    <div class="kf-cam-tool-icon" style="font-size:16px;font-weight:900;">Av</div>
+                    <span>Avatar</span>
                 </button>
                 <button class="kf-cam-tool-btn" id="camTimerBtn" onclick="toggleCameraTimer()" title="Timer">
                     <div class="kf-cam-tool-icon"><i class="fas fa-clock"></i></div>
@@ -4067,6 +4207,13 @@
                 <div class="kf-cam-bg-panel">
                     <div class="kf-cam-bg-label">BG</div>
                     <div class="kf-cam-bg-row" id="camBgRow"></div>
+                </div>
+            </div>
+
+            <!-- AVATAR panel -->
+            <div id="camPanelAvatar" class="kf-cam-sub-panel">
+                <div class="kf-cam-avatar-panel" id="camAvatarPanelInner">
+                    <!-- Built by JS -->
                 </div>
             </div>
 
@@ -4176,6 +4323,10 @@
                     <i class="fas fa-music"></i>
                     <span>Sound</span>
                 </button>
+                <button class="kf-side-tool-btn" onclick="activateEditorTab('avatar')" title="Avatar">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Avatar</span>
+                </button>
             </div>
 
             <!-- Floating text input -->
@@ -4207,6 +4358,9 @@
             </div>
             <div class="kf-editor-tab" onclick="activateEditorTab('sound')" data-tab="sound">
                 <i class="fas fa-music"></i> Sound
+            </div>
+            <div class="kf-editor-tab" onclick="activateEditorTab('avatar')" data-tab="avatar" id="avatarTabBtn">
+                <i class="fas fa-user-circle"></i> Avatar
             </div>
             <!-- Video-only tabs (hidden for images) -->
             <div class="kf-editor-tab kv-video-only-tab" onclick="activateEditorTab('trim')" data-tab="trim" id="trimTabBtn" style="display:none;">
@@ -4462,6 +4616,25 @@
                             <i class="fas fa-film"></i> Export Photo + Sound as Video
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <!-- AVATAR Panel — converts user's photo/video into avatar art styles -->
+            <div class="kf-editor-panel" id="avatarPanel" style="flex-direction:column;gap:10px;padding:10px 6px;">
+                <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;letter-spacing:0.8px;text-align:center;">CONVERT TO AVATAR STYLE</div>
+                <div class="kf-avatar-style-scroll" id="avatarStyleScroll">
+                    <!-- Built dynamically by JS with live previews of user's actual photo -->
+                </div>
+                <div class="kf-avatar-intensity">
+                    <label>BLEND</label>
+                    <input type="range" id="avatarBlend" min="0" max="100" value="100" oninput="onAvatarBlendChange(this.value)">
+                    <span id="avatarBlendVal">100</span>
+                </div>
+                <div style="display:flex;gap:8px;padding-top:2px;">
+                    <button onclick="applyAvatarToPost()" style="flex:1;padding:11px;border-radius:14px;background:linear-gradient(135deg,#fe2c55,#ff6b35);border:none;color:white;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+                        <i class="fas fa-check"></i> Apply to Post
+                    </button>
+                    <button onclick="resetAvatarStyle()" style="padding:11px 16px;border-radius:14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:white;font-size:13px;cursor:pointer;">Reset</button>
                 </div>
             </div>
 
@@ -5287,7 +5460,14 @@
                     <div class="kf-vid-tool-icon"><i class="fas fa-microphone" id="vidMicIcon"></i></div>
                     <span>Mic</span>
                 </button>
+                <button class="kf-vid-tool-btn" onclick="switchVidPanel('Avatar', this)" data-panel="Avatar" title="Avatar">
+                    <div class="kf-vid-tool-icon" style="font-size:16px;font-weight:900;">Av</div>
+                    <span>Avatar</span>
+                </button>
             </div>
+
+            <!-- Live avatar canvas on video -->
+            <canvas id="vidAvatarCanvas"></canvas>
 
             <!-- Recording progress bar -->
             <div class="kf-vid-progress-wrap">
@@ -5312,6 +5492,13 @@
                 <div class="kf-vid-timer-panel">
                     <div class="kf-vid-timer-label">⏱ Duration</div>
                     <div class="kf-vid-timer-row" id="vidTimerPresets"></div>
+                </div>
+            </div>
+
+            <!-- AVATAR sub-panel -->
+            <div id="vidPanelAvatar" class="kf-vid-sub-panel">
+                <div class="kf-cam-avatar-panel" id="vidAvatarPanelInner">
+                    <!-- Built by JS -->
                 </div>
             </div>
         </div>
@@ -8068,6 +8255,11 @@
             if (tabName === 'filters') {
                 if (currentEditingType === 'video') buildVideoFilterPreviews();
                 else if (currentEditingType === 'image' && originalImage) buildFilterPreviews();
+            }
+
+            // When switching to avatar tab, build previews from user's actual photo/video
+            if (tabName === 'avatar') {
+                buildEditorAvatarPanel();
             }
         }
 
@@ -10976,6 +11168,7 @@
         // Initialize text style UI on DOM ready
         document.addEventListener('DOMContentLoaded', function() {
             initTextStyle();
+            initAvatarFeature();
 
             // Sync preview text focus/blur for placeholder
             const previewContent = document.getElementById('textPreviewContent');
@@ -10983,9 +11176,608 @@
             previewContent.addEventListener('blur', updatePlaceholder);
         });
 
+        // ================================================================
+        //  AVATAR FEATURE
+        //  Converts user's actual photo / video into avatar art styles
+        //  using canvas pixel manipulation — no external library needed.
+        // ================================================================
+
+        // ---- Avatar style definitions ----
+        const AVATAR_STYLES = [
+            { id: 'none',       name: 'Original',  icon: '—',    css: null },
+            { id: 'cartoon',    name: 'Cartoon',   icon: '🎨',   css: null },
+            { id: 'anime',      name: 'Anime',     icon: '✨',   css: null },
+            { id: 'sketch',     name: 'Sketch',    icon: '✏️',  css: null },
+            { id: 'watercolor', name: 'Watercolor',icon: '💧',   css: null },
+            { id: 'pixelart',   name: 'Pixel Art', icon: '👾',   css: null },
+            { id: 'neon',       name: 'Neon',      icon: '⚡',   css: null },
+            { id: 'popart',     name: 'Pop Art',   icon: '🟥',   css: null },
+            { id: 'oilpaint',   name: 'Oil Paint', icon: '🖼️', css: null },
+            { id: 'thermal',    name: 'Thermal',   icon: '🌡️', css: null },
+        ];
+
+        // State
+        let activeAvatarStyle = 'none';
+        let avatarBlendAmount = 100;     // 0–100
+        let camActiveAvatarStyle = 'none';
+        let vidActiveAvatarStyle = 'none';
+        let camAvatarAnimId = null;
+        let vidAvatarAnimId = null;
+        // Offscreen canvas for the baked avatar result (editor)
+        let avatarResultCanvas = null;
+        let avatarResultCtx = null;
+
+        function initAvatarFeature() {
+            buildCamAvatarPanel();
+            buildVidAvatarPanel();
+            // Editor panel built lazily when tab opens (needs image loaded)
+        }
+
+        // ==============================================================
+        //  PIXEL MANIPULATION — The core art-style transforms
+        // ==============================================================
+
+        /** Apply an avatar style to ImageData in-place */
+        function applyAvatarStyle(imgData, styleId, blend) {
+            if (styleId === 'none') return imgData;
+            const src = new Uint8ClampedArray(imgData.data);
+            const dst = imgData.data;
+            const w = imgData.width, h = imgData.height;
+
+            switch (styleId) {
+                case 'cartoon':    applyCartoon(dst, src, w, h); break;
+                case 'anime':      applyAnime(dst, src, w, h); break;
+                case 'sketch':     applySketch(dst, src, w, h); break;
+                case 'watercolor': applyWatercolor(dst, src, w, h); break;
+                case 'pixelart':   applyPixelArt(dst, src, w, h); break;
+                case 'neon':       applyNeon(dst, src, w, h); break;
+                case 'popart':     applyPopArt(dst, src, w, h); break;
+                case 'oilpaint':   applyOilPaint(dst, src, w, h); break;
+                case 'thermal':    applyThermal(dst, src, w, h); break;
+            }
+
+            // Blend with original if < 100
+            if (blend < 100) {
+                const t = blend / 100;
+                for (let i = 0; i < dst.length; i += 4) {
+                    dst[i]   = src[i]   + (dst[i]   - src[i])   * t;
+                    dst[i+1] = src[i+1] + (dst[i+1] - src[i+1]) * t;
+                    dst[i+2] = src[i+2] + (dst[i+2] - src[i+2]) * t;
+                }
+            }
+            return imgData;
+        }
+
+        /** Cartoon: posterize + edge outline */
+        function applyCartoon(dst, src, w, h) {
+            const levels = 5;
+            const step = 255 / levels;
+            // Posterize
+            for (let i = 0; i < dst.length; i += 4) {
+                dst[i]   = Math.round(src[i]   / step) * step;
+                dst[i+1] = Math.round(src[i+1] / step) * step;
+                dst[i+2] = Math.round(src[i+2] / step) * step;
+                dst[i+3] = src[i+3];
+            }
+            // Boost saturation
+            for (let i = 0; i < dst.length; i += 4) {
+                const r=dst[i], g=dst[i+1], b=dst[i+2];
+                const avg = (r+g+b)/3;
+                dst[i]   = clamp(avg + (r-avg)*1.6);
+                dst[i+1] = clamp(avg + (g-avg)*1.6);
+                dst[i+2] = clamp(avg + (b-avg)*1.6);
+            }
+            // Edge detect and darken
+            const tmp = new Uint8ClampedArray(dst);
+            for (let y=1; y<h-1; y++) {
+                for (let x=1; x<w-1; x++) {
+                    const i = (y*w+x)*4;
+                    const up   = ((y-1)*w+x)*4;
+                    const dn   = ((y+1)*w+x)*4;
+                    const lt   = (y*w+x-1)*4;
+                    const rt   = (y*w+x+1)*4;
+                    const gx = Math.abs(luma(tmp,rt)-luma(tmp,lt));
+                    const gy = Math.abs(luma(tmp,dn)-luma(tmp,up));
+                    if (gx+gy > 80) { dst[i]=dst[i+1]=dst[i+2]=0; }
+                }
+            }
+        }
+
+        /** Anime: smooth + vivid colours + sharp edges */
+        function applyAnime(dst, src, w, h) {
+            // Bilateral-style smooth (box blur approximation)
+            const blurred = boxBlur(src, w, h, 2);
+            // Vivid colors
+            for (let i = 0; i < dst.length; i += 4) {
+                const r=blurred[i], g=blurred[i+1], b=blurred[i+2];
+                const avg=(r+g+b)/3;
+                dst[i]   = clamp(avg + (r-avg)*1.9);
+                dst[i+1] = clamp(avg + (g-avg)*1.9);
+                dst[i+2] = clamp(avg + (b-avg)*1.9);
+                dst[i+3] = src[i+3];
+            }
+            // Posterize lightly
+            const levels=8, step=255/levels;
+            for (let i=0;i<dst.length;i+=4){
+                dst[i]  =Math.round(dst[i]/step)*step;
+                dst[i+1]=Math.round(dst[i+1]/step)*step;
+                dst[i+2]=Math.round(dst[i+2]/step)*step;
+            }
+            // Strong edge outlines
+            const tmp = new Uint8ClampedArray(dst);
+            for (let y=1;y<h-1;y++) for (let x=1;x<w-1;x++) {
+                const i=(y*w+x)*4;
+                const up=((y-1)*w+x)*4, dn=((y+1)*w+x)*4, lt=(y*w+x-1)*4, rt=(y*w+x+1)*4;
+                const gx=Math.abs(luma(tmp,rt)-luma(tmp,lt));
+                const gy=Math.abs(luma(tmp,dn)-luma(tmp,up));
+                if (gx+gy>60){dst[i]=dst[i+1]=dst[i+2]=20;}
+            }
+        }
+
+        /** Sketch: grayscale + edge detection + invert */
+        function applySketch(dst, src, w, h) {
+            // Grayscale
+            const gray = new Uint8ClampedArray(w*h);
+            for (let i=0,j=0;i<src.length;i+=4,j++) {
+                gray[j]=0.299*src[i]+0.587*src[i+1]+0.114*src[i+2];
+            }
+            // Invert-blur for dodge sketch
+            const inv = new Uint8ClampedArray(w*h*4);
+            for (let i=0,j=0;j<gray.length;j++,i+=4) {
+                const v=255-gray[j]; inv[i]=v;inv[i+1]=v;inv[i+2]=v;inv[i+3]=255;
+            }
+            const blurredInv = boxBlur(inv, w, h, 3);
+            // Color dodge blend
+            for (let i=0,j=0;j<gray.length;j++,i+=4) {
+                const g=gray[j], bi=blurredInv[i];
+                let val = bi===255 ? 255 : clamp(g*255/(255-bi));
+                // Add subtle lines
+                val = clamp(val * 0.95 + 10);
+                dst[i]=dst[i+1]=dst[i+2]=val;
+                dst[i+3]=255;
+            }
+        }
+
+        /** Watercolor: blur + texture + desaturate edges */
+        function applyWatercolor(dst, src, w, h) {
+            const blurred = boxBlur(src, w, h, 3);
+            const blurred2 = boxBlur(blurred, w, h, 2);
+            for (let i=0;i<dst.length;i+=4) {
+                // Mix two blur levels
+                const r=(blurred[i]*0.6+blurred2[i]*0.4);
+                const g=(blurred[i+1]*0.6+blurred2[i+1]*0.4);
+                const b=(blurred[i+2]*0.6+blurred2[i+2]*0.4);
+                // Slightly desaturate
+                const avg=(r+g+b)/3;
+                dst[i]  =clamp(avg+(r-avg)*0.75);
+                dst[i+1]=clamp(avg+(g-avg)*0.75);
+                dst[i+2]=clamp(avg+(b-avg)*0.75);
+                dst[i+3]=src[i+3];
+            }
+            // Paper texture noise
+            for (let i=0;i<dst.length;i+=4) {
+                const n=(Math.random()-0.5)*18;
+                dst[i]  =clamp(dst[i]+n);
+                dst[i+1]=clamp(dst[i+1]+n);
+                dst[i+2]=clamp(dst[i+2]+n);
+            }
+            // Slight brightness bump
+            for (let i=0;i<dst.length;i+=4){
+                dst[i]  =clamp(dst[i]*1.12+12);
+                dst[i+1]=clamp(dst[i+1]*1.12+12);
+                dst[i+2]=clamp(dst[i+2]*1.12+12);
+            }
+        }
+
+        /** Pixel Art: mosaic downscale effect */
+        function applyPixelArt(dst, src, w, h) {
+            const blockSize = Math.max(4, Math.round(Math.min(w,h) / 40));
+            for (let by=0; by<h; by+=blockSize) {
+                for (let bx=0; bx<w; bx+=blockSize) {
+                    // Average block color
+                    let r=0,g=0,b=0,cnt=0;
+                    for (let dy=0;dy<blockSize&&by+dy<h;dy++) for (let dx=0;dx<blockSize&&bx+dx<w;dx++) {
+                        const i=((by+dy)*w+(bx+dx))*4;
+                        r+=src[i];g+=src[i+1];b+=src[i+2];cnt++;
+                    }
+                    r=Math.round(r/cnt); g=Math.round(g/cnt); b=Math.round(b/cnt);
+                    // Posterize to 4 levels per channel
+                    r=Math.round(r/64)*64; g=Math.round(g/64)*64; b=Math.round(b/64)*64;
+                    // Fill block with avg color
+                    for (let dy=0;dy<blockSize&&by+dy<h;dy++) for (let dx=0;dx<blockSize&&bx+dx<w;dx++) {
+                        const i=((by+dy)*w+(bx+dx))*4;
+                        dst[i]=r; dst[i+1]=g; dst[i+2]=b; dst[i+3]=255;
+                    }
+                }
+            }
+        }
+
+        /** Neon: dark background + glowing edges in vivid colors */
+        function applyNeon(dst, src, w, h) {
+            // Dark bg
+            for (let i=0;i<dst.length;i+=4){dst[i]=10;dst[i+1]=5;dst[i+2]=20;dst[i+3]=255;}
+            // Edge detect with color
+            for (let y=1;y<h-1;y++) for (let x=1;x<w-1;x++) {
+                const i=(y*w+x)*4;
+                const up=((y-1)*w+x)*4, dn=((y+1)*w+x)*4, lt=(y*w+x-1)*4, rt=(y*w+x+1)*4;
+                const gx=Math.abs(luma(src,rt)-luma(src,lt));
+                const gy=Math.abs(luma(src,dn)-luma(src,up));
+                const edge=Math.min(255,(gx+gy)*2);
+                if (edge>40) {
+                    // Use hue from original pixel
+                    const r=src[i], g=src[i+1], b=src[i+2];
+                    const maxC=Math.max(r,g,b);
+                    const t=edge/255;
+                    dst[i]  =clamp(r/maxC*edge*1.5+dst[i]*(1-t));
+                    dst[i+1]=clamp(g/maxC*edge*1.5+dst[i+1]*(1-t));
+                    dst[i+2]=clamp(b/maxC*edge*1.5+dst[i+2]*(1-t));
+                }
+            }
+            // Add glow (blur the result back into dst)
+            const glow = boxBlur(new Uint8ClampedArray(dst), w, h, 2);
+            for (let i=0;i<dst.length;i+=4){
+                dst[i]  =clamp(dst[i]+glow[i]*0.5);
+                dst[i+1]=clamp(dst[i+1]+glow[i+1]*0.5);
+                dst[i+2]=clamp(dst[i+2]+glow[i+2]*0.5);
+            }
+        }
+
+        /** Pop Art: 4-color Warhol style */
+        function applyPopArt(dst, src, w, h) {
+            // Convert to 4-tone with vivid palette
+            const palettes = [
+                [[255,50,50],[255,220,0],[0,180,255],[20,20,20]],
+                [[255,0,180],[0,255,180],[255,180,0],[30,0,80]],
+            ];
+            const pal = palettes[0];
+            for (let i=0;i<dst.length;i+=4) {
+                const g=0.299*src[i]+0.587*src[i+1]+0.114*src[i+2];
+                let ci;
+                if (g<60) ci=3;
+                else if (g<130) ci=2;
+                else if (g<200) ci=0;
+                else ci=1;
+                dst[i]=pal[ci][0]; dst[i+1]=pal[ci][1]; dst[i+2]=pal[ci][2]; dst[i+3]=255;
+            }
+        }
+
+        /** Oil Paint: simplified using averaging in slightly offset kernel */
+        function applyOilPaint(dst, src, w, h) {
+            const radius=3;
+            const numBins=8;
+            const binW=256/numBins;
+            for (let y=0;y<h;y++) for (let x=0;x<w;x++) {
+                const bins=new Array(numBins).fill(null).map(()=>({r:0,g:0,b:0,cnt:0}));
+                let maxCnt=0, maxBin=0;
+                for (let dy=-radius;dy<=radius;dy++) for (let dx=-radius;dx<=radius;dx++) {
+                    const nx=x+dx, ny=y+dy;
+                    if (nx<0||ny<0||nx>=w||ny>=h) continue;
+                    const idx=(ny*w+nx)*4;
+                    const g=0.299*src[idx]+0.587*src[idx+1]+0.114*src[idx+2];
+                    const bin=Math.min(numBins-1,Math.floor(g/binW));
+                    bins[bin].r+=src[idx]; bins[bin].g+=src[idx+1]; bins[bin].b+=src[idx+2]; bins[bin].cnt++;
+                    if (bins[bin].cnt>maxCnt){maxCnt=bins[bin].cnt;maxBin=bin;}
+                }
+                const i=(y*w+x)*4;
+                const b=bins[maxBin];
+                dst[i]  =clamp(b.r/b.cnt);
+                dst[i+1]=clamp(b.g/b.cnt);
+                dst[i+2]=clamp(b.b/b.cnt);
+                dst[i+3]=255;
+            }
+        }
+
+        /** Thermal camera: false-color heat map */
+        function applyThermal(dst, src, w, h) {
+            for (let i=0;i<dst.length;i+=4) {
+                const g=0.299*src[i]+0.587*src[i+1]+0.114*src[i+2];
+                const t=g/255;
+                let r,gC,b;
+                if (t<0.25){ r=0;gC=0;b=clamp(t*4*200+55); }
+                else if (t<0.5){ r=0;gC=clamp((t-0.25)*4*255);b=clamp(200-(t-0.25)*4*200); }
+                else if (t<0.75){ r=clamp((t-0.5)*4*255);gC=255;b=0; }
+                else { r=255;gC=clamp(255-(t-0.75)*4*255);b=0; }
+                dst[i]=r;dst[i+1]=gC;dst[i+2]=b;dst[i+3]=255;
+            }
+        }
+
+        // ---- Utility: box blur ----
+        function boxBlur(src, w, h, radius) {
+            const dst = new Uint8ClampedArray(src.length);
+            const tmp = new Uint8ClampedArray(src.length);
+            // Horizontal pass
+            for (let y=0;y<h;y++) for (let x=0;x<w;x++) {
+                let r=0,g=0,b=0,a=0,cnt=0;
+                for (let dx=-radius;dx<=radius;dx++) {
+                    const nx=Math.max(0,Math.min(w-1,x+dx));
+                    const i=(y*w+nx)*4;
+                    r+=src[i];g+=src[i+1];b+=src[i+2];a+=src[i+3];cnt++;
+                }
+                const i=(y*w+x)*4;
+                tmp[i]=r/cnt;tmp[i+1]=g/cnt;tmp[i+2]=b/cnt;tmp[i+3]=a/cnt;
+            }
+            // Vertical pass
+            for (let y=0;y<h;y++) for (let x=0;x<w;x++) {
+                let r=0,g=0,b=0,a=0,cnt=0;
+                for (let dy=-radius;dy<=radius;dy++) {
+                    const ny=Math.max(0,Math.min(h-1,y+dy));
+                    const i=(ny*w+x)*4;
+                    r+=tmp[i];g+=tmp[i+1];b+=tmp[i+2];a+=tmp[i+3];cnt++;
+                }
+                const i=(y*w+x)*4;
+                dst[i]=r/cnt;dst[i+1]=g/cnt;dst[i+2]=b/cnt;dst[i+3]=a/cnt;
+            }
+            return dst;
+        }
+
+        function luma(data, i) { return 0.299*data[i]+0.587*data[i+1]+0.114*data[i+2]; }
+        function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
+
+        // ==============================================================
+        //  EDITOR: Avatar tab panel
+        // ==============================================================
+
+        function buildEditorAvatarPanel() {
+            const scroll = document.getElementById('avatarStyleScroll');
+            if (!scroll) return;
+            scroll.innerHTML = '';
+
+            AVATAR_STYLES.forEach(style => {
+                const btn = document.createElement('button');
+                btn.className = 'kf-avatar-style-btn' + (style.id === activeAvatarStyle ? ' active' : '');
+                btn.id = 'edAv_' + style.id;
+                btn.onclick = () => selectEditorAvatarStyle(style.id);
+
+                const preview = document.createElement('div');
+                preview.className = 'kf-avatar-style-preview';
+
+                // Generate thumbnail from current image
+                if (style.id === 'none' && originalImage) {
+                    const c = document.createElement('canvas'); c.width=62;c.height=62;
+                    const cx=c.getContext('2d');
+                    cx.drawImage(originalImage,0,0,62,62);
+                    preview.appendChild(c);
+                } else if (originalImage) {
+                    const thumbW=62, thumbH=62;
+                    const tmpC = document.createElement('canvas'); tmpC.width=thumbW; tmpC.height=thumbH;
+                    const tmpCtx = tmpC.getContext('2d');
+                    tmpCtx.drawImage(originalImage,0,0,thumbW,thumbH);
+                    try {
+                        const id = tmpCtx.getImageData(0,0,thumbW,thumbH);
+                        applyAvatarStyle(id, style.id, 100);
+                        tmpCtx.putImageData(id,0,0);
+                    } catch(e) {}
+                    preview.appendChild(tmpC);
+                } else {
+                    // Fallback emoji
+                    preview.style.cssText += 'display:flex;align-items:center;justify-content:center;font-size:28px;';
+                    preview.textContent = style.icon;
+                }
+
+                const name = document.createElement('span');
+                name.className = 'kf-avatar-style-name';
+                name.textContent = style.name;
+
+                btn.appendChild(preview);
+                btn.appendChild(name);
+                scroll.appendChild(btn);
+            });
+        }
+
+        function selectEditorAvatarStyle(styleId) {
+            activeAvatarStyle = styleId;
+            document.querySelectorAll('.kf-avatar-style-btn').forEach(b => b.classList.remove('active'));
+            const btn = document.getElementById('edAv_' + styleId);
+            if (btn) btn.classList.add('active');
+            renderEditorAvatar();
+        }
+
+        function onAvatarBlendChange(val) {
+            avatarBlendAmount = parseInt(val);
+            document.getElementById('avatarBlendVal').textContent = val;
+            renderEditorAvatar();
+        }
+
+        function renderEditorAvatar() {
+            if (!originalImage || !hiResCtx) return;
+            if (activeAvatarStyle === 'none') {
+                // Restore original + current filter
+                applyFilter(editorCurrentFilter || 'none', null);
+                return;
+            }
+            // Draw base image
+            hiResCtx.drawImage(originalImage, 0, 0, hiResCanvas.width, hiResCanvas.height);
+            // Apply current filter first
+            if (editorCurrentFilter && editorCurrentFilter !== 'none') {
+                const filter = EDITOR_FILTERS.find(f => f.id === editorCurrentFilter);
+                if (filter && filter.fn) {
+                    const id2 = hiResCtx.getImageData(0,0,hiResCanvas.width,hiResCanvas.height);
+                    filter.fn(id2); hiResCtx.putImageData(id2,0,0);
+                }
+            }
+            // Apply avatar style
+            try {
+                const id = hiResCtx.getImageData(0,0,hiResCanvas.width,hiResCanvas.height);
+                applyAvatarStyle(id, activeAvatarStyle, avatarBlendAmount);
+                hiResCtx.putImageData(id,0,0);
+            } catch(e) { console.warn('Avatar render error:', e); }
+            syncHiResToDisplay();
+        }
+
+        function applyAvatarToPost() {
+            renderEditorAvatar();
+            // Bake into hiRes and mark as done
+            showAlert('avatar applied! 🎨', 'your photo has been transformed. hit Done to save it! ✨', '🎨', [{text:'nice! 🔥', type:'primary'}]);
+            createFloatingEmoji('🎨', window.innerWidth/2, 100);
+        }
+
+        function resetAvatarStyle() {
+            activeAvatarStyle = 'none';
+            avatarBlendAmount = 100;
+            document.getElementById('avatarBlend').value = 100;
+            document.getElementById('avatarBlendVal').textContent = '100';
+            document.querySelectorAll('.kf-avatar-style-btn').forEach(b => b.classList.remove('active'));
+            const none = document.getElementById('edAv_none');
+            if (none) none.classList.add('active');
+            if (hiResCtx && originalImage) {
+                hiResCtx.drawImage(originalImage, 0, 0, hiResCanvas.width, hiResCanvas.height);
+                applyAdjustments(false);
+                syncHiResToDisplay();
+            }
+        }
+
+        // ==============================================================
+        //  CAMERA: Live avatar style on camera preview via canvas
+        // ==============================================================
+
+        function buildCamAvatarPanel() {
+            const panel = document.getElementById('camAvatarPanelInner');
+            if (!panel) return;
+            AVATAR_STYLES.forEach(style => {
+                const item = document.createElement('div');
+                item.className='kf-cam-avatar-item'+(style.id==='none'?' active':'');
+                item.id='camAv_'+style.id;
+                item.onclick=()=>setCamAvatarStyle(style.id);
+                item.innerHTML=`<div class="kf-cam-avatar-icon">${style.icon}</div><span class="kf-cam-avatar-label">${style.name}</span>`;
+                panel.appendChild(item);
+            });
+        }
+
+        function setCamAvatarStyle(styleId) {
+            camActiveAvatarStyle = styleId;
+            document.querySelectorAll('[id^="camAv_"]').forEach(el=>el.classList.remove('active'));
+            const btn = document.getElementById('camAv_'+styleId); if(btn) btn.classList.add('active');
+            const canvas = document.getElementById('camAvatarCanvas');
+            if (!canvas) return;
+
+            if (camAvatarAnimId) { cancelAnimationFrame(camAvatarAnimId); camAvatarAnimId=null; }
+
+            if (styleId==='none') {
+                canvas.style.display='none';
+                canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+                return;
+            }
+            canvas.style.display='block';
+
+            const video = document.getElementById('cameraLive');
+            const offscreen = document.createElement('canvas');
+
+            function loopCamAvatar() {
+                if (!video || video.paused || !video.videoWidth) {
+                    camAvatarAnimId = requestAnimationFrame(loopCamAvatar); return;
+                }
+                const vw=video.videoWidth, vh=video.videoHeight;
+                // Process at lower res for performance
+                const scale=Math.min(1, 320/Math.max(vw,vh));
+                offscreen.width=Math.round(vw*scale); offscreen.height=Math.round(vh*scale);
+                const oc=offscreen.getContext('2d');
+                oc.drawImage(video,0,0,offscreen.width,offscreen.height);
+                try {
+                    const id=oc.getImageData(0,0,offscreen.width,offscreen.height);
+                    applyAvatarStyle(id,camActiveAvatarStyle,100);
+                    oc.putImageData(id,0,0);
+                } catch(e){}
+                canvas.width=vw; canvas.height=vh;
+                const ctx=canvas.getContext('2d');
+                ctx.drawImage(offscreen,0,0,vw,vh);
+                camAvatarAnimId=requestAnimationFrame(loopCamAvatar);
+            }
+            camAvatarAnimId=requestAnimationFrame(loopCamAvatar);
+        }
+
+        // ==============================================================
+        //  VIDEO RECORDER: Live avatar style on video preview
+        // ==============================================================
+
+        function buildVidAvatarPanel() {
+            const panel = document.getElementById('vidAvatarPanelInner');
+            if (!panel) return;
+            AVATAR_STYLES.forEach(style => {
+                const item = document.createElement('div');
+                item.className='kf-cam-avatar-item'+(style.id==='none'?' active':'');
+                item.id='vidAv_'+style.id;
+                item.onclick=()=>setVidAvatarStyle(style.id);
+                item.innerHTML=`<div class="kf-cam-avatar-icon">${style.icon}</div><span class="kf-cam-avatar-label">${style.name}</span>`;
+                panel.appendChild(item);
+            });
+        }
+
+        function setVidAvatarStyle(styleId) {
+            vidActiveAvatarStyle = styleId;
+            document.querySelectorAll('[id^="vidAv_"]').forEach(el=>el.classList.remove('active'));
+            const btn = document.getElementById('vidAv_'+styleId); if(btn) btn.classList.add('active');
+            const canvas = document.getElementById('vidAvatarCanvas');
+            if (!canvas) return;
+
+            if (vidAvatarAnimId) { cancelAnimationFrame(vidAvatarAnimId); vidAvatarAnimId=null; }
+
+            if (styleId==='none') {
+                canvas.style.display='none';
+                canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+                return;
+            }
+            canvas.style.display='block';
+
+            const video = document.getElementById('videoLive');
+            const offscreen = document.createElement('canvas');
+
+            function loopVidAvatar() {
+                if (!video || !video.videoWidth) {
+                    vidAvatarAnimId=requestAnimationFrame(loopVidAvatar); return;
+                }
+                const vw=video.videoWidth, vh=video.videoHeight;
+                const scale=Math.min(1, 320/Math.max(vw,vh));
+                offscreen.width=Math.round(vw*scale); offscreen.height=Math.round(vh*scale);
+                const oc=offscreen.getContext('2d');
+                oc.drawImage(video,0,0,offscreen.width,offscreen.height);
+                try {
+                    const id=oc.getImageData(0,0,offscreen.width,offscreen.height);
+                    applyAvatarStyle(id,vidActiveAvatarStyle,100);
+                    oc.putImageData(id,0,0);
+                } catch(e){}
+                canvas.width=vw; canvas.height=vh;
+                const ctx=canvas.getContext('2d');
+                ctx.drawImage(offscreen,0,0,vw,vh);
+                vidAvatarAnimId=requestAnimationFrame(loopVidAvatar);
+            }
+            vidAvatarAnimId=requestAnimationFrame(loopVidAvatar);
+        }
+
+        // Stop avatar loops when modals close
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const origCloseCamera = window.closeCamera;
+                if (origCloseCamera) window.closeCamera = function() {
+                    if (camAvatarAnimId) { cancelAnimationFrame(camAvatarAnimId); camAvatarAnimId=null; }
+                    origCloseCamera.apply(this, arguments);
+                };
+                const origCloseVid = window.closeVideoRecorder;
+                if (origCloseVid) window.closeVideoRecorder = function() {
+                    if (vidAvatarAnimId) { cancelAnimationFrame(vidAvatarAnimId); vidAvatarAnimId=null; }
+                    origCloseVid.apply(this, arguments);
+                };
+            }, 800);
+        });
+
+
     </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
