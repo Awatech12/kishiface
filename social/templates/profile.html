@@ -171,14 +171,12 @@
         .kf-stats-card {
             background: var(--kf-white);
             border-radius: var(--radius-md);
-            border: 1px solid var(--kf-border);
             overflow: hidden;
             margin-bottom: 16px;
         }
 
         .kf-stats-card-header {
             padding: 14px 16px 10px;
-            border-bottom: 1px solid var(--kf-border-light);
         }
 
         .kf-stats-card-title {
@@ -225,20 +223,30 @@
 
         .kf-mutual-avatars {
             display: flex;
-            margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .kf-mutual-avatars a {
+            display: block;
+            flex-shrink: 0;
         }
 
         .kf-mutual-avatars img {
-            width: 26px;
-            height: 26px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             border: 2px solid var(--kf-white);
-            margin-left: -8px;
             object-fit: cover;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            transition: transform 0.15s, box-shadow 0.15s;
+            display: block;
         }
 
-        .kf-mutual-avatars img:first-child {
-            margin-left: 0;
+        .kf-mutual-avatars a:hover img {
+            transform: scale(1.08);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.18);
         }
 
         .kf-mutual-text {
@@ -576,7 +584,6 @@
             padding: 16px;
             background: var(--kf-white);
             border-radius: var(--radius-md);
-            border: 1px solid var(--kf-border);
         }
 
         .kishiface-mobile-mutual-title {
@@ -1414,12 +1421,82 @@
 
         /* Profile meta mobile (hidden on desktop) */
         .kishiface-profile-meta-mobile { display: none; }
+
+        /* ─── Profile Picture Modal ──────────────────── */
+        .kf-pic-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.88);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 20000;
+            animation: kf-fade-in 0.2s ease;
+            cursor: zoom-out;
+        }
+
+        .kf-pic-modal-overlay.active { display: flex; }
+
+        .kf-pic-modal-inner {
+            position: relative;
+            max-width: min(90vw, 520px);
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: default;
+        }
+
+        .kf-pic-modal-img {
+            width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: var(--radius-md);
+            box-shadow: 0 8px 48px rgba(0,0,0,0.5);
+            animation: kf-modal-slide-up 0.25s ease;
+            display: block;
+        }
+
+        .kf-pic-modal-close {
+            position: absolute;
+            top: -14px;
+            right: -14px;
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: white;
+            font-size: 15px;
+            transition: background 0.15s;
+            backdrop-filter: blur(4px);
+        }
+
+        .kf-pic-modal-close:hover { background: rgba(255,255,255,0.28); }
+
+        .kishiface-profile-avatar {
+            cursor: zoom-in;
+        }
     </style>
 </head>
 <body>
 
 <!-- Toast -->
 <div id="kishifaceToast" class="kishiface-toast"></div>
+
+<!-- Profile Picture Full View Modal -->
+<div class="kf-pic-modal-overlay" id="profilePicModal">
+    <div class="kf-pic-modal-inner">
+        <button class="kf-pic-modal-close" id="profilePicModalClose">
+            <i class="fas fa-times"></i>
+        </button>
+        <img src="" alt="Profile picture" class="kf-pic-modal-img" id="profilePicModalImg">
+    </div>
+</div>
 
 <!-- Logout Modal -->
 <div class="logout-modal" id="logoutModal">
@@ -1756,23 +1833,14 @@
                         {% if request.user == user %}
                             {% if profile.followers.all %}
                                 <div class="kishiface-mutual-avatars-mobile" id="mutualAvatarsMobile">
-                                    {% for follower in profile.followers.all|slice:":5" %}
+                                    {% for follower in profile.followers.all|slice:":8" %}
                                         <a href="{% url 'profile' follower.user.username %}" title="{{ follower.user.username }}">
                                             <img src="{{ follower.picture.url }}" alt="{{ follower.user.username }}" 
                                                  class="kishiface-mutual-avatar-mobile"
                                                  data-username="{{ follower.user.username }}" 
-                                                 style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid white; margin-left: -8px; cursor: pointer;">
+                                                 style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid white; margin-right: 6px; cursor: pointer; object-fit: cover;">
                                         </a>
                                     {% endfor %}
-                                </div>
-                                <div class="kishiface-mutual-text-mobile">
-                                    Followed by 
-                                    {% for follower in profile.followers.all|slice:":3" %}
-                                        <a href="{% url 'profile' follower.user.username %}"><strong>{{ follower.user.username }}</strong></a>{% if not forloop.last %}, {% endif %}
-                                    {% endfor %}
-                                    {% if profile.followers.count > 3 %}
-                                        and <a href="{% url 'followers' user.username %}">{{ profile.followers.count|add:"-3" }} other{% if profile.followers.count > 4 %}s{% endif %}</a>
-                                    {% endif %}
                                 </div>
                             {% else %}
                                 <div class="kishiface-mutual-text-mobile">You don't have any followers yet.</div>
@@ -1780,21 +1848,13 @@
                         
                         {% elif mutual_count > 0 %}
                             <div class="kishiface-mutual-avatars-mobile" id="mutualAvatarsMobile">
-                                {% for mutual in mutual_followings|slice:":5" %}
+                                {% for mutual in mutual_followings|slice:":8" %}
                                     <a href="{% url 'profile' mutual.user.username %}" title="{{ mutual.user.username }}">
                                         <img src="{{ mutual.picture.url }}" alt="{{ mutual.user.username }}" 
-                                             class="kishiface-mutual-avatar-mobile" data-username="{{ mutual.user.username }}">
+                                             class="kishiface-mutual-avatar-mobile" data-username="{{ mutual.user.username }}"
+                                             style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid white; margin-right: 6px; cursor: pointer; object-fit: cover;">
                                     </a>
                                 {% endfor %}
-                            </div>
-                            <div class="kishiface-mutual-text-mobile">
-                                Followed by 
-                                {% for mutual in mutual_followings|slice:":3" %}
-                                    <a href="{% url 'profile' mutual.user.username %}"><strong>{{ mutual.user.username }}</strong></a>{% if not forloop.last %}, {% endif %}
-                                {% endfor %}
-                                {% if mutual_count > 3 %}
-                                    and <a href="{% url 'followers' user.username %}">{{ mutual_count|add:"-3" }} other{% if mutual_count > 4 %}s{% endif %}</a>
-                                {% endif %}
                             </div>
                         {% else %}
                             <div class="kishiface-mutual-text-mobile">No mutual connections yet.</div>
@@ -1889,42 +1949,24 @@
                 {% if request.user == user %}
                     {% if profile.followers.all %}
                         <div class="kf-mutual-avatars">
-                            {% for follower in profile.followers.all|slice:":5" %}
+                            {% for follower in profile.followers.all|slice:":10" %}
                                 <a href="{% url 'profile' follower.user.username %}" title="{{ follower.user.username }}">
                                     <img src="{{ follower.picture.url }}" alt="{{ follower.user.username }}">
                                 </a>
                             {% endfor %}
                         </div>
-                        <p class="kf-mutual-text">
-                            Followed by 
-                            {% for follower in profile.followers.all|slice:":3" %}
-                                <a href="{% url 'profile' follower.user.username %}"><strong>{{ follower.user.username }}</strong></a>{% if not forloop.last %}, {% endif %}
-                            {% endfor %}
-                            {% if profile.followers.count > 3 %}
-                                and <a href="{% url 'followers' user.username %}">{{ profile.followers.count|add:"-3" }} others</a>
-                            {% endif %}
-                        </p>
                     {% else %}
                         <p class="kf-mutual-text">No followers yet.</p>
                     {% endif %}
                 
                 {% elif mutual_count > 0 %}
                     <div class="kf-mutual-avatars">
-                        {% for mutual in mutual_followings|slice:":5" %}
+                        {% for mutual in mutual_followings|slice:":10" %}
                             <a href="{% url 'profile' mutual.user.username %}" title="{{ mutual.user.username }}">
                                 <img src="{{ mutual.picture.url }}" alt="{{ mutual.user.username }}">
                             </a>
                         {% endfor %}
                     </div>
-                    <p class="kf-mutual-text">
-                        Followed by 
-                        {% for mutual in mutual_followings|slice:":3" %}
-                            <a href="{% url 'profile' mutual.user.username %}"><strong>{{ mutual.user.username }}</strong></a>{% if not forloop.last %}, {% endif %}
-                        {% endfor %}
-                        {% if mutual_count > 3 %}
-                            and <a href="{% url 'followers' user.username %}">{{ mutual_count|add:"-3" }} others</a>
-                        {% endif %}
-                    </p>
                 {% else %}
                     <p class="kf-mutual-text">No mutual connections yet.</p>
                 {% endif %}
@@ -3001,8 +3043,47 @@ document.addEventListener('DOMContentLoaded', function() {
         showToast: showToast
     };
 })();
+
+// ─── Profile Picture Zoom Modal ──────────────────
+(function() {
+    const modal = document.getElementById('profilePicModal');
+    const modalImg = document.getElementById('profilePicModalImg');
+    const closeBtn = document.getElementById('profilePicModalClose');
+    const avatar = document.getElementById('mainProfilePicture');
+
+    if (!modal || !avatar) return;
+
+    function openModal() {
+        modalImg.src = avatar.src;
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    avatar.addEventListener('click', openModal);
+
+    closeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        closeModal();
+    });
+
+    // Click outside image to close
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeModal();
+    });
+
+    // Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
+    });
+})();
 </script>
 
 </body>
 </html>
+
 
