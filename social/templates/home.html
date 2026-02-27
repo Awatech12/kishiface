@@ -11,9 +11,26 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
   <title>Kvibe - Home</title>
-<script src="{% static 'js/home.js' %}"></script>
+
+  <!-- Resource hints: pre-warm CDN connections before browser needs them -->
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+
+  <!-- Preload the user's profile picture — it's the LCP image (first visible above fold) -->
+  <link rel="preload" as="image" href="{{ request.user.profile.picture.url }}" fetchpriority="high">
+
+  <!-- Theme color for browser chrome (improves perceived performance on mobile) -->
+  <meta name="theme-color" content="#ffffff">
+
+  <!-- Font Awesome: load async so it never blocks rendering -->
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
+
+  <!-- home.js and htmx: defer both so they never block HTML parsing -->
+  <script src="{% static 'js/home.js' %}" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   
   <style>
     /* Minimal critical CSS */
@@ -309,6 +326,11 @@
       overflow-x: auto;
       scrollbar-width: none;
       -ms-overflow-style: none;
+      /* Prevent stories horizontal scroll from triggering page scroll */
+      overscroll-behavior-x: contain;
+      touch-action: pan-x;
+      /* Smooth momentum scrolling on iOS */
+      -webkit-overflow-scrolling: touch;
     }
 
     .kf-stories-list::-webkit-scrollbar {
@@ -1702,6 +1724,10 @@
       border-bottom: 1px solid var(--kf-border);
       border-radius: 8px;
       overflow: hidden;
+      /* Skip rendering cost for off-screen posts — massive scroll performance win */
+      content-visibility: auto;
+      contain-intrinsic-size: 0 500px;
+      contain: layout style;
     }
     
     /* Repost header styling */
@@ -1744,6 +1770,9 @@
       border-radius: 50%;
       object-fit: cover;
       margin-right: 12px;
+      /* Explicit aspect-ratio prevents layout shift while image loads */
+      aspect-ratio: 1 / 1;
+      flex-shrink: 0;
     }
     
     .kf-username {
@@ -3399,6 +3428,9 @@
       background-size: 800px 100%;
       animation: skeleton-shimmer 1.4s ease-in-out infinite;
       border-radius: 4px;
+      /* GPU-accelerate shimmer for smooth 60fps animation */
+      will-change: background-position;
+      transform: translateZ(0);
     }
 
     /* Skeleton Feed */
@@ -3680,6 +3712,7 @@
               <img src="{{ data.channel.image.url }}" 
                    class="kf-channel-icon" 
                    loading="lazy"
+                   decoding="async"
                    alt="{{ data.channel.channel_name }}">
               <span class="kf-channel-name">{{ data.channel.channel_name }}</span>
               {% if data.unread_count > 0 %}
@@ -3737,7 +3770,7 @@
                 <!-- Create Story Button  -->
                 <div class="kf-story-item kf-story-add" onclick="kfOpenCreateStoryModal()">
                     <!-- Background: Current User Profile Pic -->
-                    <img src="{{ request.user.profile.picture.url }}" class="kf-story-preview-media" alt="Me">
+                    <img src="{{ request.user.profile.picture.url }}" class="kf-story-preview-media" alt="Me" fetchpriority="high" loading="lazy" decoding="async">
                     <div class="kf-story-overlay"></div>
                     
                     <!-- Top Left: Plus Icon -->
@@ -3756,7 +3789,7 @@
                     
                     <!-- 1. BACKGROUND PREVIEW LOGIC -->
                     {% if story.story_type == 'image' %}
-                        <img src="{{ story.image.url }}" class="kf-story-preview-media" loading="lazy" alt="Story">
+                        <img src="{{ story.image.url }}" class="kf-story-preview-media" loading="lazy" alt="Story" decoding="async">
                     
                     {% elif story.story_type == 'video' %}
                          <!-- Use video as preview, muted and paused at first frame -->
@@ -3773,7 +3806,7 @@
                         
                     {% else %}
                         <!-- Fallback if specific type unknown: Use author Profile Pic blurred -->
-                        <img src="{{ story.author.profile.picture.url }}" class="kf-story-preview-media" style="filter: blur(2px);" loading="lazy">
+                        <img src="{{ story.author.profile.picture.url }}" class="kf-story-preview-media" style="filter: blur(2px);" loading="lazy" decoding="async">
                     {% endif %}
 
                     <!-- 2. DARK GRADIENT OVERLAY -->
@@ -3783,6 +3816,8 @@
                     <div class="kf-story-profile-ring">
                         <img src="{{ story.author.profile.picture.url }}" 
                              class="kf-story-profile-img"
+                             loading="lazy"
+                             decoding="async"
                              alt="{{ story.author.username }}">
                     </div>
 
@@ -3880,6 +3915,7 @@
                   class="kf-profile-pic"
                   alt="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}"
                   loading="lazy"
+                  decoding="async"
                 >
                 <div style="flex: 1;">
                   <div style="display: flex; align-items: center; flex-wrap: wrap;">
@@ -3891,11 +3927,11 @@
                       {% endif %}
                       {% if item.data.is_repost and item.data.original_post %}
                         {% if item.data.original_post.author.profile.is_verify %} 
-                          <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                          <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;" loading="eager" decoding="async" fetchpriority="low">
                         {% endif %}
                       {% else %}
                         {% if item.data.author.profile.is_verify and item.data.author.first_name %} 
-                          <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                          <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;" loading="eager" decoding="async" fetchpriority="low">
                         {% endif %}
                       {% endif %}
                     </a>
@@ -3941,7 +3977,7 @@
                   <span class="kf-repost-caption-author">
                     {{ item.data.author.first_name }} {{ item.data.author.last_name }}
                     {% if item.data.author.profile.is_verify %} 
-                      <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align: middle;">
+                      <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align: middle;" loading="eager" decoding="async" fetchpriority="low">
                     {% endif %}
                   </span>
                   <div class="kf-repost-caption-text">
@@ -4033,7 +4069,7 @@
                                     </button>
                                   </div>
                                 </div>
-                                <audio id="kf-audio-element-{{ item.data.post_id }}" preload="metadata" class="kf-audio-hidden">
+                                <audio id="kf-audio-element-{{ item.data.post_id }}" preload="none" class="kf-audio-hidden">
                                   <source src="{{ original_post.file.url }}" type="audio/webm">
                                 </audio>
                               </div>
@@ -4092,8 +4128,7 @@
                                     src="{{ image.image.url }}" 
                                     alt="Post image {{ forloop.counter }}"
                                     loading="lazy"
-                                    onload="this.classList.add('loaded')"
-                                  />
+                                    onload="this.classList.add('loaded')" decoding="async"/>
                                   <!-- Download button for image -->
                                   <button class="kf-image-download-btn" 
                                           title="Download Image" 
@@ -4159,7 +4194,7 @@
                                 </button>
                               </div>
                             </div>
-                            <audio id="kf-audio-element-{{ item.data.post_id }}" preload="metadata" class="kf-audio-hidden">
+                            <audio id="kf-audio-element-{{ item.data.post_id }}" preload="none" class="kf-audio-hidden">
                               <source src="{{ original_post.file.url }}" type="audio/webm">
                             </audio>
                           </div>
@@ -4206,8 +4241,7 @@
                                     src="{{ image.image.url }}" 
                                     alt="Post image {{ forloop.counter }}"
                                     loading="lazy"
-                                    onload="this.classList.add('loaded')"
-                                  />
+                                    onload="this.classList.add('loaded')" decoding="async"/>
                                   <!-- Download button for image -->
                                   <button class="kf-image-download-btn" 
                                           title="Download Image" 
@@ -4242,8 +4276,7 @@
                                 src="{{ image.image.url }}" 
                                 alt="Post image"
                                 loading="lazy"
-                                onload="this.classList.add('loaded')"
-                              />
+                                onload="this.classList.add('loaded')" decoding="async"/>
                               <!-- Download button for image -->
                               <button class="kf-image-download-btn" 
                                       title="Download Image" 
@@ -4303,7 +4336,7 @@
                                   </button>
                                 </div>
                               </div>
-                              <audio id="kf-audio-element-{{ item.data.post_id }}" preload="metadata" class="kf-audio-hidden">
+                              <audio id="kf-audio-element-{{ item.data.post_id }}" preload="none" class="kf-audio-hidden">
                                 <source src="{{ item.data.file.url }}" type="audio/webm">
                               </audio>
                             </div>
@@ -4362,8 +4395,7 @@
                                   src="{{ image.image.url }}" 
                                   alt="Post image {{ forloop.counter }}"
                                   loading="lazy"
-                                  onload="this.classList.add('loaded')"
-                                />
+                                  onload="this.classList.add('loaded')" decoding="async"/>
                                 <!-- Download button for image -->
                                 <button class="kf-image-download-btn" 
                                         title="Download Image" 
@@ -4429,7 +4461,7 @@
                               </button>
                             </div>
                           </div>
-                          <audio id="kf-audio-element-{{ item.data.post_id }}" preload="metadata" class="kf-audio-hidden">
+                          <audio id="kf-audio-element-{{ item.data.post_id }}" preload="none" class="kf-audio-hidden">
                             <source src="{{ item.data.file.url }}" type="audio/webm">
                           </audio>
                         </div>
@@ -4476,8 +4508,7 @@
                                   src="{{ image.image.url }}" 
                                   alt="Post image {{ forloop.counter }}"
                                   loading="lazy"
-                                  onload="this.classList.add('loaded')"
-                                />
+                                  onload="this.classList.add('loaded')" decoding="async"/>
                                 <!-- Download button for image -->
                                 <button class="kf-image-download-btn" 
                                         title="Download Image" 
@@ -4512,8 +4543,7 @@
                               src="{{ image.image.url }}" 
                               alt="Post image"
                               loading="lazy"
-                              onload="this.classList.add('loaded')"
-                            />
+                              onload="this.classList.add('loaded')" decoding="async"/>
                             <!-- Download button for image -->
                             <button class="kf-image-download-btn" 
                                     title="Download Image" 
@@ -4550,7 +4580,7 @@
                     src="{{ item.data.product_owner.profile.picture.url }}" 
                     alt="{{ item.data.seller.username }}"
                     loading="lazy"
-                  >
+                   decoding="async">
                   <div>
                     <div style="font-weight: 600; font-size: 14px;">
                       {{ item.data.product_owner.first_name }} {{ item.data.product_owner.last_name }}
@@ -4570,15 +4600,13 @@
                       src="{{ first_image.product_image.url }}" 
                       alt="{{ item.data.product_name }}"
                       class="kf-marketplace-ad-image"
-                      loading="lazy"
-                    />
+                      loading="lazy" decoding="async"/>
                   {% else %}
                     <img 
                       src="{{ item.data.product_image.url }}" 
                       alt="{{ item.data.product_name }}"
                       class="kf-marketplace-ad-image"
-                      loading="lazy"
-                    />
+                      loading="lazy" decoding="async"/>
                   {% endif %}
                 {% endwith %}
                 
@@ -4634,12 +4662,12 @@
                     alt="{{ item.data.username }}"
                     class="kf-user-suggestion-picture"
                     loading="lazy"
-                  >
+                   decoding="async">
                   <div class="kf-user-suggestion-details">
                     <div class="kf-user-suggestion-name">
                       {{ item.data.first_name }} {{ item.data.last_name }}
                       {% if item.data.profile.is_verify %} 
-                        <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;" loading="lazy">
+                        <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;" loading="eager" decoding="async" fetchpriority="low">
                       {% endif %}
                     </div>
                     <div class="kf-user-suggestion-username">
@@ -4697,10 +4725,9 @@
                         <img 
                           src="{{ first_image.product_image.url }}" 
                           alt="{{ product.product_name }}"
-                          loading="lazy"
-                        />
+                          loading="lazy" decoding="async"/>
                       {% else %}
-                        <img src="{{ product.product_image.url }}" alt="{{ product.product_name }}" loading="lazy">
+                        <img src="{{ product.product_image.url }}" alt="{{ product.product_name }}" loading="lazy" decoding="async">
                       {% endif %}
                     {% endwith %}
                     <div class="kf-product-name">{{ product.product_name }}</div>
@@ -4782,15 +4809,13 @@
                       src="{{ first_image.product_image.url }}" 
                       alt="{{ product.product_name }}"
                       class="kf-your-product-image"
-                      loading="lazy"
-                    />
+                      loading="lazy" decoding="async"/>
                   {% else %}
                     <img 
                       src="{{ product.product_image.url }}" 
                       alt="{{ product.product_name }}"
                       class="kf-your-product-image"
-                      loading="lazy"
-                    />
+                      loading="lazy" decoding="async"/>
                   {% endif %}
                 {% endwith %}
                 <div class="kf-your-product-details">
@@ -4891,12 +4916,12 @@
                 class="kf-user-suggestion-picture"
                 style="width: 40px; height: 40px;"
                 loading="lazy"
-              >
+               decoding="async">
               <div class="kf-user-suggestion-details">
                 <div class="kf-user-suggestion-name" style="font-size: 14px;">
                   {{ user.first_name }} {{ user.last_name }}
                   {% if user.profile.is_verify %} 
-                    <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align: middle;">
+                    <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align: middle;" loading="eager" decoding="async" fetchpriority="low">
                   {% endif %}
                 </div>
                 <div class="kf-user-suggestion-username" style="font-size: 12px;">
@@ -5359,7 +5384,9 @@
   </div>
 
   <!-- Inline script for immediate initialization -->
-<script>
+<script defer>
+(function() {
+  function _initApp() {
    function getCsrfFromMeta(){
     return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
    }
@@ -5697,7 +5724,7 @@
       }
       
       userInfo.innerHTML = `
-        <img src="${story.author_profile_picture}" alt="${story.author_username}">
+        <img src="${story.author_profile_picture}" alt="${story.author_username}" loading="lazy" decoding="async">
         <div class="kf-story-viewer-user-info">
           <div class="kf-story-viewer-username">${story.author_name}</div>
           <div class="kf-story-viewer-time">${story.time_ago}</div>
@@ -5758,7 +5785,7 @@
         mediaControls.style.display = 'none';
       } else if (story.story_type === 'image') {
         contentArea.innerHTML = `
-          <img src="${story.media_url}" class="kf-story-image" alt="Story image">
+          <img src="${story.media_url}" class="kf-story-image" alt="Story image" loading="lazy" decoding="async">
         `;
         // Hide media controls for image stories
         mediaControls.style.display = 'none';
@@ -6887,29 +6914,45 @@
         // Stories
         const skelStories = document.getElementById('kf-skeleton-stories-container');
         const realStories = document.getElementById('kf-real-stories-container');
-        if (skelStories) skelStories.style.display = 'none';
+        if (skelStories) {
+          // Remove GPU layer before hiding to free memory
+          skelStories.querySelectorAll('.skeleton').forEach(el => el.style.willChange = 'auto');
+          skelStories.style.display = 'none';
+        }
         if (realStories) realStories.style.display = 'block';
 
         // Feed
         const skelFeed = document.getElementById('kf-skeleton-feed');
         const realFeed = document.getElementById('kf-real-feed');
-        if (skelFeed) skelFeed.style.display = 'none';
+        if (skelFeed) {
+          skelFeed.querySelectorAll('.skeleton').forEach(el => el.style.willChange = 'auto');
+          skelFeed.style.display = 'none';
+        }
         if (realFeed) realFeed.style.display = 'block';
 
         // Sidebar
         const skelSidebar = document.getElementById('kf-skeleton-sidebar');
         const realSidebar = document.getElementById('kf-real-sidebar');
-        if (skelSidebar) skelSidebar.style.display = 'none';
+        if (skelSidebar) {
+          skelSidebar.querySelectorAll('.skeleton').forEach(el => el.style.willChange = 'auto');
+          skelSidebar.style.display = 'none';
+        }
         if (realSidebar) realSidebar.style.display = 'block';
       }
 
-      // Reveal after a short delay to show skeleton effect, or on load if already ready
+      // Use requestIdleCallback when available (non-blocking), fall back to rAF + setTimeout
+      function kfScheduleReveal() {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(kfRevealContent, { timeout: 800 });
+        } else {
+          requestAnimationFrame(function() { setTimeout(kfRevealContent, 0); });
+        }
+      }
+
       if (document.readyState === 'complete') {
-        setTimeout(kfRevealContent, 600);
+        kfScheduleReveal();
       } else {
-        window.addEventListener('load', function() {
-          setTimeout(kfRevealContent, 400);
-        });
+        window.addEventListener('load', kfScheduleReveal);
       }
 
 
@@ -6989,17 +7032,26 @@
       const rightSidebar = document.querySelector('.kf-right-sidebar');
       
       if (leftSidebar) {
+        // Passive listener + throttle localStorage writes for smooth scrolling
+        let _lsScrollTimer;
         leftSidebar.addEventListener('scroll', function() {
-          localStorage.setItem('kf_left_sidebar_scroll', leftSidebar.scrollTop);
-        });
+          clearTimeout(_lsScrollTimer);
+          _lsScrollTimer = setTimeout(function() {
+            localStorage.setItem('kf_left_sidebar_scroll', leftSidebar.scrollTop);
+          }, 150);
+        }, { passive: true });
         const savedScroll = localStorage.getItem('kf_left_sidebar_scroll');
         if (savedScroll) leftSidebar.scrollTop = parseInt(savedScroll);
       }
       
       if (rightSidebar) {
+        let _rsScrollTimer;
         rightSidebar.addEventListener('scroll', function() {
-          localStorage.setItem('kf_right_sidebar_scroll', rightSidebar.scrollTop);
-        });
+          clearTimeout(_rsScrollTimer);
+          _rsScrollTimer = setTimeout(function() {
+            localStorage.setItem('kf_right_sidebar_scroll', rightSidebar.scrollTop);
+          }, 150);
+        }, { passive: true });
         const savedScroll = localStorage.getItem('kf_right_sidebar_scroll');
         if (savedScroll) rightSidebar.scrollTop = parseInt(savedScroll);
       }
@@ -7028,8 +7080,21 @@
         }
       });
     });
+  } // end _initApp
+
+  // Run immediately if DOM is ready, otherwise wait
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initApp);
+  } else {
+    _initApp();
+  }
+})();
 </script>
 </body>
+</html>
+
+
+
 </html>
 
 
