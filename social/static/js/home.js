@@ -1,6 +1,100 @@
-// ===== GLOBAL MEDIA TRACKING =====
+/// ===== GLOBAL MEDIA TRACKING =====
 let kfCurrentlyPlayingMedia = null;
 const kfAudioTimers = {};
+
+// ===== IMAGE GRID LIGHTBOX =====
+
+let kfLightboxImages = [];   // [{src, alt}]
+let kfLightboxIndex = 0;
+let kfLightboxPostData = {}; // {username, avatar, time, caption}
+
+function kfOpenLightbox(images, startIndex, postData) {
+  kfLightboxImages = images;
+  kfLightboxIndex = startIndex;
+  kfLightboxPostData = postData || {};
+
+  const lb = document.getElementById('kf-lightbox');
+  if (!lb) return;
+
+  // Populate details pane
+  const detailHeader = lb.querySelector('.kf-lightbox-details-header');
+  const detailBody   = lb.querySelector('.kf-lightbox-details-body');
+  const thumbStrip   = lb.querySelector('.kf-lightbox-details-thumbs');
+
+  if (detailHeader) {
+    detailHeader.innerHTML = `
+      <img src="${postData.avatar || ''}" alt="">
+      <div>
+        <a class="kf-lightbox-details-username" href="${postData.profileUrl || '#'}">${postData.username || ''}</a>
+        <div class="kf-lightbox-details-meta">${postData.time || ''}</div>
+      </div>`;
+  }
+
+  if (detailBody) {
+    detailBody.textContent = postData.caption || '';
+  }
+
+  if (thumbStrip) {
+    thumbStrip.innerHTML = images.map((img, i) => `
+      <div class="kf-lightbox-thumb ${i === startIndex ? 'active' : ''}" onclick="kfLightboxGoTo(${i})">
+        <img src="${img.src}" alt="${img.alt || ''}">
+      </div>`).join('');
+  }
+
+  kfLightboxRender();
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Keyboard nav
+  document.addEventListener('keydown', kfLightboxKeyNav);
+}
+
+function kfLightboxRender() {
+  const lb = document.getElementById('kf-lightbox');
+  if (!lb) return;
+
+  const imgWrap  = lb.querySelector('.kf-lightbox-img-wrap');
+  const counter  = lb.querySelector('.kf-lightbox-counter');
+  const prevBtn  = lb.querySelector('.kf-lightbox-prev');
+  const nextBtn  = lb.querySelector('.kf-lightbox-next');
+  const thumbs   = lb.querySelectorAll('.kf-lightbox-thumb');
+
+  const total = kfLightboxImages.length;
+  const cur   = kfLightboxImages[kfLightboxIndex];
+
+  if (imgWrap) {
+    imgWrap.innerHTML = `<img src="${cur.src}" alt="${cur.alt || ''}" draggable="false">`;
+  }
+  if (counter)  counter.textContent = `${kfLightboxIndex + 1} / ${total}`;
+  if (prevBtn)  prevBtn.classList.toggle('hidden', kfLightboxIndex === 0);
+  if (nextBtn)  nextBtn.classList.toggle('hidden', kfLightboxIndex === total - 1);
+
+  thumbs.forEach((t, i) => t.classList.toggle('active', i === kfLightboxIndex));
+}
+
+function kfLightboxGoTo(index) {
+  if (index < 0 || index >= kfLightboxImages.length) return;
+  kfLightboxIndex = index;
+  kfLightboxRender();
+}
+
+function kfCloseLightbox() {
+  const lb = document.getElementById('kf-lightbox');
+  if (!lb) return;
+  lb.classList.remove('open');
+  document.body.style.overflow = '';
+  document.removeEventListener('keydown', kfLightboxKeyNav);
+}
+
+function kfLightboxKeyNav(e) {
+  if (e.key === 'ArrowRight') kfLightboxGoTo(kfLightboxIndex + 1);
+  else if (e.key === 'ArrowLeft') kfLightboxGoTo(kfLightboxIndex - 1);
+  else if (e.key === 'Escape') kfCloseLightbox();
+}
+
+window.kfOpenLightbox  = kfOpenLightbox;
+window.kfLightboxGoTo  = kfLightboxGoTo;
+window.kfCloseLightbox = kfCloseLightbox;
 
 // ===== DOWNLOAD FUNCTIONS =====
 
@@ -571,3 +665,4 @@ window.kfDownloadPostMedia = kfDownloadPostMedia;
 window.kfClosePanel = (panelId) => kfClosePanel(panelId || 'kf-profile-panel');
 window.kfClosePanel2 = () => kfClosePanel('kf-comments-panel');
 window.kfSlideCarousel = kfSlideCarousel;
+
