@@ -569,12 +569,145 @@
             margin: 0 40px;
             cursor: pointer;
             opacity: 0;
-            transition: opacity 0.3s, background 0.2s;
+            transition: opacity 0.5s ease, background 0.2s;
         }
-        .spotlight-item:hover .kf-seek-btn { opacity: 0.6; }
-        .kf-seek-btn:hover { background: rgba(0, 0, 0, 0.5); opacity: 1 !important; }
+        .kf-seek-btn.visible { opacity: 0.75; }
+        .kf-seek-btn:hover { background: rgba(0, 0, 0, 0.5); }
         .kf-seek-btn i { font-size: 20px; }
         .kf-seek-btn span { font-size: 10px; font-weight: bold; margin-top: 2px; }
+
+        /* ---- GEN Z NEW FEATURES ---- */
+
+        /* Double-tap heart burst */
+        .heart-burst {
+            position: absolute;
+            font-size: 80px;
+            color: #fe2c55;
+            pointer-events: none;
+            z-index: 200;
+            animation: heartBurst 0.8s ease forwards;
+            text-shadow: 0 0 30px rgba(254,44,85,0.8);
+        }
+        @keyframes heartBurst {
+            0%   { transform: scale(0) translateY(0); opacity: 1; }
+            40%  { transform: scale(1.4) translateY(-10px); opacity: 1; }
+            100% { transform: scale(1) translateY(-60px); opacity: 0; }
+        }
+
+        /* Floating emoji reactions */
+        .kf-reaction-tray {
+            position: absolute;
+            left: 12px;
+            bottom: calc(180px + env(safe-area-inset-bottom));
+            display: flex;
+            gap: 8px;
+            z-index: 50;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+        }
+        .kf-reaction-tray.show {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .kf-reaction-btn {
+            font-size: 26px;
+            background: rgba(0,0,0,0.5);
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s;
+            backdrop-filter: blur(8px);
+        }
+        .kf-reaction-btn:active { transform: scale(1.4); }
+
+        /* Floating emoji animation */
+        .float-emoji {
+            position: fixed;
+            font-size: 32px;
+            pointer-events: none;
+            z-index: 9999;
+            animation: floatUp 2s ease forwards;
+        }
+        @keyframes floatUp {
+            0%   { transform: translateY(0) scale(1); opacity: 1; }
+            80%  { transform: translateY(-200px) scale(1.2) rotate(15deg); opacity: 0.8; }
+            100% { transform: translateY(-300px) scale(0.5); opacity: 0; }
+        }
+
+        /* Speed pill */
+        .kf-speed-pill {
+            position: absolute;
+            top: 80px;
+            right: 12px;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            padding: 4px 10px;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            z-index: 50;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: opacity 0.3s;
+            opacity: 0;
+        }
+        .kf-speed-pill.show { opacity: 1; }
+        .kf-speed-pill:active { background: rgba(254,44,85,0.7); }
+
+        /* Vibe tag */
+        .kf-vibe-tag {
+            position: absolute;
+            top: 80px;
+            left: 12px;
+            background: linear-gradient(135deg, #fe2c55, #ff9500);
+            border-radius: 20px;
+            padding: 5px 14px;
+            color: white;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: opacity 0.4s, transform 0.4s;
+            text-transform: uppercase;
+        }
+        .kf-vibe-tag.show { opacity: 1; transform: translateX(0); }
+
+        /* Pause indicator */
+        .kf-pause-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            color: white;
+            font-size: 60px;
+            pointer-events: none;
+            z-index: 100;
+            opacity: 0;
+            transition: none;
+        }
+        .kf-pause-indicator.pop {
+            animation: pausePop 0.6s ease forwards;
+        }
+        @keyframes pausePop {
+            0%   { transform: translate(-50%,-50%) scale(0); opacity: 0.9; }
+            40%  { transform: translate(-50%,-50%) scale(1.2); opacity: 0.9; }
+            100% { transform: translate(-50%,-50%) scale(1); opacity: 0; }
+        }
 
         /* Toast notification */
         .kf-toast {
@@ -639,7 +772,7 @@
                 <source src="{{ post.preview_url }}" type="video/mp4">
             </video>
 
-            <!-- NEW SEEK CONTROLS -->
+            <!-- SEEK CONTROLS (auto-hide after 1s) -->
             <div class="kf-seek-overlay">
                 <button class="kf-seek-btn" onclick="seekVideo(this, -5)">
                     <i class="fa-solid fa-backward"></i>
@@ -649,6 +782,24 @@
                     <i class="fa-solid fa-forward"></i>
                     <span>5s</span>
                 </button>
+            </div>
+
+            <!-- PAUSE INDICATOR -->
+            <div class="kf-pause-indicator"><i class="fa-solid fa-pause"></i></div>
+
+            <!-- SPEED PILL -->
+            <div class="kf-speed-pill" onclick="cycleSpeed(this)">⚡ 1×</div>
+
+            <!-- VIBE TAG (changes per video, fun labels) -->
+            <div class="kf-vibe-tag">🔥 trending</div>
+
+            <!-- EMOJI REACTION TRAY -->
+            <div class="kf-reaction-tray">
+                <button class="kf-reaction-btn" onclick="sendReaction(this, '🔥')">🔥</button>
+                <button class="kf-reaction-btn" onclick="sendReaction(this, '💀')">💀</button>
+                <button class="kf-reaction-btn" onclick="sendReaction(this, '🤣')">🤣</button>
+                <button class="kf-reaction-btn" onclick="sendReaction(this, '😍')">😍</button>
+                <button class="kf-reaction-btn" onclick="sendReaction(this, '👏')">👏</button>
             </div>
 
             <!-- Sidebar -->
@@ -889,13 +1040,174 @@
         });
     });
 
-    // NEW SEEK LOGIC
+    // SEEK WITH AUTO-HIDE AFTER 1 SECOND
+    let seekHideTimers = new WeakMap();
+
     function seekVideo(btn, seconds) {
-        const video = btn.closest('.spotlight-item').querySelector('video');
+        const item = btn.closest('.spotlight-item');
+        const video = item.querySelector('video');
         if (video) {
             video.currentTime = Math.min(Math.max(video.currentTime + seconds, 0), video.duration);
         }
+        // Show seek buttons
+        item.querySelectorAll('.kf-seek-btn').forEach(b => b.classList.add('visible'));
+        // Clear any existing hide timer
+        if (seekHideTimers.has(item)) clearTimeout(seekHideTimers.get(item));
+        // Hide after 1 second
+        seekHideTimers.set(item, setTimeout(() => {
+            item.querySelectorAll('.kf-seek-btn').forEach(b => b.classList.remove('visible'));
+        }, 1000));
     }
+
+    // Show seek buttons on touch/click of the video area, hide after 1s
+    document.querySelectorAll('.kf-seek-overlay').forEach(overlay => {
+        const item = overlay.closest('.spotlight-item');
+        item.addEventListener('touchstart', () => {
+            overlay.querySelectorAll('.kf-seek-btn').forEach(b => b.classList.add('visible'));
+            if (seekHideTimers.has(item)) clearTimeout(seekHideTimers.get(item));
+            seekHideTimers.set(item, setTimeout(() => {
+                overlay.querySelectorAll('.kf-seek-btn').forEach(b => b.classList.remove('visible'));
+            }, 1000));
+        });
+    });
+
+    // ---- GEN Z FEATURES ----
+
+    // 1. DOUBLE-TAP TO LIKE + heart burst
+    const tapTimers = new WeakMap();
+    document.querySelectorAll('.spotlight-item').forEach(item => {
+        const video = item.querySelector('video');
+
+        item.addEventListener('click', (e) => {
+            // Ignore clicks on buttons/links
+            if (e.target.closest('button, a, .action-sidebar, .bottom-overlay, .kf-seek-btn, .kf-reaction-tray, .kf-speed-pill')) return;
+
+            if (tapTimers.has(item)) {
+                // Double tap!
+                clearTimeout(tapTimers.get(item));
+                tapTimers.delete(item);
+                triggerHeartBurst(item, e.clientX, e.clientY);
+                // Auto-like
+                const likeBtn = item.querySelector('.spotlight-like-btn');
+                if (likeBtn && !likeBtn.querySelector('i').classList.contains('is-liked')) {
+                    likeBtn.click();
+                }
+            } else {
+                // Single tap - toggle play/pause
+                tapTimers.set(item, setTimeout(() => {
+                    tapTimers.delete(item);
+                    if (video) {
+                        if (video.paused) { video.play(); } else { video.pause(); }
+                        showPauseIndicator(item, video.paused);
+                    }
+                }, 250));
+            }
+        });
+    });
+
+    function triggerHeartBurst(item, x, y) {
+        const heart = document.createElement('div');
+        heart.className = 'heart-burst';
+        heart.textContent = '❤️';
+        heart.style.left = (x - item.getBoundingClientRect().left - 40) + 'px';
+        heart.style.top  = (y - item.getBoundingClientRect().top - 40) + 'px';
+        item.appendChild(heart);
+        setTimeout(() => heart.remove(), 900);
+    }
+
+    function showPauseIndicator(item, paused) {
+        const indicator = item.querySelector('.kf-pause-indicator');
+        if (!indicator) return;
+        indicator.innerHTML = paused ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>';
+        indicator.classList.remove('pop');
+        void indicator.offsetWidth; // reflow
+        indicator.classList.add('pop');
+    }
+
+    // 2. EMOJI REACTION TRAY - show on long-press / hold
+    document.querySelectorAll('.spotlight-item').forEach(item => {
+        let holdTimer;
+        const tray = item.querySelector('.kf-reaction-tray');
+
+        item.addEventListener('touchstart', (e) => {
+            if (e.target.closest('button, a, .action-sidebar, .bottom-overlay')) return;
+            holdTimer = setTimeout(() => {
+                tray && tray.classList.add('show');
+            }, 600);
+        }, { passive: true });
+
+        item.addEventListener('touchend', () => {
+            clearTimeout(holdTimer);
+            // hide tray after 3s of inactivity
+            setTimeout(() => tray && tray.classList.remove('show'), 3000);
+        });
+
+        item.addEventListener('touchmove', () => clearTimeout(holdTimer), { passive: true });
+    });
+
+    function sendReaction(btn, emoji) {
+        const item = btn.closest('.spotlight-item');
+        // Spawn multiple floating emojis
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => spawnFloatEmoji(emoji, item), i * 120);
+        }
+        btn.style.transform = 'scale(1.5)';
+        setTimeout(() => btn.style.transform = '', 200);
+    }
+
+    function spawnFloatEmoji(emoji, item) {
+        const el = document.createElement('div');
+        el.className = 'float-emoji';
+        el.textContent = emoji;
+        const rect = item.getBoundingClientRect();
+        el.style.left = (rect.left + Math.random() * rect.width * 0.6 + rect.width * 0.2) + 'px';
+        el.style.top  = (rect.bottom - 100) + 'px';
+        el.style.animationDelay = (Math.random() * 0.3) + 's';
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2500);
+    }
+
+    // 3. SPEED CONTROL
+    const speedOptions = [0.5, 1, 1.5, 2];
+    const speedLabels  = ['0.5×', '1×', '1.5×', '2×'];
+    const speedEmojis  = ['🐢', '⚡', '🚀', '🔥'];
+    const itemSpeeds = new WeakMap();
+
+    function cycleSpeed(pill) {
+        const item = pill.closest('.spotlight-item');
+        const video = item.querySelector('video');
+        let idx = (itemSpeeds.get(item) || 0) + 1;
+        if (idx >= speedOptions.length) idx = 0;
+        itemSpeeds.set(item, idx);
+        video.playbackRate = speedOptions[idx];
+        pill.textContent = speedEmojis[idx] + ' ' + speedLabels[idx];
+        pill.classList.add('show');
+        showToast('Speed: ' + speedLabels[idx]);
+        // Hide pill after 2s of no interaction
+        clearTimeout(pill._hideTimer);
+        pill._hideTimer = setTimeout(() => pill.classList.remove('show'), 2000);
+    }
+
+    // Show speed pill briefly on scroll to new video
+    function showSpeedPillBriefly(item) {
+        const pill = item.querySelector('.kf-speed-pill');
+        const tag  = item.querySelector('.kf-vibe-tag');
+        if (pill) {
+            pill.classList.add('show');
+            clearTimeout(pill._hideTimer);
+            pill._hideTimer = setTimeout(() => pill.classList.remove('show'), 1500);
+        }
+        if (tag) {
+            tag.classList.add('show');
+            setTimeout(() => tag.classList.remove('show'), 2500);
+        }
+    }
+
+    // Randomize vibe tags
+    const vibeTags = ['🔥 trending', '😂 no way', '💀 caught me', '✨ nailed it', '👀 wait for it', '🤌 perfect', '🫶 wholesome', '💅 iconic'];
+    document.querySelectorAll('.kf-vibe-tag').forEach(tag => {
+        tag.textContent = vibeTags[Math.floor(Math.random() * vibeTags.length)];
+    });
 
     function manualSeek(event, container) {
         const video = container.closest('.spotlight-item').querySelector('video');
@@ -991,17 +1303,14 @@
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             const video = entry.target.querySelector('video');
-            if (entry.isIntersecting) { if (video) video.play().catch(() => {}); } 
+            if (entry.isIntersecting) { 
+                if (video) video.play().catch(() => {}); 
+                showSpeedPillBriefly(entry.target);
+            } 
             else { if (video) { video.pause(); video.currentTime = 0; } }
         });
     }, { threshold: 0.7 });
     items.forEach(item => observer.observe(item));
-
-    videos.forEach(v => { v.addEventListener('click', (e) => { 
-        if(e.target.classList.contains('post-video')) {
-            v.paused ? v.play() : v.pause(); 
-        }
-    }); });
 
     function goNext() { if (currentIndex < items.length - 1) { currentIndex++; items[currentIndex].scrollIntoView({ behavior: 'smooth' }); } }
     function goPrev() { if (currentIndex > 0) { currentIndex--; items[currentIndex].scrollIntoView({ behavior: 'smooth' }); } }
