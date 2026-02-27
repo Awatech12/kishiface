@@ -1624,6 +1624,77 @@
       margin-left: 12px;
     }
 
+    /* ===== MOOD FILTER BAR ===== */
+    .kf-mood-filter-bar {
+      background: var(--kf-white);
+      border-bottom: 1px solid var(--kf-border);
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .kf-mood-filter-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .kf-mood-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1.5px solid var(--kf-border);
+      background: var(--kf-white);
+      color: var(--kf-text);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all 0.18s ease;
+    }
+
+    .kf-mood-filter-chip:hover {
+      border-color: var(--chip-color, #8e8e8e);
+      color: var(--chip-color, #8e8e8e);
+      background: color-mix(in srgb, var(--chip-color, #8e8e8e) 8%, white);
+    }
+
+    .kf-mood-filter-chip.active {
+      background: var(--chip-color, var(--kf-text));
+      border-color: var(--chip-color, var(--kf-text));
+      color: white;
+    }
+
+    .kf-mood-filter-chip .chip-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    .kf-mood-filter-chip.active .chip-dot {
+      background: white;
+    }
+
+    /* All chip */
+    .kf-mood-filter-chip.chip-all {
+      --chip-color: #262626;
+    }
+
+    /* Posts filtered out */
+    .kf-post.mood-hidden {
+      display: none;
+    }
+
     /* Post - Plane Design */
     .kf-post {
       background: var(--kf-white);
@@ -3542,11 +3613,44 @@
             </div>
         </div>
 
+    <!-- Mood Filter Bar -->
+    <div class="kf-mood-filter-bar" id="moodFilterBar">
+      <button class="kf-mood-filter-chip chip-all active" data-mood="all" onclick="kfFilterMood('all', this)">
+        <span class="chip-dot"></span> All
+      </button>
+      <button class="kf-mood-filter-chip" style="--chip-color: #ff1493;" data-mood="slay" onclick="kfFilterMood('slay', this)">
+        <span class="chip-dot"></span> 💅 slay
+      </button>
+      <button class="kf-mood-filter-chip" style="--chip-color: #9933ff;" data-mood="vibing" onclick="kfFilterMood('vibing', this)">
+        <span class="chip-dot"></span> 🎵 vibing
+      </button>
+      <button class="kf-mood-filter-chip" style="--chip-color: #00cc66;" data-mood="sheesh" onclick="kfFilterMood('sheesh', this)">
+        <span class="chip-dot"></span> 🥶 sheesh
+      </button>
+      <button class="kf-mood-filter-chip" style="--chip-color: #ff6b00;" data-mood="periodt" onclick="kfFilterMood('periodt', this)">
+        <span class="chip-dot"></span> ⏸️ periodt
+      </button>
+      <button class="kf-mood-filter-chip" style="--chip-color: #ff4444;" data-mood="no-cap" onclick="kfFilterMood('no-cap', this)">
+        <span class="chip-dot"></span> 🎯 no cap
+      </button>
+      <button class="kf-mood-filter-chip" style="--chip-color: #ffd700;" data-mood="bussin" onclick="kfFilterMood('bussin', this)">
+        <span class="chip-dot"></span> 🔥 bussin
+      </button>
+      <button class="kf-mood-filter-chip" style="--chip-color: #808080;" data-mood="mid" onclick="kfFilterMood('mid', this)">
+        <span class="chip-dot"></span> 😐 mid
+      </button>
+      <button class="kf-mood-filter-chip" style="--chip-color: #8b4513;" data-mood="cringe" onclick="kfFilterMood('cringe', this)">
+        <span class="chip-dot"></span> 😬 cringe
+      </button>
+      <!-- Custom mood chips injected by JS at runtime -->
+      <div id="kfCustomMoodChips" style="display:contents;"></div>
+    </div>
+
     <!-- Main Feed Content -->
         {% for item in posts_with_ads %}
           {% if item.type == 'post' %}
             <!-- Regular Post -->
-            <article class="kf-post" data-post-id="{{ item.data.post_id }}">
+            <article class="kf-post" data-post-id="{{ item.data.post_id }}" data-mood="{{ item.data.mood|default:'' }}" data-custom-mood="{% if item.data.mood == 'custom' or not item.data.mood %}{{ item.data.custom_mood|default:'' }}{% endif %}">
               <!-- Repost Header (if this is a repost) -->
               {% if item.data.is_repost %}
               <div class="kf-repost-header">
@@ -5151,6 +5255,53 @@
       };
     }
     
+    // ===== MOOD FILTER =====
+    function kfFilterMood(mood, btn) {
+      document.querySelectorAll('.kf-mood-filter-chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+
+      document.querySelectorAll('.kf-post[data-post-id]').forEach(post => {
+        if (mood === 'all') {
+          post.classList.remove('mood-hidden');
+          return;
+        }
+        // custom mood: match by data-custom-mood value
+        if (mood.startsWith('__custom__')) {
+          const label = mood.replace('__custom__', '');
+          const postCustom = (post.getAttribute('data-custom-mood') || '').toLowerCase().trim();
+          post.classList.toggle('mood-hidden', postCustom !== label);
+        } else {
+          const postMood = post.getAttribute('data-mood') || '';
+          post.classList.toggle('mood-hidden', postMood !== mood);
+        }
+      });
+    }
+
+    // Auto-inject custom mood chips from posts in the feed
+    (function kfInjectCustomMoodChips() {
+      const seen = new Set();
+      const container = document.getElementById('kfCustomMoodChips');
+      if (!container) return;
+
+      document.querySelectorAll('.kf-post[data-post-id]').forEach(post => {
+        const mood = post.getAttribute('data-mood') || '';
+        const custom = (post.getAttribute('data-custom-mood') || '').trim();
+        if ((mood === 'custom' || mood === '') && custom && !seen.has(custom.toLowerCase())) {
+          seen.add(custom.toLowerCase());
+          const btn = document.createElement('button');
+          btn.className = 'kf-mood-filter-chip';
+          btn.style.setProperty('--chip-color', '#0095f6');
+          btn.setAttribute('data-mood', '__custom__' + custom.toLowerCase());
+          btn.innerHTML = `<span class="chip-dot"></span> ✨ ${custom}`;
+          btn.onclick = function() { kfFilterMood('__custom__' + custom.toLowerCase(), btn); };
+          container.appendChild(btn);
+        }
+      });
+
+      // Only show "custom" chips if there are any
+      if (seen.size === 0) container.style.display = 'none';
+    })();
+
     function kfCloseRepostModal() {
       const modal = document.getElementById('kf-repost-modal');
       modal.classList.remove('show');
@@ -6609,3 +6760,4 @@
 </script>
 </body>
 </html>
+
