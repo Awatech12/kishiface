@@ -3984,64 +3984,37 @@
                             </button>
                           </div>
                         {% elif original_post.images.all %}
-                          <!-- Single or Multiple Images (original image carousel) -->
-                          {% if original_post.images.all|length > 1 %}
-                            <div class="kf-image-carousel" id="kf-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ original_post.images.all|length }}">
-                              <div class="kf-image-track" id="kf-track-{{ item.data.post_id }}">
-                                {% for image in original_post.images.all %}
-                                <div class="kf-image-slide">
-                                  <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
-                                  <img 
-                                    src="{{ image.image.url }}" 
-                                    alt="Post image {{ forloop.counter }}"
-                                    loading="lazy"
-                                    onload="this.classList.add('loaded')"
-                                  />
-                                  <!-- Download button for image -->
-                                  <button class="kf-image-download-btn" 
-                                          title="Download Image" 
-                                          onclick="kfDownloadImage('{{ original_post.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
-                                    <i class="fas fa-download"></i>
-                                  </button>
-                                </div>
-                                {% endfor %}
-                              </div>
-                              
-                              <div class="kf-carousel-controls">
-                                <button class="kf-carousel-prev" onclick="kfSlideCarousel('{{ item.data.post_id }}', -1)">
-                                  <i class="fas fa-chevron-left"></i>
-                                </button>
-                                <button class="kf-carousel-next" onclick="kfSlideCarousel('{{ item.data.post_id }}', 1)">
-                                  <i class="fas fa-chevron-right"></i>
-                                </button>
-                              </div>
-                              
-                              <div class="kf-carousel-indicators">
-                                {% for image in original_post.images.all %}
-                                <span class="kf-indicator {% if forloop.first %}active{% endif %}"></span>
-                                {% endfor %}
-                              </div>
+                          {% with images=original_post.images.all img_count=original_post.images.all|length %}
+                          {% if img_count == 1 %}
+                            <!-- Single Image -->
+                            <div class="kf-image-slide" onclick="kfOpenLightbox(
+                                [{% for img in images %}{src:'{{ img.image.url }}',alt:'Image {{ forloop.counter }}'}{% if not forloop.last %},{% endif %}{% endfor %}],
+                                0,
+                                {username:'{{ original_post.author.get_full_name|default:original_post.author.username }}',avatar:'{{ original_post.author.profile.picture.url }}',profileUrl:'{% url "profile" original_post.author.username %}',time:'{{ original_post.created_at|insta_timesince }}',caption:'{{ original_post.content|default:""| escapejs }}'}
+                              )" style="cursor:pointer;">
+                              <img src="{{ images.0.image.url }}" alt="Post image" loading="lazy" onload="this.classList.add('loaded')"/>
                             </div>
                           {% else %}
-                            <!-- Single Image -->
-                            {% with image=original_post.images.first %}
-                            <div class="kf-image-slide">
-                              <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
-                              <img 
-                                src="{{ image.image.url }}" 
-                                alt="Post image"
-                                loading="lazy"
-                                onload="this.classList.add('loaded')"
-                              />
-                              <!-- Download button for image -->
-                              <button class="kf-image-download-btn" 
-                                      title="Download Image" 
-                                      onclick="kfDownloadImage('{{ original_post.post_id }}', '{{ image.image.url }}', 'image')">
-                                <i class="fas fa-download"></i>
-                              </button>
+                            <!-- Twitter-style image grid (2+ images) -->
+                            <div class="kf-image-grid {% if img_count == 2 %}grid-2{% elif img_count == 3 %}grid-3{% elif img_count == 4 %}grid-4{% else %}grid-5plus{% endif %}">
+                              {% for image in images %}
+                                {% if forloop.counter <= 4 %}
+                                  <div class="kf-grid-cell"
+                                       onclick="kfOpenLightbox(
+                                         [{% for img in images %}{src:'{{ img.image.url }}',alt:'Image {{ forloop.counter }}'}{% if not forloop.last %},{% endif %}{% endfor %}],
+                                         {{ forloop.counter0 }},
+                                         {username:'{{ original_post.author.get_full_name|default:original_post.author.username }}',avatar:'{{ original_post.author.profile.picture.url }}',profileUrl:'{% url "profile" original_post.author.username %}',time:'{{ original_post.created_at|insta_timesince }}',caption:'{{ original_post.content|default:""| escapejs }}'}
+                                       )">
+                                    <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" loading="lazy"/>
+                                    {% if forloop.counter == 4 and img_count > 4 %}
+                                      <div class="kf-grid-more-overlay">+{{ img_count|add:"-4" }}</div>
+                                    {% endif %}
+                                  </div>
+                                {% endif %}
+                              {% endfor %}
                             </div>
-                            {% endwith %}
                           {% endif %}
+                          {% endwith %}
                         {% endif %}
                       {% endif %}
                     {% endwith %}
@@ -4254,64 +4227,39 @@
                           </button>
                         </div>
                       {% elif item.data.images.all %}
-                        <!-- Single or Multiple Images (original image carousel) -->
-                        {% if item.data.images.all|length > 1 %}
-                          <div class="kf-image-carousel" id="kf-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ item.data.images.all|length }}">
-                            <div class="kf-image-track" id="kf-track-{{ item.data.post_id }}">
-                              {% for image in item.data.images.all %}
-                              <div class="kf-image-slide">
-                                <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
-                                <img 
-                                  src="{{ image.image.url }}" 
-                                  alt="Post image {{ forloop.counter }}"
-                                  loading="lazy"
-                                  onload="this.classList.add('loaded')"
-                                />
-                                <!-- Download button for image -->
-                                <button class="kf-image-download-btn" 
-                                        title="Download Image" 
-                                        onclick="kfDownloadImage('{{ item.data.post_id }}', '{{ image.image.url }}', 'image{{ forloop.counter }}')">
-                                  <i class="fas fa-download"></i>
-                                </button>
-                              </div>
-                              {% endfor %}
-                            </div>
-                            
-                            <div class="kf-carousel-controls">
-                              <button class="kf-carousel-prev" onclick="kfSlideCarousel('{{ item.data.post_id }}', -1)">
-                                <i class="fas fa-chevron-left"></i>
-                              </button>
-                              <button class="kf-carousel-next" onclick="kfSlideCarousel('{{ item.data.post_id }}', 1)">
-                                <i class="fas fa-chevron-right"></i>
-                              </button>
-                            </div>
-                            
-                            <div class="kf-carousel-indicators">
-                              {% for image in item.data.images.all %}
-                              <span class="kf-indicator {% if forloop.first %}active{% endif %}"></span>
-                              {% endfor %}
-                            </div>
+                        {% with images=item.data.images.all img_count=item.data.images.all|length %}
+                        {% if img_count == 1 %}
+                          <!-- Single Image -->
+                          <div class="kf-image-slide" onclick="kfOpenLightbox(
+                              [{% for img in images %}{src:'{{ img.image.url }}',alt:'Image {{ forloop.counter }}'}{% if not forloop.last %},{% endif %}{% endfor %}],
+                              0,
+                              {username:'{{ item.data.author.get_full_name|default:item.data.author.username }}',avatar:'{{ item.data.author.profile.picture.url }}',profileUrl:'{% url "profile" item.data.author.username %}',time:'{{ item.data.created_at|insta_timesince }}',caption:'{{ item.data.content|default:""| escapejs }}'}
+                            )" style="cursor:pointer;">
+                            <img src="{{ images.0.image.url }}" alt="Post image" loading="lazy" onload="this.classList.add('loaded')"/>
                           </div>
                         {% else %}
-                          <!-- Single Image -->
-                          {% with image=item.data.images.first %}
-                          <div class="kf-image-slide">
-                            <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
-                            <img 
-                              src="{{ image.image.url }}" 
-                              alt="Post image"
-                              loading="lazy"
-                              onload="this.classList.add('loaded')"
-                            />
-                            <!-- Download button for image -->
-                            <button class="kf-image-download-btn" 
-                                    title="Download Image" 
-                                    onclick="kfDownloadImage('{{ item.data.post_id }}', '{{ image.image.url }}', 'image')">
-                              <i class="fas fa-download"></i>
-                            </button>
+                          <!-- Twitter-style image grid (2+ images) -->
+                          {% with grid_class=img_count|stringformat:"s" %}
+                          <div class="kf-image-grid {% if img_count == 2 %}grid-2{% elif img_count == 3 %}grid-3{% elif img_count == 4 %}grid-4{% else %}grid-5plus{% endif %}">
+                            {% for image in images %}
+                              {% if forloop.counter <= 4 %}
+                                <div class="kf-grid-cell"
+                                     onclick="kfOpenLightbox(
+                                       [{% for img in images %}{src:'{{ img.image.url }}',alt:'Image {{ forloop.counter }}'}{% if not forloop.last %},{% endif %}{% endfor %}],
+                                       {{ forloop.counter0 }},
+                                       {username:'{{ item.data.author.get_full_name|default:item.data.author.username }}',avatar:'{{ item.data.author.profile.picture.url }}',profileUrl:'{% url "profile" item.data.author.username %}',time:'{{ item.data.created_at|insta_timesince }}',caption:'{{ item.data.content|default:""| escapejs }}'}
+                                     )">
+                                  <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" loading="lazy"/>
+                                  {% if forloop.counter == 4 and img_count > 4 %}
+                                    <div class="kf-grid-more-overlay">+{{ img_count|add:"-4" }}</div>
+                                  {% endif %}
+                                </div>
+                              {% endif %}
+                            {% endfor %}
                           </div>
                           {% endwith %}
                         {% endif %}
+                        {% endwith %}
                       {% endif %}
                     {% endif %}
                   {% endwith %}
@@ -6758,6 +6706,35 @@
       });
     });
 </script>
+
+<!-- ===== TWITTER-STYLE IMAGE LIGHTBOX MODAL ===== -->
+<div id="kf-lightbox" class="kf-lightbox" onclick="if(event.target===this)kfCloseLightbox()">
+  <div class="kf-lightbox-carousel">
+    <!-- Close -->
+    <button class="kf-lightbox-close" onclick="kfCloseLightbox()">
+      <i class="fas fa-times"></i>
+    </button>
+    <!-- Image -->
+    <div class="kf-lightbox-img-wrap"></div>
+    <!-- Nav -->
+    <button class="kf-lightbox-prev hidden" onclick="kfLightboxGoTo(kfLightboxIndex - 1)">
+      <i class="fas fa-chevron-left"></i>
+    </button>
+    <button class="kf-lightbox-next hidden" onclick="kfLightboxGoTo(kfLightboxIndex + 1)">
+      <i class="fas fa-chevron-right"></i>
+    </button>
+    <!-- Counter -->
+    <div class="kf-lightbox-counter">1 / 1</div>
+  </div>
+
+  <!-- Details pane (desktop) -->
+  <div class="kf-lightbox-details">
+    <div class="kf-lightbox-details-header"></div>
+    <div class="kf-lightbox-details-body"></div>
+    <div class="kf-lightbox-details-thumbs"></div>
+  </div>
+</div>
+
 </body>
 </html>
 
