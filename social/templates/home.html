@@ -6909,51 +6909,7 @@
         }
       }
       
-      // ===== SKELETON LOADING: Reveal real content after page load =====
-      function kfRevealContent() {
-        // Stories
-        const skelStories = document.getElementById('kf-skeleton-stories-container');
-        const realStories = document.getElementById('kf-real-stories-container');
-        if (skelStories) {
-          // Remove GPU layer before hiding to free memory
-          skelStories.querySelectorAll('.skeleton').forEach(el => el.style.willChange = 'auto');
-          skelStories.style.display = 'none';
-        }
-        if (realStories) realStories.style.display = 'block';
-
-        // Feed
-        const skelFeed = document.getElementById('kf-skeleton-feed');
-        const realFeed = document.getElementById('kf-real-feed');
-        if (skelFeed) {
-          skelFeed.querySelectorAll('.skeleton').forEach(el => el.style.willChange = 'auto');
-          skelFeed.style.display = 'none';
-        }
-        if (realFeed) realFeed.style.display = 'block';
-
-        // Sidebar
-        const skelSidebar = document.getElementById('kf-skeleton-sidebar');
-        const realSidebar = document.getElementById('kf-real-sidebar');
-        if (skelSidebar) {
-          skelSidebar.querySelectorAll('.skeleton').forEach(el => el.style.willChange = 'auto');
-          skelSidebar.style.display = 'none';
-        }
-        if (realSidebar) realSidebar.style.display = 'block';
-      }
-
-      // Use requestIdleCallback when available (non-blocking), fall back to rAF + setTimeout
-      function kfScheduleReveal() {
-        if ('requestIdleCallback' in window) {
-          requestIdleCallback(kfRevealContent, { timeout: 800 });
-        } else {
-          requestAnimationFrame(function() { setTimeout(kfRevealContent, 0); });
-        }
-      }
-
-      if (document.readyState === 'complete') {
-        kfScheduleReveal();
-      } else {
-        window.addEventListener('load', kfScheduleReveal);
-      }
+      // ===== SKELETON LOADING: placeholder — reveal is handled below DOMContentLoaded =====
 
 
       const lazyVideos = document.querySelectorAll('video[data-src]');
@@ -7079,7 +7035,38 @@
           return;
         }
       });
-    });
+    }); // end DOMContentLoaded
+
+    // ===== SKELETON REVEAL =====
+    // Defined at _initApp scope (not inside DOMContentLoaded) so it's
+    // always reachable by the 'load' event handler below.
+    function kfRevealContent() {
+      var pairs = [
+        ['kf-skeleton-stories-container', 'kf-real-stories-container', 'block'],
+        ['kf-skeleton-feed',              'kf-real-feed',              'block'],
+        ['kf-skeleton-sidebar',           'kf-real-sidebar',           'block']
+      ];
+      pairs.forEach(function(p) {
+        var skel = document.getElementById(p[0]);
+        var real = document.getElementById(p[1]);
+        if (skel) {
+          skel.querySelectorAll('.skeleton').forEach(function(el) {
+            el.style.willChange = 'auto'; // free GPU layer
+          });
+          skel.style.display = 'none';
+        }
+        if (real) real.style.display = p[2];
+      });
+    }
+
+    // Fire as soon as the page (images, media) is fully loaded.
+    // If already loaded (e.g. cached page), run immediately.
+    if (document.readyState === 'complete') {
+      kfRevealContent();
+    } else {
+      window.addEventListener('load', kfRevealContent);
+    }
+
   } // end _initApp
 
   // Run immediately if DOM is ready, otherwise wait
@@ -7093,9 +7080,6 @@
 </body>
 </html>
 
-
-
-</html>
 
 
 
