@@ -135,24 +135,21 @@ def validate_file_size(value, max_size_mb=50):
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     followings = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
+    blocked_users = models.ManyToManyField('self', symmetrical=False, related_name='blocked_by', blank=True)  # NEW
     phone = models.CharField(max_length=20, blank=True, default='')
     full_name = models.CharField(max_length=200, blank=True)
     is_verify = models.BooleanField(default=False)
     address = models.TextField(null=True, blank=True)
-    website = models.URLField(max_length=500, blank=True, default='') 
+    website = models.URLField(max_length=500, blank=True, default='')
     bio = models.CharField(max_length=300, blank=True, default='')
-    location = models.CharField(max_length=200, blank=True, default='') 
+    location = models.CharField(max_length=200, blank=True, default='')
     
     if settings.USE_CLOUDINARY:
         picture = CloudinaryField('picture', folder='profile_image', default='logo_iowyea')
     else:
-        picture = models.ImageField(
-            upload_to='profile_image/',
-            default='male.png'
-        )
+        picture = models.ImageField(upload_to='profile_image/', default='male.png')
     
     created_at = models.DateTimeField(auto_now_add=True)
-    
     online = models.BooleanField(default=False)
 
     class Meta:
@@ -200,32 +197,44 @@ class Profile(models.Model):
         
         super().save(*args, **kwargs)
 
+    # ── Online status ────────────────────────────────────────────
     @property
     def is_online(self):
-        """Returns True if user is online, based strictly on the boolean flag"""
         return self.online
 
     def get_status_display(self):
-        """Returns 'Online' or 'Offline' only"""
-        if self.online:
-            return "Online"
-        return "Offline"
+        return "Online" if self.online else "Offline"
 
     def update_online_status(self, online=True):
-        """Call this from WebSocket to update status efficiently"""
         self.online = online
         self.save(update_fields=['online'])
 
     @classmethod
     def mark_user_online(cls, user_id):
-        """Static method to mark user online"""
         cls.objects.filter(user_id=user_id).update(online=True)
 
     @classmethod
     def mark_user_offline(cls, user_id):
-        """Static method to mark user offline"""
         cls.objects.filter(user_id=user_id).update(online=False)
-    
+
+    # ── Block helpers ────────────────────────────────────────────
+    def block(self, profile):
+        """Block another profile. Also removes any existing follow relationship."""
+        self.blocked_users.add(profile)
+        # clean up follow relationships in both directions
+        self.followings.remove(profile)
+        profile.followings.remove(self)
+
+    def unblock(self, profile):
+        self.blocked_users.remove(profile)
+
+    def has_blocked(self, profile):
+        return self.blocked_users.filter(pk=profile.pk).exists()
+
+    def is_blocked_by(self, profile):
+        return profile.blocked_users.filter(pk=self.pk).exists()
+
+    # ── Website helpers ──────────────────────────────────────────
     @property
     def safe_website(self):
         if not self.website:
@@ -239,18 +248,48 @@ class Profile(models.Model):
     def display_website(self):
         if not self.website:
             return ""
-        
         website = self.safe_website
         if not website:
             return ""
-        
         display_url = website.replace('https://', '').replace('http://', '')
         if display_url.startswith('www.'):
             display_url = display_url[4:]
-        
         if len(display_url) > 30:
             return display_url[:27] + '...'
         return display_url
+        
+class UserReport(models.Model):
+    REASON_CHOICES = [
+        ('spam',          'Spam or fake account'),
+        ('harassment',    'Harassment or bullying'),
+        ('hate_speech',   'Hate speech or discrimination'),
+        ('inappropriate', 'Inappropriate content'),
+        ('impersonation', 'Impersonation'),
+        ('other',         'Something else'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending',   'Pending'),
+        ('reviewed',  'Reviewed'),
+        ('resolved',  'Resolved'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    reporter    = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reports_made')
+    reported    = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reports_received')
+    reason      = models.CharField(max_length=20, choices=REASON_CHOICES)
+    note        = models.TextField(blank=True, default='')
+    status      = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'UserReport_Table'
+        # prevent a user from filing the same reason against same person multiple times
+        unique_together = ('reporter', 'reported', 'reason')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.reporter.username} reported {self.reported.username} for {self.reason}"      
 
 class Post(models.Model):
     post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)

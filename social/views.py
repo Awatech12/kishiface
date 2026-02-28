@@ -5,7 +5,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, CommentReply,ChannelUserLastSeen,Story, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
+from social.models import Profile, Post, PostImage,UserReport, CommentReply,ChannelUserLastSeen,Story, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -14,7 +14,7 @@ from channels.layers import get_channel_layer
 from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
 import time, json
-from django.http import JsonResponse 
+from django.http import JsonResponse, Http404
 from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -563,51 +563,132 @@ def comment_reply(request, comment_id):
     }
     return render(request, 'comment_reply.html', context)
 
+    
 @login_required(login_url='/')
 def profile(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
+
+    # ── Block guard ──────────────────────────────────────────────
+    # If the viewer has been blocked by this profile, show 404
+    if request.user.is_authenticated and request.user != user:
+        viewer_profile = request.user.profile
+        if profile.has_blocked(viewer_profile) or viewer_profile.has_blocked(profile):
+            raise Http404
+
     total_posts = Post.objects.filter(author=user)
-    total_view = 0
-    for post in total_posts:
-        total_view +=post.view
+    total_view = sum(post.view for post in total_posts)
 
     user_posts = Post.objects.filter(author=user)
-    
     total_like_recieved = user_posts.aggregate(total=Count('likes'))['total'] or 0
-    total_comments_received = PostComment.objects.filter(post__author = user).count() 
+    total_comments_received = PostComment.objects.filter(post__author=user).count()
 
     mutual_followings = None
     mutual_count = 0
-    if request.user.is_authenticated and request.user !=user:
+    if request.user.is_authenticated and request.user != user:
         my_following = request.user.profile.followings.all()
         mutual_followings = my_following.filter(followings=profile)[:3]
         mutual_count = my_following.filter(followings=profile).count()
-        
-    # Get ONLY image posts for the Posts tab
+
     posts = Post.objects.filter(
         author=user,
         images__isnull=False
     ).prefetch_related('images').distinct()[:30]
-    
+
     context = {
         'user': user,
         'posts': posts,
         'profile': profile,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
-        'total_view':total_view,
-        'total_like_recieved':total_like_recieved,
-        'total_comments_received':total_comments_received,
-        'mutual_followings':mutual_followings,
-        'mutual_count':mutual_count
-
+        'total_view': total_view,
+        'total_like_recieved': total_like_recieved,
+        'total_comments_received': total_comments_received,
+        'mutual_followings': mutual_followings,
+        'mutual_count': mutual_count,
     }
-    
-    # Check if this is an AJAX request
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render(request, 'profile_posts_partial.html', context)
-    
+
     return render(request, 'profile.html', context)
+
+
+# ── Block View ───────────────────────────────────────────────────
+@login_required(login_url='/')
+@require_POST
+def block_user(request, username):
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return JsonResponse({'error': 'Invalid request'}, status=400)
+
+    target_user = get_object_or_404(User, username=username)
+
+    if target_user == request.user:
+        return JsonResponse({'error': 'You cannot block yourself'}, status=400)
+
+    requester_profile = request.user.profile
+    target_profile    = target_user.profile
+
+    if requester_profile.has_blocked(target_profile):
+        # Already blocked — treat as idempotent success
+        return JsonResponse({'success': True, 'already_blocked': True})
+
+    requester_profile.block(target_profile)
+    return JsonResponse({'success': True})
+
+
+# ── Unblock View (optional but recommended) ──────────────────────
+@login_required(login_url='/')
+@require_POST
+def unblock_user(request, username):
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return JsonResponse({'error': 'Invalid request'}, status=400)
+
+    target_user = get_object_or_404(User, username=username)
+
+    if target_user == request.user:
+        return JsonResponse({'error': 'Invalid request'}, status=400)
+
+    request.user.profile.unblock(target_user.profile)
+    return JsonResponse({'success': True})
+
+
+# ── Report View ──────────────────────────────────────────────────
+@login_required(login_url='/')
+@require_POST
+def report_user(request, username):
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return JsonResponse({'error': 'Invalid request'}, status=400)
+
+    target_user = get_object_or_404(User, username=username)
+
+    if target_user == request.user:
+        return JsonResponse({'error': 'You cannot report yourself'}, status=400)
+
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'error': 'Invalid request body'}, status=400)
+
+    reason = body.get('reason', '').strip()
+    note   = body.get('note', '').strip()[:1000]  # cap note length
+
+    valid_reasons = {'spam', 'harassment', 'hate_speech', 'inappropriate', 'impersonation', 'other'}
+    if reason not in valid_reasons:
+        return JsonResponse({'error': 'Please select a valid reason'}, status=400)
+
+    # Use get_or_create to prevent duplicate reports for the same reason
+    report, created = UserReport.objects.get_or_create(
+        reporter=request.user,
+        reported=target_user,
+        reason=reason,
+        defaults={'note': note}
+    )
+
+    if not created:
+        # User already reported this person for this reason — still return success
+        return JsonResponse({'success': True, 'already_reported': True})
+
+    return JsonResponse({'success': True})    
 
 @login_required(login_url='/')
 def profile_videos(request, username):
