@@ -1,4 +1,4 @@
-<!-- post_like.html -->
+<!<!-- post_like.html -->
 {% load humanize %}
 
 <!DOCTYPE html>
@@ -352,6 +352,12 @@
 
         .kf-repost-count.show { display: inline; }
 
+        .kf-share-count {
+            font-size: 13.5px;
+            display: none;
+        }
+        .kf-share-count.show { display: inline; }
+
         /* =====================
            SHARE BUTTON
         ===================== */
@@ -493,9 +499,14 @@
                    
     <!-- SHARE BUTTON -->
     <button class="horizontal-action-item share-btn"
+            id="share-btn-{{ post.post_id }}"
             onclick="kfOpenShareModal('{{ post.post_id }}', '{{ post.message|escapejs|truncatechars:100 }}')"
             style="border: none; background: none; font-family: inherit; cursor: pointer;">
       <i class="fa-regular fa-paper-plane horizontal-action-icon"></i>
+      <span class="comment-count kf-share-count {% if post.share > 0 %}show{% endif %}" 
+            id="kf-share-count-{{ post.post_id }}">
+        {% if post.share > 0 %}{{ post.share|intcomma }}{% endif %}
+      </span>
     </button>
   </div>
 
@@ -732,6 +743,24 @@
     return window.location.origin + '/post/' + postId;
   }
 
+  function kfTrackShare(postId) {
+    fetch(`/track_share/${postId}/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '' }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        const countEl = document.getElementById('kf-share-count-' + postId);
+        if (countEl) {
+          countEl.textContent = data.new_count;
+          countEl.classList.add('show');
+        }
+      }
+    })
+    .catch(() => {});
+  }
+
   function kfShareVia(platform, postId) {
     const url = kfGetShareUrl(postId);
     const text = (_kfShareData[postId] || {}).text || '';
@@ -748,14 +777,15 @@
       case 'x':         shareLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`; break;
       case 'copy':
         navigator.clipboard.writeText(url).then(() => {
+          kfTrackShare(postId);
           kfCloseShareModal(postId);
-          /* Optional: show a brief toast if you have one */
         });
         return;
     }
 
     if (shareLink) {
       window.open(shareLink, '_blank');
+      kfTrackShare(postId);
       kfCloseShareModal(postId);
     }
   }
