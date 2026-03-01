@@ -5,6 +5,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+     <meta name="csrf-token" content="{{ csrf_token }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Post Engagement Block</title>
     
@@ -352,18 +353,64 @@
 
         .kf-repost-count.show { display: inline; }
 
-        /* =====================
-           SHARE ICONS
-        ===================== */
-        .share-facebook:hover .horizontal-action-icon { color: #1877f2; }
-        .share-twitter:hover .horizontal-action-icon  { color: #000; }
-        .share-whatsapp:hover .horizontal-action-icon { color: #25d366; }
+        .kf-share-count {
+            font-size: 13.5px;
+            display: none;
+        }
+        .kf-share-count.show { display: inline; }
 
-        .share-facebook:hover .horizontal-action-icon,
-        .share-twitter:hover .horizontal-action-icon,
-        .share-whatsapp:hover .horizontal-action-icon {
+        /* =====================
+           SHARE BUTTON
+        ===================== */
+        .share-btn:hover .horizontal-action-icon { color: #0095f6; }
+        .share-btn:hover .horizontal-action-icon {
             animation: jellyPop 0.45s cubic-bezier(0.34,1.56,0.64,1);
         }
+
+        /* =====================
+           SHARE MODAL
+        ===================== */
+        .kf-share-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); display: none; justify-content: center; align-items: flex-end;
+            z-index: 6000;
+        }
+        .kf-share-modal.active { display: flex; }
+        .kf-share-modal-content {
+            background: white; width: 100%; border-radius: 20px 20px 0 0;
+            padding: 20px; animation: kfShareSlideUp 0.3s ease-out; max-width: 500px;
+        }
+        @keyframes kfShareSlideUp {
+            from { transform: translateY(100%); }
+            to   { transform: translateY(0); }
+        }
+        .kf-share-header {
+            display: flex; justify-content: space-between; align-items: center;
+            font-weight: bold; font-size: 18px; margin-bottom: 20px; color: #333;
+        }
+        .kf-share-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 10px; text-align: center;
+            max-height: 60vh; overflow-y: auto; padding-bottom: 10px;
+        }
+        .kf-share-item {
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            text-decoration: none; color: #333; font-size: 11px; cursor: pointer;
+        }
+        .kf-share-icon-wrap {
+            width: 50px; height: 50px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-size: 24px; color: white;
+            transition: transform 0.2s;
+        }
+        .kf-share-icon-wrap:active { transform: scale(0.9); }
+        .si-whatsapp  { background: #25D366; }
+        .si-facebook  { background: #1877F2; }
+        .si-x         { background: #000; }
+        .si-telegram  { background: #0088cc; }
+        .si-snapchat  { background: #FFFC00; color: #000 !important; }
+        .si-sms       { background: #4cd964; }
+        .si-email     { background: #777; }
+        .si-copy      { background: #8e8e8e; }
+        .si-snapchat .kf-share-icon-wrap { color: #000; }
 
         /* =====================
            HTMX
@@ -451,26 +498,17 @@
       </span>
     </button>
                    
-    <!-- FACEBOOK -->
-    <a href="https://www.facebook.com/sharer/sharer.php?u=https://kishiface.pythonanywhere.com/{{post.post_id}}" 
-       target="_blank"
-       class="horizontal-action-item share-facebook">
-      <i class="fab fa-facebook horizontal-action-icon"></i>
-    </a>
-
-    <!-- TWITTER -->
-    <a href="https://twitter.com/intent/tweet?text={{ post.message|urlencode }}%20https://kishiface.pythonanywhere.com/{{post.post_id}}" 
-       target="_blank"
-       class="horizontal-action-item share-twitter">
-      <i class="fab fa-twitter horizontal-action-icon"></i>
-    </a>
-
-    <!-- WHATSAPP -->
-    <a href="https://api.whatsapp.com/send?text={{ post.message|urlencode }}%20https://kishiface.pythonanywhere.com/comment/{{post.post_id}}" 
-       target="_blank"
-       class="horizontal-action-item share-whatsapp">
-      <i class="fab fa-whatsapp horizontal-action-icon"></i>
-    </a>
+    <!-- SHARE BUTTON -->
+    <button class="horizontal-action-item share-btn"
+            id="share-btn-{{ post.post_id }}"
+            onclick="kfOpenShareModal('{{ post.post_id }}', '{{ post.message|escapejs|truncatechars:100 }}')"
+            style="border: none; background: none; font-family: inherit; cursor: pointer;">
+      <i class="fa-regular fa-paper-plane horizontal-action-icon"></i>
+      <span class="comment-count kf-share-count {% if post.share > 0 %}show{% endif %}" 
+            id="kf-share-count-{{ post.post_id }}">
+        {% if post.share > 0 %}{{ post.share|intcomma }}{% endif %}
+      </span>
+    </button>
   </div>
 
   <!-- LIKERS AND ENGAGEMENT COUNTS SECTION -->
@@ -575,7 +613,54 @@
 
 </div>
 
+<!-- SHARE MODAL -->
+<div class="kf-share-modal" id="kf-share-modal-{{ post.post_id }}" onclick="kfCloseShareModal('{{ post.post_id }}')">
+  <div class="kf-share-modal-content" onclick="event.stopPropagation()">
+    <div class="kf-share-header">
+      Share to
+      <i class="fa-solid fa-xmark" style="cursor:pointer" onclick="kfCloseShareModal('{{ post.post_id }}')"></i>
+    </div>
+    <div class="kf-share-grid">
+      <div class="kf-share-item" onclick="kfShareVia('whatsapp', '{{ post.post_id }}')">
+        <div class="kf-share-icon-wrap si-whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
+        <span>WhatsApp</span>
+      </div>
+      <div class="kf-share-item" onclick="kfShareVia('facebook', '{{ post.post_id }}')">
+        <div class="kf-share-icon-wrap si-facebook"><i class="fa-brands fa-facebook-f"></i></div>
+        <span>Facebook</span>
+      </div>
+      <div class="kf-share-item" onclick="kfShareVia('telegram', '{{ post.post_id }}')">
+        <div class="kf-share-icon-wrap si-telegram"><i class="fa-brands fa-telegram"></i></div>
+        <span>Telegram</span>
+      </div>
+      <div class="kf-share-item" onclick="kfShareVia('snapchat', '{{ post.post_id }}')">
+        <div class="kf-share-icon-wrap si-snapchat" style="color:#000"><i class="fa-brands fa-snapchat"></i></div>
+        <span>Snapchat</span>
+      </div>
+      <div class="kf-share-item" onclick="kfShareVia('sms', '{{ post.post_id }}')">
+        <div class="kf-share-icon-wrap si-sms"><i class="fa-solid fa-comment-sms"></i></div>
+        <span>SMS</span>
+      </div>
+      <div class="kf-share-item" onclick="kfShareVia('email', '{{ post.post_id }}')">
+        <div class="kf-share-icon-wrap si-email"><i class="fa-solid fa-envelope"></i></div>
+        <span>Email</span>
+      </div>
+      <div class="kf-share-item" onclick="kfShareVia('x', '{{ post.post_id }}')">
+        <div class="kf-share-icon-wrap si-x"><i class="fa-brands fa-x-twitter"></i></div>
+        <span>X</span>
+      </div>
+      <div class="kf-share-item" onclick="kfShareVia('copy', '{{ post.post_id }}')">
+        <div class="kf-share-icon-wrap si-copy"><i class="fa-solid fa-link"></i></div>
+        <span>Copy link</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
+function getCsrfFromMeta(){
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+   }
   /* ============================================================
      LIKE BUTTON — PARTICLE BURST + FLOATING LABEL + JELLY ICON
   ============================================================ */
@@ -643,6 +728,78 @@
     btn.appendChild(lbl);
     lbl.addEventListener('animationend', () => lbl.remove());
   }
+
+  /* ============================================================
+     SHARE MODAL
+  ============================================================ */
+  const _kfShareData = {};
+
+  function kfOpenShareModal(postId, text) {
+    _kfShareData[postId] = { text };
+    document.getElementById('kf-share-modal-' + postId).classList.add('active');
+  }
+
+  function kfCloseShareModal(postId) {
+    document.getElementById('kf-share-modal-' + postId).classList.remove('active');
+  }
+
+  function kfGetShareUrl(postId) {
+    return window.location.origin + '/comment/' + postId;
+  }
+
+  function kfTrackShare(postId) {
+    fetch(`/track_share/${postId}/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrfFromMeta() }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        const countEl = document.getElementById('kf-share-count-' + postId);
+        if (countEl) {
+          countEl.textContent = data.new_count;
+          countEl.classList.add('show');
+        }
+      }
+    })
+    .catch(() => {});
+  }
+
+  function kfShareVia(platform, postId) {
+    const url = kfGetShareUrl(postId);
+    const text = (_kfShareData[postId] || {}).text || '';
+    const fullMsg = encodeURIComponent(text + ' ' + url);
+    let shareLink = '';
+
+    switch (platform) {
+      case 'whatsapp':  shareLink = `https://api.whatsapp.com/send?text=${fullMsg}`; break;
+      case 'facebook':  shareLink = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`; break;
+      case 'telegram':  shareLink = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`; break;
+      case 'snapchat':  shareLink = `https://www.snapchat.com/scan?attachmentUrl=${encodeURIComponent(url)}`; break;
+      case 'sms':       shareLink = `sms:?body=${fullMsg}`; break;
+      case 'email':     shareLink = `mailto:?subject=Check this out on KishiFace&body=${fullMsg}`; break;
+      case 'x':         shareLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`; break;
+      case 'copy':
+        navigator.clipboard.writeText(url).then(() => {
+          kfTrackShare(postId);
+          kfCloseShareModal(postId);
+        });
+        return;
+    }
+
+    if (shareLink) {
+      window.open(shareLink, '_blank');
+      kfTrackShare(postId);
+      kfCloseShareModal(postId);
+    }
+  }
+
+  /* Close share modal on Escape */
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.kf-share-modal.active').forEach(el => el.classList.remove('active'));
+    }
+  });
 </script>
 
 </body>

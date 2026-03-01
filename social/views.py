@@ -5,7 +5,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage,UserReport, CommentReply,ChannelUserLastSeen,Story, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
+from social.models import Profile, Post, PostImage,UserReport,BlockedUser, CommentReply,ChannelUserLastSeen,Story, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -564,31 +564,64 @@ def comment_reply(request, comment_id):
     return render(request, 'comment_reply.html', context)
 
     
+# ─────────────────────────────────────────────────────────────────────────────
+# Profile View
+# ─────────────────────────────────────────────────────────────────────────────
+
 @login_required(login_url='/')
 def profile(request, username):
-    user = get_object_or_404(User, username=username)
+    user    = get_object_or_404(User, username=username)
     profile = user.profile
 
-    # ── Block guard ──────────────────────────────────────────────
-    # If the viewer has been blocked by this profile, show 404
+    # ── Block status ──────────────────────────────────────────────────────────
+    is_blocked        = False  # viewer blocked the profile owner
+    viewer_is_blocked = False  # profile owner blocked the viewer
+
     if request.user.is_authenticated and request.user != user:
-        viewer_profile = request.user.profile
-        if profile.has_blocked(viewer_profile) or viewer_profile.has_blocked(profile):
-            raise Http404
+        is_blocked = BlockedUser.objects.filter(
+            blocker=request.user, blocked=user
+        ).exists()
 
-    total_posts = Post.objects.filter(author=user)
-    total_view = sum(post.view for post in total_posts)
+        viewer_is_blocked = BlockedUser.objects.filter(
+            blocker=user, blocked=request.user
+        ).exists()
 
+    # Profile owner blocked the viewer → deny access entirely
+    if viewer_is_blocked:
+        return render(request, 'blocked.html', {'blocked_by': user})
+
+    # Viewer blocked the profile owner → render a limited view so they
+    # can still reach the ··· menu and choose to unblock
+    if is_blocked:
+        context = {
+            'user':                    user,
+            'profile':                 profile,
+            'posts':                   [],
+            'current_profile':         request.user.profile if request.user.is_authenticated else None,
+            'total_view':              0,
+            'total_like_recieved':     0,
+            'total_comments_received': 0,
+            'mutual_followings':       None,
+            'mutual_count':            0,
+            'is_blocked':              True,
+        }
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return render(request, 'profile_posts_partial.html', context)
+        return render(request, 'profile.html', context)
+
+    # ── Normal full profile ───────────────────────────────────────────────────
     user_posts = Post.objects.filter(author=user)
-    total_like_recieved = user_posts.aggregate(total=Count('likes'))['total'] or 0
-    total_comments_received = PostComment.objects.filter(post__author=user).count()
+    total_view = sum(post.view for post in user_posts)
+
+    total_like_recieved      = user_posts.aggregate(total=Count('likes'))['total'] or 0
+    total_comments_received  = PostComment.objects.filter(post__author=user).count()
 
     mutual_followings = None
-    mutual_count = 0
+    mutual_count      = 0
     if request.user.is_authenticated and request.user != user:
-        my_following = request.user.profile.followings.all()
+        my_following      = request.user.profile.followings.all()
         mutual_followings = my_following.filter(followings=profile)[:3]
-        mutual_count = my_following.filter(followings=profile).count()
+        mutual_count      = my_following.filter(followings=profile).count()
 
     posts = Post.objects.filter(
         author=user,
@@ -596,15 +629,16 @@ def profile(request, username):
     ).prefetch_related('images').distinct()[:30]
 
     context = {
-        'user': user,
-        'posts': posts,
-        'profile': profile,
-        'current_profile': request.user.profile if request.user.is_authenticated else None,
-        'total_view': total_view,
-        'total_like_recieved': total_like_recieved,
+        'user':                    user,
+        'posts':                   posts,
+        'profile':                 profile,
+        'current_profile':         request.user.profile if request.user.is_authenticated else None,
+        'total_view':              total_view,
+        'total_like_recieved':     total_like_recieved,
         'total_comments_received': total_comments_received,
-        'mutual_followings': mutual_followings,
-        'mutual_count': mutual_count,
+        'mutual_followings':       mutual_followings,
+        'mutual_count':            mutual_count,
+        'is_blocked':              False,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -613,82 +647,166 @@ def profile(request, username):
     return render(request, 'profile.html', context)
 
 
-# ── Block View ───────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Update Profile View
+# ─────────────────────────────────────────────────────────────────────────────
+
 @login_required(login_url='/')
-@require_POST
+def update_profile(request, username):
+    user    = request.user
+    profile = request.user.profile
+
+    if request.method == 'POST':
+        fname    = request.POST.get('fname')
+        lname    = request.POST.get('lname')
+        phone    = request.POST.get('phone')
+        address  = request.POST.get('address')
+        location = request.POST.get('location')
+        image    = request.FILES.get('image')
+        bio      = request.POST.get('bio')
+        website  = request.POST.get('website')
+
+        try:
+            if fname and lname:
+                user.first_name = fname
+                user.last_name  = lname
+                user.save()
+
+            if phone or address or location or bio or website:
+                if phone:
+                    profile.phone = phone
+                if address:
+                    profile.address = address
+                if location:
+                    profile.location = location
+                if bio:
+                    profile.bio = bio
+                if website:
+                    profile.website = website
+                profile.save()
+
+            if image:
+                profile.picture = image
+                profile.save()
+
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'data': {
+                        'first_name':  user.first_name,
+                        'last_name':   user.last_name,
+                        'bio':         profile.bio,
+                        'phone':       profile.phone,
+                        'address':     profile.address,
+                        'location':    profile.location,
+                        'picture_url': profile.picture.url,
+                        'website':     profile.website,
+                    },
+                    'message': 'Profile updated successfully!'
+                })
+            else:
+                messages.info(request, 'Profile Updated Successfully')
+                return redirect('profile', username=request.user.username)
+
+        except Exception as e:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)})
+            else:
+                messages.error(request, f'Error updating profile: {str(e)}')
+                return redirect('profile', username=request.user.username)
+
+    # GET fallback
+    return render(request, 'update_profile.html', {'profile': profile})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Block / Unblock View  (single toggle endpoint)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
 def block_user(request, username):
-    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
-        return JsonResponse({'error': 'Invalid request'}, status=400)
+    """
+    POST /block/<username>/
+    Toggles block state — one endpoint handles both block and unblock.
+    Returns JSON: { success, action: 'blocked' | 'unblocked' }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed.'}, status=405)
 
     target_user = get_object_or_404(User, username=username)
 
     if target_user == request.user:
-        return JsonResponse({'error': 'You cannot block yourself'}, status=400)
+        return JsonResponse({'success': False, 'error': "You can't block yourself."}, status=400)
 
-    requester_profile = request.user.profile
-    target_profile    = target_user.profile
-
-    if requester_profile.has_blocked(target_profile):
-        # Already blocked — treat as idempotent success
-        return JsonResponse({'success': True, 'already_blocked': True})
-
-    requester_profile.block(target_profile)
-    return JsonResponse({'success': True})
-
-
-# ── Unblock View (optional but recommended) ──────────────────────
-@login_required(login_url='/')
-@require_POST
-def unblock_user(request, username):
-    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
-        return JsonResponse({'error': 'Invalid request'}, status=400)
-
-    target_user = get_object_or_404(User, username=username)
-
-    if target_user == request.user:
-        return JsonResponse({'error': 'Invalid request'}, status=400)
-
-    request.user.profile.unblock(target_user.profile)
-    return JsonResponse({'success': True})
-
-
-# ── Report View ──────────────────────────────────────────────────
-@login_required(login_url='/')
-@require_POST
-def report_user(request, username):
-    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
-        return JsonResponse({'error': 'Invalid request'}, status=400)
-
-    target_user = get_object_or_404(User, username=username)
-
-    if target_user == request.user:
-        return JsonResponse({'error': 'You cannot report yourself'}, status=400)
-
-    try:
-        body = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({'error': 'Invalid request body'}, status=400)
-
-    reason = body.get('reason', '').strip()
-    note   = body.get('note', '').strip()[:1000]  # cap note length
-
-    valid_reasons = {'spam', 'harassment', 'hate_speech', 'inappropriate', 'impersonation', 'other'}
-    if reason not in valid_reasons:
-        return JsonResponse({'error': 'Please select a valid reason'}, status=400)
-
-    # Use get_or_create to prevent duplicate reports for the same reason
-    report, created = UserReport.objects.get_or_create(
-        reporter=request.user,
-        reported=target_user,
-        reason=reason,
-        defaults={'note': note}
+    block_record, created = BlockedUser.objects.get_or_create(
+        blocker=request.user,
+        blocked=target_user
     )
 
     if not created:
-        # User already reported this person for this reason — still return success
-        return JsonResponse({'success': True, 'already_reported': True})
+        # Record already existed → UNBLOCK
+        block_record.delete()
+        return JsonResponse({'success': True, 'action': 'unblocked'})
 
-    return JsonResponse({'success': True})    
+    # Newly created → BLOCK
+    # Remove mutual follows so the relationship is fully severed
+    request.user.profile.followings.remove(target_user.profile)
+    target_user.profile.followings.remove(request.user.profile)
+
+    return JsonResponse({'success': True, 'action': 'blocked'})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Report User View
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def report_user(request, username):
+    """
+    POST /report/<username>/
+    Accepts JSON body: { reason: str, note: str }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed.'}, status=405)
+
+    target_user = get_object_or_404(User, username=username)
+
+    if target_user == request.user:
+        return JsonResponse({'success': False, 'error': "You can't report yourself."}, status=400)
+
+    # Parse JSON body sent by the frontend
+    try:
+        body   = json.loads(request.body)
+        reason = body.get('reason', '').strip()
+        note   = body.get('note', '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        reason = request.POST.get('reason', '').strip()
+        note   = request.POST.get('note', '').strip()
+
+    if not reason:
+        return JsonResponse({'success': False, 'error': 'Please select a reason.'}, status=400)
+
+    # Prevent duplicate reports from the same user within 24 hours
+    already_reported = UserReport.objects.filter(
+        reporter=request.user,
+        reported=target_user,
+        created_at__gte=timezone.now() - timedelta(hours=24)
+    ).exists()
+
+    if already_reported:
+        return JsonResponse({
+            'success': False,
+            'error': 'You already reported this user recently. Our team is reviewing it.'
+        })
+
+    UserReport.objects.create(
+        reporter=request.user,
+        reported=target_user,
+        reason=reason,
+        note=note,
+    )
+
+    return JsonResponse({'success': True})
 
 @login_required(login_url='/')
 def profile_videos(request, username):

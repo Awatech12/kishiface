@@ -2386,6 +2386,29 @@
                         <div class="kf-mobile-vibe-bars" id="mobileVibeBarsContainer"></div>
                     </div>
 
+                    <!-- Blocked Banner (shown when current user has blocked this profile) -->
+                    {% if is_blocked %}
+                    <div id="blockedBanner" style="display:flex;align-items:center;gap:12px;margin:14px 20px;padding:14px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-md);">
+                        <div style="width:36px;height:36px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-ban" style="color:var(--kf-danger);font-size:15px;"></i>
+                        </div>
+                        <div style="flex:1;">
+                            <div style="font-size:13.5px;font-weight:600;color:#991b1b;margin-bottom:2px;">You've blocked this account</div>
+                            <div style="font-size:12.5px;color:#b91c1c;line-height:1.4;">Their content is hidden. You can unblock them from the ··· menu.</div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div id="blockedBanner" style="display:none;align-items:center;gap:12px;margin:14px 20px;padding:14px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-md);">
+                        <div style="width:36px;height:36px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-ban" style="color:var(--kf-danger);font-size:15px;"></i>
+                        </div>
+                        <div style="flex:1;">
+                            <div style="font-size:13.5px;font-weight:600;color:#991b1b;margin-bottom:2px;">You've blocked this account</div>
+                            <div style="font-size:12.5px;color:#b91c1c;line-height:1.4;">Their content is hidden. You can unblock them from the ··· menu.</div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- Tabs -->
                     <nav class="kishiface-tabs">
                         <button data-tab="posts" data-url="{% url 'profile' user.username %}" class="kishiface-tab kishiface-tab-active">Posts</button>
@@ -2635,14 +2658,20 @@ function fallbackShare(url) {
     });
 }
 
-// ─── Block User ─────────────────────────────────────────────
+// ─── Block / Unblock User ────────────────────────────────────
 let _blockUsername = '';
+// Initialised from Django context so JS always knows the current state
+let _isBlocked = {% if is_blocked %}true{% else %}false{% endif %};
 
 function blockUser(username) {
     _blockUsername = username;
+    if (_isBlocked) {
+        // Already blocked — go straight to unblock
+        _doUnblockUser();
+        return;
+    }
     document.getElementById('blockUserHandle').textContent = '@' + username;
     document.getElementById('blockUserModal').classList.add('active');
-    // close any open menu
     const menu = document.querySelector('.kishiface-actions-menu');
     if (menu) menu.remove();
 }
@@ -2666,8 +2695,10 @@ function _doBlockUser() {
         confirmBtn.disabled = false;
         confirmBtn.textContent = 'Block';
         if (data.success) {
+            _isBlocked = true;
             showToast(`@${username} has been blocked`, 'success');
-            setTimeout(() => { window.location.href = '/'; }, 1500);
+            // Show the blocked-state banner and hide interactive sections
+            _applyBlockedState(username);
         } else {
             showToast(data.error || 'Failed to block user', 'error');
         }
@@ -2678,6 +2709,76 @@ function _doBlockUser() {
         confirmBtn.textContent = 'Block';
         showToast('An error occurred. Please try again.', 'error');
     });
+}
+
+function _doUnblockUser() {
+    const username = _blockUsername || "{{ user.username }}";
+    const unblockModal = document.getElementById('unblockUserModal');
+    if (unblockModal) {
+        document.getElementById('unblockUserHandle').textContent = '@' + username;
+        unblockModal.classList.add('active');
+    }
+    const menu = document.querySelector('.kishiface-actions-menu');
+    if (menu) menu.remove();
+}
+
+function _confirmUnblock() {
+    const username = _blockUsername || "{{ user.username }}";
+    const confirmBtn = document.getElementById('confirmUnblockBtn');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Unblocking…';
+
+    fetch(`/block/${username}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('unblockUserModal').classList.remove('active');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Unblock';
+        if (data.success) {
+            _isBlocked = false;
+            showToast(`@${username} has been unblocked`, 'success');
+            _removeBlockedState();
+        } else {
+            showToast(data.error || 'Failed to unblock user', 'error');
+        }
+    })
+    .catch(() => {
+        document.getElementById('unblockUserModal').classList.remove('active');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Unblock';
+        showToast('An error occurred. Please try again.', 'error');
+    });
+}
+
+function _applyBlockedState(username) {
+    // Show the blocked banner
+    const banner = document.getElementById('blockedBanner');
+    if (banner) banner.style.display = 'flex';
+    // Hide posts grid, tabs, follow/message buttons
+    const postsContainer = document.getElementById('posts-container');
+    if (postsContainer) postsContainer.style.display = 'none';
+    document.querySelectorAll('.kishiface-tabs').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.kf-mood-filter-row').forEach(t => t.style.display = 'none');
+    // Hide follow/message actions; keep the ⋯ button
+    const followForms = document.querySelectorAll('.kishiface-profile-actions form, .kishiface-profile-actions a');
+    followForms.forEach(el => el.style.display = 'none');
+}
+
+function _removeBlockedState() {
+    const banner = document.getElementById('blockedBanner');
+    if (banner) banner.style.display = 'none';
+    const postsContainer = document.getElementById('posts-container');
+    if (postsContainer) postsContainer.style.display = '';
+    document.querySelectorAll('.kishiface-tabs').forEach(t => t.style.display = '');
+    document.querySelectorAll('.kf-mood-filter-row').forEach(t => t.style.display = '');
+    const followForms = document.querySelectorAll('.kishiface-profile-actions form, .kishiface-profile-actions a');
+    followForms.forEach(el => el.style.display = '');
 }
 
 // ─── Report User ─────────────────────────────────────────────
@@ -2783,6 +2884,10 @@ function showOtherProfileActionsMenu(button, username) {
     menu.style.right = `${window.innerWidth - rect.right}px`;
     menu.style.zIndex = '10000';
     
+    const blockLabel = _isBlocked
+        ? `<i class="fas fa-lock-open"></i> Unblock`
+        : `<i class="fas fa-ban"></i> Block`;
+
     menu.innerHTML = `
         <button class="kishiface-menu-item" onclick="shareProfile()">
             <i class="fas fa-share-alt"></i> Share Profile
@@ -2792,13 +2897,12 @@ function showOtherProfileActionsMenu(button, username) {
             <i class="fas fa-flag"></i> Report
         </button>
         <button class="kishiface-menu-item danger" onclick="blockUser('${username}')">
-            <i class="fas fa-ban"></i> Block
+            ${blockLabel}
         </button>
     `;
     
     document.body.appendChild(menu);
     
-    // Close menu when clicking outside
     setTimeout(() => {
         document.addEventListener('click', function closeMenu(e) {
             if (!menu.contains(e.target) && e.target !== button) {
@@ -2896,6 +3000,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Escape') {
             hideLogoutModal();
             document.getElementById('blockUserModal')?.classList.remove('active');
+            document.getElementById('unblockUserModal')?.classList.remove('active');
             document.getElementById('reportUserModal')?.classList.remove('active');
             const menu = document.querySelector('.kishiface-actions-menu');
             if (menu) menu.remove();
@@ -2911,6 +3016,21 @@ document.addEventListener('DOMContentLoaded', function() {
     blockModal?.addEventListener('click', e => {
         if (e.target === blockModal) blockModal.classList.remove('active');
     });
+
+    // ─── Unblock Modal Listeners ─────────────────────
+    const unblockModal = document.getElementById('unblockUserModal');
+    document.getElementById('cancelUnblockBtn')?.addEventListener('click', () => {
+        unblockModal.classList.remove('active');
+    });
+    document.getElementById('confirmUnblockBtn')?.addEventListener('click', _confirmUnblock);
+    unblockModal?.addEventListener('click', e => {
+        if (e.target === unblockModal) unblockModal.classList.remove('active');
+    });
+
+    // Apply blocked state on page load if already blocked
+    if (_isBlocked) {
+        _applyBlockedState("{{ user.username }}");
+    }
 
     // ─── Report Modal Listeners ──────────────────────
     const reportModal = document.getElementById('reportUserModal');
@@ -3122,15 +3242,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Close modal functions
-    function closeModal() {
-        if (formHasChanges) {
-            if (!confirm('You have unsaved changes. Are you sure you want to close?')) {
-                return false;
-            }
+    function closeModal(force = false) {
+        if (formHasChanges && !force) {
+            // Show inline discard warning instead of native confirm()
+            showMessage(
+                `<span>You have unsaved changes.</span>
+                 <button onclick="window._discardEditChanges()" 
+                   style="margin-left:10px;padding:4px 12px;background:var(--kf-danger);color:#fff;border:none;border-radius:var(--radius-full);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;">
+                   Discard
+                 </button>`,
+                'error'
+            );
+            return false;
         }
         
         editProfileModal.classList.remove('active');
         document.body.style.overflow = '';
+        editMessages.innerHTML = '';
         
         // Reset form values if not saved
         if (formHasChanges) {
@@ -3149,6 +3277,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         return true;
     }
+    
+    // Global discard handler called by inline button
+    window._discardEditChanges = function() {
+        closeModal(true);
+    };
     
     if (closeEditModal) {
         closeEditModal.addEventListener('click', function() {
@@ -3241,84 +3374,120 @@ document.addEventListener('DOMContentLoaded', function() {
         editProfileLoading.classList.add('active');
         saveEditBtn.disabled = true;
         nextEditBtn.disabled = true;
-        
+        editMessages.innerHTML = '';
+
         try {
             const formData = new FormData(editProfileForm);
-            
-            const response = await fetch(window.location.href, {
+
+            // Target the update_profile view, not the current profile page
+            const updateUrl = "{% url 'update_profile' user.username %}";
+
+            const response = await fetch(updateUrl, {
                 method: 'POST',
                 body: formData,
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             });
-            
+
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                throw new Error(`Server error (HTTP ${response.status})`);
             }
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
-                // Update profile elements
-                if (mainProfileName && (editFirstName.value || editLastName.value)) {
-                    const firstName = result.data?.first_name || editFirstName.value;
-                    const lastName = result.data?.last_name || editLastName.value;
+                const d = result.data || {};
+
+                // ── Name ────────────────────────────────────────────────────
+                if (mainProfileName) {
+                    const firstName = d.first_name || editFirstName.value.trim();
+                    const lastName  = d.last_name  || editLastName.value.trim();
+                    const fullName  = `${firstName} ${lastName}`.trim();
+                    // preserve the verified badge node if present
                     const verifiedBadge = mainProfileName.querySelector('.kishiface-verified-badge');
-                    mainProfileName.textContent = `${firstName} ${lastName}`.trim();
-                    if (verifiedBadge) {
-                        mainProfileName.appendChild(verifiedBadge);
+                    mainProfileName.textContent = fullName;
+                    if (verifiedBadge) mainProfileName.appendChild(verifiedBadge);
+
+                    // also update the sticky top-header name
+                    const headerName = document.querySelector('.kishiface-header-name');
+                    if (headerName) headerName.textContent = firstName || fullName;
+                }
+
+                // ── Bio ──────────────────────────────────────────────────────
+                const newBio = d.bio ?? editBio.value.trim();
+                if (mainProfileBio) {
+                    mainProfileBio.textContent = newBio;
+                    mainProfileBio.style.display = newBio ? '' : 'none';
+                }
+
+                // ── Location ─────────────────────────────────────────────────
+                const newLocation = d.location ?? editLocation.value.trim();
+                if (mainProfileLocation) {
+                    mainProfileLocation.textContent = newLocation;
+                    mainProfileLocation.closest('.kishiface-meta-item').style.display =
+                        newLocation ? '' : 'none';
+                }
+
+                // ── Address ──────────────────────────────────────────────────
+                const newAddress = d.address ?? editAddress.value.trim();
+                if (mainProfileAddress) {
+                    mainProfileAddress.textContent = newAddress;
+                    mainProfileAddress.closest('.kishiface-meta-item').style.display =
+                        newAddress ? '' : 'none';
+                }
+
+                // ── Website ──────────────────────────────────────────────────
+                if (mainProfileWebsite) {
+                    const newWebsite = d.website ?? editWebsite.value.trim();
+                    if (newWebsite) {
+                        // strip protocol + www for display
+                        let display = newWebsite.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+                        if (display.length > 28) display = display.slice(0, 25) + '…';
+                        const anchor = mainProfileWebsite.querySelector('a');
+                        if (anchor) {
+                            anchor.href = newWebsite;
+                            anchor.textContent = display;
+                        }
+                        mainProfileWebsite.closest('.kishiface-meta-item').style.display = '';
+                    } else {
+                        mainProfileWebsite.closest('.kishiface-meta-item').style.display = 'none';
                     }
                 }
-                
-                if (editBio.value) {
-                    if (mainProfileBio) {
-                        mainProfileBio.textContent = editBio.value;
-                    }
+
+                // ── Profile picture ──────────────────────────────────────────
+                const newPicUrl = d.picture_url || null;
+                if (newPicUrl) {
+                    // cache-bust so the browser actually re-fetches
+                    const bust = `${newPicUrl}?t=${Date.now()}`;
+                    if (mainProfilePicture) mainProfilePicture.src = bust;
+                    if (coverImage) coverImage.style.backgroundImage = `url('${bust}')`;
+                    // update the edit modal preview too
+                    if (editProfilePicture) editProfilePicture.src = bust;
                 }
-                
-                if (editLocation.value && mainProfileLocation) {
-                    mainProfileLocation.textContent = editLocation.value;
-                }
-                
-                if (editAddress.value && mainProfileAddress) {
-                    mainProfileAddress.textContent = editAddress.value;
-                }
-                
-                // Update profile pictures
-                if (editProfilePicture.src !== originalValues.picture) {
-                    const newPicUrl = result.data?.picture_url || editProfilePicture.src;
-                    if (mainProfilePicture) {
-                        mainProfilePicture.src = newPicUrl;
-                    }
-                    if (coverImage) {
-                        coverImage.style.backgroundImage = `url('${newPicUrl}')`;
-                    }
-                }
-                
-                // Update original values
+
+                // ── Sync originalValues so "unsaved changes" tracking resets ─
                 originalValues = {
-                    firstName: editFirstName.value.trim(),
-                    lastName: editLastName.value.trim(),
-                    bio: editBio.value.trim(),
-                    phone: editPhone.value.trim(),
-                    location: editLocation.value.trim(),
-                    address: editAddress.value.trim(),
-                    website: editWebsite.value.trim(),
-                    picture: editProfilePicture.src
+                    firstName: d.first_name  || editFirstName.value.trim(),
+                    lastName:  d.last_name   || editLastName.value.trim(),
+                    bio:       d.bio         ?? editBio.value.trim(),
+                    phone:     d.phone       ?? editPhone.value.trim(),
+                    location:  d.location    ?? editLocation.value.trim(),
+                    address:   d.address     ?? editAddress.value.trim(),
+                    website:   d.website     ?? editWebsite.value.trim(),
+                    picture:   editProfilePicture ? editProfilePicture.src : originalValues.picture
                 };
-                
+
                 formHasChanges = false;
                 checkFormChanges();
-                
-                // Show success and close
-                showToast('Profile updated successfully!', 'success');
-                
+
+                showToast(result.message || 'Profile updated successfully!', 'success');
+
                 setTimeout(() => {
                     editProfileModal.classList.remove('active');
                     document.body.style.overflow = '';
                 }, 800);
-                
+
             } else {
                 showMessage(result.error || 'Failed to update profile. Please try again.', 'error');
                 saveEditBtn.disabled = false;
@@ -3327,7 +3496,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     nextEditBtn.classList.add('active');
                 }
             }
-            
+
         } catch (error) {
             console.error('Save error:', error);
             showMessage('An error occurred. Please try again.', 'error');

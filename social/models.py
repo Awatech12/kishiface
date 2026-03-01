@@ -289,7 +289,15 @@ class UserReport(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.reporter.username} reported {self.reported.username} for {self.reason}"      
+        return f"{self.reporter.username} reported {self.reported.username} for {self.reason}"  
+
+class BlockedUser(models.Model):
+    blocker  = models.ForeignKey(User, related_name='blocking',  on_delete=models.CASCADE)
+    blocked  = models.ForeignKey(User, related_name='blocked_by', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('blocker', 'blocked')    
 
 class Post(models.Model):
     post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)

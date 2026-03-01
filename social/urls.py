@@ -50,7 +50,7 @@ urlpatterns = [
     #====== Profials codes =======
     path('<str:username>/', views.profile, name='profile'),
     path('block/<str:username>/',   views.block_user,   name='block_user'),
-    path('unblock/<str:username>/', views.unblock_user, name='unblock_user'),
+    #path('unblock/<str:username>/', views.unblock_user, name='unblock_user'),
     path('report/<str:username>/',  views.report_user,  name='report_user'),
     path('<str:username>/videos/', views.profile_videos, name='profile_videos'),
     path('<str:username>/audios/', views.profile_audios, name='profile_audios'),
