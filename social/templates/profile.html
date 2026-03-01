@@ -1732,6 +1732,143 @@
             .kf-mobile-joined i { font-size: 11px; }
         }
 
+        /* ─── Mobile Bottom Sheet Menu ───────────────── */
+        .kf-mobile-sheet-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 5000;
+            animation: kf-fade-in 0.2s ease;
+        }
+        .kf-mobile-sheet-overlay.active { display: block; }
+
+        .kf-mobile-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 5001;
+            background: #fff;
+            border-radius: 20px 20px 0 0;
+            padding: 0 0 calc(env(safe-area-inset-bottom) + 12px);
+            transform: translateY(100%);
+            transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .kf-mobile-sheet.active { transform: translateY(0); }
+
+        .kf-mobile-sheet-handle {
+            width: 38px;
+            height: 4px;
+            background: #ddd;
+            border-radius: 99px;
+            margin: 12px auto 4px;
+        }
+
+        .kf-mobile-sheet-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 20px 10px;
+            border-bottom: 1px solid #f2f2f2;
+        }
+
+        .kf-sheet-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #0095f6;
+            flex-shrink: 0;
+        }
+
+        .kf-sheet-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: #111;
+            line-height: 1.2;
+        }
+
+        .kf-sheet-username {
+            font-size: 12.5px;
+            color: #888;
+            margin-top: 1px;
+        }
+
+        .kf-mobile-sheet-items {
+            padding: 8px 0;
+        }
+
+        .kf-sheet-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            padding: 14px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+            font-family: -apple-system, 'DM Sans', sans-serif;
+            font-size: 15px;
+            font-weight: 500;
+            color: #111;
+            transition: background 0.12s;
+        }
+
+        .kf-sheet-item:hover, .kf-sheet-item:active { background: #f7f7f7; }
+
+        .kf-sheet-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: #f2f2f2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            color: #444;
+            flex-shrink: 0;
+        }
+
+        .kf-sheet-label { flex: 1; }
+
+        .kf-sheet-arrow {
+            font-size: 11px;
+            color: #ccc;
+        }
+
+        .kf-sheet-item-danger { color: #ef4444; }
+        .kf-sheet-icon-danger { background: #fef2f2; color: #ef4444; }
+
+        .kf-sheet-item-warn { color: #d97706; }
+        .kf-sheet-icon-warn { background: #fffbeb; color: #d97706; }
+
+        .kf-sheet-divider {
+            height: 1px;
+            background: #f2f2f2;
+            margin: 4px 20px;
+        }
+
+        .kf-sheet-cancel {
+            display: block;
+            width: calc(100% - 32px);
+            margin: 8px 16px 4px;
+            padding: 14px;
+            background: #f2f2f2;
+            border: none;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #111;
+            cursor: pointer;
+            font-family: -apple-system, 'DM Sans', sans-serif;
+            transition: background 0.12s;
+        }
+        .kf-sheet-cancel:hover { background: #e8e8e8; }
+
         /* ─── Mobile Sticky Scroll Header ───────────── */
         .kf-scroll-header { display: none; }
 
@@ -2625,15 +2762,12 @@
         <!-- Background: profile picture as full cover -->
         <div class="kf-hero-bg" style="background-image: url('{{ user.profile.picture.url }}');"></div>
 
-        <!-- Top bar: back + share + more -->
+        <!-- Top bar: back + three dots only -->
         <div class="kf-hero-topbar">
             <button class="kf-hero-icon-btn" id="kishiface-back-btn-mobile" onclick="history.back()">
                 <i class="fas fa-chevron-down"></i>
             </button>
             <div class="kf-hero-topbar-right">
-                <button class="kf-hero-icon-btn" onclick="shareProfile()" title="Share">
-                    <i class="fas fa-share-alt"></i>
-                </button>
                 <button class="kf-hero-icon-btn" id="more-actions-btn-mobile" title="More">
                     <i class="fas fa-ellipsis-h"></i>
                 </button>
@@ -2682,9 +2816,6 @@
                     <button class="kf-hero-primary-btn" id="openEditProfileBtnMobile">
                         <i class="fas fa-pen" style="font-size:13px;"></i> Edit Profile
                     </button>
-                    <button class="kf-hero-round-btn" onclick="shareProfile()" title="Share">
-                        <i class="fas fa-share-alt"></i>
-                    </button>
                 {% else %}
                     {% if current_profile in profile.followers.all %}
                         <form action="{% url 'follow' profile.user.username %}" method="post" style="flex:1;display:flex;">
@@ -2704,9 +2835,6 @@
                     <a href="{% url 'message' user.username %}" class="kf-hero-secondary-btn">
                         <i class="fas fa-comment" style="font-size:13px;"></i> Message
                     </a>
-                    <button class="kf-hero-round-btn" id="more-actions-btn-other-mobile" onclick="shareProfile()" title="Share">
-                        <i class="fas fa-share-alt"></i>
-                    </button>
                 {% endif %}
             </div>
 
@@ -2752,6 +2880,72 @@
         <i class="far fa-calendar-alt"></i> Joined {{ profile.created_at|date:"F Y" }}
     </div>
 
+</div>
+
+<!-- ═══ MOBILE BOTTOM SHEET MENU ═══ -->
+<div class="kf-mobile-sheet-overlay" id="kfMobileSheetOverlay" onclick="closeMobileSheet()"></div>
+<div class="kf-mobile-sheet" id="kfMobileSheet">
+    <div class="kf-mobile-sheet-handle"></div>
+
+    <!-- Own profile sheet -->
+    <div id="kfSheetOwn">
+        <div class="kf-mobile-sheet-header">
+            <img src="{{ user.profile.picture.url }}" class="kf-sheet-avatar" alt="">
+            <div>
+                <div class="kf-sheet-name">{{ user.first_name|default:user.username }} {{ user.last_name }}</div>
+                <div class="kf-sheet-username">@{{ user.username }}</div>
+            </div>
+        </div>
+        <div class="kf-mobile-sheet-items">
+            <button class="kf-sheet-item" onclick="shareProfile(); closeMobileSheet();">
+                <span class="kf-sheet-icon"><i class="fas fa-share-alt"></i></span>
+                <span class="kf-sheet-label">Share Profile</span>
+                <i class="fas fa-chevron-right kf-sheet-arrow"></i>
+            </button>
+            <button class="kf-sheet-item" onclick="closeMobileSheet(); document.getElementById('editProfileModal').classList.add('active');">
+                <span class="kf-sheet-icon"><i class="fas fa-pen"></i></span>
+                <span class="kf-sheet-label">Edit Profile</span>
+                <i class="fas fa-chevron-right kf-sheet-arrow"></i>
+            </button>
+            <div class="kf-sheet-divider"></div>
+            <button class="kf-sheet-item kf-sheet-item-danger" onclick="closeMobileSheet(); setTimeout(showLogoutModal, 200);">
+                <span class="kf-sheet-icon kf-sheet-icon-danger"><i class="fas fa-sign-out-alt"></i></span>
+                <span class="kf-sheet-label">Log Out</span>
+                <i class="fas fa-chevron-right kf-sheet-arrow"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Other profile sheet -->
+    <div id="kfSheetOther" style="display:none;">
+        <div class="kf-mobile-sheet-header">
+            <img src="{{ user.profile.picture.url }}" class="kf-sheet-avatar" alt="">
+            <div>
+                <div class="kf-sheet-name">{{ user.first_name|default:user.username }} {{ user.last_name }}</div>
+                <div class="kf-sheet-username">@{{ user.username }}</div>
+            </div>
+        </div>
+        <div class="kf-mobile-sheet-items">
+            <button class="kf-sheet-item" onclick="shareProfile(); closeMobileSheet();">
+                <span class="kf-sheet-icon"><i class="fas fa-share-alt"></i></span>
+                <span class="kf-sheet-label">Share Profile</span>
+                <i class="fas fa-chevron-right kf-sheet-arrow"></i>
+            </button>
+            <div class="kf-sheet-divider"></div>
+            <button class="kf-sheet-item kf-sheet-item-warn" onclick="closeMobileSheet(); setTimeout(() => reportUser('{{ user.username }}'), 200);">
+                <span class="kf-sheet-icon kf-sheet-icon-warn"><i class="fas fa-flag"></i></span>
+                <span class="kf-sheet-label">Report</span>
+                <i class="fas fa-chevron-right kf-sheet-arrow"></i>
+            </button>
+            <button class="kf-sheet-item kf-sheet-item-danger" id="kfSheetBlockBtn" onclick="closeMobileSheet(); setTimeout(() => blockUser('{{ user.username }}'), 200);">
+                <span class="kf-sheet-icon kf-sheet-icon-danger"><i class="fas fa-ban"></i></span>
+                <span class="kf-sheet-label" id="kfSheetBlockLabel">{% if is_blocked %}Unblock{% else %}Block{% endif %}</span>
+                <i class="fas fa-chevron-right kf-sheet-arrow"></i>
+            </button>
+        </div>
+    </div>
+
+    <button class="kf-sheet-cancel" onclick="closeMobileSheet()">Cancel</button>
 </div>
 
 <!-- Desktop Layout -->
@@ -3209,6 +3403,39 @@
 
 {% include 'footer.html' %}
 <script>
+// ── Mobile Bottom Sheet ─────────────────────────────────────────
+function openMobileSheet(type) {
+    // type = 'own' or 'other'
+    document.getElementById('kfSheetOwn').style.display   = type === 'own'   ? '' : 'none';
+    document.getElementById('kfSheetOther').style.display = type === 'other' ? '' : 'none';
+
+    // Sync block label
+    if (type === 'other') {
+        const lbl = document.getElementById('kfSheetBlockLabel');
+        if (lbl) lbl.textContent = _isBlocked ? 'Unblock' : 'Block';
+        const btn = document.getElementById('kfSheetBlockBtn');
+        if (btn) {
+            const icon = btn.querySelector('.kf-sheet-icon i');
+            if (icon) icon.className = _isBlocked ? 'fas fa-lock-open' : 'fas fa-ban';
+        }
+    }
+
+    document.getElementById('kfMobileSheetOverlay').classList.add('active');
+    // small delay so CSS transition fires
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            document.getElementById('kfMobileSheet').classList.add('active');
+        });
+    });
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMobileSheet() {
+    document.getElementById('kfMobileSheet').classList.remove('active');
+    document.getElementById('kfMobileSheetOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
 // ── Wire mobile hero buttons to existing functions ──────────────
 document.addEventListener('DOMContentLoaded', function() {
     // Edit profile button (own profile)
@@ -3219,26 +3446,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // More actions (own profile)
+    // ··· three dots — own profile
     const mobileMoreBtn = document.getElementById('more-actions-btn-mobile');
     if (mobileMoreBtn) {
         mobileMoreBtn.addEventListener('click', function(e) {
-            const desktopMoreBtn = document.getElementById('more-actions-btn');
-            if (desktopMoreBtn) { desktopMoreBtn.click(); }
-            else {
-                const otherBtn = document.getElementById('more-actions-btn-other');
-                if (otherBtn) otherBtn.click();
-            }
+            e.stopPropagation();
+            // Determine if own profile by checking if edit btn exists
+            const isOwn = !!document.getElementById('openEditProfileBtnMobile');
+            openMobileSheet(isOwn ? 'own' : 'other');
         });
     }
 
-    // More actions (other profile)
-    const mobileMoreBtnOther = document.getElementById('more-actions-btn-other-mobile');
-    if (mobileMoreBtnOther) {
-        mobileMoreBtnOther.addEventListener('click', function() {
-            const btn = document.getElementById('more-actions-btn-other');
-            if (btn) btn.click();
-        });
+    // Scroll header share
+    const scrollHeaderShare = document.querySelector('.kf-scroll-header-btn');
+    if (scrollHeaderShare) {
+        scrollHeaderShare.addEventListener('click', shareProfile);
     }
 
     // ── Scroll: fade hero, reveal sticky header ──────────────────
@@ -3247,23 +3469,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (heroCard && scrollHdr && window.innerWidth <= 767) {
         const heroHeight = heroCard.offsetHeight || 420;
-        // Fade starts at 30% scroll, completes at 80% of hero height
         const fadeStart  = heroHeight * 0.25;
         const fadeEnd    = heroHeight * 0.70;
 
         function onScroll() {
             const scrollY = window.scrollY || window.pageYOffset;
-
-            // Calculate fade progress (0 = fully visible, 1 = fully faded)
             let progress = 0;
             if (scrollY > fadeStart) {
                 progress = Math.min((scrollY - fadeStart) / (fadeEnd - fadeStart), 1);
             }
-
-            // Fade the hero card out
             heroCard.style.opacity = 1 - progress;
-
-            // Show sticky header when hero is mostly faded (progress > 0.55)
             if (progress > 0.55) {
                 scrollHdr.classList.add('visible');
             } else {
@@ -3272,7 +3487,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         window.addEventListener('scroll', onScroll, { passive: true });
-        // Also handle resize (e.g. orientation change)
         window.addEventListener('resize', function() {
             if (window.innerWidth > 767) {
                 heroCard.style.opacity = '';
@@ -4814,6 +5028,7 @@ function profileFilterMood(mood, btn) {
 
 </body>
 </html>
+
 
 
 
