@@ -1182,6 +1182,9 @@
             object-fit: contain;
         }
 
+        /* Tab icons — mobile only */
+        .kf-tab-icon { display: none; }
+
         /* WebView fix */
         .kishiface-webview-fix {
             transform: translateZ(0);
@@ -2250,25 +2253,31 @@
                 background: #fff;
                 border-bottom: 1px solid #f0f0f0;
                 border-top: 1px solid #f0f0f0;
+                position: sticky;
+                top: 0;
+                z-index: 50;
             }
 
             .kishiface-tab {
                 font-size: 11px;
                 font-weight: 600;
                 letter-spacing: 0.04em;
-                padding: 13px 4px;
+                padding: 10px 4px 11px;
                 color: #aaa;
                 text-transform: uppercase;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
             }
 
-            .kishiface-tab-active { color: #111; }
-
-            .kishiface-tab-active::after {
-                background: #0095f6;
-                width: 28px;
-                height: 2.5px;
-                border-radius: 2px;
+            .kf-tab-icon {
+                font-size: 15px;
+                display: block;
             }
+
+            .kishiface-tab-active { color: #0095f6; }
+            .kishiface-tab-active .kf-tab-icon { color: #0095f6; }
 
             /* ── Posts grid ── */
             .kishiface-posts-grid { gap: 1.5px; }
@@ -2304,7 +2313,8 @@
             .kf-hero-card { max-height: 480px; }
             .kf-hero-name { font-size: 19px; }
             .kf-hero-avatar { width: 62px; height: 62px; }
-            .kishiface-tab { font-size: 10px; padding: 12px 4px; }
+            .kishiface-tab { font-size: 10px; padding: 9px 4px 10px; }
+            .kf-tab-icon { font-size: 14px; }
         }
 
         /* Profile meta mobile (hidden on desktop) */
@@ -2796,6 +2806,7 @@
             </div>
 
             <!-- Stats row: · followers · following · views -->
+            {% if not is_blocked %}
             <div class="kf-hero-stats-row">
                 <a href="{% url 'followers' user.username %}" class="kf-hero-stat">
                     <span class="kf-hero-stat-num">{{ profile.followers.count }}</span>&nbsp;Followers
@@ -2809,8 +2820,10 @@
                 <span class="kf-hero-stat">{{ profile.bio|truncatechars:22 }}</span>
                 {% endif %}
             </div>
+            {% endif %}
 
             <!-- Action buttons -->
+            {% if not is_blocked %}
             <div class="kf-hero-actions">
                 {% if request.user == user %}
                     <button class="kf-hero-primary-btn" id="openEditProfileBtnMobile">
@@ -2820,29 +2833,40 @@
                     {% if current_profile in profile.followers.all %}
                         <form action="{% url 'follow' profile.user.username %}" method="post" style="flex:1;display:flex;">
                             {% csrf_token %}
-                            <button type="submit" class="kf-hero-secondary-btn" style="flex:1;">
+                            <button type="submit" class="kf-hero-secondary-btn" style="flex:1;" disabled>
                                 <i class="fas fa-check" style="font-size:12px;"></i> Following
                             </button>
                         </form>
                     {% else %}
                         <form action="{% url 'follow' profile.user.username %}" method="post" style="flex:1;display:flex;">
                             {% csrf_token %}
-                            <button type="submit" class="kf-hero-primary-btn" style="flex:1;">
+                            <button type="submit" class="kf-hero-primary-btn" style="flex:1;" disabled>
                                 <i class="fas fa-user-plus" style="font-size:13px;"></i> Follow
                             </button>
                         </form>
                     {% endif %}
-                    <a href="{% url 'message' user.username %}" class="kf-hero-secondary-btn">
+                    <a href="{% url 'message' user.username %}" class="kf-hero-secondary-btn" style="pointer-events:none;opacity:0.5;">
                         <i class="fas fa-comment" style="font-size:13px;"></i> Message
                     </a>
                 {% endif %}
             </div>
+            {% else %}
+            <!-- Blocked message shown in hero overlay -->
+            <div id="mobileHeroBlockedMsg" style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);border-radius:12px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);">
+                <i class="fas fa-ban" style="color:#fca5a5;font-size:16px;flex-shrink:0;"></i>
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">You've blocked this account</div>
+                    <div style="font-size:11.5px;color:rgba(255,255,255,0.75);line-height:1.4;">Content hidden. Tap ··· to unblock.</div>
+                </div>
+            </div>
+            {% endif %}
 
         </div>
     </div>
 </div>
 
 <!-- ═══ MOBILE DETAILS SECTION (below hero, above tabs) ═══ -->
+{% if not is_blocked %}
 <div class="kf-mobile-details">
 
     <!-- Location + Website pill row -->
@@ -2881,6 +2905,7 @@
     </div>
 
 </div>
+{% endif %}
 
 <!-- ═══ MOBILE BOTTOM SHEET MENU ═══ -->
 <div class="kf-mobile-sheet-overlay" id="kfMobileSheetOverlay" onclick="closeMobileSheet()"></div>
@@ -2902,7 +2927,7 @@
                 <span class="kf-sheet-label">Share Profile</span>
                 <i class="fas fa-chevron-right kf-sheet-arrow"></i>
             </button>
-            <button class="kf-sheet-item" onclick="closeMobileSheet(); document.getElementById('editProfileModal').classList.add('active');">
+            <button class="kf-sheet-item" onclick="closeMobileSheet(); setTimeout(function(){ var d=document.getElementById('openEditProfileBtn'); if(d) d.click(); else document.getElementById('editProfileModal').classList.add('active'); }, 200);">
                 <span class="kf-sheet-icon"><i class="fas fa-pen"></i></span>
                 <span class="kf-sheet-label">Edit Profile</span>
                 <i class="fas fa-chevron-right kf-sheet-arrow"></i>
@@ -3236,14 +3261,23 @@
                     </div>
                     {% endif %}
 
-                    <!-- Tabs -->
-                    <nav class="kishiface-tabs">
-                        <button data-tab="posts" data-url="{% url 'profile' user.username %}" class="kishiface-tab kishiface-tab-active">Posts</button>
-                        <button data-tab="videos" data-url="{% url 'profile_videos' user.username %}" class="kishiface-tab">Videos</button>
-                        <button data-tab="audio" data-url="{% url 'profile_audios' user.username %}" class="kishiface-tab">Audio</button>
-                        <button data-tab="text" data-url="{% url 'profile_text_posts' user.username %}" class="kishiface-tab">Text</button>
-                    </nav>
                 </section>
+
+                <!-- Tabs — outside profile-info so they show on mobile too -->
+                <nav class="kishiface-tabs">
+                    <button data-tab="posts" data-url="{% url 'profile' user.username %}" class="kishiface-tab kishiface-tab-active">
+                        <i class="fas fa-th kf-tab-icon"></i><span>Posts</span>
+                    </button>
+                    <button data-tab="videos" data-url="{% url 'profile_videos' user.username %}" class="kishiface-tab">
+                        <i class="fas fa-play kf-tab-icon"></i><span>Videos</span>
+                    </button>
+                    <button data-tab="audio" data-url="{% url 'profile_audios' user.username %}" class="kishiface-tab">
+                        <i class="fas fa-music kf-tab-icon"></i><span>Audio</span>
+                    </button>
+                    <button data-tab="text" data-url="{% url 'profile_text_posts' user.username %}" class="kishiface-tab">
+                        <i class="fas fa-align-left kf-tab-icon"></i><span>Text</span>
+                    </button>
+                </nav>
 
                 <!-- Mood Filter Row -->
                 <div class="kf-mood-filter-row" id="profileMoodFilterRow" style="display:none;">
@@ -3438,11 +3472,22 @@ function closeMobileSheet() {
 
 // ── Wire mobile hero buttons to existing functions ──────────────
 document.addEventListener('DOMContentLoaded', function() {
-    // Edit profile button (own profile)
+    // Apply blocked state on initial page load (mobile hero)
+    if (_isBlocked) {
+        _applyBlockedState('{{ user.username }}');
+    }
+
+    // Edit profile button (own profile) — delegate to the desktop button so
+    // initializeForm() runs and the Save button is properly enabled on changes
     const mobileEditBtn = document.getElementById('openEditProfileBtnMobile');
     if (mobileEditBtn) {
         mobileEditBtn.addEventListener('click', function() {
-            document.getElementById('editProfileModal').classList.add('active');
+            const desktopEditBtn = document.getElementById('openEditProfileBtn');
+            if (desktopEditBtn) {
+                desktopEditBtn.click();   // runs initializeForm() + opens modal
+            } else {
+                document.getElementById('editProfileModal').classList.add('active');
+            }
         });
     }
 
@@ -3676,7 +3721,7 @@ function _confirmUnblock() {
 }
 
 function _applyBlockedState(username) {
-    // Show the blocked banner
+    // Show the blocked banner (desktop)
     const banner = document.getElementById('blockedBanner');
     if (banner) banner.style.display = 'flex';
     // Hide posts grid, tabs, follow/message buttons
@@ -3687,6 +3732,30 @@ function _applyBlockedState(username) {
     // Hide follow/message actions; keep the ⋯ button
     const followForms = document.querySelectorAll('.kishiface-profile-actions form, .kishiface-profile-actions a');
     followForms.forEach(el => el.style.display = 'none');
+
+    // ── Mobile hero blocked state ──────────────────────────────
+    // Hide mobile hero stats row, bio snippet, and action buttons
+    const heroStats   = document.querySelector('.kf-hero-stats-row');
+    const heroActions = document.querySelector('.kf-hero-actions');
+    if (heroStats)   heroStats.style.display = 'none';
+    if (heroActions) heroActions.style.display = 'none';
+
+    // Show mobile blocked message inside hero overlay
+    let mobileBlockedMsg = document.getElementById('mobileHeroBlockedMsg');
+    if (!mobileBlockedMsg) {
+        mobileBlockedMsg = document.createElement('div');
+        mobileBlockedMsg.id = 'mobileHeroBlockedMsg';
+        mobileBlockedMsg.style.cssText = 'display:flex;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);border-radius:12px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+        mobileBlockedMsg.innerHTML = '<i class="fas fa-ban" style="color:#fca5a5;font-size:16px;flex-shrink:0;"></i><div><div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">You\'ve blocked this account</div><div style="font-size:11.5px;color:rgba(255,255,255,0.75);line-height:1.4;">Content hidden. Tap ··· to unblock.</div></div>';
+        const heroOverlay = document.querySelector('.kf-hero-overlay');
+        if (heroOverlay) heroOverlay.appendChild(mobileBlockedMsg);
+    } else {
+        mobileBlockedMsg.style.display = 'flex';
+    }
+
+    // Hide mobile details section (location, bio, joined)
+    const mobileDetails = document.querySelector('.kf-mobile-details');
+    if (mobileDetails) mobileDetails.style.display = 'none';
 }
 
 function _removeBlockedState() {
@@ -3698,6 +3767,16 @@ function _removeBlockedState() {
     document.querySelectorAll('.kf-mood-filter-row').forEach(t => t.style.display = '');
     const followForms = document.querySelectorAll('.kishiface-profile-actions form, .kishiface-profile-actions a');
     followForms.forEach(el => el.style.display = '');
+
+    // Restore mobile hero
+    const heroStats   = document.querySelector('.kf-hero-stats-row');
+    const heroActions = document.querySelector('.kf-hero-actions');
+    if (heroStats)   heroStats.style.display = '';
+    if (heroActions) heroActions.style.display = '';
+    const mobileBlockedMsg = document.getElementById('mobileHeroBlockedMsg');
+    if (mobileBlockedMsg) mobileBlockedMsg.style.display = 'none';
+    const mobileDetails = document.querySelector('.kf-mobile-details');
+    if (mobileDetails) mobileDetails.style.display = '';
 }
 
 // ─── Report User ─────────────────────────────────────────────
@@ -5028,6 +5107,11 @@ function profileFilterMood(mood, btn) {
 
 </body>
 </html>
+
+
+
+
+
 
 
 
