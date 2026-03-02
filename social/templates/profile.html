@@ -2833,19 +2833,19 @@
                     {% if current_profile in profile.followers.all %}
                         <form action="{% url 'follow' profile.user.username %}" method="post" style="flex:1;display:flex;">
                             {% csrf_token %}
-                            <button type="submit" class="kf-hero-secondary-btn" style="flex:1;" disabled>
+                            <button type="submit" class="kf-hero-secondary-btn" style="flex:1;">
                                 <i class="fas fa-check" style="font-size:12px;"></i> Following
                             </button>
                         </form>
                     {% else %}
                         <form action="{% url 'follow' profile.user.username %}" method="post" style="flex:1;display:flex;">
                             {% csrf_token %}
-                            <button type="submit" class="kf-hero-primary-btn" style="flex:1;" disabled>
+                            <button type="submit" class="kf-hero-primary-btn" style="flex:1;">
                                 <i class="fas fa-user-plus" style="font-size:13px;"></i> Follow
                             </button>
                         </form>
                     {% endif %}
-                    <a href="{% url 'message' user.username %}" class="kf-hero-secondary-btn" style="pointer-events:none;opacity:0.5;">
+                    <a href="{% url 'message' user.username %}" class="kf-hero-secondary-btn">
                         <i class="fas fa-comment" style="font-size:13px;"></i> Message
                     </a>
                 {% endif %}
@@ -3707,7 +3707,8 @@ function _confirmUnblock() {
         if (data.success) {
             _isBlocked = false;
             showToast(`@${username} has been unblocked`, 'success');
-            _removeBlockedState();
+            // Reload so all hidden content (posts, bio, details) reappears cleanly
+            setTimeout(() => { window.location.reload(); }, 900);
         } else {
             showToast(data.error || 'Failed to unblock user', 'error');
         }
@@ -4479,6 +4480,73 @@ document.addEventListener('DOMContentLoaded', function() {
                 formHasChanges = false;
                 checkFormChanges();
 
+                // ── Update mobile hero card immediately ──────────────────────
+                const newFirstName = d.first_name || editFirstName.value.trim();
+                const newLastName  = d.last_name  || editLastName.value.trim();
+                const newFullName  = `${newFirstName} ${newLastName}`.trim();
+
+                // Hero name
+                const heroNameEl = document.querySelector('.kf-hero-name');
+                if (heroNameEl) {
+                    const verifiedIcon = heroNameEl.querySelector('.verified-icon');
+                    heroNameEl.textContent = newFullName;
+                    if (verifiedIcon) heroNameEl.appendChild(verifiedIcon);
+                }
+
+                // Scroll header name + avatar
+                const scrollHeaderName = document.querySelector('.kf-scroll-header-name');
+                if (scrollHeaderName) scrollHeaderName.textContent = newFullName;
+
+                // Hero bg + avatar + scroll header avatar
+                if (newPicUrl) {
+                    const bust = `${newPicUrl}?t=${Date.now()}`;
+                    const heroAvatar = document.getElementById('mobileHeroAvatar');
+                    if (heroAvatar) heroAvatar.src = bust;
+                    const heroBg = document.querySelector('.kf-hero-bg');
+                    if (heroBg) heroBg.style.backgroundImage = `url('${bust}')`;
+                    const scrollAvatar = document.querySelector('.kf-scroll-header-avatar');
+                    if (scrollAvatar) scrollAvatar.src = bust;
+                }
+
+                // Mobile bio block
+                const newBioVal = d.bio ?? editBio.value.trim();
+                const mobileBioBlock = document.querySelector('.kf-mobile-bio-block');
+                const mobileDetails  = document.querySelector('.kf-mobile-details');
+                if (mobileBioBlock) {
+                    mobileBioBlock.textContent = newBioVal;
+                    mobileBioBlock.style.display = newBioVal ? '' : 'none';
+                } else if (newBioVal && mobileDetails) {
+                    // Bio block didn't exist yet — create and insert before joined date
+                    const joinedEl = document.querySelector('.kf-mobile-joined');
+                    const bioDiv = document.createElement('div');
+                    bioDiv.className = 'kf-mobile-bio-block';
+                    bioDiv.textContent = newBioVal;
+                    if (joinedEl) mobileDetails.insertBefore(bioDiv, joinedEl);
+                    else if (mobileDetails) mobileDetails.appendChild(bioDiv);
+                }
+
+                // Mobile location pill
+                const newLocationVal = d.location ?? editLocation.value.trim();
+                const locationPills  = document.querySelectorAll('.kf-mobile-pill');
+                let locationPill = null;
+                locationPills.forEach(p => { if (p.querySelector('.fa-map-marker-alt')) locationPill = p; });
+                const pillsRow = document.querySelector('.kf-mobile-pills-row');
+                if (locationPill) {
+                    locationPill.querySelector('span').textContent = newLocationVal;
+                    locationPill.style.display = newLocationVal ? '' : 'none';
+                } else if (newLocationVal && pillsRow) {
+                    const pill = document.createElement('div');
+                    pill.className = 'kf-mobile-pill';
+                    pill.innerHTML = `<i class="fas fa-map-marker-alt"></i><span>${newLocationVal}</span>`;
+                    pillsRow.insertBefore(pill, pillsRow.firstChild);
+                }
+
+                // Mobile hero bio snippet in stats row
+                const heroBioSnippet = document.querySelector('.kf-hero-stats-row .kf-hero-stat:last-child');
+                if (heroBioSnippet && !heroBioSnippet.querySelector('.kf-hero-stat-num')) {
+                    heroBioSnippet.textContent = newBioVal ? newBioVal.slice(0, 22) + (newBioVal.length > 22 ? '…' : '') : '';
+                }
+
                 showToast(result.message || 'Profile updated successfully!', 'success');
 
                 setTimeout(() => {
@@ -5107,6 +5175,9 @@ function profileFilterMood(mood, btn) {
 
 </body>
 </html>
+
+
+
 
 
 
