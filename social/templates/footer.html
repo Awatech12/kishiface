@@ -1,582 +1,281 @@
+
 {% load static %}
 <html lang="en">  
 <head>  
   <meta charset="utf-8" />  
   <meta name="viewport" content="width=device-width, initial-scale=1" />  
-  <title>Home - KishiFace</title>  
+  <title>Footer - KishiFace</title>  
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   
   <style>  
+    /* === PROTOTYPE DESIGN VARIABLES === */
+    :root {
+      --nav-bg: rgba(255, 255, 255, 0.95);
+      --nav-shadow: 0 10px 40px rgba(0,0,0,0.1);
+      --nav-icon-color: #0095f6; /* Inactive Gray */
+      --nav-icon-active:#0095f6; /* Active Black */
+      --nav-accent: #000000;
+      --badge-color: #0095f6; /* iOS Red */
+    }
+
     body { 
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
       margin: 0; 
-      background: #fff; 
-      color: #000; 
     }  
     
+    /* === FLOATING PILL NAVIGATION === */
     .bottom-nav { 
       position: fixed; 
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 20px; 
+      left: 50%; 
+      transform: translateX(-50%); 
+      width: 96%; 
+      max-width: 400px; 
+      height: 65px; 
+      
+      background: var(--nav-bg); 
+      backdrop-filter: blur(20px); 
+      -webkit-backdrop-filter: blur(20px);
+      
+      border-radius: 35px; 
+      box-shadow: var(--nav-shadow); 
+      border: 1px solid rgba(255,255,255,0.5);
+      
+      display: flex; 
+      align-items: center; 
+      justify-content: space-evenly; /* Even spacing for 5 items */
+      padding: 0 5px;
+      z-index: 1000; 
+      
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
+    }
+    
+    /* Scroll Hide State */
+    .bottom-nav.hidden { 
+      transform: translate(-50%, 150%); 
+      opacity: 0; 
+      pointer-events: none;
+    }
+    
+    /* === ICONS === */
+    .nav-item { 
       display: flex;
+      align-items: center;
       justify-content: center;
-      align-items: center;
-      background: white;
-      border-top: 1px solid #ddd;
-      padding: 10px 0;
-      z-index: 1000;
-      transition: transform 0.3s ease;
-      transform: translateY(0);
-    }
-    
-    .bottom-nav.hidden {
-      transform: translateY(100%);
-    }
-    
-    .nav-icons {
-      display: flex;
-      align-items: center;
-      justify-content: space-around;
-      width: 100%;
-      max-width: 600px;
-      padding: 0 20px;
-    }
-    
-    .nav-icons a {
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 45px;
+      height: 45px;
+      color: var(--nav-icon-color); 
+      font-size: 22px; 
       text-decoration: none;
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      transition: all 0.2s ease;
       position: relative;
+      transition: color 0.2s, transform 0.1s;
+      border-radius: 50%;
     }
     
-    .nav-icons a:hover {
-      background: #f5f5f5;
+    .nav-item.active { 
+      color: var(--nav-icon-active); 
     }
     
-    .profile-trigger {
-      display: none; /* Hidden in this layout */
+    .nav-item:active {
+      transform: scale(0.9);
     }
-    
-    .bottom-nav svg { 
-      width: 24px; 
-      height: 24px; 
+
+    /* === FAB (CREATE POST - CENTER) === */
+    .nav-fab { 
+      width: 48px; 
+      height: 48px; 
+      background: #0095f6; 
+      color: #ffffff; 
+      border-radius: 50%; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      font-size: 20px; 
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3); 
       cursor: pointer; 
-      stroke: #333;
-      transition: all 0.2s ease; 
+      text-decoration: none;
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      margin: 0 5px;
     }
     
-    .bottom-nav svg:hover {
-      stroke: #0095f6;
+    .nav-fab:active {
+      transform: scale(0.9);
     }
-    
-    
-    
-    /* Notification Badge Styles */
-    .notification-badge {
+
+    /* === BADGES === */
+    .nav-badge-count {
       position: absolute;
-      top: -2px;
-      right: -2px;
-      background: #0095f6;
+      top: 2px;
+      right: 2px;
+      background: var(--badge-color);
       color: white;
-      font-size: 11px;
-      font-weight: 600;
-      width: 20px;
-      height: 20px;
+      font-size: 9px;
+      font-weight: 700;
+      min-width: 15px;
+      height: 15px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 0 4px;
-      z-index: 1002;
       border: 2px solid white;
+      pointer-events: none;
     }
     
-    /* Footer Notification Badge */
-    .footer-notification-badge {
-      position: absolute;
-      top: -2px;
-      right: -2px;
-      background-color: #0095f6;
-      color: white;
-      font-size: 11px;
-      font-weight: 600;
-      min-width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 4px;
-      z-index: 1002;
-      border: 2px solid white;
-    }
-    
-    /* Hide badge when count is 0 */
-    .footer-notification-badge.hidden {
-      display: none !important;
-    }
-    
-    /* Notification icon specific styles */
-    .notification-icon-link {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      color: #333;
-      font-size: 22px;
-      position: relative;
-    }
-    
-    .notification-icon-link:hover {
-      color: #0095f6;
-    }
-    
-    /* Footer badge container */
-    .footer-badge-container {
-      position: relative;
-      display: inline-block;
-    }
-    
-    /* Modal styles for logout confirmation */
-    .logout-modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 2000;
-      justify-content: center;
-      align-items: center;
-    }
-    
-    .logout-modal.active {
-      display: flex;
-    }
-    
-    .logout-modal-content {
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      width: 90%;
-      max-width: 320px;
-      text-align: center;
-      animation: modalSlideIn 0.3s ease;
-    }
-    
-    @keyframes modalSlideIn {
-      from {
-        opacity: 0;
-        transform: translateY(-20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-    
-    .logout-modal-title {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 12px;
-      color: #000;
-    }
-    
-    .logout-modal-message {
-      font-size: 14px;
-      color: #666;
-      margin-bottom: 20px;
-      line-height: 1.5;
-    }
-    
-    .logout-modal-buttons {
-      display: flex;
-      gap: 12px;
-    }
-    
-    .logout-modal-btn {
-      flex: 1;
-      padding: 12px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    
-    .logout-modal-cancel {
-      background: #f5f5f5;
-      color: #333;
-    }
-    
-    .logout-modal-cancel:hover {
-      background: #e5e5e5;
-    }
-    
-    .logout-modal-confirm {
-      background: #0095f6;
-      color: white;
-    }
-    
-    .logout-modal-confirm:hover {
-      background: #0095f6;
-    }
-    
+    .hidden-badge { display: none !important; }
+
     /* Responsive adjustments */
-    @media (max-width: 768px) {
-      .nav-icons {
-        padding: 0 15px;
-      }
-      
-      .nav-icons a {
-        width: 40px;
-        height: 40px;
-      }
-      
-      .bottom-nav svg {
-        width: 22px;
-        height: 22px;
-      }
-      
-      .nav-profile-img {
-        width: 24px;
-        height: 24px;
-      }
-      
-      .notification-badge,
-      .footer-notification-badge {
-        min-width: 16px;
-        height: 16px;
-        font-size: 10px;
-        top: -1px;
-        right: -1px;
-      }
-      
-      .notification-icon-link {
-        width: 22px;
-        height: 22px;
-        font-size: 20px;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .nav-icons {
-        padding: 0 10px;
-      }
-      
-      .nav-icons a {
-        width: 36px;
-        height: 36px;
-      }
-      
-      .bottom-nav svg {
-        width: 20px;
-        height: 20px;
-      }
-      
-      .nav-profile-img {
-        width: 22px;
-        height: 22px;
-      }
-      
-      .notification-badge,
-      .footer-notification-badge {
-        min-width: 14px;
-        height: 14px;
-        font-size: 9px;
-      }
-      
-      .notification-icon-link {
-        width: 20px;
-        height: 20px;
-        font-size: 18px;
-      }
-    }
-    
     @media (max-width: 360px) {
-      .nav-icons {
-        padding: 0 5px;
-      }
-      
-      .nav-icons a {
-        width: 32px;
-        height: 32px;
-      }
-      
-      .bottom-nav svg {
-        width: 18px;
-        height: 18px;
-      }
-      
-      .nav-profile-img {
-        width: 20px;
-        height: 20px;
-      }
+      .bottom-nav { width: 96%; height: 60px; }
+      .nav-item { font-size: 20px; width: 35px; }
+      .nav-fab { width: 42px; height: 42px; }
     }
   </style>  
 </head>  
 <body>  
 
-<!-- Logout Confirmation Modal -->
-<div class="logout-modal" id="logoutModal">
-  <div class="logout-modal-content">
-    <h3 class="logout-modal-title">Log Out?</h3>
-    <p class="logout-modal-message">Are you sure you want to log out of your account?</p>
-    <div class="logout-modal-buttons">
-      <button class="logout-modal-btn logout-modal-cancel" id="cancelLogout">Cancel</button>
-      <button class="logout-modal-btn logout-modal-confirm" id="confirmLogout">Log Out</button>
-    </div>
-  </div>
-</div>
-
-<div class="bottom-nav" id="bottomNav">
-  <div class="nav-icons">
-    <!-- Home Icon -->
-    <a href="{% url 'home' %}" title="Home">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </a>  
+<!-- Navigation Bar -->
+<nav class="bottom-nav" id="bottomNav">
     
-    <!-- Explore Users Icon with Follow Notification Badge -->
-    <a href="{% url 'explore' %}" title="Explore Users" class="explore-icon">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z"/>
-        <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8.25 15.75l1.5-1.5 2.25 2.25 4.5-4.5 1.5 1.5-6 6z"/>
-        <circle cx="18" cy="6" r="1.5" stroke-width="2"/>
-      </svg>
-      {% if unread_follow_count and unread_follow_count > 0 %}
-      <span class="notification-badge" id="exploreNotificationBadge">
-        {{ unread_follow_count }}
-      </span>
-      {% endif %}
-    </a>
-   
-     <!-- Add Post Icon -->
-    <a href="{% url 'post' %}" title="Create Post">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" stroke-width="2"/>
-        <line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/>
-        <line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/>
-      </svg>
+    <!-- 1. Home -->
+    <a href="{% url 'home' %}" class="nav-item {% if request.path == '/' or request.path == '/home/' %}active{% endif %}" title="Home">
+        <i class="fas fa-home"></i>
     </a>
     
-    <!-- Spotlight Icon - Ghost/Play Style -->
-<a href="{% url 'spotlight' %}" title="Spotlight">
-  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="10" stroke-width="2"/>
-    <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M10 8l6 4-6 4V8z"/>
-    <circle cx="9" cy="10" r="1" fill="currentColor"/>
-    <circle cx="15" cy="10" r="1" fill="currentColor"/>
-  </svg>
-</a>
+    <!-- 2. Explore -->
+    <a href="{% url 'explore' %}" class="nav-item {% if '/explore' in request.path %}active{% endif %}" title="Explore">
+        <i class="far fa-compass"></i>
+        <!-- Follow Badge -->
+        {% if unread_follow_count and unread_follow_count > 0 %}
+        <span class="nav-badge-count" id="exploreBadge">{{ unread_follow_count }}</span>
+        {% endif %}
+    </a>
     
-   
+    <!-- 3. Create (Center FAB) -->
+    <a href="{% url 'post' %}" class="nav-fab" title="Create">
+        <i class="fas fa-plus"></i>
+    </a>
     
-    <!-- Notification Icon with HTMX Badge -->
-    <a href="{% url 'notification_list' %}" title="Notifications" class="notification-icon-link">
-      <div class="footer-badge-container">
-        <i class="fa-regular fa-bell"></i>
-        <div class="footer-notification-badge {% if unread_notifications_count == 0 %}hidden{% endif %}" 
+    <!-- 4. Spotlight -->
+    <a href="{% url 'spotlight' %}" class="nav-item {% if '/spotlight' in request.path %}active{% endif %}" title="Spotlight">
+        <i class="fas fa-play"></i>
+    </a>
+    
+    <!-- 5. Notifications -->
+    <a href="{% url 'notification_list' %}" class="nav-item notification-link {% if '/notifications' in request.path %}active{% endif %}" title="Notifications">
+        <i class="far fa-bell"></i>
+        
+        <!-- HTMX Badge Wrapper -->
+        <div class="nav-badge-count {% if unread_notifications_count == 0 %}hidden-badge{% endif %}" 
              id="footerNotificationBadge"
-             data-count="{{ unread_notifications_count|default:0 }}">
-          <span
-            hx-get="{% url 'notification_partial' %}"
-            hx-trigger="every 0.15s"
-            hx-target="#footerNotificationBadge"
-            hx-swap="outerHTML"   
-          >
+             data-count="{{ unread_notifications_count|default:0 }}"
+              hx-get="{% url 'notification_partial' %}"
+            hx-trigger="every 5s"
+            
+            hx-swap="innerHTML">
+          
+             
+          
           {{ unread_notifications_count|default:0 }}
-          </span>
+          
         </div>
-      </div>
     </a>
-    
-  
-  </div>
-</div>  
+
+</nav>  
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     const bottomNav = document.getElementById('bottomNav');
-    const logoutIcon = document.getElementById('logoutIcon');
-    const logoutModal = document.getElementById('logoutModal');
-    const cancelLogout = document.getElementById('cancelLogout');
-    const confirmLogout = document.getElementById('confirmLogout');
     
-    // Variables for scroll handling
+    // --- Scroll Handling (Hide on Down, Show on Up) ---
     let lastScrollTop = 0;
-    const scrollThreshold = 50; // Minimum scroll amount to trigger hide/show
+    const scrollThreshold = 10;
     let isNavVisible = true;
     
-    // Scroll event handler
     function handleScroll() {
       const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
       const scrollDelta = scrollTop - lastScrollTop;
       
-      // Only trigger if user scrolled more than threshold
+      // Prevent bouncing at top/bottom from triggering
+      if (scrollTop < 0 || scrollTop + window.innerHeight > document.documentElement.scrollHeight) return;
+
       if (Math.abs(scrollDelta) > scrollThreshold) {
         if (scrollDelta > 0 && isNavVisible) {
-          // Scrolling down, hide navbar
+          // Scrolling DOWN -> Hide
           bottomNav.classList.add('hidden');
           isNavVisible = false;
         } else if (scrollDelta < 0 && !isNavVisible) {
-          // Scrolling up, show navbar
+          // Scrolling UP -> Show
           bottomNav.classList.remove('hidden');
           isNavVisible = true;
         }
-        
-        // Update last scroll position
-        lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+        lastScrollTop = scrollTop;
       }
     }
     
-    // Throttle scroll events for better performance
+    // Throttle scroll event
     let scrollTimeout;
-    function throttledScroll() {
+    window.addEventListener('scroll', function() {
       if (!scrollTimeout) {
         scrollTimeout = setTimeout(function() {
           handleScroll();
           scrollTimeout = null;
-        }, 150); // Adjust throttle time as needed
+        }, 100);
+      }
+    });
+    
+    // --- Interaction: Always show nav if user touches screen (UX improvement) ---
+    function showNav() {
+      if (!isNavVisible) {
+        bottomNav.classList.remove('hidden');
+        isNavVisible = true;
       }
     }
-    
-    // Add scroll event listener
-    window.addEventListener('scroll', throttledScroll);
-    
-    // Logout icon click handler
-    logoutIcon.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Show logout confirmation modal
-      logoutModal.classList.add('active');
-    });
-    
-    // Cancel logout
-    cancelLogout.addEventListener('click', function() {
-      logoutModal.classList.remove('active');
-    });
-    
-    // Confirm logout
-    confirmLogout.addEventListener('click', function() {
-      // Redirect to logout URL
-      window.location.href = "{% url 'logout' %}";
-    });
-    
-    // Close modal when clicking outside
-    logoutModal.addEventListener('click', function(e) {
-      if (e.target === logoutModal) {
-        logoutModal.classList.remove('active');
-      }
-    });
-    
-    // Close modal with Escape key
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        logoutModal.classList.remove('active');
-      }
-    });
-    
-    // Function to update notification indicators
+    document.addEventListener('touchstart', showNav);
+    document.addEventListener('mousedown', showNav);
+
+    // --- Badge Updating Logic ---
     function updateNotificationIndicators() {
       const footerBadge = document.getElementById('footerNotificationBadge');
-      const exploreBadge = document.getElementById('exploreNotificationBadge');
       
-      // Handle footer notification badge updates
       if (footerBadge) {
-        const badgeText = footerBadge.textContent.trim();
-        const badgeCount = parseInt(badgeText) || 0;
+        const text = footerBadge.innerText.trim();
+        const count = parseInt(text) || 0;
         
-        if (badgeCount > 0) {
-          footerBadge.classList.remove('hidden');
-          footerBadge.setAttribute('data-count', badgeCount);
+        if (count > 0) {
+          footerBadge.classList.remove('hidden-badge');
+          footerBadge.style.display = 'flex';
         } else {
-          footerBadge.classList.add('hidden');
-          footerBadge.setAttribute('data-count', '0');
+          footerBadge.classList.add('hidden-badge');
+          footerBadge.style.display = 'none';
         }
       }
     }
     
-    // Initialize HTMX configuration
-    htmx.config.useTemplateFragments = true;
+    // Initial check
+    setTimeout(updateNotificationIndicators, 500);
     
-    // Listen for HTMX events for badge updates
+    // HTMX Hooks
     document.body.addEventListener('htmx:afterSwap', function(event) {
-      if (event.target.id === 'footerNotificationBadge' || 
-          event.target.id === 'exploreNotificationBadge') {
+      if (event.target.id === 'footerNotificationBadge') {
         setTimeout(updateNotificationIndicators, 100);
       }
     });
     
-    // Also listen for HTMX beforeSwap to ensure proper handling
-    document.body.addEventListener('htmx:beforeSwap', function(event) {
-      if (event.detail.target.id === 'footerNotificationBadge' || 
-          event.detail.target.id === 'exploreNotificationBadge') {
-        event.detail.shouldSwap = true;
-      }
-    });
-    
-    // Initialize notification indicators
-    setTimeout(updateNotificationIndicators, 500);
-    
-    // Mark notifications as read when user clicks notification icon
-    const notificationLink = document.querySelector('.notification-icon-link');
-    if (notificationLink) {
-      notificationLink.addEventListener('click', function() {
-        // You can add AJAX call here to mark notifications as read
-        // fetch('/mark-notifications-read/', { method: 'POST' });
-        
-        // Update UI after a delay
-        setTimeout(updateNotificationIndicators, 1000);
-      });
+    // Click listener to clear badge visually (actual clear happens on page load/API)
+    const notifLink = document.querySelector('.notification-link');
+    if(notifLink) {
+        notifLink.addEventListener('click', () => {
+            setTimeout(updateNotificationIndicators, 1000);
+        });
     }
-    
-    // Mark follow notifications as read when user clicks explore icon
-    const exploreLink = document.querySelector('.explore-icon');
-    if (exploreLink) {
-      exploreLink.addEventListener('click', function() {
-        // You can add AJAX call here to mark follow notifications as read
-        // fetch('/mark-follow-notifications-read/', { method: 'POST' });
-        
-        // Update UI after a delay
-        setTimeout(updateNotificationIndicators, 1000);
-      });
-    }
-    
-    // Show navbar on touch/mouse down (when user might want to use it)
-    document.addEventListener('mousedown', function() {
-      if (!isNavVisible) {
-        bottomNav.classList.remove('hidden');
-        isNavVisible = true;
-      }
-    });
-    
-    document.addEventListener('touchstart', function() {
-      if (!isNavVisible) {
-        bottomNav.classList.remove('hidden');
-        isNavVisible = true;
-      }
-    });
   });
 
-
-  // online status code 
+  // --- Real-Time Online Status (Preserved) ---
   class RealTimeStatus {
     constructor() {
         this.ws = null;
-        this.userId = window.userId; // Your ID
+        this.userId = window.userId; 
         this.connect();
     }
     
@@ -588,7 +287,6 @@
         this.ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.type === 'status_change') {
-                // This is the magic: it updates the status of the specific user ID received
                 this.updateUI(data.user_id, data.status);
             }
         };
@@ -598,7 +296,7 @@
                 if (this.ws.readyState === WebSocket.OPEN) {
                     this.ws.send(JSON.stringify({type: 'ping'}));
                 }
-            }, 20000); // Ping every 20 seconds
+            }, 20000); 
         };
         
         this.ws.onclose = () => setTimeout(() => this.connect(), 3000);
@@ -611,8 +309,6 @@
                 el.textContent = "Online";
                 el.className = "user-status online";
             } else {
-                // If they go offline, we could show "Just now" 
-                // or wait for a page refresh for exact "5m ago"
                 el.textContent = "Just now"; 
                 el.className = "user-status offline";
             }
