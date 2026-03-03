@@ -1,32 +1,31 @@
 /// ===== GLOBAL MEDIA TRACKING =====
-let kfCurrentlyPlayingMedia = null;
-const kfAudioTimers = {};
+let kvibeCurrentlyPlayingMedia = null;
 
 // ===== IMAGE GRID LIGHTBOX =====
 
-let kfLightboxImages = [];   // [{src, alt}]
-let kfLightboxIndex = 0;
-let kfLightboxPostData = {}; // {username, avatar, time, caption}
+let kvibeLightboxImages = [];   // [{src, alt}]
+let kvibeLightboxIndex = 0;
+let kvibeLightboxPostData = {}; // {username, avatar, time, caption}
 
-function kfOpenLightbox(images, startIndex, postData) {
-  kfLightboxImages = images;
-  kfLightboxIndex = startIndex;
-  kfLightboxPostData = postData || {};
+function kvibeOpenLightbox(images, startIndex, postData) {
+  kvibeLightboxImages = images;
+  kvibeLightboxIndex = startIndex;
+  kvibeLightboxPostData = postData || {};
 
-  const lb = document.getElementById('kf-lightbox');
+  const lb = document.getElementById('kvibe-lightbox');
   if (!lb) return;
 
   // Populate details pane
-  const detailHeader = lb.querySelector('.kf-lightbox-details-header');
-  const detailBody   = lb.querySelector('.kf-lightbox-details-body');
-  const thumbStrip   = lb.querySelector('.kf-lightbox-details-thumbs');
+  const detailHeader = lb.querySelector('.kvibe-lightbox-details-header');
+  const detailBody   = lb.querySelector('.kvibe-lightbox-details-body');
+  const thumbStrip   = lb.querySelector('.kvibe-lightbox-details-thumbs');
 
   if (detailHeader) {
     detailHeader.innerHTML = `
       <img src="${postData.avatar || ''}" alt="">
       <div>
-        <a class="kf-lightbox-details-username" href="${postData.profileUrl || '#'}">${postData.username || ''}</a>
-        <div class="kf-lightbox-details-meta">${postData.time || ''}</div>
+        <a class="kvibe-lightbox-details-username" href="${postData.profileUrl || '#'}">${postData.username || ''}</a>
+        <div class="kvibe-lightbox-details-meta">${postData.time || ''}</div>
       </div>`;
   }
 
@@ -36,295 +35,101 @@ function kfOpenLightbox(images, startIndex, postData) {
 
   if (thumbStrip) {
     thumbStrip.innerHTML = images.map((img, i) => `
-      <div class="kf-lightbox-thumb ${i === startIndex ? 'active' : ''}" onclick="kfLightboxGoTo(${i})">
+      <div class="kvibe-lightbox-thumb ${i === startIndex ? 'active' : ''}" onclick="kvibeLightboxGoTo(${i})">
         <img src="${img.src}" alt="${img.alt || ''}">
       </div>`).join('');
   }
 
-  kfLightboxRender();
+  kvibeLightboxRender();
   lb.classList.add('open');
   document.body.style.overflow = 'hidden';
 
   // Keyboard nav
-  document.addEventListener('keydown', kfLightboxKeyNav);
+  document.addEventListener('keydown', kvibeLightboxKeyNav);
 }
 
-function kfLightboxRender() {
-  const lb = document.getElementById('kf-lightbox');
+function kvibeLightboxRender() {
+  const lb = document.getElementById('kvibe-lightbox');
   if (!lb) return;
 
-  const imgWrap  = lb.querySelector('.kf-lightbox-img-wrap');
-  const counter  = lb.querySelector('.kf-lightbox-counter');
-  const prevBtn  = lb.querySelector('.kf-lightbox-prev');
-  const nextBtn  = lb.querySelector('.kf-lightbox-next');
-  const thumbs   = lb.querySelectorAll('.kf-lightbox-thumb');
+  const imgWrap  = lb.querySelector('.kvibe-lightbox-img-wrap');
+  const counter  = lb.querySelector('.kvibe-lightbox-counter');
+  const prevBtn  = lb.querySelector('.kvibe-lightbox-prev');
+  const nextBtn  = lb.querySelector('.kvibe-lightbox-next');
+  const thumbs   = lb.querySelectorAll('.kvibe-lightbox-thumb');
 
-  const total = kfLightboxImages.length;
-  const cur   = kfLightboxImages[kfLightboxIndex];
+  const total = kvibeLightboxImages.length;
+  const cur   = kvibeLightboxImages[kvibeLightboxIndex];
 
   if (imgWrap) {
     imgWrap.innerHTML = `<img src="${cur.src}" alt="${cur.alt || ''}" draggable="false">`;
   }
-  if (counter)  counter.textContent = `${kfLightboxIndex + 1} / ${total}`;
-  if (prevBtn)  prevBtn.classList.toggle('hidden', kfLightboxIndex === 0);
-  if (nextBtn)  nextBtn.classList.toggle('hidden', kfLightboxIndex === total - 1);
+  if (counter)  counter.textContent = `${kvibeLightboxIndex + 1} / ${total}`;
+  if (prevBtn)  prevBtn.classList.toggle('hidden', kvibeLightboxIndex === 0);
+  if (nextBtn)  nextBtn.classList.toggle('hidden', kvibeLightboxIndex === total - 1);
 
-  thumbs.forEach((t, i) => t.classList.toggle('active', i === kfLightboxIndex));
+  thumbs.forEach((t, i) => t.classList.toggle('active', i === kvibeLightboxIndex));
 }
 
-function kfLightboxGoTo(index) {
-  if (index < 0 || index >= kfLightboxImages.length) return;
-  kfLightboxIndex = index;
-  kfLightboxRender();
+function kvibeLightboxGoTo(index) {
+  if (index < 0 || index >= kvibeLightboxImages.length) return;
+  kvibeLightboxIndex = index;
+  kvibeLightboxRender();
 }
 
-function kfCloseLightbox() {
-  const lb = document.getElementById('kf-lightbox');
+function kvibeCloseLightbox() {
+  const lb = document.getElementById('kvibe-lightbox');
   if (!lb) return;
   lb.classList.remove('open');
   document.body.style.overflow = '';
-  document.removeEventListener('keydown', kfLightboxKeyNav);
+  document.removeEventListener('keydown', kvibeLightboxKeyNav);
 }
 
-function kfLightboxKeyNav(e) {
-  if (e.key === 'ArrowRight') kfLightboxGoTo(kfLightboxIndex + 1);
-  else if (e.key === 'ArrowLeft') kfLightboxGoTo(kfLightboxIndex - 1);
-  else if (e.key === 'Escape') kfCloseLightbox();
+function kvibeLightboxKeyNav(e) {
+  if (e.key === 'ArrowRight') kvibeLightboxGoTo(kvibeLightboxIndex + 1);
+  else if (e.key === 'ArrowLeft') kvibeLightboxGoTo(kvibeLightboxIndex - 1);
+  else if (e.key === 'Escape') kvibeCloseLightbox();
 }
 
-window.kfOpenLightbox  = kfOpenLightbox;
-window.kfLightboxGoTo  = kfLightboxGoTo;
-window.kfCloseLightbox = kfCloseLightbox;
-
-// ===== DOWNLOAD FUNCTIONS =====
-
-/**
- * Download a file from a URL
- */
-function kfDownloadFile(url, filename) {
-    // Create a temporary anchor element
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename || 'download';
-    link.target = '_blank';
-    
-    // Append to the document
-    document.body.appendChild(link);
-    
-    // Trigger the download
-    link.click();
-    
-    // Clean up
-    document.body.removeChild(link);
-}
-
-/**
- * Download video file
- */
-function kfDownloadVideo(postId, videoUrl) {
-    event.stopPropagation(); // Prevent video play/pause
-    const filename = `kishiface_video_${postId}_${Date.now()}.mp4`;
-    kfDownloadFile(videoUrl, filename);
-}
-
-/**
- * Download audio file
- */
-function kfDownloadAudio(postId, audioUrl) {
-    event.stopPropagation(); // Prevent audio play/pause
-    const filename = `kishiface_audio_${postId}_${Date.now()}.webm`;
-    kfDownloadFile(audioUrl, filename);
-}
-
-/**
- * Download image file
- */
-function kfDownloadImage(postId, imageUrl, imageNumber) {
-    event.stopPropagation(); // Prevent carousel slide
-    const filename = `kishiface_image_${postId}_${imageNumber}_${Date.now()}.jpg`;
-    kfDownloadFile(imageUrl, filename);
-}
-
-/**
- * Smart download for post media - handles multiple media types
- */
-function kfDownloadPostMedia(postId, downloadIcon) {
-    const hasVideo = downloadIcon.dataset.hasVideo === 'true';
-    const hasAudio = downloadIcon.dataset.hasAudio === 'true';
-    const hasImages = downloadIcon.dataset.hasImages === 'true';
-    
-    // If post has multiple media types, show download options
-    if ((hasVideo && hasAudio) || (hasVideo && hasImages) || (hasAudio && hasImages)) {
-        kfShowDownloadOptions(postId, hasVideo, hasAudio, hasImages);
-        return;
-    }
-    
-    // Single media type - download directly
-    if (hasVideo) {
-        const videoContainer = document.getElementById(`kf-container-${postId}`);
-        const video = videoContainer?.querySelector('.kf-video source');
-        if (video && video.src) {
-            kfDownloadVideo(postId, video.src);
-        }
-    } else if (hasAudio) {
-        const audioPlayer = document.getElementById(`kf-audio-${postId}`);
-        const audio = audioPlayer?.querySelector('.kf-audio-hidden source');
-        if (audio && audio.src) {
-            kfDownloadAudio(postId, audio.src);
-        }
-    } else if (hasImages) {
-        // Download first image
-        const carousel = document.getElementById(`kf-carousel-${postId}`);
-        const firstImage = carousel?.querySelector('.kf-image-slide img');
-        if (firstImage && firstImage.src) {
-            kfDownloadImage(postId, firstImage.src, 1);
-        }
-    }
-}
-
-/**
- * Show download options modal for posts with multiple media types
- */
-function kfShowDownloadOptions(postId, hasVideo, hasAudio, hasImages) {
-    // Create modal
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 2000;
-    `;
-    
-    const modalContent = document.createElement('div');
-    modalContent.style.cssText = `
-        background: white;
-        padding: 24px;
-        border-radius: 12px;
-        max-width: 300px;
-        width: 90%;
-        text-align: center;
-    `;
-    
-    modalContent.innerHTML = `
-        <h3 style="margin: 0 0 16px 0; color: var(--kf-text);">Download Options</h3>
-        <p style="color: var(--kf-text-light); margin-bottom: 20px; font-size: 14px;">
-            Select what you want to download:
-        </p>
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-            ${hasVideo ? '<button class="kf-download-option-btn" data-type="video" style="padding: 12px; background: var(--kf-primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">Download Video</button>' : ''}
-            ${hasAudio ? '<button class="kf-download-option-btn" data-type="audio" style="padding: 12px; background: var(--kf-primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">Download Audio</button>' : ''}
-            ${hasImages ? '<button class="kf-download-option-btn" data-type="images" style="padding: 12px; background: var(--kf-primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">Download Images</button>' : ''}
-            <button class="kf-cancel-btn" style="padding: 12px; background: #f3f4f6; color: var(--kf-text); border: none; border-radius: 8px; cursor: pointer; font-weight: 500; margin-top: 8px;">Cancel</button>
-        </div>
-    `;
-    
-    modal.appendChild(modalContent);
-    document.body.appendChild(modal);
-    
-    // Add event listeners
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal || e.target.classList.contains('kf-cancel-btn')) {
-            document.body.removeChild(modal);
-        } else if (e.target.classList.contains('kf-download-option-btn')) {
-            const type = e.target.dataset.type;
-            kfHandleDownloadOption(postId, type);
-            document.body.removeChild(modal);
-        }
-    });
-}
-
-/**
- * Handle download option selection
- */
-function kfHandleDownloadOption(postId, type) {
-    switch(type) {
-        case 'video':
-            const videoContainer = document.getElementById(`kf-container-${postId}`);
-            const video = videoContainer?.querySelector('.kf-video source');
-            if (video && video.src) {
-                kfDownloadVideo(postId, video.src);
-            }
-            break;
-            
-        case 'audio':
-            const audioPlayer = document.getElementById(`kf-audio-${postId}`);
-            const audio = audioPlayer?.querySelector('.kf-audio-hidden source');
-            if (audio && audio.src) {
-                kfDownloadAudio(postId, audio.src);
-            }
-            break;
-            
-        case 'images':
-            const carousel = document.getElementById(`kf-carousel-${postId}`);
-            const images = carousel?.querySelectorAll('.kf-image-slide img');
-            if (images && images.length > 0) {
-                // Download all images
-                images.forEach((img, index) => {
-                    if (img.src && !img.src.includes('placeholder.jpg')) {
-                        setTimeout(() => {
-                            kfDownloadImage(postId, img.src, index + 1);
-                        }, index * 500); // Stagger downloads
-                    }
-                });
-            }
-            break;
-    }
-}
+window.kvibeOpenLightbox  = kvibeOpenLightbox;
+window.kvibeLightboxGoTo  = kvibeLightboxGoTo;
+window.kvibeCloseLightbox = kvibeCloseLightbox;
 
 // ===== VIDEO PLAYER CONTROLS =====
 
 /**
  * Pauses all video and audio elements except the one currently starting.
  */
-function kfPauseAllOtherMedia(currentMediaElement) {
-    if (kfCurrentlyPlayingMedia && kfCurrentlyPlayingMedia !== currentMediaElement) {
+function kvibePauseAllOtherMedia(currentMediaElement) {
+    if (kvibeCurrentlyPlayingMedia && kvibeCurrentlyPlayingMedia !== currentMediaElement) {
         // Pause the previously playing media
-        kfCurrentlyPlayingMedia.pause();
+        kvibeCurrentlyPlayingMedia.pause();
         
         // Reset video UI
-        if (kfCurrentlyPlayingMedia.tagName === 'VIDEO') {
-            const prevContainer = kfCurrentlyPlayingMedia.closest('.kf-video-container');
+        if (kvibeCurrentlyPlayingMedia.tagName === 'VIDEO') {
+            const prevContainer = kvibeCurrentlyPlayingMedia.closest('.kvibe-video-container');
             if (prevContainer) {
                 prevContainer.classList.add('paused');
-                const prevPlayIcon = prevContainer.querySelector('.kf-play-pause-icon');
+                const prevPlayIcon = prevContainer.querySelector('.kvibe-play-pause-icon');
                 if (prevPlayIcon) prevPlayIcon.style.opacity = '1';
             }
         }
-        // Reset audio UI
-        else if (kfCurrentlyPlayingMedia.tagName === 'AUDIO') {
-            const postId = kfCurrentlyPlayingMedia.id.replace('kf-audio-element-', '');
-            const prevIcon = document.getElementById('kf-audio-icon-' + postId);
-            if (prevIcon) {
-                prevIcon.classList.remove('fa-pause');
-                prevIcon.classList.add('fa-play');
-            }
-            
-            // Stop audio timer
-            if (kfAudioTimers[postId]) {
-                clearInterval(kfAudioTimers[postId]);
-                delete kfAudioTimers[postId];
-            }
         }
+    }
     }
     
     // Update the globally tracked media element if it's playing
     if (currentMediaElement && !currentMediaElement.paused) {
-        kfCurrentlyPlayingMedia = currentMediaElement;
+        kvibeCurrentlyPlayingMedia = currentMediaElement;
     }
 }
 
 /**
  * Toggles play/pause for the video.
  */
-function kfTogglePlayPause(videoId, e) {
+function kvibeTogglePlayPause(videoId, e) {
     // Prevent restarting if the click target is a seek button or download button
-    if (e && (e.target.closest('.kf-seek-overlay-btn') || e.target.closest('.kf-video-download-btn'))) {
+    if (e && (e.target.closest('.kvibe-seek-overlay-btn') || false)) {
         return;
     }
 
@@ -332,13 +137,13 @@ function kfTogglePlayPause(videoId, e) {
     if (!video) return;
 
     if (video.paused || video.ended) {
-        kfPauseAllOtherMedia(video);
+        kvibePauseAllOtherMedia(video);
         video.play().then(() => {
             // Video started playing
-            const container = video.closest('.kf-video-container');
+            const container = video.closest('.kvibe-video-container');
             if (container) {
                 container.classList.remove('paused');
-                const playIcon = container.querySelector('.kf-play-pause-icon');
+                const playIcon = container.querySelector('.kvibe-play-pause-icon');
                 if (playIcon) playIcon.style.opacity = '0';
             }
         }).catch(error => {
@@ -346,10 +151,10 @@ function kfTogglePlayPause(videoId, e) {
         });
     } else {
         video.pause();
-        const container = video.closest('.kf-video-container');
+        const container = video.closest('.kvibe-video-container');
         if (container) {
             container.classList.add('paused');
-            const playIcon = container.querySelector('.kf-play-pause-icon');
+            const playIcon = container.querySelector('.kvibe-play-pause-icon');
             if (playIcon) playIcon.style.opacity = '1';
         }
     }
@@ -358,7 +163,7 @@ function kfTogglePlayPause(videoId, e) {
 /**
  * Seeks the video forward or backward by a specified amount.
  */
-function kfSeekVideo(videoId, seconds) {
+function kvibeSeekVideo(videoId, seconds) {
     const video = document.getElementById(videoId);
     if (video) {
         let newTime = video.currentTime + seconds;
@@ -370,83 +175,11 @@ function kfSeekVideo(videoId, seconds) {
     }
 }
 
-// ===== AUDIO CONTROLS =====
-
-// Format time as MM:SS
-function kfFormatTime(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
-
-function kfToggleAudio(postId) {
-  const audio = document.getElementById(`kf-audio-element-${postId}`);
-  const icon = document.getElementById(`kf-audio-icon-${postId}`);
-  
-  if (!audio || !icon) return;
-  
-  if (audio.paused || audio.ended) {
-    kfPauseAllOtherMedia(audio);
-    
-    audio.play().then(() => {
-      icon.classList.remove('fa-play');
-      icon.classList.add('fa-pause');
-      
-      // Update progress
-      kfUpdateAudioProgress(postId);
-      kfAudioTimers[postId] = setInterval(() => kfUpdateAudioProgress(postId), 250);
-    }).catch(e => {
-      console.error("Audio Play Error:", e);
-    });
-  } else {
-    audio.pause();
-    icon.classList.remove('fa-pause');
-    icon.classList.add('fa-play');
-    
-    if (kfAudioTimers[postId]) {
-      clearInterval(kfAudioTimers[postId]);
-      delete kfAudioTimers[postId];
-    }
-  }
-}
-
-function kfUpdateAudioProgress(postId) {
-  const audio = document.getElementById(`kf-audio-element-${postId}`);
-  const progress = document.getElementById(`kf-audio-progress-${postId}`);
-  const time = document.getElementById(`kf-audio-time-${postId}`);
-  
-  if (!audio || !audio.duration) return;
-  
-  const percent = (audio.currentTime / audio.duration) * 100;
-  if (progress) progress.style.width = `${percent}%`;
-  if (time) time.textContent = kfFormatTime(audio.currentTime);
-}
-
-function kfSeekAudio(event, postId) {
-  const audio = document.getElementById(`kf-audio-element-${postId}`);
-  const progressBar = event.currentTarget;
-  const rect = progressBar.getBoundingClientRect();
-  const percent = (event.clientX - rect.left) / rect.width;
-  
-  if (audio && audio.duration) {
-    audio.currentTime = percent * audio.duration;
-    kfUpdateAudioProgress(postId);
-  }
-}
-
-function kfSeekAudioBy(postId, seconds) {
-  const audio = document.getElementById(`kf-audio-element-${postId}`);
-  if (audio) {
-    audio.currentTime = Math.max(0, Math.min(audio.currentTime + seconds, audio.duration || Infinity));
-    kfUpdateAudioProgress(postId);
-  }
-}
-
 // ===== CAROUSEL CONTROLS =====
-function kfSlideCarousel(postId, direction) {
-  const carousel = document.getElementById(`kf-carousel-${postId}`);
-  const track = document.getElementById(`kf-track-${postId}`);
-  const indicators = carousel?.querySelectorAll('.kf-indicator');
+function kvibeSlideCarousel(postId, direction) {
+  const carousel = document.getElementById(`kvibe-carousel-${postId}`);
+  const track = document.getElementById(`kvibe-track-${postId}`);
+  const indicators = carousel?.querySelectorAll('.kvibe-indicator');
   
   if (!carousel || !track) return;
   
@@ -466,39 +199,22 @@ function kfSlideCarousel(postId, direction) {
 }
 
 // ===== INTERSECTION OBSERVER =====
-let kfMediaObserver = null;
+let kvibeMediaObserver = null;
 
-function kfInitMediaObserver() {
-    kfMediaObserver = new IntersectionObserver((entries) => {
+function kvibeInitMediaObserver() {
+    kvibeMediaObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (!entry.isIntersecting) {
                 const container = entry.target;
-                const video = container.querySelector('.kf-video');
-                const audio = container.querySelector('.kf-audio-hidden');
+                const video = container.querySelector('.kvibe-video');
                 
                 // Pause video if playing
                 if (video && !video.paused) {
                     video.pause();
                     container.classList.add('paused');
-                    const playIcon = container.querySelector('.kf-play-pause-icon');
+                    const playIcon = container.querySelector('.kvibe-play-pause-icon');
                     if (playIcon) playIcon.style.opacity = '1';
                 }
-                
-                // Pause audio if playing
-                if (audio && !audio.paused) {
-                    audio.pause();
-                    const postId = audio.id.replace('kf-audio-element-', '');
-                    const icon = document.getElementById(`kf-audio-icon-${postId}`);
-                    if (icon) {
-                        icon.classList.remove('fa-pause');
-                        icon.classList.add('fa-play');
-                    }
-                    
-                    // Stop audio timer
-                    if (kfAudioTimers[postId]) {
-                        clearInterval(kfAudioTimers[postId]);
-                        delete kfAudioTimers[postId];
-                    }
                 }
             }
         });
@@ -508,33 +224,33 @@ function kfInitMediaObserver() {
 }
 
 // ===== PROFILE PANEL =====
-function kfOpenProfilePanel(username) {
+function kvibeOpenProfilePanel(username) {
   if (window.innerWidth <= 768) return;
   
   fetch(`/popup/${username}/`)
     .then(res => res.text())
     .then(html => {
-      document.getElementById('kf-profile-content').innerHTML = html;
-      document.getElementById('kf-profile-panel').classList.add('open');
+      document.getElementById('kvibe-profile-content').innerHTML = html;
+      document.getElementById('kvibe-profile-panel').classList.add('open');
     });
 }
 
-function kfClosePanel(panelId) {
+function kvibeClosePanel(panelId) {
   document.getElementById(panelId)?.classList.remove('open');
 }
 
 // ===== INITIALIZATION =====
-function kfInit() {
+function kvibeInit() {
     // Initialize media observer
-    kfInitMediaObserver();
+    kvibeInitMediaObserver();
     
     // --- Video Setup ---
-    document.querySelectorAll('.kf-video-container').forEach(container => {
-        const video = container.querySelector('.kf-video');
+    document.querySelectorAll('.kvibe-video-container').forEach(container => {
+        const video = container.querySelector('.kvibe-video');
         if (!video) return;
         
         // Add to Intersection Observer
-        if (kfMediaObserver) kfMediaObserver.observe(container);
+        if (kvibeMediaObserver) kvibeMediaObserver.observe(container);
         
         // Initial state - show play icon (paused by default)
         container.classList.add('paused');
@@ -542,91 +258,34 @@ function kfInit() {
         // Event listeners
         video.addEventListener('play', () => {
             container.classList.remove('paused');
-            const playIcon = container.querySelector('.kf-play-pause-icon');
+            const playIcon = container.querySelector('.kvibe-play-pause-icon');
             if (playIcon) playIcon.style.opacity = '0';
-            kfCurrentlyPlayingMedia = video;
+            kvibeCurrentlyPlayingMedia = video;
         });
         
         video.addEventListener('pause', () => {
             container.classList.add('paused');
-            const playIcon = container.querySelector('.kf-play-pause-icon');
+            const playIcon = container.querySelector('.kvibe-play-pause-icon');
             if (playIcon) playIcon.style.opacity = '1';
-            if (kfCurrentlyPlayingMedia === video) kfCurrentlyPlayingMedia = null;
+            if (kvibeCurrentlyPlayingMedia === video) kvibeCurrentlyPlayingMedia = null;
         });
         
         video.addEventListener('ended', () => {
             container.classList.add('paused');
-            const playIcon = container.querySelector('.kf-play-pause-icon');
+            const playIcon = container.querySelector('.kvibe-play-pause-icon');
             if (playIcon) playIcon.style.opacity = '1';
-            if (kfCurrentlyPlayingMedia === video) kfCurrentlyPlayingMedia = null;
+            if (kvibeCurrentlyPlayingMedia === video) kvibeCurrentlyPlayingMedia = null;
         });
     });
     
-    // --- Audio Setup ---
-    document.querySelectorAll('.kf-audio-player').forEach(container => {
-        const audio = container.querySelector('.kf-audio-hidden');
-        if (!audio) return;
-        
-        const postId = audio.id.replace('kf-audio-element-', '');
-        
-        // Add to Intersection Observer
-        if (kfMediaObserver) kfMediaObserver.observe(container);
-        
-        // Audio metadata
-        audio.addEventListener('loadedmetadata', () => {
-            kfUpdateAudioProgress(postId);
-        });
-        
-        audio.addEventListener('play', () => {
-            const icon = document.getElementById(`kf-audio-icon-${postId}`);
-            if (icon) {
-                icon.classList.remove('fa-play');
-                icon.classList.add('fa-pause');
-            }
-            kfCurrentlyPlayingMedia = audio;
-        });
-        
-        audio.addEventListener('pause', () => {
-            const icon = document.getElementById(`kf-audio-icon-${postId}`);
-            if (icon) {
-                icon.classList.remove('fa-pause');
-                icon.classList.add('fa-play');
-            }
-            
-            if (kfAudioTimers[postId]) {
-                clearInterval(kfAudioTimers[postId]);
-                delete kfAudioTimers[postId];
-            }
-            
-            if (kfCurrentlyPlayingMedia === audio) kfCurrentlyPlayingMedia = null;
-        });
-        
-        audio.addEventListener('ended', () => {
-            const icon = document.getElementById(`kf-audio-icon-${postId}`);
-            if (icon) {
-                icon.classList.remove('fa-pause');
-                icon.classList.add('fa-play');
-            }
-            
-            if (kfAudioTimers[postId]) {
-                clearInterval(kfAudioTimers[postId]);
-                delete kfAudioTimers[postId];
-            }
-            
-            if (kfCurrentlyPlayingMedia === audio) kfCurrentlyPlayingMedia = null;
-            
-            // Reset progress
-            kfUpdateAudioProgress(postId);
-        });
-    });
     
     // --- Profile Links ---
-    document.querySelectorAll('.kf-username').forEach(link => {
+    document.querySelectorAll('.kvibe-username').forEach(link => {
         link.addEventListener('click', (e) => {
             if (window.innerWidth > 768) {
                 e.preventDefault();
                 const username = link.dataset.user;
-                kfOpenProfilePanel(username);
+                kvibeOpenProfilePanel(username);
             }
         });
     });
@@ -634,35 +293,24 @@ function kfInit() {
     // --- Resize Handler ---
     window.addEventListener('resize', () => {
         if (window.innerWidth <= 768) {
-            kfClosePanel('kf-profile-panel');
-            kfClosePanel('kf-comments-panel');
+            kvibeClosePanel('kvibe-profile-panel');
+            kvibeClosePanel('kvibe-comments-panel');
         }
-    });
-    
-    // --- Cleanup ---
-    window.addEventListener('beforeunload', () => {
-        Object.values(kfAudioTimers).forEach(timer => clearInterval(timer));
     });
 }
 
 // ===== START WHEN READY =====
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', kfInit);
+    document.addEventListener('DOMContentLoaded', kvibeInit);
 } else {
-    kfInit();
+    kvibeInit();
 }
 
 // ===== MAKE FUNCTIONS GLOBALLY AVAILABLE =====
-window.kfTogglePlayPause = kfTogglePlayPause;
-window.kfSeekVideo = kfSeekVideo;
-window.kfToggleAudio = kfToggleAudio;
-window.kfSeekAudio = kfSeekAudio;
-window.kfSeekAudioBy = kfSeekAudioBy;
-window.kfDownloadVideo = kfDownloadVideo;
-window.kfDownloadAudio = kfDownloadAudio;
-window.kfDownloadImage = kfDownloadImage;
-window.kfDownloadPostMedia = kfDownloadPostMedia;
-window.kfClosePanel = (panelId) => kfClosePanel(panelId || 'kf-profile-panel');
-window.kfClosePanel2 = () => kfClosePanel('kf-comments-panel');
-window.kfSlideCarousel = kfSlideCarousel;
+window.kvibeTogglePlayPause = kvibeTogglePlayPause;
+window.kvibeSeekVideo = kvibeSeekVideo;
+window.kvibeClosePanel = (panelId) => kvibeClosePanel(panelId || 'kvibe-profile-panel');
+window.kvibeClosePanel2 = () => kvibeClosePanel('kvibe-comments-panel');
+window.kvibeSlideCarousel = kvibeSlideCarousel;
+
 
