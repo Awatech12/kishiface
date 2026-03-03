@@ -6,7 +6,7 @@
   
   function showToast(message, type = 'success') {
     const toast = document.createElement('div');
-    toast.className = 'kf-toast';
+    toast.className = 'kvibe-toast';
     toast.innerHTML = `
       <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
       <span>${message}</span>
@@ -15,30 +15,30 @@
     document.body.appendChild(toast);
     
     setTimeout(() => {
-      toast.style.animation = 'kfSlideOut 0.3s ease';
+      toast.style.animation = 'kvibeSlideOut 0.3s ease';
       setTimeout(() => {
         document.body.removeChild(toast);
       }, 300);
     }, 3000);
   }
   
-  function kfToggleRepost(postId, button) {
+  function kvibeToggleRepost(postId, button) {
     currentRepostPostId = postId;
     currentRepostButton = button;
     
     const isReposted = button.getAttribute('data-reposted') === 'true';
     
     if (isReposted) {
-      kfPerformRepost(postId, '', true);
+      kvibePerformRepost(postId, '', true);
     } else {
-      kfOpenRepostModal();
+      kvibeOpenRepostModal();
     }
   }
   
-  function kfOpenRepostModal() {
-    const modal = document.getElementById('kf-repost-modal');
-    const textarea = document.getElementById('kf-repost-caption');
-    const charCount = document.getElementById('kf-repost-char-count');
+  function kvibeOpenRepostModal() {
+    const modal = document.getElementById('kvibe-repost-modal');
+    const textarea = document.getElementById('kvibe-repost-caption');
+    const charCount = document.getElementById('kvibe-repost-char-count');
     
     textarea.value = '';
     charCount.textContent = '0';
@@ -53,10 +53,10 @@
       charCount.textContent = this.value.length;
     });
     
-    const confirmBtn = document.getElementById('kf-repost-confirm-btn');
+    const confirmBtn = document.getElementById('kvibe-repost-confirm-btn');
     confirmBtn.onclick = function() {
-      kfPerformRepost(currentRepostPostId, textarea.value, false);
-      kfCloseRepostModal();
+      kvibePerformRepost(currentRepostPostId, textarea.value, false);
+      kvibeCloseRepostModal();
     };
     
     textarea.addEventListener('input', function() {
@@ -65,7 +65,7 @@
     });
     
     setTimeout(() => {
-      const modalContent = modal.querySelector('.kf-repost-modal-content');
+      const modalContent = modal.querySelector('.kvibe-repost-modal-content');
       const viewportHeight = window.innerHeight;
       const modalHeight = modalContent.offsetHeight;
       
@@ -75,17 +75,17 @@
     }, 10);
   }
   
-  function kfCloseRepostModal() {
-    const modal = document.getElementById('kf-repost-modal');
+  function kvibeCloseRepostModal() {
+    const modal = document.getElementById('kvibe-repost-modal');
     modal.classList.remove('show');
     currentRepostPostId = null;
     currentRepostButton = null;
   }
   
-  function kfPerformRepost(postId, caption, undo = false) {
+  function kvibePerformRepost(postId, caption, undo = false) {
     const button = currentRepostButton;
     const icon = button.querySelector('i');
-    const countSpan = button.querySelector('.kf-repost-count');
+    const countSpan = button.querySelector('.kvibe-repost-count');
     
     
     
@@ -164,10 +164,10 @@
     return cookieValue;
   }
   
-  function kfToggleText(postId) {
-    const textElement = document.getElementById(`kf-text-${postId}`);
+  function kvibeToggleText(postId) {
+    const textElement = document.getElementById(`kvibe-text-${postId}`);
     const button = textElement.nextElementSibling;
-    if (!button || !button.classList.contains('kf-text-toggle')) return;
+    if (!button || !button.classList.contains('kvibe-text-toggle')) return;
     
     const span = button.querySelector('span');
     const icon = button.querySelector('i');
@@ -187,16 +187,7 @@
     }
   }
 
-  function kfDownloadAudio(postId, url) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `kishiface_post_${postId}_audio.webm`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-  
-  function kfDownloadVideo(postId, url) {
+  function kvibeDownloadVideo(postId, url) {
     const link = document.createElement('a');
     link.href = url;
     link.download = `kishiface_post_${postId}_video.mp4`;
@@ -205,7 +196,7 @@
     document.body.removeChild(link);
   }
   
-  function kfDownloadImage(postId, url, filename) {
+  function kvibeDownloadImage(postId, url, filename) {
     const link = document.createElement('a');
     link.href = url;
     link.download = `kishiface_post_${postId}_${filename}.jpg`;
@@ -214,43 +205,7 @@
     document.body.removeChild(link);
   }
   
-  function kfToggleAudio(postId) {
-    const audio = document.getElementById(`kf-audio-element-${postId}`);
-    const icon = document.getElementById(`kf-audio-icon-${postId}`);
-    
-    if (audio.paused) {
-      audio.play();
-      icon.className = 'fas fa-pause';
-    } else {
-      audio.pause();
-      icon.className = 'fas fa-play';
-    }
-    
-    audio.addEventListener('timeupdate', function() {
-      const progress = (audio.currentTime / audio.duration) * 100;
-      document.getElementById(`kf-audio-progress-${postId}`).style.width = progress + '%';
-      
-      const minutes = Math.floor(audio.currentTime / 60);
-      const seconds = Math.floor(audio.currentTime % 60);
-      document.getElementById(`kf-audio-time-${postId}`).textContent = 
-        minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
-    });
-  }
-  
-  function kfSeekAudio(event, postId) {
-    const audio = document.getElementById(`kf-audio-element-${postId}`);
-    const progressBar = event.currentTarget;
-    const rect = progressBar.getBoundingClientRect();
-    const pos = (event.clientX - rect.left) / progressBar.offsetWidth;
-    audio.currentTime = pos * audio.duration;
-  }
-  
-  function kfSeekAudioBy(postId, seconds) {
-    const audio = document.getElementById(`kf-audio-element-${postId}`);
-    audio.currentTime = Math.max(0, audio.currentTime + seconds);
-  }
-  
-  function kfTogglePlayPause(videoId, event) {
+  function kvibeTogglePlayPause(videoId, event) {
     event.stopPropagation();
     const video = document.getElementById(videoId);
     
@@ -263,14 +218,14 @@
     }
   }
   
-  function kfSeekVideo(videoId, seconds) {
+  function kvibeSeekVideo(videoId, seconds) {
     const video = document.getElementById(videoId);
     video.currentTime = Math.max(0, video.currentTime + seconds);
   }
   
-  function kfSlideCarousel(postId, direction) {
-    const carousel = document.getElementById(`kf-carousel-${postId}`);
-    const track = document.getElementById(`kf-track-${postId}`);
+  function kvibeSlideCarousel(postId, direction) {
+    const carousel = document.getElementById(`kvibe-carousel-${postId}`);
+    const track = document.getElementById(`kvibe-track-${postId}`);
     const totalSlides = parseInt(carousel.getAttribute('data-total'));
     let currentSlide = parseInt(carousel.getAttribute('data-slide'));
     
@@ -282,7 +237,7 @@
     track.style.transform = `translateX(-${currentSlide * 100}%)`;
     carousel.setAttribute('data-slide', currentSlide);
     
-    const indicators = carousel.querySelectorAll('.kf-indicator');
+    const indicators = carousel.querySelectorAll('.kvibe-indicator');
     indicators.forEach((indicator, index) => {
       if (index === currentSlide) {
         indicator.classList.add('active');
@@ -387,7 +342,7 @@
     const newHeight = Math.min(textarea.scrollHeight, maxHeight);
     textarea.style.height = newHeight + 'px';
     
-    const wrapper = textarea.closest('.kf-comment-input-wrapper');
+    const wrapper = textarea.closest('.kvibe-comment-input-wrapper');
     if (wrapper) {
       wrapper.style.minHeight = (42 + Math.max(0, newHeight - 24)) + 'px';
     }
@@ -519,7 +474,7 @@
     }
   }
 
-  function kfDownloadCommentAudio(id, url) {
+  function kvibeDownloadCommentAudio(id, url) {
     const link = document.createElement('a');
     link.href = url;
     link.download = `voice_message_${id}.webm`;
@@ -624,19 +579,19 @@
     });
     
     // Auto-detect long text and add toggle buttons
-    document.querySelectorAll('.kf-post-text').forEach(textElement => {
+    document.querySelectorAll('.kvibe-post-text').forEach(textElement => {
       const textContent = textElement.textContent.trim();
       const lineCount = (textContent.match(/\n/g) || []).length + 1;
       const charCount = textContent.length;
       
       if (charCount > 150 || lineCount > 3) {
         textElement.classList.add('collapsed');
-        if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kf-text-toggle')) {
+        if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kvibe-text-toggle')) {
           const toggleBtn = document.createElement('button');
-          toggleBtn.className = 'kf-text-toggle';
+          toggleBtn.className = 'kvibe-text-toggle';
           toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
           toggleBtn.onclick = function() {
-            kfToggleText(textElement.id.replace('kf-text-', ''));
+            kvibeToggleText(textElement.id.replace('kvibe-text-', ''));
           };
           textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
         }
@@ -650,12 +605,12 @@
         e.preventDefault();
         e.stopPropagation();
         
-        const logoutModal = document.getElementById('logoutModal');
+        const logoutModal = document.getElementById('kvibeLogoutModal');
         if (logoutModal) {
           logoutModal.classList.add('active');
           
-          const cancelLogout = document.getElementById('cancelLogout');
-          const confirmLogout = document.getElementById('confirmLogout');
+          const cancelLogout = document.getElementById('kvibeCancelLogout');
+          const confirmLogout = document.getElementById('kvibeConfirmLogout');
           
           if (cancelLogout) {
             cancelLogout.onclick = function() {
@@ -678,16 +633,16 @@
       });
     }
     
-    document.getElementById('kf-repost-modal').addEventListener('click', function(e) {
+    document.getElementById('kvibe-repost-modal').addEventListener('click', function(e) {
       if (e.target === this) {
-        kfCloseRepostModal();
+        kvibeCloseRepostModal();
       }
     });
     
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
-        kfCloseRepostModal();
-        const logoutModal = document.getElementById('logoutModal');
+        kvibeCloseRepostModal();
+        const logoutModal = document.getElementById('kvibeLogoutModal');
         if (logoutModal && logoutModal.classList.contains('active')) {
           logoutModal.classList.remove('active');
         }
@@ -695,9 +650,9 @@
     });
     
     window.addEventListener('resize', function() {
-      const modal = document.getElementById('kf-repost-modal');
+      const modal = document.getElementById('kvibe-repost-modal');
       if (modal.classList.contains('show')) {
-        const modalContent = modal.querySelector('.kf-repost-modal-content');
+        const modalContent = modal.querySelector('.kvibe-repost-modal-content');
         const viewportHeight = window.innerHeight;
         const modalHeight = modalContent.offsetHeight;
         
@@ -710,7 +665,7 @@
     });
 });
 
-function kfLazyLoad() {
+function kvibeLazyLoad() {
   const lazyImages = document.querySelectorAll('img[loading="lazy"]');
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
@@ -725,7 +680,95 @@ function kfLazyLoad() {
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', kfLazyLoad);
+  document.addEventListener('DOMContentLoaded', kvibeLazyLoad);
 } else {
-  kfLazyLoad();
+  kvibeLazyLoad();
 }
+
+  // ── Mixed media carousel ──
+  function kvibeSlideMixedCarousel(postId, direction) {
+    const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
+    const track = document.getElementById(`kvibe-mixed-track-${postId}`);
+    const total = parseInt(carousel.dataset.total);
+    let current = (parseInt(carousel.dataset.slide) + direction + total) % total;
+    track.style.transform = `translateX(-${current * 100}%)`;
+    carousel.dataset.slide = current;
+    carousel.querySelectorAll('.kvibe-mixed-indicator').forEach((ind, i) => {
+      ind.classList.toggle('active', i === current);
+    });
+  }
+
+  function kvibeGoToMixedSlide(postId, index) {
+    const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
+    const track = document.getElementById(`kvibe-mixed-track-${postId}`);
+    track.style.transform = `translateX(-${index * 100}%)`;
+    carousel.dataset.slide = index;
+    carousel.querySelectorAll('.kvibe-mixed-indicator').forEach((ind, i) => {
+      ind.classList.toggle('active', i === index);
+    });
+  }
+
+  // ── Follow / Unfollow ──
+  function kvibeToggleFollow(btn) {
+    const userId = btn.dataset.userId;
+    const username = btn.dataset.username;
+    const isFollowing = btn.classList.contains('kvibe-follow-btn--following');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    fetch(`/follow/${userId}/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      if (data.success) {
+        if (data.followed) {
+          btn.classList.add('kvibe-follow-btn--following');
+          btn.title = `Unfollow ${username}`;
+          btn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>';
+          showToast(`Following @${username}`, 'success');
+        } else {
+          btn.classList.remove('kvibe-follow-btn--following');
+          btn.title = `Follow ${username}`;
+          btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>';
+          showToast(`Unfollowed @${username}`, 'info');
+        }
+      } else {
+        btn.innerHTML = isFollowing
+          ? '<i class="fas fa-user-check"></i><span>Following</span>'
+          : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+      }
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.innerHTML = isFollowing
+        ? '<i class="fas fa-user-check"></i><span>Following</span>'
+        : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+    });
+  }
+
+  // ── Lazy-load videos (data-src) ──
+  function kvibeVideoLazyLoad() {
+    document.querySelectorAll('video[data-src]').forEach(video => {
+      new IntersectionObserver((entries, obs) => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            const source = e.target.querySelector('source[data-src]');
+            if (source) {
+              source.src = source.dataset.src;
+              e.target.load();
+              e.target.removeAttribute('data-src');
+            }
+            obs.unobserve(e.target);
+          }
+        });
+      }, { rootMargin: '300px' }).observe(video);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', kvibeVideoLazyLoad);
+  } else {
+    kvibeVideoLazyLoad();
+  }
