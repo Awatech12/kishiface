@@ -114,8 +114,6 @@ function kvibePauseAllOtherMedia(currentMediaElement) {
                 if (prevPlayIcon) prevPlayIcon.style.opacity = '1';
             }
         }
-        }
-    }
     }
     
     // Update the globally tracked media element if it's playing
@@ -214,7 +212,10 @@ function kvibeInitMediaObserver() {
                     container.classList.add('paused');
                     const playIcon = container.querySelector('.kvibe-play-pause-icon');
                     if (playIcon) playIcon.style.opacity = '1';
-                }
+                    // Clear global tracker if this was the active media
+                    if (kvibeCurrentlyPlayingMedia === video) {
+                        kvibeCurrentlyPlayingMedia = null;
+                    }
                 }
             }
         });
@@ -312,5 +313,7 @@ window.kvibeSeekVideo = kvibeSeekVideo;
 window.kvibeClosePanel = (panelId) => kvibeClosePanel(panelId || 'kvibe-profile-panel');
 window.kvibeClosePanel2 = () => kvibeClosePanel('kvibe-comments-panel');
 window.kvibeSlideCarousel = kvibeSlideCarousel;
+
+
 
 
