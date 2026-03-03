@@ -114,8 +114,21 @@ function kvibePauseAllOtherMedia(currentMediaElement) {
                 if (prevPlayIcon) prevPlayIcon.style.opacity = '1';
             }
         }
+        // Reset audio UI
+        else if (kfCurrentlyPlayingMedia.tagName === 'AUDIO') {
+            const postId = kfCurrentlyPlayingMedia.id.replace('kf-audio-element-', '');
+            const prevIcon = document.getElementById('kf-audio-icon-' + postId);
+            if (prevIcon) {
+                prevIcon.classList.remove('fa-pause');
+                prevIcon.classList.add('fa-play');
+            }
+            
+            // Stop audio timer
+            if (kfAudioTimers[postId]) {
+                clearInterval(kfAudioTimers[postId]);
+                delete kfAudioTimers[postId];
+            }
         }
-    }
     }
     
     // Update the globally tracked media element if it's playing
@@ -214,7 +227,10 @@ function kvibeInitMediaObserver() {
                     container.classList.add('paused');
                     const playIcon = container.querySelector('.kvibe-play-pause-icon');
                     if (playIcon) playIcon.style.opacity = '1';
-                }
+                    // Clear global tracker if this was the active media
+                    if (kvibeCurrentlyPlayingMedia === video) {
+                        kvibeCurrentlyPlayingMedia = null;
+                    }
                 }
             }
         });
@@ -307,9 +323,16 @@ if (document.readyState === 'loading') {
 }
 
 // ===== MAKE FUNCTIONS GLOBALLY AVAILABLE =====
-window.kvibeTogglePlayPause = kvibeTogglePlayPause;
-window.kvibeSeekVideo = kvibeSeekVideo;
-window.kvibeClosePanel = (panelId) => kvibeClosePanel(panelId || 'kvibe-profile-panel');
-window.kvibeClosePanel2 = () => kvibeClosePanel('kvibe-comments-panel');
-window.kvibeSlideCarousel = kvibeSlideCarousel;
+window.kfTogglePlayPause = kfTogglePlayPause;
+window.kfSeekVideo = kfSeekVideo;
+window.kfToggleAudio = kfToggleAudio;
+window.kfSeekAudio = kfSeekAudio;
+window.kfSeekAudioBy = kfSeekAudioBy;
+window.kfDownloadVideo = kfDownloadVideo;
+window.kfDownloadAudio = kfDownloadAudio;
+window.kfDownloadImage = kfDownloadImage;
+window.kfDownloadPostMedia = kfDownloadPostMedia;
+window.kfClosePanel = (panelId) => kfClosePanel(panelId || 'kf-profile-panel');
+window.kfClosePanel2 = () => kfClosePanel('kf-comments-panel');
+window.kfSlideCarousel = kfSlideCarousel;
 

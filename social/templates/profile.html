@@ -1,0 +1,5194 @@
+{% load humanize %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+    <title>{% if profile.full_name %} {{profile.full_name}} {% else %} {{user.username}} {% endif %} / Kvibe {{profile.get_status}}</title>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- Google Fonts: DM Serif Display + DM Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* ── Kvibe Brand Palette (matches home page) ── */
+            --kvibe-bg:           #fafafa;
+            --kvibe-white:        #ffffff;
+            --kvibe-border:       #dbdbdb;
+            --kvibe-border-light: #efefef;
+            --kvibe-text:         #262626;
+            --kvibe-text-muted:   #8e8e8e;
+            --kvibe-gray:         #8e8e8e;
+            --kvibe-gray-light:   #c7c7c7;
+            --kvibe-primary:      #0095f6;
+            --kvibe-primary-dark: #0077cc;
+            --kvibe-primary-hover:#0077cc;
+            --kvibe-accent:       #0095f6;
+            --kvibe-danger:       #ed4956;
+            --kvibe-danger-hover: #c0392b;
+            --kvibe-modal-overlay:rgba(0, 0, 0, 0.5);
+            --kvibe-btn-bg:       #0095f6;
+            --kvibe-btn-color:    #ffffff;
+            --radius-sm:   6px;
+            --radius-md:   12px;
+            --radius-lg:   20px;
+            --radius-full: 9999px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--kvibe-bg);
+            color: var(--kvibe-text);
+            line-height: 1.5;
+            -webkit-text-size-adjust: 100%;
+            overflow-x: hidden;
+        }
+
+        /* ─── Layout ─────────────────────────────────── */
+        .kvibe-desktop-layout {
+            display: flex;
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 56px 24px 0;
+            gap: 24px;
+        }
+
+        /* ─── Left Sidebar ───────────────────────────── */
+        .kvibe-left-sidebar {
+            width: 220px;
+            flex-shrink: 0;
+            position: sticky;
+            top: 64px;
+            height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+
+        .kvibe-desktop-nav {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 12px 0;
+            background: var(--kvibe-white);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--kvibe-border);
+        }
+
+        .kvibe-desktop-nav-item {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            width: 100%;
+            padding: 10px 14px;
+            position: relative;
+            transition: background 0.15s ease;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            margin: 0 6px;
+            width: calc(100% - 12px);
+        }
+
+        .kvibe-desktop-nav-item:hover {
+            background: var(--kvibe-border-light);
+        }
+
+        .kvibe-desktop-nav-item.active {
+            background: rgba(0,149,246,0.07);
+            border-left: 3px solid var(--kvibe-primary);
+        }
+
+        .kvibe-desktop-nav-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .kvibe-desktop-nav-icon svg {
+            width: 18px;
+            height: 18px;
+            stroke: var(--kvibe-gray);
+        }
+
+        .kvibe-desktop-nav-icon i {
+            font-size: 17px;
+            color: var(--kvibe-gray);
+        }
+
+        .kvibe-desktop-nav-item.active .kvibe-desktop-nav-icon svg,
+        .kvibe-desktop-nav-item.active .kvibe-desktop-nav-icon i {
+            color: var(--kvibe-primary);
+            stroke: var(--kvibe-primary);
+        }
+
+        .kvibe-desktop-nav-label {
+            font-size: 13.5px;
+            color: var(--kvibe-gray);
+            font-weight: 400;
+            letter-spacing: 0.01em;
+        }
+
+        .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-label,
+        .kvibe-desktop-nav-item.active .kvibe-desktop-nav-label {
+            color: var(--kvibe-primary);
+            font-weight: 500;
+        }
+
+        /* Nav divider */
+        .kvibe-nav-divider {
+            height: 1px;
+            background: var(--kvibe-border-light);
+            margin: 6px 14px;
+        }
+
+        /* ─── Right Sidebar ──────────────────────────── */
+        .kvibe-right-sidebar {
+            width: 300px;
+            flex-shrink: 0;
+            position: sticky;
+            top: 64px;
+            height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+
+        .kvibe-stats-card {
+            background: var(--kvibe-white);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .kvibe-stats-card-header {
+            padding: 14px 16px 10px;
+        }
+
+        .kvibe-stats-card-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--kvibe-gray);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .kvibe-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--kvibe-border-light);
+        }
+
+        .kvibe-stat-item {
+            text-align: center;
+            padding: 14px 8px;
+            background: var(--kvibe-white);
+        }
+
+        .kvibe-stat-number {
+            font-family: 'DM Serif Display', serif;
+            font-size: 18px;
+            color: var(--kvibe-text);
+            display: block;
+            line-height: 1.2;
+        }
+
+        .kvibe-stat-label {
+            font-size: 10.5px;
+            color: var(--kvibe-gray-light);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 2px;
+        }
+
+        /* ─── Mobile Vibe Score ───────────────────────── */
+        .kvibe-mobile-vibe-card {
+            margin: 14px 16px 0;
+            background: var(--kvibe-white);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--kvibe-border);
+            overflow: hidden;
+        }
+
+        .kvibe-mobile-vibe-header {
+            padding: 12px 14px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .kvibe-mobile-vibe-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--kvibe-gray);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .kvibe-mobile-vibe-sentence {
+            padding: 0 14px 10px;
+            font-size: 12.5px;
+            color: var(--kvibe-text-muted);
+            line-height: 1.5;
+        }
+
+        .kvibe-mobile-vibe-sentence strong {
+            color: var(--kvibe-text);
+        }
+
+        .kvibe-mobile-vibe-bars {
+            padding: 2px 14px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+        }
+
+        .kvibe-mobile-vibe-bar-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .kvibe-mobile-vibe-bar-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .kvibe-mobile-vibe-bar-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--kvibe-text);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+
+        .kvibe-mobile-vibe-bar-label:hover {
+            text-decoration: underline;
+        }
+
+        .kvibe-mobile-vibe-bar-pct {
+            font-size: 11px;
+            color: var(--kvibe-gray-light);
+            font-weight: 600;
+        }
+
+        .kvibe-mobile-vibe-track {
+            height: 5px;
+            background: var(--kvibe-border-light);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .kvibe-mobile-vibe-fill {
+            height: 100%;
+            border-radius: 99px;
+            transition: width 0.8s cubic-bezier(.4,0,.2,1);
+        }
+
+        /* ─── Vibe Score Card ──────────────────────── */
+        .kvibe-vibe-card {
+            background: var(--kvibe-white);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .kvibe-vibe-card-header {
+            padding: 14px 16px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .kvibe-vibe-card-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--kvibe-gray);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .kvibe-vibe-emoji {
+            font-size: 16px;
+        }
+
+        .kvibe-vibe-sentence {
+            padding: 0 16px 10px;
+            font-size: 13px;
+            color: var(--kvibe-text-muted);
+            line-height: 1.5;
+        }
+
+        .kvibe-vibe-sentence strong {
+            color: var(--kvibe-text);
+        }
+
+        .kvibe-vibe-bars {
+            padding: 6px 16px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .kvibe-vibe-bar-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .kvibe-vibe-bar-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .kvibe-vibe-bar-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--kvibe-text);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+
+        .kvibe-vibe-bar-label:hover {
+            text-decoration: underline;
+        }
+
+        .kvibe-vibe-bar-pct {
+            font-size: 11.5px;
+            color: var(--kvibe-gray-light);
+            font-weight: 600;
+        }
+
+        .kvibe-vibe-track {
+            height: 5px;
+            background: var(--kvibe-border-light);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .kvibe-vibe-fill {
+            height: 100%;
+            border-radius: 99px;
+            transition: width 0.8s cubic-bezier(.4,0,.2,1);
+        }
+
+        /* Mood filter chips on posts grid */
+        .kvibe-mood-filter-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            padding: 12px 0 8px;
+        }
+
+        .kvibe-profile-mood-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 1.5px solid var(--kvibe-border);
+            background: var(--kvibe-white);
+            color: var(--kvibe-text);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s ease;
+            font-family: inherit;
+        }
+
+        .kvibe-profile-mood-chip:hover {
+            border-color: var(--chip-color, #111);
+            color: var(--chip-color, #111);
+        }
+
+        .kvibe-profile-mood-chip.active {
+            background: var(--chip-color, #111);
+            border-color: var(--chip-color, #111);
+            color: white;
+        }
+
+        .kvibe-profile-mood-chip .chip-count {
+            background: rgba(0,0,0,0.1);
+            border-radius: 99px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 6px;
+        }
+
+        .kvibe-profile-mood-chip.active .chip-count {
+            background: rgba(255,255,255,0.25);
+        }
+
+        /* Vibe badge under bio */
+        .kvibe-vibe-summary-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            padding: 7px 14px;
+            border-radius: var(--radius-full);
+            border: 1.5px solid var(--kvibe-border);
+            background: var(--kvibe-white);
+            font-size: 12.5px;
+            color: var(--kvibe-text-muted);
+            line-height: 1.4;
+        }
+
+        .kvibe-vibe-summary-badge .vibe-icon {
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        /* post mood tag */
+        .kvibe-post-mood-tag {
+            position: absolute;
+            bottom: 6px;
+            left: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 99px;
+            color: white;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* hidden posts */
+        .kvibe-post-item.mood-hidden {
+            display: none;
+        }
+
+        /* Mutual section in sidebar */
+        .kvibe-mutual-section {
+            padding: 14px 16px;
+        }
+
+        .kvibe-mutual-avatars {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .kvibe-mutual-avatars a {
+            display: block;
+            flex-shrink: 0;
+        }
+
+        .kvibe-mutual-avatars img {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2px solid var(--kvibe-white);
+            object-fit: cover;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            transition: transform 0.15s, box-shadow 0.15s;
+            display: block;
+        }
+
+        .kvibe-mutual-avatars a:hover img {
+            transform: scale(1.08);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.18);
+        }
+
+        .kvibe-mutual-text {
+            font-size: 12.5px;
+            color: var(--kvibe-gray);
+            line-height: 1.5;
+        }
+
+        .kvibe-mutual-text a {
+            color: var(--kvibe-accent);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .kvibe-mutual-text a:hover {
+            text-decoration: underline;
+        }
+
+        .kvibe-view-all-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            padding: 7px 14px;
+            background: var(--kvibe-border-light);
+            color: var(--kvibe-text);
+            border-radius: var(--radius-full);
+            font-size: 12.5px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+
+        .kvibe-view-all-btn:hover {
+            background: var(--kvibe-border);
+        }
+
+        /* ─── Main Profile Area ──────────────────────── */
+        .kvibe-main-profile {
+            flex: 1;
+            min-width: 0;
+            max-width: 640px;
+        }
+
+        /* ─── Fixed Top Header ───────────────────────── */
+        .kvibe-profile-header {
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: 0;
+            z-index: 100;
+            background: rgba(255,255,255,0.96);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--kvibe-border);
+        }
+
+        .kvibe-header-inner {
+            display: flex;
+            align-items: center;
+            height: 52px;
+            padding: 0 16px;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .kvibe-header-back {
+            margin-right: 20px;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+            flex-shrink: 0;
+        }
+
+        .kvibe-header-back:hover {
+            background: var(--kvibe-border-light);
+        }
+
+        .kvibe-header-back i {
+            font-size: 16px;
+            color: var(--kvibe-text);
+        }
+
+        .kvibe-header-info {
+            flex: 1;
+        }
+
+        .kvibe-header-name {
+            font-family: 'DM Serif Display', serif;
+            font-weight: 400;
+            font-size: 16px;
+            line-height: 1.2;
+            color: var(--kvibe-text);
+        }
+
+        .kvibe-header-posts {
+            font-size: 11.5px;
+            color: var(--kvibe-gray-light);
+            letter-spacing: 0.02em;
+        }
+
+        /* ─── Cover ──────────────────────────────────── */
+        .kvibe-cover {
+            height: 220px;
+            background-color: #e5e7eb;
+            background-size: cover;
+            background-position: center;
+            width: 100%;
+            position: relative;
+        }
+
+        .kvibe-cover::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.18) 100%);
+        }
+
+        /* ─── Profile Info ───────────────────────────── */
+        .kvibe-profile-info {
+            background: var(--kvibe-white);
+            padding: 0 20px 0;
+            border-bottom: 1px solid var(--kvibe-border);
+        }
+
+        /* Avatar — centered below cover */
+        .kvibe-avatar-container {
+            display: flex;
+            justify-content: center;
+            margin-top: -48px;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .kvibe-profile-avatar {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid var(--kvibe-white);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+            background: var(--kvibe-white);
+        }
+
+        /* Actions — right-aligned row */
+        .kvibe-profile-actions {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .kvibe-action-btn {
+            padding: 7px 18px;
+            border-radius: var(--radius-full);
+            font-size: 13.5px;
+            font-weight: 500;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: 1.5px solid var(--kvibe-border);
+            background: var(--kvibe-white);
+            color: var(--kvibe-text);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .kvibe-action-btn:hover {
+            border-color: var(--kvibe-gray);
+            background: var(--kvibe-border-light);
+        }
+
+        .kvibe-action-btn-primary {
+            background: var(--kvibe-btn-bg);
+            color: var(--kvibe-btn-color);
+            border-color: var(--kvibe-btn-bg);
+        }
+
+        .kvibe-action-btn-primary:hover {
+            background: var(--kvibe-primary-hover);
+            border-color: var(--kvibe-primary-hover);
+        }
+
+        .kvibe-more-actions {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1.5px solid var(--kvibe-border);
+            background: var(--kvibe-white);
+            color: var(--kvibe-text);
+            cursor: pointer;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        .kvibe-more-actions:hover {
+            background: var(--kvibe-border-light);
+            border-color: var(--kvibe-gray);
+        }
+
+        /* Profile Details — centered layout */
+        .kvibe-profile-details {
+            text-align: center;
+            padding-bottom: 16px;
+        }
+
+        .kvibe-profile-name {
+            font-family: 'DM Serif Display', serif;
+            font-size: 22px;
+            font-weight: 400;
+            color: var(--kvibe-text);
+            line-height: 1.25;
+            margin-bottom: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .kvibe-profile-username {
+            font-size: 13.5px;
+            color: var(--kvibe-gray);
+            margin-bottom: 10px;
+            letter-spacing: 0.01em;
+        }
+
+        .kvibe-profile-bio {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--kvibe-text);
+            max-width: 360px;
+            margin: 0 auto 14px;
+            font-weight: 300;
+        }
+
+        /* Meta info — horizontal compact row */
+        .kvibe-profile-meta {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px 20px;
+            margin-bottom: 14px;
+            color: var(--kvibe-gray);
+            font-size: 13px;
+        }
+
+        .kvibe-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .kvibe-meta-item i {
+            font-size: 13px;
+            opacity: 0.7;
+        }
+
+        .kvibe-meta-item a {
+            color: var(--kvibe-accent);
+            text-decoration: none;
+        }
+
+        .kvibe-meta-item a:hover {
+            text-decoration: underline;
+        }
+
+        /* Follow stats — horizontal pill row */
+        .kvibe-follow-stats {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 16px;
+            background: var(--kvibe-border-light);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+            border: 1px solid var(--kvibe-border);
+        }
+
+        .kvibe-follow-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 20px;
+            color: var(--kvibe-gray);
+            font-size: 12px;
+            text-decoration: none;
+            transition: background 0.15s;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .kvibe-follow-stat:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 20%;
+            height: 60%;
+            width: 1px;
+            background: var(--kvibe-border);
+        }
+
+        .kvibe-follow-stat:hover {
+            background: var(--kvibe-border);
+        }
+
+        .kvibe-follow-number {
+            font-family: 'DM Serif Display', serif;
+            font-size: 16px;
+            color: var(--kvibe-text);
+            line-height: 1.2;
+        }
+
+        /* ─── Mobile Mutual ──────────────────────────── */
+        .kvibe-mobile-mutual {
+            display: none;
+            margin: 12px;
+            padding: 16px;
+            background: var(--kvibe-white);
+            border-radius: var(--radius-md);
+        }
+
+        .kvibe-mobile-mutual-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--kvibe-text);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .kvibe-mobile-mutual-title i {
+            color: var(--kvibe-accent);
+        }
+
+        .kvibe-mutual-avatars-mobile {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
+        .kvibe-mutual-avatar-mobile {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid var(--kvibe-white);
+            margin-left: -8px;
+            object-fit: cover;
+            cursor: pointer;
+        }
+
+        .kvibe-mutual-avatar-mobile:first-child { margin-left: 0; }
+
+        .kvibe-mutual-text-mobile {
+            font-size: 12.5px;
+            color: var(--kvibe-gray);
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .kvibe-mutual-text-mobile strong { font-weight: 600; color: var(--kvibe-text); }
+
+        .kvibe-mutual-text-mobile a {
+            color: var(--kvibe-accent);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .kvibe-view-all-mobile {
+            display: block;
+            padding: 8px 16px;
+            background: var(--kvibe-btn-bg);
+            color: var(--kvibe-white);
+            border-radius: var(--radius-full);
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            text-align: center;
+        }
+
+        /* ─── Tabs ───────────────────────────────────── */
+        .kvibe-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--kvibe-border);
+            background: var(--kvibe-white);
+            width: 100%;
+        }
+
+        .kvibe-tab {
+            flex: 1;
+            text-align: center;
+            padding: 13px 8px;
+            font-weight: 400;
+            font-size: 13px;
+            color: var(--kvibe-gray);
+            text-decoration: none;
+            transition: color 0.15s;
+            position: relative;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-family: 'DM Sans', sans-serif;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .kvibe-tab:hover {
+            color: var(--kvibe-text);
+        }
+
+        .kvibe-tab-active {
+            color: var(--kvibe-primary);
+        }
+
+        .kvibe-tab-active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 32px;
+            height: 2px;
+            background: var(--kvibe-primary);
+            border-radius: var(--radius-full);
+        }
+
+        /* ─── Posts Grid ─────────────────────────────── */
+        .kvibe-posts-container {
+            min-height: 200px;
+            width: 100%;
+            background: var(--kvibe-white);
+        }
+
+        .kvibe-posts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px;
+            width: 100%;
+        }
+
+        .kvibe-post-item {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            cursor: pointer;
+            background-color: var(--kvibe-border-light);
+            overflow: hidden;
+            text-decoration: none;
+            display: block;
+        }
+
+        .kvibe-post-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .kvibe-placeholder {
+            width: 100%;
+            height: 100%;
+            background: var(--kvibe-border-light);
+        }
+
+        .kvibe-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px;
+            height: 24px;
+            border: 2px solid rgba(0,0,0,0.08);
+            border-radius: 50%;
+            border-top-color: var(--kvibe-primary);
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* Video/Audio thumbnails */
+        .kvibe-video-thumbnail {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+        }
+
+        .kvibe-preview-media {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            pointer-events: none;
+        }
+
+        .kvibe-video-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+
+        .kvibe-video-overlay i {
+            font-size: 28px;
+            color: rgba(255,255,255,0.9);
+            background: rgba(0,0,0,0.45);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .kvibe-audio-thumbnail {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0095f6 0%, #0077cc 100%);
+        }
+
+        .kvibe-audio-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+        }
+
+        .kvibe-audio-overlay i {
+            font-size: 24px;
+            color: rgba(255,255,255,0.9);
+            background: rgba(0,0,0,0.3);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-left: 3px;
+        }
+
+        /* Post hover overlay */
+        .kvibe-post-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.38);
+            opacity: 0;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.2rem;
+            color: white;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .kvibe-post-item:hover .kvibe-post-overlay { opacity: 1; }
+
+        .kvibe-post-overlay span {
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            font-size: 14px;
+            gap: 4px;
+        }
+
+        /* Text Posts */
+        .kvibe-text-posts {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .kvibe-text-item {
+            border: 1px solid var(--kvibe-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: var(--kvibe-white);
+        }
+
+        .kvibe-text-card { padding: 16px; }
+
+        .kvibe-text-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--kvibe-text);
+            margin-bottom: 12px;
+            white-space: pre-line;
+            word-break: break-word;
+        }
+
+        .kvibe-text-stats {
+            display: flex;
+            gap: 12px;
+            color: var(--kvibe-gray);
+            font-size: 12.5px;
+            border-top: 1px solid var(--kvibe-border-light);
+            padding-top: 10px;
+        }
+
+        .kvibe-text-stats span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* No Posts */
+        .kvibe-no-posts {
+            padding: 60px 24px;
+            text-align: center;
+        }
+
+        .kvibe-no-posts-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 20px;
+            font-weight: 400;
+            margin-bottom: 6px;
+            color: var(--kvibe-text);
+        }
+
+        .kvibe-no-posts-text {
+            color: var(--kvibe-gray);
+            font-size: 13.5px;
+        }
+
+        /* Verified badge */
+        .kvibe-verified-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 17px;
+            height: 17px;
+        }
+
+        .kvibe-verified-badge img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Tab icons — mobile only */
+        .kvibe-tab-icon { display: none; }
+
+        /* WebView fix */
+        .kvibe-webview-fix {
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            will-change: transform;
+        }
+
+        .kvibe-container { display: block; }
+        .kvibe-main { width: 100%; }
+        .kvibe-desktop-only { display: none; }
+        .kvibe-mobile-only { display: block; }
+
+        /* ─── Edit Profile Modal ─────────────────────── */
+        .kvibe-edit-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--kvibe-modal-overlay);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 16px;
+            animation: kf-fade-in 0.2s ease;
+        }
+
+        .kvibe-edit-modal-overlay.active { display: flex; }
+
+        .kvibe-edit-modal {
+            background: var(--kvibe-white);
+            border-radius: var(--radius-md);
+            width: 100%;
+            max-width: 540px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+            animation: kf-modal-slide-up 0.25s ease;
+        }
+
+        .kvibe-edit-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--kvibe-border-light);
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .kvibe-edit-modal-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 16px;
+            font-weight: 400;
+            color: var(--kvibe-text);
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .kvibe-edit-modal-close {
+            background: none;
+            border: none;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--kvibe-text);
+            font-size: 16px;
+            border-radius: 50%;
+            transition: background 0.15s;
+            z-index: 1;
+        }
+
+        .kvibe-edit-modal-close:hover { background: var(--kvibe-border-light); }
+
+        .kvibe-edit-modal-next {
+            background: none;
+            border: none;
+            color: var(--kvibe-accent);
+            font-size: 13.5px;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            padding: 6px 14px;
+            border-radius: var(--radius-sm);
+            opacity: 0.4;
+            pointer-events: none;
+            transition: opacity 0.15s;
+        }
+
+        .kvibe-edit-modal-next.active { opacity: 1; pointer-events: all; }
+
+        .kvibe-edit-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            max-height: calc(90vh - 130px);
+        }
+
+        .kvibe-edit-form-scrollable { max-height: 100%; overflow-y: auto; }
+
+        .kvibe-edit-profile-pic-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 28px 24px 20px;
+            flex-shrink: 0;
+        }
+
+        .kvibe-edit-profile-pic-container {
+            position: relative;
+            width: 88px;
+            height: 88px;
+            cursor: pointer;
+        }
+
+        .kvibe-edit-profile-pic {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid var(--kvibe-border);
+        }
+
+        .kvibe-edit-change-photo-btn {
+            position: absolute;
+            bottom: -3px;
+            right: -3px;
+            width: 26px;
+            height: 26px;
+            background: var(--kvibe-btn-bg);
+            border: 2px solid var(--kvibe-white);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .kvibe-edit-form { padding: 0 24px 24px; }
+
+        .kvibe-edit-form-group { margin-bottom: 14px; }
+
+        .kvibe-edit-form-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--kvibe-gray);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 6px;
+        }
+
+        .kvibe-edit-form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--kvibe-border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--kvibe-white);
+            transition: border-color 0.15s;
+            -webkit-appearance: none;
+        }
+
+        .kvibe-edit-form-input:focus {
+            outline: none;
+            border-color: var(--kvibe-primary);
+        }
+
+        .kvibe-edit-form-input.error { border-color: var(--kvibe-danger); }
+
+        .kvibe-edit-form-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--kvibe-border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--kvibe-white);
+            min-height: 90px;
+            resize: vertical;
+            transition: border-color 0.15s;
+            line-height: 1.5;
+        }
+
+        .kvibe-edit-form-textarea:focus { outline: none; border-color: var(--kvibe-primary); }
+        .kvibe-edit-form-textarea.error { border-color: var(--kvibe-danger); }
+
+        .kvibe-edit-form-help {
+            font-size: 11.5px;
+            color: var(--kvibe-gray-light);
+            margin-top: 4px;
+            display: block;
+        }
+
+        .kvibe-edit-form-help.error { color: var(--kvibe-danger); }
+
+        .kvibe-edit-username-display {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: var(--kvibe-border-light);
+            border-radius: var(--radius-sm);
+        }
+
+        .kvibe-edit-username-label { font-size: 12px; color: var(--kvibe-gray); }
+        .kvibe-edit-username-value { font-size: 13px; font-weight: 600; color: var(--kvibe-text); }
+
+        .kvibe-edit-field-counter {
+            text-align: right;
+            font-size: 11px;
+            color: var(--kvibe-gray-light);
+            margin-top: 3px;
+        }
+
+        .kvibe-edit-field-counter.warning { color: #f59e0b; }
+        .kvibe-edit-field-counter.error { color: var(--kvibe-danger); }
+
+        .kvibe-edit-footer-actions {
+            display: flex;
+            gap: 10px;
+            padding: 14px 24px;
+            border-top: 1px solid var(--kvibe-border-light);
+            background: var(--kvibe-white);
+            flex-shrink: 0;
+        }
+
+        .kvibe-edit-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: var(--radius-full);
+            font-size: 13.5px;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: all 0.15s;
+            min-height: 40px;
+        }
+
+        .kvibe-edit-btn-cancel {
+            background: var(--kvibe-white);
+            color: var(--kvibe-text);
+            border: 1px solid var(--kvibe-border);
+        }
+
+        .kvibe-edit-btn-cancel:hover { background: var(--kvibe-border-light); }
+
+        .kvibe-edit-btn-save {
+            background: var(--kvibe-btn-bg);
+            color: var(--kvibe-white);
+        }
+
+        .kvibe-edit-btn-save:hover:not(:disabled) { background: var(--kvibe-primary-hover); }
+        .kvibe-edit-btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .kvibe-edit-loading {
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0.88);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            border-radius: var(--radius-md);
+        }
+
+        .kvibe-edit-loading.active { display: flex; }
+
+        .kvibe-edit-loading-spinner {
+            width: 36px;
+            height: 36px;
+            border: 2.5px solid var(--kvibe-border);
+            border-top: 2.5px solid var(--kvibe-primary);
+            border-radius: 50%;
+            animation: kf-spin 0.8s linear infinite;
+        }
+
+        .kvibe-edit-messages { padding: 14px 24px 0; flex-shrink: 0; }
+
+        .kvibe-edit-alert {
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 12px;
+            font-size: 13.5px;
+            animation: kf-slide-down 0.25s ease;
+        }
+
+        .kvibe-edit-alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+        .kvibe-edit-alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .kvibe-edit-alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+
+        .kvibe-edit-file-input { display: none; }
+
+        /* ─── Logout Modal ───────────────────────────── */
+        .logout-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .logout-modal.active { display: flex; }
+
+        .logout-modal-content {
+            background: var(--kvibe-white);
+            border-radius: var(--radius-md);
+            padding: 28px 24px;
+            width: 90%;
+            max-width: 300px;
+            text-align: center;
+            animation: kf-modal-slide-up 0.25s ease;
+        }
+
+        .logout-modal-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 18px;
+            font-weight: 400;
+            margin-bottom: 8px;
+            color: var(--kvibe-text);
+        }
+
+        .logout-modal-message {
+            font-size: 13.5px;
+            color: var(--kvibe-gray);
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .logout-modal-buttons { display: flex; gap: 10px; }
+
+        .logout-modal-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: var(--radius-full);
+            font-size: 13.5px;
+            font-weight: 500;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .logout-modal-cancel { background: var(--kvibe-border-light); color: var(--kvibe-text); }
+        .logout-modal-cancel:hover { background: var(--kvibe-border); }
+        .logout-modal-confirm { background: var(--kvibe-accent); color: white; }
+        .logout-modal-confirm:hover { background: #0081d6; }
+
+        /* ─── Toast ──────────────────────────────────── */
+        .kvibe-toast {
+            position: fixed;
+            bottom: 88px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(17,17,17,0.88);
+            color: white;
+            padding: 10px 22px;
+            border-radius: var(--radius-full);
+            font-size: 13.5px;
+            z-index: 10000;
+            opacity: 0;
+            transition: all 0.25s ease;
+            pointer-events: none;
+            text-align: center;
+            max-width: 88%;
+            white-space: normal;
+        }
+
+        .kvibe-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .kvibe-toast.success { background: #059669; }
+        .kvibe-toast.error { background: var(--kvibe-danger); }
+        .kvibe-toast.info { background: var(--kvibe-accent); }
+
+        /* ─── More Actions Menu ──────────────────────── */
+        .kvibe-actions-menu {
+            background: var(--kvibe-white);
+            border-radius: var(--radius-md);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.13);
+            z-index: 1000;
+            min-width: 180px;
+            overflow: hidden;
+            animation: menuFadeIn 0.15s ease;
+            border: 1px solid var(--kvibe-border);
+        }
+
+        @keyframes menuFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .kvibe-menu-item {
+            padding: 11px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: background 0.12s;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: 13.5px;
+            font-family: 'DM Sans', sans-serif;
+            color: var(--kvibe-text);
+        }
+
+        .kvibe-menu-item:hover { background: var(--kvibe-border-light); }
+        .kvibe-menu-item i { width: 18px; color: var(--kvibe-gray); }
+        .kvibe-menu-item.danger { color: var(--kvibe-danger); }
+        .kvibe-menu-item.danger i { color: var(--kvibe-danger); }
+
+        .kvibe-menu-divider {
+            height: 1px;
+            background: var(--kvibe-border-light);
+            margin: 3px 0;
+        }
+
+        /* ─── Mobile Bottom Nav (kept for footer include) */
+        /* ─── Animations ─────────────────────────────── */
+        @keyframes kf-fade-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes kf-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        @keyframes kf-modal-slide-up {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes kf-slide-down {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ─── Responsive ─────────────────────────────── */
+        @media (min-width: 768px) {
+            .kvibe-desktop-only { display: block; }
+            .kvibe-mobile-only { display: none !important; }
+            .kvibe-mobile-mutual { display: none !important; }
+            .kvibe-profile-meta-mobile { display: none !important; }
+            .bottom-nav { display: none !important; }
+
+            .kvibe-cover { height: 260px; }
+
+            .kvibe-profile-avatar {
+                width: 110px;
+                height: 110px;
+            }
+
+            .kvibe-avatar-container { margin-top: -55px; }
+        }
+
+        @media (max-width: 1100px) {
+            .kvibe-right-sidebar { width: 240px; }
+        }
+
+        @media (max-width: 900px) {
+            .kvibe-right-sidebar { display: none; }
+            .kvibe-left-sidebar { width: 56px; }
+            .kvibe-desktop-nav-label { display: none; }
+            .kvibe-desktop-nav-item { padding: 10px; justify-content: center; }
+            .kvibe-desktop-nav-icon { margin-right: 0; }
+        }
+
+        /* ─── Mobile Details Section (below hero) ───── */
+        .kvibe-mobile-details { display: none; }
+
+        @media (max-width: 767px) {
+            .kvibe-mobile-details {
+                display: block;
+                background: #fff;
+                padding: 16px 18px 4px;
+            }
+
+            /* Pills row: location, website, contact */
+            .kvibe-mobile-pills-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 14px;
+            }
+
+            .kvibe-mobile-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 7px 14px;
+                background: rgba(0,149,246,0.07);
+                border-radius: 99px;
+                border: 1px solid rgba(0,149,246,0.25);
+                font-size: 13px;
+                font-weight: 500;
+                color: #0095f6;
+                white-space: nowrap;
+                max-width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .kvibe-mobile-pill i {
+                font-size: 12px;
+                color: #0095f6;
+                flex-shrink: 0;
+            }
+
+            .kvibe-mobile-pill-link {
+                color: #0095f6;
+                text-decoration: none;
+                border-color: rgba(0,149,246,0.35);
+                background: rgba(0,149,246,0.1);
+            }
+
+            .kvibe-mobile-pill-link i { color: #0095f6; }
+
+            .kvibe-mobile-pill-link:hover { background: rgba(0,149,246,0.18); }
+
+            /* Bio block */
+            .kvibe-mobile-bio-block {
+                font-size: 14.5px;
+                line-height: 1.6;
+                color: #222;
+                margin-bottom: 12px;
+                font-weight: 400;
+                white-space: pre-line;
+                word-break: break-word;
+            }
+
+            /* Joined */
+            .kvibe-mobile-joined {
+                font-size: 12px;
+                color: #0095f6;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                margin-bottom: 14px;
+                opacity: 0.7;
+            }
+
+            .kvibe-mobile-joined i { font-size: 11px; }
+        }
+
+        /* ─── Mobile Bottom Sheet Menu ───────────────── */
+        .kvibe-mobile-sheet-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 5000;
+            animation: kf-fade-in 0.2s ease;
+        }
+        .kvibe-mobile-sheet-overlay.active { display: block; }
+
+        .kvibe-mobile-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 5001;
+            background: #fff;
+            border-radius: 20px 20px 0 0;
+            padding: 0 0 calc(env(safe-area-inset-bottom) + 12px);
+            transform: translateY(100%);
+            transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .kvibe-mobile-sheet.active { transform: translateY(0); }
+
+        .kvibe-mobile-sheet-handle {
+            width: 38px;
+            height: 4px;
+            background: #ddd;
+            border-radius: 99px;
+            margin: 12px auto 4px;
+        }
+
+        .kvibe-mobile-sheet-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 20px 10px;
+            border-bottom: 1px solid #f2f2f2;
+        }
+
+        .kvibe-sheet-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #0095f6;
+            flex-shrink: 0;
+        }
+
+        .kvibe-sheet-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: #111;
+            line-height: 1.2;
+        }
+
+        .kvibe-sheet-username {
+            font-size: 12.5px;
+            color: #888;
+            margin-top: 1px;
+        }
+
+        .kvibe-mobile-sheet-items {
+            padding: 8px 0;
+        }
+
+        .kvibe-sheet-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            padding: 14px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+            font-family: -apple-system, 'DM Sans', sans-serif;
+            font-size: 15px;
+            font-weight: 500;
+            color: #111;
+            transition: background 0.12s;
+        }
+
+        .kvibe-sheet-item:hover, .kvibe-sheet-item:active { background: #f7f7f7; }
+
+        .kvibe-sheet-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: #f2f2f2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            color: #444;
+            flex-shrink: 0;
+        }
+
+        .kvibe-sheet-label { flex: 1; }
+
+        .kvibe-sheet-arrow {
+            font-size: 11px;
+            color: #ccc;
+        }
+
+        .kvibe-sheet-item-danger { color: #ef4444; }
+        .kvibe-sheet-icon-danger { background: #fef2f2; color: #ef4444; }
+
+        .kvibe-sheet-item-warn { color: #d97706; }
+        .kvibe-sheet-icon-warn { background: #fffbeb; color: #d97706; }
+
+        .kvibe-sheet-divider {
+            height: 1px;
+            background: #f2f2f2;
+            margin: 4px 20px;
+        }
+
+        .kvibe-sheet-cancel {
+            display: block;
+            width: calc(100% - 32px);
+            margin: 8px 16px 4px;
+            padding: 14px;
+            background: #f2f2f2;
+            border: none;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #111;
+            cursor: pointer;
+            font-family: -apple-system, 'DM Sans', sans-serif;
+            transition: background 0.12s;
+        }
+        .kvibe-sheet-cancel:hover { background: #e8e8e8; }
+
+        /* ─── Mobile Sticky Scroll Header ───────────── */
+        .kvibe-scroll-header { display: none; }
+
+        @media (max-width: 767px) {
+            /* Sticky header — hidden by default, fades in on scroll */
+            .kvibe-scroll-header {
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 200;
+                height: 56px;
+                align-items: center;
+                padding: 0 14px;
+                gap: 12px;
+                background: rgba(255,255,255,0.97);
+                backdrop-filter: blur(14px);
+                -webkit-backdrop-filter: blur(14px);
+                border-bottom: 1px solid rgba(0,0,0,0.08);
+                box-shadow: 0 1px 12px rgba(0,0,0,0.08);
+                /* Start invisible and slightly up */
+                opacity: 0;
+                transform: translateY(-100%);
+                transition: opacity 0.3s ease, transform 0.3s ease;
+                pointer-events: none;
+            }
+
+            .kvibe-scroll-header.visible {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: all;
+            }
+
+            .kvibe-scroll-header-back {
+                width: 34px;
+                height: 34px;
+                border-radius: 50%;
+                background: #f2f2f2;
+                border: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                color: #111;
+                cursor: pointer;
+                flex-shrink: 0;
+                transition: background 0.15s;
+            }
+            .kvibe-scroll-header-back:hover { background: #e0e0e0; }
+
+            .kvibe-scroll-header-identity {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex: 1;
+                min-width: 0;
+            }
+
+            .kvibe-scroll-header-avatar {
+                width: 34px;
+                height: 34px;
+                border-radius: 50%;
+                object-fit: cover;
+                border: 2px solid #0095f6;
+                flex-shrink: 0;
+            }
+
+            .kvibe-scroll-header-info {
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+            }
+
+            .kvibe-scroll-header-name {
+                font-size: 15px;
+                font-weight: 700;
+                color: #111;
+                line-height: 1.2;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .kvibe-scroll-header-username {
+                font-size: 11.5px;
+                color: #888;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .kvibe-scroll-header-actions {
+                display: flex;
+                gap: 8px;
+                flex-shrink: 0;
+            }
+
+            .kvibe-scroll-header-btn {
+                width: 34px;
+                height: 34px;
+                border-radius: 50%;
+                background: #f2f2f2;
+                border: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                color: #111;
+                cursor: pointer;
+                transition: background 0.15s;
+            }
+            .kvibe-scroll-header-btn:hover { background: #e0e0e0; }
+
+            /* Hero card fade on scroll — controlled via JS opacity */
+            .kvibe-hero-card {
+                transition: opacity 0.15s ease;
+                will-change: opacity;
+            }
+        }
+
+        /* ─── Mobile Snapchat Hero Card ─────────────── */
+        .kvibe-mobile-hero {
+            display: none;
+        }
+
+        @media (max-width: 767px) {
+            /* ── Layout Reset ── */
+            .kvibe-desktop-layout { display: block; padding: 0; }
+            .kvibe-left-sidebar, .kvibe-right-sidebar { display: none; }
+            .kvibe-main-profile { max-width: 100%; }
+            .kvibe-desktop-only { display: none !important; }
+            .kvibe-mobile-mutual { display: none !important; }
+            .bottom-nav { display: flex !important; }
+
+            /* ── Hide original cover + old header + old profile info ── */
+            .kvibe-cover { display: none !important; }
+            .kvibe-profile-header { display: none !important; }
+            .kvibe-avatar-container { display: none !important; }
+            .kvibe-profile-details { display: none !important; }
+
+            /* ── Show the new hero card ── */
+            .kvibe-mobile-hero { display: block; }
+
+            /* ── Hero: full-width photo card with overlay ── */
+            .kvibe-hero-card {
+                position: relative;
+                width: 100%;
+                height: 100svh;
+                max-height: 520px;
+                overflow: hidden;
+                background: #111;
+            }
+
+            .kvibe-hero-bg {
+                position: absolute;
+                inset: 0;
+                background-size: cover;
+                background-position: center top;
+                filter: brightness(0.75);
+            }
+
+            /* Top icons row: back (chevron down) + share + more */
+            .kvibe-hero-topbar {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                padding: 14px 16px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                z-index: 10;
+            }
+
+            .kvibe-hero-icon-btn {
+                width: 38px;
+                height: 38px;
+                border-radius: 50%;
+                background: rgba(0,0,0,0.35);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                border: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #fff;
+                font-size: 15px;
+                cursor: pointer;
+                text-decoration: none;
+                transition: background 0.15s;
+                flex-shrink: 0;
+            }
+
+            .kvibe-hero-icon-btn:hover { background: rgba(0,0,0,0.55); }
+
+            .kvibe-hero-topbar-right {
+                display: flex;
+                gap: 10px;
+            }
+
+            /* Bottom overlay content */
+            .kvibe-hero-overlay {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                padding: 28px 18px 20px;
+                background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 55%, transparent 100%);
+                z-index: 10;
+            }
+
+            /* Avatar row */
+            .kvibe-hero-avatar-row {
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                margin-bottom: 10px;
+            }
+
+            .kvibe-hero-avatar {
+                width: 72px;
+                height: 72px;
+                border-radius: 50%;
+                object-fit: cover;
+                border: 3px solid #fff;
+                box-shadow: 0 0 0 3px #0095f6, 0 0 0 5.5px rgba(0,149,246,0.35);
+                flex-shrink: 0;
+                cursor: zoom-in;
+            }
+
+            .kvibe-hero-user-info { flex: 1; min-width: 0; }
+
+            .kvibe-hero-name {
+                font-size: 21px;
+                font-weight: 700;
+                color: #fff;
+                line-height: 1.2;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-wrap: wrap;
+            }
+
+            .kvibe-hero-name .verified-icon {
+                width: 18px;
+                height: 18px;
+                flex-shrink: 0;
+            }
+
+            .kvibe-hero-username {
+                font-size: 13px;
+                color: rgba(255,255,255,0.7);
+                margin-top: 2px;
+                font-weight: 400;
+            }
+
+            /* Stats inline row */
+            .kvibe-hero-stats-row {
+                display: flex;
+                align-items: center;
+                gap: 0;
+                margin-bottom: 14px;
+                flex-wrap: wrap;
+                row-gap: 4px;
+            }
+
+            .kvibe-hero-stat {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                color: rgba(255,255,255,0.9);
+                font-size: 13px;
+                font-weight: 500;
+                text-decoration: none;
+                padding: 0 10px 0 0;
+            }
+
+            .kvibe-hero-stat:first-child { padding-left: 0; }
+
+            .kvibe-hero-stat-dot {
+                color: rgba(255,255,255,0.45);
+                font-size: 13px;
+                margin-right: 10px;
+            }
+
+            .kvibe-hero-stat-num {
+                font-weight: 700;
+                color: #fff;
+            }
+
+            /* Bio line */
+            .kvibe-hero-bio {
+                font-size: 13px;
+                color: rgba(255,255,255,0.8);
+                line-height: 1.5;
+                margin-bottom: 14px;
+                max-width: 320px;
+            }
+
+            /* Action buttons row */
+            .kvibe-hero-actions {
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+
+            .kvibe-hero-primary-btn {
+                flex: 1;
+                padding: 11px 20px;
+                border-radius: 99px;
+                background: #0095f6;
+                color: #fff;
+                font-size: 15px;
+                font-weight: 700;
+                font-family: -apple-system, 'DM Sans', sans-serif;
+                border: none;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 7px;
+                text-decoration: none;
+                transition: background 0.15s;
+                letter-spacing: 0.01em;
+            }
+
+            .kvibe-hero-primary-btn:hover { background: #0077cc; }
+
+            .kvibe-hero-secondary-btn {
+                padding: 11px 18px;
+                border-radius: 99px;
+                background: rgba(255,255,255,0.18);
+                backdrop-filter: blur(6px);
+                -webkit-backdrop-filter: blur(6px);
+                color: #fff;
+                font-size: 14px;
+                font-weight: 600;
+                font-family: -apple-system, 'DM Sans', sans-serif;
+                border: 1.5px solid rgba(255,255,255,0.3);
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                text-decoration: none;
+                transition: background 0.15s;
+            }
+
+            .kvibe-hero-secondary-btn:hover { background: rgba(255,255,255,0.28); }
+
+            .kvibe-hero-round-btn {
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                background: rgba(255,255,255,0.18);
+                backdrop-filter: blur(6px);
+                -webkit-backdrop-filter: blur(6px);
+                border: 1.5px solid rgba(255,255,255,0.3);
+                color: #fff;
+                font-size: 15px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                flex-shrink: 0;
+                transition: background 0.15s;
+            }
+
+            .kvibe-hero-round-btn:hover { background: rgba(255,255,255,0.3); }
+
+            /* ── Hide original profile section on mobile ── */
+            .kvibe-profile-info {
+                display: none !important;
+            }
+
+            /* ── Tabs: clean flat row below hero ── */
+            .kvibe-tabs {
+                background: #fff;
+                border-bottom: 1px solid #f0f0f0;
+                border-top: 1px solid #f0f0f0;
+                position: sticky;
+                top: 0;
+                z-index: 50;
+            }
+
+            .kvibe-tab {
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                padding: 10px 4px 11px;
+                color: #aaa;
+                text-transform: uppercase;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+            }
+
+            .kvibe-tab-icon {
+                font-size: 15px;
+                display: block;
+            }
+
+            .kvibe-tab-active { color: #0095f6; }
+            .kvibe-tab-active .kvibe-tab-icon { color: #0095f6; }
+
+            /* ── Posts grid ── */
+            .kvibe-posts-grid { gap: 1.5px; }
+            .kvibe-posts-container { background: #fff; }
+
+            /* ── Mood filter: horizontal scroll ── */
+            .kvibe-mood-filter-row {
+                padding: 10px 12px 8px;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }
+            .kvibe-mood-filter-row::-webkit-scrollbar { display: none; }
+
+            /* ── Vibe hidden ── */
+            .kvibe-vibe-summary-badge { display: none !important; }
+            .kvibe-mobile-vibe-card { display: none !important; }
+
+            /* ── Edit modal: bottom sheet ── */
+            .kvibe-edit-modal-overlay { padding: 0; align-items: flex-end; }
+            .kvibe-edit-modal {
+                max-height: 100vh;
+                border-radius: 20px 20px 0 0;
+                max-width: 100%;
+            }
+            .kvibe-edit-modal-body { max-height: calc(100vh - 130px); }
+            .kvibe-edit-form { padding: 0 16px 16px; }
+            .kvibe-edit-footer-actions { padding: 14px 16px; }
+        }
+
+        @media (max-width: 480px) {
+            .kvibe-hero-card { max-height: 480px; }
+            .kvibe-hero-name { font-size: 19px; }
+            .kvibe-hero-avatar { width: 62px; height: 62px; }
+            .kvibe-tab { font-size: 10px; padding: 9px 4px 10px; }
+            .kvibe-tab-icon { font-size: 14px; }
+        }
+
+        /* Profile meta mobile (hidden on desktop) */
+        .kvibe-profile-meta-mobile { display: none; }
+
+        /* ─── Profile Picture Modal ──────────────────── */
+        .kvibe-pic-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.88);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 20000;
+            animation: kf-fade-in 0.2s ease;
+            cursor: zoom-out;
+        }
+
+        .kvibe-pic-modal-overlay.active { display: flex; }
+
+        .kvibe-pic-modal-inner {
+            position: relative;
+            max-width: min(90vw, 520px);
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: default;
+        }
+
+        .kvibe-pic-modal-img {
+            width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: var(--radius-md);
+            box-shadow: 0 8px 48px rgba(0,0,0,0.5);
+            animation: kf-modal-slide-up 0.25s ease;
+            display: block;
+        }
+
+        .kvibe-pic-modal-close {
+            position: absolute;
+            top: -14px;
+            right: -14px;
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: white;
+            font-size: 15px;
+            transition: background 0.15s;
+            backdrop-filter: blur(4px);
+        }
+
+        .kvibe-pic-modal-close:hover { background: rgba(255,255,255,0.28); }
+
+        .kvibe-profile-avatar {
+            cursor: zoom-in;
+        }
+
+        /* ─── Block / Report Modals ──────────────────── */
+        .kvibe-action-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 30000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: kf-fade-in 0.2s ease;
+        }
+        .kvibe-action-modal-overlay.active { display: flex; }
+
+        .kvibe-action-modal {
+            background: var(--kvibe-white);
+            border-radius: var(--radius-md);
+            width: 100%;
+            max-width: 360px;
+            overflow: hidden;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+            animation: kf-modal-slide-up 0.25s ease;
+        }
+
+        .kvibe-action-modal-header {
+            padding: 20px 20px 0;
+            text-align: center;
+        }
+
+        .kvibe-action-modal-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 20px;
+        }
+        .kvibe-action-modal-icon.danger { background: #fef2f2; color: var(--kvibe-danger); }
+        .kvibe-action-modal-icon.warn   { background: #fffbeb; color: #d97706; }
+
+        .kvibe-action-modal-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--kvibe-text);
+            margin-bottom: 6px;
+        }
+
+        .kvibe-action-modal-desc {
+            font-size: 13.5px;
+            color: var(--kvibe-gray);
+            line-height: 1.55;
+            padding: 0 4px;
+        }
+
+        .kvibe-action-modal-body {
+            padding: 18px 20px 0;
+        }
+
+        /* Report reason options */
+        .kvibe-report-options {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .kvibe-report-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1.5px solid var(--kvibe-border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.12s;
+            background: var(--kvibe-white);
+            text-align: left;
+            font-size: 13.5px;
+            font-family: 'DM Sans', sans-serif;
+            color: var(--kvibe-text);
+        }
+
+        .kvibe-report-option:hover {
+            border-color: #d97706;
+            background: #fffbeb;
+        }
+
+        .kvibe-report-option.selected {
+            border-color: #d97706;
+            background: #fffbeb;
+            color: #92400e;
+            font-weight: 500;
+        }
+
+        .kvibe-report-option i {
+            width: 16px;
+            text-align: center;
+            color: var(--kvibe-gray);
+            font-size: 13px;
+        }
+        .kvibe-report-option.selected i { color: #d97706; }
+
+        .kvibe-report-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--kvibe-border);
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            font-family: 'DM Sans', sans-serif;
+            resize: none;
+            height: 72px;
+            line-height: 1.5;
+            color: var(--kvibe-text);
+            margin-top: 6px;
+            transition: border-color 0.15s;
+        }
+        .kvibe-report-textarea:focus { outline: none; border-color: var(--kvibe-primary); }
+        .kvibe-report-textarea::placeholder { color: var(--kvibe-gray-light); }
+
+        .kvibe-action-modal-footer {
+            display: flex;
+            gap: 10px;
+            padding: 18px 20px;
+        }
+
+        .kvibe-action-modal-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: var(--radius-full);
+            font-size: 13.5px;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .kvibe-action-modal-btn-cancel {
+            background: var(--kvibe-border-light);
+            color: var(--kvibe-text);
+            border: 1px solid var(--kvibe-border);
+        }
+        .kvibe-action-modal-btn-cancel:hover { background: var(--kvibe-border); }
+
+        .kvibe-action-modal-btn-danger {
+            background: var(--kvibe-danger);
+            color: white;
+        }
+        .kvibe-action-modal-btn-danger:hover { background: var(--kvibe-danger-hover); }
+
+        .kvibe-action-modal-btn-warn {
+            background: #d97706;
+            color: white;
+        }
+        .kvibe-action-modal-btn-warn:hover { background: #b45309; }
+        .kvibe-action-modal-btn-warn:disabled { opacity: 0.4; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<!-- Toast -->
+<div id="kvibeToast" class="kvibe-toast"></div>
+
+<!-- Profile Picture Full View Modal -->
+<div class="kvibe-pic-modal-overlay" id="profilePicModal">
+    <div class="kvibe-pic-modal-inner">
+        <button class="kvibe-pic-modal-close" id="profilePicModalClose">
+            <i class="fas fa-times"></i>
+        </button>
+        <img src="" alt="Profile picture" class="kvibe-pic-modal-img" id="profilePicModalImg">
+    </div>
+</div>
+
+<!-- Logout Modal -->
+<div class="logout-modal" id="logoutModal">
+    <div class="logout-modal-content">
+        <h3 class="logout-modal-title">Log Out?</h3>
+        <p class="logout-modal-message">Are you sure you want to log out of your account?</p>
+        <div class="logout-modal-buttons">
+            <button class="logout-modal-btn logout-modal-cancel" id="cancelLogout">Cancel</button>
+            <button class="logout-modal-btn logout-modal-confirm" id="confirmLogout">Log Out</button>
+        </div>
+    </div>
+</div>
+
+<!-- Block User Modal -->
+<div class="kvibe-action-modal-overlay" id="blockUserModal">
+    <div class="kvibe-action-modal">
+        <div class="kvibe-action-modal-header">
+            <div class="kvibe-action-modal-icon danger">
+                <i class="fas fa-ban"></i>
+            </div>
+            <h3 class="kvibe-action-modal-title">Block User?</h3>
+            <p class="kvibe-action-modal-desc">
+                <strong id="blockUserHandle"></strong> won't be able to follow you, see your posts, or send you messages. They won't be notified that you blocked them.
+            </p>
+        </div>
+        <div class="kvibe-action-modal-footer">
+            <button class="kvibe-action-modal-btn kvibe-action-modal-btn-cancel" id="cancelBlockBtn">Cancel</button>
+            <button class="kvibe-action-modal-btn kvibe-action-modal-btn-danger" id="confirmBlockBtn">Block</button>
+        </div>
+    </div>
+</div>
+
+<!-- Unblock User Modal -->
+<div class="kvibe-action-modal-overlay" id="unblockUserModal">
+    <div class="kvibe-action-modal">
+        <div class="kvibe-action-modal-header">
+            <div class="kvibe-action-modal-icon" style="background:#f0fdf4;color:#16a34a;">
+                <i class="fas fa-lock-open"></i>
+            </div>
+            <h3 class="kvibe-action-modal-title">Unblock User?</h3>
+            <p class="kvibe-action-modal-desc">
+                <strong id="unblockUserHandle"></strong> will be able to follow you and see your posts again.
+            </p>
+        </div>
+        <div class="kvibe-action-modal-footer">
+            <button class="kvibe-action-modal-btn kvibe-action-modal-btn-cancel" id="cancelUnblockBtn">Cancel</button>
+            <button class="kvibe-action-modal-btn" id="confirmUnblockBtn"
+                    style="background:#16a34a;color:white;flex:1;padding:10px;border:none;border-radius:var(--radius-full);font-size:13.5px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all 0.15s;">
+                Unblock
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Report User Modal -->
+<div class="kvibe-action-modal-overlay" id="reportUserModal">
+    <div class="kvibe-action-modal">
+        <div class="kvibe-action-modal-header">
+            <div class="kvibe-action-modal-icon warn">
+                <i class="fas fa-flag"></i>
+            </div>
+            <h3 class="kvibe-action-modal-title">Report Account</h3>
+            <p class="kvibe-action-modal-desc">Why are you reporting <strong id="reportUserHandle"></strong>? Your report is anonymous.</p>
+        </div>
+        <div class="kvibe-action-modal-body">
+            <div class="kvibe-report-options" id="reportOptions">
+                <button class="kvibe-report-option" data-reason="spam">
+                    <i class="fas fa-robot"></i> Spam or fake account
+                </button>
+                <button class="kvibe-report-option" data-reason="harassment">
+                    <i class="fas fa-exclamation-triangle"></i> Harassment or bullying
+                </button>
+                <button class="kvibe-report-option" data-reason="hate_speech">
+                    <i class="fas fa-times-circle"></i> Hate speech or discrimination
+                </button>
+                <button class="kvibe-report-option" data-reason="inappropriate">
+                    <i class="fas fa-eye-slash"></i> Inappropriate content
+                </button>
+                <button class="kvibe-report-option" data-reason="impersonation">
+                    <i class="fas fa-user-secret"></i> Impersonation
+                </button>
+                <button class="kvibe-report-option" data-reason="other">
+                    <i class="fas fa-ellipsis-h"></i> Something else
+                </button>
+            </div>
+            <textarea class="kvibe-report-textarea" id="reportExtraNote" placeholder="Add more details (optional)…"></textarea>
+        </div>
+        <div class="kvibe-action-modal-footer">
+            <button class="kvibe-action-modal-btn kvibe-action-modal-btn-cancel" id="cancelReportBtn">Cancel</button>
+            <button class="kvibe-action-modal-btn kvibe-action-modal-btn-warn" id="confirmReportBtn" disabled>Submit Report</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Profile Modal -->
+<div class="kvibe-edit-modal-overlay" id="editProfileModal">
+    <div class="kvibe-edit-modal">
+        <div class="kvibe-edit-loading" id="editProfileLoading">
+            <div class="kvibe-edit-loading-spinner"></div>
+        </div>
+        
+        <div class="kvibe-edit-modal-header">
+            <button class="kvibe-edit-modal-close" id="closeEditModal">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 class="kvibe-edit-modal-title">Edit Profile</h3>
+            <button class="kvibe-edit-modal-next" id="nextEditBtn" disabled>Done</button>
+        </div>
+        
+        <div class="kvibe-edit-modal-body">
+            <div class="kvibe-edit-messages" id="editMessages"></div>
+            
+            <div class="kvibe-edit-form-scrollable">
+                <form id="editProfileForm" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="kvibe-edit-profile-pic-section">
+                        <div class="kvibe-edit-profile-pic-container" id="editProfilePicContainer">
+                            <img src="{{user.profile.picture.url}}" 
+                                 alt="Profile Picture" 
+                                 class="kvibe-edit-profile-pic" 
+                                 id="editProfilePicture">
+                            <div class="kvibe-edit-change-photo-btn" id="editChangePhotoBtn">
+                                <i class="fas fa-camera"></i>
+                            </div>
+                        </div>
+                        <input type="file" name="image" id="editImageInput" class="kvibe-edit-file-input" accept="image/*">
+                    </div>
+                    
+                    <div class="kvibe-edit-form">
+                        <div class="kvibe-edit-username-display">
+                            <span class="kvibe-edit-username-label">Username</span>
+                            <span class="kvibe-edit-username-value">@{{user.username}}</span>
+                        </div>
+                        
+                        <div class="kvibe-edit-form-group">
+                            <label class="kvibe-edit-form-label" for="editFirstName">First Name</label>
+                            <input type="text" class="kvibe-edit-form-input" id="editFirstName" name="fname" 
+                                   value="{{user.first_name|default:''}}" placeholder="First name" maxlength="50">
+                            <span class="kvibe-edit-form-help">Your first name as it appears on your profile</span>
+                        </div>
+                        
+                        <div class="kvibe-edit-form-group">
+                            <label class="kvibe-edit-form-label" for="editLastName">Last Name</label>
+                            <input type="text" class="kvibe-edit-form-input" id="editLastName" name="lname" 
+                                   value="{{user.last_name|default:''}}" placeholder="Last name" maxlength="50">
+                            <span class="kvibe-edit-form-help">Your last name as it appears on your profile</span>
+                        </div>
+                        
+                        <div class="kvibe-edit-form-group">
+                            <label class="kvibe-edit-form-label" for="editBio">Bio</label>
+                            <textarea class="kvibe-edit-form-textarea" id="editBio" name="bio" 
+                                      placeholder="Tell something about yourself" maxlength="300">{{profile.bio|default:''}}</textarea>
+                            <div class="kvibe-edit-field-counter" id="bioCounter">0/300</div>
+                        </div>
+                        
+                        <div class="kvibe-edit-form-group">
+                            <label class="kvibe-edit-form-label" for="editPhone">Phone Number</label>
+                            <input type="tel" class="kvibe-edit-form-input" id="editPhone" name="phone" 
+                                   value="{{profile.phone|default:''}}" placeholder="+234----------">
+                            <span class="kvibe-edit-form-help">Only visible to you</span>
+                        </div>
+                        
+                        <div class="kvibe-edit-form-group">
+                            <label class="kvibe-edit-form-label" for="editLocation">Location</label>
+                            <input type="text" class="kvibe-edit-form-input" id="editLocation" name="location" 
+                                   value="{{profile.location|default:''}}" placeholder="City, Country" maxlength="200">
+                        </div>
+                        
+                        <div class="kvibe-edit-form-group">
+                            <label class="kvibe-edit-form-label" for="editAddress">Address</label>
+                            <input type="text" class="kvibe-edit-form-input" id="editAddress" name="address" 
+                                   value="{{profile.address|default:''}}" placeholder="Street, City, State, ZIP" maxlength="500">
+                        </div>
+                        
+                        <div class="kvibe-edit-form-group">
+                            <label class="kvibe-edit-form-label" for="editWebsite">Website</label>
+                            <input type="url" class="kvibe-edit-form-input" id="editWebsite" name="website" 
+                                   value="{{profile.website|default:''}}" placeholder="https://yourwebsite.com" maxlength="500">
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="kvibe-edit-footer-actions">
+            <button type="button" class="kvibe-edit-btn kvibe-edit-btn-cancel" id="cancelEditBtn">Cancel</button>
+            <button type="button" class="kvibe-edit-btn kvibe-edit-btn-save" id="saveEditBtn" disabled>Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MOBILE STICKY SCROLL HEADER ═══ -->
+<div class="kvibe-scroll-header" id="kvibeScrollHeader">
+    <button class="kvibe-scroll-header-back" onclick="history.back()">
+        <i class="fas fa-chevron-left"></i>
+    </button>
+    <div class="kvibe-scroll-header-identity">
+        <img src="{{ user.profile.picture.url }}" alt="{{ user.username }}" class="kvibe-scroll-header-avatar">
+        <div class="kvibe-scroll-header-info">
+            <span class="kvibe-scroll-header-name">{{ user.first_name|default:user.username }} {{ user.last_name }}</span>
+            <span class="kvibe-scroll-header-username">@{{ user.username }}</span>
+        </div>
+    </div>
+    <div class="kvibe-scroll-header-actions">
+        <button class="kvibe-scroll-header-btn" onclick="shareProfile()">
+            <i class="fas fa-share-alt"></i>
+        </button>
+    </div>
+</div>
+
+<!-- ═══ MOBILE HERO CARD (Snapchat-style, mobile only) ═══ -->
+<div class="kvibe-mobile-hero">
+    <div class="kvibe-hero-card">
+        <!-- Background: profile picture as full cover -->
+        <div class="kvibe-hero-bg" style="background-image: url('{{ user.profile.picture.url }}');"></div>
+
+        <!-- Top bar: back + three dots only -->
+        <div class="kvibe-hero-topbar">
+            <button class="kvibe-hero-icon-btn" id="kvibe-back-btn-mobile" onclick="history.back()">
+                <i class="fas fa-chevron-down"></i>
+            </button>
+            <div class="kvibe-hero-topbar-right">
+                <button class="kvibe-hero-icon-btn" id="more-actions-btn-mobile" title="More">
+                    <i class="fas fa-ellipsis-h"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Bottom overlay: avatar + name + stats + actions -->
+        <div class="kvibe-hero-overlay">
+
+            <!-- Avatar + name side by side -->
+            <div class="kvibe-hero-avatar-row">
+                <img src="{{ user.profile.picture.url }}"
+                     alt="{{ user.username }}"
+                     class="kvibe-hero-avatar"
+                     id="mobileHeroAvatar"
+                     onclick="document.getElementById('profilePicModal').classList.add('active'); document.getElementById('profilePicModalImg').src=this.src;">
+                <div class="kvibe-hero-user-info">
+                    <div class="kvibe-hero-name">
+                        {{ user.first_name|default:user.username }} {{ user.last_name }}
+                        {% if user.profile.is_verify %}
+                        <img src="{% static 'images/verify1.jpg' %}" class="verified-icon" alt="Verified">
+                        {% endif %}
+                    </div>
+                    <div class="kvibe-hero-username">{{ user.username }}</div>
+                </div>
+            </div>
+
+            <!-- Stats row: · followers · following · views -->
+            {% if not is_blocked %}
+            <div class="kvibe-hero-stats-row">
+                <a href="{% url 'followers' user.username %}" class="kvibe-hero-stat">
+                    <span class="kvibe-hero-stat-num">{{ profile.followers.count }}</span>&nbsp;Followers
+                </a>
+                <span class="kvibe-hero-stat-dot">·</span>
+                <a href="{% url 'following' user.username %}" class="kvibe-hero-stat">
+                    <span class="kvibe-hero-stat-num">{{ profile.followings.count }}</span>&nbsp;Following
+                </a>
+                {% if profile.bio %}
+                <span class="kvibe-hero-stat-dot">·</span>
+                <span class="kvibe-hero-stat">{{ profile.bio|truncatechars:22 }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Action buttons -->
+            {% if not is_blocked %}
+            <div class="kvibe-hero-actions">
+                {% if request.user == user %}
+                    <button class="kvibe-hero-primary-btn" id="openEditProfileBtnMobile">
+                        <i class="fas fa-pen" style="font-size:13px;"></i> Edit Profile
+                    </button>
+                {% else %}
+                    {% if current_profile in profile.followers.all %}
+                        <form action="{% url 'follow' profile.user.username %}" method="post" style="flex:1;display:flex;">
+                            {% csrf_token %}
+                            <button type="submit" class="kvibe-hero-secondary-btn" style="flex:1;">
+                                <i class="fas fa-check" style="font-size:12px;"></i> Following
+                            </button>
+                        </form>
+                    {% else %}
+                        <form action="{% url 'follow' profile.user.username %}" method="post" style="flex:1;display:flex;">
+                            {% csrf_token %}
+                            <button type="submit" class="kvibe-hero-primary-btn" style="flex:1;">
+                                <i class="fas fa-user-plus" style="font-size:13px;"></i> Follow
+                            </button>
+                        </form>
+                    {% endif %}
+                    <a href="{% url 'message' user.username %}" class="kvibe-hero-secondary-btn">
+                        <i class="fas fa-comment" style="font-size:13px;"></i> Message
+                    </a>
+                {% endif %}
+            </div>
+            {% else %}
+            <!-- Blocked message shown in hero overlay -->
+            <div id="mobileHeroBlockedMsg" style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);border-radius:12px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);">
+                <i class="fas fa-ban" style="color:#fca5a5;font-size:16px;flex-shrink:0;"></i>
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">You've blocked this account</div>
+                    <div style="font-size:11.5px;color:rgba(255,255,255,0.75);line-height:1.4;">Content hidden. Tap ··· to unblock.</div>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MOBILE DETAILS SECTION (below hero, above tabs) ═══ -->
+{% if not is_blocked %}
+<div class="kvibe-mobile-details">
+
+    <!-- Location + Website pill row -->
+    {% if profile.location or profile.website or profile.address %}
+    <div class="kvibe-mobile-pills-row">
+        {% if profile.location %}
+        <div class="kvibe-mobile-pill">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>{{ profile.location }}</span>
+        </div>
+        {% endif %}
+        {% if profile.address %}
+        <div class="kvibe-mobile-pill">
+            <i class="fas fa-home"></i>
+            <span>{{ profile.address|truncatechars:24 }}</span>
+        </div>
+        {% endif %}
+        {% if profile.website and profile.website.strip %}
+        <a href="{{ profile.safe_website }}" target="_blank" rel="noopener noreferrer"
+           onclick="return validateWebsiteLink(this);" class="kvibe-mobile-pill kvibe-mobile-pill-link">
+            <i class="fas fa-envelope"></i>
+            <span>{{ profile.display_website|truncatechars:22 }}</span>
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Bio block -->
+    {% if profile.bio %}
+    <div class="kvibe-mobile-bio-block">{{ profile.bio }}</div>
+    {% endif %}
+
+    <!-- Joined date -->
+    <div class="kvibe-mobile-joined">
+        <i class="far fa-calendar-alt"></i> Joined {{ profile.created_at|date:"F Y" }}
+    </div>
+
+</div>
+{% endif %}
+
+<!-- ═══ MOBILE BOTTOM SHEET MENU ═══ -->
+<div class="kvibe-mobile-sheet-overlay" id="kvibeMobileSheetOverlay" onclick="closeMobileSheet()"></div>
+<div class="kvibe-mobile-sheet" id="kvibeMobileSheet">
+    <div class="kvibe-mobile-sheet-handle"></div>
+
+    <!-- Own profile sheet -->
+    <div id="kvibeSheetOwn">
+        <div class="kvibe-mobile-sheet-header">
+            <img src="{{ user.profile.picture.url }}" class="kvibe-sheet-avatar" alt="">
+            <div>
+                <div class="kvibe-sheet-name">{{ user.first_name|default:user.username }} {{ user.last_name }}</div>
+                <div class="kvibe-sheet-username">@{{ user.username }}</div>
+            </div>
+        </div>
+        <div class="kvibe-mobile-sheet-items">
+            <button class="kvibe-sheet-item" onclick="shareProfile(); closeMobileSheet();">
+                <span class="kvibe-sheet-icon"><i class="fas fa-share-alt"></i></span>
+                <span class="kvibe-sheet-label">Share Profile</span>
+                <i class="fas fa-chevron-right kvibe-sheet-arrow"></i>
+            </button>
+            <button class="kvibe-sheet-item" onclick="closeMobileSheet(); setTimeout(function(){ var d=document.getElementById('openEditProfileBtn'); if(d) d.click(); else document.getElementById('editProfileModal').classList.add('active'); }, 200);">
+                <span class="kvibe-sheet-icon"><i class="fas fa-pen"></i></span>
+                <span class="kvibe-sheet-label">Edit Profile</span>
+                <i class="fas fa-chevron-right kvibe-sheet-arrow"></i>
+            </button>
+            <div class="kvibe-sheet-divider"></div>
+            <button class="kvibe-sheet-item kvibe-sheet-item-danger" onclick="closeMobileSheet(); setTimeout(showLogoutModal, 200);">
+                <span class="kvibe-sheet-icon kvibe-sheet-icon-danger"><i class="fas fa-sign-out-alt"></i></span>
+                <span class="kvibe-sheet-label">Log Out</span>
+                <i class="fas fa-chevron-right kvibe-sheet-arrow"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Other profile sheet -->
+    <div id="kvibeSheetOther" style="display:none;">
+        <div class="kvibe-mobile-sheet-header">
+            <img src="{{ user.profile.picture.url }}" class="kvibe-sheet-avatar" alt="">
+            <div>
+                <div class="kvibe-sheet-name">{{ user.first_name|default:user.username }} {{ user.last_name }}</div>
+                <div class="kvibe-sheet-username">@{{ user.username }}</div>
+            </div>
+        </div>
+        <div class="kvibe-mobile-sheet-items">
+            <button class="kvibe-sheet-item" onclick="shareProfile(); closeMobileSheet();">
+                <span class="kvibe-sheet-icon"><i class="fas fa-share-alt"></i></span>
+                <span class="kvibe-sheet-label">Share Profile</span>
+                <i class="fas fa-chevron-right kvibe-sheet-arrow"></i>
+            </button>
+            <div class="kvibe-sheet-divider"></div>
+            <button class="kvibe-sheet-item kvibe-sheet-item-warn" onclick="closeMobileSheet(); setTimeout(() => reportUser('{{ user.username }}'), 200);">
+                <span class="kvibe-sheet-icon kvibe-sheet-icon-warn"><i class="fas fa-flag"></i></span>
+                <span class="kvibe-sheet-label">Report</span>
+                <i class="fas fa-chevron-right kvibe-sheet-arrow"></i>
+            </button>
+            <button class="kvibe-sheet-item kvibe-sheet-item-danger" id="kvibeSheetBlockBtn" onclick="closeMobileSheet(); setTimeout(() => blockUser('{{ user.username }}'), 200);">
+                <span class="kvibe-sheet-icon kvibe-sheet-icon-danger"><i class="fas fa-ban"></i></span>
+                <span class="kvibe-sheet-label" id="kvibeSheetBlockLabel">{% if is_blocked %}Unblock{% else %}Block{% endif %}</span>
+                <i class="fas fa-chevron-right kvibe-sheet-arrow"></i>
+            </button>
+        </div>
+    </div>
+
+    <button class="kvibe-sheet-cancel" onclick="closeMobileSheet()">Cancel</button>
+</div>
+
+<!-- Desktop Layout -->
+<div class="kvibe-desktop-layout">
+
+    <!-- Left Sidebar (Desktop) -->
+    <aside class="kvibe-left-sidebar kvibe-desktop-only">
+        <div class="kvibe-desktop-nav">
+            <a href="{% url 'home' %}" class="kvibe-desktop-nav-item" title="Home">
+                <div class="kvibe-desktop-nav-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-width="1.8" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span class="kvibe-desktop-nav-label">Home</span>
+            </a>
+            
+            <a href="{% url 'explore' %}" class="kvibe-desktop-nav-item" title="Explore">
+                <div class="kvibe-desktop-nav-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z"/>
+                        <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/>
+                    </svg>
+                </div>
+                <span class="kvibe-desktop-nav-label">Explore</span>
+            </a>
+            
+            <a href="{% url 'search' %}" class="kvibe-desktop-nav-item" title="Search">
+                <div class="kvibe-desktop-nav-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="7" stroke-width="1.8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span class="kvibe-desktop-nav-label">Search</span>
+            </a>
+            
+            <a href="{% url 'post' %}" class="kvibe-desktop-nav-item" title="Create">
+                <div class="kvibe-desktop-nav-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9" stroke-width="1.8"/>
+                        <line x1="12" y1="8" x2="12" y2="16" stroke-width="1.8" stroke-linecap="round"/>
+                        <line x1="8" y1="12" x2="16" y2="12" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span class="kvibe-desktop-nav-label">Create</span>
+            </a>
+
+            <a href="{% url 'notification_list' %}" class="kvibe-desktop-nav-item" title="Alerts">
+                <div class="kvibe-desktop-nav-icon">
+                    <i class="fa-regular fa-bell"></i>
+                </div>
+                <span class="kvibe-desktop-nav-label">Alerts</span>
+            </a>
+            
+            <a href="{% url 'profile' request.user.username %}" class="kvibe-desktop-nav-item active" title="Profile">
+                <div class="kvibe-desktop-nav-icon">
+                    <i class="fa-regular fa-user" style="color: var(--kvibe-text);"></i>
+                </div>
+                <span class="kvibe-desktop-nav-label">Profile</span>
+            </a>
+
+            <div class="kvibe-nav-divider"></div>
+            
+            <a href="{% url 'channel_create' %}" class="kvibe-desktop-nav-item" title="Channels">
+                <div class="kvibe-desktop-nav-icon">
+                    <i class="fa-regular fa-newspaper"></i>
+                </div>
+                <span class="kvibe-desktop-nav-label">Channels</span>
+            </a>
+            
+            <a href="{% url 'market' %}" class="kvibe-desktop-nav-item" title="Marketplace">
+                <div class="kvibe-desktop-nav-icon">
+                    <i class="fa-solid fa-store"></i>
+                </div>
+                <span class="kvibe-desktop-nav-label">Market</span>
+            </a>
+            
+            <div class="kvibe-nav-divider"></div>
+
+            <a href="#" class="kvibe-desktop-nav-item logout" id="desktopLogoutBtn" title="Log Out">
+                <div class="kvibe-desktop-nav-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                    </svg>
+                </div>
+                <span class="kvibe-desktop-nav-label">Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Profile -->
+    <div class="kvibe-main-profile">
+        <div class="kvibe-container">
+            <main class="kvibe-main">
+
+                <!-- Fixed top header -->
+                <header class="kvibe-profile-header">
+                    <div class="kvibe-header-inner">
+                        <div class="kvibe-header-back" id="kvibe-back-btn">
+                            <i class="fas fa-arrow-left"></i>
+                        </div>
+                        <div class="kvibe-header-info">
+                            <div class="kvibe-header-name">{{user.first_name|default:user.username}}</div>
+                            <div class="kvibe-header-posts" id="header-posts-count">{{posts|length}} posts</div>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- Cover image -->
+                <div class="kvibe-cover" style="background-image:url('{{ user.profile.picture.url }}');"></div>
+
+                <!-- Profile info card -->
+                <section class="kvibe-profile-info">
+
+                    <!-- Centered avatar -->
+                    <div class="kvibe-avatar-container">
+                        <img src="{{user.profile.picture.url}}" 
+                             alt="{{user.username}}" 
+                             class="kvibe-profile-avatar"
+                             loading="lazy"
+                             id="mainProfilePicture">
+                    </div>
+
+                    <!-- Profile details: name, username, bio, meta, stats — all centered -->
+                    <div class="kvibe-profile-details">
+                        <h1 class="kvibe-profile-name" id="mainProfileName">
+                            {{user.first_name}} {{user.last_name}}
+                            {% if user.profile.is_verify %}
+                            <span class="kvibe-verified-badge">
+                                <img src="{% static 'images/verify1.jpg' %}" alt="Verified" loading="lazy">
+                            </span>
+                            {% endif %}
+                        </h1>
+
+                        <div class="kvibe-profile-username">@{{user.username}}</div>
+
+                        {% if profile.bio %}
+                        <div class="kvibe-profile-bio" id="mainProfileBio">{{profile.bio}}</div>
+                        {% endif %}
+
+                        <!-- Vibe Summary Badge (populated by JS) -->
+                        <div class="kvibe-vibe-summary-badge" id="vibeSummaryBadge" style="display:none;">
+                            <span class="vibe-icon">✨</span>
+                            <span id="vibeSummaryText"></span>
+                        </div>
+
+                        <!-- Meta info row -->
+                        <div class="kvibe-profile-meta">
+                            {% if profile.location %}
+                            <div class="kvibe-meta-item">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span id="mainProfileLocation">{{profile.location}}</span>
+                            </div>
+                            {% endif %}
+                            {% if profile.address %}
+                            <div class="kvibe-meta-item">
+                                <i class="fas fa-home"></i>
+                                <span id="mainProfileAddress">{{profile.address}}</span>
+                            </div>
+                            {% endif %}
+                            {% if profile.website and profile.website.strip %}
+                            <div class="kvibe-meta-item">
+                                <i class="fas fa-link"></i>
+                                <span id="mainProfileWebsite">
+                                    <a href="{{ profile.safe_website}}" target="_blank" rel="noopener noreferrer"
+                                       onclick="return validateWebsiteLink(this);">
+                                        {{profile.display_website|truncatechars:28}}
+                                    </a>
+                                </span>
+                            </div>
+                            {% endif %}
+                            <div class="kvibe-meta-item">
+                                <i class="far fa-calendar"></i>
+                                <span>Joined {{profile.created_at|date:"F Y"}}</span>
+                            </div>
+                        </div>
+
+                        <!-- Follow stats pill row -->
+                        <div class="kvibe-follow-stats">
+                            <a href="{% url 'following' user.username %}" class="kvibe-follow-stat">
+                                <span class="kvibe-follow-number">{{profile.followings.count}}</span>
+                                <span>Following</span>
+                            </a>
+                            <a href="{% url 'followers' user.username %}" class="kvibe-follow-stat">
+                                <span class="kvibe-follow-number">{{profile.followers.count}}</span>
+                                <span>Followers</span>
+                            </a>
+                            <span class="kvibe-follow-stat">
+                                <span class="kvibe-follow-number">{{total_view}}</span>
+                                <span>Views</span>
+                            </span>
+                        </div>
+
+                        <!-- Action buttons -->
+                        <div class="kvibe-profile-actions">
+                            {% if request.user == user %}
+                            <button class="kvibe-action-btn" id="openEditProfileBtn">
+                                <i class="fas fa-pen" style="font-size:11px;"></i> Edit profile
+                            </button>
+                            <button class="kvibe-more-actions" id="more-actions-btn">
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                            {% else %}
+                            {% if current_profile in profile.followers.all %}
+                                <form action="{% url 'follow' profile.user.username %}" method="post" style="display: inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="kvibe-action-btn">Following</button>
+                                </form>
+                            {% else %}
+                                <form action="{% url 'follow' profile.user.username %}" method="post" style="display: inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="kvibe-action-btn kvibe-action-btn-primary">Follow</button>
+                                </form>
+                            {% endif %}
+                            <a href="{% url 'message' user.username %}" class="kvibe-action-btn">Message</a>
+                            <button class="kvibe-more-actions" id="more-actions-btn-other">
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Mobile Mutual Connections -->
+                    <div class="kvibe-mobile-mutual">
+                        <h3 class="kvibe-mobile-mutual-title">
+                            <i class="fas fa-user-friends"></i> 
+                            {% if request.user == user %}Your Followers{% else %}Mutual Connections{% endif %}
+                        </h3>
+                        
+                        {% if request.user == user %}
+                            {% if profile.followers.all %}
+                                <div class="kvibe-mutual-avatars-mobile" id="mutualAvatarsMobile">
+                                    {% for follower in profile.followers.all|slice:":8" %}
+                                        <a href="{% url 'profile' follower.user.username %}" title="{{ follower.user.username }}">
+                                            <img src="{{ follower.picture.url }}" alt="{{ follower.user.username }}" 
+                                                 class="kvibe-mutual-avatar-mobile"
+                                                 data-username="{{ follower.user.username }}" 
+                                                 style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid white; margin-right: 6px; cursor: pointer; object-fit: cover;">
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="kvibe-mutual-text-mobile">You don't have any followers yet.</div>
+                            {% endif %}
+                        
+                        {% elif mutual_count > 0 %}
+                            <div class="kvibe-mutual-avatars-mobile" id="mutualAvatarsMobile">
+                                {% for mutual in mutual_followings|slice:":8" %}
+                                    <a href="{% url 'profile' mutual.user.username %}" title="{{ mutual.user.username }}">
+                                        <img src="{{ mutual.picture.url }}" alt="{{ mutual.user.username }}" 
+                                             class="kvibe-mutual-avatar-mobile" data-username="{{ mutual.user.username }}"
+                                             style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid white; margin-right: 6px; cursor: pointer; object-fit: cover;">
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="kvibe-mutual-text-mobile">No mutual connections yet.</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Mobile Vibe Score (hidden on mobile) -->
+                    <div id="mobileVibeScoreCard" style="display:none;">
+                        <p id="mobileVibeScoreSentence"></p>
+                        <div id="mobileVibeBarsContainer"></div>
+                    </div>
+
+                    <!-- Blocked Banner (shown when current user has blocked this profile) -->
+                    {% if is_blocked %}
+                    <div id="blockedBanner" style="display:flex;align-items:center;gap:12px;margin:14px 20px;padding:14px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-md);">
+                        <div style="width:36px;height:36px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-ban" style="color:var(--kvibe-danger);font-size:15px;"></i>
+                        </div>
+                        <div style="flex:1;">
+                            <div style="font-size:13.5px;font-weight:600;color:#991b1b;margin-bottom:2px;">You've blocked this account</div>
+                            <div style="font-size:12.5px;color:#b91c1c;line-height:1.4;">Their content is hidden. You can unblock them from the ··· menu.</div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div id="blockedBanner" style="display:none;align-items:center;gap:12px;margin:14px 20px;padding:14px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-md);">
+                        <div style="width:36px;height:36px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-ban" style="color:var(--kvibe-danger);font-size:15px;"></i>
+                        </div>
+                        <div style="flex:1;">
+                            <div style="font-size:13.5px;font-weight:600;color:#991b1b;margin-bottom:2px;">You've blocked this account</div>
+                            <div style="font-size:12.5px;color:#b91c1c;line-height:1.4;">Their content is hidden. You can unblock them from the ··· menu.</div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                </section>
+
+                <!-- Tabs — outside profile-info so they show on mobile too -->
+                <nav class="kvibe-tabs">
+                    <button data-tab="posts" data-url="{% url 'profile' user.username %}" class="kvibe-tab kvibe-tab-active">
+                        <i class="fas fa-th kvibe-tab-icon"></i><span>Posts</span>
+                    </button>
+                    <button data-tab="videos" data-url="{% url 'profile_videos' user.username %}" class="kvibe-tab">
+                        <i class="fas fa-play kvibe-tab-icon"></i><span>Videos</span>
+                    </button>
+                    <button data-tab="audio" data-url="{% url 'profile_audios' user.username %}" class="kvibe-tab">
+                        <i class="fas fa-music kvibe-tab-icon"></i><span>Audio</span>
+                    </button>
+                    <button data-tab="text" data-url="{% url 'profile_text_posts' user.username %}" class="kvibe-tab">
+                        <i class="fas fa-align-left kvibe-tab-icon"></i><span>Text</span>
+                    </button>
+                </nav>
+
+                <!-- Mood Filter Row -->
+                <div class="kvibe-mood-filter-row" id="profileMoodFilterRow" style="display:none;">
+                    <button class="kvibe-profile-mood-chip active" style="--chip-color:#111;" data-mood="all" onclick="profileFilterMood('all',this)">
+                        All <span class="chip-count" id="moodCountAll">0</span>
+                    </button>
+                    <button class="kvibe-profile-mood-chip" style="--chip-color:#ff1493;" data-mood="slay" onclick="profileFilterMood('slay',this)">
+                        💅 slay <span class="chip-count" id="moodCountSlay">0</span>
+                    </button>
+                    <button class="kvibe-profile-mood-chip" style="--chip-color:#9933ff;" data-mood="vibing" onclick="profileFilterMood('vibing',this)">
+                        🎵 vibing <span class="chip-count" id="moodCountVibing">0</span>
+                    </button>
+                    <button class="kvibe-profile-mood-chip" style="--chip-color:#00cc66;" data-mood="sheesh" onclick="profileFilterMood('sheesh',this)">
+                        🥶 sheesh <span class="chip-count" id="moodCountSheesh">0</span>
+                    </button>
+                    <button class="kvibe-profile-mood-chip" style="--chip-color:#ff6b00;" data-mood="periodt" onclick="profileFilterMood('periodt',this)">
+                        ⏸️ periodt <span class="chip-count" id="moodCountPeriodt">0</span>
+                    </button>
+                    <button class="kvibe-profile-mood-chip" style="--chip-color:#ff4444;" data-mood="no-cap" onclick="profileFilterMood('no-cap',this)">
+                        🎯 no cap <span class="chip-count" id="moodCountNocap">0</span>
+                    </button>
+                    <button class="kvibe-profile-mood-chip" style="--chip-color:#ffd700;" data-mood="bussin" onclick="profileFilterMood('bussin',this)">
+                        🔥 bussin <span class="chip-count" id="moodCountBussin">0</span>
+                    </button>
+                    <button class="kvibe-profile-mood-chip" style="--chip-color:#808080;" data-mood="mid" onclick="profileFilterMood('mid',this)">
+                        😐 mid <span class="chip-count" id="moodCountMid">0</span>
+                    </button>
+                    <button class="kvibe-profile-mood-chip" style="--chip-color:#8b4513;" data-mood="cringe" onclick="profileFilterMood('cringe',this)">
+                        😬 cringe <span class="chip-count" id="moodCountCringe">0</span>
+                    </button>
+                    <!-- custom mood chips injected by JS -->
+                    <div id="profileCustomMoodChips" style="display:contents;"></div>
+                </div>
+
+                <!-- Posts Container -->
+                <section class="kvibe-posts-container kvibe-webview-fix" id="posts-container">
+                    {% if posts %}
+                    <div class="kvibe-posts-grid">
+                        {% for post in posts %}
+                            {% if post.preview_type == 'image' and post.preview_url %}
+                                <a href="{% url 'post_comment' post.post_id %}" class="kvibe-post-item" data-mood="{{ post.mood|default:'' }}" data-custom-mood="{{ post.custom_mood|default:'' }}">
+                                    {% if post.preview_url %}
+                                        <img src="{{ post.preview_url }}" alt="Post" class="kvibe-post-image" loading="lazy">
+                                    {% else %}
+                                        <div class="kvibe-placeholder"></div>
+                                    {% endif %}
+                                    {% if post.mood %}
+                                    <span class="kvibe-post-mood-tag">{{ post.mood }}</span>
+                                    {% endif %}
+                                    <div class="kvibe-post-overlay">
+                                        <span><i class="fa-solid fa-heart"></i> {{post.likes.count}}</span>
+                                        <span><i class="fa-solid fa-comment"></i> {{post.comments.count}}</span>
+                                        <span><i class="fa-regular fa-eye"></i> {{post.view|intcomma}}</span>
+                                    </div>
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="kvibe-no-posts">
+                        <h2 class="kvibe-no-posts-title">No posts yet</h2>
+                        <p class="kvibe-no-posts-text">When they do, their posts will show up here.</p>
+                    </div>
+                    {% endif %}
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Right Sidebar (Desktop) -->
+    <aside class="kvibe-right-sidebar kvibe-desktop-only">
+        <!-- Vibe Score Card -->
+        <div class="kvibe-vibe-card" id="vibeScoreCard" style="display:none;">
+            <div class="kvibe-vibe-card-header">
+                <span class="kvibe-vibe-card-title">Vibe Score</span>
+                <span class="kvibe-vibe-emoji">✨</span>
+            </div>
+            <p class="kvibe-vibe-sentence" id="vibeScoreSentence"></p>
+            <div class="kvibe-vibe-bars" id="vibeBarsContainer"></div>
+        </div>
+
+        <!-- Stats Card -->
+        <div class="kvibe-stats-card">
+            <div class="kvibe-stats-card-header">
+                <h3 class="kvibe-stats-card-title">Profile Stats</h3>
+            </div>
+            <div class="kvibe-stats-grid">
+                <div class="kvibe-stat-item">
+                    <span class="kvibe-stat-number">{{posts|length}}</span>
+                    <span class="kvibe-stat-label">Posts</span>
+                </div>
+                <div class="kvibe-stat-item">
+                    <span class="kvibe-stat-number">{{profile.followings.count}}</span>
+                    <span class="kvibe-stat-label">Following</span>
+                </div>
+                <div class="kvibe-stat-item">
+                    <span class="kvibe-stat-number">{{profile.followers.count}}</span>
+                    <span class="kvibe-stat-label">Followers</span>
+                </div>
+                <div class="kvibe-stat-item">
+                    <span class="kvibe-stat-number">{{total_view}}</span>
+                    <span class="kvibe-stat-label">Views</span>
+                </div>
+                <div class="kvibe-stat-item">
+                    <span class="kvibe-stat-number">{{total_like_recieved}}</span>
+                    <span class="kvibe-stat-label">Likes</span>
+                </div>
+                <div class="kvibe-stat-item">
+                    <span class="kvibe-stat-number">{{total_comments_received}}</span>
+                    <span class="kvibe-stat-label">Comments</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mutual / Followers Card -->
+        <div class="kvibe-stats-card">
+            <div class="kvibe-stats-card-header">
+                <h3 class="kvibe-stats-card-title">
+                    {% if request.user == user %}Your Followers{% else %}Mutual Connections{% endif %}
+                </h3>
+            </div>
+            <div class="kvibe-mutual-section">
+                {% if request.user == user %}
+                    {% if profile.followers.all %}
+                        <div class="kvibe-mutual-avatars">
+                            {% for follower in profile.followers.all|slice:":10" %}
+                                <a href="{% url 'profile' follower.user.username %}" title="{{ follower.user.username }}">
+                                    <img src="{{ follower.picture.url }}" alt="{{ follower.user.username }}">
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="kvibe-mutual-text">No followers yet.</p>
+                    {% endif %}
+                
+                {% elif mutual_count > 0 %}
+                    <div class="kvibe-mutual-avatars">
+                        {% for mutual in mutual_followings|slice:":10" %}
+                            <a href="{% url 'profile' mutual.user.username %}" title="{{ mutual.user.username }}">
+                                <img src="{{ mutual.picture.url }}" alt="{{ mutual.user.username }}">
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="kvibe-mutual-text">No mutual connections yet.</p>
+                {% endif %}
+
+                <a href="{% url 'followers' user.username %}" class="kvibe-view-all-btn">
+                    <i class="fas fa-users" style="font-size:12px;"></i> View All
+                </a>
+            </div>
+        </div>
+    </aside>
+
+</div>
+
+{% include 'footer.html' %}
+<script>
+// ── Mobile Bottom Sheet ─────────────────────────────────────────
+function openMobileSheet(type) {
+    // type = 'own' or 'other'
+    document.getElementById('kvibeSheetOwn').style.display   = type === 'own'   ? '' : 'none';
+    document.getElementById('kvibeSheetOther').style.display = type === 'other' ? '' : 'none';
+
+    // Sync block label
+    if (type === 'other') {
+        const lbl = document.getElementById('kvibeSheetBlockLabel');
+        if (lbl) lbl.textContent = _isBlocked ? 'Unblock' : 'Block';
+        const btn = document.getElementById('kvibeSheetBlockBtn');
+        if (btn) {
+            const icon = btn.querySelector('.kvibe-sheet-icon i');
+            if (icon) icon.className = _isBlocked ? 'fas fa-lock-open' : 'fas fa-ban';
+        }
+    }
+
+    document.getElementById('kvibeMobileSheetOverlay').classList.add('active');
+    // small delay so CSS transition fires
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            document.getElementById('kvibeMobileSheet').classList.add('active');
+        });
+    });
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMobileSheet() {
+    document.getElementById('kvibeMobileSheet').classList.remove('active');
+    document.getElementById('kvibeMobileSheetOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+// ── Wire mobile hero buttons to existing functions ──────────────
+document.addEventListener('DOMContentLoaded', function() {
+    // Apply blocked state on initial page load (mobile hero)
+    if (_isBlocked) {
+        _applyBlockedState('{{ user.username }}');
+    }
+
+    // Edit profile button (own profile) — delegate to the desktop button so
+    // initializeForm() runs and the Save button is properly enabled on changes
+    const mobileEditBtn = document.getElementById('openEditProfileBtnMobile');
+    if (mobileEditBtn) {
+        mobileEditBtn.addEventListener('click', function() {
+            const desktopEditBtn = document.getElementById('openEditProfileBtn');
+            if (desktopEditBtn) {
+                desktopEditBtn.click();   // runs initializeForm() + opens modal
+            } else {
+                document.getElementById('editProfileModal').classList.add('active');
+            }
+        });
+    }
+
+    // ··· three dots — own profile
+    const mobileMoreBtn = document.getElementById('more-actions-btn-mobile');
+    if (mobileMoreBtn) {
+        mobileMoreBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Determine if own profile by checking if edit btn exists
+            const isOwn = !!document.getElementById('openEditProfileBtnMobile');
+            openMobileSheet(isOwn ? 'own' : 'other');
+        });
+    }
+
+    // Scroll header share
+    const scrollHeaderShare = document.querySelector('.kvibe-scroll-header-btn');
+    if (scrollHeaderShare) {
+        scrollHeaderShare.addEventListener('click', shareProfile);
+    }
+
+    // ── Scroll: fade hero, reveal sticky header ──────────────────
+    const heroCard   = document.querySelector('.kvibe-hero-card');
+    const scrollHdr  = document.getElementById('kvibeScrollHeader');
+
+    if (heroCard && scrollHdr && window.innerWidth <= 767) {
+        const heroHeight = heroCard.offsetHeight || 420;
+        const fadeStart  = heroHeight * 0.25;
+        const fadeEnd    = heroHeight * 0.70;
+
+        function onScroll() {
+            const scrollY = window.scrollY || window.pageYOffset;
+            let progress = 0;
+            if (scrollY > fadeStart) {
+                progress = Math.min((scrollY - fadeStart) / (fadeEnd - fadeStart), 1);
+            }
+            heroCard.style.opacity = 1 - progress;
+            if (progress > 0.55) {
+                scrollHdr.classList.add('visible');
+            } else {
+                scrollHdr.classList.remove('visible');
+            }
+        }
+
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 767) {
+                heroCard.style.opacity = '';
+                scrollHdr.classList.remove('visible');
+            }
+        });
+    }
+});
+
+function showToast(message, type = 'info', duration = 3000) {
+    const toast = document.getElementById('kvibeToast');
+    if (!toast) return;
+    
+    toast.textContent = message;
+    toast.className = 'kvibe-toast ' + type;
+    toast.classList.add('show');
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, duration);
+}
+
+// Security function to validate website links
+function validateWebsiteLink(linkElement) {
+    const href = linkElement.getAttribute('href');
+    
+    // Basic URL validation
+    try {
+        const url = new URL(href);
+        
+        // Check for potentially dangerous protocols
+        const dangerousProtocols = ['javascript:', 'data:', 'vbscript:', 'file:'];
+        if (dangerousProtocols.some(proto => url.protocol.toLowerCase().startsWith(proto))) {
+            console.warn('Blocked potentially dangerous URL:', href);
+            return false;
+        }
+        
+        // Allow only http and https protocols
+        if (!['http:', 'https:'].includes(url.protocol)) {
+            console.warn('Blocked non-http(s) URL:', href);
+            return false;
+        }
+        
+        // Additional security checks
+        if (href.includes('<script>') || href.includes('javascript:') || href.includes('data:text/html')) {
+            console.warn('Blocked potentially malicious URL:', href);
+            return false;
+        }
+        
+        // All checks passed - allow navigation
+        return true;
+        
+    } catch (error) {
+        console.warn('Invalid URL:', href, error);
+        return false;
+    }
+}
+
+// Share profile function
+function shareProfile() {
+    const profileUrl = window.location.href;
+    const profileName = document.querySelector('.kvibe-profile-name')?.textContent || 'Kvibe User';
+    
+    if (navigator.share) {
+        navigator.share({
+            title: profileName,
+            text: `Check out ${profileName}'s profile on Kvibe`,
+            url: profileUrl,
+        })
+        .then(() => showToast('Profile shared successfully!', 'success'))
+        .catch((error) => {
+            if (error.name !== 'AbortError') {
+                console.error('Error sharing:', error);
+                fallbackShare(profileUrl);
+            }
+        });
+    } else {
+        fallbackShare(profileUrl);
+    }
+}
+
+// Fallback share method (copy to clipboard)
+function fallbackShare(url) {
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Profile link copied to clipboard!', 'success');
+    }).catch(() => {
+        showToast('Could not copy link. Please copy manually.', 'error');
+    });
+}
+
+// ─── Block / Unblock User ────────────────────────────────────
+let _blockUsername = '';
+// Initialised from Django context so JS always knows the current state
+let _isBlocked = {% if is_blocked %}true{% else %}false{% endif %};
+
+function blockUser(username) {
+    _blockUsername = username;
+    if (_isBlocked) {
+        // Already blocked — go straight to unblock
+        _doUnblockUser();
+        return;
+    }
+    document.getElementById('blockUserHandle').textContent = '@' + username;
+    document.getElementById('blockUserModal').classList.add('active');
+    const menu = document.querySelector('.kvibe-actions-menu');
+    if (menu) menu.remove();
+}
+
+function _doBlockUser() {
+    const username = _blockUsername;
+    const confirmBtn = document.getElementById('confirmBlockBtn');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Blocking…';
+
+    fetch(`/block/${username}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('blockUserModal').classList.remove('active');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Block';
+        if (data.success) {
+            _isBlocked = true;
+            showToast(`@${username} has been blocked`, 'success');
+            // Show the blocked-state banner and hide interactive sections
+            _applyBlockedState(username);
+        } else {
+            showToast(data.error || 'Failed to block user', 'error');
+        }
+    })
+    .catch(() => {
+        document.getElementById('blockUserModal').classList.remove('active');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Block';
+        showToast('An error occurred. Please try again.', 'error');
+    });
+}
+
+function _doUnblockUser() {
+    const username = _blockUsername || "{{ user.username }}";
+    const unblockModal = document.getElementById('unblockUserModal');
+    if (unblockModal) {
+        document.getElementById('unblockUserHandle').textContent = '@' + username;
+        unblockModal.classList.add('active');
+    }
+    const menu = document.querySelector('.kvibe-actions-menu');
+    if (menu) menu.remove();
+}
+
+function _confirmUnblock() {
+    const username = _blockUsername || "{{ user.username }}";
+    const confirmBtn = document.getElementById('confirmUnblockBtn');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Unblocking…';
+
+    fetch(`/block/${username}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('unblockUserModal').classList.remove('active');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Unblock';
+        if (data.success) {
+            _isBlocked = false;
+            showToast(`@${username} has been unblocked`, 'success');
+            // Reload so all hidden content (posts, bio, details) reappears cleanly
+            setTimeout(() => { window.location.reload(); }, 900);
+        } else {
+            showToast(data.error || 'Failed to unblock user', 'error');
+        }
+    })
+    .catch(() => {
+        document.getElementById('unblockUserModal').classList.remove('active');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Unblock';
+        showToast('An error occurred. Please try again.', 'error');
+    });
+}
+
+function _applyBlockedState(username) {
+    // Show the blocked banner (desktop)
+    const banner = document.getElementById('blockedBanner');
+    if (banner) banner.style.display = 'flex';
+    // Hide posts grid, tabs, follow/message buttons
+    const postsContainer = document.getElementById('posts-container');
+    if (postsContainer) postsContainer.style.display = 'none';
+    document.querySelectorAll('.kvibe-tabs').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.kvibe-mood-filter-row').forEach(t => t.style.display = 'none');
+    // Hide follow/message actions; keep the ⋯ button
+    const followForms = document.querySelectorAll('.kvibe-profile-actions form, .kvibe-profile-actions a');
+    followForms.forEach(el => el.style.display = 'none');
+
+    // ── Mobile hero blocked state ──────────────────────────────
+    // Hide mobile hero stats row, bio snippet, and action buttons
+    const heroStats   = document.querySelector('.kvibe-hero-stats-row');
+    const heroActions = document.querySelector('.kvibe-hero-actions');
+    if (heroStats)   heroStats.style.display = 'none';
+    if (heroActions) heroActions.style.display = 'none';
+
+    // Show mobile blocked message inside hero overlay
+    let mobileBlockedMsg = document.getElementById('mobileHeroBlockedMsg');
+    if (!mobileBlockedMsg) {
+        mobileBlockedMsg = document.createElement('div');
+        mobileBlockedMsg.id = 'mobileHeroBlockedMsg';
+        mobileBlockedMsg.style.cssText = 'display:flex;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);border-radius:12px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+        mobileBlockedMsg.innerHTML = '<i class="fas fa-ban" style="color:#fca5a5;font-size:16px;flex-shrink:0;"></i><div><div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">You\'ve blocked this account</div><div style="font-size:11.5px;color:rgba(255,255,255,0.75);line-height:1.4;">Content hidden. Tap ··· to unblock.</div></div>';
+        const heroOverlay = document.querySelector('.kvibe-hero-overlay');
+        if (heroOverlay) heroOverlay.appendChild(mobileBlockedMsg);
+    } else {
+        mobileBlockedMsg.style.display = 'flex';
+    }
+
+    // Hide mobile details section (location, bio, joined)
+    const mobileDetails = document.querySelector('.kvibe-mobile-details');
+    if (mobileDetails) mobileDetails.style.display = 'none';
+}
+
+function _removeBlockedState() {
+    const banner = document.getElementById('blockedBanner');
+    if (banner) banner.style.display = 'none';
+    const postsContainer = document.getElementById('posts-container');
+    if (postsContainer) postsContainer.style.display = '';
+    document.querySelectorAll('.kvibe-tabs').forEach(t => t.style.display = '');
+    document.querySelectorAll('.kvibe-mood-filter-row').forEach(t => t.style.display = '');
+    const followForms = document.querySelectorAll('.kvibe-profile-actions form, .kvibe-profile-actions a');
+    followForms.forEach(el => el.style.display = '');
+
+    // Restore mobile hero
+    const heroStats   = document.querySelector('.kvibe-hero-stats-row');
+    const heroActions = document.querySelector('.kvibe-hero-actions');
+    if (heroStats)   heroStats.style.display = '';
+    if (heroActions) heroActions.style.display = '';
+    const mobileBlockedMsg = document.getElementById('mobileHeroBlockedMsg');
+    if (mobileBlockedMsg) mobileBlockedMsg.style.display = 'none';
+    const mobileDetails = document.querySelector('.kvibe-mobile-details');
+    if (mobileDetails) mobileDetails.style.display = '';
+}
+
+// ─── Report User ─────────────────────────────────────────────
+let _reportUsername = '';
+let _reportSelectedReason = '';
+
+function reportUser(username) {
+    _reportUsername = username;
+    _reportSelectedReason = '';
+    document.getElementById('reportUserHandle').textContent = '@' + username;
+    document.getElementById('reportExtraNote').value = '';
+    document.getElementById('confirmReportBtn').disabled = true;
+    // clear selections
+    document.querySelectorAll('.kvibe-report-option').forEach(o => o.classList.remove('selected'));
+    document.getElementById('reportUserModal').classList.add('active');
+    // close any open menu
+    const menu = document.querySelector('.kvibe-actions-menu');
+    if (menu) menu.remove();
+}
+
+function _doReportUser() {
+    const username = _reportUsername;
+    const reason = _reportSelectedReason;
+    const note = document.getElementById('reportExtraNote').value.trim();
+    const confirmBtn = document.getElementById('confirmReportBtn');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Submitting…';
+
+    fetch(`/report/${username}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason: reason, note: note })
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('reportUserModal').classList.remove('active');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Submit Report';
+        if (data.success) {
+            showToast(`Thank you for your report. Our team will review it.`, 'success');
+        } else {
+            showToast(data.error || 'Failed to submit report', 'error');
+        }
+    })
+    .catch(() => {
+        document.getElementById('reportUserModal').classList.remove('active');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Submit Report';
+        showToast('An error occurred. Please try again.', 'error');
+    });
+}
+
+// More actions menu (for own profile)
+function showMoreActionsMenu(button) {
+    const existingMenu = document.querySelector('.kvibe-actions-menu');
+    if (existingMenu) existingMenu.remove();
+    
+    const rect = button.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'kvibe-actions-menu';
+    menu.style.position = 'fixed';
+    menu.style.top = `${rect.bottom + 5}px`;
+    menu.style.right = `${window.innerWidth - rect.right}px`;
+    menu.style.zIndex = '10000';
+    
+    menu.innerHTML = `
+        <button class="kvibe-menu-item" onclick="shareProfile()">
+            <i class="fas fa-share-alt"></i> Share Profile
+        </button>
+        <div class="kvibe-menu-divider"></div>
+        <button class="kvibe-menu-item danger" onclick="showLogoutModal()">
+            <i class="fas fa-sign-out-alt"></i> Log Out
+        </button>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    // Close menu when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target) && e.target !== button) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        });
+    }, 100);
+}
+
+// More actions menu (for other profiles)
+function showOtherProfileActionsMenu(button, username) {
+    const existingMenu = document.querySelector('.kvibe-actions-menu');
+    if (existingMenu) existingMenu.remove();
+    
+    const rect = button.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'kvibe-actions-menu';
+    menu.style.position = 'fixed';
+    menu.style.top = `${rect.bottom + 5}px`;
+    menu.style.right = `${window.innerWidth - rect.right}px`;
+    menu.style.zIndex = '10000';
+    
+    const blockLabel = _isBlocked
+        ? `<i class="fas fa-lock-open"></i> Unblock`
+        : `<i class="fas fa-ban"></i> Block`;
+
+    menu.innerHTML = `
+        <button class="kvibe-menu-item" onclick="shareProfile()">
+            <i class="fas fa-share-alt"></i> Share Profile
+        </button>
+        <div class="kvibe-menu-divider"></div>
+        <button class="kvibe-menu-item" onclick="reportUser('${username}')">
+            <i class="fas fa-flag"></i> Report
+        </button>
+        <button class="kvibe-menu-item danger" onclick="blockUser('${username}')">
+            ${blockLabel}
+        </button>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target) && e.target !== button) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        });
+    }, 100);
+}
+
+// Logout modal functions (from footer)
+function showLogoutModal() {
+    const modal = document.getElementById('logoutModal');
+    if (modal) {
+        modal.classList.add('active');
+    }
+}
+
+function hideLogoutModal() {
+    const modal = document.getElementById('logoutModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function confirmLogout() {
+    window.location.href = "{% url 'logout' %}";
+}
+
+// Attach validation to all website links
+document.addEventListener('DOMContentLoaded', function() {
+    const websiteLinks = document.querySelectorAll('a[href*="http"]');
+    websiteLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (!validateWebsiteLink(this)) {
+                e.preventDefault();
+                showToast('This link appears to be invalid or unsafe. Please check the URL.', 'error');
+            }
+        });
+    });
+    
+    // More actions button (own profile)
+    const moreActionsBtn = document.getElementById('more-actions-btn');
+    if (moreActionsBtn) {
+        moreActionsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            showMoreActionsMenu(this);
+        });
+    }
+    
+    // More actions button (other profiles)
+    const moreActionsBtnOther = document.getElementById('more-actions-btn-other');
+    if (moreActionsBtnOther) {
+        const username = "{{ user.username }}";
+        moreActionsBtnOther.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            showOtherProfileActionsMenu(this, username);
+        });
+    }
+    
+    // Desktop logout button
+    const desktopLogoutBtn = document.getElementById('desktopLogoutBtn');
+    if (desktopLogoutBtn) {
+        desktopLogoutBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            showLogoutModal();
+        });
+    }
+    
+    // Logout modal buttons
+    const cancelLogout = document.getElementById('cancelLogout');
+    const confirmLogoutBtn = document.getElementById('confirmLogout');
+    const logoutModal = document.getElementById('logoutModal');
+    
+    if (cancelLogout) {
+        cancelLogout.addEventListener('click', hideLogoutModal);
+    }
+    
+    if (confirmLogoutBtn) {
+        confirmLogoutBtn.addEventListener('click', confirmLogout);
+    }
+    
+    if (logoutModal) {
+        logoutModal.addEventListener('click', function(e) {
+            if (e.target === logoutModal) {
+                hideLogoutModal();
+            }
+        });
+    }
+    
+    // Escape key to close modal
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            hideLogoutModal();
+            document.getElementById('blockUserModal')?.classList.remove('active');
+            document.getElementById('unblockUserModal')?.classList.remove('active');
+            document.getElementById('reportUserModal')?.classList.remove('active');
+            const menu = document.querySelector('.kvibe-actions-menu');
+            if (menu) menu.remove();
+        }
+    });
+
+    // ─── Block Modal Listeners ───────────────────────
+    const blockModal = document.getElementById('blockUserModal');
+    document.getElementById('cancelBlockBtn')?.addEventListener('click', () => {
+        blockModal.classList.remove('active');
+    });
+    document.getElementById('confirmBlockBtn')?.addEventListener('click', _doBlockUser);
+    blockModal?.addEventListener('click', e => {
+        if (e.target === blockModal) blockModal.classList.remove('active');
+    });
+
+    // ─── Unblock Modal Listeners ─────────────────────
+    const unblockModal = document.getElementById('unblockUserModal');
+    document.getElementById('cancelUnblockBtn')?.addEventListener('click', () => {
+        unblockModal.classList.remove('active');
+    });
+    document.getElementById('confirmUnblockBtn')?.addEventListener('click', _confirmUnblock);
+    unblockModal?.addEventListener('click', e => {
+        if (e.target === unblockModal) unblockModal.classList.remove('active');
+    });
+
+    // Apply blocked state on page load if already blocked
+    if (_isBlocked) {
+        _applyBlockedState("{{ user.username }}");
+    }
+
+    // ─── Report Modal Listeners ──────────────────────
+    const reportModal = document.getElementById('reportUserModal');
+    document.getElementById('cancelReportBtn')?.addEventListener('click', () => {
+        reportModal.classList.remove('active');
+    });
+    document.getElementById('confirmReportBtn')?.addEventListener('click', _doReportUser);
+    reportModal?.addEventListener('click', e => {
+        if (e.target === reportModal) reportModal.classList.remove('active');
+    });
+
+    // Report reason option selection
+    document.querySelectorAll('.kvibe-report-option').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.kvibe-report-option').forEach(o => o.classList.remove('selected'));
+            this.classList.add('selected');
+            _reportSelectedReason = this.getAttribute('data-reason');
+            document.getElementById('confirmReportBtn').disabled = false;
+        });
+    });
+});
+
+// Edit Profile Modal Functionality - IMPROVED FOR RESPONSIVENESS
+(function() {
+    'use strict';
+    
+    // Modal Elements
+    const editProfileModal = document.getElementById('editProfileModal');
+    const openEditProfileBtn = document.getElementById('openEditProfileBtn');
+    const closeEditModal = document.getElementById('closeEditModal');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+    const saveEditBtn = document.getElementById('saveEditBtn');
+    const nextEditBtn = document.getElementById('nextEditBtn');
+    const editProfileForm = document.getElementById('editProfileForm');
+    const editImageInput = document.getElementById('editImageInput');
+    const editChangePhotoBtn = document.getElementById('editChangePhotoBtn');
+    const editProfilePicContainer = document.getElementById('editProfilePicContainer');
+    const editProfilePicture = document.getElementById('editProfilePicture');
+    const editMessages = document.getElementById('editMessages');
+    const editProfileLoading = document.getElementById('editProfileLoading');
+    const editModalBody = document.querySelector('.kvibe-edit-modal-body');
+    const editFormScrollable = document.querySelector('.kvibe-edit-form-scrollable');
+    
+    // Main profile elements to update
+    const mainProfilePicture = document.getElementById('mainProfilePicture');
+    const mainProfileName = document.getElementById('mainProfileName');
+    const mainProfileBio = document.getElementById('mainProfileBio');
+    const mainProfileLocation = document.getElementById('mainProfileLocation');
+    const mainProfileAddress = document.getElementById('mainProfileAddress');
+    const mainProfileWebsite = document.getElementById('mainProfileWebsite');
+    const coverImage = document.querySelector('.kvibe-cover');
+    
+    // Form inputs
+    const editFirstName = document.getElementById('editFirstName');
+    const editLastName = document.getElementById('editLastName');
+    const editBio = document.getElementById('editBio');
+    const editPhone = document.getElementById('editPhone');
+    const editWebsite = document.getElementById('editWebsite');
+    const editAddress = document.getElementById('editAddress');
+    const editLocation = document.getElementById('editLocation');
+    const bioCounter = document.getElementById('bioCounter');
+    
+    // Track form changes
+    let formHasChanges = false;
+    let originalValues = {};
+    
+    // Initialize form
+    function initializeForm() {
+        // Store original values
+        originalValues = {
+            firstName: editFirstName.value.trim(),
+            lastName: editLastName.value.trim(),
+            bio: editBio.value.trim(),
+            phone: editPhone.value.trim(),
+            location: editLocation.value.trim(),
+            address: editAddress.value.trim(),
+            website: editWebsite.value.trim(),
+            picture: editProfilePicture.src
+        };
+        
+        // Initialize bio counter
+        updateBioCounter();
+        
+        // Check form changes
+        checkFormChanges();
+        
+        // Add event listeners for form changes
+        const formInputs = [editFirstName, editLastName, editBio, editPhone, editLocation, editAddress, editWebsite];
+        formInputs.forEach(input => {
+            input.addEventListener('input', handleFormChange);
+            input.addEventListener('change', handleFormChange);
+        });
+        
+        editBio.addEventListener('input', updateBioCounter);
+        
+        // Handle mobile keyboard events
+        formInputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                // On mobile, adjust modal position
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => {
+                        this.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 300);
+                }
+            });
+        });
+    }
+    
+    // Update bio character counter
+    function updateBioCounter() {
+        const currentLength = editBio.value.length;
+        const maxLength = 300;
+        bioCounter.textContent = `${currentLength}/${maxLength}`;
+        
+        if (currentLength > maxLength * 0.9) {
+            bioCounter.className = 'kvibe-edit-field-counter warning';
+        } else if (currentLength > maxLength) {
+            bioCounter.className = 'kvibe-edit-field-counter error';
+        } else {
+            bioCounter.className = 'kvibe-edit-field-counter';
+        }
+    }
+    
+    // Handle form changes
+    function handleFormChange() {
+        checkFormChanges();
+    }
+    
+    // Check if form has changes
+    function checkFormChanges() {
+        const currentValues = {
+            firstName: editFirstName.value.trim(),
+            lastName: editLastName.value.trim(),
+            bio: editBio.value.trim(),
+            phone: editPhone.value.trim(),
+            location: editLocation.value.trim(),
+            address: editAddress.value.trim(),
+            website: editWebsite.value.trim()
+        };
+        
+        formHasChanges = false;
+        
+        // Check text values
+        for (const key in currentValues) {
+            if (currentValues[key] !== originalValues[key]) {
+                formHasChanges = true;
+                break;
+            }
+        }
+        
+        // Check if save button should be enabled
+        saveEditBtn.disabled = !formHasChanges;
+        nextEditBtn.disabled = !formHasChanges;
+        
+        // Update next button class
+        if (formHasChanges) {
+            nextEditBtn.classList.add('active');
+        } else {
+            nextEditBtn.classList.remove('active');
+        }
+    }
+    
+    // Open modal
+    if (openEditProfileBtn) {
+        openEditProfileBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Initialize form
+            initializeForm();
+            
+            // Clear messages
+            editMessages.innerHTML = '';
+            
+            // Reset scroll position
+            if (editFormScrollable) {
+                editFormScrollable.scrollTop = 0;
+            }
+            
+            // Open modal
+            editProfileModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            
+            // Focus first input with slight delay for better UX
+            setTimeout(() => {
+                editFirstName.focus();
+                editFirstName.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 400);
+            
+            // Adjust modal for mobile
+            adjustModalForMobile();
+        });
+    }
+    
+    // Adjust modal for mobile
+    function adjustModalForMobile() {
+        if (window.innerWidth <= 768) {
+            // On mobile, ensure modal is positioned correctly
+            const modal = document.querySelector('.kvibe-edit-modal');
+            if (modal) {
+                modal.style.maxHeight = '90vh';
+            }
+            
+            // Add touch handling for better mobile experience
+            editModalBody.addEventListener('touchmove', function(e) {
+                e.stopPropagation();
+            }, { passive: true });
+        }
+    }
+    
+    // Close modal functions
+    function closeModal(force = false) {
+        if (formHasChanges && !force) {
+            // Show inline discard warning instead of native confirm()
+            showMessage(
+                `<span>You have unsaved changes.</span>
+                 <button onclick="window._discardEditChanges()" 
+                   style="margin-left:10px;padding:4px 12px;background:var(--kvibe-danger);color:#fff;border:none;border-radius:var(--radius-full);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;">
+                   Discard
+                 </button>`,
+                'error'
+            );
+            return false;
+        }
+        
+        editProfileModal.classList.remove('active');
+        document.body.style.overflow = '';
+        editMessages.innerHTML = '';
+        
+        // Reset form values if not saved
+        if (formHasChanges) {
+            editFirstName.value = originalValues.firstName;
+            editLastName.value = originalValues.lastName;
+            editBio.value = originalValues.bio;
+            editPhone.value = originalValues.phone;
+            editLocation.value = originalValues.location;
+            editAddress.value = originalValues.address;
+            editWebsite.value = originalValues.website;
+            editProfilePicture.src = originalValues.picture;
+            
+            updateBioCounter();
+            checkFormChanges();
+        }
+        
+        return true;
+    }
+    
+    // Global discard handler called by inline button
+    window._discardEditChanges = function() {
+        closeModal(true);
+    };
+    
+    if (closeEditModal) {
+        closeEditModal.addEventListener('click', function() {
+            closeModal();
+        });
+    }
+    
+    if (cancelEditBtn) {
+        cancelEditBtn.addEventListener('click', function() {
+            closeModal();
+        });
+    }
+    
+    // Close on overlay click
+    if (editProfileModal) {
+        editProfileModal.addEventListener('click', function(e) {
+            if (e.target === editProfileModal) {
+                closeModal();
+            }
+        });
+    }
+    
+    // Image upload
+    if (editProfilePicContainer) {
+        editProfilePicContainer.addEventListener('click', function() {
+            editImageInput.click();
+        });
+    }
+    
+    if (editChangePhotoBtn) {
+        editChangePhotoBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            editImageInput.click();
+        });
+    }
+    
+    if (editImageInput) {
+        editImageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                // Validate file type
+                if (!file.type.startsWith('image/')) {
+                    showMessage('Please select a valid image file.', 'error');
+                    return;
+                }
+                
+                // Validate file size (max 10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    showMessage('Image size must be less than 10MB.', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    editProfilePicture.src = e.target.result;
+                    formHasChanges = true;
+                    saveEditBtn.disabled = false;
+                    nextEditBtn.disabled = false;
+                    nextEditBtn.classList.add('active');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+    
+    // Next button (same as save for now)
+    if (nextEditBtn) {
+        nextEditBtn.addEventListener('click', function() {
+            if (formHasChanges) {
+                saveProfile();
+            }
+        });
+    }
+    
+    // Save button
+    if (saveEditBtn) {
+        saveEditBtn.addEventListener('click', function() {
+            saveProfile();
+        });
+    }
+    
+    // Show message in modal
+    function showMessage(message, type = 'info') {
+        const alertClass = `kvibe-edit-alert kf-edit-alert-${type}`;
+        editMessages.innerHTML = `<div class="${alertClass}">${message}</div>`;
+    }
+    
+    // Save profile — POSTs to the dedicated update_profile endpoint
+    async function saveProfile() {
+        editProfileLoading.classList.add('active');
+        saveEditBtn.disabled = true;
+        nextEditBtn.disabled = true;
+        editMessages.innerHTML = '';
+
+        try {
+            const formData = new FormData(editProfileForm);
+
+            // Target the update_profile view, not the current profile page
+            const updateUrl = "{% url 'update_profile' user.username %}";
+
+            const response = await fetch(updateUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server error (HTTP ${response.status})`);
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                const d = result.data || {};
+
+                // ── Name ────────────────────────────────────────────────────
+                if (mainProfileName) {
+                    const firstName = d.first_name || editFirstName.value.trim();
+                    const lastName  = d.last_name  || editLastName.value.trim();
+                    const fullName  = `${firstName} ${lastName}`.trim();
+                    // preserve the verified badge node if present
+                    const verifiedBadge = mainProfileName.querySelector('.kvibe-verified-badge');
+                    mainProfileName.textContent = fullName;
+                    if (verifiedBadge) mainProfileName.appendChild(verifiedBadge);
+
+                    // also update the sticky top-header name
+                    const headerName = document.querySelector('.kvibe-header-name');
+                    if (headerName) headerName.textContent = firstName || fullName;
+                }
+
+                // ── Bio ──────────────────────────────────────────────────────
+                const newBio = d.bio ?? editBio.value.trim();
+                if (mainProfileBio) {
+                    mainProfileBio.textContent = newBio;
+                    mainProfileBio.style.display = newBio ? '' : 'none';
+                }
+
+                // ── Location ─────────────────────────────────────────────────
+                const newLocation = d.location ?? editLocation.value.trim();
+                if (mainProfileLocation) {
+                    mainProfileLocation.textContent = newLocation;
+                    mainProfileLocation.closest('.kvibe-meta-item').style.display =
+                        newLocation ? '' : 'none';
+                }
+
+                // ── Address ──────────────────────────────────────────────────
+                const newAddress = d.address ?? editAddress.value.trim();
+                if (mainProfileAddress) {
+                    mainProfileAddress.textContent = newAddress;
+                    mainProfileAddress.closest('.kvibe-meta-item').style.display =
+                        newAddress ? '' : 'none';
+                }
+
+                // ── Website ──────────────────────────────────────────────────
+                if (mainProfileWebsite) {
+                    const newWebsite = d.website ?? editWebsite.value.trim();
+                    if (newWebsite) {
+                        // strip protocol + www for display
+                        let display = newWebsite.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+                        if (display.length > 28) display = display.slice(0, 25) + '…';
+                        const anchor = mainProfileWebsite.querySelector('a');
+                        if (anchor) {
+                            anchor.href = newWebsite;
+                            anchor.textContent = display;
+                        }
+                        mainProfileWebsite.closest('.kvibe-meta-item').style.display = '';
+                    } else {
+                        mainProfileWebsite.closest('.kvibe-meta-item').style.display = 'none';
+                    }
+                }
+
+                // ── Profile picture ──────────────────────────────────────────
+                const newPicUrl = d.picture_url || null;
+                if (newPicUrl) {
+                    // cache-bust so the browser actually re-fetches
+                    const bust = `${newPicUrl}?t=${Date.now()}`;
+                    if (mainProfilePicture) mainProfilePicture.src = bust;
+                    if (coverImage) coverImage.style.backgroundImage = `url('${bust}')`;
+                    // update the edit modal preview too
+                    if (editProfilePicture) editProfilePicture.src = bust;
+                }
+
+                // ── Sync originalValues so "unsaved changes" tracking resets ─
+                originalValues = {
+                    firstName: d.first_name  || editFirstName.value.trim(),
+                    lastName:  d.last_name   || editLastName.value.trim(),
+                    bio:       d.bio         ?? editBio.value.trim(),
+                    phone:     d.phone       ?? editPhone.value.trim(),
+                    location:  d.location    ?? editLocation.value.trim(),
+                    address:   d.address     ?? editAddress.value.trim(),
+                    website:   d.website     ?? editWebsite.value.trim(),
+                    picture:   editProfilePicture ? editProfilePicture.src : originalValues.picture
+                };
+
+                formHasChanges = false;
+                checkFormChanges();
+
+                // ── Update mobile hero card immediately ──────────────────────
+                const newFirstName = d.first_name || editFirstName.value.trim();
+                const newLastName  = d.last_name  || editLastName.value.trim();
+                const newFullName  = `${newFirstName} ${newLastName}`.trim();
+
+                // Hero name
+                const heroNameEl = document.querySelector('.kvibe-hero-name');
+                if (heroNameEl) {
+                    const verifiedIcon = heroNameEl.querySelector('.verified-icon');
+                    heroNameEl.textContent = newFullName;
+                    if (verifiedIcon) heroNameEl.appendChild(verifiedIcon);
+                }
+
+                // Scroll header name + avatar
+                const scrollHeaderName = document.querySelector('.kvibe-scroll-header-name');
+                if (scrollHeaderName) scrollHeaderName.textContent = newFullName;
+
+                // Hero bg + avatar + scroll header avatar
+                if (newPicUrl) {
+                    const bust = `${newPicUrl}?t=${Date.now()}`;
+                    const heroAvatar = document.getElementById('mobileHeroAvatar');
+                    if (heroAvatar) heroAvatar.src = bust;
+                    const heroBg = document.querySelector('.kvibe-hero-bg');
+                    if (heroBg) heroBg.style.backgroundImage = `url('${bust}')`;
+                    const scrollAvatar = document.querySelector('.kvibe-scroll-header-avatar');
+                    if (scrollAvatar) scrollAvatar.src = bust;
+                }
+
+                // Mobile bio block
+                const newBioVal = d.bio ?? editBio.value.trim();
+                const mobileBioBlock = document.querySelector('.kvibe-mobile-bio-block');
+                const mobileDetails  = document.querySelector('.kvibe-mobile-details');
+                if (mobileBioBlock) {
+                    mobileBioBlock.textContent = newBioVal;
+                    mobileBioBlock.style.display = newBioVal ? '' : 'none';
+                } else if (newBioVal && mobileDetails) {
+                    // Bio block didn't exist yet — create and insert before joined date
+                    const joinedEl = document.querySelector('.kvibe-mobile-joined');
+                    const bioDiv = document.createElement('div');
+                    bioDiv.className = 'kvibe-mobile-bio-block';
+                    bioDiv.textContent = newBioVal;
+                    if (joinedEl) mobileDetails.insertBefore(bioDiv, joinedEl);
+                    else if (mobileDetails) mobileDetails.appendChild(bioDiv);
+                }
+
+                // Mobile location pill
+                const newLocationVal = d.location ?? editLocation.value.trim();
+                const locationPills  = document.querySelectorAll('.kvibe-mobile-pill');
+                let locationPill = null;
+                locationPills.forEach(p => { if (p.querySelector('.fa-map-marker-alt')) locationPill = p; });
+                const pillsRow = document.querySelector('.kvibe-mobile-pills-row');
+                if (locationPill) {
+                    locationPill.querySelector('span').textContent = newLocationVal;
+                    locationPill.style.display = newLocationVal ? '' : 'none';
+                } else if (newLocationVal && pillsRow) {
+                    const pill = document.createElement('div');
+                    pill.className = 'kvibe-mobile-pill';
+                    pill.innerHTML = `<i class="fas fa-map-marker-alt"></i><span>${newLocationVal}</span>`;
+                    pillsRow.insertBefore(pill, pillsRow.firstChild);
+                }
+
+                // Mobile hero bio snippet in stats row
+                const heroBioSnippet = document.querySelector('.kvibe-hero-stats-row .kvibe-hero-stat:last-child');
+                if (heroBioSnippet && !heroBioSnippet.querySelector('.kvibe-hero-stat-num')) {
+                    heroBioSnippet.textContent = newBioVal ? newBioVal.slice(0, 22) + (newBioVal.length > 22 ? '…' : '') : '';
+                }
+
+                showToast(result.message || 'Profile updated successfully!', 'success');
+
+                setTimeout(() => {
+                    editProfileModal.classList.remove('active');
+                    document.body.style.overflow = '';
+                }, 800);
+
+            } else {
+                showMessage(result.error || 'Failed to update profile. Please try again.', 'error');
+                saveEditBtn.disabled = false;
+                if (formHasChanges) {
+                    nextEditBtn.disabled = false;
+                    nextEditBtn.classList.add('active');
+                }
+            }
+
+        } catch (error) {
+            console.error('Save error:', error);
+            showMessage('An error occurred. Please try again.', 'error');
+            saveEditBtn.disabled = false;
+            if (formHasChanges) {
+                nextEditBtn.disabled = false;
+                nextEditBtn.classList.add('active');
+            }
+        } finally {
+            editProfileLoading.classList.remove('active');
+        }
+    }
+    
+    // Escape key to close modal
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && editProfileModal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+    
+})();
+
+// Tab navigation with AJAX loading
+(function() {
+    'use strict';
+    
+    const tabs = document.querySelectorAll('.kvibe-tab');
+    const postsContainer = document.getElementById('posts-container');
+    const headerPosts = document.getElementById('header-posts-count');
+    
+    if (!tabs.length || !postsContainer) return;
+    
+    let currentTab = 'posts';
+    const isWebView = /wv|WebView/i.test(navigator.userAgent) || 
+                      window.matchMedia('(display-mode: standalone)').matches;
+    
+    function initializePage() {
+        // Detect initial tab from URL
+        const initialTab = extractTabFromURL();
+        if (initialTab !== 'posts') {
+            updateActiveTab(initialTab);
+        }
+        
+        // Attach tab click handlers
+        tabs.forEach(tab => {
+            tab.addEventListener('click', handleTabClick);
+        });
+        
+        // Initialize content
+        initializeLazyLoading();
+        
+        // Handle browser back/forward
+        window.addEventListener('popstate', function(e) {
+            if (e.state && e.state.tab) {
+                restoreFromState(e.state);
+            }
+        });
+    }
+    
+    // Handle tab clicks
+    async function handleTabClick(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const tabName = this.getAttribute('data-tab');
+        const url = this.getAttribute('data-url');
+        
+        if (tabName === currentTab) return;
+        
+        // Update UI
+        updateActiveTab(tabName);
+        
+        // Update history
+        updateHistory(tabName, url);
+        
+        // Load content
+        await loadTabContent(tabName, url + '?ajax=1');
+    }
+    
+    // Save current state
+    function saveCurrentState() {
+        const state = {
+            tab: currentTab,
+            content: postsContainer.innerHTML,
+            postCount: headerPosts.textContent,
+            timestamp: Date.now()
+        };
+        
+        history.replaceState(state, '', window.location.href);
+    }
+    
+    // Restore from saved state
+    function restoreFromState(state) {
+        if (state.content) {
+            postsContainer.innerHTML = state.content;
+        }
+        if (state.postCount) {
+            headerPosts.textContent = state.postCount;
+        }
+        if (state.tab) {
+            updateActiveTab(state.tab);
+        }
+        
+        // Re-initialize dynamic content
+        initializeLazyLoading();
+        if (state.tab === 'videos') {
+            initializeVideoThumbnails();
+        }
+    }
+    
+    // Update active tab UI
+    function updateActiveTab(tabName) {
+        tabs.forEach(t => {
+            t.classList.remove('kvibe-tab-active');
+            if (t.getAttribute('data-tab') === tabName) {
+                t.classList.add('kvibe-tab-active');
+            }
+        });
+        currentTab = tabName;
+    }
+    
+    // Update browser history
+    function updateHistory(tabName, url) {
+        const state = {
+            tab: tabName,
+            timestamp: Date.now(),
+            isWebView: isWebView
+        };
+        
+        if (isWebView) {
+            history.replaceState(state, '', url.replace('?ajax=1', ''));
+        } else {
+            history.pushState(state, '', url.replace('?ajax=1', ''));
+        }
+    }
+    
+    // Load tab content via AJAX
+    async function loadTabContent(tabName, url) {
+        // Show loading
+        postsContainer.innerHTML = '<div style="position:relative;height:120px;"><div class="kvibe-loading"></div></div>';
+        headerPosts.textContent = `Loading...`;
+        
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Cache-Control': 'no-cache'
+                },
+                cache: 'no-cache'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            let html = await response.text();
+            
+            // Handle different response types
+            if (html.includes('<!DOCTYPE html>')) {
+                // Extract just the posts container
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                const container = tempDiv.querySelector('.kvibe-posts-container') || 
+                                tempDiv.querySelector('.kvibe-posts-grid') ||
+                                tempDiv.querySelector('.kvibe-text-posts') ||
+                                tempDiv.querySelector('.kvibe-no-posts');
+                
+                if (container) {
+                    html = container.innerHTML;
+                }
+            }
+            
+            // Update content
+            postsContainer.innerHTML = html;
+            
+            // Update stats
+            updatePostCount(tabName);
+            
+            // Initialize content
+            initializeLazyLoading();
+            if (tabName === 'videos') {
+                initializeVideoThumbnails();
+            }
+            
+            // Save state
+            saveCurrentState();
+            
+        } catch (error) {
+            console.error('Error loading tab:', error);
+            postsContainer.innerHTML = `
+                <div class="kvibe-no-posts">
+                    <h2 class="kvibe-no-posts-title">Error loading content</h2>
+                    <p class="kvibe-no-posts-text">Please try again</p>
+                </div>
+            `;
+            headerPosts.textContent = 'Error';
+        }
+    }
+    
+    // Update post count display
+    function updatePostCount(tabName) {
+        let count = 0;
+        
+        if (tabName === 'posts' || tabName === 'videos' || tabName === 'audio') {
+            count = postsContainer.querySelectorAll('.kvibe-post-item').length;
+        } else if (tabName === 'text') {
+            count = postsContainer.querySelectorAll('.kvibe-text-item').length;
+        }
+        
+        headerPosts.textContent = `${count} ${tabName}`;
+    }
+    
+    // Initialize video thumbnails
+    function initializeVideoThumbnails() {
+        const videos = postsContainer.querySelectorAll('video');
+        videos.forEach(video => {
+            video.controls = false;
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = 'metadata';
+            
+            // Prevent video playback
+            video.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            
+            video.addEventListener('play', function(e) {
+                e.preventDefault();
+                this.pause();
+            });
+        });
+    }
+    
+    // Initialize lazy loading for images
+    function initializeLazyLoading() {
+        const lazyImages = postsContainer.querySelectorAll('img[loading="lazy"]');
+        
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        if (img.dataset.src) {
+                            img.src = img.dataset.src;
+                            img.removeAttribute('data-src');
+                        }
+                        observer.unobserve(img);
+                    }
+                });
+            }, {
+                rootMargin: '50px',
+                threshold: 0.1
+            });
+            
+            lazyImages.forEach(img => observer.observe(img));
+        } else {
+            // Fallback for older browsers
+            lazyImages.forEach(img => {
+                if (img.getBoundingClientRect().top < window.innerHeight + 100) {
+                    if (img.dataset.src) {
+                        img.src = img.dataset.src;
+                        img.removeAttribute('data-src');
+                    }
+                }
+            });
+        }
+    }
+    
+    // Submit form via AJAX
+    async function submitForm(form) {
+        const formData = new FormData(form);
+        const action = form.getAttribute('action');
+        
+        try {
+            const response = await fetch(action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                    // Reload the current tab
+                    const currentTabElement = document.querySelector('.kvibe-tab-active');
+                    if (currentTabElement) {
+                        const tabName = currentTabElement.getAttribute('data-tab');
+                        const url = currentTabElement.getAttribute('data-url') + '?ajax=1';
+                        loadTabContent(tabName, url);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Form submission error:', error);
+        }
+    }
+    
+    // Refresh layout for WebView
+    function refreshLayout() {
+        if (!isWebView) return;
+        
+        // Force reflow
+        document.body.style.display = 'none';
+        document.body.offsetHeight;
+        document.body.style.display = '';
+        
+        // Force GPU acceleration
+        postsContainer.style.transform = 'translateZ(0)';
+        postsContainer.style.webkitTransform = 'translateZ(0)';
+    }
+    
+    // Extract tab name from URL
+    function extractTabFromURL() {
+        const path = window.location.pathname;
+        if (path.includes('/videos/')) return 'videos';
+        if (path.includes('/audios/')) return 'audio';
+        if (path.includes('/text-posts/')) return 'text';
+        return 'posts';
+    }
+    
+    // Back button
+    const backBtn = document.getElementById('kvibe-back-btn');
+    if (backBtn) {
+        backBtn.addEventListener('click', function() {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '/';
+            }
+        });
+    }
+    
+    // Initialize on DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializePage);
+    } else {
+        initializePage();
+    }
+    
+    // Export functions for debugging
+    window.KvibeProfile = {
+        reloadTab: function(tabName) {
+            const tabElement = document.querySelector(`[data-tab="${tabName}"]`);
+            if (tabElement) {
+                const url = tabElement.getAttribute('data-url') + '?ajax=1';
+                loadTabContent(tabName, url);
+            }
+        },
+        refreshPage: function() {
+            location.reload();
+        },
+        isWebView: isWebView,
+        shareProfile: shareProfile,
+        showToast: showToast
+    };
+})();
+
+// ─── Profile Picture Zoom Modal ──────────────────
+(function() {
+    const modal = document.getElementById('profilePicModal');
+    const modalImg = document.getElementById('profilePicModalImg');
+    const closeBtn = document.getElementById('profilePicModalClose');
+    const avatar = document.getElementById('mainProfilePicture');
+
+    if (!modal || !avatar) return;
+
+    function openModal() {
+        modalImg.src = avatar.src;
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    avatar.addEventListener('click', openModal);
+
+    closeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        closeModal();
+    });
+
+    // Click outside image to close
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeModal();
+    });
+
+    // Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
+    });
+})();
+
+// ===== VIBE SCORE ENGINE =====
+(function initVibeScore() {
+
+    const MOOD_CONFIG = {
+        'slay':    { emoji: '💅', label: 'Slay',   color: '#ff1493', vibe: 'main character' },
+        'vibing':  { emoji: '🎵', label: 'Vibing',  color: '#9933ff', vibe: 'chill'         },
+        'sheesh':  { emoji: '🥶', label: 'Sheesh',  color: '#00cc66', vibe: 'cold'          },
+        'periodt': { emoji: '⏸️', label: 'Periodt', color: '#ff6b00', vibe: 'period'        },
+        'no-cap':  { emoji: '🎯', label: 'No Cap',  color: '#ff4444', vibe: 'for real'      },
+        'bussin':  { emoji: '🔥', label: 'Bussin',  color: '#ffd700', vibe: 'fire'          },
+        'mid':     { emoji: '😐', label: 'Mid',     color: '#808080', vibe: 'average'       },
+        'cringe':  { emoji: '😬', label: 'Cringe',  color: '#8b4513', vibe: 'cheugy'        },
+    };
+
+    // Group moods into "vibes" for the summary sentence
+    const VIBE_GROUPS = {
+        'Chill':  ['vibing', 'mid'],
+        'Chaos':  ['slay', 'bussin', 'sheesh', 'no-cap'],
+        'Drama':  ['periodt', 'cringe'],
+    };
+
+    function run() {
+        const posts = Array.from(document.querySelectorAll('.kvibe-post-item[data-mood]'));
+        if (!posts.length) return;
+
+        // Count moods
+        const counts = {};
+        let moodedPosts = 0;
+        posts.forEach(post => {
+            const m = (post.getAttribute('data-mood') || '').trim();
+            if (!m) return;
+            counts[m] = (counts[m] || 0) + 1;
+            moodedPosts++;
+        });
+
+        if (moodedPosts === 0) return;
+
+        // Sort moods by count desc
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+        // Update all chip counts
+        const total = posts.length;
+        document.getElementById('moodCountAll').textContent = total;
+
+        const chipIdMap = {
+            'slay':'Slay','vibing':'Vibing','sheesh':'Sheesh','periodt':'Periodt',
+            'no-cap':'Nocap','bussin':'Bussin','mid':'Mid','cringe':'Cringe'
+        };
+        sorted.forEach(([mood, cnt]) => {
+            const key = chipIdMap[mood];
+            if (key) {
+                const el = document.getElementById('moodCount' + key);
+                if (el) el.textContent = cnt;
+            }
+        });
+
+        // Hide chips with 0 posts, show filter row if any moods exist
+        const filterRow = document.getElementById('profileMoodFilterRow');
+        if (filterRow) {
+            filterRow.style.display = 'flex';
+            // hide chips with 0 count
+            filterRow.querySelectorAll('.kvibe-profile-mood-chip[data-mood]').forEach(btn => {
+                const m = btn.getAttribute('data-mood');
+                if (m === 'all') return;
+                if (!counts[m]) btn.style.display = 'none';
+            });
+        }
+
+        // Inject custom mood chips
+        const customContainer = document.getElementById('profileCustomMoodChips');
+        const seen = new Set();
+        posts.forEach(post => {
+            const m = (post.getAttribute('data-mood') || '').trim();
+            const custom = (post.getAttribute('data-custom-mood') || '').trim();
+            if ((m === 'custom' || m === '') && custom && !seen.has(custom.toLowerCase())) {
+                seen.add(custom.toLowerCase());
+                const cnt = Array.from(posts).filter(p =>
+                    (p.getAttribute('data-custom-mood') || '').trim().toLowerCase() === custom.toLowerCase()
+                ).length;
+                const btn = document.createElement('button');
+                btn.className = 'kvibe-profile-mood-chip';
+                btn.style.setProperty('--chip-color', '#0095f6');
+                btn.setAttribute('data-mood', '__custom__' + custom.toLowerCase());
+                btn.innerHTML = `✨ ${custom} <span class="chip-count">${cnt}</span>`;
+                btn.onclick = function() { profileFilterMood('__custom__' + custom.toLowerCase(), btn); };
+                customContainer.appendChild(btn);
+            }
+        });
+
+        // Build vibe bars in sidebar card
+        buildVibeCard(sorted, moodedPosts, total);
+
+        // Build vibe summary sentence under bio
+        buildVibeSummary(counts, moodedPosts);
+    }
+
+    function buildVibeCard(sorted, moodedPosts, total) {
+        // Build for both desktop sidebar card and mobile inline card
+        const configs = [
+            {
+                card: document.getElementById('vibeScoreCard'),
+                sentence: document.getElementById('vibeScoreSentence'),
+                bars: document.getElementById('vibeBarsContainer'),
+                fillClass: 'kvibe-vibe-fill'
+            },
+            {
+                card: document.getElementById('mobileVibeScoreCard'),
+                sentence: document.getElementById('mobileVibeScoreSentence'),
+                bars: document.getElementById('mobileVibeBarsContainer'),
+                fillClass: 'kvibe-mobile-vibe-fill'
+            }
+        ];
+
+        configs.forEach(({ card, sentence, bars, fillClass }) => {
+            if (!card || !sorted.length) return;
+
+            card.style.display = '';
+
+            // Vibe sentence (top 3 moods)
+            const top3 = sorted.slice(0, 3);
+            const parts = top3.map(([mood, cnt]) => {
+                const pct = Math.round((cnt / moodedPosts) * 100);
+                const cfg = MOOD_CONFIG[mood] || { emoji: '✨', label: mood };
+                return `<strong style="color:${cfg.color || 'inherit'}">${pct}% ${cfg.emoji} ${cfg.label}</strong>`;
+            });
+            const rest = sorted.length > 3 ? `, and a little bit of everything else.` : '.';
+            sentence.innerHTML = `This user is ${parts.join(', ')}${rest}`;
+
+            // Bars (all moods)
+            bars.innerHTML = '';
+            sorted.forEach(([mood, cnt]) => {
+                const pct = Math.round((cnt / moodedPosts) * 100);
+                const cfg = MOOD_CONFIG[mood] || { emoji: '✨', label: mood, color: '#0095f6' };
+                const row = document.createElement('div');
+                row.className = card.id === 'mobileVibeScoreCard' ? 'kvibe-mobile-vibe-bar-row' : 'kvibe-vibe-bar-row';
+                const metaClass   = card.id === 'mobileVibeScoreCard' ? 'kvibe-mobile-vibe-bar-meta'  : 'kvibe-vibe-bar-meta';
+                const labelClass  = card.id === 'mobileVibeScoreCard' ? 'kvibe-mobile-vibe-bar-label' : 'kvibe-vibe-bar-label';
+                const pctClass    = card.id === 'mobileVibeScoreCard' ? 'kvibe-mobile-vibe-bar-pct'   : 'kvibe-vibe-bar-pct';
+                const trackClass  = card.id === 'mobileVibeScoreCard' ? 'kvibe-mobile-vibe-track'     : 'kvibe-vibe-track';
+                row.innerHTML = `
+                    <div class="${metaClass}">
+                        <span class="${labelClass}" onclick="profileFilterMood('${mood}', document.querySelector('[data-mood=\\'${mood}\\']'))"
+                              style="color:${cfg.color}">
+                            ${cfg.emoji} ${cfg.label}
+                        </span>
+                        <span class="${pctClass}">${pct}%</span>
+                    </div>
+                    <div class="${trackClass}">
+                        <div class="${fillClass}" style="width:0%;background:${cfg.color};" data-target="${pct}"></div>
+                    </div>`;
+                bars.appendChild(row);
+            });
+
+            // Animate bars after paint
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    bars.querySelectorAll(`.${fillClass}`).forEach(fill => {
+                        fill.style.width = fill.getAttribute('data-target') + '%';
+                    });
+                }, 120);
+            });
+        });
+    }
+
+    function buildVibeSummary(counts, moodedPosts) {
+        const badge = document.getElementById('vibeSummaryBadge');
+        const text  = document.getElementById('vibeSummaryText');
+        if (!badge || !text || moodedPosts === 0) return;
+
+        // Calculate vibe group percentages
+        const groupPcts = {};
+        Object.entries(VIBE_GROUPS).forEach(([group, moods]) => {
+            const cnt = moods.reduce((s, m) => s + (counts[m] || 0), 0);
+            if (cnt > 0) groupPcts[group] = Math.round((cnt / moodedPosts) * 100);
+        });
+
+        const sorted = Object.entries(groupPcts).sort((a, b) => b[1] - a[1]);
+        if (!sorted.length) return;
+
+        const parts = sorted.map(([g, pct]) => `<strong>${pct}% ${g}</strong>`);
+        text.innerHTML = parts.join(', ');
+        badge.style.display = 'inline-flex';
+    }
+
+    // Run after DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run);
+    } else {
+        run();
+    }
+})();
+
+// Profile mood filter function
+function profileFilterMood(mood, btn) {
+    // Update active chip
+    document.querySelectorAll('.kvibe-profile-mood-chip').forEach(c => c.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
+    document.querySelectorAll('.kvibe-post-item[data-mood]').forEach(post => {
+        if (mood === 'all') {
+            post.classList.remove('mood-hidden');
+        } else if (mood.startsWith('__custom__')) {
+            const label = mood.replace('__custom__', '');
+            const postCustom = (post.getAttribute('data-custom-mood') || '').toLowerCase().trim();
+            post.classList.toggle('mood-hidden', postCustom !== label);
+        } else {
+            post.classList.toggle('mood-hidden', (post.getAttribute('data-mood') || '') !== mood);
+        }
+    });
+}
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
