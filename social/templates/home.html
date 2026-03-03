@@ -1,0 +1,4333 @@
+{% load pwa %}
+{% load post_tags %}
+{% load humanize %}
+{% load static %}
+{% load time %}
+{% load text_filters %}  
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  {% progressive_web_app_meta %}
+  <title>Kvibe - Home</title>
+<script src="{% static 'js/home.js' %}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  
+  <style>
+    /* Minimal critical CSS */
+    :root {
+      --kvibe-bg: #fafafa;
+      --kvibe-white: #ffffff;
+      --kvibe-text: #262626;
+      --kvibe-text-light: #8e8e8e;
+      --kvibe-primary: #0095f6;
+      --kvibe-border: #dbdbdb;
+      --kvibe-repost: #0095f6;
+      --kvibe-repost-bg: #ffffff;
+      
+      /* Mood Colors */
+      --mood-slay: #ff1493;
+      --mood-vibing: #9933ff;
+      --mood-sheesh: #00cc66;
+      --mood-periodt: #ff6b00;
+      --mood-no-cap: #ff4444;
+      --mood-bussin: #ffd700;
+      --mood-mid: #808080;
+      --mood-cringe: #8b4513;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kvibe-bg);
+      color: var(--kvibe-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior-y: contain;
+    }
+    
+    .kvibe-container {
+      max-width: 100%;
+      width: 100%;
+    }
+    
+    /* ===== UPDATED DESKTOP LAYOUT ===== */
+    .kvibe-desktop-layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px 20px 0 20px;
+      gap: 20px;
+    }
+    
+    /* Left Sidebar - Main Navigation */
+    .kvibe-left-sidebar {
+      width: 245px; 
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+    
+    /* Desktop Navigation (Icon + Text inline) */
+    .kvibe-desktop-nav {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 20px 0;
+      background: var(--kvibe-white);
+    }
+    
+    .kvibe-desktop-nav-item {
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+      width: 100%;
+      padding: 12px;
+      position: relative;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+    
+    .kvibe-desktop-nav-item:hover {
+      background: var(--kvibe-bg);
+    }
+    
+    .kvibe-desktop-nav-item.active {
+      background: var(--kvibe-bg);
+    }
+    
+    .kvibe-desktop-nav-icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 12px;
+      position: relative;
+      flex-shrink: 0;
+    }
+    
+    .kvibe-desktop-nav-icon svg {
+      width: 100%;
+      height: 100%;
+      stroke: var(--kvibe-text-light);
+      transition: all 0.2s ease;
+    }
+    
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-icon svg {
+      stroke: var(--kvibe-primary);
+    }
+    
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-icon svg {
+      stroke: var(--kvibe-primary);
+    }
+    
+    .kvibe-desktop-nav-label {
+      font-size: 14px;
+      color: var(--kvibe-text-light);
+      font-weight: 400;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-label {
+      color: var(--kvibe-text);
+    }
+    
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-label {
+      color: var(--kvibe-text);
+      font-weight: 600;
+    }
+    
+    /* Desktop notification badge */
+    .kvibe-desktop-notification-badge {
+      position: absolute;
+      top: 8px;
+      left: 20px;
+      background: #0095f6;
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      border: 2px solid var(--kvibe-white);
+    }
+    
+    /* Channel navigation */
+    .kvibe-channel-nav-item {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      border-radius: 8px;
+      text-decoration: none;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .kvibe-channel-nav-item:hover {
+      background: var(--kvibe-bg);
+    }
+    
+    /* New channel item animation */
+    .kvibe-channel-nav-item.new-update-flash {
+      animation: kvibe-channel-update-flash 1.5s ease;
+    }
+    
+    @keyframes kvibe-channel-update-flash {
+      0%, 100% { background: transparent; }
+      10%, 40% { background: rgba(0, 149, 246, 0.1); }
+      20%, 30% { background: rgba(0, 149, 246, 0.2); }
+    }
+    
+    .kvibe-channel-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+    
+    .kvibe-channel-name {
+      font-size: 14px;
+      color: var(--kvibe-text);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .kvibe-channel-unread {
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--kvibe-primary);
+      color: white;
+      min-width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      margin-left: 8px;
+    }
+    
+    /* Channel section header */
+    .kvibe-channels-header {
+      padding: 16px 12px 8px 12px;
+      margin-top: 20px;
+    }
+    
+    .kvibe-channels-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--kvibe-text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .kvibe-channels-count {
+      background: var(--kvibe-border);
+      color: var(--kvibe-text);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    
+    /* Channels list */
+    .kvibe-channels-list {
+      padding: 0 12px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    
+    /* Empty state for channels */
+    .kvibe-channels-empty {
+      text-align: center;
+      padding: 20px 12px;
+      color: var(--kvibe-text-light);
+    }
+    
+    .kvibe-channels-empty i {
+      font-size: 20px;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+    
+    .kvibe-channels-empty p {
+      font-size: 12px;
+    }
+    
+    /* Logout icon specific styling */
+    .kvibe-desktop-nav-item.logout .kvibe-desktop-nav-icon svg {
+      stroke: #0095f6;
+    }
+    
+    .kvibe-desktop-nav-item.logout:hover .kvibe-desktop-nav-icon svg {
+      stroke: #0095f6;
+    }
+    
+    .kvibe-desktop-nav-item.logout:hover .kvibe-desktop-nav-label {
+      color: #0095f6;
+    }
+    
+/* Main Feed */
+    .kvibe-main-feed {
+      flex: 1;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    /* Right Sidebar - Products & Suggestions */
+    .kvibe-right-sidebar {
+      width: 380px; 
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-left: 10px;
+    }
+    
+    /* Desktop-only components */
+    .kvibe-desktop-only {
+      display: none;
+    }
+    
+    /* Your Products Section */
+    .kvibe-your-products {
+      background: var(--kvibe-white);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    
+    .kvibe-your-products-header {
+      padding: 16px;
+    }
+    
+    .kvibe-your-products-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--kvibe-text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .kvibe-your-products-count {
+      background: var(--kvibe-primary);
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    
+    .kvibe-your-products-list {
+      padding: 0 16px;
+    }
+    
+    .kvibe-your-product-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--kvibe-border);
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    
+    .kvibe-your-product-item:hover {
+      background: var(--kvibe-bg);
+    }
+    
+    .kvibe-your-product-item:last-child {
+      border-bottom: none;
+    }
+    
+    .kvibe-your-product-image {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      object-fit: cover;
+      margin-right: 12px;
+      flex-shrink: 0;
+      background: #fafafa;
+    }
+    
+    .kvibe-your-product-details {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .kvibe-your-product-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--kvibe-text);
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .kvibe-your-product-price {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--kvibe-primary);
+    }
+    
+    .kvibe-your-product-status {
+      font-size: 11px;
+      color: var(--kvibe-text-light);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .kvibe-your-product-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .kvibe-your-product-btn {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    
+    .kvibe-your-product-btn-primary {
+      background: var(--kvibe-primary);
+      color: white;
+    }
+    
+    .kvibe-your-product-btn-secondary {
+      background: transparent;
+      color: var(--kvibe-primary);
+      border: 1px solid var(--kvibe-primary);
+    }
+    
+    .kvibe-your-products-empty {
+      text-align: center;
+      padding: 20px;
+      color: var(--kvibe-text-light);
+    }
+    
+    .kvibe-your-products-empty i {
+      font-size: 20px;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+    
+    .kvibe-your-products-empty p {
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    
+    /* Product Upload Section */
+    .kvibe-product-upload {
+      background: var(--kvibe-white);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    
+    /* ===== MOOD BADGE STYLES - NEW ===== */
+    .kvibe-mood-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, var(--mood-color), color-mix(in srgb, var(--mood-color) 70%, white));
+      border-radius: 20px;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+      animation: moodAppear 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    @keyframes moodAppear {
+      0% {
+        opacity: 0;
+        transform: scale(0.8);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .kvibe-mood-badge i {
+      font-size: 14px;
+    }
+
+    /* Mood-specific colors */
+    .kvibe-mood-slay { --mood-color: #ff1493; }
+    .kvibe-mood-vibing { --mood-color: #9933ff; }
+    .kvibe-mood-sheesh { --mood-color: #00cc66; }
+    .kvibe-mood-periodt { --mood-color: #ff6b00; }
+    .kvibe-mood-no-cap { --mood-color: #ff4444; }
+    .kvibe-mood-bussin { --mood-color: #ffd700; }
+    .kvibe-mood-mid { --mood-color: #808080; }
+    .kvibe-mood-cringe { --mood-color: #8b4513; }
+    
+    /* Mood hover effect */
+    .kvibe-mood-badge:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    /* Mood in header */
+    .kvibe-post-header .kvibe-mood-badge {
+      margin-left: 12px;
+    }
+
+    /* ===== MOOD FILTER BAR ===== */
+    /* Mood filter bar — sticky inside the feed column only.
+       Works on both mobile (full width) and desktop (feed column only).
+       top: 54px = exact height of the fixed header. */
+    .kvibe-mood-filter-bar {
+      background: var(--kvibe-white);
+      border-bottom: 1px solid var(--kvibe-border);
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      position: sticky;
+      top: 54px;
+      z-index: 50;
+      height: 48px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    .kvibe-mood-filter-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .kvibe-mood-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1.5px solid var(--kvibe-border);
+      background: var(--kvibe-white);
+      color: var(--kvibe-text);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all 0.18s ease;
+    }
+
+    .kvibe-mood-filter-chip:hover {
+      border-color: var(--kvibe-chip-color, #8e8e8e);
+      color: var(--kvibe-chip-color, #8e8e8e);
+      background: color-mix(in srgb, var(--kvibe-chip-color, #8e8e8e) 8%, white);
+    }
+
+    .kvibe-mood-filter-chip.active {
+      background: var(--kvibe-chip-color, var(--kvibe-text));
+      border-color: var(--kvibe-chip-color, var(--kvibe-text));
+      color: white;
+    }
+
+    .kvibe-mood-filter-chip .kvibe-chip-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    .kvibe-mood-filter-chip.active .kvibe-chip-dot {
+      background: white;
+    }
+
+    /* All chip */
+    .kvibe-mood-filter-chip.kvibe-chip-all {
+      --kvibe-chip-color: #262626;
+    }
+
+    /* Posts filtered out */
+    .kvibe-post.mood-hidden {
+      display: none;
+    }
+
+    /* Post - Plane Design */
+    .kvibe-post {
+      background: var(--kvibe-white);
+      margin-bottom: 0;
+      border-bottom: 1px solid var(--kvibe-border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    /* Repost header styling */
+    .kvibe-repost-header {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      background: var(--kvibe-bg);
+      border-bottom: var(--kvibe-border);
+      font-size: 12px;
+      color: var(--kvibe-repost);
+    }
+    
+    .kvibe-repost-header i {
+      color: var(--kvibe-repost);
+      margin-right: 6px;
+    }
+    
+    .kvibe-repost-header a {
+      color: var(--kvibe-primary);
+      text-decoration: none;
+      font-weight: 500;
+      margin: 0 4px;
+    }
+    
+    .kvibe-repost-header a:hover {
+      text-decoration: underline;
+    }
+    
+    .kvibe-post-header {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      flex-wrap: wrap;
+    }
+    
+    .kvibe-profile-pic {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-right: 12px;
+    }
+    
+    .kvibe-username {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--kvibe-text);
+      text-decoration: none;
+    }
+    
+    .kvibe-post-time {
+      font-size: 12px;
+      color: var(--kvibe-text-light);
+      margin-top: 2px;
+    }
+    
+    .kvibe-post-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    
+    /* POST CONTENT WITH SHOW MORE/LESS - UPDATED FOR FORMATTING */
+    .kvibe-post-content {
+      padding: 0 16px 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      position: relative;
+    }
+    
+    .kvibe-post-text {
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    
+    .kvibe-post-text.collapsed {
+      max-height: 60px; /* Show about 3 lines */
+    }
+    
+    .kvibe-post-text.expanded {
+      max-height: 1000px; /* Enough for expanded text */
+    }
+    
+    /* Paragraph styling */
+    .kvibe-post-paragraph {
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    
+    .kvibe-post-paragraph:last-child {
+      margin-bottom: 0;
+    }
+    
+    /* Link styling for formatted text */
+    .kvibe-post-paragraph a,
+    .kvibe-post-text a {
+      color: var(--kvibe-primary);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .kvibe-post-paragraph a:hover,
+    .kvibe-post-text a:hover {
+      text-decoration: underline;
+    }
+    
+    /* Mention link styling */
+    .kvibe-mention-link {
+      color: var(--kvibe-primary);
+      text-decoration: none;
+      font-weight: 600;
+      background: rgba(0, 149, 246, 0.1);
+      padding: 0 2px;
+      border-radius: 3px;
+    }
+    
+    .kvibe-mention-link:hover {
+      text-decoration: underline;
+      background: rgba(0, 149, 246, 0.2);
+    }
+    
+    /* Hashtag link styling - NEW */
+    .kvibe-hashtag {
+      color: var(--kvibe-primary);
+      text-decoration: none;
+      font-weight: 600;
+      background: rgba(0, 149, 246, 0.1);
+      padding: 0 2px;
+      border-radius: 3px;
+    }
+    
+    .kvibe-hashtag:hover {
+      text-decoration: underline;
+      background: rgba(0, 149, 246, 0.2);
+    }
+    
+    /* URL link styling */
+    .kvibe-url-link {
+      color: var(--kvibe-primary);
+      text-decoration: none;
+      font-weight: 500;
+      word-break: break-word;
+    }
+    
+    .kvibe-url-link:hover {
+      text-decoration: underline;
+    }
+    
+    /* BB Code styling */
+    .kvibe-post-paragraph strong,
+    .kvibe-post-paragraph b {
+      font-weight: 700;
+    }
+    
+    .kvibe-post-paragraph em,
+    .kvibe-post-paragraph i {
+      font-style: italic;
+    }
+    
+    .kvibe-post-paragraph u {
+      text-decoration: underline;
+    }
+    
+    .kvibe-text-toggle {
+      background: none;
+      border: none;
+      color: var(--kvibe-text-light);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 4px 0;
+      margin-top: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .kvibe-text-toggle:hover {
+      color: var(--kvibe-text);
+    }
+    
+    .kvibe-text-toggle i {
+      font-size: 12px;
+    }
+    
+    /* Repost caption styling - UPDATED FOR BETTER VISIBILITY */
+    .kvibe-repost-caption-container {
+      padding: 12px 16px 0 16px;
+      background: white;
+    }
+    
+    .kvibe-repost-caption {
+      padding: 10px;
+      background: var(--kvibe-white);
+      border: 1px solid whitesmoke;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--kvibe-text);
+    }
+    
+    .kvibe-repost-caption-author {
+      font-weight: 600;
+      color: var(--kvibe-repost);
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    .kvibe-repost-caption-text {
+      color: var(--kvibe-text);
+    }
+    
+    /* Media containers */
+    .kvibe-media-container {
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    /* ===== MIXED MEDIA CAROUSEL ===== */
+    .kvibe-mixed-media-carousel {
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .kvibe-mixed-media-track {
+      display: flex;
+      transition: transform 0.3s ease;
+    }
+    
+    .kvibe-mixed-media-slide {
+      width: 100%;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background: #000; /* Dark background for better contrast */
+    }
+    
+    .kvibe-mixed-media-slide .kvibe-video-container,
+    .kvibe-mixed-media-slide .kvibe-image-slide {
+      width: 100%;
+      height: auto;
+      flex: 1;
+    }
+    
+    .kvibe-mixed-media-slide .kvibe-video {
+      width: 100%;
+      height: auto;
+      max-height: 600px;
+      object-fit: contain;
+    }
+    
+    .kvibe-mixed-media-slide .kvibe-image-slide {
+      width: 100%;
+      height: auto;
+      position: relative;
+      background: #fafafa;
+    }
+    
+    .kvibe-mixed-media-slide .kvibe-image-slide img {
+      width: 100%;
+      height: auto;
+      max-height: 600px;
+      object-fit: contain;
+      display: block;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .kvibe-mixed-media-slide .kvibe-image-slide img.loaded {
+      opacity: 1;
+    }
+    
+    /* Media type indicator */
+    .kvibe-media-type-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    /* Mixed media carousel controls */
+    .kvibe-mixed-carousel-controls {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 12px;
+      pointer-events: none;
+    }
+    
+    .kvibe-mixed-carousel-prev,
+    .kvibe-mixed-carousel-next {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.5);
+      border: none;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      pointer-events: all;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+      z-index: 30;
+    }
+    
+    .kvibe-mixed-carousel-prev:hover,
+    .kvibe-mixed-carousel-next:hover {
+      opacity: 1;
+    }
+    
+    .kvibe-mixed-carousel-indicators {
+      position: absolute;
+      bottom: 16px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      z-index: 30;
+    }
+    
+    .kvibe-mixed-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.5);
+      transition: background 0.2s, transform 0.2s;
+      cursor: pointer;
+    }
+    
+    .kvibe-mixed-indicator.active {
+      background: white;
+      transform: scale(1.2);
+    }
+    
+    /* Hide controls on single media */
+    .kvibe-mixed-media-carousel[data-total="1"] .kvibe-mixed-carousel-controls,
+    .kvibe-mixed-media-carousel[data-total="1"] .kvibe-mixed-carousel-indicators {
+      display: none;
+    }
+    
+    /* Image carousel (standalone) */
+    .kvibe-image-carousel {
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .kvibe-image-track {
+      display: flex;
+      transition: transform 0.3s ease;
+    }
+    
+    .kvibe-image-slide {
+      width: 100%;
+      flex-shrink: 0;
+      display: block;
+      background: #fafafa;
+      position: relative;
+    }
+    
+    .kvibe-image-slide img {
+      width: 100%;
+      height: auto;
+      display: block;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .kvibe-image-slide img.loaded {
+      opacity: 1;
+    }
+    
+
+    
+    /* ===== VIDEO PLAYER ===== */
+    .kvibe-video-container {
+      position: relative; 
+      width: 100%;
+      overflow: hidden;
+      background-color: #000;
+      min-height: 200px; 
+      display: flex; 
+      justify-content: center;
+      align-items: center;
+    }
+
+    .kvibe-video {
+      max-width: 100%; 
+      height: auto; 
+      object-fit: contain; 
+      display: block; 
+    }
+
+    /* Styling for the Play/Pause Icon */
+    .kvibe-play-pause-icon {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 4em; 
+      color: white;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 50%;
+      padding: 15px 20px 15px 23px;
+      pointer-events: none;
+      opacity: 0; 
+      transition: opacity 0.3s ease;
+    }
+
+    /* State Class: Show Play icon when video is paused */
+    .kvibe-video-container.paused .kvibe-play-pause-icon {
+      opacity: 1;
+    }
+    
+    /* OVERLAY SEEK ICONS */
+    .kvibe-seek-overlay-btn {
+      position: absolute;
+      bottom: 10px; 
+      background: rgba(0, 0, 0, 0.4);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 8px 10px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      z-index: 10; 
+      opacity: 0; 
+      transition: opacity 0.3s ease;
+    }
+
+    .kvibe-seek-overlay-btn:hover {
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    .kvibe-backward-btn {
+      left: 10px;
+    }
+
+    .kvibe-forward-btn {
+      right: 10px;
+    }
+    
+
+
+    /* State Class: Show controls when paused or hovered */
+    .kvibe-video-container.paused .kvibe-seek-overlay-btn,
+    .kvibe-video-container:hover .kvibe-seek-overlay-btn {
+      opacity: 1;
+    }
+    /* ===== END VIDEO PLAYER ===== */
+    
+
+    
+    /* Repost styling */
+    /* ===== REPOST BUTTON STYLES - UPDATED TO MATCH COMMENT BUTTON ===== */
+.kvibe-repost-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: #4b5563;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+.kvibe-repost-icon::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(23, 191, 99, 0.1);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.kvibe-repost-icon:active::before {
+  width: 120px;
+  height: 120px;
+}
+
+.kvibe-repost-icon:hover {
+  background-color: #f3f4f6;
+  color: #1f2937;
+  transform: translateY(-2px);
+}
+
+.kvibe-repost-icon:hover i {
+  color: #0095f6;
+  transform: scale(1.1) rotate(5deg);
+}
+
+.kvibe-repost-icon i.reposted {
+  color: #0095f6 !important;
+}
+
+.kvibe-repost-icon:hover i.reposted {
+  color: #0095f6 !important;
+  transform: scale(1.1) rotate(5deg);
+}
+
+/* Repost count display - UPDATED */
+.kvibe-repost-count {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4b5563;
+  transition: color 0.3s ease;
+  position: static !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  min-width: auto !important;
+  text-align: left !important;
+  margin: 0 !important;
+  bottom: auto !important;
+  right: auto !important;
+}
+
+.kvibe-repost-count.show {
+  display: inline-block !important;
+}
+
+/* Animation for repost */
+@keyframes retweetSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.kvibe-repost-animate {
+  animation: retweetSpin 0.6s ease-out;
+}
+
+/* Remove old repost count badge positioning */
+.kvibe-repost-count[style*="position: absolute"] {
+  position: static !important;
+}
+
+.kvibe-repost-count[style*="bottom:"] {
+  bottom: auto !important;
+}
+
+.kvibe-repost-count[style*="right:"] {
+  right: auto !important;
+}
+
+/* Mobile adjustments */
+@media (max-width: 767px) {
+  .kvibe-repost-icon {
+    padding: 6px 10px;
+    gap: 6px;
+    font-size: 13px;
+  }
+  
+  .kvibe-repost-count {
+    font-size: 13px;
+  }
+} 
+    /* Repost modal */
+    .kvibe-repost-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s, visibility 0.3s;
+    }
+    
+    .kvibe-repost-modal.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .kvibe-repost-modal-content {
+      background: var(--kvibe-white);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 400px;
+      overflow: hidden;
+    }
+    
+    .kvibe-repost-modal-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--kvibe-border);
+      text-align: center;
+      font-weight: 600;
+    }
+    
+    .kvibe-repost-modal-body {
+      padding: 16px;
+    }
+    
+    .kvibe-repost-textarea {
+      width: 100%;
+      border: 1px solid var(--kvibe-border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 80px;
+      margin-bottom: 16px;
+    }
+    
+    .kvibe-repost-modal-footer {
+      padding: 16px;
+      border-top: 1px solid var(--kvibe-border);
+      display: flex;
+      gap: 12px;
+    }
+    
+    .kvibe-repost-btn {
+      flex: 1;
+      padding: 10px;
+      background: var(--kvibe-repost);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .kvibe-repost-cancel-btn {
+      flex: 1;
+      padding: 10px;
+      background: transparent;
+      color: var(--kvibe-text);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    
+    .kvibe-repost-btn:hover {
+      opacity: 0.9;
+    }
+    
+    .kvibe-repost-cancel-btn:hover {
+      background: var(--kvibe-bg);
+    }
+    
+    /* Marketplace Ad Styling - Plane Design */
+    .kvibe-marketplace-ad {
+      background: var(--kvibe-white);
+      margin-bottom: 0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .kvibe-marketplace-ad-header {
+      padding: 12px 16px;
+      background: var(--kvibe-white);
+    }
+    
+    .kvibe-marketplace-ad-badge {
+      font-size: 12px;
+      color: var(--kvibe-text-light);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    
+    .kvibe-marketplace-ad-seller {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .kvibe-marketplace-ad-seller img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    
+    .kvibe-marketplace-ad-image-container {
+      position: relative;
+      width: 100%;
+      height: 300px;
+      overflow: hidden;
+      background: #fafafa;
+    }
+    
+    .kvibe-marketplace-ad-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    
+    .kvibe-marketplace-ad-view-btn {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      background: var(--kvibe-primary);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 10;
+    }
+    
+    .kvibe-marketplace-ad-content {
+      padding: 16px;
+    }
+    
+    .kvibe-marketplace-ad-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .kvibe-marketplace-ad-description {
+      font-size: 14px;
+      color: var(--kvibe-text-light);
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    
+    .kvibe-marketplace-ad-price {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--kvibe-primary);
+    }
+    
+    .kvibe-marketplace-ad-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    
+    .kvibe-marketplace-ad-btn-primary {
+      flex: 1;
+      padding: 10px;
+      background: var(--kvibe-primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-decoration: none;
+    }
+    
+    .kvibe-marketplace-ad-btn-secondary {
+      flex: 1;
+      padding: 10px;
+      background: transparent;
+      color: var(--kvibe-primary);
+      border: 1px solid var(--kvibe-primary);
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .kvibe-marketplace-ad-btn-primary:hover,
+    .kvibe-marketplace-ad-btn-secondary:hover {
+      opacity: 0.9;
+    }
+    
+    /* Marketplace Section */
+    .kvibe-marketplace {
+      background: var(--kvibe-white);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    
+    .kvibe-marketplace-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+    }
+    
+    .kvibe-marketplace-title {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .kvibe-see-all {
+      color: var(--kvibe-primary);
+      font-size: 14px;
+      text-decoration: none;
+    }
+    
+    .kvibe-marketplace-list {
+      padding: 16px;
+    }
+    
+    .kvibe-marketplace-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--kvibe-border);
+    }
+    
+    .kvibe-marketplace-item:last-child {
+      border-bottom: none;
+    }
+    
+    .kvibe-marketplace-item img {
+      width: 60px;
+      height: 60px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #fafafa;
+    }
+    
+    .kvibe-product-name {
+      font-size: 14px;
+      font-weight: 500;
+      flex: 1;
+    }
+    
+    .kvibe-product-price {
+      font-size: 14px;
+      color: var(--kvibe-text-light);
+      font-weight: 500;
+    }
+    
+    /* USER SUGGESTION STYLING - Plane Design */
+    .kvibe-user-suggestion {
+      background: var(--kvibe-white);
+      margin-bottom: 0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .kvibe-user-suggestion-header {
+      padding: 12px 16px 0 16px;
+      background: var(--kvibe-white);
+    }
+    
+    .kvibe-user-suggestion-badge {
+      font-size: 12px;
+      color: var(--kvibe-text-light);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    
+    .kvibe-user-suggestion-content {
+      padding: 0 16px 16px 16px;
+    }
+    
+    .kvibe-user-suggestion-profile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .kvibe-user-suggestion-picture {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    
+    .kvibe-user-suggestion-details {
+      flex: 1;
+    }
+    
+    .kvibe-user-suggestion-name {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--kvibe-text);
+      margin-bottom: 2px;
+    }
+    
+    .kvibe-user-suggestion-username {
+      font-size: 13px;
+      color: var(--kvibe-text-light);
+      margin-bottom: 6px;
+    }
+    
+    .kvibe-user-suggestion-bio {
+      font-size: 13px;
+      color: var(--kvibe-text);
+      line-height: 1.4;
+    } 
+    
+    .kvibe-user-suggestion-actions {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .kvibe-user-suggestion-btn-primary {
+      flex: 1;
+      padding: 10px;
+      background: var(--kvibe-primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 14px;
+    }
+    
+    .kvibe-user-suggestion-btn-secondary {
+      flex: 1;
+      padding: 10px;
+      background: transparent;
+      color: var(--kvibe-primary);
+      border: 1px solid var(--kvibe-primary);
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 14px;
+    }
+    
+    .kvibe-user-suggestion-btn-primary:hover,
+    .kvibe-user-suggestion-btn-secondary:hover {
+      opacity: 0.9;
+    }
+    
+    /* Trending Hashtags Section - NEW */
+    .kvibe-trending-hashtags {
+      background: var(--kvibe-white);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    
+    .kvibe-trending-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--kvibe-border);
+    }
+    
+    .kvibe-trending-title {
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .kvibe-trending-list {
+      padding: 8px;
+    }
+    
+    .kvibe-trending-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      border-radius: 8px;
+      transition: background 0.2s ease;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--kvibe-text);
+    }
+    
+    .kvibe-trending-item:hover {
+      background: var(--kvibe-bg);
+    }
+    
+    .kvibe-trending-hashtag {
+      font-weight: 600;
+      color: var(--kvibe-primary);
+      margin-right: 8px;
+    }
+    
+    .kvibe-trending-count {
+      font-size: 12px;
+      color: var(--kvibe-text-light);
+      margin-left: auto;
+    }
+    
+
+    
+    /* Toast notification */
+    .kvibe-toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: var(--kvibe-primary);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      z-index: 9999;
+      animation: kvibeSlideIn 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    @keyframes kvibeSlideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes kvibeSlideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+    
+    /* Side panels */
+    .kvibe-side-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--kvibe-white);
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      z-index: 1000;
+    }
+    
+    .kvibe-side-panel.open {
+      transform: translateX(0);
+    }
+    
+    /* Utility */
+    .kvibe-hidden {
+      display: none;
+    }
+    
+    /* Carousel controls */
+    .kvibe-carousel-controls {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 12px;
+      pointer-events: none;
+    }
+    
+    .kvibe-carousel-prev,
+    .kvibe-carousel-next {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.5);
+      border: none;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      pointer-events: all;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+    }
+    
+    .kvibe-carousel-indicators {
+      position: absolute;
+      bottom: 16px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .kvibe-indicator {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.5);
+      transition: background 0.2s;
+    }
+    
+    .kvibe-indicator.active {
+      background: white;
+    }
+    
+    /* Hide carousel controls on single image */
+    .kvibe-image-carousel[data-total="1"] .kvibe-carousel-controls,
+    .kvibe-image-carousel[data-total="1"] .kvibe-carousel-indicators {
+      display: none;
+    }
+    
+    /* Loading animation for images */
+    @keyframes kvibeFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .kvibe-image-slide img.loaded {
+      animation: kvibeFadeIn 0.3s ease;
+    }
+    
+
+    
+    /* Edit icon styling */
+    .kvibe-edit-icon {
+      color: var(--kvibe-text);
+      padding: 8px;
+      border-radius: 50%;
+      transition: all 0.15s ease-in-out;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    
+    .kvibe-edit-icon:hover {
+      color: var(--kvibe-primary);
+      background-color: #f3f4f6;
+    }
+    
+    /* ===== LAZY LOAD OPTIMIZATIONS ===== */
+    /* Smooth image fade-in */
+    img[loading="lazy"] {
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    img[loading="lazy"].loaded {
+      opacity: 1;
+    }
+    
+    /* Video poster fallback */
+    video[poster] {
+      background: #000;
+    }
+    
+    /* Make sure video container has a background */
+    .kvibe-video-container {
+      background: #000;
+    }
+    
+    /* Logout Modal Styles */
+    .kvibe-logout-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .kvibe-logout-modal.active {
+      display: flex;
+    }
+    
+    .kvibe-logout-modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      width: 90%;
+      max-width: 320px;
+      text-align: center;
+      animation: modalSlideIn 0.3s ease;
+    }
+    
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .kvibe-logout-modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #000;
+    }
+    
+    .kvibe-logout-modal-message {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    
+    .kvibe-logout-modal-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .kvibe-logout-modal-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .kvibe-logout-modal-cancel {
+      background: #f5f5f5;
+      color: #333;
+    }
+    
+    .kvibe-logout-modal-cancel:hover {
+      background: #e5e5e5;
+    }
+    
+    .kvibe-logout-modal-confirm {
+      background: #ff4444;
+      color: white;
+    }
+    
+    .kvibe-logout-modal-confirm:hover {
+      background: #ff0000;
+    }
+    
+    
+    /* Hide bottom nav in desktop */
+    @media (min-width: 768px) {
+      .kvibe-bottom-nav {
+        display: none !important;
+      }
+      
+      .kvibe-desktop-only {
+        display: block;
+      }
+    }
+    
+    /* Responsive adjustments - Mobile */
+    @media (max-width: 767px) {
+      .kvibe-desktop-layout {
+        display: block;
+        padding: 2px 0 0 0;
+      }
+      
+      .kvibe-left-sidebar,
+      .kvibe-right-sidebar {
+        display: none;
+      }
+      
+      .kvibe-main-feed {
+        max-width: 100%;
+        padding: 0;
+      }
+      
+      .kvibe-marketplace.desktop-only {
+        display: none;
+      }
+      
+      .kvibe-desktop-only {
+        display: none;
+      }
+      
+      .kvibe-post {
+        border-radius: 0;
+        margin-bottom: 8px;
+      }
+      
+      .kvibe-bottom-nav {
+        display: flex !important;
+      }
+    }
+    
+    /* Responsive adjustments - Tablet */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .kvibe-desktop-layout {
+        padding: 4px 15px 0 15px;
+      }
+      
+      .kvibe-left-sidebar {
+        width: 245px;
+      }
+      
+      .kvibe-right-sidebar {
+        width: 200px; /* Adjusted for tablet */
+      }
+      
+      
+      .kvibe-desktop-only {
+        display: block;
+      }
+      
+      .kvibe-bottom-nav {
+        display: none !important;
+      }
+    }
+    
+    /* Responsive adjustments - Desktop */
+    @media (min-width: 1024px) {
+      .kvibe-desktop-layout {
+        padding: 44px 20px 0 20px;
+      }
+      
+      .kvibe-left-sidebar {
+        width: 245px;
+      }
+      
+      .kvibe-right-sidebar {
+        width: 330px; /* Increased width for desktop */
+      }
+      
+      
+      .kvibe-desktop-only {
+        display: block;
+      }
+      
+      .kvibe-bottom-nav {
+        display: none !important;
+      }
+      
+      /* Custom scrollbar for sidebars */
+      .kvibe-left-sidebar::-webkit-scrollbar,
+      .kvibe-right-sidebar::-webkit-scrollbar {
+        width: 6px;
+      }
+      
+      .kvibe-left-sidebar::-webkit-scrollbar-track,
+      .kvibe-right-sidebar::-webkit-scrollbar-track {
+        background: var(--kvibe-bg);
+      }
+      
+      .kvibe-left-sidebar::-webkit-scrollbar-thumb,
+      .kvibe-right-sidebar::-webkit-scrollbar-thumb {
+        background: var(--kvibe-border);
+        border-radius: 3px;
+      }
+      
+      .kvibe-left-sidebar::-webkit-scrollbar-thumb:hover,
+      .kvibe-right-sidebar::-webkit-scrollbar-thumb:hover {
+        background: var(--kvibe-text-light);
+      }
+    }
+
+    /* ===== MOBILE RIGHT SIDEBAR ===== */
+    .kvibe-mobile-sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 1100;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .kvibe-mobile-sidebar-overlay.active {
+      display: block;
+      opacity: 1;
+    }
+
+    .kvibe-mobile-right-sidebar {
+      position: fixed;
+      top: 0;
+      right: -100%;
+      width: 82vw;
+      max-width: 320px;
+      height: 100dvh;
+      background: var(--kvibe-white);
+      z-index: 1101;
+      overflow-y: auto;
+      transition: right 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+      padding-bottom: 80px;
+    }
+
+    .kvibe-mobile-right-sidebar.open {
+      right: 0;
+    }
+
+    .kvibe-mobile-sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--kvibe-border);
+      position: sticky;
+      top: 0;
+      background: var(--kvibe-white);
+      z-index: 2;
+    }
+
+    .kvibe-mobile-sidebar-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--kvibe-text);
+    }
+
+    .kvibe-mobile-sidebar-close {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: var(--kvibe-bg);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--kvibe-text);
+      font-size: 16px;
+    }
+
+    .kvibe-mobile-sidebar-body {
+      padding: 16px;
+    }
+
+    /* Toggle button shown only on mobile */
+    .kvibe-mobile-sidebar-toggle {
+      display: none;
+    }
+
+    @media (max-width: 767px) {
+      .kvibe-mobile-sidebar-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: 50%;
+        right: 0;
+        transform: translateY(-50%);
+        z-index: 1050;
+        background: var(--kvibe-primary);
+        color: white;
+        border: none;
+        border-radius: 8px 0 0 8px;
+        width: 28px;
+        height: 64px;
+        cursor: pointer;
+        box-shadow: -2px 2px 10px rgba(0,0,0,0.18);
+        flex-direction: column;
+        gap: 4px;
+        padding: 0;
+      }
+
+      .kvibe-mobile-sidebar-toggle i {
+        font-size: 13px;
+      }
+
+      .kvibe-mobile-sidebar-toggle span {
+        font-size: 9px;
+        font-weight: 700;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        letter-spacing: 0.5px;
+      }
+    }
+
+    /* ===== SKELETON LOADING ANIMATIONS ===== */
+    @keyframes skeleton-shimmer {
+      0% { background-position: -468px 0; }
+      100% { background-position: 468px 0; }
+    }
+
+    .kvibe-skeleton {
+      background: #e8e8e8;
+      background-image: linear-gradient(
+        to right,
+        #e8e8e8 0%,
+        #f5f5f5 20%,
+        #e8e8e8 40%,
+        #e8e8e8 100%
+      );
+      background-repeat: no-repeat;
+      background-size: 800px 100%;
+      animation: skeleton-shimmer 1.4s ease-in-out infinite;
+      border-radius: 4px;
+    }
+
+    /* Skeleton Feed */
+    .kvibe-skeleton-feed {
+      display: none;
+    }
+
+    .kvibe-skeleton-feed.visible {
+      display: block;
+    }
+
+    /* Skeleton Post Card */
+    .kvibe-skeleton-post {
+      background: var(--kvibe-white);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .kvibe-skeleton-post-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .kvibe-skeleton-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .kvibe-skeleton-meta {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .kvibe-skeleton-name {
+      height: 13px;
+      width: 140px;
+      border-radius: 6px;
+    }
+
+    .kvibe-skeleton-time {
+      height: 11px;
+      width: 90px;
+      border-radius: 6px;
+    }
+
+    .kvibe-skeleton-text-line {
+      height: 13px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+
+    .kvibe-skeleton-text-line:last-child {
+      margin-bottom: 0;
+    }
+
+    .kvibe-skeleton-media {
+      width: 100%;
+      height: 280px;
+      border-radius: 8px;
+      margin: 14px 0;
+    }
+
+    .kvibe-skeleton-actions {
+      display: flex;
+      gap: 16px;
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid var(--kvibe-border);
+    }
+
+    .kvibe-skeleton-action-btn {
+      height: 22px;
+      width: 52px;
+      border-radius: 6px;
+    }
+
+    
+
+    /* Skeleton Right Sidebar */
+    .kvibe-skeleton-sidebar-user {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+    }
+
+    .kvibe-skeleton-sidebar-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .kvibe-skeleton-sidebar-meta {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .kvibe-skeleton-sidebar-name {
+      height: 12px;
+      width: 110px;
+      border-radius: 5px;
+    }
+
+    .kvibe-skeleton-sidebar-sub {
+      height: 10px;
+      width: 75px;
+      border-radius: 5px;
+    }
+
+    /* Skeleton Channel Nav */
+    .kvibe-skeleton-channel {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+    }
+
+    .kvibe-skeleton-channel-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .kvibe-skeleton-channel-name {
+      height: 12px;
+      flex: 1;
+      border-radius: 5px;
+      max-width: 140px;
+    }
+  
+    /* ===== KVIBE FOLLOW BUTTON IN POST HEADER ===== */
+    .kvibe-follow-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1.5px solid var(--kvibe-primary);
+      background: transparent;
+      color: var(--kvibe-primary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      font-family: inherit;
+      line-height: 1;
+    }
+
+    .kvibe-follow-btn:hover {
+      background: var(--kvibe-primary);
+      color: white;
+    }
+
+    .kvibe-follow-btn--following {
+      background: var(--kvibe-primary);
+      color: white;
+    }
+
+    .kvibe-follow-btn--following:hover {
+      background: #e53935;
+      border-color: #e53935;
+      color: white;
+    }
+
+    .kvibe-follow-btn--following:hover i::before {
+      content: "\f235"; /* fa-user-minus unicode */
+    }
+
+    .kvibe-follow-btn--following:hover span::after {
+      content: "Unfollow";
+    }
+
+    .kvibe-follow-btn--following:hover span {
+      font-size: 0;
+    }
+
+    .kvibe-follow-btn--following:hover span::after {
+      font-size: 12px;
+    }
+
+    .kvibe-follow-btn i {
+      font-size: 11px;
+    }
+
+  </style>
+  
+  <!-- Deferred JavaScript -->
+ 
+</head>
+<body>
+
+  {% include 'header.html' %}
+
+  <main class="kvibe-container">
+    <!-- Desktop Layout -->
+    <div class="kvibe-desktop-layout">
+      <!-- Left Sidebar - Main Navigation & Channels (Desktop) -->
+      <aside class="kvibe-left-sidebar kvibe-desktop-only">
+        <!-- Desktop Navigation  -->
+        <div class="kvibe-desktop-nav">
+          <!-- Home -->
+          <a href="{% url 'home' %}" class="kvibe-desktop-nav-item {% if request.path == '/home/' %}active{% endif %}" title="Home">
+            <div class="kvibe-desktop-nav-icon">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <span class="kvibe-desktop-nav-label">Home</span>
+          </a>
+          
+          <!-- Explore Users -->
+          <a href="{% url 'explore' %}" class="kvibe-desktop-nav-item" title="Explore Users">
+            <div class="kvibe-desktop-nav-icon">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z"/>
+                <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8.25 15.75l1.5-1.5 2.25 2.25 4.5-4.5 1.5 1.5-6 6z"/>
+                <circle cx="18" cy="6" r="1.5" stroke-width="2"/>
+              </svg>
+              {% if unread_follow_count and unread_follow_count > 0 %}
+              <span class="kvibe-desktop-notification-badge">{{ unread_follow_count }}</span>
+              {% endif %}
+            </div>
+            <span class="kvibe-desktop-nav-label">Explore</span>
+          </a>
+          
+          <!-- Search -->
+          <a href="{% url 'search' %}" class="kvibe-desktop-nav-item" title="Search">
+            <div class="kvibe-desktop-nav-icon">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <span class="kvibe-desktop-nav-label">Search</span>
+          </a>
+          
+          <!-- Create Post -->
+          <a href="{% url 'post' %}" class="kvibe-desktop-nav-item" title="Create Post">
+            <div class="kvibe-desktop-nav-icon">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                <line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/>
+                <line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/>
+              </svg>
+            </div>
+            <span class="kvibe-desktop-nav-label">Create</span>
+          </a>
+          
+          <!-- Notifications -->
+          <a href="{% url 'notification_list' %}" class="kvibe-desktop-nav-item" title="Notifications">
+            <div class="kvibe-desktop-nav-icon">
+              <i class="fa-regular fa-bell" style="font-size: 20px; color: var(--kvibe-text-light);"></i>
+              {% if unread_notifications_count and unread_notifications_count > 0 %}
+              <span class="kvibe-desktop-notification-badge">{{ unread_notifications_count }}</span>
+              {% endif %}
+            </div>
+            <span class="kvibe-desktop-nav-label">Alerts</span>
+          </a>
+          
+          <!-- Profile -->
+          <a href="{% url 'profile' request.user.username %}" class="kvibe-desktop-nav-item" title="Profile">
+            <div class="kvibe-desktop-nav-icon">
+              <i class="fa-regular fa-user" style="font-size: 20px; color: var(--kvibe-text-light);"></i>
+            </div>
+            <span class="kvibe-desktop-nav-label">Profile</span>
+          </a>
+          
+          <!-- Channels -->
+          <a href="{% url 'channel_create' %}" class="kvibe-desktop-nav-item" title="Channels">
+            <div class="kvibe-desktop-nav-icon">
+              <i class="fa-regular fa-newspaper" style="font-size: 20px; color: var(--kvibe-text-light);"></i>
+            </div>
+            <span class="kvibe-desktop-nav-label">Channels</span>
+          </a>
+          
+          <!-- Marketplace -->
+          <a href="{% url 'market' %}" class="kvibe-desktop-nav-item" title="Marketplace">
+            <div class="kvibe-desktop-nav-icon">
+              <i class="fa-solid fa-store" style="font-size: 20px; color: var(--kvibe-text-light);"></i>
+            </div>
+            <span class="kvibe-desktop-nav-label">Marketplace</span>
+          </a>
+          
+          <!-- Logout -->
+          <a href="#" class="kvibe-desktop-nav-item logout" title="Log Out" id="desktopLogoutIcon">
+            <div class="kvibe-desktop-nav-icon">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+              </svg>
+            </div>
+            <span class="kvibe-desktop-nav-label">Logout</span>
+          </a>
+        </div>
+        
+        <!-- Channels Section (Below Navigation) - UPDATED FOR WEBSOCKET INTEGRATION -->
+        {% if followed_list %}
+        <div class="kvibe-channels-header">
+          <h3 class="kvibe-channels-title">
+            <i class="fas fa-newspaper"></i> Your Subscriptions
+            <span class="kvibe-channels-count" id="channels-count">{{ followed_list|length }}</span>
+          </h3>
+        </div>
+        <div class="kvibe-channels-list" id="following-list-container">
+          {% for data in followed_list|slice:":8" %}
+            <a href="{% url 'channel' data.channel.channel_id %}" 
+               class="kvibe-channel-nav-item" 
+               data-id="{{ data.channel.channel_id }}"
+               id="channel-item-{{ data.channel.channel_id }}">
+              <img src="{{ data.channel.image.url }}" 
+                   class="kvibe-channel-icon" 
+                   loading="lazy"
+                   alt="{{ data.channel.channel_name }}">
+              <span class="kvibe-channel-name">{{ data.channel.channel_name }}</span>
+              {% if data.unread_count > 0 %}
+                <span class="kvibe-channel-unread" id="channel-badge-{{ data.channel.channel_id }}">
+                  {{ data.unread_count }}
+                </span>
+              {% endif %}
+            </a>
+          {% endfor %}
+          
+          {% if followed_list|length > 8 %}
+            <div style="text-align: center; padding: 12px;">
+              <a href="{% url 'channel_create' %}" class="kvibe-view-profile-btn">
+                View All Channels
+              </a>
+            </div>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="kvibe-channels-header">
+          <h3 class="kvibe-channels-title">
+            <i class="fas fa-newspaper"></i> Your Subscriptions
+          </h3>
+        </div>
+        <div class="kvibe-channels-empty">
+          <i class="fas fa-wind"></i>
+          <p>No active subscriptions.</p>
+          <a href="{% url 'channel_create' %}" class="kvibe-your-product-btn kvibe-your-product-btn-primary" style="display: inline-block; margin-top: 10px;">
+            <i class="fas fa-plus-circle"></i> Discover Channels
+          </a>
+        </div>
+        {% endif %}
+      </aside>
+
+      <!-- Main Feed -->
+      <div class="kvibe-main-feed">
+
+    <!-- Mood Filter Bar -->
+    <div class="kvibe-mood-filter-bar" id="moodFilterBar">
+      <button class="kvibe-mood-filter-chip chip-all active" data-mood="all" onclick="kvibeFilterMood('all', this)">
+        <span class="kvibe-chip-dot"></span> All
+      </button>
+      <button class="kvibe-mood-filter-chip" style="--kvibe-chip-color: #ff1493;" data-mood="slay" onclick="kvibeFilterMood('slay', this)">
+        <span class="kvibe-chip-dot"></span> 💅 slay
+      </button>
+      <button class="kvibe-mood-filter-chip" style="--kvibe-chip-color: #9933ff;" data-mood="vibing" onclick="kvibeFilterMood('vibing', this)">
+        <span class="kvibe-chip-dot"></span> 🎵 vibing
+      </button>
+      <button class="kvibe-mood-filter-chip" style="--kvibe-chip-color: #00cc66;" data-mood="sheesh" onclick="kvibeFilterMood('sheesh', this)">
+        <span class="kvibe-chip-dot"></span> 🥶 sheesh
+      </button>
+      <button class="kvibe-mood-filter-chip" style="--kvibe-chip-color: #ff6b00;" data-mood="periodt" onclick="kvibeFilterMood('periodt', this)">
+        <span class="kvibe-chip-dot"></span> ⏸️ periodt
+      </button>
+      <button class="kvibe-mood-filter-chip" style="--kvibe-chip-color: #ff4444;" data-mood="no-cap" onclick="kvibeFilterMood('no-cap', this)">
+        <span class="kvibe-chip-dot"></span> 🎯 no cap
+      </button>
+      <button class="kvibe-mood-filter-chip" style="--kvibe-chip-color: #ffd700;" data-mood="bussin" onclick="kvibeFilterMood('bussin', this)">
+        <span class="kvibe-chip-dot"></span> 🔥 bussin
+      </button>
+      <button class="kvibe-mood-filter-chip" style="--kvibe-chip-color: #808080;" data-mood="mid" onclick="kvibeFilterMood('mid', this)">
+        <span class="kvibe-chip-dot"></span> 😐 mid
+      </button>
+      <button class="kvibe-mood-filter-chip" style="--kvibe-chip-color: #8b4513;" data-mood="cringe" onclick="kvibeFilterMood('cringe', this)">
+        <span class="kvibe-chip-dot"></span> 😬 cringe
+      </button>
+      <!-- Custom mood chips injected by JS at runtime -->
+      <div id="kvibeCustomMoodChips" style="display:contents;"></div>
+    </div>
+
+    <!-- Skeleton Feed (shown while page loads) -->
+    <div id="kvibe-skeleton-feed">
+      {% for i in "12345" %}
+      <div class="kvibe-skeleton-post">
+        <div class="kvibe-skeleton-post-header">
+          <div class="kvibe-skeleton-avatar kvibe-skeleton"></div>
+          <div class="kvibe-skeleton-meta">
+            <div class="kvibe-skeleton-name kvibe-skeleton"></div>
+            <div class="kvibe-skeleton-time kvibe-skeleton"></div>
+          </div>
+        </div>
+        <div class="kvibe-skeleton-text-line kvibe-skeleton" style="width:95%"></div>
+        <div class="kvibe-skeleton-text-line kvibe-skeleton" style="width:80%"></div>
+        <div class="kvibe-skeleton-media kvibe-skeleton"></div>
+        <div class="kvibe-skeleton-actions">
+          <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+          <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+          <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Main Feed Content -->
+    <div id="kvibe-real-feed" style="display:none;">
+    {% for item in posts_with_ads %}
+          {% if item.type == 'post' %}
+            <!-- Regular Post -->
+            <article class="kvibe-post" data-post-id="{{ item.data.post_id }}" data-mood="{{ item.data.mood|default:'' }}" data-custom-mood="{% if item.data.mood == 'custom' or not item.data.mood %}{{ item.data.custom_mood|default:'' }}{% endif %}">
+              <!-- Repost Header (if this is a repost) -->
+              {% if item.data.is_repost %}
+              <div class="kvibe-repost-header">
+                <i class="fas fa-retweet"></i>
+                <span>
+                  <a href="{% url 'profile' item.data.author.username %}">{{ item.data.author.first_name }} {{ item.data.author.last_name }}</a>
+                  reposted
+                </span>
+              </div>
+              {% endif %}
+              
+              <!-- Post Header -->
+              <div class="kvibe-post-header">
+                <img 
+                  src="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.profile.picture.url }}{% else %}{{ item.data.author.profile.picture.url }}{% endif %}" 
+                  class="kvibe-profile-pic"
+                  alt="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}"
+                  loading="lazy"
+                >
+                <div style="flex: 1;">
+                  <div style="display: flex; align-items: center; flex-wrap: wrap;">
+                    <a href="{% url 'profile' username=item.data.get_original_author.username %}" class="kvibe-username" data-user="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}">
+                      {% if item.data.is_repost and item.data.original_post %}
+                        {{ item.data.original_post.author.first_name }} {{ item.data.original_post.author.last_name }}
+                      {% else %}
+                        {{ item.data.author.first_name }} {{ item.data.author.last_name }}
+                      {% endif %}
+                      {% if item.data.is_repost and item.data.original_post %}
+                        {% if item.data.original_post.author.profile.is_verify %} 
+                          <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                        {% endif %}
+                      {% else %}
+                        {% if item.data.author.profile.is_verify and item.data.author.first_name %} 
+                          <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;">
+                        {% endif %}
+                      {% endif %}
+                    </a>
+                    
+                    <!-- ===== MOOD BADGE - NEW ===== -->
+                    {% if item.data.has_mood %}
+                      {% with mood_data=item.data.get_mood_data %}
+                        <span class="kvibe-mood-badge kvibe-mood-{{ item.data.mood|default:'custom' }}" 
+                              style="{% if mood_data.color %}--mood-color: {{ mood_data.color }};{% endif %}">
+                          <i class="fa-regular fa-face-smile"></i>
+                          {{ mood_data.display }}
+                        </span>
+                      {% endwith %}
+                    {% endif %}
+                  </div>
+                  
+                  <div class="kvibe-post-time">
+                    {% if item.data.is_repost %}
+                      @{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}
+                      · Original post: {{ item.data.original_post.created_at|insta_timesince }}
+                      · Reposted: {{ item.data.created_at|insta_timesince }}
+                    {% else %}
+                      @{{ item.data.author.username }} · {{ item.data.created_at|insta_timesince }}
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="kvibe-post-actions">
+                  {% with post_author=item.data.get_original_author %}
+                  {% if request.user != post_author %}
+                    {% if post_author.id in following_ids %}
+                      <button class="kvibe-follow-btn kvibe-follow-btn--following"
+                              data-user-id="{{ post_author.id }}"
+                              data-username="{{ post_author.username }}"
+                              onclick="kvibeToggleFollow(this)"
+                              title="Unfollow {{ post_author.username }}">
+                        <i class="fas fa-user-check"></i>
+                        <span>Following</span>
+                      </button>
+                    {% else %}
+                      <button class="kvibe-follow-btn"
+                              data-user-id="{{ post_author.id }}"
+                              data-username="{{ post_author.username }}"
+                              onclick="kvibeToggleFollow(this)"
+                              title="Follow {{ post_author.username }}">
+                        <i class="fas fa-user-plus"></i>
+                        <span>Follow</span>
+                      </button>
+                    {% endif %}
+                  {% endif %}
+                  {% endwith %}
+                  {% if request.user == item.data.author and not item.data.is_repost %}
+                    <a href="{% url 'editpost' item.data.post_id %}" title="Edit" class="kvibe-edit-icon">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Repost caption (if exists) - UPDATED FOR BETTER VISIBILITY -->
+              {% if item.data.is_repost and item.data.repost_content %}
+              <div class="kvibe-repost-caption-container">
+                <div class="kvibe-repost-caption">
+                  <span class="kvibe-repost-caption-author">
+                    {{ item.data.author.first_name }} {{ item.data.author.last_name }}
+                    {% if item.data.author.profile.is_verify %} 
+                      <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align: middle;">
+                    {% endif %}
+                  </span>
+                  <div class="kvibe-repost-caption-text">
+                    {{ item.data.repost_content|format_post_text|safe }}
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+
+              <!-- Post Content with Show More/Less - UPDATED WITH FORMATTING -->
+              {% if item.data.content or item.data.is_repost %}
+              <div class="kvibe-post-content">
+                <div class="kvibe-post-text collapsed" id="kvibe-text-{{ item.data.post_id }}">
+                  {% if item.data.is_repost and item.data.original_post %}
+                    {{ item.data.original_post.content|format_post_text|safe }}
+                  {% else %}
+                    {{ item.data.content|format_post_text|safe }}
+                  {% endif %}
+                </div>
+                {% if item.data.is_repost and item.data.original_post %}
+                  {% if item.data.original_post.content|length > 150 %}
+                  <button class="kvibe-text-toggle" onclick="kvibeToggleText('{{ item.data.post_id }}')">
+                    <span>more</span>
+                    <i class="fas fa-chevron-down"></i>
+                  </button>
+                  {% endif %}
+                {% else %}
+                  {% if item.data.content|length > 150 %}
+                  <button class="kvibe-text-toggle" onclick="kvibeToggleText('{{ item.data.post_id }}')">
+                    <span>more</span>
+                    <i class="fas fa-chevron-down"></i>
+                  </button>
+                  {% endif %}
+                {% endif %}
+              </div>
+              {% endif %}
+
+              <!-- Media Container - Handle all media types -->
+              {% if item.data.file or item.data.video_file or item.data.images.all or item.data.is_repost %}
+              <div class="kvibe-media-container">
+                {% comment %} 
+                  For reposts, we need to check if the original post has media 
+                  For regular posts, check the post's own media
+                {% endcomment %}
+                {% if item.data.is_repost and item.data.original_post %}
+                  {% comment %} This is a repost - get media from original post {% endcomment %}
+                  {% with original_post=item.data.original_post %}
+                    {% with total_media=original_post|total_media_count %}
+                      
+                      {% if total_media > 1 %}
+                        <!-- Mixed Media Carousel (multiple items) -->
+                        <div class="kvibe-mixed-media-carousel" id="kvibe-mixed-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ total_media }}">
+                          <div class="kvibe-mixed-media-track" id="kvibe-mixed-track-{{ item.data.post_id }}">
+                            
+                            <!-- Video (if exists) -->
+                            {% if original_post.video_file %}
+                            <div class="kvibe-mixed-media-slide" data-media-type="video">
+                              <span class="kvibe-media-type-badge">
+                                <i class="fas fa-video"></i> Video
+                              </span>
+                              <div class="kvibe-video-container" id="kvibe-container-{{ item.data.post_id }}">
+                                
+                                <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
+                                <video class="kvibe-video" 
+                                       id="kvibe-post-video-{{ item.data.post_id }}" 
+                                       preload="metadata"
+                                       poster="{% if original_post.video_thumbnail %}{{ original_post.video_thumbnail.url }}{% else %}{% endif %}"
+                                       data-src="{{ original_post.video_file.url }}"
+                                       onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)">
+                                  <source data-src="{{ original_post.video_file.url }}#t=0.5" type="video/mp4">
+                                  Your browser does not support HTML5 video.
+                                </video>
+                                
+                                <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
+                                
+                                <button class="kvibe-seek-overlay-btn kvibe-backward-btn" 
+                                        onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', -10)">
+                                  <i class="fa-solid fa-backward-step"></i> 10s
+                                </button>
+                                <button class="kvibe-seek-overlay-btn kvibe-forward-btn" 
+                                        onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', 10)">
+                                  10s <i class="fa-solid fa-forward-step"></i>
+                                </button>
+                              </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Images Last (if exist) -->
+                            {% if original_post.images.all %}
+                              {% for image in original_post.images.all %}
+                              <div class="kvibe-mixed-media-slide" data-media-type="image">
+                                <span class="kvibe-media-type-badge">
+                                  <i class="fas fa-image"></i> Image {{ forloop.counter }}
+                                </span>
+                                <div class="kvibe-image-slide">
+                                  <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                                  <img 
+                                    src="{{ image.image.url }}" 
+                                    alt="Post image {{ forloop.counter }}"
+                                    loading="lazy"
+                                    onload="this.classList.add('loaded')"
+                                  />
+                                </div>
+                              </div>
+                              {% endfor %}
+                            {% endif %}
+                          </div>
+                          
+                          <!-- Carousel Controls for Multiple Items -->
+                          <div class="kvibe-mixed-carousel-controls">
+                            <button class="kvibe-mixed-carousel-prev" onclick="kvibeSlideMixedCarousel('{{ item.data.post_id }}', -1)">
+                              <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button class="kvibe-mixed-carousel-next" onclick="kvibeSlideMixedCarousel('{{ item.data.post_id }}', 1)">
+                              <i class="fas fa-chevron-right"></i>
+                            </button>
+                          </div>
+                          
+                          <!-- Carousel Indicators -->
+                          <div class="kvibe-mixed-carousel-indicators">
+                            {% for i in "x"|rjust:total_media %}
+                            <span class="kvibe-mixed-indicator {% if forloop.first %}active{% endif %}" 
+                                  onclick="kvibeGoToMixedSlide('{{ item.data.post_id }}', {{ forloop.counter0 }})"></span>
+                            {% endfor %}
+                          </div>
+                        </div>
+                        
+                      {% else %}
+                        <!-- Single media item (no carousel needed) -->
+                        {% if original_post.video_file %}
+                          <!-- Single Video -->
+                          <div class="kvibe-video-container" id="kvibe-container-{{ item.data.post_id }}">
+                            
+                            <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
+                            <video class="kvibe-video" 
+                                   id="kvibe-post-video-{{ item.data.post_id }}" 
+                                   preload="metadata"
+                                   poster="{% if original_post.video_thumbnail %}{{ original_post.video_thumbnail.url }}{% else %}{% endif %}"
+                                   data-src="{{ original_post.video_file.url }}"
+                                   onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)">
+                              <source data-src="{{ original_post.video_file.url }}#t=0.5" type="video/mp4">
+                              Your browser does not support HTML5 video.
+                            </video>
+                            
+                            <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
+                            
+                            <button class="kvibe-seek-overlay-btn kvibe-backward-btn" 
+                                    onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', -10)">
+                              <i class="fa-solid fa-backward-step"></i> 10s
+                            </button>
+                            <button class="kvibe-seek-overlay-btn kvibe-forward-btn" 
+                                    onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', 10)">
+                              10s <i class="fa-solid fa-forward-step"></i>
+                            </button>
+                          </div>
+                        {% elif original_post.images.all %}
+                          <!-- Single or Multiple Images (original image carousel) -->
+                          {% if original_post.images.all|length > 1 %}
+                            <div class="kvibe-image-carousel" id="kvibe-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ original_post.images.all|length }}">
+                              <div class="kvibe-image-track" id="kvibe-track-{{ item.data.post_id }}">
+                                {% for image in original_post.images.all %}
+                                <div class="kvibe-image-slide">
+                                  <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                                  <img 
+                                    src="{{ image.image.url }}" 
+                                    alt="Post image {{ forloop.counter }}"
+                                    loading="lazy"
+                                    onload="this.classList.add('loaded')"
+                                  />
+                                </div>
+                                {% endfor %}
+                              </div>
+                              
+                              <div class="kvibe-carousel-controls">
+                                <button class="kvibe-carousel-prev" onclick="kvibeSlideCarousel('{{ item.data.post_id }}', -1)">
+                                  <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="kvibe-carousel-next" onclick="kvibeSlideCarousel('{{ item.data.post_id }}', 1)">
+                                  <i class="fas fa-chevron-right"></i>
+                                </button>
+                              </div>
+                              
+                              <div class="kvibe-carousel-indicators">
+                                {% for image in original_post.images.all %}
+                                <span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>
+                                {% endfor %}
+                              </div>
+                            </div>
+                          {% else %}
+                            <!-- Single Image -->
+                            {% with image=original_post.images.first %}
+                            <div class="kvibe-image-slide">
+                              <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                              <img 
+                                src="{{ image.image.url }}" 
+                                alt="Post image"
+                                loading="lazy"
+                                onload="this.classList.add('loaded')"
+                              />
+                            </div>
+                            {% endwith %}
+                          {% endif %}
+                        {% endif %}
+                      {% endif %}
+                    {% endwith %}
+                  {% endwith %}
+                {% else %}
+                  {% comment %} This is a regular post - use post's own media {% endcomment %}
+                  {% with total_media=item.data|total_media_count %}
+                    
+                    {% if total_media > 1 %}
+                      <!-- Mixed Media Carousel (multiple items) -->
+                      <div class="kvibe-mixed-media-carousel" id="kvibe-mixed-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ total_media }}">
+                        <div class="kvibe-mixed-media-track" id="kvibe-mixed-track-{{ item.data.post_id }}">
+                          
+                          <!-- Video (if exists) -->
+                          {% if item.data.video_file %}
+                          <div class="kvibe-mixed-media-slide" data-media-type="video">
+                            <span class="kvibe-media-type-badge">
+                              <i class="fas fa-video"></i> Video
+                            </span>
+                            <div class="kvibe-video-container" id="kvibe-container-{{ item.data.post_id }}">
+                              
+                              <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
+                              <video class="kvibe-video" 
+                                     id="kvibe-post-video-{{ item.data.post_id }}" 
+                                     preload="metadata"
+                                     poster="{{ item.data.video_thumbnail.url|default:'' }}"
+                                     data-src="{{ item.data.video_file.url }}"
+                                     onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)">
+                                <source data-src="{{ item.data.video_file.url }}#t=0.5" type="video/mp4">
+                                Your browser does not support HTML5 video.
+                              </video>
+                              
+                              <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
+                              
+                              <button class="kvibe-seek-overlay-btn kvibe-backward-btn" 
+                                      onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', -10)">
+                                <i class="fa-solid fa-backward-step"></i> 10s
+                              </button>
+                              <button class="kvibe-seek-overlay-btn kvibe-forward-btn" 
+                                      onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', 10)">
+                                10s <i class="fa-solid fa-forward-step"></i>
+                              </button>
+                            </div>
+                          </div>
+                          {% endif %}
+                          
+                          <!-- Images Last (if exist) -->
+                          {% if item.data.images.all %}
+                            {% for image in item.data.images.all %}
+                            <div class="kvibe-mixed-media-slide" data-media-type="image">
+                              <span class="kvibe-media-type-badge">
+                                <i class="fas fa-image"></i> Image {{ forloop.counter }}
+                              </span>
+                              <div class="kvibe-image-slide">
+                                <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                                <img 
+                                  src="{{ image.image.url }}" 
+                                  alt="Post image {{ forloop.counter }}"
+                                  loading="lazy"
+                                  onload="this.classList.add('loaded')"
+                                />
+                              </div>
+                            </div>
+                            {% endfor %}
+                          {% endif %}
+                        </div>
+                        
+                        <!-- Carousel Controls for Multiple Items -->
+                        <div class="kvibe-mixed-carousel-controls">
+                          <button class="kvibe-mixed-carousel-prev" onclick="kvibeSlideMixedCarousel('{{ item.data.post_id }}', -1)">
+                            <i class="fas fa-chevron-left"></i>
+                          </button>
+                          <button class="kvibe-mixed-carousel-next" onclick="kvibeSlideMixedCarousel('{{ item.data.post_id }}', 1)">
+                            <i class="fas fa-chevron-right"></i>
+                          </button>
+                        </div>
+                        
+                        <!-- Carousel Indicators -->
+                        <div class="kvibe-mixed-carousel-indicators">
+                          {% for i in "x"|rjust:total_media %}
+                          <span class="kvibe-mixed-indicator {% if forloop.first %}active{% endif %}" 
+                                onclick="kvibeGoToMixedSlide('{{ item.data.post_id }}', {{ forloop.counter0 }})"></span>
+                          {% endfor %}
+                        </div>
+                      </div>
+                      
+                    {% else %}
+                      <!-- Single media item (no carousel needed) -->
+                      {% if item.data.video_file %}
+                        <!-- Single Video -->
+                        <div class="kvibe-video-container" id="kvibe-container-{{ item.data.post_id }}">
+                          
+                          <!-- OPTIMIZED VIDEO TAG WITH LAZY LOADING -->
+                          <video class="kvibe-video" 
+                                 id="kvibe-post-video-{{ item.data.post_id }}" 
+                                 preload="metadata"
+                                 poster="{{ item.data.video_thumbnail.url|default:'' }}"
+                                 data-src="{{ item.data.video_file.url }}"
+                                 onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)">
+                            <source data-src="{{ item.data.video_file.url }}#t=0.5" type="video/mp4">
+                            Your browser does not support HTML5 video.
+                          </video>
+                          
+                          <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
+                          
+                          <button class="kvibe-seek-overlay-btn kvibe-backward-btn" 
+                                  onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', -10)">
+                            <i class="fa-solid fa-backward-step"></i> 10s
+                          </button>
+                          <button class="kvibe-seek-overlay-btn kvibe-forward-btn" 
+                                  onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', 10)">
+                            10s <i class="fa-solid fa-forward-step"></i>
+                          </button>
+                        </div>
+                      {% elif item.data.images.all %}
+                        <!-- Single or Multiple Images (original image carousel) -->
+                        {% if item.data.images.all|length > 1 %}
+                          <div class="kvibe-image-carousel" id="kvibe-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ item.data.images.all|length }}">
+                            <div class="kvibe-image-track" id="kvibe-track-{{ item.data.post_id }}">
+                              {% for image in item.data.images.all %}
+                              <div class="kvibe-image-slide">
+                                <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                                <img 
+                                  src="{{ image.image.url }}" 
+                                  alt="Post image {{ forloop.counter }}"
+                                  loading="lazy"
+                                  onload="this.classList.add('loaded')"
+                                />
+                              </div>
+                              {% endfor %}
+                            </div>
+                            
+                            <div class="kvibe-carousel-controls">
+                              <button class="kvibe-carousel-prev" onclick="kvibeSlideCarousel('{{ item.data.post_id }}', -1)">
+                                <i class="fas fa-chevron-left"></i>
+                              </button>
+                              <button class="kvibe-carousel-next" onclick="kvibeSlideCarousel('{{ item.data.post_id }}', 1)">
+                                <i class="fas fa-chevron-right"></i>
+                              </button>
+                            </div>
+                            
+                            <div class="kvibe-carousel-indicators">
+                              {% for image in item.data.images.all %}
+                              <span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>
+                              {% endfor %}
+                            </div>
+                          </div>
+                        {% else %}
+                          <!-- Single Image -->
+                          {% with image=item.data.images.first %}
+                          <div class="kvibe-image-slide">
+                            <!-- OPTIMIZED IMAGE TAG WITH LAZY LOADING -->
+                            <img 
+                              src="{{ image.image.url }}" 
+                              alt="Post image"
+                              loading="lazy"
+                              onload="this.classList.add('loaded')"
+                            />
+                          </div>
+                          {% endwith %}
+                        {% endif %}
+                      {% endif %}
+                    {% endif %}
+                  {% endwith %}
+                {% endif %}
+              </div>
+              {% endif %}
+
+              <!-- Post Actions (Likes, Comments) -->
+              <div class="kvibe-post-actions">
+                {% include 'snippet/post_like.html' with post=item.data %}
+              </div>
+            </article>
+          
+          {% elif item.type == 'product' %}
+            <!-- Product Advertisement -->
+            <div class="kvibe-marketplace-ad" data-product-id="{{ item.data.id }}">
+              <!-- Ad Header -->
+              <div class="kvibe-marketplace-ad-header">
+                <div class="kvibe-marketplace-ad-badge">
+                  <i class="fas fa-tag"></i> Sponsored · Marketplace
+                </div>
+                
+                <div class="kvibe-marketplace-ad-seller">
+                  <img 
+                    src="{{ item.data.product_owner.profile.picture.url }}" 
+                    alt="{{ item.data.seller.username }}"
+                    loading="lazy"
+                  >
+                  <div>
+                    <div style="font-weight: 600; font-size: 14px;">
+                      {{ item.data.product_owner.first_name }} {{ item.data.product_owner.last_name }}
+                    </div>
+                    <div style="font-size: 12px; color: var(--kvibe-text-light);">
+                      @{{ item.data.product_owner.username }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Product Image -->
+              <div class="kvibe-marketplace-ad-image-container">
+                {% with first_image=item.data.images.first %}
+                  {% if first_image %}
+                    <img 
+                      src="{{ first_image.product_image.url }}" 
+                      alt="{{ item.data.product_name }}"
+                      class="kvibe-marketplace-ad-image"
+                      loading="lazy"
+                    />
+                  {% else %}
+                    <img 
+                      src="{{ item.data.product_image.url }}" 
+                      alt="{{ item.data.product_name }}"
+                      class="kvibe-marketplace-ad-image"
+                      loading="lazy"
+                    />
+                  {% endif %}
+                {% endwith %}
+                
+                <!-- View Product Button -->
+                <a href="{% url 'market' %}" class="kvibe-marketplace-ad-view-btn">
+                  <i class="fas fa-shopping-cart"></i> View Product
+                </a>
+              </div>
+              
+              <!-- Product Details -->
+              <div class="kvibe-marketplace-ad-content">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                  <div>
+                    <h3 class="kvibe-marketplace-ad-title">
+                      {{ item.data.product_name }}
+                    </h3>
+                    <p class="kvibe-marketplace-ad-description">
+                      {{ item.data.product_description|truncatewords:20 }}
+                    </p>
+                  </div>
+                  <div class="kvibe-marketplace-ad-price">
+                    ₦{{ item.data.product_price|intcomma }}
+                  </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="kvibe-marketplace-ad-actions">
+                  <a href="{% url 'message' item.data.product_owner.username %}" class="kvibe-marketplace-ad-btn-primary" >
+                    <i class="fa-regular fa-message"></i> Message Seller
+                  </a>
+                  <a href="{% url 'product_detail' item.data.product_id %}" class="kvibe-marketplace-ad-btn-secondary">
+                    <i class="fas fa-external-link-alt"></i> View Details
+                  </a>
+                </div>
+              </div>
+            </div>
+          
+          {% elif item.type == 'user_suggestion' %}
+            <!-- User Suggestion -->
+            <div class="kvibe-user-suggestion" data-user-id="{{ item.data.id }}">
+              <!-- Suggestion Header -->
+              <div class="kvibe-user-suggestion-header">
+                <div class="kvibe-user-suggestion-badge">
+                  <i class="fas fa-user-plus"></i> Suggested for you
+                </div>
+              </div>
+              
+              <!-- User Info -->
+              <div class="kvibe-user-suggestion-content">
+                <div class="kvibe-user-suggestion-profile">
+                  <img 
+                    src="{{ item.data.profile.picture.url }}" 
+                    alt="{{ item.data.username }}"
+                    class="kvibe-user-suggestion-picture"
+                    loading="lazy"
+                  >
+                  <div class="kvibe-user-suggestion-details">
+                    <div class="kvibe-user-suggestion-name">
+                      {{ item.data.first_name }} {{ item.data.last_name }}
+                      {% if item.data.profile.is_verify %} 
+                        <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;" loading="lazy">
+                      {% endif %}
+                    </div>
+                    <div class="kvibe-user-suggestion-username">
+                      @{{ item.data.username }}
+                    </div>
+                    {% if item.data.profile.bio %}
+                    <div class="kvibe-user-suggestion-bio">
+                      {{ item.data.profile.bio|truncatechars:80 }}
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="kvibe-user-suggestion-actions">
+                  <button class="kvibe-user-suggestion-btn-primary" 
+                          onclick="kvibeFollowUser('{{ item.data.id }}', '{{ item.data.username }}')">
+                    <i class="fas fa-user-plus"></i> Follow
+                  </button>
+                  <a href="{% url 'profile' item.data.username %}" class="kvibe-user-suggestion-btn-secondary">
+                    <i class="fas fa-user"></i> View Profile
+                  </a>
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        {% empty %}
+          <!-- Empty feed - no posts available -->
+        {% endfor %}
+    </div><!-- end #kvibe-real-feed -->
+      </div>
+
+      <!-- Right Sidebar - Your Products, Suggestions & Upload (Desktop) -->
+      <aside class="kvibe-right-sidebar kvibe-desktop-only">
+
+        <!-- Skeleton Right Sidebar (shown while loading) -->
+        <div id="kvibe-skeleton-sidebar">
+          <div style="background: var(--kvibe-white); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            {% for i in "123" %}
+            <div class="kvibe-skeleton-sidebar-user">
+              <div class="kvibe-skeleton-sidebar-avatar kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-sidebar-meta">
+                <div class="kvibe-skeleton-sidebar-name kvibe-skeleton"></div>
+                <div class="kvibe-skeleton-sidebar-sub kvibe-skeleton"></div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <div style="background: var(--kvibe-white); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            {% for i in "1234" %}
+            <div class="kvibe-skeleton-sidebar-user">
+              <div class="kvibe-skeleton-sidebar-avatar kvibe-skeleton" style="border-radius: 8px; width: 48px; height: 48px;"></div>
+              <div class="kvibe-skeleton-sidebar-meta">
+                <div class="kvibe-skeleton-sidebar-name kvibe-skeleton"></div>
+                <div class="kvibe-skeleton-sidebar-sub kvibe-skeleton"></div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Real Right Sidebar Content -->
+        <div id="kvibe-real-sidebar" style="display:none;">
+        <!-- Your Products Section -->
+        <div class="kvibe-your-products" style="margin-bottom: 20px;">
+          <div class="kvibe-your-products-header">
+            <h3 class="kvibe-your-products-title">
+              <i class="fas fa-box"></i> Your Products
+              <span class="kvibe-your-products-count">{{ user_products|length }}</span>
+            </h3>
+          </div>
+          <div class="kvibe-your-products-list">
+            {% if user_products %}
+              {% for product in user_products.all|slice:":5" %}
+              <div class="kvibe-your-product-item">
+                {% with first_image=product.images.first %}
+                  {% if first_image %}
+                    <img 
+                      src="{{ first_image.product_image.url }}" 
+                      alt="{{ product.product_name }}"
+                      class="kvibe-your-product-image"
+                      loading="lazy"
+                    />
+                  {% else %}
+                    <img 
+                      src="{{ product.product_image.url }}" 
+                      alt="{{ product.product_name }}"
+                      class="kvibe-your-product-image"
+                      loading="lazy"
+                    />
+                  {% endif %}
+                {% endwith %}
+                <div class="kvibe-your-product-details">
+                  <div class="kvibe-your-product-name">{{ product.product_name|truncatechars:20 }}</div>
+                  <div class="kvibe-your-product-price">₦{{ product.product_price|intcomma }}</div>
+                  <div class="kvibe-your-product-status">
+                    <i class="fas fa-eye"></i> {{ product.views_count|default:"0" }} views
+                  </div>
+                </div>
+                <div class="kvibe-your-product-actions">
+                  <a href="{% url 'product_detail' product.product_id %}" class="kvibe-your-product-btn kvibe-your-product-btn-primary" title="View">
+                    <i class="fas fa-eye"></i>
+                  </a>
+                  <a href="{% url 'message' product.product_owner.username %}" class="kvibe-your-product-btn kvibe-your-product-btn-secondary" title="Chat">
+                    <i class="fas fa-message"></i>
+                  </a>
+                </div>
+              </div>
+              {% endfor %}
+              {% if user_products|length > 5 %}
+                <div style="text-align: center; padding: 12px;">
+                  <a href="{% url 'market' %}" class="kvibe-view-profile-btn">
+                    View All Products
+                  </a>
+                </div>
+              {% endif %}
+            {% else %}
+              <div class="kvibe-your-products-empty">
+                <i class="fas fa-box-open"></i>
+                <p>No products yet</p>
+                <a href="{% url 'market' %}" class="kvibe-your-product-btn kvibe-your-product-btn-primary" style="display: block;">
+                  <i class="fas fa-plus-circle"></i> Add First Product
+                </a>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Trending Hashtags Section - NEW -->
+        {% if trending_hashtags %}
+        <div class="kvibe-trending-hashtags">
+            <div class="kvibe-trending-header">
+                <h3 class="kvibe-trending-title">
+                    <i class="fas fa-hashtag"></i> Trending Hashtags
+                </h3>
+            </div>
+            <div class="kvibe-trending-list">
+                {% for tag, count in trending_hashtags %}
+                <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+                    <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+                    <span class="kvibe-trending-count">{{ count }} posts</span>
+                </a>
+                {% endfor %}
+            </div>
+            <div style="padding: 8px 16px 16px;">
+                <a href="{% url 'search' %}?q=%23" class="kvibe-marketplace-ad-btn-secondary" style="text-align: center; display: block; font-size: 12px;">
+                    <i class="fas fa-search"></i> Explore All Hashtags
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Product Upload Section -->
+        <div class="kvibe-product-upload" style="margin-bottom: 20px;">
+          <div class="kvibe-user-suggestion-header">
+            <div class="kvibe-user-suggestion-badge">
+              <i class="fas fa-upload"></i> Upload Product
+            </div>
+          </div>
+          <div class="kvibe-user-suggestion-content">
+            <div style="text-align: center; padding: 10px 0;">
+              <p style="font-size: 13px; color: var(--kvibe-text-light); margin-bottom: 15px;">
+                Sell your products to the Kishiface community
+              </p>
+              <a href="{% url 'market' %}" class="kvibe-marketplace-ad-btn-primary" style="display: block; margin-bottom: 10px;">
+                <i class="fas fa-plus-circle"></i> List New Product
+              </a>
+              <a href="{% url 'market' %}" class="kvibe-marketplace-ad-btn-secondary">
+                <i class="fas fa-store"></i> My Products
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Suggestions Section -->
+        <div class="kvibe-user-suggestion" style="margin-bottom: 20px;">
+          <div class="kvibe-user-suggestion-header">
+            <div class="kvibe-user-suggestion-badge">
+              <i class="fas fa-user-plus"></i> Who to Follow
+            </div>
+          </div>
+          <div class="kvibe-user-suggestion-content">
+            {% for user in users|slice:":3" %}
+            <div class="kvibe-user-suggestion-profile" style="margin-bottom: 15px;">
+              <img 
+                src="{{ user.profile.picture.url }}" 
+                alt="{{ user.username }}"
+                class="kvibe-user-suggestion-picture"
+                style="width: 40px; height: 40px;"
+                loading="lazy"
+              >
+              <div class="kvibe-user-suggestion-details">
+                <div class="kvibe-user-suggestion-name" style="font-size: 14px;">
+                  {{ user.first_name }} {{ user.last_name }}
+                  {% if user.profile.is_verify %} 
+                    <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align: middle;">
+                  {% endif %}
+                </div>
+                <div class="kvibe-user-suggestion-username" style="font-size: 12px;">
+                  @{{ user.username }}
+                </div>
+              </div>
+              <button class="kvibe-user-suggestion-btn-primary" 
+                      onclick="kvibeFollowUser('{{ user.id }}', '{{ user.username }}')"
+                      style="padding: 6px 12px; font-size: 12px; white-space: nowrap;">
+                <i class="fas fa-user-plus"></i> Follow
+              </button>
+            </div>
+            {% empty %}
+            <div style="text-align: center; padding: 20px; color: var(--kvibe-text-light);">
+              <i class="fas fa-users" style="font-size: 20px; margin-bottom: 8px;"></i>
+              <p style="font-size: 12px;">No suggestions</p>
+            </div>
+            {% endfor %}
+            {% if users|length > 3 %}
+            <a href="{% url 'explore' %}" class="kvibe-marketplace-ad-btn-secondary" style="text-align: center; display: block; margin-top: 10px; font-size: 12px;">
+              <i class="fas fa-compass"></i> Discover More
+            </a>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- User Stats Section -->
+        <div class="kvibe-user-suggestion">
+          <div class="kvibe-user-suggestion-header">
+            <div class="kvibe-user-suggestion-badge">
+              <i class="fas fa-chart-line"></i> Your Stats
+            </div>
+          </div>
+          <div class="kvibe-user-suggestion-content">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+              <div style="text-align: center;">
+                <div style="font-size: 16px; font-weight: 700; color: var(--kvibe-primary);">{{ request.user.post_set.count }}</div>
+                <div style="font-size: 11px; color: var(--kvibe-text-light);">Posts</div>
+              </div>
+              <div style="text-align: center;">
+                <div style="font-size: 16px; font-weight: 700; color: var(--kvibe-primary);">{{ request.user.profile.followings.count }}</div>
+                <div style="font-size: 11px; color: var(--kvibe-text-light);">Following</div>
+              </div>
+              <div style="text-align: center;">
+                <div style="font-size: 16px; font-weight: 700; color: var(--kvibe-primary);">{{ request.user.profile.followers.count }}</div>
+                <div style="font-size: 11px; color: var(--kvibe-text-light);">Followers</div>
+              </div>
+            </div>
+            <a href="{% url 'profile' request.user.username %}" class="kvibe-marketplace-ad-btn-secondary" style="text-align: center; display: block; font-size: 12px;">
+              <i class="fas fa-chart-bar"></i> View Analytics
+            </a>
+          </div>
+        </div><!-- end #kvibe-real-sidebar -->
+      </aside>
+    </div>
+  </main>
+  
+  {% include 'footer.html' %}
+
+  <!-- ===== MOBILE RIGHT SIDEBAR TOGGLE BUTTON ===== -->
+  <button class="kvibe-mobile-sidebar-toggle" id="kvibe-mobile-sidebar-toggle" onclick="kvibeOpenMobileSidebar()" aria-label="Open sidebar">
+    <i class="fas fa-chevron-left"></i>
+    <span>MORE</span>
+  </button>
+
+  <!-- ===== MOBILE RIGHT SIDEBAR OVERLAY ===== -->
+  <div class="kvibe-mobile-sidebar-overlay" id="kvibe-mobile-sidebar-overlay" onclick="kvibeCloseMobileSidebar()"></div>
+
+  <!-- ===== MOBILE RIGHT SIDEBAR ===== -->
+  <aside class="kvibe-mobile-right-sidebar" id="kvibe-mobile-right-sidebar">
+    <div class="kvibe-mobile-sidebar-header">
+      <span class="kvibe-mobile-sidebar-title">Discover</span>
+      <button class="kvibe-mobile-sidebar-close" onclick="kvibeCloseMobileSidebar()" aria-label="Close sidebar">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="kvibe-mobile-sidebar-body">
+
+      <!-- Your Products Section -->
+      <div class="kvibe-your-products" style="margin-bottom: 20px;">
+        <div class="kvibe-your-products-header">
+          <h3 class="kvibe-your-products-title">
+            <i class="fas fa-box"></i> Your Products
+            <span class="kvibe-your-products-count">{{ user_products|length }}</span>
+          </h3>
+        </div>
+        <div class="kvibe-your-products-list">
+          {% if user_products %}
+            {% for product in user_products.all|slice:":5" %}
+            <div class="kvibe-your-product-item">
+              {% with first_image=product.images.first %}
+                {% if first_image %}
+                  <img src="{{ first_image.product_image.url }}" alt="{{ product.product_name }}" class="kvibe-your-product-image" loading="lazy"/>
+                {% else %}
+                  <img src="{{ product.product_image.url }}" alt="{{ product.product_name }}" class="kvibe-your-product-image" loading="lazy"/>
+                {% endif %}
+              {% endwith %}
+              <div class="kvibe-your-product-details">
+                <div class="kvibe-your-product-name">{{ product.product_name|truncatechars:20 }}</div>
+                <div class="kvibe-your-product-price">&#8358;{{ product.product_price|intcomma }}</div>
+                <div class="kvibe-your-product-status">
+                  <i class="fas fa-eye"></i> {{ product.views_count|default:"0" }} views
+                </div>
+              </div>
+              <div class="kvibe-your-product-actions">
+                <a href="{% url 'product_detail' product.product_id %}" class="kvibe-your-product-btn kvibe-your-product-btn-primary" title="View">
+                  <i class="fas fa-eye"></i>
+                </a>
+                <a href="{% url 'message' product.product_owner.username %}" class="kvibe-your-product-btn kvibe-your-product-btn-secondary" title="Chat">
+                  <i class="fas fa-message"></i>
+                </a>
+              </div>
+            </div>
+            {% endfor %}
+            {% if user_products|length > 5 %}
+              <div style="text-align: center; padding: 12px;">
+                <a href="{% url 'market' %}" class="kvibe-view-profile-btn">View All Products</a>
+              </div>
+            {% endif %}
+          {% else %}
+            <div class="kvibe-your-products-empty">
+              <i class="fas fa-box-open"></i>
+              <p>No products yet</p>
+              <a href="{% url 'market' %}" class="kvibe-your-product-btn kvibe-your-product-btn-primary" style="display: block;">
+                <i class="fas fa-plus-circle"></i> Add First Product
+              </a>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Trending Hashtags Section -->
+      {% if trending_hashtags %}
+      <div class="kvibe-trending-hashtags" style="margin-bottom: 20px;">
+        <div class="kvibe-trending-header">
+          <h3 class="kvibe-trending-title">
+            <i class="fas fa-hashtag"></i> Trending Hashtags
+          </h3>
+        </div>
+        <div class="kvibe-trending-list">
+          {% for tag, count in trending_hashtags %}
+          <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+            <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+            <span class="kvibe-trending-count">{{ count }} posts</span>
+          </a>
+          {% endfor %}
+        </div>
+        <div style="padding: 8px 0 4px;">
+          <a href="{% url 'search' %}?q=%23" class="kvibe-marketplace-ad-btn-secondary" style="text-align: center; display: block; font-size: 12px;">
+            <i class="fas fa-search"></i> Explore All Hashtags
+          </a>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Upload Product Section -->
+      <div class="kvibe-product-upload" style="margin-bottom: 20px;">
+        <div class="kvibe-user-suggestion-header">
+          <div class="kvibe-user-suggestion-badge">
+            <i class="fas fa-upload"></i> Upload Product
+          </div>
+        </div>
+        <div class="kvibe-user-suggestion-content">
+          <div style="text-align: center; padding: 10px 0;">
+            <p style="font-size: 13px; color: var(--kvibe-text-light); margin-bottom: 15px;">
+              Sell your products to the Kishiface community
+            </p>
+            <a href="{% url 'market' %}" class="kvibe-marketplace-ad-btn-primary" style="display: block; margin-bottom: 10px;">
+              <i class="fas fa-plus-circle"></i> List New Product
+            </a>
+            <a href="{% url 'market' %}" class="kvibe-marketplace-ad-btn-secondary">
+              <i class="fas fa-store"></i> My Products
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Who to Follow Section -->
+      <div class="kvibe-user-suggestion" style="margin-bottom: 20px;">
+        <div class="kvibe-user-suggestion-header">
+          <div class="kvibe-user-suggestion-badge">
+            <i class="fas fa-user-plus"></i> Who to Follow
+          </div>
+        </div>
+        <div class="kvibe-user-suggestion-content">
+          {% for user in users|slice:":3" %}
+          <div class="kvibe-user-suggestion-profile" style="margin-bottom: 15px;">
+            <img src="{{ user.profile.picture.url }}" alt="{{ user.username }}" class="kvibe-user-suggestion-picture" style="width: 40px; height: 40px;" loading="lazy">
+            <div class="kvibe-user-suggestion-details">
+              <div class="kvibe-user-suggestion-name" style="font-size: 14px;">
+                {{ user.first_name }} {{ user.last_name }}
+                {% if user.profile.is_verify %}
+                  <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="checkmark" style="vertical-align: middle;">
+                {% endif %}
+              </div>
+              <div class="kvibe-user-suggestion-username" style="font-size: 12px;">@{{ user.username }}</div>
+            </div>
+            <button class="kvibe-user-suggestion-btn-primary"
+                    onclick="kvibeFollowUser('{{ user.id }}', '{{ user.username }}')"
+                    style="padding: 6px 12px; font-size: 12px; white-space: nowrap;">
+              <i class="fas fa-user-plus"></i> Follow
+            </button>
+          </div>
+          {% empty %}
+          <div style="text-align: center; padding: 20px; color: var(--kvibe-text-light);">
+            <i class="fas fa-users" style="font-size: 20px; margin-bottom: 8px;"></i>
+            <p style="font-size: 12px;">No suggestions</p>
+          </div>
+          {% endfor %}
+          {% if users|length > 3 %}
+          <a href="{% url 'explore' %}" class="kvibe-marketplace-ad-btn-secondary" style="text-align: center; display: block; margin-top: 10px; font-size: 12px;">
+            <i class="fas fa-compass"></i> Discover More
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Your Stats Section -->
+      <div class="kvibe-user-suggestion">
+        <div class="kvibe-user-suggestion-header">
+          <div class="kvibe-user-suggestion-badge">
+            <i class="fas fa-chart-line"></i> Your Stats
+          </div>
+        </div>
+        <div class="kvibe-user-suggestion-content">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+            <div style="text-align: center;">
+              <div style="font-size: 16px; font-weight: 700; color: var(--kvibe-primary);">{{ request.user.post_set.count }}</div>
+              <div style="font-size: 11px; color: var(--kvibe-text-light);">Posts</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-size: 16px; font-weight: 700; color: var(--kvibe-primary);">{{ request.user.profile.followings.count }}</div>
+              <div style="font-size: 11px; color: var(--kvibe-text-light);">Following</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-size: 16px; font-weight: 700; color: var(--kvibe-primary);">{{ request.user.profile.followers.count }}</div>
+              <div style="font-size: 11px; color: var(--kvibe-text-light);">Followers</div>
+            </div>
+          </div>
+          <a href="{% url 'profile' request.user.username %}" class="kvibe-marketplace-ad-btn-secondary" style="text-align: center; display: block; font-size: 12px;">
+            <i class="fas fa-chart-bar"></i> View Analytics
+          </a>
+        </div>
+      </div>
+
+    </div><!-- end .kvibe-mobile-sidebar-body -->
+  </aside>
+
+  <script>
+    function kvibeOpenMobileSidebar() {
+      document.getElementById('kvibe-mobile-right-sidebar').classList.add('open');
+      document.getElementById('kvibe-mobile-sidebar-overlay').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function kvibeCloseMobileSidebar() {
+      document.getElementById('kvibe-mobile-right-sidebar').classList.remove('open');
+      document.getElementById('kvibe-mobile-sidebar-overlay').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    // Close sidebar on swipe right
+    (function() {
+      const sidebar = document.getElementById('kvibe-mobile-right-sidebar');
+      let startX = 0;
+      sidebar.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; }, { passive: true });
+      sidebar.addEventListener('touchend', function(e) {
+        const diff = e.changedTouches[0].clientX - startX;
+        if (diff > 60) kvibeCloseMobileSidebar();
+      }, { passive: true });
+    })();
+  </script>
+
+  <!-- Repost Modal -->
+  <div class="kvibe-repost-modal" id="kvibe-repost-modal">
+    <div class="kvibe-repost-modal-content">
+      <div class="kvibe-repost-modal-header">
+        Repost
+      </div>
+      <div class="kvibe-repost-modal-body">
+        <textarea 
+          class="kvibe-repost-textarea" 
+          id="kvibe-repost-caption" 
+          placeholder="Add a comment to your repost (optional)"
+          maxlength="500"></textarea>
+        <div style="font-size: 12px; color: var(--kvibe-text-light); text-align: right;">
+          <span id="kvibe-repost-char-count">0</span>/500
+        </div>
+      </div>
+      <div class="kvibe-repost-modal-footer">
+        <button class="kvibe-repost-cancel-btn" onclick="kvibeCloseRepostModal()">Cancel</button>
+        <button class="kvibe-repost-btn" id="kvibe-repost-confirm-btn">
+          <i class="fas fa-retweet"></i> Repost
+        </button>
+      </div>
+    </div>
+  </div>
+<!-- Side Panels -->
+  <div class="kvibe-side-panel" id="kvibe-profile-panel">
+    <div id="kvibe-profile-content"></div>
+  </div>
+  
+  <div class="kvibe-side-panel" id="kvibe-comments-panel">
+    <div id="kvibe-comments-content"></div>
+  </div>
+
+  <!-- Logout Modal (for desktop) -->
+  <div class="kvibe-logout-modal" id="kvibeLogoutModal">
+    <div class="kvibe-logout-modal-content">
+      <h3 class="kvibe-logout-modal-title">Log Out?</h3>
+      <p class="kvibe-logout-modal-message">Are you sure you want to log out of your account?</p>
+      <div class="kvibe-logout-modal-buttons">
+        <button class="kvibe-logout-modal-btn logout-modal-cancel" id="kvibeCancelLogout">Cancel</button>
+        <button class="kvibe-logout-modal-btn logout-modal-confirm" id="kvibeConfirmLogout">Log Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline script for immediate initialization -->
+<script>
+   function getCsrfFromMeta(){
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+   }
+    // ==========================================
+    // GLOBAL VARIABLES & HELPERS
+    // ==========================================
+    
+    // Variables for repost modal
+    let currentRepostPostId = null;
+    let currentRepostButton = null;
+        
+    // Helper function to show toast
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = 'kvibe-toast';
+      toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+        <span>${message}</span>
+      `;
+      
+      document.body.appendChild(toast);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        toast.style.animation = 'kvibeSlideOut 0.3s ease';
+        setTimeout(() => {
+          document.body.removeChild(toast);
+        }, 300);
+      }, 3000);
+    }
+
+    
+
+    // ==========================================
+    // USER ACTIONS (Follow, Repost, Text Toggle)
+    // ==========================================
+    
+
+    // ==========================================
+    // FOLLOW / UNFOLLOW FROM POST HEADER
+    // ==========================================
+    function kvibeToggleFollow(btn) {
+      const userId = btn.dataset.userId;
+      const username = btn.dataset.username;
+      const isFollowing = btn.classList.contains('kvibe-follow-btn--following');
+
+      // Optimistic UI update
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      fetch(`/follow/${userId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfFromMeta(),
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+          if (data.followed) {
+            btn.classList.add('kvibe-follow-btn--following');
+            btn.title = `Unfollow ${username}`;
+            btn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>';
+            showToast(`You are now following @${username}`, 'success');
+          } else {
+            btn.classList.remove('kvibe-follow-btn--following');
+            btn.title = `Follow ${username}`;
+            btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>';
+            showToast(`Unfollowed @${username}`, 'info');
+          }
+        } else {
+          // Restore old state on error
+          btn.innerHTML = isFollowing
+            ? '<i class="fas fa-user-check"></i><span>Following</span>'
+            : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+          showToast('Something went wrong. Please try again.', 'error');
+        }
+      })
+      .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = isFollowing
+          ? '<i class="fas fa-user-check"></i><span>Following</span>'
+          : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+        showToast('Something went wrong. Please try again.', 'error');
+      });
+    }
+
+    // Follow user function
+    function kvibeFollowUser(userId, username) {
+      const button = event.target.closest('button');
+      const originalText = button.innerHTML;
+      
+      // Show loading state
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      button.disabled = true;
+      
+      fetch(`/follow/${userId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfFromMeta(),
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          if (data.followed) {
+            showToast(`You are now following @${username}`, 'success');
+            button.innerHTML = '<i class="fas fa-check"></i> Following';
+            button.classList.remove('kvibe-user-suggestion-btn-primary');
+            button.classList.add('kvibe-user-suggestion-btn-secondary');
+            
+            setTimeout(() => {
+              const suggestionDiv = button.closest('.kvibe-user-suggestion');
+              if (suggestionDiv) {
+                suggestionDiv.style.opacity = '0';
+                suggestionDiv.style.transition = 'opacity 0.3s';
+                setTimeout(() => {
+                  suggestionDiv.remove();
+                }, 300);
+              }
+            }, 1500);
+          } else {
+            showToast(`Unfollowed @${username}`, 'info');
+            button.innerHTML = '<i class="fas fa-user-plus"></i> Follow';
+            button.classList.remove('kvibe-user-suggestion-btn-secondary');
+            button.classList.add('kvibe-user-suggestion-btn-primary');
+          }
+        } else {
+          showToast('Error: ' + data.error, 'error');
+          button.innerHTML = originalText;
+        }
+        button.disabled = false;
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        showToast('Something went wrong. Please try again.', 'error');
+        button.innerHTML = originalText;
+        button.disabled = false;
+      });
+    }
+    
+    // Repost functionality
+    function kvibeToggleRepost(postId, button) {
+      currentRepostPostId = postId;
+      currentRepostButton = button;
+      
+      const isReposted = button.getAttribute('data-reposted') === 'true';
+      
+      if (isReposted) {
+        kvibePerformRepost(postId, '', true);
+      } else {
+        kvibeOpenRepostModal();
+      }
+    }
+    
+    function kvibeOpenRepostModal() {
+      const modal = document.getElementById('kvibe-repost-modal');
+      const textarea = document.getElementById('kvibe-repost-caption');
+      const charCount = document.getElementById('kvibe-repost-char-count');
+      
+      textarea.value = '';
+      charCount.textContent = '0';
+      
+      modal.classList.add('show');
+      textarea.focus();
+      
+      textarea.addEventListener('input', function() {
+        charCount.textContent = this.value.length;
+      });
+      
+      const confirmBtn = document.getElementById('kvibe-repost-confirm-btn');
+      confirmBtn.onclick = function() {
+        kvibePerformRepost(currentRepostPostId, textarea.value, false);
+        kvibeCloseRepostModal();
+      };
+    }
+    
+    // ===== MOOD FILTER =====
+    function kvibeFilterMood(mood, btn) {
+      document.querySelectorAll('.kvibe-mood-filter-chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+
+      document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
+        if (mood === 'all') {
+          post.classList.remove('kvibe-mood-hidden');
+          return;
+        }
+        // custom mood: match by data-custom-mood value
+        if (mood.startsWith('__custom__')) {
+          const label = mood.replace('__custom__', '');
+          const postCustom = (post.getAttribute('data-custom-mood') || '').toLowerCase().trim();
+          post.classList.toggle('kvibe-mood-hidden', postCustom !== label);
+        } else {
+          const postMood = post.getAttribute('data-mood') || '';
+          post.classList.toggle('kvibe-mood-hidden', postMood !== mood);
+        }
+      });
+    }
+
+    // Auto-inject custom mood chips from posts in the feed
+    (function kvibeInjectCustomMoodChips() {
+      const seen = new Set();
+      const container = document.getElementById('kvibeCustomMoodChips');
+      if (!container) return;
+
+      document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
+        const mood = post.getAttribute('data-mood') || '';
+        const custom = (post.getAttribute('data-custom-mood') || '').trim();
+        if ((mood === 'custom' || mood === '') && custom && !seen.has(custom.toLowerCase())) {
+          seen.add(custom.toLowerCase());
+          const btn = document.createElement('button');
+          btn.className = 'kvibe-mood-filter-chip';
+          btn.style.setProperty('--kvibe-chip-color', '#0095f6');
+          btn.setAttribute('data-mood', '__custom__' + custom.toLowerCase());
+          btn.innerHTML = `<span class="kvibe-chip-dot"></span> ✨ ${custom}`;
+          btn.onclick = function() { kvibeFilterMood('__custom__' + custom.toLowerCase(), btn); };
+          container.appendChild(btn);
+        }
+      });
+
+      // Only show "custom" chips if there are any
+      if (seen.size === 0) container.style.display = 'none';
+    })();
+
+    function kvibeCloseRepostModal() {
+      const modal = document.getElementById('kvibe-repost-modal');
+      modal.classList.remove('show');
+      currentRepostPostId = null;
+      currentRepostButton = null;
+    }
+    
+    function kvibePerformRepost(postId, caption, undo = false) {
+      const button = currentRepostButton;
+      const icon = button.querySelector('i');
+      const countSpan = button.querySelector('.kvibe-repost-count');
+      const originalText = button.innerHTML;
+      
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      button.disabled = true;
+      
+      fetch(`/repost/${postId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfFromMeta(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          caption: caption,
+          undo: undo
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          if (data.reposted) {
+            showToast(data.message || 'Post reposted successfully!', 'success');
+            button.setAttribute('data-reposted', 'true');
+            icon.classList.add('reposted');
+            
+            if (data.repost_count > 0) {
+              countSpan.textContent = data.repost_count;
+              countSpan.classList.add('show');
+            }
+            setTimeout(() => { location.reload(); }, 800);
+          } else {
+            showToast(data.message || 'Repost removed', 'info');
+            button.setAttribute('data-reposted', 'false');
+            icon.classList.remove('reposted');
+            
+            if (data.repost_count > 0) {
+              countSpan.textContent = data.repost_count;
+            } else {
+              countSpan.classList.remove('show');
+            }
+            setTimeout(() => { location.reload(); }, 800);
+          }
+        } else {
+          showToast('Error: ' + data.error, 'error');
+          button.innerHTML = originalText;
+          button.disabled = false;
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        showToast('Something went wrong. Please try again.', 'error');
+        button.innerHTML = originalText;
+        button.disabled = false;
+      });
+    }
+    
+    // Text Toggle Function
+    function kvibeToggleText(postId) {
+      const textElement = document.getElementById(`kvibe-text-${postId}`);
+      const button = textElement.nextElementSibling;
+      if (!button || !button.classList.contains('kvibe-text-toggle')) return;
+      
+      const span = button.querySelector('span');
+      const icon = button.querySelector('i');
+      
+      if (textElement.classList.contains('collapsed')) {
+        textElement.classList.remove('collapsed');
+        textElement.classList.add('expanded');
+        span.textContent = 'less';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+      } else {
+        textElement.classList.remove('expanded');
+        textElement.classList.add('collapsed');
+        span.textContent = 'more';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+      }
+    }
+    
+    // ==========================================
+    // MEDIA & CAROUSEL FUNCTIONS
+    // ==========================================
+
+    function kvibeSlideMixedCarousel(postId, direction) {
+      const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
+      const track = document.getElementById(`kvibe-mixed-track-${postId}`);
+      const totalSlides = parseInt(carousel.getAttribute('data-total'));
+      let currentSlide = parseInt(carousel.getAttribute('data-slide'));
+      
+      currentSlide += direction;
+      
+      if (currentSlide < 0) currentSlide = totalSlides - 1;
+      if (currentSlide >= totalSlides) currentSlide = 0;
+      
+      track.style.transform = `translateX(-${currentSlide * 100}%)`;
+      carousel.setAttribute('data-slide', currentSlide);
+      
+      const indicators = carousel.querySelectorAll('.kvibe-mixed-indicator');
+      indicators.forEach((indicator, index) => {
+        if (index === currentSlide) {
+          indicator.classList.add('active');
+        } else {
+          indicator.classList.remove('active');
+        }
+      });
+    }
+    
+    function kvibeGoToMixedSlide(postId, slideIndex) {
+      const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
+      const track = document.getElementById(`kvibe-mixed-track-${postId}`);
+      const totalSlides = parseInt(carousel.getAttribute('data-total'));
+      
+      if (slideIndex < 0 || slideIndex >= totalSlides) return;
+      
+      track.style.transform = `translateX(-${slideIndex * 100}%)`;
+      carousel.setAttribute('data-slide', slideIndex);
+      
+      const indicators = carousel.querySelectorAll('.kvibe-mixed-indicator');
+      indicators.forEach((indicator, index) => {
+        if (index === slideIndex) {
+          indicator.classList.add('active');
+        } else {
+          indicator.classList.remove('active');
+        }
+      });
+    }
+    
+    function kvibeSlideCarousel(postId, direction) {
+      const carousel = document.getElementById(`kvibe-carousel-${postId}`);
+      const track = document.getElementById(`kvibe-track-${postId}`);
+      const totalSlides = parseInt(carousel.getAttribute('data-total'));
+      let currentSlide = parseInt(carousel.getAttribute('data-slide'));
+      
+      currentSlide += direction;
+      
+      if (currentSlide < 0) currentSlide = totalSlides - 1;
+      if (currentSlide >= totalSlides) currentSlide = 0;
+      
+      track.style.transform = `translateX(-${currentSlide * 100}%)`;
+      carousel.setAttribute('data-slide', currentSlide);
+      
+      const indicators = carousel.querySelectorAll('.kvibe-indicator');
+      indicators.forEach((indicator, index) => {
+        if (index === currentSlide) {
+          indicator.classList.add('active');
+        } else {
+          indicator.classList.remove('active');
+        }
+      });
+    }
+    
+    function kvibeDownloadImage(postId, url, filename) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `kvibe_post_${postId}_${filename}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    function kvibeDownloadVideo(postId, url) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `kvibe_post_${postId}_video.mp4`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    function kvibeTogglePlayPause(videoId, event) {
+      event.stopPropagation();
+      const video = document.getElementById(videoId);
+      
+      if (video.hasAttribute('data-src') && !video.src) {
+        const source = video.querySelector('source[data-src]');
+        if (source) {
+          source.src = source.dataset.src;
+          video.load();
+          video.removeAttribute('data-src');
+          
+          video.addEventListener('loadeddata', function playWhenLoaded() {
+            video.play();
+            video.parentElement.classList.remove('paused');
+            video.removeEventListener('loadeddata', playWhenLoaded);
+          });
+          return;
+        }
+      }
+      
+      if (video.paused) {
+        video.play();
+        video.parentElement.classList.remove('paused');
+      } else {
+        video.pause();
+        video.parentElement.classList.add('paused');
+      }
+    }
+    
+    // Close modals when clicking outside
+    document.addEventListener('click', function(e) {
+      const repostModal = document.getElementById('kvibe-repost-modal');
+      if (repostModal && e.target === repostModal) {
+        kvibeCloseRepostModal();
+      }
+      
+      const logoutModal = document.getElementById('kvibeLogoutModal');
+      if (logoutModal && logoutModal.classList.contains('active') && e.target === logoutModal) {
+        logoutModal.classList.remove('active');
+      }
+    });
+
+    // ==========================================
+    // INITIALIZATION (DOMContentLoaded)
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', function() {
+      // Desktop logout functionality
+      const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
+      if (desktopLogoutIcon) {
+        desktopLogoutIcon.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const logoutModal = document.getElementById('kvibeLogoutModal');
+          if (logoutModal) {
+            logoutModal.classList.add('active');
+            
+            const cancelLogout = document.getElementById('kvibeCancelLogout');
+            const confirmLogout = document.getElementById('kvibeConfirmLogout');
+            
+            if (cancelLogout) {
+              cancelLogout.onclick = function() {
+                logoutModal.classList.remove('active');
+              };
+            }
+            
+            if (confirmLogout) {
+              confirmLogout.onclick = function() {
+                window.location.href = "{% url 'logout' %}";
+              };
+            }
+          }
+        });
+      }
+      
+      // WebSocket connection
+      if ("{{ request.user.is_authenticated }}" === "True") {
+        const userId = "{{ request.user.id }}";
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const ws = new WebSocket(`${protocol}${window.location.host}/ws/user/${userId}/`);
+        
+        ws.onmessage = function(event) {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'unread_update') {
+            const channelId = data.channel_id;
+            const unreadCount = data.unread_count || 0;
+            const channelItem = document.getElementById(`channel-item-${channelId}`);
+            const listContainer = document.getElementById('following-list-container');
+            
+            if (channelItem) {
+              const badgeSpan = channelItem.querySelector('.kvibe-channel-unread');
+              
+              if (unreadCount > 0) {
+                if (badgeSpan) {
+                  badgeSpan.textContent = unreadCount;
+                } else {
+                  const newBadge = document.createElement('span');
+                  newBadge.className = 'kvibe-channel-unread';
+                  newBadge.id = `channel-badge-${channelId}`;
+                  newBadge.textContent = unreadCount;
+                  channelItem.appendChild(newBadge);
+                }
+                
+                channelItem.classList.add('kvibe-new-update-flash');
+                setTimeout(() => channelItem.classList.remove('kvibe-new-update-flash'), 1500);
+                
+                if (listContainer) {
+                  const firstChannelItem = listContainer.querySelector('.kvibe-channel-nav-item');
+                  if (firstChannelItem && firstChannelItem !== channelItem) {
+                    listContainer.insertBefore(channelItem, firstChannelItem);
+                  }
+                }
+              } else {
+                if (badgeSpan) {
+                  badgeSpan.remove();
+                }
+              }
+            }
+          }
+        };
+      }
+      
+      // ===== SKELETON LOADING: Reveal real content after page load =====
+      function kvibeRevealContent() {
+        // Feed
+        const skelFeed = document.getElementById('kvibe-skeleton-feed');
+        const realFeed = document.getElementById('kvibe-real-feed');
+        if (skelFeed) skelFeed.style.display = 'none';
+        if (realFeed) realFeed.style.display = 'block';
+
+        // Sidebar
+        const skelSidebar = document.getElementById('kvibe-skeleton-sidebar');
+        const realSidebar = document.getElementById('kvibe-real-sidebar');
+        if (skelSidebar) skelSidebar.style.display = 'none';
+        if (realSidebar) realSidebar.style.display = 'block';
+      }
+
+      // Reveal after a short delay to show kvibe-skeleton effect, or on load if already ready
+      if (document.readyState === 'complete') {
+        setTimeout(kvibeRevealContent, 600);
+      } else {
+        window.addEventListener('load', function() {
+          setTimeout(kvibeRevealContent, 400);
+        });
+      }
+
+
+      const lazyVideos = document.querySelectorAll('video[data-src]');
+      const videoObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const video = entry.target;
+            const source = video.querySelector('source[data-src]');
+            
+            if (source) {
+              source.src = source.dataset.src;
+              video.load();
+              video.removeAttribute('data-src');
+            }
+            videoObserver.unobserve(video);
+          }
+        });
+      }, { rootMargin: '300px' });
+      
+      lazyVideos.forEach(video => videoObserver.observe(video));
+      
+      // Lazy load images
+      const lazyImages = document.querySelectorAll('img[loading="lazy"]');
+      const imgObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            img.style.opacity = '1';
+            imgObserver.unobserve(img);
+          }
+        });
+      });
+      
+      lazyImages.forEach(img => imgObserver.observe(img));
+      
+      // Text expansion logic
+      document.querySelectorAll('.kvibe-post-text').forEach(textElement => {
+        const hasHTML = /<\/?[a-z][\s\S]*>/i.test(textElement.innerHTML);
+        
+        if (hasHTML) {
+          const textContent = textElement.textContent || textElement.innerText;
+          const charCount = textContent.length;
+          
+          if (charCount > 150) {
+            textElement.classList.add('collapsed');
+            if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kvibe-text-toggle')) {
+              const toggleBtn = document.createElement('button');
+              toggleBtn.className = 'kvibe-text-toggle';
+              toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
+              toggleBtn.onclick = function() {
+                const postId = textElement.id.replace('kvibe-text-', '');
+                kvibeToggleText(postId);
+              };
+              textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
+            }
+          }
+        }
+      });
+      
+      // Global keydown listeners (Escape key)
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          kvibeCloseRepostModal();
+          const logoutModal = document.getElementById('kvibeLogoutModal');
+          if (logoutModal && logoutModal.classList.contains('active')) {
+            logoutModal.classList.remove('active');
+          }
+        }
+      });
+      
+      // Sidebar scroll persistence
+      const leftSidebar = document.querySelector('.kvibe-left-sidebar');
+      const rightSidebar = document.querySelector('.kvibe-right-sidebar');
+      
+      if (leftSidebar) {
+        leftSidebar.addEventListener('scroll', function() {
+          localStorage.setItem('kf_left_sidebar_scroll', leftSidebar.scrollTop);
+        });
+        const savedScroll = localStorage.getItem('kf_left_sidebar_scroll');
+        if (savedScroll) leftSidebar.scrollTop = parseInt(savedScroll);
+      }
+      
+      if (rightSidebar) {
+        rightSidebar.addEventListener('scroll', function() {
+          localStorage.setItem('kf_right_sidebar_scroll', rightSidebar.scrollTop);
+        });
+        const savedScroll = localStorage.getItem('kf_right_sidebar_scroll');
+        if (savedScroll) rightSidebar.scrollTop = parseInt(savedScroll);
+      }
+      
+      // Channel List Animation Observer
+      const listContainer = document.getElementById('following-list-container');
+      if (listContainer) {
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+              const addedNode = mutation.addedNodes[0];
+              if (addedNode.classList && addedNode.classList.contains('kvibe-channel-nav-item')) {
+                addedNode.classList.add('kvibe-new-update-flash');
+                setTimeout(() => addedNode.classList.remove('kvibe-new-update-flash'), 1500);
+              }
+            }
+          });
+        });
+        observer.observe(listContainer, { childList: true });
+      }
+      
+      // Fix link clicks in posts
+      document.addEventListener('click', function(e) {
+        if (e.target.tagName === 'A' && e.target.closest('.kvibe-post-text')) {
+          return;
+        }
+      });
+    });
+</script>
+</body>
+</html>
