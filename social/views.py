@@ -213,26 +213,22 @@ def home(request):
     # Get top 5 trending hashtags
     trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
     
-    if not following:  # New user - hasn't followed anyone yet
-        # Always show welcome message for new users
-        feed.append({'type': 'welcome'})
-        
-        # Then add some user suggestions (up to 3)
-        if users:
-            feed += [{'type': 'user_suggestion', 'data': u} for u in users[:3]]
-        
-        # Then add some marketplace products (up to 2)
-        if products:
-            feed += [{'type': 'product', 'data': p} for p in products[:2]]
+    # All users (new or existing) see posts - new users see all posts with follow option
+    # For new users with no following, show all posts (so they can discover & follow)
+    if not following:
+        all_posts = Post.objects.exclude(author=request.user).order_by('?')
+        posts = all_posts
+
+    for i, post in enumerate(posts, 1):
+        feed.append({'type': 'post', 'data': post})
+        if i % 2 == 0:
+            if i % 4 == 0 and products:
+                feed.append({'type': 'product', 'data': products.pop(0)})
+            elif i % 4 == 2 and users:
+                feed.append({'type': 'user_suggestion', 'data': users.pop(0)})
     
-    else:  # Existing user - already follows people
-        for i, post in enumerate(posts, 1):
-            feed.append({'type': 'post', 'data': post})
-            if i % 2 == 0:
-                if i % 4 == 0 and products:
-                    feed.append({'type': 'product', 'data': products.pop(0)})
-                elif i % 4 == 2 and users:
-                    feed.append({'type': 'user_suggestion', 'data': users.pop(0)})
+    # Pass following ids to template for follow button state
+    following_ids = list(following)
     
     return render(request, 'home.html', {
         'posts_with_ads': feed,
@@ -246,6 +242,7 @@ def home(request):
         'stories_available': stories_available,
         'user_has_unviewed_stories': user_has_unviewed,
         'trending_hashtags': trending_hashtags,  # Add trending hashtags to context
+        'following_ids': following_ids,  # For follow button state in posts
     })
 
 from django.views.decorators.http import require_POST
