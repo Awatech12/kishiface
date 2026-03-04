@@ -291,6 +291,11 @@ def load_more_posts(request):
             'is_liked': request.user in post.likes.all(),
             'is_following_author': is_following_author,
             'is_own_post': post.author == request.user,
+            # Engagement bar extras
+            'is_reposted': request.user in post.reposts.all() if hasattr(post, 'reposts') else False,
+            'repost_count': post.reposts.count() if hasattr(post, 'reposts') else 0,
+            'view_count': post.view if hasattr(post, 'view') and post.view else 0,
+            'liker_pics': [u.profile.picture.url for u in post.likes.all()[:3]],
         })
 
     return JsonResponse({

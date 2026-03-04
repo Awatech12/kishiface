@@ -12,7 +12,7 @@ DEBUG = os.getenv("DEBUG")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 USE_CLOUDINARY = True
 
-ALLOWED_HOSTS = [
+ALLOWED_HOSTS = [ 
     '127.0.0.1',
     'localhost',
     'kishiface.onrender.com', 
