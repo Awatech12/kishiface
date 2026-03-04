@@ -5,7 +5,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage,UserReport,BlockedUser, CommentReply,ChannelUserLastSeen,Story, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
+from social.models import Profile, Post, PostImage,UserReport,BlockedUser, CommentReply,ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -128,9 +128,7 @@ def home(request):
         Q(is_repost=True, author__in=following)  # Include reposts by followed users
     ).order_by('?')  # Changed from '?' to '-created_at' for chronological order
     
-    products = list(Market.objects.exclude(product_owner_id=request.user.id).order_by('?'))
     users = list(User.objects.exclude(id__in=following).exclude(id=request.user.id).order_by('?'))
-    user_products = Market.objects.filter(product_owner_id=request.user.id).order_by('-posted_on')
     
     # Get unread follow notifications count
     unread_follow_count = FollowNotification.objects.filter(
@@ -143,54 +141,6 @@ def home(request):
         recipient=request.user,
         is_read=False
     ).count()
-    
-    # ===== GET INSTAGRAM-STYLE STORIES (ONE PER USER) =====
-    from django.utils import timezone
-    from datetime import timedelta
-    
-    # Get active stories from last 24 hours
-    twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
-    
-    # Get all active stories from followed users and yourself
-    all_stories = Story.objects.filter(
-        Q(author__in=following) | Q(author=request.user),
-        created_at__gte=twenty_four_hours_ago,
-        is_active=True
-    ).select_related('author', 'author__profile').order_by('-created_at')
-    
-    # Filter to show only latest story per user (like Instagram)
-    seen_users = set()
-    active_stories = []
-    
-    # First, get the current user's story (if exists) and put it first
-    user_story = None
-    other_stories = []
-    
-    for story in all_stories:
-        if story.author.id not in seen_users:
-            if story.author == request.user:
-                user_story = story
-            else:
-                other_stories.append(story)
-            seen_users.add(story.author.id)
-    
-    # Add user's story first, then other stories
-    if user_story:
-        active_stories.append(user_story)
-    active_stories.extend(other_stories)
-    
-    # Limit to show maximum 10 stories in the carousel
-    active_stories = active_stories[:10]
-    
-    # Check if there are any unviewed stories (for UI indicators)
-    user_has_unviewed = False
-    for story in active_stories:
-        if story.author != request.user and request.user not in story.viewers.all():
-            user_has_unviewed = True
-            break
-    
-    # Show stories section if there are stories or user can create one
-    stories_available = len(active_stories) > 0
     
     # ===== BUILD FEED =====
     feed = []
@@ -221,28 +171,20 @@ def home(request):
 
     for i, post in enumerate(posts, 1):
         feed.append({'type': 'post', 'data': post})
-        if i % 2 == 0:
-            if i % 4 == 0 and products:
-                feed.append({'type': 'product', 'data': products.pop(0)})
-            elif i % 4 == 2 and users:
-                feed.append({'type': 'user_suggestion', 'data': users.pop(0)})
+        if i % 4 == 2 and users:
+            feed.append({'type': 'user_suggestion', 'data': users.pop(0)})
     
     # Pass following ids to template for follow button state
     following_ids = list(following)
     
     return render(request, 'home.html', {
         'posts_with_ads': feed,
-        'products': products[:5],
-        'user_products': user_products[:6],
-        'followed_list': followed_list[:8],  # Only show first 8 channels
+        'followed_list': followed_list[:8],
         'unread_follow_count': unread_follow_count,
         'unread_notifications_count': unread_notifications_count,
-        'users': users[:3],  # For right sidebar suggestions
-        'active_stories': active_stories,
-        'stories_available': stories_available,
-        'user_has_unviewed_stories': user_has_unviewed,
-        'trending_hashtags': trending_hashtags,  # Add trending hashtags to context
-        'following_ids': following_ids,  # For follow button state in posts
+        'users': users[:3],
+        'trending_hashtags': trending_hashtags,
+        'following_ids': following_ids,
     })
 
 from django.views.decorators.http import require_POST
@@ -1683,24 +1625,27 @@ def channelmessage_like(request, channelmessage_id):
         'like_count': channelmessage.like.count()
     })
   
-# ======= Market Plce ======='
 
 
 
+
+# ======= Marketplace =======
+
+@login_required(login_url='/')
 def market(request):
     # Handle category filtering
     category = request.GET.get('category', 'all')
-    
+
     # Filter products based on category
     if category == 'all':
         products = Market.objects.all().order_by('-posted_on')
     else:
         products = Market.objects.filter(product_category=category).order_by('-posted_on')
-    
+
     # Calculate stats
     highest_price = products.aggregate(Max('product_price'))['product_price__max']
     lowest_price = products.aggregate(Min('product_price'))['product_price__min']
-    
+
     # Handle POST request for product creation
     if request.method == 'POST' and 'form_type' in request.POST:
         if request.POST['form_type'] == 'marketplace':
@@ -1713,18 +1658,18 @@ def market(request):
             product_category = request.POST.get('category')
             product_condition = request.POST.get('product_condition', 'New')
             whatsapp_number = request.POST.get('whatsapp_number')
-            
+
             # Validate required fields
             if not all([product_name, product_price, product_category, product_description, whatsapp_number]):
                 messages.error(request, 'Please fill in all required fields.')
                 return redirect('market')
-            
+
             # Check if at least one image is uploaded
             images = request.FILES.getlist('images')
             if len(images) == 0:
                 messages.error(request, 'Please upload at least one image.')
                 return redirect('market')
-            
+
             # Create the product
             product = Market.objects.create(
                 product_owner=product_owner,
@@ -1737,14 +1682,14 @@ def market(request):
                 product_condition=product_condition,
                 whatsapp_number=whatsapp_number
             )
-            
+
             # Save images (limit to 5)
             for image in images[:5]:
                 MarketImage.objects.create(product=product, product_image=image)
-            
+
             messages.success(request, 'Product Added Successfully', extra_tags='marketplace_success')
             return redirect('market')
-    
+
     context = {
         'products': products,
         'highest_price': highest_price or 0,
@@ -1752,6 +1697,32 @@ def market(request):
     }
     return render(request, 'marketplace.html', context)
 
+
+@login_required(login_url='/')
+def product_detail(request, product_id):
+    product = get_object_or_404(Market, product_id=product_id)
+    if product.views_count is None:
+        product.views_count = 0
+    product.views_count += 1
+    product.save()
+
+    # Get all images for this product
+    images = product.images.all()
+
+    # Get related products (same category, excluding current)
+    related_products = Market.objects.filter(
+        product_category=product.product_category
+    ).exclude(product_id=product_id)[:4]
+
+    seller_profile = get_object_or_404(Profile, user=product.product_owner)
+
+    context = {
+        'product': product,
+        'images': images,
+        'related_products': related_products,
+        'seller': seller_profile,
+    }
+    return render(request, 'product_details.html', context)
 
 
 def notification_partial(request):
@@ -1828,29 +1799,6 @@ def track_share(request, post_id):
     })
 
 
-def product_detail(request, product_id):
-    product = get_object_or_404(Market, product_id=product_id)
-    if product.views_count is None:
-        product.views_count = 0
-    product.views_count += 1
-    product.save()
-    # Get all images for this product
-    images = product.images.all() 
-    # Get related products (same category, excluding current)
-    related_products = Market.objects.filter(
-        product_category=product.product_category
-    ).exclude(product_id=product_id)[:4]
-    
-    seller_profile = get_object_or_404(Profile, user=product.product_owner)
-
-    context = {
-        'product': product,
-        'images': images,
-        'related_products': related_products,
-        'seller': seller_profile,
-    }
-    return render(request, 'product_details.html', context)
-
 def get_location(request, username): 
     user = Profile.objects.get(user__username=username)
     return JsonResponse({
@@ -1858,253 +1806,6 @@ def get_location(request, username):
         'lng': user.longitude
     })
 
-
-def get_stories(request):
-    if request.method == 'GET':
-        profile = Profile.objects.get(user=request.user)
-        following = profile.followings.values_list('user', flat=True)
-        
-        twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
-        
-        # Get all stories
-        all_stories = Story.objects.filter(
-            Q(author__in=following) | Q(author=request.user),
-            created_at__gte=twenty_four_hours_ago,
-            is_active=True
-        ).order_by('-created_at')
-        
-        # Get only latest story per user for the initial viewer
-        seen_authors = set()
-        initial_stories = []
-        all_user_stories = []  # For when user taps on a story
-        
-        # First, find current user's story
-        user_story = None
-        other_stories = []
-        
-        for story in all_stories:
-            if story.author.id not in seen_authors:
-                if story.author == request.user:
-                    user_story = story
-                else:
-                    other_stories.append(story)
-                seen_authors.add(story.author.id)
-            
-            # Collect all stories for the viewer
-            all_user_stories.append(story)
-        
-        # Put user's story first
-        if user_story:
-            initial_stories = [user_story] + other_stories
-        else:
-            initial_stories = other_stories
-        
-        stories_data = []
-        for story in all_user_stories:
-            # Check if this user has multiple stories
-            user_story_count = Story.objects.filter(
-                author=story.author,
-                created_at__gte=twenty_four_hours_ago,
-                is_active=True
-            ).count()
-            
-            # Display "You" for current user
-            author_name = "You" if story.author == request.user else f"{story.author.first_name} {story.author.last_name}".strip() or story.author.username
-            
-            # Get viewer count for current user's stories
-            viewer_count = 0
-            if story.author == request.user:
-                viewer_count = story.viewers.count()
-            
-            stories_data.append({
-                'id': str(story.story_id),
-                'author_id': story.author.id,
-                'author_username': story.author.username,
-                'author_name': author_name,  # This will show "You" for current user
-                'author_profile_picture': story.author.profile.picture.url,
-                'story_type': story.story_type,
-                'content': story.content or '',
-                'media_url': story.image.url if story.image else (story.video.url if story.video else ''),
-                'background_color': story.background_color,
-                'text_color': story.text_color,
-                'font_family': story.font_family,
-                'font_size': story.font_size,
-                'created_at': story.created_at.isoformat(),
-                'time_ago': story.created_at.strftime('%H:%M'),
-                'duration': 10,  # Default 10 seconds per story
-                'viewed': request.user in story.viewers.all(),
-                'has_multiple_stories': user_story_count > 1,
-                'story_index': user_story_count,  # Which story number this is
-                'is_current_user': story.author == request.user,  # Add this flag for easier JS handling
-                'viewer_count': viewer_count,  # Add viewer count for current user's stories
-            })
-        
-        return JsonResponse({
-            'success': True,
-            'stories': stories_data,
-            'initial_stories': [str(s.story_id) for s in initial_stories]  # User's story will be first
-        })
-    
-    return JsonResponse({'success': False, 'error': 'Invalid method'})
-
-def mark_story_viewed(request, story_id):
-    if request.method == 'POST':
-        try:
-            story = Story.objects.get(story_id=story_id)
-            if request.user not in story.viewers.all():
-                story.viewers.add(request.user)
-                story.save()
-            return JsonResponse({'success': True})
-        except Story.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Story not found'})
-    
-    return JsonResponse({'success': False, 'error': 'Invalid method'})
-
-
-@login_required
-def send_story_reply(request, story_id):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            reply_text = data.get('message', '').strip()
-            
-            if not reply_text:
-                return JsonResponse({'success': False, 'error': 'Message cannot be empty'})
-            
-            story = get_object_or_404(Story, story_id=story_id)
-            
-            # 1. Format the conversation text to provide context
-            # Example: "Replying to your story: Nice picture!"
-            context_prefix = "Replying to your story: "
-            full_conversation = f"{context_prefix}{reply_text}"
-            
-            # 2. Create the Message object (DM)
-            # Note: We use 'conversation' field based on your models.py
-            message = Message.objects.create(
-                sender=request.user,
-                receiver=story.author,
-                conversation=full_conversation,
-                file_type='story_reply', # Custom type so frontend can style it differently if needed
-                is_read=False
-            )
-            
-            # 3. Real-time Broadcast via WebSockets (Django Channels)
-            # This allows the receiver to see the DM instantly while chatting
-            channel_layer = get_channel_layer()
-            
-            # Create consistent room name (Logic must match send_message view)
-            user_ids = sorted([request.user.id, story.author.id])
-            room_name = f"dm_{user_ids[0]}_{user_ids[1]}"
-            room_group_name = f"chat_{room_name}"
-            
-            # Prepare data for WebSocket
-            # If the story has an image/video, we could technically pass that URL here 
-            # for the preview, though the Message model stores it in 'file'.
-            
-            print(f"📤 Broadcasting story reply to room: {room_group_name}")
-            
-            async_to_sync(channel_layer.group_send)(
-                room_group_name,
-                {
-                    'type': 'chat_message', 
-                    'message_id': message.id,
-                    'sender': request.user.username,
-                    'receiver': story.author.username,
-                    'message': full_conversation,
-                    'file_type': 'story_reply',
-                    'file_url': None, # We aren't attaching a file to the message object itself to save space
-                    'time': message.chat_time,
-                    'date_label': message.chat_date_label,
-                    'created_at': message.created_at.isoformat(),
-                    'reply_to': None # Could link to story info here if frontend supports it
-                }
-            )
-            
-            return JsonResponse({'success': True})
-            
-        except Story.DoesNotExist: 
-            return JsonResponse({'success': False, 'error': 'Story not found or expired'})
-        except Exception as e:
-            print(f"Error in story reply: {e}")
-            return JsonResponse({'success': False, 'error': str(e)})
-    
-    return JsonResponse({'success': False, 'error': 'Invalid method'})
-
-
-def create_story(request):
-    if request.method == 'POST':
-        try:
-            story_type = request.POST.get('story_type', 'text')
-            
-            if story_type == 'text':
-                # Handle text story
-                data = json.loads(request.body)
-                
-                story = Story.objects.create(
-                    author=request.user,
-                    story_type='text',
-                    content=data.get('content', ''),
-                    background_color=data.get('background_color', '#0095f6'),
-                    text_color=data.get('text_color', '#ffffff'),
-                    font_family=data.get('font_family', 'Arial'),
-                    font_size=data.get('font_size', 24)
-                )
-                
-            else:
-                # Handle image/video story
-                story = Story.objects.create(
-                    author=request.user,
-                    story_type=story_type,
-                    content=request.POST.get('content', '')
-                )
-                
-                if story_type == 'image' and 'story_media' in request.FILES:
-                    story.image = request.FILES['story_media']
-                elif story_type == 'video' and 'story_media' in request.FILES:
-                    story.video = request.FILES['story_media']
-                
-                story.save()  
-            
-            # Add creator as viewer
-            story.viewers.add(request.user)
-            
-            return JsonResponse({'success': True, 'story_id': str(story.story_id)})
-            
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    
-    return JsonResponse({'success': False, 'error': 'Invalid method'})
-
-
-@login_required
-def get_story_viewers(request, story_id):
-    """Get the number of viewers for a specific story (only for story owner)"""
-    if request.method == 'GET':
-        try:
-            story = Story.objects.get(story_id=story_id)
-            
-            # Only allow story owner to see viewer count
-            if story.author != request.user:
-                return JsonResponse({
-                    'success': False, 
-                    'error': 'Unauthorized access to viewer data'
-                })
-            
-            # Get the count of unique viewers
-            viewer_count = story.viewers.count()
-            
-            return JsonResponse({
-                'success': True,
-                'viewer_count': viewer_count,
-                'story_id': str(story_id)
-            })
-            
-        except Story.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Story not found'})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    
-    return JsonResponse({'success': False, 'error': 'Invalid method'})
 
 def error_404(request, exception):
     return render(request, '404.html', status=404)

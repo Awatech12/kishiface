@@ -40,13 +40,6 @@ urlpatterns = [
    path('mark-follow-notifications-read/', views.mark_follow_notifications_read, name='mark_follow_notifications_read'),
    path('notifications/delete-group/', views.delete_notification_group, name='delete_notification_group'),
    
-   # Story APIs
-    path('api/stories/', views.get_stories, name='get_stories'),
-    path('api/stories/<uuid:story_id>/view/', views.mark_story_viewed, name='mark_story_viewed'),
-    path('api/stories/<uuid:story_id>/reply/', views.send_story_reply, name='send_story_reply'),
-    path('api/stories/create/', views.create_story, name='create_story'),
-        path('api/stories/<uuid:story_id>/viewers/', views.get_story_viewers, name='get_story_viewers'),
-
     #====== Profials codes =======
     path('<str:username>/', views.profile, name='profile'),
     path('block/<str:username>/',   views.block_user,   name='block_user'),
