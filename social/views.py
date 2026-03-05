@@ -212,13 +212,20 @@ def home(request):
     })
 
 
-@login_required(login_url='/')
-def _safe_pic_url(request, profile_or_none):
-    """Return picture URL exactly like Django template: {{ profile.picture.url }}"""
+def _safe_pic_url(user_obj):
+    """
+    Return picture URL safely.
+    Handles RelatedObjectDoesNotExist if user has no profile,
+    or ValueError if profile has no image.
+    """
     try:
-        return profile_or_none.picture.url
+        # We access .profile here inside the try block so if it doesn't exist,
+        # it catches the error instead of crashing the view.
+        if hasattr(user_obj, 'profile') and user_obj.profile.picture:
+            return user_obj.profile.picture.url
     except Exception:
-        return ''
+        pass
+    return ''
 
 
 def load_more_posts(request):
@@ -254,8 +261,11 @@ def load_more_posts(request):
     for post in page_obj.object_list:
         media = []
         if post.video_file:
-            media.append({'type': 'video', 'url': post.video_file.url,
-                          'thumbnail': post.video_thumbnail.url if hasattr(post, 'video_thumbnail') and post.video_thumbnail else ''})
+            media.append({
+                'type': 'video', 
+                'url': post.video_file.url,
+                'thumbnail': post.video_thumbnail.url if hasattr(post, 'video_thumbnail') and post.video_thumbnail else ''
+            })
         for img in post.images.all():
             media.append({'type': 'image', 'url': img.image.url})
 
@@ -263,8 +273,11 @@ def load_more_posts(request):
         if post.is_repost and post.original_post:
             op = post.original_post
             if op.video_file:
-                original_media.append({'type': 'video', 'url': op.video_file.url,
-                                       'thumbnail': op.video_thumbnail.url if hasattr(op, 'video_thumbnail') and op.video_thumbnail else ''})
+                original_media.append({
+                    'type': 'video', 
+                    'url': op.video_file.url,
+                    'thumbnail': op.video_thumbnail.url if hasattr(op, 'video_thumbnail') and op.video_thumbnail else ''
+                })
             for img in op.images.all():
                 original_media.append({'type': 'image', 'url': img.image.url})
 
@@ -282,39 +295,77 @@ def load_more_posts(request):
         if hasattr(post, 'get_original_author'):
             is_following_author = post.get_original_author().id in following_ids
 
+        # Determine original author info safely
+        if post.is_repost and post.original_post:
+            orig_author = post.original_post.author
+            orig_username = orig_author.username
+            orig_name = '{} {}'.format(orig_author.first_name, orig_author.last_name)
+            orig_pic = _safe_pic_url(orig_author)
+            try:
+                orig_verified = orig_author.profile.is_verify
+            except Exception:
+                orig_verified = False
+            orig_id = orig_author.id
+            content = post.original_post.content
+            orig_created = post.original_post.created_at.isoformat()
+        else:
+            orig_author = post.author
+            orig_username = post.author.username
+            orig_name = '{} {}'.format(post.author.first_name, post.author.last_name)
+            orig_pic = _safe_pic_url(post.author)
+            try:
+                orig_verified = post.author.profile.is_verify
+            except Exception:
+                orig_verified = False
+            orig_id = post.author.id
+            content = post.content
+            orig_created = post.created_at.isoformat()
+
+        # Safely get current author verified status
+        try:
+            author_verified = post.author.profile.is_verify
+        except Exception:
+            author_verified = False
+
         posts_data.append({
             'post_id': str(post.post_id),
             'is_repost': post.is_repost,
             'author_username': post.author.username,
             'author_name': '{} {}'.format(post.author.first_name, post.author.last_name),
-            'author_pic': _safe_pic_url(request, getattr(post.author, 'profile', None)),
-            'author_verified': post.author.profile.is_verify,
+            'author_pic': _safe_pic_url(post.author),
+            'author_verified': author_verified,
             'author_id': post.author.id,
-            'original_author_username': post.original_post.author.username if post.is_repost and post.original_post else post.author.username,
-            'original_author_name': '{} {}'.format(post.original_post.author.first_name, post.original_post.author.last_name) if post.is_repost and post.original_post else '{} {}'.format(post.author.first_name, post.author.last_name),
-            'original_author_pic': _safe_pic_url(request, getattr(post.original_post.author, 'profile', None)) if post.is_repost and post.original_post else _safe_pic_url(request, getattr(post.author, 'profile', None)),
-            'original_author_verified': post.original_post.author.profile.is_verify if post.is_repost and post.original_post else post.author.profile.is_verify,
-            'original_author_id': post.original_post.author.id if post.is_repost and post.original_post else post.author.id,
-            'content': post.original_post.content if post.is_repost and post.original_post else post.content,
+            
+            'original_author_username': orig_username,
+            'original_author_name': orig_name,
+            'original_author_pic': orig_pic,
+            'original_author_verified': orig_verified,
+            'original_author_id': orig_id,
+            
+            'content': content,
             'repost_content': post.repost_content or '',
             'created_at': post.created_at.isoformat(),
-            'original_created_at': post.original_post.created_at.isoformat() if post.is_repost and post.original_post else post.created_at.isoformat(),
+            'original_created_at': orig_created,
+            
             'mood': post.mood or '',
             'custom_mood': post.custom_mood or '',
             'mood_display': mood_display,
             'mood_color': mood_color,
             'has_mood': bool(mood_display),
+            
             'media': media,
             'original_media': original_media,
+            
             'like_count': post.likes.count(),
             'is_liked': request.user in post.likes.all(),
             'is_following_author': is_following_author,
             'is_own_post': post.author == request.user,
+            
             # Engagement bar extras
             'is_reposted': request.user in post.reposts.all() if hasattr(post, 'reposts') else False,
             'repost_count': post.reposts.count() if hasattr(post, 'reposts') else 0,
             'view_count': post.view if hasattr(post, 'view') and post.view else 0,
-            'liker_pics': [_safe_pic_url(request, getattr(u, 'profile', None)) for u in post.likes.all()[:3] if _safe_pic_url(request, getattr(u, 'profile', None))],
+            'liker_pics': [_safe_pic_url(u) for u in post.likes.all()[:3] if _safe_pic_url(u)],
         })
 
     return JsonResponse({
@@ -323,7 +374,6 @@ def load_more_posts(request):
         'next_page': page_number + 1 if page_obj.has_next() else None,
         'total_pages': paginator.num_pages,
     })
-
 from django.views.decorators.http import require_POST
 @login_required(login_url='/')
 @require_POST
@@ -941,25 +991,31 @@ def profile_audios(request, username):
 def profile_text_posts(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
-    
-    # Get text posts
-    text_posts = Post.objects.filter(
-        author=user,
-        images__isnull=True,
-        video_file__isnull=True,
-        file__isnull=True
-    ).exclude(content='').filter(content__isnull=False)[:30]
-    
+
+    # Use annotate+Count to reliably exclude posts that have any image rows.
+    # images__isnull=True on a M2M join is unreliable and returns wrong results.
+    text_posts = (
+        Post.objects.filter(author=user)
+        .annotate(image_count=Count('images'))
+        .filter(image_count=0)                         # no images attached
+        .filter(Q(video_file__isnull=True) | Q(video_file=''))  # no video
+        .filter(Q(file__isnull=True) | Q(file=''))     # no audio
+        .filter(content__isnull=False)
+        .exclude(content__exact='')
+        .select_related('author', 'author__profile')
+        .prefetch_related('likes', 'comments')
+        .order_by('-created_at')[:30]
+    )
+
     context = {
         'user': user,
         'profile': profile,
         'posts': text_posts,
     }
-    
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
         return render(request, 'profile_text_posts_partial.html', context)
-    
-    context['posts'] = text_posts
+
     return render(request, 'profile.html', context)
 
 @login_required(login_url='/')

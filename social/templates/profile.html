@@ -1,5 +1,9 @@
+{% load pwa %}
+{% load post_tags %}
 {% load humanize %}
 {% load static %}
+{% load time %}
+{% load text_filters %}  
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1014,7 +1018,127 @@
             to { transform: translate(-50%, -50%) rotate(360deg); }
         }
 
+        /* ── Profile Grid Layout (images & videos) ── */
+        .kvibe-grid-posts {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 3px;
+            width: 100%;
+        }
+
+        .kvibe-grid-item {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            overflow: hidden;
+            background: var(--kvibe-border-light, #efefef);
+            display: block;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .kvibe-grid-media {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.28s ease;
+        }
+        .kvibe-grid-item:hover .kvibe-grid-media { transform: scale(1.05); }
+
+        .kvibe-grid-video-wrap {
+            width: 100%;
+            height: 100%;
+            background: #000;
+        }
+
+        .kvibe-grid-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ccc;
+            font-size: 32px;
+        }
+
+        .kvibe-grid-play {
+            position: absolute;
+            top: 7px;
+            right: 7px;
+            width: 26px;
+            height: 26px;
+            background: rgba(0,0,0,0.55);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 10px;
+            padding-left: 2px;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        .kvibe-grid-badge {
+            position: absolute;
+            top: 7px;
+            right: 7px;
+            z-index: 3;
+            width: 26px;
+            height: 26px;
+            background: rgba(0,0,0,0.55);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 11px;
+            pointer-events: none;
+        }
+
+        .kvibe-grid-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.40);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            color: #fff;
+            font-weight: 700;
+            font-size: 14px;
+            z-index: 4;
+            pointer-events: none;
+        }
+        .kvibe-grid-item:hover .kvibe-grid-overlay { opacity: 1; }
+        .kvibe-grid-overlay span { display:flex; align-items:center; gap:5px; }
+
+        .kvibe-grid-empty {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--kvibe-text-secondary, #8e8e8e);
+        }
+        .kvibe-grid-empty-icon { font-size: 48px; display: block; margin-bottom: 12px; }
+        .kvibe-grid-empty h3   { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+        .kvibe-grid-empty p    { font-size: 14px; margin: 0; }
+
+        /* Text post feed */
+        .kvibe-text-feed { display: flex; flex-direction: column; }
+
+        /* Container mode helpers set by JS on tab switch */
+        .kvibe-posts-container.kvibe-grid-mode { display: block; }
+        .kvibe-posts-container.kvibe-feed-mode { display: block; }
+
+        /* Legacy aliases so existing JS selectors still work */
+        .kvibe-posts-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:3px; }
+        .kvibe-post-item  { position:relative; aspect-ratio:1/1; overflow:hidden;
+                            display:block; text-decoration:none; cursor:pointer;
+                            background:var(--kvibe-border-light,#efefef); }
+
         /* Video/Audio thumbnails */
+
         .kvibe-video-thumbnail {
             position: relative;
             width: 100%;
@@ -1050,35 +1174,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-
-        .kvibe-audio-thumbnail {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #0095f6 0%, #0077cc 100%);
-        }
-
-        .kvibe-audio-overlay {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1;
-        }
-
-        .kvibe-audio-overlay i {
-            font-size: 24px;
-            color: rgba(255,255,255,0.9);
-            background: rgba(0,0,0,0.3);
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding-left: 3px;
         }
 
         /* Post hover overlay */
@@ -2541,6 +2636,245 @@
         }
         .kvibe-action-modal-btn-warn:hover { background: #b45309; }
         .kvibe-action-modal-btn-warn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* ════════════════════════════════════════════════════
+           POST CARD — text feed (matches home page exactly)
+           ════════════════════════════════════════════════════ */
+
+        /* Mood badge */
+        .kvibe-mood-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 10px;
+            background: linear-gradient(135deg, var(--mood-color, #0095f6),
+                        color-mix(in srgb, var(--mood-color, #0095f6) 70%, white));
+            border-radius: 20px; color: #fff;
+            font-size: 11px; font-weight: 600;
+            box-shadow: 0 2px 6px rgba(0,0,0,.1);
+            animation: moodAppear .3s ease;
+            vertical-align: middle;
+        }
+        .kvibe-mood-slay    { --mood-color:#ff1493; }
+        .kvibe-mood-vibing  { --mood-color:#9933ff; }
+        .kvibe-mood-sheesh  { --mood-color:#00cc66; }
+        .kvibe-mood-periodt { --mood-color:#ff6b00; }
+        .kvibe-mood-no-cap  { --mood-color:#ff4444; }
+        .kvibe-mood-bussin  { --mood-color:#ffd700; }
+        .kvibe-mood-mid     { --mood-color:#808080; }
+        .kvibe-mood-cringe  { --mood-color:#8b4513; }
+        @keyframes moodAppear {
+            from { opacity:0; transform:scale(.8); }
+            to   { opacity:1; transform:scale(1); }
+        }
+
+        /* Post card wrapper */
+        .kvibe-post {
+            background: var(--kvibe-white);
+            border-bottom: 1px solid var(--kvibe-border);
+            overflow: hidden;
+        }
+        .kvibe-post.mood-hidden { display: none; }
+
+        /* Header row */
+        .kvibe-post-header {
+            display: flex; align-items: center;
+            padding: 14px 16px; flex-wrap: wrap;
+        }
+        .kvibe-profile-pic {
+            width: 36px; height: 36px; border-radius: 50%;
+            object-fit: cover; margin-right: 12px; flex-shrink: 0;
+        }
+        .kvibe-username {
+            font-weight: 600; font-size: 14px;
+            color: var(--kvibe-text); text-decoration: none;
+        }
+        .kvibe-username:hover { text-decoration: underline; }
+        .kvibe-post-time {
+            font-size: 12px; color: var(--kvibe-text-muted); margin-top: 2px;
+        }
+        .kvibe-edit-icon {
+            margin-left: auto; color: var(--kvibe-text-muted);
+            padding: 8px; border-radius: 50%; text-decoration: none;
+            display: inline-flex; align-items: center; justify-content: center;
+            transition: all .15s ease; flex-shrink: 0;
+        }
+        .kvibe-edit-icon:hover { color: var(--kvibe-primary); background: #f3f4f6; }
+
+        /* Content area */
+        .kvibe-post-content {
+            padding: 0 16px 12px;
+            font-size: 14px; line-height: 1.55; position: relative;
+        }
+        .kvibe-post-text { overflow: hidden; transition: max-height .3s ease; }
+        .kvibe-post-text.collapsed { max-height: 72px; }
+        .kvibe-post-text.expanded  { max-height: 2000px; }
+        .kvibe-post-text p { margin: 0 0 8px; }
+        .kvibe-post-text p:last-child { margin-bottom: 0; }
+        .kvibe-post-text a {
+            color: var(--kvibe-primary); text-decoration: none; font-weight: 500;
+        }
+        .kvibe-post-text a:hover { text-decoration: underline; }
+
+        /* Show more / less */
+        .kvibe-text-toggle {
+            background: none; border: none; cursor: pointer;
+            color: var(--kvibe-text-muted); font-size: 13.5px; font-weight: 500;
+            padding: 3px 0; margin-top: 4px;
+            display: inline-flex; align-items: center; gap: 4px;
+            font-family: inherit;
+        }
+        .kvibe-text-toggle:hover { color: var(--kvibe-text); }
+        .kvibe-text-toggle i { font-size: 11px; }
+
+        /* ── Engagement / liker row ── */
+        .kvibe-engagement {
+            display: flex; flex-wrap: wrap; align-items: center;
+            padding: 10px 16px 8px; border-top: 1px solid var(--kvibe-border);
+            gap: 10px; background: var(--kvibe-white);
+        }
+        .kvibe-likers-container { display: flex; margin-right: 6px; }
+        .kvibe-liker-pic {
+            width: 24px; height: 24px; border-radius: 50%;
+            border: 2px solid var(--kvibe-white); margin-left: -6px;
+            transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+        }
+        .kvibe-likers-container a:first-child .kvibe-liker-pic { margin-left: 0; }
+        .kvibe-liker-pic:hover { transform: translateY(-3px) scale(1.15); z-index: 10; }
+        .kvibe-like-text    { font-weight: normal; color: var(--kvibe-text); font-size: 13.5px; }
+        .kvibe-no-likes     { color: var(--kvibe-text-muted); font-size: 13px; }
+        .kvibe-view-text    { font-size: 13px; color: var(--kvibe-text-muted); }
+        .kvibe-separator-dot { color: var(--kvibe-border); font-size: 12px; margin: 0 2px; }
+        .kvibe-engagement-item { display: flex; align-items: center; gap: 4px; }
+        .kvibe-you-text { font-weight: 600; }
+
+        /* ── Action buttons row ── */
+        .kvibe-actions-container {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 4px 8px; background: var(--kvibe-white);
+            border-top: 1px solid var(--kvibe-border);
+        }
+        .kvibe-action-item {
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; text-decoration: none; color: var(--kvibe-text-muted);
+            font-size: 13.5px; font-weight: 500; padding: 10px 16px;
+            border-radius: 999px; transition: background .2s, color .2s;
+            position: relative; overflow: visible; cursor: pointer;
+            background: none; border: none; flex: 1;
+            min-width: 0; font-family: inherit;
+        }
+        .kvibe-action-item::after {
+            content: ''; position: absolute; inset: 0; border-radius: 999px;
+            background: currentColor; opacity: 0; transform: scale(.7);
+            transition: opacity .25s, transform .25s cubic-bezier(.34,1.56,.64,1);
+            pointer-events: none;
+        }
+        .kvibe-action-item:hover::after { opacity: .06; transform: scale(1); }
+        .kvibe-action-item:hover { color: var(--kvibe-text); }
+        .kvibe-action-icon {
+            font-size: 19px; transition: color .25s;
+            position: relative; display: inline-block;
+        }
+        .kvibe-repost-icon {
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; text-decoration: none; color: var(--kvibe-text-muted);
+            font-size: 13.5px; font-weight: 500; padding: 10px 16px;
+            border-radius: 999px; transition: background .2s, color .2s;
+            position: relative; cursor: pointer;
+            background: none; border: none; font-family: inherit;
+            flex: 1; min-width: 0;
+        }
+        .kvibe-repost-icon::after {
+            content: ''; position: absolute; inset: 0; border-radius: 999px;
+            background: currentColor; opacity: 0; transform: scale(.7);
+            transition: opacity .25s, transform .25s cubic-bezier(.34,1.56,.64,1);
+            pointer-events: none;
+        }
+        .kvibe-repost-icon:hover::after { opacity: .06; transform: scale(1); }
+        .kvibe-repost-icon:hover,
+        .kvibe-repost-icon:hover .fa-retweet { color: #10b981; }
+        .fa-retweet.reposted { color: #10b981; }
+        .kvibe-share-btn:hover .kvibe-action-icon { color: var(--kvibe-primary); }
+        .kvibe-repost-count,
+        .kvibe-share-count  { font-size: 13.5px; display: none; }
+        .kvibe-repost-count.kvibe-show,
+        .kvibe-share-count.kvibe-show { display: inline; }
+
+        /* ── Animations ── */
+        @keyframes heartMorph {
+            0%   { transform: scale(1)    rotate(0deg); }
+            10%  { transform: scale(.7)   rotate(-8deg); }
+            30%  { transform: scale(1.45) rotate(4deg); }
+            50%  { transform: scale(.9)   rotate(-2deg); }
+            65%  { transform: scale(1.15) rotate(1deg); }
+            80%  { transform: scale(.97)  rotate(0deg); }
+            100% { transform: scale(1)    rotate(0deg); }
+        }
+        @keyframes commentBounce {
+            0%   { transform: translateY(0)   scaleY(1); }
+            25%  { transform: translateY(-6px) scaleY(.9); }
+            55%  { transform: translateY(2px)  scaleY(1.05); }
+            75%  { transform: translateY(-2px) scaleY(.98); }
+            100% { transform: translateY(0)   scaleY(1); }
+        }
+        @keyframes repostSpin {
+            0%   { transform: rotate(0deg)   scale(1); }
+            40%  { transform: rotate(200deg) scale(.8); }
+            70%  { transform: rotate(340deg) scale(1.1); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+        @keyframes jellyPop {
+            0%   { transform: scale(1); }
+            25%  { transform: scale(1.3,.75); }
+            50%  { transform: scale(.85,1.2); }
+            75%  { transform: scale(1.1,.9); }
+            100% { transform: scale(1); }
+        }
+        @keyframes particleBurst {
+            0%   { transform: translate(0,0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx),var(--ty)) scale(0); opacity: 0; }
+        }
+        @keyframes labelPop {
+            0%   { transform: translateY(0)    scale(.7);  opacity: 0; }
+            60%  { transform: translateY(-22px) scale(1.05); opacity: 1; }
+            80%  { transform: translateY(-20px) scale(.97);  opacity: 1; }
+            100% { transform: translateY(-20px) scale(1);    opacity: 0; }
+        }
+        @keyframes countTick {
+            0%  { transform: translateY(0);    opacity: 1; }
+            30% { transform: translateY(-14px); opacity: 0; }
+            31% { transform: translateY(14px);  opacity: 0; }
+            70% { transform: translateY(0);     opacity: 1; }
+        }
+        .kvibe-heart-animate { animation: heartMorph .65s cubic-bezier(.34,1.56,.64,1) forwards; }
+        .kvibe-count-tick    { animation: countTick .5s cubic-bezier(.4,0,.2,1); }
+        .kvibe-action-item:hover .fa-comment  { animation: commentBounce .5s cubic-bezier(.34,1.56,.64,1); }
+        .kvibe-repost-icon:hover .fa-retweet  { animation: repostSpin .55s cubic-bezier(.34,1.56,.64,1); }
+        .kvibe-share-btn:hover .kvibe-action-icon { animation: jellyPop .45s cubic-bezier(.34,1.56,.64,1); }
+
+        /* Particle burst */
+        .kvibe-particle-container {
+            position: absolute; top: 50%; left: 50%;
+            width: 0; height: 0; pointer-events: none; z-index: 20;
+        }
+        .kvibe-particle {
+            position: absolute; width: 5px; height: 5px; border-radius: 50%;
+            animation: particleBurst .55s cubic-bezier(.4,0,.2,1) forwards;
+        }
+        .kvibe-float-label {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%,-50%);
+            font-size: 11px; font-weight: 700; color: var(--kvibe-primary);
+            pointer-events: none; white-space: nowrap;
+            animation: labelPop .7s cubic-bezier(.34,1.56,.64,1) forwards;
+            z-index: 30;
+        }
+
+        /* Mobile tweaks */
+        @media (max-width: 767px) {
+            .kvibe-actions-container { padding: 2px 4px; }
+            .kvibe-action-item  { padding: 8px 10px; font-size: 13px; gap: 6px; }
+            .kvibe-action-icon  { font-size: 18px; }
+            .kvibe-repost-icon  { padding: 8px 10px; font-size: 13px; }
+        }
     </style>
 </head>
 <body>
@@ -3273,9 +3607,6 @@
                     <button data-tab="videos" data-url="{% url 'profile_videos' user.username %}" class="kvibe-tab">
                         <i class="fas fa-play kvibe-tab-icon"></i><span>Videos</span>
                     </button>
-                    <button data-tab="audio" data-url="{% url 'profile_audios' user.username %}" class="kvibe-tab">
-                        <i class="fas fa-music kvibe-tab-icon"></i><span>Audio</span>
-                    </button>
                     <button data-tab="text" data-url="{% url 'profile_text_posts' user.username %}" class="kvibe-tab">
                         <i class="fas fa-align-left kvibe-tab-icon"></i><span>Text</span>
                     </button>
@@ -3316,32 +3647,42 @@
 
                 <!-- Posts Container -->
                 <section class="kvibe-posts-container kvibe-webview-fix" id="posts-container">
+                    {% load humanize %}
                     {% if posts %}
-                    <div class="kvibe-posts-grid">
+                    <div class="kvibe-grid-posts">
                         {% for post in posts %}
-                            {% if post.preview_type == 'image' and post.preview_url %}
-                                <a href="{% url 'post_comment' post.post_id %}" class="kvibe-post-item" data-mood="{{ post.mood|default:'' }}" data-custom-mood="{{ post.custom_mood|default:'' }}">
-                                    {% if post.preview_url %}
-                                        <img src="{{ post.preview_url }}" alt="Post" class="kvibe-post-image" loading="lazy">
-                                    {% else %}
-                                        <div class="kvibe-placeholder"></div>
-                                    {% endif %}
-                                    {% if post.mood %}
-                                    <span class="kvibe-post-mood-tag">{{ post.mood }}</span>
-                                    {% endif %}
-                                    <div class="kvibe-post-overlay">
-                                        <span><i class="fa-solid fa-heart"></i> {{post.likes.count}}</span>
-                                        <span><i class="fa-solid fa-comment"></i> {{post.comments.count}}</span>
-                                        <span><i class="fa-regular fa-eye"></i> {{post.view|intcomma}}</span>
-                                    </div>
-                                </a>
-                            {% endif %}
+                            <a href="{% url 'post_comment' post.post_id %}"
+                               class="kvibe-grid-item kvibe-post-item"
+                               data-mood="{{ post.mood|default:'' }}"
+                               data-custom-mood="{{ post.custom_mood|default:'' }}">
+
+                                {% with first_img=post.images.first %}
+                                {% if first_img %}
+                                    <img src="{{ first_img.image.url }}" alt="Post"
+                                         class="kvibe-grid-media" loading="lazy">
+                                {% else %}
+                                    <div class="kvibe-grid-placeholder"><i class="fas fa-image"></i></div>
+                                {% endif %}
+                                {% endwith %}
+
+                                {% if post.images.all|length > 1 %}
+                                    <span class="kvibe-grid-badge"><i class="fas fa-clone"></i></span>
+                                {% endif %}
+
+                                <div class="kvibe-grid-overlay">
+                                    <span><i class="fas fa-heart"></i> {{ post.likes.count }}</span>
+                                    <span><i class="fas fa-comment"></i> {{ post.comments.count }}</span>
+                                    <span><i class="far fa-eye"></i> {{ post.view|intcomma }}</span>
+                                </div>
+
+                            </a>
                         {% endfor %}
                     </div>
                     {% else %}
-                    <div class="kvibe-no-posts">
-                        <h2 class="kvibe-no-posts-title">No posts yet</h2>
-                        <p class="kvibe-no-posts-text">When they do, their posts will show up here.</p>
+                    <div class="kvibe-grid-empty">
+                        <span class="kvibe-grid-empty-icon">🖼️</span>
+                        <h3>No posts yet</h3>
+                        <p>Photo posts will appear here.</p>
                     </div>
                     {% endif %}
                 </section>
@@ -4588,340 +4929,218 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 // Tab navigation with AJAX loading
-(function() {
+(function () {
     'use strict';
-    
-    const tabs = document.querySelectorAll('.kvibe-tab');
+
+    const tabs           = document.querySelectorAll('.kvibe-tab');
     const postsContainer = document.getElementById('posts-container');
-    const headerPosts = document.getElementById('header-posts-count');
-    
+    const headerPosts    = document.getElementById('header-posts-count');
+    const moodFilterRow  = document.getElementById('profileMoodFilterRow');
+
     if (!tabs.length || !postsContainer) return;
-    
+
     let currentTab = 'posts';
-    const isWebView = /wv|WebView/i.test(navigator.userAgent) || 
+    const tabCache = {};   // in-memory cache: tabName → html string
+    const isWebView = /wv|WebView/i.test(navigator.userAgent) ||
                       window.matchMedia('(display-mode: standalone)').matches;
-    
-    function initializePage() {
-        // Detect initial tab from URL
-        const initialTab = extractTabFromURL();
-        if (initialTab !== 'posts') {
-            updateActiveTab(initialTab);
-        }
-        
-        // Attach tab click handlers
-        tabs.forEach(tab => {
-            tab.addEventListener('click', handleTabClick);
-        });
-        
-        // Initialize content
-        initializeLazyLoading();
-        
-        // Handle browser back/forward
-        window.addEventListener('popstate', function(e) {
-            if (e.state && e.state.tab) {
-                restoreFromState(e.state);
-            }
-        });
+
+    /* ── helpers ── */
+
+    function showMoodFilter(show) {
+        if (moodFilterRow) moodFilterRow.style.display = show ? '' : 'none';
     }
-    
-    // Handle tab clicks
+
+    function updateActiveTab(tabName) {
+        tabs.forEach(t =>
+            t.classList.toggle('kvibe-tab-active',
+                t.getAttribute('data-tab') === tabName));
+        currentTab = tabName;
+    }
+
+    function updateHistory(tabName, url) {
+        const state = { tab: tabName, timestamp: Date.now() };
+        isWebView
+            ? history.replaceState(state, '', url)
+            : history.pushState(state, '', url);
+    }
+
+    /* Strip full-page wrapper if server returned the whole HTML page */
+    function extractContent(html) {
+        if (!html.includes('<!DOCTYPE') && !html.includes('<html')) return html;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const inner =
+            tmp.querySelector('#posts-container')     ||
+            tmp.querySelector('.kvibe-grid-posts')    ||
+            tmp.querySelector('.kvibe-text-feed')     ||
+            tmp.querySelector('.kvibe-no-posts')      ||
+            tmp.querySelector('.kvibe-grid-empty');
+        return inner ? (inner.innerHTML || inner.outerHTML) : html;
+    }
+
+    function afterRender(tabName) {
+        showMoodFilter(tabName === 'posts');
+        initializeLazyLoading();
+        if (tabName === 'videos') initializeVideoThumbnails();
+        updatePostCount(tabName);
+        // re-run mood counters when posts tab reloads
+        if (tabName === 'posts' && typeof run === 'function') {
+            setTimeout(run, 0);
+        }
+    }
+
+    /* ── loader ── */
+
+    async function loadTabContent(tabName, url) {
+        postsContainer.innerHTML =
+            '<div style="min-height:140px;display:flex;align-items:center;justify-content:center;">' +
+            '<div class="kvibe-loading"></div></div>';
+        if (headerPosts) headerPosts.textContent = 'Loading…';
+
+        try {
+            const resp = await fetch(url, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' },
+                cache: 'no-cache'
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+            const html = extractContent(await resp.text());
+            tabCache[tabName] = html;
+            postsContainer.innerHTML = html;
+            afterRender(tabName);
+
+        } catch (err) {
+            console.error('Tab load error:', err);
+            postsContainer.innerHTML =
+                '<div class="kvibe-grid-empty">' +
+                '<span class="kvibe-grid-empty-icon">⚠️</span>' +
+                '<h3>Could not load content</h3>' +
+                '<p>Tap to retry</p></div>';
+        }
+    }
+
+    /* ── click handler ── */
+
     async function handleTabClick(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const tabName = this.getAttribute('data-tab');
-        const url = this.getAttribute('data-url');
-        
+        const rawUrl  = this.getAttribute('data-url');
         if (tabName === currentTab) return;
-        
-        // Update UI
+
         updateActiveTab(tabName);
-        
-        // Update history
-        updateHistory(tabName, url);
-        
-        // Load content
-        await loadTabContent(tabName, url + '?ajax=1');
-    }
-    
-    // Save current state
-    function saveCurrentState() {
-        const state = {
-            tab: currentTab,
-            content: postsContainer.innerHTML,
-            postCount: headerPosts.textContent,
-            timestamp: Date.now()
-        };
-        
-        history.replaceState(state, '', window.location.href);
-    }
-    
-    // Restore from saved state
-    function restoreFromState(state) {
-        if (state.content) {
-            postsContainer.innerHTML = state.content;
+        updateHistory(tabName, rawUrl);
+
+        if (tabCache[tabName]) {
+            postsContainer.innerHTML = tabCache[tabName];
+            afterRender(tabName);
+            return;
         }
-        if (state.postCount) {
-            headerPosts.textContent = state.postCount;
-        }
-        if (state.tab) {
-            updateActiveTab(state.tab);
-        }
-        
-        // Re-initialize dynamic content
-        initializeLazyLoading();
-        if (state.tab === 'videos') {
-            initializeVideoThumbnails();
-        }
+        await loadTabContent(tabName, rawUrl + '?ajax=1');
     }
-    
-    // Update active tab UI
-    function updateActiveTab(tabName) {
-        tabs.forEach(t => {
-            t.classList.remove('kvibe-tab-active');
-            if (t.getAttribute('data-tab') === tabName) {
-                t.classList.add('kvibe-tab-active');
-            }
-        });
-        currentTab = tabName;
-    }
-    
-    // Update browser history
-    function updateHistory(tabName, url) {
-        const state = {
-            tab: tabName,
-            timestamp: Date.now(),
-            isWebView: isWebView
-        };
-        
-        if (isWebView) {
-            history.replaceState(state, '', url.replace('?ajax=1', ''));
-        } else {
-            history.pushState(state, '', url.replace('?ajax=1', ''));
-        }
-    }
-    
-    // Load tab content via AJAX
-    async function loadTabContent(tabName, url) {
-        // Show loading
-        postsContainer.innerHTML = '<div style="position:relative;height:120px;"><div class="kvibe-loading"></div></div>';
-        headerPosts.textContent = `Loading...`;
-        
-        try {
-            const response = await fetch(url, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Cache-Control': 'no-cache'
-                },
-                cache: 'no-cache'
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            let html = await response.text();
-            
-            // Handle different response types
-            if (html.includes('<!DOCTYPE html>')) {
-                // Extract just the posts container
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = html;
-                const container = tempDiv.querySelector('.kvibe-posts-container') || 
-                                tempDiv.querySelector('.kvibe-posts-grid') ||
-                                tempDiv.querySelector('.kvibe-text-posts') ||
-                                tempDiv.querySelector('.kvibe-no-posts');
-                
-                if (container) {
-                    html = container.innerHTML;
-                }
-            }
-            
-            // Update content
-            postsContainer.innerHTML = html;
-            
-            // Update stats
-            updatePostCount(tabName);
-            
-            // Initialize content
-            initializeLazyLoading();
-            if (tabName === 'videos') {
-                initializeVideoThumbnails();
-            }
-            
-            // Save state
-            saveCurrentState();
-            
-        } catch (error) {
-            console.error('Error loading tab:', error);
-            postsContainer.innerHTML = `
-                <div class="kvibe-no-posts">
-                    <h2 class="kvibe-no-posts-title">Error loading content</h2>
-                    <p class="kvibe-no-posts-text">Please try again</p>
-                </div>
-            `;
-            headerPosts.textContent = 'Error';
-        }
-    }
-    
-    // Update post count display
+
+    /* ── post count ── */
+
     function updatePostCount(tabName) {
-        let count = 0;
-        
-        if (tabName === 'posts' || tabName === 'videos' || tabName === 'audio') {
-            count = postsContainer.querySelectorAll('.kvibe-post-item').length;
-        } else if (tabName === 'text') {
-            count = postsContainer.querySelectorAll('.kvibe-text-item').length;
+        if (!headerPosts) return;
+        let count;
+        if (tabName === 'posts' || tabName === 'videos') {
+            count = postsContainer.querySelectorAll('.kvibe-grid-item, .kvibe-post-item').length;
+        } else {
+            count = postsContainer.querySelectorAll('.kvibe-post').length;
         }
-        
-        headerPosts.textContent = `${count} ${tabName}`;
+        headerPosts.textContent = count + ' ' + tabName;
     }
-    
-    // Initialize video thumbnails
+
+    /* ── video thumbnails ── */
+
     function initializeVideoThumbnails() {
-        const videos = postsContainer.querySelectorAll('video');
-        videos.forEach(video => {
-            video.controls = false;
-            video.muted = true;
-            video.playsInline = true;
-            video.preload = 'metadata';
-            
-            // Prevent video playback
-            video.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-            });
-            
-            video.addEventListener('play', function(e) {
-                e.preventDefault();
-                this.pause();
-            });
+        postsContainer.querySelectorAll('video').forEach(v => {
+            v.controls = false; v.muted = true; v.playsInline = true; v.preload = 'metadata';
+            v.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
+            v.addEventListener('play', function () { this.pause(); });
         });
     }
-    
-    // Initialize lazy loading for images
+
+    /* ── lazy images ── */
+
     function initializeLazyLoading() {
-        const lazyImages = postsContainer.querySelectorAll('img[loading="lazy"]');
-        
+        const imgs = postsContainer.querySelectorAll('img[loading="lazy"]');
         if ('IntersectionObserver' in window) {
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target;
-                        if (img.dataset.src) {
-                            img.src = img.dataset.src;
-                            img.removeAttribute('data-src');
-                        }
-                        observer.unobserve(img);
+            const obs = new IntersectionObserver(entries => {
+                entries.forEach(en => {
+                    if (en.isIntersecting) {
+                        const img = en.target;
+                        if (img.dataset.src) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+                        obs.unobserve(img);
                     }
                 });
-            }, {
-                rootMargin: '50px',
-                threshold: 0.1
-            });
-            
-            lazyImages.forEach(img => observer.observe(img));
+            }, { rootMargin: '60px', threshold: 0.05 });
+            imgs.forEach(img => obs.observe(img));
         } else {
-            // Fallback for older browsers
-            lazyImages.forEach(img => {
-                if (img.getBoundingClientRect().top < window.innerHeight + 100) {
-                    if (img.dataset.src) {
-                        img.src = img.dataset.src;
-                        img.removeAttribute('data-src');
-                    }
-                }
-            });
+            imgs.forEach(img => { if (img.dataset.src) img.src = img.dataset.src; });
         }
     }
-    
-    // Submit form via AJAX
-    async function submitForm(form) {
-        const formData = new FormData(form);
-        const action = form.getAttribute('action');
-        
-        try {
-            const response = await fetch(action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success) {
-                    // Reload the current tab
-                    const currentTabElement = document.querySelector('.kvibe-tab-active');
-                    if (currentTabElement) {
-                        const tabName = currentTabElement.getAttribute('data-tab');
-                        const url = currentTabElement.getAttribute('data-url') + '?ajax=1';
-                        loadTabContent(tabName, url);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Form submission error:', error);
+
+    /* ── popstate (browser back/forward) ── */
+
+    window.addEventListener('popstate', function (e) {
+        if (!e.state || !e.state.tab) return;
+        const tabName = e.state.tab;
+        updateActiveTab(tabName);
+        if (tabCache[tabName]) {
+            postsContainer.innerHTML = tabCache[tabName];
+            afterRender(tabName);
+        } else {
+            const el = document.querySelector('[data-tab="' + tabName + '"]');
+            if (el) loadTabContent(tabName, el.getAttribute('data-url') + '?ajax=1');
         }
-    }
-    
-    // Refresh layout for WebView
-    function refreshLayout() {
-        if (!isWebView) return;
-        
-        // Force reflow
-        document.body.style.display = 'none';
-        document.body.offsetHeight;
-        document.body.style.display = '';
-        
-        // Force GPU acceleration
-        postsContainer.style.transform = 'translateZ(0)';
-        postsContainer.style.webkitTransform = 'translateZ(0)';
-    }
-    
-    // Extract tab name from URL
+    });
+
+    /* ── extract tab from URL ── */
+
     function extractTabFromURL() {
-        const path = window.location.pathname;
-        if (path.includes('/videos/')) return 'videos';
-        if (path.includes('/audios/')) return 'audio';
-        if (path.includes('/text-posts/')) return 'text';
+        const p = window.location.pathname;
+        if (p.includes('/videos/'))     return 'videos';
+        if (p.includes('/text-posts/')) return 'text';
         return 'posts';
     }
-    
-    // Back button
+
+    /* ── back button ── */
+
     const backBtn = document.getElementById('kvibe-back-btn');
     if (backBtn) {
-        backBtn.addEventListener('click', function() {
-            if (window.history.length > 1) {
-                window.history.back();
-            } else {
-                window.location.href = '/';
-            }
+        backBtn.addEventListener('click', function () {
+            window.history.length > 1 ? window.history.back() : (window.location.href = '/');
         });
     }
-    
-    // Initialize on DOM ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializePage);
-    } else {
-        initializePage();
+
+    /* ── init ── */
+
+    function initializePage() {
+        const initialTab = extractTabFromURL();
+        updateActiveTab(initialTab);
+        showMoodFilter(initialTab === 'posts');
+        initializeLazyLoading();
+        // seed posts-tab cache from server-rendered HTML
+        if (initialTab === 'posts') tabCache['posts'] = postsContainer.innerHTML;
+        tabs.forEach(tab => tab.addEventListener('click', handleTabClick));
     }
-    
-    // Export functions for debugging
+
+    document.readyState === 'loading'
+        ? document.addEventListener('DOMContentLoaded', initializePage)
+        : initializePage();
+
+    /* ── public API ── */
+
     window.KvibeProfile = {
-        reloadTab: function(tabName) {
-            const tabElement = document.querySelector(`[data-tab="${tabName}"]`);
-            if (tabElement) {
-                const url = tabElement.getAttribute('data-url') + '?ajax=1';
-                loadTabContent(tabName, url);
-            }
+        reloadTab(tabName) {
+            const el = document.querySelector('[data-tab="' + tabName + '"]');
+            if (el) { delete tabCache[tabName]; loadTabContent(tabName, el.getAttribute('data-url') + '?ajax=1'); }
         },
-        refreshPage: function() {
-            location.reload();
-        },
-        isWebView: isWebView,
-        shareProfile: shareProfile,
-        showToast: showToast
+        refreshPage() { location.reload(); },
+        isWebView, shareProfile, showToast
     };
 })();
 
@@ -4985,7 +5204,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function run() {
-        const posts = Array.from(document.querySelectorAll('.kvibe-post-item[data-mood]'));
+        const posts = Array.from(document.querySelectorAll('.kvibe-post-item[data-mood], .kvibe-grid-item[data-mood]'));
         if (!posts.length) return;
 
         // Count moods
@@ -5156,12 +5375,106 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 // Profile mood filter function
+// ════════════════════════════════════════════════════
+// POST CARD FUNCTIONS — text feed
+// ════════════════════════════════════════════════════
+
+// Expand / collapse long text posts
+function kvibeToggleText(postId) {
+    const el = document.getElementById('kvibe-text-' + postId);
+    if (!el) return;
+    const btn  = el.nextElementSibling;
+    if (!btn || !btn.classList.contains('kvibe-text-toggle')) return;
+    const span = btn.querySelector('span');
+    const icon = btn.querySelector('i');
+    if (el.classList.contains('collapsed')) {
+        el.classList.replace('collapsed', 'expanded');
+        if (span) span.textContent = 'less';
+        if (icon) { icon.classList.replace('fa-chevron-down', 'fa-chevron-up'); }
+    } else {
+        el.classList.replace('expanded', 'collapsed');
+        if (span) span.textContent = 'more';
+        if (icon) { icon.classList.replace('fa-chevron-up', 'fa-chevron-down'); }
+    }
+}
+
+// Like button with heart animation + particles
+function kvibeHandleLike(btn, postId) {
+    if (!btn) return;
+    const icon     = btn.querySelector('.kvibe-action-icon');
+    const countEl  = btn.querySelector('.kvibe-like-count');
+    const isLiked  = icon && icon.classList.contains('fas');
+    if (icon) {
+        icon.classList.add('kvibe-heart-animate');
+        icon.addEventListener('animationend', () => icon.classList.remove('kvibe-heart-animate'), { once: true });
+        if (isLiked) {
+            icon.classList.replace('fas', 'fa-regular');
+            icon.style.color = '';
+        } else {
+            icon.classList.replace('fa-regular', 'fas');
+            icon.style.color = '#ed4956';
+            spawnParticles(btn);
+            spawnFloatLabel(btn, '+1');
+        }
+    }
+    if (countEl) {
+        const cur = parseInt(countEl.textContent) || 0;
+        countEl.textContent = isLiked ? Math.max(0, cur - 1) : cur + 1;
+        countEl.classList.add('kvibe-count-tick');
+        countEl.addEventListener('animationend', () => countEl.classList.remove('kvibe-count-tick'), { once: true });
+    }
+}
+
+// Particle burst helper
+function spawnParticles(anchorEl) {
+    const container = document.createElement('div');
+    container.className = 'kvibe-particle-container';
+    anchorEl.style.position = 'relative';
+    anchorEl.appendChild(container);
+    const colors = ['#ed4956','#ff8c00','#ffd700','#ff69b4','#9b59b6'];
+    for (let i = 0; i < 8; i++) {
+        const p = document.createElement('div');
+        p.className = 'kvibe-particle';
+        const angle = (i / 8) * 2 * Math.PI;
+        const dist  = 28 + Math.random() * 18;
+        p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+        p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+        p.style.background = colors[i % colors.length];
+        container.appendChild(p);
+    }
+    setTimeout(() => container.remove(), 600);
+}
+
+// Float label helper
+function spawnFloatLabel(anchorEl, text) {
+    const lbl = document.createElement('div');
+    lbl.className = 'kvibe-float-label';
+    lbl.textContent = text;
+    anchorEl.style.position = 'relative';
+    anchorEl.appendChild(lbl);
+    setTimeout(() => lbl.remove(), 750);
+}
+
+// Repost toggle
+function kvibeToggleRepostBtn(btn, postId) {
+    if (!btn) return;
+    const icon     = btn.querySelector('.fa-retweet');
+    const countEl  = btn.querySelector('.kvibe-repost-count');
+    const isActive = icon && icon.classList.contains('reposted');
+    if (icon) icon.classList.toggle('reposted', !isActive);
+    if (countEl) {
+        const cur = parseInt(countEl.textContent) || 0;
+        countEl.textContent = isActive ? Math.max(0, cur - 1) : cur + 1;
+        countEl.classList.toggle('kvibe-show', !isActive ? cur + 1 > 0 : cur - 1 > 0);
+    }
+}
+
 function profileFilterMood(mood, btn) {
     // Update active chip
     document.querySelectorAll('.kvibe-profile-mood-chip').forEach(c => c.classList.remove('active'));
     if (btn) btn.classList.add('active');
 
-    document.querySelectorAll('.kvibe-post-item[data-mood]').forEach(post => {
+    document.querySelectorAll('.kvibe-post-item[data-mood], .kvibe-grid-item[data-mood]').forEach(post => {
         if (mood === 'all') {
             post.classList.remove('mood-hidden');
         } else if (mood.startsWith('__custom__')) {

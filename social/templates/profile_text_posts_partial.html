@@ -1,26 +1,90 @@
+{% load pwa %}
+{% load post_tags %}
+{% load humanize %}
 {% load static %}
+{% load time %}
+{% load text_filters %}  
+
 {% if posts %}
-<div class="kishiface-text-posts">
-    {% for post in posts %}
-        <div class="kishiface-text-item">
-            <a href="{% url 'post_comment' post.post_id %}" style="text-decoration: none; color: inherit;">
-                <div class="kishiface-text-card">
-                    <div class="kishiface-text-content">
-                        {{ post.content|truncatechars:250|linebreaks }}
-                    </div>
-                    <div class="kishiface-text-stats">
-                        <span><i class="fa-solid fa-heart"></i> {{post.likes.count}}</span>
-                        <span><i class="fa-solid fa-comment"></i> {{post.comments.count}}</span>
-                        <span><i class="fa-solid fa-clock"></i> {{post.created_at|timesince}}</span>
-                    </div>
-                </div>
-            </a>
+<div class="kvibe-text-feed">
+  {% for post in posts %}
+
+  <article class="kvibe-post"
+           data-post-id="{{ post.post_id }}"
+           data-mood="{{ post.mood|default:'' }}"
+           data-custom-mood="{{ post.custom_mood|default:'' }}">
+
+    <!-- ────────── Header ────────── -->
+    <div class="kvibe-post-header">
+
+      {% if post.author.profile.picture %}
+        <img src="{{ post.author.profile.picture.url }}"
+             class="kvibe-profile-pic"
+             alt="{{ post.author.username }}"
+             loading="lazy"
+             onerror="this.onerror=null;this.src='https://placehold.co/36x36/efefef/888?text=U';">
+      {% else %}
+        <img src="https://placehold.co/36x36/efefef/888?text=U"
+             class="kvibe-profile-pic"
+             alt="{{ post.author.username }}">
+      {% endif %}
+
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;">
+          <a href="{% url 'profile' post.author.username %}" class="kvibe-username">
+            {{ post.author.first_name }} {{ post.author.last_name }}
+          </a>
+          {% if post.author.profile.is_verify %}
+            <img src="{% static 'images/verify1.jpg' %}" width="15" height="15"
+                 alt="✓" style="vertical-align:middle;flex-shrink:0;">
+          {% endif %}
+          {% if post.mood %}
+            <span class="kvibe-mood-badge kvibe-mood-{{ post.mood }}">
+              <i class="fa-regular fa-face-smile"></i>
+              {{ post.get_mood_display|default:post.mood }}
+            </span>
+          {% endif %}
         </div>
-    {% endfor %}
-</div>
+        <div class="kvibe-post-time">
+          @{{ post.author.username }}&nbsp;&middot;&nbsp;{{ post.created_at|timesince }} ago
+        </div>
+      </div>
+
+      {% if request.user == post.author %}
+        <a href="{% url 'editpost' post.post_id %}" class="kvibe-edit-icon" title="Edit">
+          <i class="fas fa-edit"></i>
+        </a>
+      {% endif %}
+
+    </div><!-- /header -->
+
+    <!-- ────────── Text content ────────── -->
+    <div class="kvibe-post-content">
+      <div class="kvibe-post-text {% if post.content|length > 200 %}collapsed{% endif %}"
+           id="kvibe-text-{{ post.post_id }}">
+        {{ post.content|linebreaks }}
+      </div>
+      {% if post.content|length > 200 %}
+        <button class="kvibe-text-toggle"
+                onclick="kvibeToggleText('{{ post.post_id }}')">
+          <span>more</span>
+          <i class="fas fa-chevron-down"></i>
+        </button>
+      {% endif %}
+    </div><!-- /content -->
+
+    <!-- ────────── Engagement bar ────────── -->
+    {% include 'snippet/post_like.html' with post=post %}
+
+  </article>
+
+  {% endfor %}
+</div><!-- /kvibe-text-feed -->
+
 {% else %}
-<div class="kishiface-no-posts">
-    <h2 class="kishiface-no-posts-title">No text posts yet</h2>
-    <p class="kishiface-no-posts-text">When they write posts, they will show up here.</p>
+<div style="padding:64px 24px;text-align:center;color:#8e8e8e;">
+  <div style="font-size:48px;margin-bottom:14px;">✍️</div>
+  <h3 style="font-size:18px;font-weight:600;margin:0 0 6px;color:#262626;">No text posts yet</h3>
+  <p style="font-size:14px;margin:0;">Text posts will appear here.</p>
 </div>
 {% endif %}
