@@ -459,6 +459,43 @@
 .reply-action-btn .fa-edit:hover {
     color: #0095f6;
 }
+
+/* Follow / Following button styles */
+.kvibe-follow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid #0095f6;
+  background: #0095f6;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  line-height: 1;
+}
+.kvibe-follow-btn:hover {
+  background: #0074cc;
+  border-color: #0074cc;
+  color: white;
+}
+.kvibe-follow-btn--following {
+  background: transparent;
+  color: #65676b;
+  border: 1.5px solid #ccc;
+}
+.kvibe-follow-btn--following:hover {
+  background: #fff0f0;
+  border-color: #e53935;
+  color: #e53935;
+}
+.kvibe-follow-btn--following:hover span { font-size: 0; }
+.kvibe-follow-btn--following:hover span::after { content: "Unfollow"; font-size: 12px; }
+.kvibe-follow-btn i { font-size: 11px; }
   </style>
 </head>
 <body>
@@ -1209,10 +1246,60 @@ const quickReplies = [
     const box = document.getElementById('aiSuggestions');
     if(box) box.classList.remove('active');
   }
-  
-  // Update your existing resetInputUI function or ensure this runs
-  // Note: HTMX on-request logic in HTML calls `resetInputUI`
 
+  // ==========================================
+  // FOLLOW / UNFOLLOW
+  // ==========================================
+  function getCsrfFromMeta() {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+           document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  }
+
+  const KVIBE_CURRENT_USER_ID = "{{ request.user.id }}";
+
+  function kvibeToggleFollow(btn) {
+    const userId = btn.dataset.userId;
+    const username = btn.dataset.username;
+    const isFollowing = btn.classList.contains('kvibe-follow-btn--following');
+
+    if (String(userId) === String(KVIBE_CURRENT_USER_ID)) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch(`/follow/${userId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCsrfFromMeta(),
+        'Content-Type': 'application/json',
+      },
+    })
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      if (data.success) {
+        if (data.followed) {
+          btn.classList.add('kvibe-follow-btn--following');
+          btn.title = `Unfollow ${username}`;
+          btn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>';
+        } else {
+          btn.classList.remove('kvibe-follow-btn--following');
+          btn.title = `Follow ${username}`;
+          btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>';
+        }
+      } else {
+        btn.innerHTML = isFollowing
+          ? '<i class="fas fa-user-check"></i><span>Following</span>'
+          : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+      }
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.innerHTML = isFollowing
+        ? '<i class="fas fa-user-check"></i><span>Following</span>'
+        : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+    });
+  }
  </script>
 </body>
 </html>

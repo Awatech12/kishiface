@@ -24,7 +24,7 @@ def format_post_text(text):
     def replace_mention(match):
         username = match.group(1)
         if User.objects.filter(username=username).exists():
-            return f'<a href="/profile/{username}/" class="kf-mention-link">@{username}</a>'
+            return f'<a href="/{username}/" class="kf-mention-link">@{username}</a>'
         return match.group(0)
     
     text = re.sub(mention_pattern, replace_mention, text)
@@ -93,7 +93,7 @@ def format_comment_text(text):
     def replace_mention(match):
         username = match.group(1)
         if User.objects.filter(username=username).exists():
-            return f'<a href="/profile/{username}/" class="kf-mention-link">@{username}</a>'
+            return f'<a href="/{username}/" class="kf-mention-link">@{username}</a>'
         return match.group(0)
     
     text = re.sub(mention_pattern, replace_mention, text)

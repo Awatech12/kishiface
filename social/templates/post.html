@@ -7018,18 +7018,40 @@
         // =================== Image Functions ===================
         function handleImageSelect(input) {
             const files = Array.from(input.files);
-            // Separate videos from images for proper handling
+            const imageFiles = [];
+            let galleryVideoFile = null;
+
             files.forEach(file => {
                 if (file.type && file.type.startsWith('video/')) {
-                    // Treat gallery video same as recorded video (goes to selectedImages but flagged)
-                    file._isGalleryVideo = true;
+                    // Route gallery video to video_file input, same as recorded video
+                    galleryVideoFile = file;
+                } else {
+                    imageFiles.push(file);
                 }
             });
-            selectedImages = [...selectedImages, ...files];
+
+            // Handle gallery video — put it in videoFileInput so the backend receives it on 'video_file'
+            if (galleryVideoFile) {
+                currentVideoBlob = galleryVideoFile;
+                const dt = new DataTransfer();
+                dt.items.add(galleryVideoFile);
+                if (videoFileInput) videoFileInput.files = dt.files;
+
+                // Show in the video player UI
+                const videoUrl = URL.createObjectURL(galleryVideoFile);
+                if (videoElement) { videoElement.src = videoUrl; videoElement.load(); }
+                if (videoPlayer) videoPlayer.classList.add('active');
+            }
+
+            // Handle image files normally
+            if (imageFiles.length > 0) {
+                selectedImages = [...selectedImages, ...imageFiles];
+            }
+
             renderImagePreviews();
             updatePreview();
             updateFileSizeDisplay();
-            const hasVideo = files.some(f => f.type && f.type.startsWith('video/'));
+            const hasVideo = !!galleryVideoFile;
             createFloatingEmoji(hasVideo ? '🎬' : '📸', window.innerWidth/2, 100);
             vibeVibrate(20);
             updateShareButtonState();
@@ -7351,10 +7373,37 @@
         function handleGalleryFromVideoRecorder(input) {
             const files = Array.from(input.files);
             if (!files.length) return;
-            selectedImages = [...selectedImages, ...files];
-            const dt = new DataTransfer();
-            selectedImages.forEach(f => dt.items.add(f));
-            imageInput.files = dt.files;
+
+            const imageFiles = [];
+            let galleryVideoFile = null;
+
+            files.forEach(file => {
+                if (file.type && file.type.startsWith('video/')) {
+                    galleryVideoFile = file;
+                } else {
+                    imageFiles.push(file);
+                }
+            });
+
+            if (galleryVideoFile) {
+                // Route video to video_file input, same as recorded video
+                currentVideoBlob = galleryVideoFile;
+                const dt = new DataTransfer();
+                dt.items.add(galleryVideoFile);
+                if (videoFileInput) videoFileInput.files = dt.files;
+
+                const videoUrl = URL.createObjectURL(galleryVideoFile);
+                if (videoElement) { videoElement.src = videoUrl; videoElement.load(); }
+                if (videoPlayer) videoPlayer.classList.add('active');
+            }
+
+            if (imageFiles.length > 0) {
+                selectedImages = [...selectedImages, ...imageFiles];
+                const dt2 = new DataTransfer();
+                selectedImages.forEach(f => dt2.items.add(f));
+                imageInput.files = dt2.files;
+            }
+
             renderImagePreviews();
             updatePreview();
             updateFileSizeDisplay();
@@ -9430,44 +9479,116 @@
 
         // Form submission
         document.getElementById('postForm').addEventListener('submit', function(e) {
+            e.preventDefault(); // Always prevent default — we submit manually via fetch
+
             // If text style mode is ON and no image has been generated yet, auto-generate it first
             if (textStyleMode && !textImageBlob) {
                 const preview = document.getElementById('textPreviewContent');
                 const text = preview.innerText.trim();
                 if (text) {
-                    e.preventDefault();
-                    // Auto-generate the image then resubmit
                     generateTextImageThenSubmit(this);
                     return;
                 }
             }
 
             const hasContent = textarea.value.trim().length > 0 || selectedImages.length > 0 || currentVideoBlob;
-            
+
             if (!hasContent) {
-                e.preventDefault();
                 showAlert('empty post', 'add something bestie ✨', '💅', [
                     {text: 'ok', type: 'primary'}
                 ]);
                 return;
             }
-            
+
             const randomMessage = genZLoadingMessages[Math.floor(Math.random() * genZLoadingMessages.length)];
             const randomSubtext = genZLoadingSubtexts[Math.floor(Math.random() * genZLoadingSubtexts.length)];
             loadingText.textContent = randomMessage;
             loadingSubtext.textContent = randomSubtext;
-            
+
             loadingOverlay.classList.add('active');
             sharePostBtn.disabled = true;
             sharePostBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> posting...';
-            
+
             for (let i = 0; i < 5; i++) {
                 setTimeout(() => {
                     const emojis = ['✨', '🔥', '💅', '⭐', '🎵', '🚀'];
-                    createFloatingEmoji(emojis[Math.floor(Math.random() * emojis.length)], 
+                    createFloatingEmoji(emojis[Math.floor(Math.random() * emojis.length)],
                         window.innerWidth/2, window.innerHeight/2);
                 }, i * 200);
             }
+
+            // Build FormData manually so gallery videos always go to 'video_file',
+            // never accidentally to 'images'. This is more reliable than DataTransfer
+            // on mobile browsers (Android Chrome especially).
+            const fd = new FormData();
+
+            // CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (csrfToken) fd.append('csrfmiddlewaretoken', csrfToken.value);
+
+            // Text content
+            fd.append('content', textarea.value || '');
+
+            // Mood fields
+            const moodInput = document.querySelector('[name=mood]');
+            const customMoodInput = document.querySelector('[name=custom_mood]');
+            if (moodInput) fd.append('mood', moodInput.value || '');
+            if (customMoodInput) fd.append('custom_mood', customMoodInput.value || '');
+
+            // Video: use currentVideoBlob (covers both recorded AND gallery video)
+            if (currentVideoBlob) {
+                const ext = currentVideoBlob.type && currentVideoBlob.type.includes('webm') ? 'webm' : 'mp4';
+                fd.append('video_file', currentVideoBlob, `video.${ext}`);
+            }
+
+            // Images: only add files that are NOT videos
+            selectedImages.forEach((file, i) => {
+                if (!file.type || !file.type.startsWith('video/')) {
+                    fd.append('images', file, file.name || `image_${i}`);
+                }
+            });
+
+            // Audio file
+            const audioInput = document.querySelector('[name=audio_file]');
+            if (audioInput && audioInput.files && audioInput.files[0]) {
+                fd.append('audio_file', audioInput.files[0]);
+            }
+
+            fetch(this.action, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(res => {
+                if (res.redirected) {
+                    window.location.href = res.url;
+                    return;
+                }
+                const contentType = res.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    return res.json().then(data => {
+                        if (data.success && data.redirect) {
+                            window.location.href = data.redirect;
+                        } else if (!data.success) {
+                            throw new Error(data.error || 'Post failed');
+                        } else {
+                            window.location.href = '/home';
+                        }
+                    });
+                }
+                if (res.ok) {
+                    window.location.href = '/home';
+                } else {
+                    return res.text().then(text => { throw new Error(text); });
+                }
+            })
+            .catch(err => {
+                loadingOverlay.classList.remove('active');
+                sharePostBtn.disabled = false;
+                sharePostBtn.innerHTML = 'Share ✨';
+                console.error('Post failed:', err);
+                showAlert('oops!', 'post failed, try again 😅', '❌', [{text: 'ok', type: 'primary'}]);
+            });
         });
 
         // Initialize

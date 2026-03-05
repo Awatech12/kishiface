@@ -1997,8 +1997,8 @@
       padding: 5px 12px;
       border-radius: 20px;
       border: 1.5px solid var(--kvibe-primary);
-      background: transparent;
-      color: var(--kvibe-primary);
+      background: var(--kvibe-primary);
+      color: white;
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
@@ -2009,19 +2009,21 @@
     }
 
     .kvibe-follow-btn:hover {
-      background: var(--kvibe-primary);
+      background: #0074cc;
+      border-color: #0074cc;
       color: white;
     }
 
     .kvibe-follow-btn--following {
-      background: var(--kvibe-primary);
-      color: white;
+      background: transparent;
+      color: #65676b;
+      border: 1.5px solid #ccc;
     }
 
     .kvibe-follow-btn--following:hover {
-      background: #e53935;
+      background: #fff0f0;
       border-color: #e53935;
-      color: white;
+      color: #e53935;
     }
 
     .kvibe-follow-btn--following:hover i::before {
@@ -2642,6 +2644,7 @@
                   class="kvibe-profile-pic"
                   alt="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}"
                   loading="lazy"
+                  onerror="this.onerror=null;this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';"
                 >
                 <div style="flex: 1;">
                   <div style="display: flex; align-items: center; flex-wrap: wrap;">
@@ -3218,6 +3221,7 @@
             <!-- Following List -->
             <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-following">
               {% for profile_obj in sidebar_followings %}
+              {% if profile_obj.user != request.user %}
               <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
                 <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
                 <div class="kvibe-sidebar-user-info">
@@ -3230,6 +3234,7 @@
                   <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
                 </div>
               </a>
+              {% endif %}
               {% empty %}
               <div class="kvibe-sidebar-empty">
                 <i class="fas fa-user-friends"></i>
@@ -3241,6 +3246,7 @@
             <!-- Followers List -->
             <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-followers">
               {% for profile_obj in sidebar_followers %}
+              {% if profile_obj.user != request.user %}
               <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
                 <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
                 <div class="kvibe-sidebar-user-info">
@@ -3253,6 +3259,7 @@
                   <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
                 </div>
               </a>
+              {% endif %}
               {% empty %}
               <div class="kvibe-sidebar-empty">
                 <i class="fas fa-user-friends"></i>
@@ -3332,6 +3339,7 @@
         <!-- Following List -->
         <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-mob-following">
           {% for profile_obj in sidebar_followings %}
+          {% if profile_obj.user != request.user %}
           <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
             <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
             <div class="kvibe-sidebar-user-info">
@@ -3344,6 +3352,7 @@
               <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
             </div>
           </a>
+          {% endif %}
           {% empty %}
           <div class="kvibe-sidebar-empty">
             <i class="fas fa-user-friends"></i>
@@ -3355,6 +3364,7 @@
         <!-- Followers List -->
         <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-mob-followers">
           {% for profile_obj in sidebar_followers %}
+          {% if profile_obj.user != request.user %}
           <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
             <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
             <div class="kvibe-sidebar-user-info">
@@ -3367,6 +3377,7 @@
               <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
             </div>
           </a>
+          {% endif %}
           {% empty %}
           <div class="kvibe-sidebar-empty">
             <i class="fas fa-user-friends"></i>
@@ -4354,7 +4365,7 @@
           const repostHeader = p.is_repost
             ? `<div class="kvibe-repost-header">
                 <i class="fas fa-retweet"></i>
-                <span><a href="/profile/${kvibeEscapeHtml(p.author_username)}/">${kvibeEscapeHtml(p.author_name)}</a> reposted</span>
+                <span><a href="/${kvibeEscapeHtml(p.author_username)}/">${kvibeEscapeHtml(p.author_name)}</a> reposted</span>
                </div>` : '';
 
           const repostCaption = (p.is_repost && p.repost_content)
@@ -4389,10 +4400,10 @@
           return `<article class="kvibe-post" data-post-id="${kvibeEscapeHtml(p.post_id)}" data-mood="${kvibeEscapeHtml(p.mood)}" data-custom-mood="${kvibeEscapeHtml(p.custom_mood)}">
             ${repostHeader}
             <div class="kvibe-post-header">
-              <img src="${kvibeEscapeHtml(p.original_author_pic)}" class="kvibe-profile-pic" alt="${kvibeEscapeHtml(p.original_author_username)}" loading="lazy">
+              <img src="${p.original_author_pic || 'https://placehold.co/40x40/dbdbdb/8e8e8e?text=U'}" class="kvibe-profile-pic" alt="${kvibeEscapeHtml(p.original_author_username)}" loading="lazy" onerror="this.onerror=null;this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';">
               <div style="flex:1;">
                 <div style="display:flex;align-items:center;flex-wrap:wrap;">
-                  <a href="/profile/${kvibeEscapeHtml(p.original_author_username)}/" class="kvibe-username">
+                  <a href="/${kvibeEscapeHtml(p.original_author_username)}/" class="kvibe-username">
                     ${kvibeEscapeHtml(p.original_author_name)} ${verifiedBadge(p.original_author_verified)}
                   </a>
                   ${moodBadge}
@@ -4521,6 +4532,7 @@
             const data = await resp.json();
 
             if (data.posts && data.posts.length) {
+
               const fragment = document.createDocumentFragment();
               data.posts.forEach(p => {
                 const tmp = document.createElement('div');

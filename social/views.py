@@ -166,13 +166,19 @@ def home(request):
     # All users (new or existing) see posts - new users see all posts with follow option
     # For new users with no following, show all posts (so they can discover & follow)
     if not following:
-        posts = Post.objects.exclude(author=request.user).order_by('-created_at')
+        posts = Post.objects.exclude(author=request.user).order_by('-created_at').select_related(
+            'author', 'author__profile',
+            'original_post', 'original_post__author', 'original_post__author__profile'
+        ).prefetch_related('likes', 'reposts', 'images')
     else:
         posts = Post.objects.filter(
             Q(author__in=following) |
             Q(author=request.user) |
             Q(is_repost=True, author__in=following)
-        ).order_by('-created_at')
+        ).order_by('-created_at').select_related(
+            'author', 'author__profile',
+            'original_post', 'original_post__author', 'original_post__author__profile'
+        ).prefetch_related('likes', 'reposts', 'images')
 
     # Paginate: 10 posts per page on initial load
     POSTS_PER_PAGE = 10
@@ -207,6 +213,14 @@ def home(request):
 
 
 @login_required(login_url='/')
+def _safe_pic_url(request, profile_or_none):
+    """Return picture URL exactly like Django template: {{ profile.picture.url }}"""
+    try:
+        return profile_or_none.picture.url
+    except Exception:
+        return ''
+
+
 def load_more_posts(request):
     """AJAX endpoint: returns the next page of posts as JSON for infinite scroll."""
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -218,10 +232,15 @@ def load_more_posts(request):
     page_number = int(request.GET.get('page', 2))
     POSTS_PER_PAGE = 10
 
+    base_qs = Post.objects.select_related(
+        'author', 'author__profile',
+        'original_post', 'original_post__author', 'original_post__author__profile'
+    ).prefetch_related('likes', 'reposts', 'images')
+
     if not following:
-        posts = Post.objects.exclude(author=request.user).order_by('-created_at')
+        posts = base_qs.exclude(author=request.user).order_by('-created_at')
     else:
-        posts = Post.objects.filter(
+        posts = base_qs.filter(
             Q(author__in=following) |
             Q(author=request.user) |
             Q(is_repost=True, author__in=following)
@@ -268,12 +287,12 @@ def load_more_posts(request):
             'is_repost': post.is_repost,
             'author_username': post.author.username,
             'author_name': '{} {}'.format(post.author.first_name, post.author.last_name),
-            'author_pic': post.author.profile.picture.url,
+            'author_pic': _safe_pic_url(request, getattr(post.author, 'profile', None)),
             'author_verified': post.author.profile.is_verify,
             'author_id': post.author.id,
             'original_author_username': post.original_post.author.username if post.is_repost and post.original_post else post.author.username,
             'original_author_name': '{} {}'.format(post.original_post.author.first_name, post.original_post.author.last_name) if post.is_repost and post.original_post else '{} {}'.format(post.author.first_name, post.author.last_name),
-            'original_author_pic': post.original_post.author.profile.picture.url if post.is_repost and post.original_post else post.author.profile.picture.url,
+            'original_author_pic': _safe_pic_url(request, getattr(post.original_post.author, 'profile', None)) if post.is_repost and post.original_post else _safe_pic_url(request, getattr(post.author, 'profile', None)),
             'original_author_verified': post.original_post.author.profile.is_verify if post.is_repost and post.original_post else post.author.profile.is_verify,
             'original_author_id': post.original_post.author.id if post.is_repost and post.original_post else post.author.id,
             'content': post.original_post.content if post.is_repost and post.original_post else post.content,
@@ -295,7 +314,7 @@ def load_more_posts(request):
             'is_reposted': request.user in post.reposts.all() if hasattr(post, 'reposts') else False,
             'repost_count': post.reposts.count() if hasattr(post, 'reposts') else 0,
             'view_count': post.view if hasattr(post, 'view') and post.view else 0,
-            'liker_pics': [u.profile.picture.url for u in post.likes.all()[:3]],
+            'liker_pics': [_safe_pic_url(request, getattr(u, 'profile', None)) for u in post.likes.all()[:3] if _safe_pic_url(request, getattr(u, 'profile', None))],
         })
 
     return JsonResponse({
@@ -477,6 +496,10 @@ def post(request):
             PostImage.objects.create(post=post, image=image)
         
         messages.success(request, 'Post dropped successfully! ✨')
+        
+        # If called via fetch (AJAX), return JSON so JS can redirect
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'redirect': '/home'})
         return redirect('home')
     
     return render(request, 'post.html')
@@ -546,8 +569,10 @@ def post_comment(request, post_id):
     post.view +=1
     post.save()
     comments=PostComment.objects.filter(post=post).order_by('-created_at')
-
-    return render(request, 'postcomment.html', {'post':post, 'comments': comments})
+    following_ids = []
+    if request.user.is_authenticated:
+        following_ids = list(Profile.objects.get(user=request.user).followings.values_list('user', flat=True))
+    return render(request, 'postcomment.html', {'post':post, 'comments': comments, 'following_ids': following_ids})
 
 
 @login_required(login_url='/')
@@ -595,11 +620,12 @@ def postcomment(request, post_id):
     # --- HANDLE GET REQUEST (Modal loading) ---
     # This fetches all existing comments when you open the modal
     comments = post.comments.all().order_by('-created_at')
+    following_ids = list(Profile.objects.get(user=request.user).followings.values_list('user', flat=True))
     
     return render(
         request, 
         'postcomment.html', # Or the specific template fragment containing the list
-        {'post': post, 'comments': comments}
+        {'post': post, 'comments': comments, 'following_ids': following_ids}
     )
 
 @login_required(login_url='/')
@@ -2003,29 +2029,69 @@ def delete_reply(request, reply_id):
     return JsonResponse({'success': True})
 
 @login_required(login_url='/')
+@login_required(login_url='login')
 def hashtag_view(request, tag_name):
     """View posts containing a specific hashtag"""
     from django.db.models import Q
-    
-    # Search for posts containing the hashtag (both original posts and reposts)
+
+    profile = request.user.profile
+
+    # Posts containing this hashtag (original + reposts of matching originals)
     posts = Post.objects.filter(
-        Q(content__icontains=f'#{tag_name}') | 
+        Q(content__icontains=f'#{tag_name}') |
         Q(original_post__content__icontains=f'#{tag_name}')
-    ).order_by('-created_at').select_related('author', 'original_post')
-    
-    # Get related hashtags
+    ).order_by('-created_at').select_related(
+        'author', 'author__profile',
+        'original_post', 'original_post__author', 'original_post__author__profile'
+    ).prefetch_related('likes', 'reposts', 'images')
+
+    post_count = posts.count()
+
+    # Related hashtags — from the same post set (exclude current tag)
     all_hashtags = {}
-    recent_posts = Post.objects.all()[:100]
-    for post in recent_posts:
-        hashtags = extract_hashtags(post.content)
-        for tag in hashtags:
-            all_hashtags[tag] = all_hashtags.get(tag, 0) + 1
-    
+    for post in posts[:200]:
+        content = post.original_post.content if post.is_repost and post.original_post else post.content
+        if content:
+            for tag in extract_hashtags(content):
+                if tag.lower() != tag_name.lower():
+                    all_hashtags[tag] = all_hashtags.get(tag, 0) + 1
+
     related_hashtags = sorted(all_hashtags.items(), key=lambda x: x[1], reverse=True)[:10]
-    
+
+    # following_ids — flat list of user IDs the current user follows (same as home view)
+    # Used in template for O(1) follow button state: {% if post_author.id in following_ids %}
+    following_ids = list(profile.followings.values_list('user', flat=True))
+
+    # Sidebar: following / followers lists (same as home view)
+    sidebar_followings = profile.followings.select_related('user', 'user__profile').all()
+    sidebar_followers  = profile.followers.select_related('user', 'user__profile').all()
+
+    # Trending hashtags for sidebar (from recent global posts)
+    hashtag_counts = {}
+    recent_posts = Post.objects.filter(content__isnull=False).order_by('-created_at')[:200]
+    for post in recent_posts:
+        if post.content:
+            for tag in extract_hashtags(post.content):
+                hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
+    trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
+    # Unread counts for nav badges
+    unread_follow_count = FollowNotification.objects.filter(
+        to_user=request.user, is_read=False
+    ).count()
+    unread_notifications_count = Notification.objects.filter(
+        recipient=request.user, is_read=False
+    ).count()
+
     return render(request, 'hashtag_view.html', {
         'tag_name': tag_name,
         'posts': posts,
+        'post_count': post_count,
         'related_hashtags': related_hashtags,
-        'post_count': posts.count()
+        'following_ids': following_ids,
+        'sidebar_followings': sidebar_followings,
+        'sidebar_followers': sidebar_followers,
+        'trending_hashtags': trending_hashtags,
+        'unread_follow_count': unread_follow_count,
+        'unread_notifications_count': unread_notifications_count,
     })
