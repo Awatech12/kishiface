@@ -5265,10 +5265,40 @@ document.addEventListener('DOMContentLoaded', function() {
         updateActiveTab(initialTab);
         showMoodFilter(initialTab === 'posts');
         initializeLazyLoading();
-        // seed posts-tab cache from server-rendered HTML
-        if (initialTab === 'posts') tabCache['posts'] = postsContainer.innerHTML;
+
+        // Seed cache from whatever the server rendered into postsContainer.
+        // This covers ALL tabs (posts, videos, text) so that navigating away
+        // and pressing Back finds the content in the cache rather than showing
+        // a blank container.
+        const rendered = postsContainer.innerHTML.trim();
+        if (rendered) tabCache[initialTab] = rendered;
+
+        // If the URL says we're on the text (or videos) tab but the container
+        // is empty (e.g. the server returned a full page for the posts URL and
+        // then pushState changed the address bar), fetch the real content now.
+        if (!rendered && initialTab !== 'posts') {
+            const el = document.querySelector('[data-tab="' + initialTab + '"]');
+            if (el) loadTabContent(initialTab, el.getAttribute('data-url') + '?ajax=1');
+        }
+
         tabs.forEach(tab => tab.addEventListener('click', handleTabClick));
     }
+
+    // pageshow fires on both normal loads AND bfcache restores (persisted=true).
+    // When the browser pops the page from bfcache the in-memory tabCache is gone,
+    // so we re-seed it from whatever is currently in postsContainer.
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) return;          // normal load – initializePage already ran
+        const activeTab = currentTab || extractTabFromURL();
+        const rendered  = postsContainer ? postsContainer.innerHTML.trim() : '';
+        if (rendered) {
+            tabCache[activeTab] = rendered;
+        } else {
+            // Container is blank after bfcache restore – reload the active tab
+            const el = document.querySelector('[data-tab="' + activeTab + '"]');
+            if (el) loadTabContent(activeTab, el.getAttribute('data-url') + '?ajax=1');
+        }
+    });
 
     document.readyState === 'loading'
         ? document.addEventListener('DOMContentLoaded', initializePage)
