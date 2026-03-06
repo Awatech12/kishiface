@@ -64,12 +64,6 @@
       {% endif %}
     </div>
 
-    <!-- Engagement wrapper — mirrors home.html kvibe-engagement-wrapper -->
-    <div id="kvibe-post-engagement-{{ post.post_id }}"
-         class="kvibe-engagement-wrapper"
-         data-like-count="{{ post.likes.count }}"
-         data-is-liked="{% if request.user in post.likes.all %}true{% else %}false{% endif %}">
-
     <!-- Action buttons -->
     <div class="kvibe-actions-container">
 
@@ -80,11 +74,11 @@
               onclick="kvibeLikePost(this)"
               style="border:none;font-family:inherit;cursor:pointer;">
         {% if request.user in post.likes.all %}
-          <i class="fas fa-heart kvibe-action-icon heart-animate" style="color:var(--kvibe-primary);"></i>
+          <i class="fas fa-heart kvibe-action-icon" style="color:var(--kvibe-primary);"></i>
         {% else %}
           <i class="fa-regular fa-heart kvibe-action-icon"></i>
         {% endif %}
-        <span class="kvibe-like-count kvibe-count">{% if post.likes.count > 0 %}{{ post.likes.count|intcomma }}{% endif %}</span>
+        <span class="kvibe-like-count" id="kvibe-like-count-{{ post.post_id }}">{% if post.likes.count > 0 %}{{ post.likes.count|intcomma }}{% endif %}</span>
       </button>
 
       <!-- COMMENT -->
@@ -119,56 +113,49 @@
 
     </div>
 
-    <!-- Likers + engagement row — matches home.html kvibe-engagement structure -->
-    <div class="kvibe-engagement">
-      <div class="kvibe-likers-container" id="kvibe-likers-{{ post.post_id }}">
-        {% if post.likes.count > 0 %}
-          {% for liker in post.likes.all|slice:":3" %}
-            <a href="{% url 'profile' liker.username %}" class="kvibe-liker-link" aria-label="{{ liker.username }}">
-              {% if liker.profile.picture and liker.profile.picture.name %}
-                <img src="{{ liker.profile.picture.url }}"
-                     onerror="this.onerror=null;this.src='https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}';"
-                     alt="{{ liker.username }}" class="kvibe-liker-pic">
-              {% else %}
-                <img src="https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}"
-                     alt="{{ liker.username }}" class="kvibe-liker-pic">
-              {% endif %}
-            </a>
-          {% endfor %}
-        {% endif %}
+    <!-- Likers + view count row -->
+    <div class="kvibe-engagement-row">
+      <!-- Likers avatars — always in DOM so JS can populate after first like -->
+      <div class="kvibe-likers-container" id="kvibe-likers-{{ post.post_id }}"{% if post.likes.count == 0 %} style="display:none;"{% endif %}>
+        {% for liker in post.likes.all|slice:":3" %}
+          <a href="{% url 'profile' liker.username %}" aria-label="{{ liker.username }}">
+            {% if liker.profile.picture and liker.profile.picture.name %}
+              <img src="{{ liker.profile.picture.url }}"
+                   onerror="this.onerror=null;this.src='https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}';"
+                   alt="{{ liker.username }}" class="kvibe-liker-pic">
+            {% else %}
+              <img src="https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}"
+                   alt="{{ liker.username }}" class="kvibe-liker-pic">
+            {% endif %}
+          </a>
+        {% endfor %}
       </div>
 
-      <div class="kvibe-engagement-item">
-        <span class="kvibe-like-text" id="kvibe-like-text-{{ post.post_id }}">
-          {% if post.likes.count == 0 %}
-            <span class="kvibe-no-likes">Be the first to like this</span>
-          {% elif request.user in post.likes.all %}
-            {% if post.likes.count == 1 %}
-              <span class="kvibe-you-text">Liked by You</span>
-            {% else %}
-              <span class="kvibe-you-text">Liked by You</span> and {{ post.likes.count|add:"-1" }} others
-            {% endif %}
+      <span class="kvibe-like-text" id="kvibe-like-text-{{ post.post_id }}">
+        {% if post.likes.count == 0 %}
+          <span class="kvibe-no-likes">Be the first to like this</span>
+        {% elif request.user in post.likes.all %}
+          {% if post.likes.count == 1 %}
+            <span class="kvibe-you-text">Liked by You</span>
           {% else %}
-            {% with liker=post.likes.first %}
-              Liked by <a href="{% url 'profile' liker.username %}"
-                          style="color:var(--kvibe-text);text-decoration:none;">{{ liker.username }}</a>{% if post.likes.count > 1 %} and {{ post.likes.count|add:"-1" }} others{% endif %}
-            {% endwith %}
+            <span class="kvibe-you-text">Liked by You</span> and {{ post.likes.count|add:"-1" }} others
           {% endif %}
-        </span>
-      </div>
+        {% else %}
+          {% with liker=post.likes.first %}
+            Liked by <a href="{% url 'profile' liker.username %}"
+                        style="color:var(--kvibe-text);text-decoration:none;">{{ liker.username }}</a>{% if post.likes.count > 1 %} and {{ post.likes.count|add:"-1" }} others{% endif %}
+          {% endwith %}
+        {% endif %}
+      </span>
 
       <span class="kvibe-separator-dot">·</span>
 
-      <div class="kvibe-engagement-item">
-        <span class="kvibe-view-text">
-          <i class="fa-regular fa-chart-bar"></i> {{ post.view|intcomma }}
-        </span>
-      </div>
+      <span class="kvibe-view-text">
+        <i class="fa-regular fa-chart-bar"></i> {{ post.view|intcomma }}
+      </span>
     </div>
 
-    </div><!-- /kvibe-engagement-wrapper -->
-
-        <!-- Share modal -->
+    <!-- Share modal -->
     <div class="kvibe-share-modal" id="kvibe-share-modal-{{ post.post_id }}"
          onclick="kvibeCloseShareModal('{{ post.post_id }}')">
       <div class="kvibe-share-modal-content" onclick="event.stopPropagation()">

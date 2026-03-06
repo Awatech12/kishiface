@@ -5544,54 +5544,110 @@ function kvibeGetCsrf() {
 
 // ── LIKE ─────────────────────────────────────────────
 function kvibeLikePost(btn) {
-    const postId  = btn.dataset.postId;
-    const isLiked = btn.dataset.liked === 'true';
-    const icon    = btn.querySelector('.kvibe-action-icon');
-    const countEl = btn.querySelector('.kvibe-like-count');
-    const textEl  = document.getElementById('kvibe-like-text-' + postId);
+    var postId    = btn.dataset.postId;
+    var prevLiked = btn.dataset.liked === 'true';
+    var icon      = btn.querySelector('.kvibe-action-icon');
+    // Use ID-based lookup first (reliable after AJAX tab load), fall back to querySelector
+    var countEl   = document.getElementById('kvibe-like-count-' + postId)
+                    || btn.querySelector('.kvibe-like-count');
+    var textEl    = document.getElementById('kvibe-like-text-' + postId);
+    var likersEl  = document.getElementById('kvibe-likers-' + postId);
 
-    // Optimistic UI
-    if (isLiked) {
+    // Snapshot before optimistic update so revert is accurate
+    var prevCount = parseInt(((countEl ? countEl.textContent : '') || '').replace(/,/g, '')) || 0;
+    var newCount  = prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1;
+
+    // ── Optimistic UI ──────────────────────────────────
+    btn.dataset.liked = prevLiked ? 'false' : 'true';
+    if (prevLiked) {
         icon.className = 'fa-regular fa-heart kvibe-action-icon';
         icon.removeAttribute('style');
-        btn.dataset.liked = 'false';
     } else {
         icon.className = 'fas fa-heart kvibe-action-icon kv-heart-pop';
         icon.style.color = 'var(--kvibe-primary)';
-        btn.dataset.liked = 'true';
-        icon.addEventListener('animationend', () => icon.classList.remove('kv-heart-pop'), { once: true });
+        icon.addEventListener('animationend', function() { icon.classList.remove('kv-heart-pop'); }, { once: true });
     }
+    if (countEl) countEl.textContent = newCount > 0 ? newCount.toLocaleString() : '';
+    _kvibeUpdateLikeText(textEl, newCount, !prevLiked);
+    if (likersEl) likersEl.style.display = newCount > 0 ? '' : 'none';
 
-    let count = parseInt((countEl.textContent || '').replace(/,/g, '')) || 0;
-    count = isLiked ? Math.max(0, count - 1) : count + 1;
-    countEl.textContent = count > 0 ? count.toLocaleString() : '';
-
-    if (textEl) {
-        const nowLiked = !isLiked;
-        if (count === 0) {
-            textEl.innerHTML = '<span class="kvibe-no-likes">Be the first to like this</span>';
-        } else if (nowLiked) {
-            textEl.innerHTML = count === 1
-                ? '<span class="kvibe-you-text">Liked by You</span>'
-                : '<span class="kvibe-you-text">Liked by You</span> and ' + (count - 1) + ' others';
-        } else {
-            textEl.innerHTML = 'Liked by ' + count + ' ' + (count === 1 ? 'person' : 'people');
-        }
-    }
-
-    fetch('/like_post/' + postId + '/', {
+    // ── Fetch ───────────────────────────────────────────
+    fetch('/like/' + postId, {
         method: 'GET',
         headers: { 'X-CSRFToken': kvibeGetCsrf(), 'X-Requested-With': 'XMLHttpRequest' }
-    }).catch(function() {
-        // revert on error
-        btn.dataset.liked = isLiked ? 'true' : 'false';
-        icon.className = isLiked
-            ? 'fas fa-heart kvibe-action-icon'
-            : 'fa-regular fa-heart kvibe-action-icon';
-        if (isLiked) icon.style.color = 'var(--kvibe-primary)';
-        else icon.removeAttribute('style');
-        const revert = isLiked ? count + 1 : Math.max(0, count - 1);
-        countEl.textContent = revert > 0 ? revert.toLocaleString() : '';
+    })
+    .then(function(res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+    })
+    .then(function(data) {
+        if (!data.success) throw new Error('Server error');
+        // Sync with server truth
+        var sc = data.like_count;
+        btn.dataset.liked = data.is_liked ? 'true' : 'false';
+        if (countEl) countEl.textContent = sc > 0 ? sc.toLocaleString() : '';
+        if (data.is_liked) {
+            icon.className = 'fas fa-heart kvibe-action-icon';
+            icon.style.color = 'var(--kvibe-primary)';
+        } else {
+            icon.className = 'fa-regular fa-heart kvibe-action-icon';
+            icon.removeAttribute('style');
+        }
+        _kvibeUpdateLikeText(textEl, sc, data.is_liked);
+        if (likersEl) {
+            _kvibeUpdateLikerAvatars(likersEl, data.liker_pics || [], data.liker_names || []);
+            likersEl.style.display = sc > 0 ? '' : 'none';
+        }
+    })
+    .catch(function() {
+        // Revert to exact previous state on any error
+        btn.dataset.liked = prevLiked ? 'true' : 'false';
+        if (prevLiked) {
+            icon.className = 'fas fa-heart kvibe-action-icon';
+            icon.style.color = 'var(--kvibe-primary)';
+        } else {
+            icon.className = 'fa-regular fa-heart kvibe-action-icon';
+            icon.removeAttribute('style');
+        }
+        if (countEl) countEl.textContent = prevCount > 0 ? prevCount.toLocaleString() : '';
+        _kvibeUpdateLikeText(textEl, prevCount, prevLiked);
+        if (likersEl) likersEl.style.display = prevCount > 0 ? '' : 'none';
+    });
+}
+
+// Update "Liked by You / Be the first to like" text span
+function _kvibeUpdateLikeText(el, count, isLiked) {
+    if (!el) return;
+    if (count === 0) {
+        el.innerHTML = '<span class="kvibe-no-likes">Be the first to like this</span>';
+    } else if (isLiked) {
+        el.innerHTML = count === 1
+            ? '<span class="kvibe-you-text">Liked by You</span>'
+            : '<span class="kvibe-you-text">Liked by You</span> and ' + (count - 1) + ' others';
+    } else {
+        el.innerHTML = 'Liked by ' + count + ' ' + (count === 1 ? 'person' : 'people');
+    }
+}
+
+// Rebuild the small liker avatar strip from server data
+function _kvibeUpdateLikerAvatars(container, pics, names) {
+    if (!container) return;
+    container.innerHTML = '';
+    pics.slice(0, 3).forEach(function(picUrl, i) {
+        if (!picUrl) return;
+        var username = (names && names[i]) ? names[i] : '';
+        var initial  = username.charAt(0).toUpperCase() || '?';
+        var fallback = 'https://placehold.co/24x24/cccccc/ffffff?text=' + initial;
+        var a = document.createElement('a');
+        a.href = '/profile/' + username + '/';
+        a.setAttribute('aria-label', username);
+        var img = document.createElement('img');
+        img.src = picUrl;
+        img.alt = username;
+        img.className = 'kvibe-liker-pic';
+        img.onerror = function() { this.onerror = null; this.src = fallback; };
+        a.appendChild(img);
+        container.appendChild(a);
     });
 }
 
