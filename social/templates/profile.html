@@ -2348,7 +2348,7 @@
                 border-bottom: 1px solid #f0f0f0;
                 border-top: 1px solid #f0f0f0;
                 position: sticky;
-                top: 0;
+                top: 52px;
                 z-index: 50;
             }
 
@@ -5534,29 +5534,25 @@ function kvibeLikePost(btn) {
     const postId  = btn.dataset.postId;
     const isLiked = btn.dataset.liked === 'true';
     const icon    = btn.querySelector('.kvibe-action-icon');
-    const countEl = btn.querySelector('.kvibe-like-count, .kvibe-count');
+    const countEl = btn.querySelector('.kvibe-like-count');
     const textEl  = document.getElementById('kvibe-like-text-' + postId);
-    const likersEl = document.getElementById('kvibe-likers-' + postId);
 
-    // ── Optimistic UI ──
+    // Optimistic UI
     if (isLiked) {
         icon.className = 'fa-regular fa-heart kvibe-action-icon';
         icon.removeAttribute('style');
         btn.dataset.liked = 'false';
     } else {
-        icon.className = 'fas fa-heart kvibe-action-icon heart-animate';
+        icon.className = 'fas fa-heart kvibe-action-icon kv-heart-pop';
         icon.style.color = 'var(--kvibe-primary)';
         btn.dataset.liked = 'true';
-        // Particle burst + floating label — same as home.html
-        if (typeof spawnParticles === 'function') spawnParticles(btn);
-        if (typeof spawnLabel    === 'function') spawnLabel(btn, '+1');
+        icon.addEventListener('animationend', () => icon.classList.remove('kv-heart-pop'), { once: true });
     }
 
-    let count = parseInt((countEl ? countEl.textContent : '').replace(/,/g, '')) || 0;
+    let count = parseInt((countEl.textContent || '').replace(/,/g, '')) || 0;
     count = isLiked ? Math.max(0, count - 1) : count + 1;
-    if (countEl) countEl.textContent = count > 0 ? count.toLocaleString() : '';
+    countEl.textContent = count > 0 ? count.toLocaleString() : '';
 
-    // Optimistic text update
     if (textEl) {
         const nowLiked = !isLiked;
         if (count === 0) {
@@ -5570,88 +5566,19 @@ function kvibeLikePost(btn) {
         }
     }
 
-    // ── Server call — get real liker pics + counts back ──
     fetch('/like_post/' + postId + '/', {
         method: 'GET',
         headers: { 'X-CSRFToken': kvibeGetCsrf(), 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(function(res) { return res.json(); })
-    .then(function(data) {
-        if (!data.success) return;
-
-        // Update count with real server value
-        const realCount = data.like_count;
-        if (countEl) countEl.textContent = realCount > 0 ? realCount.toLocaleString() : '';
-
-        // Update data attribute to reflect server state
-        btn.dataset.liked = data.is_liked ? 'true' : 'false';
-
-        // Update icon to match server state
-        if (data.is_liked) {
-            icon.className = 'fas fa-heart kvibe-action-icon heart-animate';
-            icon.style.color = 'var(--kvibe-primary)';
-        } else {
-            icon.className = 'fa-regular fa-heart kvibe-action-icon';
-            icon.removeAttribute('style');
-        }
-
-        // ── Update liker profile pictures (the key missing piece) ──
-        if (likersEl) {
-            if (realCount === 0 || !data.liker_pics || !data.liker_pics.length) {
-                likersEl.innerHTML = '';
-            } else {
-                likersEl.innerHTML = data.liker_pics.map(function(pic, i) {
-                    const name = (data.liker_names && data.liker_names[i]) || '';
-                    const fallback = name ? name.charAt(0).toUpperCase() : 'U';
-                    const profileUrl = name ? '/profile/' + name + '/' : '#';
-                    return '<a href="' + profileUrl + '" class="kvibe-liker-link" aria-label="' + name + '">' +
-                           '<img src="' + pic + '" class="kvibe-liker-pic" alt="' + name + '" ' +
-                           'onerror="this.onerror=null;this.src='https://placehold.co/24x24/cccccc/ffffff?text=' + fallback + '';">' +
-                           '</a>';
-                }).join('');
-            }
-        }
-
-        // ── Update like text with real server data (with liker names) ──
-        if (textEl) {
-            if (realCount === 0) {
-                textEl.innerHTML = '<span class="kvibe-no-likes">Be the first to like this</span>';
-            } else if (data.is_liked) {
-                textEl.innerHTML = realCount === 1
-                    ? '<span class="kvibe-you-text">Liked by You</span>'
-                    : '<span class="kvibe-you-text">Liked by You</span> and ' + (realCount - 1) + ' others';
-            } else {
-                const firstName = (data.liker_names && data.liker_names[0]) || '';
-                if (firstName) {
-                    const profileUrl = '/profile/' + firstName + '/';
-                    textEl.innerHTML = realCount === 1
-                        ? 'Liked by <a href="' + profileUrl + '" style="color:var(--kvibe-text);text-decoration:none;">' + firstName + '</a>'
-                        : 'Liked by <a href="' + profileUrl + '" style="color:var(--kvibe-text);text-decoration:none;">' + firstName + '</a> and ' + (realCount - 1) + ' others';
-                } else {
-                    textEl.innerHTML = 'Liked by ' + realCount + (realCount === 1 ? ' person' : ' people');
-                }
-            }
-        }
-
-        // Sync engagement-wrapper data attributes
-        const wrapper = btn.closest('.kvibe-engagement-wrapper');
-        if (wrapper) {
-            wrapper.dataset.likeCount = realCount;
-            wrapper.dataset.isLiked   = data.is_liked ? 'true' : 'false';
-        }
-    })
-    .catch(function() {
-        // Revert optimistic update on error
+    }).catch(function() {
+        // revert on error
         btn.dataset.liked = isLiked ? 'true' : 'false';
-        if (isLiked) {
-            icon.className = 'fas fa-heart kvibe-action-icon';
-            icon.style.color = 'var(--kvibe-primary)';
-        } else {
-            icon.className = 'fa-regular fa-heart kvibe-action-icon';
-            icon.removeAttribute('style');
-        }
-        const revertCount = isLiked ? count + 1 : Math.max(0, count - 1);
-        if (countEl) countEl.textContent = revertCount > 0 ? revertCount.toLocaleString() : '';
+        icon.className = isLiked
+            ? 'fas fa-heart kvibe-action-icon'
+            : 'fa-regular fa-heart kvibe-action-icon';
+        if (isLiked) icon.style.color = 'var(--kvibe-primary)';
+        else icon.removeAttribute('style');
+        const revert = isLiked ? count + 1 : Math.max(0, count - 1);
+        countEl.textContent = revert > 0 ? revert.toLocaleString() : '';
     });
 }
 
@@ -5811,7 +5738,4 @@ function profileFilterMood(mood, btn) {
 
 </body>
 </html>
-
-
-
 
