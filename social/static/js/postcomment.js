@@ -86,65 +86,58 @@
     const button = currentRepostButton;
     const icon = button.querySelector('i');
     const countSpan = button.querySelector('.kvibe-repost-count');
-    
-    
-    
-    const originalText = button.innerHTML;
+
+    const originalHTML = button.innerHTML;
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     button.disabled = true;
-    
+
     fetch(`/repost/${postId}/`, {
       method: 'POST',
       headers: {
         'X-CSRFToken': getCsrfFromMeta(),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        caption: caption,
-        undo: undo
-      })
+      body: JSON.stringify({ caption: caption, undo: undo })
     })
     .then(response => response.json())
     .then(data => {
+      button.disabled = false;
       if (data.success) {
         if (data.reposted) {
           showToast(data.message || 'Post reposted successfully!', 'success');
           button.setAttribute('data-reposted', 'true');
-          icon.classList.add('reposted');
-          
-          if (data.repost_count > 0) {
-            countSpan.textContent = data.repost_count;
-            countSpan.classList.add('show');
+          // Restore button with updated reposted state
+          button.innerHTML = originalHTML;
+          const freshIcon = button.querySelector('i');
+          if (freshIcon) freshIcon.classList.add('reposted');
+          if (countSpan) {
+            countSpan.textContent = data.repost_count > 0 ? data.repost_count : '';
+            if (data.repost_count > 0) countSpan.classList.add('show');
           }
-          
-          setTimeout(() => {
-            location.reload();
-          }, 800);
         } else {
           showToast(data.message || 'Repost removed', 'info');
           button.setAttribute('data-reposted', 'false');
-          icon.classList.remove('reposted');
-          
-          if (data.repost_count > 0) {
-            countSpan.textContent = data.repost_count;
-          } else {
-            countSpan.classList.remove('show');
+          button.innerHTML = originalHTML;
+          const freshIcon = button.querySelector('i');
+          if (freshIcon) freshIcon.classList.remove('reposted');
+          if (countSpan) {
+            if (data.repost_count > 0) {
+              countSpan.textContent = data.repost_count;
+            } else {
+              countSpan.textContent = '';
+              countSpan.classList.remove('show');
+            }
           }
-          
-          setTimeout(() => {
-            location.reload();
-          }, 800);
         }
       } else {
         showToast('Error: ' + data.error, 'error');
-        button.innerHTML = originalText;
-        button.disabled = false;
+        button.innerHTML = originalHTML;
       }
     })
     .catch(error => {
       console.error('Error:', error);
       showToast('Something went wrong. Please try again.', 'error');
-      button.innerHTML = originalText;
+      button.innerHTML = originalHTML;
       button.disabled = false;
     });
   }
@@ -436,39 +429,42 @@
   document.addEventListener('DOMContentLoaded', initInputUI);
 
   function initAudioWave(container, audioId) {
-    const wave = container.querySelector('.audio-wave');
+    const wave = container.querySelector('.kvibe-audio-wave');
     if (!wave) return;
     
-    const bars = wave.querySelectorAll('.wave-bar');
-    const audio = container.querySelector('.hidden-audio');
+    const bars = wave.querySelectorAll('.kvibe-wave-bar');
+    const audio = container.querySelector('.kvibe-hidden-audio');
     
     if (audio && bars.length > 0) {
+      const baseHeights = [4, 7, 10, 7, 4];
       bars.forEach((bar, index) => {
-        const baseHeight = [4, 6, 8, 6, 4][index] || 4;
-        bar.style.height = baseHeight + 'px';
+        bar.style.height = (baseHeights[index] || 4) + 'px';
       });
       
+      let waveInterval;
+
       audio.addEventListener('play', function() {
         container.classList.add('playing');
-        bars.forEach((bar, index) => {
-          const baseHeight = [4, 6, 8, 6, 4][index] || 4;
-          bar.style.height = baseHeight + 'px';
-        });
+        waveInterval = setInterval(() => {
+          bars.forEach((bar, index) => {
+            bar.style.height = (baseHeights[index] + Math.random() * 5) + 'px';
+          });
+        }, 150);
       });
       
       audio.addEventListener('pause', function() {
         container.classList.remove('playing');
+        clearInterval(waveInterval);
         bars.forEach((bar, index) => {
-          const baseHeight = [4, 6, 8, 6, 4][index] || 4;
-          bar.style.height = baseHeight + 'px';
+          bar.style.height = (baseHeights[index] || 4) + 'px';
         });
       });
       
       audio.addEventListener('ended', function() {
         container.classList.remove('playing');
+        clearInterval(waveInterval);
         bars.forEach((bar, index) => {
-          const baseHeight = [4, 6, 8, 6, 4][index] || 4;
-          bar.style.height = baseHeight + 'px';
+          bar.style.height = (baseHeights[index] || 4) + 'px';
         });
       });
     }
@@ -484,8 +480,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    const audioContainers = document.querySelectorAll('.audio-container');
-    const allAudioElements = document.querySelectorAll('.hidden-audio');
+    const audioContainers = document.querySelectorAll('.kvibe-audio-container');
+    const allAudioElements = document.querySelectorAll('.kvibe-hidden-audio');
 
     const formatTime = (seconds) => {
         if (isNaN(seconds)) return '0:00';
@@ -498,87 +494,164 @@
         allAudioElements.forEach(audio => {
             if (audio !== currentAudio && !audio.paused) {
                 audio.pause();
-                const container = audio.closest('.audio-container');
+                const container = audio.closest('.kvibe-audio-container');
                 if (container) {
                     container.classList.remove('playing');
-                    const btn = container.querySelector('.play-pause-btn');
-                    const icon = btn.querySelector('i');
-                    icon.className = 'fas fa-play';
-                    btn.setAttribute('data-state', 'paused');
+                    const btn = container.querySelector('.kvibe-play-pause-btn');
+                    if (btn) {
+                        const icon = btn.querySelector('i');
+                        if (icon) icon.className = 'fas fa-play';
+                        btn.setAttribute('data-state', 'paused');
+                    }
                 }
             }
         });
     };
 
     audioContainers.forEach(container => {
-        const audio = container.querySelector('.hidden-audio');
-        const playPauseBtn = container.querySelector('.play-pause-btn');
+        const audio = container.querySelector('.kvibe-hidden-audio');
+        const playPauseBtn = container.querySelector('.kvibe-play-pause-btn');
+        if (!audio || !playPauseBtn) return;
+
         const icon = playPauseBtn.querySelector('i');
-        const progressBar = container.querySelector('.progress-bar');
-        const progressFilled = container.querySelector('.progress-filled');
-        const timeDisplay = container.querySelector('.time-display');
+        const progressBar = container.querySelector('.kvibe-progress-bar');
+        const progressFilled = container.querySelector('.kvibe-progress-filled');
+        const timeDisplay = container.querySelector('.kvibe-time-display');
         const audioId = container.dataset.src ? container.dataset.src.split('/').pop().split('.')[0] : '';
 
-        if (audioId) {
-            initAudioWave(container, audioId);
-        }
+        if (audioId) initAudioWave(container, audioId);
 
         audio.onloadedmetadata = () => {
-            if (audio.duration && !isNaN(audio.duration)) {
+            if (audio.duration && !isNaN(audio.duration) && timeDisplay) {
                 timeDisplay.textContent = formatTime(audio.duration);
             }
         };
 
         playPauseBtn.addEventListener('click', () => {
             if (audio.paused || audio.ended) {
-                pauseOthers(audio); 
+                pauseOthers(audio);
                 audio.play();
                 container.classList.add('playing');
-                icon.className = 'fas fa-pause';
+                if (icon) icon.className = 'fas fa-pause';
                 playPauseBtn.setAttribute('data-state', 'playing');
             } else {
                 audio.pause();
                 container.classList.remove('playing');
-                icon.className = 'fas fa-play';
+                if (icon) icon.className = 'fas fa-play';
                 playPauseBtn.setAttribute('data-state', 'paused');
             }
         });
 
         audio.addEventListener('timeupdate', () => {
+            if (!audio.duration) return;
             const progress = (audio.currentTime / audio.duration) * 100;
-            progressFilled.style.width = `${progress}%`;
-            timeDisplay.textContent = formatTime(audio.currentTime); 
+            if (progressFilled) progressFilled.style.width = `${progress}%`;
+            if (timeDisplay) timeDisplay.textContent = formatTime(audio.currentTime);
         });
 
         audio.addEventListener('ended', () => {
             audio.currentTime = 0;
             container.classList.remove('playing');
-            icon.className = 'fas fa-play';
+            if (icon) icon.className = 'fas fa-play';
             playPauseBtn.setAttribute('data-state', 'paused');
-            progressFilled.style.width = '0%';
-            if (audio.duration && !isNaN(audio.duration)) {
+            if (progressFilled) progressFilled.style.width = '0%';
+            if (audio.duration && !isNaN(audio.duration) && timeDisplay) {
                 timeDisplay.textContent = formatTime(audio.duration);
             }
         });
 
-        progressBar.addEventListener('click', (e) => {
-            const rect = progressBar.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const percentage = clickX / rect.width;
-            
-            audio.currentTime = audio.duration * percentage;
-            
-            if (audio.paused) {
-                 pauseOthers(audio);
-                 container.classList.add('playing');
-                 audio.play();
-                 icon.className = 'fas fa-pause';
-                 playPauseBtn.setAttribute('data-state', 'playing');
-            }
-        });
+        if (progressBar) {
+            progressBar.addEventListener('click', (e) => {
+                const rect = progressBar.getBoundingClientRect();
+                const percentage = (e.clientX - rect.left) / rect.width;
+                audio.currentTime = audio.duration * percentage;
+                if (audio.paused) {
+                    pauseOthers(audio);
+                    container.classList.add('playing');
+                    audio.play();
+                    if (icon) icon.className = 'fas fa-pause';
+                    playPauseBtn.setAttribute('data-state', 'playing');
+                }
+            });
+        }
     });
     
-    // Auto-detect long text and add toggle buttons
+    // Re-init audio players when HTMX injects new comments
+    if (typeof htmx !== 'undefined') {
+      htmx.onLoad(function(el) {
+        const newContainers = el.querySelectorAll ? el.querySelectorAll('.kvibe-audio-container') : [];
+        const allAudios = document.querySelectorAll('.kvibe-hidden-audio');
+
+        const fmt = (s) => {
+          if (isNaN(s)) return '0:00';
+          return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+        };
+
+        newContainers.forEach(container => {
+          if (container._kvibeAudioInited) return;
+          container._kvibeAudioInited = true;
+
+          const audio = container.querySelector('.kvibe-hidden-audio');
+          const playPauseBtn = container.querySelector('.kvibe-play-pause-btn');
+          if (!audio || !playPauseBtn) return;
+
+          const icon = playPauseBtn.querySelector('i');
+          const progressBar = container.querySelector('.kvibe-progress-bar');
+          const progressFilled = container.querySelector('.kvibe-progress-filled');
+          const timeDisplay = container.querySelector('.kvibe-time-display');
+          const audioId = container.dataset.src ? container.dataset.src.split('/').pop().split('.')[0] : '';
+          if (audioId) initAudioWave(container, audioId);
+
+          audio.onloadedmetadata = () => {
+            if (!isNaN(audio.duration) && timeDisplay) timeDisplay.textContent = fmt(audio.duration);
+          };
+
+          playPauseBtn.addEventListener('click', () => {
+            if (audio.paused || audio.ended) {
+              allAudios.forEach(a => {
+                if (a !== audio && !a.paused) {
+                  a.pause();
+                  const c = a.closest('.kvibe-audio-container');
+                  if (c) {
+                    c.classList.remove('playing');
+                    const b = c.querySelector('.kvibe-play-pause-btn i');
+                    if (b) b.className = 'fas fa-play';
+                  }
+                }
+              });
+              audio.play();
+              container.classList.add('playing');
+              if (icon) icon.className = 'fas fa-pause';
+            } else {
+              audio.pause();
+              container.classList.remove('playing');
+              if (icon) icon.className = 'fas fa-play';
+            }
+          });
+
+          audio.addEventListener('timeupdate', () => {
+            if (!audio.duration) return;
+            if (progressFilled) progressFilled.style.width = `${(audio.currentTime/audio.duration)*100}%`;
+            if (timeDisplay) timeDisplay.textContent = fmt(audio.currentTime);
+          });
+
+          audio.addEventListener('ended', () => {
+            container.classList.remove('playing');
+            if (icon) icon.className = 'fas fa-play';
+            if (progressFilled) progressFilled.style.width = '0%';
+            if (!isNaN(audio.duration) && timeDisplay) timeDisplay.textContent = fmt(audio.duration);
+          });
+
+          if (progressBar) {
+            progressBar.addEventListener('click', (e) => {
+              const pct = (e.clientX - progressBar.getBoundingClientRect().left) / progressBar.offsetWidth;
+              audio.currentTime = audio.duration * pct;
+              if (audio.paused) { audio.play(); container.classList.add('playing'); if (icon) icon.className = 'fas fa-pause'; }
+            });
+          }
+        });
+      });
+    }
     document.querySelectorAll('.kvibe-post-text').forEach(textElement => {
       const textContent = textElement.textContent.trim();
       const lineCount = (textContent.match(/\n/g) || []).length + 1;
@@ -772,3 +845,94 @@ if (document.readyState === 'loading') {
   } else {
     kvibeVideoLazyLoad();
   }
+
+
+/* ═══════════════════════════════════════════════════════
+   LIVE COMMENT POLLING
+   Polls /comments/poll/<post_id>/?after=<last_id> every 3s
+   and injects only new comments — no page reload needed.
+   ═══════════════════════════════════════════════════════ */
+(function kvibeStartLiveComments() {
+  document.addEventListener('DOMContentLoaded', function () {
+    const list = document.getElementById('comment_list');
+    if (!list) return;
+
+    // Post UUID is in the comments form action: /comments/<uuid>/
+    const form = document.getElementById('postForm');
+    if (!form) return;
+    const match = form.getAttribute('action').match(/\/comments\/([0-9a-f-]{36})\/?/i);
+    if (!match) return;
+    const postId = match[1];
+
+    // Track the newest created_at timestamp we've seen (ISO string)
+    // Seeded from the data-created attribute on the first rendered comment
+    function getLatestTimestamp() {
+      const comments = list.querySelectorAll('[id^="kvibe-comment-"]');
+      let latest = null;
+      comments.forEach(el => {
+        const ts = el.dataset.created;
+        if (ts && (!latest || ts > latest)) latest = ts;
+      });
+      return latest || '';
+    }
+
+    // Remove empty state if comments appear
+    function removeEmptyState() {
+      const empty = list.querySelector('.kvibe-no-comments');
+      if (empty) empty.remove();
+    }
+
+    // Avoid injecting a comment the current user just submitted via HTMX
+    // (it's already in the DOM — the server would return it again in the poll)
+    function alreadyInDOM(html) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      const ids = [...tmp.querySelectorAll('[id^="kvibe-comment-"]')].map(el => el.id);
+      return ids.every(id => !!document.getElementById(id));
+    }
+
+    let polling = true;
+
+    async function poll() {
+      if (!polling) return;
+      try {
+        const after = encodeURIComponent(getLatestTimestamp());
+        const res = await fetch(`/comments/poll/${postId}/?after=${after}`, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+
+        // 204 = nothing new
+        if (res.status === 204) return;
+        if (!res.ok) return;
+
+        const html = await res.text();
+        if (!html || !html.trim()) return;
+
+        // Skip if every comment in the response is already rendered
+        if (alreadyInDOM(html)) return;
+
+        removeEmptyState();
+        list.insertAdjacentHTML('afterbegin', html);
+
+        // Re-init interactive features on newly injected nodes
+        if (typeof kvibeInitAudioPlayers === 'function') kvibeInitAudioPlayers(list);
+        if (typeof kvibeAttachReplyLikes  === 'function') kvibeAttachReplyLikes(list);
+
+      } catch (e) {
+        // Silently swallow network errors — retries on next tick
+      } finally {
+        if (polling) setTimeout(poll, 3000);
+      }
+    }
+
+    // Pause polling while user is actively typing (avoids jarring DOM shifts)
+    const textarea = document.getElementById('textInput');
+    if (textarea) {
+      textarea.addEventListener('focus', () => { polling = false; });
+      textarea.addEventListener('blur',  () => { polling = true; setTimeout(poll, 1500); });
+    }
+
+    // Kick off polling 3 seconds after page load
+    setTimeout(poll, 3000);
+  });
+})();

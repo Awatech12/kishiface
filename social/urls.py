@@ -47,7 +47,7 @@ urlpatterns = [
     #path('unblock/<str:username>/', views.unblock_user, name='unblock_user'),
     path('report/<str:username>/',  views.report_user,  name='report_user'),
     path('<str:username>/videos/', views.profile_videos, name='profile_videos'),
-    #path('<str:username>/audios/', views.profile_audios, name='profile_audios'),
+    path('<str:username>/audios/', views.profile_audios, name='profile_audios'),
     path('<str:username>/text-posts/', views.profile_text_posts, name='profile_text_posts'),
     path('follow/<int:user_id>/', views.follow_user, name='follow_user'),
 
@@ -77,5 +77,8 @@ urlpatterns = [
     path('comment/<uuid:post_id>', views.post_comment, name='post_comment'),
     #path('<str:username>', views.profile, name='profile'),
    path('repost/<uuid:post_id>/', views.repost_post, name='repost_post'),
-    path('?/<str:username>', views.update_profile, name='update_profile')
+    path('?/<str:username>', views.update_profile, name='update_profile'),
+
+    # ===== Live comment polling (no reload needed) =====
+    path('comments/poll/<uuid:post_id>/', views.comments_poll, name='comments_poll'),
 ]

@@ -2085,6 +2085,56 @@ def delete_reply(request, reply_id):
     return JsonResponse({'success': True})
 
 @login_required(login_url='/')
+def comments_poll(request, post_id):
+    """
+    GET /comments/poll/<post_id>/?after=<iso_timestamp>
+    Returns rendered HTML for comments newer than `after` timestamp.
+    Returns 204 No Content if nothing new.
+    Used by the live polling JS in postcomment.js.
+    """
+    post = get_object_or_404(Post, post_id=post_id)
+
+    after_str = request.GET.get('after', '')
+    after_dt = None
+    if after_str:
+        # django.utils.dateparse.parse_datetime handles ISO 8601 strings
+        from django.utils.dateparse import parse_datetime
+        after_dt = parse_datetime(after_str)
+        # Fallback: try dateutil if Django's parser returns None
+        if after_dt is None:
+            try:
+                from dateutil.parser import parse as du_parse
+                after_dt = du_parse(after_str)
+            except Exception:
+                after_dt = None
+
+    qs = PostComment.objects.filter(post=post)
+    if after_dt:
+        qs = qs.filter(created_at__gt=after_dt)
+
+    new_comments = (
+        qs
+        .select_related('author', 'author__profile')
+        .prefetch_related('like', 'replies', 'replies__author', 'replies__author__profile')
+        .order_by('-created_at')
+    )
+
+    if not new_comments.exists():
+        return HttpResponse(status=204)
+
+    html_parts = []
+    for comment in new_comments:
+        html_parts.append(
+            render_to_string(
+                'snippet/comment_list.html',
+                {'comment': comment, 'request': request, 'user': request.user},
+                request=request,
+            )
+        )
+
+    return HttpResponse(''.join(html_parts))
+
+@login_required(login_url='/')
 @login_required(login_url='login')
 def hashtag_view(request, tag_name):
     """View posts containing a specific hashtag"""

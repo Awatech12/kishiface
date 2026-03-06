@@ -1,9 +1,5 @@
-{% load pwa %}
-{% load post_tags %}
 {% load humanize %}
 {% load static %}
-{% load time %}
-{% load text_filters %}  
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2773,6 +2769,47 @@
             font-size: 19px; transition: color .25s;
             position: relative; display: inline-block;
         }
+
+        /* ===== REPOST MODAL ===== */
+        .kvibe-repost-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: flex; justify-content: center;
+            align-items: center; z-index: 2000; opacity: 0; visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        .kvibe-repost-modal.show { opacity: 1; visibility: visible; }
+        .kvibe-repost-modal-content {
+            background: var(--kvibe-white, #fff); border-radius: 12px;
+            width: 90%; max-width: 400px; overflow: hidden;
+        }
+        .kvibe-repost-modal-header {
+            padding: 16px; border-bottom: 1px solid var(--kvibe-border, #dbdbdb);
+            text-align: center; font-weight: 600;
+        }
+        .kvibe-repost-modal-body { padding: 16px; }
+        .kvibe-repost-textarea {
+            width: 100%; border: 1px solid var(--kvibe-border, #dbdbdb); border-radius: 8px;
+            padding: 12px; font-family: inherit; font-size: 14px; resize: vertical;
+            min-height: 80px; margin-bottom: 8px;
+        }
+        .kvibe-repost-modal-footer {
+            padding: 16px; border-top: 1px solid var(--kvibe-border, #dbdbdb);
+            display: flex; gap: 12px;
+        }
+        .kvibe-repost-btn {
+            flex: 1; padding: 10px; background: #0095f6; color: white;
+            border: none; border-radius: 6px; font-weight: 500; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .kvibe-repost-btn:hover { opacity: 0.9; }
+        .kvibe-repost-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .kvibe-repost-cancel-btn {
+            flex: 1; padding: 10px; background: transparent;
+            color: var(--kvibe-text, #262626); border: 1px solid var(--kvibe-border, #dbdbdb);
+            border-radius: 6px; font-weight: 500; cursor: pointer;
+        }
+        .kvibe-repost-cancel-btn:hover { background: #fafafa; }
+
         .kvibe-repost-icon {
             display: flex; align-items: center; justify-content: center;
             gap: 8px; text-decoration: none; color: var(--kvibe-text-muted);
@@ -5488,20 +5525,185 @@ function profileFilterMood(mood, btn) {
 }
 </script>
 
+
+<!-- ===== REPOST MODAL ===== -->
+<div class="kvibe-repost-modal" id="kvibe-repost-modal">
+  <div class="kvibe-repost-modal-content">
+    <div class="kvibe-repost-modal-header">Repost</div>
+    <div class="kvibe-repost-modal-body">
+      <textarea class="kvibe-repost-textarea" id="kvibe-repost-caption"
+                placeholder="Add a comment to your repost (optional)"
+                maxlength="500"></textarea>
+      <div style="font-size:12px;color:var(--kvibe-text-light);text-align:right;">
+        <span id="kvibe-repost-char-count">0</span>/500
+      </div>
+    </div>
+    <div class="kvibe-repost-modal-footer">
+      <button class="kvibe-repost-cancel-btn" onclick="kvibeCloseRepostModal()">Cancel</button>
+      <button class="kvibe-repost-btn" id="kvibe-repost-confirm-btn">
+        <i class="fas fa-retweet"></i> Repost
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CSRF helper ───────────────────────────────────────────────────────────
+function getCsrfFromMeta() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if (meta) return meta.getAttribute('content');
+  const cookie = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='));
+  return cookie ? cookie.trim().split('=')[1] : '';
+}
+
+// ─── Repost state ──────────────────────────────────────────────────────────
+let currentRepostPostId = null;
+let currentRepostButton = null;
+
+function kvibeToggleRepost(postId, button) {
+  currentRepostPostId = postId;
+  currentRepostButton = button;
+  const isReposted = button.getAttribute('data-reposted') === 'true';
+  if (isReposted) {
+    kvibePerformRepost(postId, '', true);
+  } else {
+    kvibeOpenRepostModal();
+  }
+}
+
+function kvibeOpenRepostModal() {
+  const modal     = document.getElementById('kvibe-repost-modal');
+  const textarea  = document.getElementById('kvibe-repost-caption');
+  const charCount = document.getElementById('kvibe-repost-char-count');
+  textarea.value = '';
+  charCount.textContent = '0';
+  modal.classList.add('show');
+  textarea.focus();
+  textarea.oninput = function () { charCount.textContent = this.value.length; };
+  document.getElementById('kvibe-repost-confirm-btn').onclick = function () {
+    kvibePerformRepost(currentRepostPostId, textarea.value, false);
+    kvibeCloseRepostModal();
+  };
+}
+
+function kvibeCloseRepostModal() {
+  const modal = document.getElementById('kvibe-repost-modal');
+  if (modal) modal.classList.remove('show');
+  currentRepostPostId = null;
+  currentRepostButton = null;
+}
+
+function kvibePerformRepost(postId, caption, undo) {
+  const button = currentRepostButton;
+  if (!button) return;
+  const savedHtml = button.innerHTML;
+  button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  button.disabled  = true;
+
+  fetch('/repost/' + postId + '/', {
+    method : 'POST',
+    headers: {
+      'X-CSRFToken'  : getCsrfFromMeta(),
+      'Content-Type' : 'application/json',
+    },
+    body: JSON.stringify({ caption: caption, undo: undo })
+  })
+  .then(r => r.json())
+  .then(data => {
+    button.disabled = false;
+    if (data.success) {
+      button.setAttribute('data-reposted', data.reposted ? 'true' : 'false');
+      button.innerHTML = savedHtml;
+      const newIcon  = button.querySelector('i');
+      const newCount = button.querySelector('.kvibe-repost-count');
+      if (newIcon)  newIcon.classList.toggle('reposted', !!data.reposted);
+      if (newCount) {
+        newCount.textContent = data.repost_count > 0 ? data.repost_count : '';
+        newCount.classList.toggle('kvibe-show', data.repost_count > 0);
+      }
+      showToast(data.message || (data.reposted ? 'Reposted!' : 'Repost removed'), 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      button.innerHTML = savedHtml;
+      showToast('Error: ' + (data.error || 'Something went wrong'), 'error');
+    }
+  })
+  .catch(() => {
+    button.disabled = false;
+    button.innerHTML = savedHtml;
+    showToast('Something went wrong. Please try again.', 'error');
+  });
+}
+
+// Close repost modal on backdrop click or Escape
+document.addEventListener('click', function (e) {
+  const modal = document.getElementById('kvibe-repost-modal');
+  if (modal && e.target === modal) kvibeCloseRepostModal();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') kvibeCloseRepostModal();
+});
+
+// ─── Share modal ────────────────────────────────────────────────────────────
+const _kvibeProfileShareData = {};
+
+function kvibeOpenShareModal(postId, text) {
+  _kvibeProfileShareData[postId] = { text: text || '' };
+  const modal = document.getElementById('kvibe-share-modal-' + postId);
+  if (modal) modal.classList.add('active');
+}
+
+function kvibeCloseShareModal(postId) {
+  const modal = document.getElementById('kvibe-share-modal-' + postId);
+  if (modal) modal.classList.remove('active');
+}
+
+function kvibeGetShareUrl(postId) {
+  return window.location.origin + '/comment/' + postId;
+}
+
+function kvibeTrackShare(postId) {
+  fetch('/track_share/' + postId + '/', {
+    method : 'POST',
+    headers: { 'X-CSRFToken': getCsrfFromMeta() }
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      const el = document.getElementById('kvibe-share-count-' + postId);
+      if (el) { el.textContent = data.new_count; el.classList.add('kvibe-show'); }
+    }
+  }).catch(() => {});
+}
+
+function kvibeShareVia(platform, postId) {
+  const url     = kvibeGetShareUrl(postId);
+  const text    = (_kvibeProfileShareData[postId] || {}).text || '';
+  const fullMsg = encodeURIComponent(text + ' ' + url);
+  let shareLink = '';
+  switch (platform) {
+    case 'whatsapp': shareLink = 'https://api.whatsapp.com/send?text=' + fullMsg; break;
+    case 'facebook': shareLink = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url); break;
+    case 'telegram': shareLink = 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text); break;
+    case 'snapchat': shareLink = 'https://www.snapchat.com/scan?attachmentUrl=' + encodeURIComponent(url); break;
+    case 'sms':      shareLink = 'sms:?body=' + fullMsg; break;
+    case 'email':    shareLink = 'mailto:?subject=Check this out on Kvibe&body=' + fullMsg; break;
+    case 'x':        shareLink = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url); break;
+    case 'copy':
+      navigator.clipboard.writeText(url).then(() => {
+        kvibeTrackShare(postId);
+        kvibeCloseShareModal(postId);
+        showToast('Link copied!', 'success');
+      });
+      return;
+  }
+  if (shareLink) {
+    window.open(shareLink, '_blank');
+    kvibeTrackShare(postId);
+    kvibeCloseShareModal(postId);
+  }
+}
+</script>
+
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
