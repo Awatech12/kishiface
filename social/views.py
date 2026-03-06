@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 import random
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.contenttypes.models import ContentType
+import cloudinary
 
 # Create your views here.
 def index(request):
@@ -214,15 +215,19 @@ def home(request):
 
 def _safe_pic_url(user_obj):
     """
-    Return picture URL safely.
-    Handles RelatedObjectDoesNotExist if user has no profile,
-    or ValueError if profile has no image.
+    Return picture URL safely — works in both debug (ImageField) and
+    production (CloudinaryField). CloudinaryField.url returns only the
+    public_id in production, so we use cloudinary.CloudinaryImage to
+    build the full https URL explicitly.
     """
     try:
-        # We access .profile here inside the try block so if it doesn't exist,
-        # it catches the error instead of crashing the view.
         if hasattr(user_obj, 'profile') and user_obj.profile.picture:
-            return user_obj.profile.picture.url
+            pic = user_obj.profile.picture
+            if hasattr(pic, 'public_id'):
+                # CloudinaryField — build the full URL
+                return cloudinary.CloudinaryImage(pic.public_id).build_url()
+            # ImageField — .url is fine
+            return pic.url
     except Exception:
         pass
     return ''
@@ -1080,6 +1085,14 @@ def profile_text_posts(request, username):
         mutual_followings = my_following.filter(followings=profile)[:3]
         mutual_count = my_following.filter(followings=profile).count()
 
+    # Pre-build liker pic URLs on each post so the template never calls
+    # .url on CloudinaryField directly — works in both debug and production
+    for post in text_posts:
+        post.liker_data = [
+            {'url': _safe_pic_url(u), 'username': u.username}
+            for u in post.likes.all()[:3]
+        ]
+
     context = {
         'user': user,
         'profile': profile,
@@ -1091,7 +1104,7 @@ def profile_text_posts(request, username):
         'mutual_followings': mutual_followings,
         'mutual_count': mutual_count,
         'is_blocked': is_blocked,
-        'active_tab': 'text',    # tell the template which tab is active
+        'active_tab': 'text',
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
