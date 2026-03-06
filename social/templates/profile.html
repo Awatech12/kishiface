@@ -5264,10 +5264,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const initialTab = extractTabFromURL();
         updateActiveTab(initialTab);
         showMoodFilter(initialTab === 'posts');
-        initializeLazyLoading();
-        // seed posts-tab cache from server-rendered HTML
-        if (initialTab === 'posts') tabCache['posts'] = postsContainer.innerHTML;
+
         tabs.forEach(tab => tab.addEventListener('click', handleTabClick));
+
+        if (initialTab === 'posts') {
+            // seed cache from server-rendered HTML — nothing else to do
+            tabCache['posts'] = postsContainer.innerHTML;
+            initializeLazyLoading();
+        } else {
+            // Direct reload on /videos/ or /text-posts/ — the server rendered
+            // profile.html with the posts grid in #posts-container, which is
+            // wrong for this tab. Immediately fetch and replace with the right content.
+            const tabEl = document.querySelector('[data-tab="' + initialTab + '"]');
+            if (tabEl) {
+                const url = tabEl.getAttribute('data-url') + '?ajax=1';
+                loadTabContent(initialTab, url);
+            }
+        }
     }
 
     document.readyState === 'loading'
@@ -5738,4 +5751,3 @@ function profileFilterMood(mood, btn) {
 
 </body>
 </html>
-

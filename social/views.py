@@ -960,25 +960,58 @@ def report_user(request, username):
 def profile_videos(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
-    
+
+    # ── Block checks (mirrors profile view) ──────────────────────────────────
+    is_blocked = False
+    if request.user.is_authenticated and request.user != user:
+        from .models import BlockedUser  # noqa: F401 – already imported at top
+        viewer_is_blocked = BlockedUser.objects.filter(
+            blocker=user, blocked=request.user
+        ).exists()
+        if viewer_is_blocked:
+            return render(request, 'blocked.html', {'blocked_by': user})
+        is_blocked = BlockedUser.objects.filter(
+            blocker=request.user, blocked=user
+        ).exists()
+
     # Get video posts
     video_posts = Post.objects.filter(
         author=user,
         video_file__isnull=False
     ).prefetch_related('images')[:30]
-    
+
+    # Build a full context so profile.html renders correctly on direct access
+    user_posts = Post.objects.filter(author=user)
+    total_view = sum(p.view for p in user_posts)
+    total_like_recieved = user_posts.aggregate(total=Count('likes'))['total'] or 0
+    total_comments_received = PostComment.objects.filter(post__author=user).count()
+
+    mutual_followings = None
+    mutual_count = 0
+    if request.user.is_authenticated and request.user != user:
+        my_following = request.user.profile.followings.all()
+        mutual_followings = my_following.filter(followings=profile)[:3]
+        mutual_count = my_following.filter(followings=profile).count()
+
     context = {
         'user': user,
         'profile': profile,
         'posts': video_posts,
+        'current_profile': request.user.profile if request.user.is_authenticated else None,
+        'total_view': total_view,
+        'total_like_recieved': total_like_recieved,
+        'total_comments_received': total_comments_received,
+        'mutual_followings': mutual_followings,
+        'mutual_count': mutual_count,
+        'is_blocked': is_blocked,
+        'active_tab': 'videos',   # tell the template which tab is active
     }
-    
-    # Always return partial for AJAX
+
+    # AJAX / partial request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
         return render(request, 'profile_videos_partial.html', context)
-    
-    # For direct access, return full page with video posts
-    context['posts'] = video_posts
+
+    # Direct page load — render full page; JS will read active_tab and show grid
     return render(request, 'profile.html', context)
 
 def profile_audios(request, username):
@@ -1007,6 +1040,18 @@ def profile_text_posts(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
 
+    # ── Block checks ──────────────────────────────────────────────────────────
+    is_blocked = False
+    if request.user.is_authenticated and request.user != user:
+        viewer_is_blocked = BlockedUser.objects.filter(
+            blocker=user, blocked=request.user
+        ).exists()
+        if viewer_is_blocked:
+            return render(request, 'blocked.html', {'blocked_by': user})
+        is_blocked = BlockedUser.objects.filter(
+            blocker=request.user, blocked=user
+        ).exists()
+
     # Use annotate+Count to reliably exclude posts that have any image rows.
     # images__isnull=True on a M2M join is unreliable and returns wrong results.
     text_posts = (
@@ -1022,10 +1067,31 @@ def profile_text_posts(request, username):
         .order_by('-created_at')[:30]
     )
 
+    # Full context for direct page loads
+    user_posts = Post.objects.filter(author=user)
+    total_view = sum(p.view for p in user_posts)
+    total_like_recieved = user_posts.aggregate(total=Count('likes'))['total'] or 0
+    total_comments_received = PostComment.objects.filter(post__author=user).count()
+
+    mutual_followings = None
+    mutual_count = 0
+    if request.user.is_authenticated and request.user != user:
+        my_following = request.user.profile.followings.all()
+        mutual_followings = my_following.filter(followings=profile)[:3]
+        mutual_count = my_following.filter(followings=profile).count()
+
     context = {
         'user': user,
         'profile': profile,
         'posts': text_posts,
+        'current_profile': request.user.profile if request.user.is_authenticated else None,
+        'total_view': total_view,
+        'total_like_recieved': total_like_recieved,
+        'total_comments_received': total_comments_received,
+        'mutual_followings': mutual_followings,
+        'mutual_count': mutual_count,
+        'is_blocked': is_blocked,
+        'active_tab': 'text',    # tell the template which tab is active
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
