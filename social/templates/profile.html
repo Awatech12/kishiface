@@ -3790,6 +3790,10 @@
                 <!-- Posts Container -->
                 <section class="kvibe-posts-container kvibe-webview-fix" id="posts-container">
                     {% load humanize %}
+                    {% if active_tab == 'text' %}
+                        {# Server-side render for direct back-navigation to /text-posts/ #}
+                        {% include 'profile_text_posts_partial.html' %}
+                    {% else %}
                     {% if posts %}
                     <div class="kvibe-grid-posts">
                         {% for post in posts %}
@@ -3826,6 +3830,7 @@
                         <h3>No posts yet</h3>
                         <p>Photo posts will appear here.</p>
                     </div>
+                    {% endif %}
                     {% endif %}
                 </section>
 
@@ -5266,35 +5271,25 @@ document.addEventListener('DOMContentLoaded', function() {
         showMoodFilter(initialTab === 'posts');
         initializeLazyLoading();
 
-        // Seed cache from whatever the server rendered into postsContainer.
-        // This covers ALL tabs (posts, videos, text) so that navigating away
-        // and pressing Back finds the content in the cache rather than showing
-        // a blank container.
+        // Seed cache from whatever the server rendered — works for all tabs.
+        // When back-navigation hits /text-posts/, the server now renders the
+        // text feed directly into #posts-container (via active_tab context),
+        // so the content is already correct and just needs to be cached.
         const rendered = postsContainer.innerHTML.trim();
         if (rendered) tabCache[initialTab] = rendered;
-
-        // If the URL says we're on the text (or videos) tab but the container
-        // is empty (e.g. the server returned a full page for the posts URL and
-        // then pushState changed the address bar), fetch the real content now.
-        if (!rendered && initialTab !== 'posts') {
-            const el = document.querySelector('[data-tab="' + initialTab + '"]');
-            if (el) loadTabContent(initialTab, el.getAttribute('data-url') + '?ajax=1');
-        }
 
         tabs.forEach(tab => tab.addEventListener('click', handleTabClick));
     }
 
-    // pageshow fires on both normal loads AND bfcache restores (persisted=true).
-    // When the browser pops the page from bfcache the in-memory tabCache is gone,
-    // so we re-seed it from whatever is currently in postsContainer.
+    // pageshow covers bfcache restores (Android back button).
+    // The DOM is intact but tabCache is wiped — re-seed it.
     window.addEventListener('pageshow', function (e) {
-        if (!e.persisted) return;          // normal load – initializePage already ran
+        if (!e.persisted) return;
         const activeTab = currentTab || extractTabFromURL();
         const rendered  = postsContainer ? postsContainer.innerHTML.trim() : '';
         if (rendered) {
             tabCache[activeTab] = rendered;
         } else {
-            // Container is blank after bfcache restore – reload the active tab
             const el = document.querySelector('[data-tab="' + activeTab + '"]');
             if (el) loadTabContent(activeTab, el.getAttribute('data-url') + '?ajax=1');
         }
@@ -5768,5 +5763,6 @@ function profileFilterMood(mood, btn) {
 
 </body>
 </html>
+
 
 
