@@ -1011,6 +1011,7 @@ def profile_text_posts(request, username):
         'user': user,
         'profile': profile,
         'posts': text_posts,
+        'active_tab': 'text',
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
