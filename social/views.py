@@ -606,6 +606,21 @@ def like_post(request, post_id):
                 notification_type='like'
             )
 
+    # Return JSON for AJAX callers (profile text posts, home feed, etc.)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        likers      = list(post.likes.all()[:3])
+        like_count  = post.likes.count()
+        is_liked    = request.user in post.likes.all()
+        liker_pics  = [_safe_pic_url(u) for u in likers]
+        liker_names = [u.username for u in likers]
+        return JsonResponse({
+            'success':     True,
+            'like_count':  like_count,
+            'is_liked':    is_liked,
+            'liker_pics':  liker_pics,
+            'liker_names': liker_names,
+        })
+
     return render(request, 'snippet/post_like.html', {
         'post': post,
         'post_id': post_id
