@@ -8,6 +8,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
     <title>{% if profile.full_name %} {{profile.full_name}} {% else %} {{user.username}} {% endif %} / Kvibe {{profile.get_status}}</title>
     
@@ -2347,7 +2348,7 @@
                 border-bottom: 1px solid #f0f0f0;
                 border-top: 1px solid #f0f0f0;
                 position: sticky;
-                top: 0;
+                top: 52px;
                 z-index: 50;
             }
 
@@ -2769,47 +2770,6 @@
             font-size: 19px; transition: color .25s;
             position: relative; display: inline-block;
         }
-
-        /* ===== REPOST MODAL ===== */
-        .kvibe-repost-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); display: flex; justify-content: center;
-            align-items: center; z-index: 2000; opacity: 0; visibility: hidden;
-            transition: opacity 0.3s, visibility 0.3s;
-        }
-        .kvibe-repost-modal.show { opacity: 1; visibility: visible; }
-        .kvibe-repost-modal-content {
-            background: var(--kvibe-white, #fff); border-radius: 12px;
-            width: 90%; max-width: 400px; overflow: hidden;
-        }
-        .kvibe-repost-modal-header {
-            padding: 16px; border-bottom: 1px solid var(--kvibe-border, #dbdbdb);
-            text-align: center; font-weight: 600;
-        }
-        .kvibe-repost-modal-body { padding: 16px; }
-        .kvibe-repost-textarea {
-            width: 100%; border: 1px solid var(--kvibe-border, #dbdbdb); border-radius: 8px;
-            padding: 12px; font-family: inherit; font-size: 14px; resize: vertical;
-            min-height: 80px; margin-bottom: 8px;
-        }
-        .kvibe-repost-modal-footer {
-            padding: 16px; border-top: 1px solid var(--kvibe-border, #dbdbdb);
-            display: flex; gap: 12px;
-        }
-        .kvibe-repost-btn {
-            flex: 1; padding: 10px; background: #0095f6; color: white;
-            border: none; border-radius: 6px; font-weight: 500; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 6px;
-        }
-        .kvibe-repost-btn:hover { opacity: 0.9; }
-        .kvibe-repost-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .kvibe-repost-cancel-btn {
-            flex: 1; padding: 10px; background: transparent;
-            color: var(--kvibe-text, #262626); border: 1px solid var(--kvibe-border, #dbdbdb);
-            border-radius: 6px; font-weight: 500; cursor: pointer;
-        }
-        .kvibe-repost-cancel-btn:hover { background: #fafafa; }
-
         .kvibe-repost-icon {
             display: flex; align-items: center; justify-content: center;
             gap: 8px; text-decoration: none; color: var(--kvibe-text-muted);
@@ -2912,6 +2872,151 @@
             .kvibe-action-icon  { font-size: 18px; }
             .kvibe-repost-icon  { padding: 8px 10px; font-size: 13px; }
         }
+    
+        /* ── Text feed engagement ── */
+        .kvibe-actions-container {
+            display: flex; align-items: center; justify-content: space-around;
+            padding: 4px 0; background: var(--kvibe-white);
+        }
+        .kvibe-action-item {
+            display: flex; align-items: center; justify-content: center;
+            gap: 6px; color: var(--kvibe-text-light); font-size: 13.5px;
+            font-weight: 500; padding: 7px 8px; border-radius: 999px;
+            transition: color 0.2s ease; position: relative;
+            overflow: visible; cursor: pointer; background: none;
+            text-decoration: none; flex: 1; min-width: 0;
+        }
+        .kvibe-action-item:hover { color: var(--kvibe-text); }
+        .kvibe-action-icon { font-size: 19px; display: inline-block; }
+        .kvibe-like-btn .kvibe-action-icon { transition: color 0.2s ease; }
+        .kvibe-like-btn:hover .kvibe-action-icon { color: #ed4956; }
+        .kvibe-reposted { color: #10b981 !important; }
+        button.kvibe-action-item:hover .fa-retweet:not(.kvibe-reposted) { color: #10b981; }
+        button.kvibe-action-item:hover .fa-paper-plane { color: var(--kvibe-primary); }
+
+        .kvibe-repost-count, .kvibe-share-count {
+            font-size: 13.5px; display: none;
+        }
+        .kvibe-repost-count.kvibe-show,
+        .kvibe-share-count.kvibe-show { display: inline; }
+
+        .kvibe-engagement-row {
+            display: flex; flex-wrap: wrap; align-items: center;
+            padding: 8px 16px 10px; gap: 8px;
+            border-top: 1px solid var(--kvibe-border);
+            font-size: 13.5px; color: var(--kvibe-text);
+        }
+        .kvibe-likers-container { display: flex; }
+        .kvibe-liker-pic {
+            width: 24px; height: 24px; border-radius: 50%;
+            border: 2px solid var(--kvibe-white); margin-left: -6px;
+        }
+        .kvibe-likers-container a:first-child .kvibe-liker-pic { margin-left: 0; }
+        .kvibe-like-text { flex: 1; }
+        .kvibe-no-likes { color: var(--kvibe-text-light); font-size: 13px; }
+        .kvibe-you-text { font-weight: 600; }
+        .kvibe-separator-dot { color: var(--kvibe-border); margin: 0 2px; }
+        .kvibe-view-text { font-size: 13px; color: var(--kvibe-text-light); }
+
+        /* Share modal */
+        .kvibe-share-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.55); display: none;
+            justify-content: center; align-items: center; z-index: 6000;
+            padding: 20px; box-sizing: border-box;
+        }
+        .kvibe-share-modal.active { display: flex; }
+        .kvibe-share-modal-content {
+            background: var(--kvibe-white); width: 100%;
+            border-radius: 20px; padding: 24px;
+            animation: kvibeModalPop 0.25s cubic-bezier(0.34,1.56,0.64,1);
+            max-width: 420px; max-height: 90vh; overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+        }
+        @keyframes kvibeModalPop {
+            from { transform: scale(0.88); opacity: 0; }
+            to   { transform: scale(1);    opacity: 1; }
+        }
+        .kvibe-share-header {
+            display: flex; justify-content: space-between; align-items: center;
+            font-weight: 700; font-size: 17px; margin-bottom: 20px;
+            color: var(--kvibe-text);
+        }
+        .kvibe-share-header .fa-xmark {
+            width: 30px; height: 30px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--kvibe-border-light); font-size: 14px;
+            transition: background 0.15s;
+        }
+        .kvibe-share-header .fa-xmark:hover { background: var(--kvibe-border); }
+        .kvibe-share-grid {
+            display: grid; grid-template-columns: repeat(4,1fr);
+            gap: 20px 10px; text-align: center; max-height: 60vh; overflow-y: auto;
+        }
+        .kvibe-share-item {
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            font-size: 11px; cursor: pointer; color: var(--kvibe-text);
+        }
+        .kvibe-share-icon-wrap {
+            width: 50px; height: 50px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; color: white; transition: transform 0.2s;
+        }
+        .kvibe-share-icon-wrap:active { transform: scale(0.9); }
+        .si-whatsapp { background: #25D366; }
+        .si-facebook { background: #1877F2; }
+        .si-x        { background: #000; }
+        .si-telegram { background: #0088cc; }
+        .si-snapchat { background: #FFFC00; color: #000 !important; }
+        .si-sms      { background: #4cd964; }
+        .si-email    { background: #8e8e8e; }
+        .si-copy     { background: #8e8e8e; }
+
+        /* Repost modal */
+        .kvibe-repost-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.55); display: none;
+            justify-content: center; align-items: center; z-index: 6000;
+            padding: 20px; box-sizing: border-box;
+        }
+        .kvibe-repost-modal.active { display: flex; }
+        .kvibe-repost-modal-content {
+            background: var(--kvibe-white); width: 100%;
+            border-radius: 20px; padding: 24px;
+            animation: kvibeModalPop 0.25s cubic-bezier(0.34,1.56,0.64,1);
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+        }
+        .kvibe-repost-caption {
+            width: 100%; border: 1px solid var(--kvibe-border);
+            border-radius: 10px; padding: 10px; font-size: 14px;
+            font-family: inherit; resize: none; box-sizing: border-box;
+        }
+        .kvibe-repost-cancel-btn {
+            flex: 1; padding: 11px; border: 1.5px solid var(--kvibe-border);
+            border-radius: 10px; background: none; cursor: pointer;
+            font-size: 14px; font-family: inherit; color: var(--kvibe-text);
+            transition: background 0.15s;
+        }
+        .kvibe-repost-cancel-btn:hover { background: var(--kvibe-border-light); }
+        .kvibe-repost-confirm-btn {
+            flex: 1; padding: 11px; border: none; border-radius: 10px;
+            background: var(--kvibe-primary); color: #fff; cursor: pointer;
+            font-size: 14px; font-family: inherit; font-weight: 600;
+            transition: background 0.15s;
+        }
+        .kvibe-repost-confirm-btn:hover:not(:disabled) { background: var(--kvibe-primary-dark); }
+        .kvibe-repost-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Heart animation */
+        @keyframes kvHeart {
+            0%   { transform: scale(1); }
+            30%  { transform: scale(1.4); }
+            60%  { transform: scale(0.9); }
+            100% { transform: scale(1); }
+        }
+        .kv-heart-pop { animation: kvHeart 0.4s ease forwards; }
+
     </style>
 </head>
 <body>
@@ -5416,6 +5521,181 @@ document.addEventListener('DOMContentLoaded', function() {
 // POST CARD FUNCTIONS — text feed
 // ════════════════════════════════════════════════════
 
+// ── CSRF helper ──────────────────────────────────────
+function kvibeGetCsrf() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) return meta.getAttribute('content');
+    const match = document.cookie.match(/csrftoken=([^;]+)/);
+    return match ? match[1] : '';
+}
+
+// ── LIKE ─────────────────────────────────────────────
+function kvibeLikePost(btn) {
+    const postId  = btn.dataset.postId;
+    const isLiked = btn.dataset.liked === 'true';
+    const icon    = btn.querySelector('.kvibe-action-icon');
+    const countEl = btn.querySelector('.kvibe-like-count');
+    const textEl  = document.getElementById('kvibe-like-text-' + postId);
+
+    // Optimistic UI
+    if (isLiked) {
+        icon.className = 'fa-regular fa-heart kvibe-action-icon';
+        icon.removeAttribute('style');
+        btn.dataset.liked = 'false';
+    } else {
+        icon.className = 'fas fa-heart kvibe-action-icon kv-heart-pop';
+        icon.style.color = 'var(--kvibe-primary)';
+        btn.dataset.liked = 'true';
+        icon.addEventListener('animationend', () => icon.classList.remove('kv-heart-pop'), { once: true });
+    }
+
+    let count = parseInt((countEl.textContent || '').replace(/,/g, '')) || 0;
+    count = isLiked ? Math.max(0, count - 1) : count + 1;
+    countEl.textContent = count > 0 ? count.toLocaleString() : '';
+
+    if (textEl) {
+        const nowLiked = !isLiked;
+        if (count === 0) {
+            textEl.innerHTML = '<span class="kvibe-no-likes">Be the first to like this</span>';
+        } else if (nowLiked) {
+            textEl.innerHTML = count === 1
+                ? '<span class="kvibe-you-text">Liked by You</span>'
+                : '<span class="kvibe-you-text">Liked by You</span> and ' + (count - 1) + ' others';
+        } else {
+            textEl.innerHTML = 'Liked by ' + count + ' ' + (count === 1 ? 'person' : 'people');
+        }
+    }
+
+    fetch('/like_post/' + postId + '/', {
+        method: 'GET',
+        headers: { 'X-CSRFToken': kvibeGetCsrf(), 'X-Requested-With': 'XMLHttpRequest' }
+    }).catch(function() {
+        // revert on error
+        btn.dataset.liked = isLiked ? 'true' : 'false';
+        icon.className = isLiked
+            ? 'fas fa-heart kvibe-action-icon'
+            : 'fa-regular fa-heart kvibe-action-icon';
+        if (isLiked) icon.style.color = 'var(--kvibe-primary)';
+        else icon.removeAttribute('style');
+        const revert = isLiked ? count + 1 : Math.max(0, count - 1);
+        countEl.textContent = revert > 0 ? revert.toLocaleString() : '';
+    });
+}
+
+// ── REPOST ───────────────────────────────────────────
+function kvibeToggleRepost(btn) {
+    const postId   = btn.dataset.postId;
+    const isActive = btn.dataset.reposted === 'true';
+    if (isActive) {
+        // Undo repost immediately
+        _kvibeDoRepost(postId, btn, '', true);
+    } else {
+        // Show modal for caption
+        document.getElementById('kvibe-repost-modal-' + postId).classList.add('active');
+    }
+}
+
+function kvibeCloseRepostModal(postId) {
+    const modal = document.getElementById('kvibe-repost-modal-' + postId);
+    if (modal) modal.classList.remove('active');
+    const cap = document.getElementById('kvibe-repost-caption-' + postId);
+    if (cap) cap.value = '';
+}
+
+function kvibeConfirmRepost(postId, confirmBtn) {
+    const caption = (document.getElementById('kvibe-repost-caption-' + postId) || {}).value || '';
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '…';
+    // find the repost button for this post
+    const btn = document.querySelector('[data-post-id="' + postId + '"].kvibe-action-item[data-reposted]')
+             || document.querySelector('button[data-post-id="' + postId + '"]');
+    kvibeCloseRepostModal(postId);
+    _kvibeDoRepost(postId, btn, caption, false);
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Repost';
+}
+
+function _kvibeDoRepost(postId, btn, caption, undo) {
+    if (btn) {
+        const icon    = btn.querySelector('.fa-retweet');
+        const countEl = document.getElementById('kvibe-repost-count-' + postId);
+        if (icon) icon.classList.toggle('kvibe-reposted', !undo);
+        btn.dataset.reposted = undo ? 'false' : 'true';
+        if (countEl) {
+            let c = parseInt(countEl.textContent.replace(/,/g, '')) || 0;
+            c = undo ? Math.max(0, c - 1) : c + 1;
+            countEl.textContent = c > 0 ? c.toLocaleString() : '';
+            countEl.classList.toggle('kvibe-show', c > 0);
+        }
+    }
+    fetch('/repost/' + postId + '/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': kvibeGetCsrf(),
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ caption: caption, undo: undo })
+    }).catch(() => {});
+}
+
+// ── SHARE ────────────────────────────────────────────
+const _kvibeShareData = {};
+
+function kvibeOpenShareModal(postId, text) {
+    _kvibeShareData[postId] = text;
+    document.getElementById('kvibe-share-modal-' + postId).classList.add('active');
+}
+function kvibeCloseShareModal(postId) {
+    document.getElementById('kvibe-share-modal-' + postId).classList.remove('active');
+}
+function kvibeShareVia(platform, postId) {
+    const url  = window.location.origin + '/comment/' + postId;
+    const text = _kvibeShareData[postId] || '';
+    const msg  = encodeURIComponent(text + ' ' + url);
+    const links = {
+        whatsapp: 'https://api.whatsapp.com/send?text=' + msg,
+        facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url),
+        telegram: 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text),
+        snapchat: 'https://www.snapchat.com/scan?attachmentUrl=' + encodeURIComponent(url),
+        sms:      'sms:?body=' + msg,
+        email:    'mailto:?subject=Check this on Kvibe&body=' + msg,
+        x:        'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url),
+    };
+    if (platform === 'copy') {
+        navigator.clipboard.writeText(url).then(() => {
+            kvibeTrackShare(postId);
+            kvibeCloseShareModal(postId);
+        });
+        return;
+    }
+    if (links[platform]) {
+        window.open(links[platform], '_blank');
+        kvibeTrackShare(postId);
+        kvibeCloseShareModal(postId);
+    }
+}
+function kvibeTrackShare(postId) {
+    const countEl = document.getElementById('kvibe-share-count-' + postId);
+    fetch('/track_share/' + postId + '/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': kvibeGetCsrf(), 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(r => r.json()).then(data => {
+        if (data.success && countEl) {
+            countEl.textContent = data.new_count;
+            countEl.classList.add('kvibe-show');
+        }
+    }).catch(() => {});
+}
+
+// Close modals on Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.kvibe-share-modal.active, .kvibe-repost-modal.active')
+            .forEach(m => m.classList.remove('active'));
+    }
+});
+
 // Expand / collapse long text posts
 function kvibeToggleText(postId) {
     const el = document.getElementById('kvibe-text-' + postId);
@@ -5435,76 +5715,7 @@ function kvibeToggleText(postId) {
     }
 }
 
-// Like button with heart animation + particles
-function kvibeHandleLike(btn, postId) {
-    if (!btn) return;
-    const icon     = btn.querySelector('.kvibe-action-icon');
-    const countEl  = btn.querySelector('.kvibe-like-count');
-    const isLiked  = icon && icon.classList.contains('fas');
-    if (icon) {
-        icon.classList.add('kvibe-heart-animate');
-        icon.addEventListener('animationend', () => icon.classList.remove('kvibe-heart-animate'), { once: true });
-        if (isLiked) {
-            icon.classList.replace('fas', 'fa-regular');
-            icon.style.color = '';
-        } else {
-            icon.classList.replace('fa-regular', 'fas');
-            icon.style.color = '#ed4956';
-            spawnParticles(btn);
-            spawnFloatLabel(btn, '+1');
-        }
-    }
-    if (countEl) {
-        const cur = parseInt(countEl.textContent) || 0;
-        countEl.textContent = isLiked ? Math.max(0, cur - 1) : cur + 1;
-        countEl.classList.add('kvibe-count-tick');
-        countEl.addEventListener('animationend', () => countEl.classList.remove('kvibe-count-tick'), { once: true });
-    }
-}
 
-// Particle burst helper
-function spawnParticles(anchorEl) {
-    const container = document.createElement('div');
-    container.className = 'kvibe-particle-container';
-    anchorEl.style.position = 'relative';
-    anchorEl.appendChild(container);
-    const colors = ['#ed4956','#ff8c00','#ffd700','#ff69b4','#9b59b6'];
-    for (let i = 0; i < 8; i++) {
-        const p = document.createElement('div');
-        p.className = 'kvibe-particle';
-        const angle = (i / 8) * 2 * Math.PI;
-        const dist  = 28 + Math.random() * 18;
-        p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
-        p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
-        p.style.background = colors[i % colors.length];
-        container.appendChild(p);
-    }
-    setTimeout(() => container.remove(), 600);
-}
-
-// Float label helper
-function spawnFloatLabel(anchorEl, text) {
-    const lbl = document.createElement('div');
-    lbl.className = 'kvibe-float-label';
-    lbl.textContent = text;
-    anchorEl.style.position = 'relative';
-    anchorEl.appendChild(lbl);
-    setTimeout(() => lbl.remove(), 750);
-}
-
-// Repost toggle
-function kvibeToggleRepostBtn(btn, postId) {
-    if (!btn) return;
-    const icon     = btn.querySelector('.fa-retweet');
-    const countEl  = btn.querySelector('.kvibe-repost-count');
-    const isActive = icon && icon.classList.contains('reposted');
-    if (icon) icon.classList.toggle('reposted', !isActive);
-    if (countEl) {
-        const cur = parseInt(countEl.textContent) || 0;
-        countEl.textContent = isActive ? Math.max(0, cur - 1) : cur + 1;
-        countEl.classList.toggle('kvibe-show', !isActive ? cur + 1 > 0 : cur - 1 > 0);
-    }
-}
 
 function profileFilterMood(mood, btn) {
     // Update active chip
@@ -5525,185 +5736,6 @@ function profileFilterMood(mood, btn) {
 }
 </script>
 
-
-<!-- ===== REPOST MODAL ===== -->
-<div class="kvibe-repost-modal" id="kvibe-repost-modal">
-  <div class="kvibe-repost-modal-content">
-    <div class="kvibe-repost-modal-header">Repost</div>
-    <div class="kvibe-repost-modal-body">
-      <textarea class="kvibe-repost-textarea" id="kvibe-repost-caption"
-                placeholder="Add a comment to your repost (optional)"
-                maxlength="500"></textarea>
-      <div style="font-size:12px;color:var(--kvibe-text-light);text-align:right;">
-        <span id="kvibe-repost-char-count">0</span>/500
-      </div>
-    </div>
-    <div class="kvibe-repost-modal-footer">
-      <button class="kvibe-repost-cancel-btn" onclick="kvibeCloseRepostModal()">Cancel</button>
-      <button class="kvibe-repost-btn" id="kvibe-repost-confirm-btn">
-        <i class="fas fa-retweet"></i> Repost
-      </button>
-    </div>
-  </div>
-</div>
-
-<script>
-// ─── CSRF helper ───────────────────────────────────────────────────────────
-function getCsrfFromMeta() {
-  const meta = document.querySelector('meta[name="csrf-token"]');
-  if (meta) return meta.getAttribute('content');
-  const cookie = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='));
-  return cookie ? cookie.trim().split('=')[1] : '';
-}
-
-// ─── Repost state ──────────────────────────────────────────────────────────
-let currentRepostPostId = null;
-let currentRepostButton = null;
-
-function kvibeToggleRepost(postId, button) {
-  currentRepostPostId = postId;
-  currentRepostButton = button;
-  const isReposted = button.getAttribute('data-reposted') === 'true';
-  if (isReposted) {
-    kvibePerformRepost(postId, '', true);
-  } else {
-    kvibeOpenRepostModal();
-  }
-}
-
-function kvibeOpenRepostModal() {
-  const modal     = document.getElementById('kvibe-repost-modal');
-  const textarea  = document.getElementById('kvibe-repost-caption');
-  const charCount = document.getElementById('kvibe-repost-char-count');
-  textarea.value = '';
-  charCount.textContent = '0';
-  modal.classList.add('show');
-  textarea.focus();
-  textarea.oninput = function () { charCount.textContent = this.value.length; };
-  document.getElementById('kvibe-repost-confirm-btn').onclick = function () {
-    kvibePerformRepost(currentRepostPostId, textarea.value, false);
-    kvibeCloseRepostModal();
-  };
-}
-
-function kvibeCloseRepostModal() {
-  const modal = document.getElementById('kvibe-repost-modal');
-  if (modal) modal.classList.remove('show');
-  currentRepostPostId = null;
-  currentRepostButton = null;
-}
-
-function kvibePerformRepost(postId, caption, undo) {
-  const button = currentRepostButton;
-  if (!button) return;
-  const savedHtml = button.innerHTML;
-  button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-  button.disabled  = true;
-
-  fetch('/repost/' + postId + '/', {
-    method : 'POST',
-    headers: {
-      'X-CSRFToken'  : getCsrfFromMeta(),
-      'Content-Type' : 'application/json',
-    },
-    body: JSON.stringify({ caption: caption, undo: undo })
-  })
-  .then(r => r.json())
-  .then(data => {
-    button.disabled = false;
-    if (data.success) {
-      button.setAttribute('data-reposted', data.reposted ? 'true' : 'false');
-      button.innerHTML = savedHtml;
-      const newIcon  = button.querySelector('i');
-      const newCount = button.querySelector('.kvibe-repost-count');
-      if (newIcon)  newIcon.classList.toggle('reposted', !!data.reposted);
-      if (newCount) {
-        newCount.textContent = data.repost_count > 0 ? data.repost_count : '';
-        newCount.classList.toggle('kvibe-show', data.repost_count > 0);
-      }
-      showToast(data.message || (data.reposted ? 'Reposted!' : 'Repost removed'), 'success');
-      setTimeout(() => location.reload(), 800);
-    } else {
-      button.innerHTML = savedHtml;
-      showToast('Error: ' + (data.error || 'Something went wrong'), 'error');
-    }
-  })
-  .catch(() => {
-    button.disabled = false;
-    button.innerHTML = savedHtml;
-    showToast('Something went wrong. Please try again.', 'error');
-  });
-}
-
-// Close repost modal on backdrop click or Escape
-document.addEventListener('click', function (e) {
-  const modal = document.getElementById('kvibe-repost-modal');
-  if (modal && e.target === modal) kvibeCloseRepostModal();
-});
-document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape') kvibeCloseRepostModal();
-});
-
-// ─── Share modal ────────────────────────────────────────────────────────────
-const _kvibeProfileShareData = {};
-
-function kvibeOpenShareModal(postId, text) {
-  _kvibeProfileShareData[postId] = { text: text || '' };
-  const modal = document.getElementById('kvibe-share-modal-' + postId);
-  if (modal) modal.classList.add('active');
-}
-
-function kvibeCloseShareModal(postId) {
-  const modal = document.getElementById('kvibe-share-modal-' + postId);
-  if (modal) modal.classList.remove('active');
-}
-
-function kvibeGetShareUrl(postId) {
-  return window.location.origin + '/comment/' + postId;
-}
-
-function kvibeTrackShare(postId) {
-  fetch('/track_share/' + postId + '/', {
-    method : 'POST',
-    headers: { 'X-CSRFToken': getCsrfFromMeta() }
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      const el = document.getElementById('kvibe-share-count-' + postId);
-      if (el) { el.textContent = data.new_count; el.classList.add('kvibe-show'); }
-    }
-  }).catch(() => {});
-}
-
-function kvibeShareVia(platform, postId) {
-  const url     = kvibeGetShareUrl(postId);
-  const text    = (_kvibeProfileShareData[postId] || {}).text || '';
-  const fullMsg = encodeURIComponent(text + ' ' + url);
-  let shareLink = '';
-  switch (platform) {
-    case 'whatsapp': shareLink = 'https://api.whatsapp.com/send?text=' + fullMsg; break;
-    case 'facebook': shareLink = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url); break;
-    case 'telegram': shareLink = 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text); break;
-    case 'snapchat': shareLink = 'https://www.snapchat.com/scan?attachmentUrl=' + encodeURIComponent(url); break;
-    case 'sms':      shareLink = 'sms:?body=' + fullMsg; break;
-    case 'email':    shareLink = 'mailto:?subject=Check this out on Kvibe&body=' + fullMsg; break;
-    case 'x':        shareLink = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url); break;
-    case 'copy':
-      navigator.clipboard.writeText(url).then(() => {
-        kvibeTrackShare(postId);
-        kvibeCloseShareModal(postId);
-        showToast('Link copied!', 'success');
-      });
-      return;
-  }
-  if (shareLink) {
-    window.open(shareLink, '_blank');
-    kvibeTrackShare(postId);
-    kvibeCloseShareModal(postId);
-  }
-}
-</script>
-
 </body>
 </html>
+
