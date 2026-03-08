@@ -19,10 +19,27 @@ const OFFLINE_URL   = '/offline/';
 const POSTS_KEY     = '/kvibe-cached-posts-data/';
 
 // --- Pre-cache at install ----------------------------------------------------
+// All key navigation pages + static assets cached immediately on SW install
+// so they are available offline even before the user visits them.
 
 const PRECACHE_URLS = [
+  // Offline fallback page
   OFFLINE_URL,
+
+  // --- Core navigation pages (from footer nav bar) ---
+  '/',               // Home       {% url 'home' %}
+  '/explore/',       // Explore    {% url 'explore' %}
+  '/post/',          // Create     {% url 'post' %}
+  '/spotlight/',     // Spotlight  {% url 'spotlight' %}
+  '/notification/',  // Alerts     {% url 'notification_list' %}
+
+  // --- Header nav links ---
+  '/channel/create/', // Channel create  {% url 'channel_create' %}
+  '/inbox/',          // Messages        {% url 'inbox' %}
+
+  // --- Static assets used in header/footer ---
   '/static/images/logo.jpg',
+  '/static/images/chat.png',
   '/static/images/small.png',
   '/static/images/big.png',
 ];
@@ -65,10 +82,12 @@ self.addEventListener('fetch', function(event) {
   if (url.origin !== self.location.origin) return;
   if (request.method !== 'GET') return;
 
-  // Skip admin / auth
+  // Skip admin / auth / non-cacheable endpoints
   if (url.pathname.startsWith('/admin/') ||
       url.pathname.startsWith('/api/') ||
-      url.pathname.startsWith('/accounts/')) return;
+      url.pathname.startsWith('/accounts/') ||
+      url.pathname.startsWith('/hx/') ||
+      url.pathname.startsWith('/ws/')) return;
 
   // /load-more-posts/ -- intercept to cache post data
   if (url.pathname.startsWith('/load-more-posts/')) {
@@ -123,7 +142,6 @@ function fetchAndCachePosts(request) {
     }
     return response;
   }).catch(function() {
-    // Offline - return empty valid response so home page does not crash
     return new Response(JSON.stringify({ posts: [], has_next: false }), {
       headers: { 'Content-Type': 'application/json' }
     });
@@ -186,8 +204,10 @@ function networkFirst(request) {
 // --- Strategy: network-first for HTML with offline fallback ------------------
 
 function networkFirstWithOfflineFallback(request) {
+  var requestUrl = request.url;
   return fetch(request).then(function(response) {
-    if (response.ok && new URL(request.url).pathname === '/') {
+    // Cache every HTML page visited while online
+    if (response.ok) {
       caches.open(DYNAMIC_CACHE).then(function(cache) {
         cache.put(request, response.clone());
       });
@@ -195,9 +215,23 @@ function networkFirstWithOfflineFallback(request) {
     return response;
   }).catch(function() {
     return caches.match(request).then(function(cached) {
+      // Page was previously visited -- serve it
       if (cached) return cached;
+
+      // Page not in cache -- redirect to offline page with the attempted URL
+      // so offline.html can show "this page isn't available offline" message
+      var attemptedPath = new URL(requestUrl).pathname;
       return caches.match(OFFLINE_URL).then(function(offlinePage) {
-        return offlinePage || new Response(
+        if (offlinePage) {
+          // Clone the offline page response and rewrite the URL so the
+          // browser navigates to /offline/?next=<path> giving offline.html
+          // the context it needs to show the right message
+          var offlineRedirect = Response.redirect(
+            OFFLINE_URL + '?next=' + encodeURIComponent(attemptedPath), 302
+          );
+          return offlineRedirect;
+        }
+        return new Response(
           '<h1>You are offline</h1>',
           { status: 503, headers: { 'Content-Type': 'text/html' } }
         );
