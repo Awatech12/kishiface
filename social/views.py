@@ -182,7 +182,7 @@ def home(request):
         ).prefetch_related('likes', 'reposts', 'images')
 
     # Paginate: 10 posts per page on initial load
-    POSTS_PER_PAGE = 10
+    POSTS_PER_PAGE = 20
     paginator = Paginator(posts, POSTS_PER_PAGE)
     page_obj = paginator.get_page(1)
 
