@@ -1727,11 +1727,12 @@
       opacity: 0;
       transition: opacity 0.3s ease;
     }
-
     .kvibe-mobile-sidebar-overlay.active {
       display: block;
       opacity: 1;
     }
+    body.kvibe-swipe-mode .kvibe-mobile-sidebar-overlay.active { z-index: 9960; }
+    body.kvibe-swipe-mode .kvibe-mobile-right-sidebar.open { z-index: 9970; }
 
     .kvibe-mobile-right-sidebar {
       position: fixed;
@@ -2413,33 +2414,111 @@
        Mobile only. Desktop is completely unaffected.
     ============================================================ */
 
-    /* Toggle button — floats above feed on mobile */
+    /* Toggle button — lives inside mobile right sidebar only */
     #kvibe-swipe-toggle {
       display: none;
     }
-    @media (max-width: 767px) {
-      #kvibe-swipe-toggle {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        position: fixed;
-        bottom: 72px;
-        right: 16px;
-        z-index: 9990;
-        background: #111;
-        color: #fff;
-        border: none;
-        border-radius: 24px;
-        padding: 10px 16px;
-        font-size: 13px;
-        font-weight: 700;
-        cursor: pointer;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.35);
-        letter-spacing: 0.02em;
-        transition: transform 0.18s ease, background 0.18s ease;
-      }
-      #kvibe-swipe-toggle:active { transform: scale(0.95); }
-      #kvibe-swipe-toggle.swipe-active { background: #0095f6; }
+
+    /* Feed / Swipp toggle row inside mobile sidebar */
+    .kvibe-sidebar-mode-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: var(--kvibe-bg);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      border: 1px solid var(--kvibe-border);
+    }
+
+    .kvibe-sidebar-mode-toggle-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--kvibe-text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .kvibe-sidebar-mode-toggle-label i {
+      color: var(--kvibe-primary);
+      font-size: 15px;
+    }
+
+    /* Pill toggle track */
+    .kvibe-mode-pill {
+      display: flex;
+      align-items: center;
+      background: #e0e0e0;
+      border-radius: 20px;
+      padding: 3px;
+      gap: 2px;
+      transition: background 0.2s ease;
+    }
+
+    .kvibe-mode-pill-option {
+      padding: 5px 14px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--kvibe-text-light);
+      transition: all 0.18s ease;
+      letter-spacing: 0.02em;
+    }
+
+    .kvibe-mode-pill-option.active {
+      background: #111;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+
+    .kvibe-mode-pill-option.swipe-active {
+      background: var(--kvibe-primary);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0,149,246,0.3);
+    }
+
+
+    /* ---- Swipe follow button (dark UI variant) ---- */
+    .kvibe-swipe-follow-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 11px;
+      border-radius: 20px;
+      border: 1.5px solid rgba(255,255,255,0.85);
+      background: transparent;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      font-family: inherit;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .kvibe-swipe-follow-btn i { font-size: 11px; }
+    .kvibe-swipe-follow-btn:active { transform: scale(0.94); }
+
+    /* Following state */
+    .kvibe-swipe-follow-btn--following {
+      border-color: rgba(255,255,255,0.35);
+      color: rgba(255,255,255,0.6);
+    }
+    .kvibe-swipe-follow-btn--following:hover {
+      border-color: #e53935;
+      color: #e53935;
+      background: rgba(229,57,53,0.12);
+    }
+    .kvibe-swipe-follow-btn--following:hover i::before { content: "\f235"; }
+    .kvibe-swipe-follow-btn--following:hover span { font-size: 0; }
+    .kvibe-swipe-follow-btn--following:hover span::after {
+      content: "Unfollow";
+      font-size: 12px;
     }
 
     /* When swipe mode is active, hide the normal page chrome */
@@ -2459,7 +2538,7 @@
       overflow: hidden;
     }
 
-    /* Full-screen swipe container */
+    /* Full-screen swipe container — flex column so header sits above slides */
     #kvibe-swipe-container {
       display: none;
       position: fixed;
@@ -2468,9 +2547,94 @@
       background: #000;
       overflow: hidden;
       touch-action: pan-y;
+      flex-direction: column;
     }
     body.kvibe-swipe-mode #kvibe-swipe-container {
-      display: block;
+      display: flex;
+    }
+
+    /* ---- Swipe header: close btn + mood chips + more btn ---- */
+    #kvibe-swipe-header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      height: 52px;
+      background: #111;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      z-index: 9950;
+    }
+    #kvibe-swipe-mood-bar {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      height: 100%;
+    }
+    #kvibe-swipe-mood-bar::-webkit-scrollbar { display: none; }
+    .kvibe-swipe-mood-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.07);
+      color: rgba(255,255,255,0.8);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all 0.18s ease;
+    }
+    .kvibe-swipe-mood-chip:active { transform: scale(0.94); }
+    .kvibe-swipe-mood-chip.active {
+      background: var(--swipe-chip-color, #fff);
+      border-color: var(--swipe-chip-color, #fff);
+      color: #000;
+      font-weight: 700;
+    }
+    .kvibe-swipe-mood-chip .kvibe-chip-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+    #kvibe-swipe-more-btn {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      width: 52px;
+      height: 52px;
+      background: none;
+      border: none;
+      border-left: 1px solid rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.75);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      transition: background 0.18s, color 0.18s;
+    }
+    #kvibe-swipe-more-btn i { font-size: 15px; margin-bottom: 1px; }
+    #kvibe-swipe-more-btn:active,
+    #kvibe-swipe-more-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+    /* ---- Slide body fills remaining height ---- */
+    #kvibe-swipe-body {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
     }
 
     /* The scrolling track of slides */
@@ -2481,9 +2645,24 @@
       transition: transform 0.38s cubic-bezier(0.25, 0.46, 0.45, 0.94);
       will-change: transform;
     }
-    #kvibe-swipe-track.no-transition {
-      transition: none !important;
+    #kvibe-swipe-track.no-transition { transition: none !important; }
+
+    /* Empty state when mood filter has no results */
+    #kvibe-swipe-empty {
+      display: none;
+      position: absolute;
+      inset: 0;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,0.55);
+      gap: 12px;
+      z-index: 5;
     }
+    #kvibe-swipe-empty.visible { display: flex; }
+    #kvibe-swipe-empty i { font-size: 42px; opacity: 0.4; }
+    #kvibe-swipe-empty p { font-size: 15px; font-weight: 500; }
+    #kvibe-swipe-empty span { font-size: 13px; opacity: 0.6; }
 
     /* Individual slide */
     .kvibe-swipe-slide {
@@ -2518,10 +2697,13 @@
 
     /* Image fills the slide */
     .kvibe-swipe-media img {
-      width: 100%;
-      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
       object-fit: contain;
       display: block;
+      opacity: 1;
     }
 
     /* Text-only post — styled card over dark bg */
@@ -2563,9 +2745,12 @@
       background: #000;
     }
     .kvibe-swipe-carousel-slide img {
-      width: 100%;
-      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
       object-fit: contain;
+      opacity: 1;
     }
     .kvibe-swipe-carousel-btn {
       position: absolute;
@@ -2809,24 +2994,6 @@
       50%       { transform: translateX(-50%) translateY(-8px); }
     }
 
-    /* Close (X) button top-left */
-    #kvibe-swipe-close {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      z-index: 9950;
-      background: rgba(0,0,0,0.45);
-      border: none;
-      color: #fff;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      cursor: pointer;
-    }
 
     /* Swipe drag feel */
     #kvibe-swipe-track.dragging {
@@ -3750,6 +3917,24 @@
     <div class="kvibe-mobile-sidebar-body">
 
       <!-- Following / Followers Tabs (mobile) -->
+
+      <!-- Feed / Swipp Mode Toggle -->
+      <div class="kvibe-sidebar-mode-toggle">
+        <span class="kvibe-sidebar-mode-toggle-label">
+          <i class="fas fa-layer-group"></i> View Mode
+        </span>
+        <div class="kvibe-mode-pill" id="kvibe-sidebar-mode-pill">
+          <button class="kvibe-mode-pill-option active" id="kvibe-pill-feed"
+                  onclick="kvibeSidebarSetMode('feed')" aria-label="Switch to Feed">
+            Feed
+          </button>
+          <button class="kvibe-mode-pill-option" id="kvibe-pill-swipp"
+                  onclick="kvibeSidebarSetMode('swipp')" aria-label="Switch to Swipp">
+            Swipp
+          </button>
+        </div>
+      </div>
+
       <div class="kvibe-sidebar-social" style="margin-bottom: 16px;">
         <div class="kvibe-sidebar-tabs">
           <button class="kvibe-sidebar-tab active" data-tab="mob-following" onclick="kvibeSwitchTab('mob-following', this)">
@@ -3852,6 +4037,43 @@
       document.getElementById('kvibe-mobile-sidebar-overlay').classList.remove('active');
       document.body.style.overflow = '';
     }
+
+
+    // Feed / Swipp pill toggle inside mobile sidebar
+    function kvibeSidebarSetMode(mode) {
+      const feedBtn  = document.getElementById('kvibe-pill-feed');
+      const swippBtn = document.getElementById('kvibe-pill-swipp');
+      if (!feedBtn || !swippBtn) return;
+      if (mode === 'swipp') {
+        feedBtn.classList.remove('active', 'swipe-active');
+        swippBtn.classList.add('active', 'swipe-active');
+      } else {
+        swippBtn.classList.remove('active', 'swipe-active');
+        feedBtn.classList.add('active');
+        feedBtn.classList.remove('swipe-active');
+      }
+      const currentlySwipe = document.body.classList.contains('kvibe-swipe-mode');
+      if (mode === 'swipp' && !currentlySwipe) {
+        kvibeCloseMobileSidebar();
+        if (typeof kvibeToggleSwipeMode === 'function') kvibeToggleSwipeMode();
+      } else if (mode === 'feed' && currentlySwipe) {
+        kvibeCloseMobileSidebar();
+        if (typeof kvibeToggleSwipeMode === 'function') kvibeToggleSwipeMode();
+      } else {
+        kvibeCloseMobileSidebar();
+      }
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      const obs = new MutationObserver(function() {
+        const isSwipe = document.body.classList.contains('kvibe-swipe-mode');
+        const fp = document.getElementById('kvibe-pill-feed');
+        const sp = document.getElementById('kvibe-pill-swipp');
+        if (!fp || !sp) return;
+        if (isSwipe) { fp.classList.remove('active', 'swipe-active'); sp.classList.add('active', 'swipe-active'); }
+        else { sp.classList.remove('active', 'swipe-active'); fp.classList.add('active'); fp.classList.remove('swipe-active'); }
+      });
+      obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    });
 
     // Close sidebar on swipe right
     (function() {
@@ -5058,20 +5280,61 @@
      KVIBE SWIPE MODE — HTML Container + Toggle Button
      Mobile only. No effect on desktop.
 ===================================================== -->
-<button id="kvibe-swipe-toggle" onclick="kvibeToggleSwipeMode()" title="Switch to swipe mode">
+<!-- kvibe-swipe-toggle is rendered inside .kvibe-mobile-right-sidebar (mobile only) -->
+<button id="kvibe-swipe-toggle" style="display:none !important" aria-hidden="true" onclick="kvibeToggleSwipeMode()" title="Switch to swipe mode">
   <i class="fas fa-layer-group"></i> <span id="kvibe-swipe-toggle-label">Swipe</span>
 </button>
 
 <div id="kvibe-swipe-container" aria-hidden="true">
-  <button id="kvibe-swipe-close" onclick="kvibeToggleSwipeMode()" aria-label="Exit swipe mode">
-    <i class="fas fa-times"></i>
-  </button>
 
-  <!-- Progress dots (right edge) -->
-  <div class="kvibe-swipe-progress" id="kvibe-swipe-progress"></div>
+  <!-- Header: mood filter -->
+  <div id="kvibe-swipe-header">
+    <div id="kvibe-swipe-mood-bar">
+      <button class="kvibe-swipe-mood-chip active" data-mood="all" onclick="kvibeSwipeFilterMood('all', this)">
+        <span class="kvibe-chip-dot"></span> All
+      </button>
+      <button class="kvibe-swipe-mood-chip" style="--swipe-chip-color:#ff1493;" data-mood="slay" onclick="kvibeSwipeFilterMood('slay', this)">
+        <span class="kvibe-chip-dot"></span> 💅 slay
+      </button>
+      <button class="kvibe-swipe-mood-chip" style="--swipe-chip-color:#9933ff;" data-mood="vibing" onclick="kvibeSwipeFilterMood('vibing', this)">
+        <span class="kvibe-chip-dot"></span> 🎵 vibing
+      </button>
+      <button class="kvibe-swipe-mood-chip" style="--swipe-chip-color:#00cc66;" data-mood="sheesh" onclick="kvibeSwipeFilterMood('sheesh', this)">
+        <span class="kvibe-chip-dot"></span> 🥶 sheesh
+      </button>
+      <button class="kvibe-swipe-mood-chip" style="--swipe-chip-color:#ff6b00;" data-mood="periodt" onclick="kvibeSwipeFilterMood('periodt', this)">
+        <span class="kvibe-chip-dot"></span> ⏸️ periodt
+      </button>
+      <button class="kvibe-swipe-mood-chip" style="--swipe-chip-color:#ff4444;" data-mood="no-cap" onclick="kvibeSwipeFilterMood('no-cap', this)">
+        <span class="kvibe-chip-dot"></span> 🎯 no cap
+      </button>
+      <button class="kvibe-swipe-mood-chip" style="--swipe-chip-color:#ffd700;" data-mood="bussin" onclick="kvibeSwipeFilterMood('bussin', this)">
+        <span class="kvibe-chip-dot"></span> 🔥 bussin
+      </button>
+      <button class="kvibe-swipe-mood-chip" style="--swipe-chip-color:#808080;" data-mood="mid" onclick="kvibeSwipeFilterMood('mid', this)">
+        <span class="kvibe-chip-dot"></span> 😐 mid
+      </button>
+      <button class="kvibe-swipe-mood-chip" style="--swipe-chip-color:#8b4513;" data-mood="cringe" onclick="kvibeSwipeFilterMood('cringe', this)">
+        <span class="kvibe-chip-dot"></span> 😬 cringe
+      </button>
+    </div>
+    <button id="kvibe-swipe-more-btn" onclick="kvibeOpenMobileSidebar()" aria-label="Open sidebar">
+      <i class="fas fa-chevron-left"></i>
+      <span>MORE</span>
+    </button>
+  </div>
 
-  <!-- Slides track -->
-  <div id="kvibe-swipe-track"></div>
+  <!-- Slide body -->
+  <div id="kvibe-swipe-body">
+    <div class="kvibe-swipe-progress" id="kvibe-swipe-progress"></div>
+    <div id="kvibe-swipe-empty">
+      <i class="far fa-frown-open"></i>
+      <p>No posts here</p>
+      <span>No posts match this mood yet</span>
+    </div>
+    <div id="kvibe-swipe-track"></div>
+  </div>
+
 </div>
 
 <script>
@@ -5142,6 +5405,24 @@
         : 0;
       const isRepost    = !!repostHead;
 
+      // Follow button data — read from feed post's follow button
+      const feedFollowBtn   = article.querySelector('.kvibe-follow-btn');
+      const followUserId    = feedFollowBtn ? feedFollowBtn.dataset.userId   : '';
+      const followUsername  = feedFollowBtn ? feedFollowBtn.dataset.username : '';
+      const isFollowing     = feedFollowBtn ? feedFollowBtn.classList.contains('kvibe-follow-btn--following') : false;
+      const currentUserId   = '{{ request.user.id }}';
+      const showFollowBtn   = followUserId && followUserId !== currentUserId;
+      const followBtnHtml   = showFollowBtn
+        ? `<button class="kvibe-swipe-follow-btn${isFollowing ? ' kvibe-swipe-follow-btn--following' : ''}"
+                   data-user-id="${esc(followUserId)}"
+                   data-username="${esc(followUsername)}"
+                   onclick="kvibeSwipeToggleFollow(this)"
+                   title="${isFollowing ? 'Unfollow' : 'Follow'} ${esc(followUsername)}">
+             <i class="fas ${isFollowing ? 'fa-user-check' : 'fa-user-plus'}"></i>
+             <span>${isFollowing ? 'Following' : 'Follow'}</span>
+           </button>`
+        : '';
+
       /* ── Detect media ─────────────────────────── */
       // Video
       const videoEl     = article.querySelector('video.kvibe-video');
@@ -5149,11 +5430,12 @@
       const imageEls    = Array.from(article.querySelectorAll(
         '.kvibe-image-slide img, .kvibe-mixed-media-slide .kvibe-image-slide img'
       ));
-      // Remove duplicates by src
+      // Remove duplicates by effective src (handles lazy-loaded images)
       const imagesSeen = new Set();
       const images = imageEls.filter(img => {
-        if (imagesSeen.has(img.src)) return false;
-        imagesSeen.add(img.src);
+        const key = img.src || img.dataset.src || '';
+        if (!key || imagesSeen.has(key)) return false;
+        imagesSeen.add(key);
         return true;
       });
 
@@ -5187,20 +5469,22 @@
             <i class="fas fa-pause kvibe-swipe-play-icon" id="kvibe-swipe-play-${postId}"></i>
           </div>`;
       } else if (hasImages && images.length === 1) {
+        const imgSrc = images[0].src || images[0].dataset.src || '';
         badgeHtml = `<div class="kvibe-swipe-media-badge"><i class="fas fa-image"></i> Photo</div>`;
         mediaHtml = `
           <div class="kvibe-swipe-media" id="kvibe-swipe-media-${postId}">
             ${badgeHtml}
-            <img src="${esc(images[0].src)}" alt="Post image" loading="lazy">
+            <img src="${esc(imgSrc)}" alt="Post image" style="opacity:1;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;" onload="this.style.opacity='1';">
             <div class="kvibe-swipe-overlay"></div>
           </div>`;
       } else if (hasImages && images.length > 1) {
         badgeHtml = `<div class="kvibe-swipe-media-badge"><i class="fas fa-images"></i> ${images.length} Photos</div>`;
-        const imgSlides = images.map((img, i) =>
-          `<div class="kvibe-swipe-carousel-slide" data-ci="${i}">
-             <img src="${esc(img.src)}" alt="Image ${i+1}" loading="${i===0?'eager':'lazy'}">
-           </div>`
-        ).join('');
+        const imgSlides = images.map((img, i) => {
+          const s = img.src || img.dataset.src || '';
+          return `<div class="kvibe-swipe-carousel-slide" data-ci="${i}">
+             <img src="${esc(s)}" alt="Image ${i+1}" style="opacity:1;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;" onload="this.style.opacity='1';">
+           </div>`;
+        }).join('');
         const dots = images.map((_, i) =>
           `<span class="kvibe-swipe-carousel-dot${i===0?' active':''}" data-di="${i}"></span>`
         ).join('');
@@ -5259,7 +5543,8 @@
           <div class="kvibe-swipe-username">
             <img class="profile-pic" src="${esc(profileSrc)}" alt="${esc(username)}"
                  onerror="this.src='https://placehold.co/32x32/555/fff?text=U';">
-            ${esc(username)}
+            <span class="kvibe-swipe-username-text">${esc(username)}</span>
+            ${followBtnHtml}
           </div>
           ${captionBlock}
           ${moodBlock}
@@ -5394,7 +5679,6 @@
     // Only handle vertical on the slide track, not on carousel or action buttons
     if (e.target.closest('.kvibe-swipe-carousel') ||
         e.target.closest('.kvibe-swipe-actions') ||
-        e.target.closest('#kvibe-swipe-close') ||
         e.target.closest('.kvibe-swipe-action-btn')) return;
     startY = e.touches[0].clientY;
     currentY = startY;
@@ -5444,6 +5728,7 @@
   window.kvibeToggleSwipeMode = function () {
     if (!isMobile()) return;
     swipeActive = !swipeActive;
+    try { localStorage.setItem('kvibe_view_mode', swipeActive ? 'swipp' : 'feed'); } catch(e) {}
 
     document.body.classList.toggle('kvibe-swipe-mode', swipeActive);
     container.setAttribute('aria-hidden', swipeActive ? 'false' : 'true');
@@ -5454,6 +5739,11 @@
     if (swipeActive) {
       btn.classList.add('swipe-active');
       label.textContent = 'Feed';
+      document.querySelectorAll('#kvibe-swipe-mood-bar .kvibe-swipe-mood-chip').forEach(c => c.classList.remove('active'));
+      const allChip = document.querySelector('#kvibe-swipe-mood-bar [data-mood="all"]');
+      if (allChip) allChip.classList.add('active');
+      const emptyEl2 = document.getElementById('kvibe-swipe-empty');
+      if (emptyEl2) emptyEl2.classList.remove('visible');
       buildSlides();
       goToSlide(0, false);
       container.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -5528,6 +5818,155 @@
     }
   };
 
+  /* ─── Follow/unfollow from swipe mode ──────────── */
+  window.kvibeSwipeToggleFollow = function (btn) {
+    const userId    = btn.dataset.userId;
+    const username  = btn.dataset.username;
+    const isFollowing = btn.classList.contains('kvibe-swipe-follow-btn--following');
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch(`/follow/${userId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCsrfFromMeta(),
+        'Content-Type': 'application/json',
+      },
+    })
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      if (data.success) {
+        if (data.followed) {
+          btn.classList.add('kvibe-swipe-follow-btn--following');
+          btn.title = `Unfollow ${username}`;
+          btn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>';
+          // Sync feed follow button
+          const feedBtn = document.querySelector(`.kvibe-follow-btn[data-user-id="${userId}"]`);
+          if (feedBtn) { feedBtn.classList.add('kvibe-follow-btn--following'); feedBtn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>'; }
+          if (typeof showToast === 'function') showToast(`You are now following @${username}`, 'success');
+        } else {
+          btn.classList.remove('kvibe-swipe-follow-btn--following');
+          btn.title = `Follow ${username}`;
+          btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>';
+          const feedBtn = document.querySelector(`.kvibe-follow-btn[data-user-id="${userId}"]`);
+          if (feedBtn) { feedBtn.classList.remove('kvibe-follow-btn--following'); feedBtn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>'; }
+          if (typeof showToast === 'function') showToast(`Unfollowed @${username}`, 'info');
+        }
+      } else {
+        btn.innerHTML = isFollowing
+          ? '<i class="fas fa-user-check"></i><span>Following</span>'
+          : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+        if (typeof showToast === 'function') showToast('Something went wrong. Please try again.', 'error');
+      }
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.innerHTML = isFollowing
+        ? '<i class="fas fa-user-check"></i><span>Following</span>'
+        : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+      if (typeof showToast === 'function') showToast('Something went wrong. Please try again.', 'error');
+    });
+  };
+
+  /* ─── Mood filter in swipe mode ────────────────── */
+  window.kvibeSwipeFilterMood = function (mood, btn) {
+    document.querySelectorAll('#kvibe-swipe-mood-bar .kvibe-swipe-mood-chip')
+      .forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    const feedEl = document.getElementById('kvibe-real-feed');
+    if (!feedEl) return;
+    const allArticles = Array.from(feedEl.querySelectorAll('article.kvibe-post'));
+    const filtered = mood === 'all' ? allArticles : allArticles.filter(a => {
+      const pm = a.getAttribute('data-mood') || '';
+      if (mood.startsWith('__custom__')) {
+        const label = mood.replace('__custom__', '');
+        return (a.getAttribute('data-custom-mood') || '').toLowerCase().trim() === label;
+      }
+      return pm === mood;
+    });
+    const emptyEl = document.getElementById('kvibe-swipe-empty');
+    if (filtered.length === 0) {
+      track.innerHTML = ''; slides.length = 0; pauseCurrentVideo(); currentIndex = 0;
+      if (emptyEl) emptyEl.classList.add('visible');
+      buildProgressDots(); return;
+    }
+    if (emptyEl) emptyEl.classList.remove('visible');
+    track.innerHTML = ''; slides.length = 0; pauseCurrentVideo(); currentIndex = 0;
+    filtered.forEach((article, idx) => {
+      const postId = article.dataset.postId || article.getAttribute('data-post-id');
+      if (!postId) return;
+      const usernameEl2 = article.querySelector('.kvibe-username');
+      const picEl2      = article.querySelector('.kvibe-profile-pic');
+      const timeEl2     = article.querySelector('.kvibe-post-time');
+      const textEl2     = article.querySelector('.kvibe-post-text');
+      const moodEl2     = article.querySelector('.kvibe-mood-badge');
+      const likeBtn2    = article.querySelector('.kvibe-like-btn');
+      const repostHead2 = article.querySelector('.kvibe-repost-header');
+      const username2   = usernameEl2 ? usernameEl2.textContent.trim() : '';
+      const profileSrc2 = picEl2      ? picEl2.src : '';
+      const timeText2   = timeEl2     ? timeEl2.textContent.trim() : '';
+      const captionHtml2= textEl2     ? textEl2.innerHTML : '';
+      const moodTxt2    = moodEl2     ? moodEl2.textContent.trim() : '';
+      const isLiked2    = likeBtn2 && likeBtn2.dataset.liked === 'true';
+      const likeCount2  = likeBtn2 ? (parseInt(likeBtn2.querySelector('.kvibe-count')?.textContent) || 0) : 0;
+      const isRepost2   = !!repostHead2;
+      const ffBtn2      = article.querySelector('.kvibe-follow-btn');
+      const fuId2       = ffBtn2 ? ffBtn2.dataset.userId   : '';
+      const fuName2     = ffBtn2 ? ffBtn2.dataset.username : '';
+      const isFol2      = ffBtn2 ? ffBtn2.classList.contains('kvibe-follow-btn--following') : false;
+      const curId2      = '{{ request.user.id }}';
+      const showFol2    = fuId2 && fuId2 !== curId2;
+      const folHtml2    = showFol2
+        ? `<button class="kvibe-swipe-follow-btn${isFol2?' kvibe-swipe-follow-btn--following':''}" data-user-id="${esc(fuId2)}" data-username="${esc(fuName2)}" onclick="kvibeSwipeToggleFollow(this)" title="${isFol2?'Unfollow':'Follow'} ${esc(fuName2)}"><i class="fas ${isFol2?'fa-user-check':'fa-user-plus'}"></i><span>${isFol2?'Following':'Follow'}</span></button>`
+        : '';
+      const videoEl2 = article.querySelector('video.kvibe-video');
+      const imageEls2 = Array.from(article.querySelectorAll('.kvibe-image-slide img, .kvibe-mixed-media-slide .kvibe-image-slide img'));
+      const seen2 = new Set();
+      const images2 = imageEls2.filter(img => { const k=img.src||img.dataset.src||''; if(!k||seen2.has(k)) return false; seen2.add(k); return true; });
+      const hasVideo2=!!videoEl2, hasImages2=images2.length>0;
+      const slide = document.createElement('div');
+      slide.className = 'kvibe-swipe-slide';
+      slide.style.top = (idx*100)+'%';
+      let mh2='';
+      if (hasVideo2) {
+        const vs=videoEl2.dataset.src||videoEl2.querySelector('source')?.dataset.src||videoEl2.src||'';
+        const po=videoEl2.getAttribute('poster')||'';
+        mh2=`<div class="kvibe-swipe-media" id="kvibe-swipe-media-${postId}"><div class="kvibe-swipe-media-badge"><i class="fas fa-video"></i> Video</div><video class="kvibe-swipe-video" id="kvibe-swipe-video-${postId}" src="${esc(vs)}" ${po?`poster="${esc(po)}"`:''}  playsinline loop muted preload="none"></video><div class="kvibe-swipe-overlay"></div><i class="fas fa-pause kvibe-swipe-play-icon" id="kvibe-swipe-play-${postId}"></i></div>`;
+      } else if (hasImages2 && images2.length===1) {
+        const s=images2[0].src||images2[0].dataset.src||'';
+        mh2=`<div class="kvibe-swipe-media" id="kvibe-swipe-media-${postId}"><div class="kvibe-swipe-media-badge"><i class="fas fa-image"></i> Photo</div><img src="${esc(s)}" alt="Post image" style="opacity:1;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;" onload="this.style.opacity='1';"><div class="kvibe-swipe-overlay"></div></div>`;
+      } else if (hasImages2 && images2.length>1) {
+        const is2=images2.map((img,i)=>{const s=img.src||img.dataset.src||'';return `<div class="kvibe-swipe-carousel-slide" data-ci="${i}"><img src="${esc(s)}" alt="Image ${i+1}" style="opacity:1;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;" onload="this.style.opacity='1';"></div>`;}).join('');
+        const ds2=images2.map((_,i)=>`<span class="kvibe-swipe-carousel-dot${i===0?' active':''}" data-di="${i}"></span>`).join('');
+        mh2=`<div class="kvibe-swipe-media" id="kvibe-swipe-media-${postId}"><div class="kvibe-swipe-media-badge"><i class="fas fa-images"></i> ${images2.length} Photos</div><div class="kvibe-swipe-carousel" id="kvibe-swipe-car-${postId}"><div class="kvibe-swipe-carousel-track" id="kvibe-swipe-car-track-${postId}">${is2}</div><button class="kvibe-swipe-carousel-btn kvibe-swipe-carousel-prev" onclick="kvibeSwipeCarousel('${postId}',-1,event)"><i class="fas fa-chevron-left"></i></button><button class="kvibe-swipe-carousel-btn kvibe-swipe-carousel-next" onclick="kvibeSwipeCarousel('${postId}',1,event)"><i class="fas fa-chevron-right"></i></button><div class="kvibe-swipe-carousel-dots" id="kvibe-swipe-car-dots-${postId}">${ds2}</div></div><div class="kvibe-swipe-overlay"></div></div>`;
+      } else {
+        mh2=`<div class="kvibe-swipe-media" id="kvibe-swipe-media-${postId}" style="background:linear-gradient(135deg,#0a0a0a 0%,#1a1a2e 50%,#16213e 100%);"><div class="kvibe-swipe-text-card">${captionHtml2}</div></div>`;
+      }
+      const rb2=isRepost2?`<span style="font-size:11px;color:rgba(255,255,255,0.6);display:inline-flex;align-items:center;gap:3px;margin-bottom:3px;"><i class="fas fa-retweet"></i> Reposted</span><br>`:'';
+      const rc2=stripHtml(captionHtml2).trim();
+      const cb2=(hasVideo2||hasImages2)&&rc2?`<div class="kvibe-swipe-caption" id="kvibe-swipe-cap-${postId}">${esc(rc2)}</div>${rc2.length>80?`<button class="kvibe-swipe-caption-more" onclick="kvibeSwipeExpandCaption('${postId}',this)">more</button>`:''}`:''
+      const mb2=moodTxt2?`<div class="kvibe-swipe-mood">${esc(moodTxt2)}</div>`:'';
+      const ll2=likeCount2>0?` ${likeCount2}`:'';
+      const lc2=isLiked2?'liked':'';
+      const li2=isLiked2?'fas':'far';
+      slide.innerHTML=`${mh2}
+        <div class="kvibe-swipe-info">${rb2}<div class="kvibe-swipe-username"><img class="profile-pic" src="${esc(profileSrc2)}" alt="${esc(username2)}" onerror="this.src='https://placehold.co/32x32/555/fff?text=U';"><span class="kvibe-swipe-username-text">${esc(username2)}</span>${folHtml2}</div>${cb2}${mb2}<div class="kvibe-swipe-time">${esc(timeText2)}</div></div>
+        <div class="kvibe-swipe-actions">
+          <button class="kvibe-swipe-action-btn ${lc2}" onclick="kvibeSwipeLike('${postId}',this)" title="Like"><div class="icon-circle"><i class="${li2} fa-heart"></i></div><span id="kvibe-swipe-like-count-${postId}">${ll2}</span></button>
+          <a class="kvibe-swipe-action-btn" href="/comment/${postId}" title="Comment" onclick="event.stopPropagation()"><div class="icon-circle"><i class="far fa-comment"></i></div><span>Comment</span></a>
+          <button class="kvibe-swipe-action-btn" onclick="kvibeSwipeRepost('${postId}',this)" title="Repost"><div class="icon-circle"><i class="fas fa-retweet"></i></div><span>Repost</span></button>
+          <button class="kvibe-swipe-action-btn" onclick="kvibeOpenShareModal('${postId}','')" title="Share"><div class="icon-circle"><i class="far fa-paper-plane"></i></div><span>Share</span></button>
+        </div>
+        ${idx===0?'<div class="kvibe-swipe-hint" id="kvibe-swipe-hint"><i class="fas fa-chevron-up"></i><span>Swipe up</span></div>':''}`;
+      track.appendChild(slide);
+      slides.push({postId, el:slide, isLiked:isLiked2, likeCount:likeCount2, videoEl:null});
+    });
+    buildProgressDots();
+    goToSlide(0, false);
+  };
+
   /* ─── Repost from swipe mode ────────────────────── */
   window.kvibeSwipeRepost = function (postId, btn) {
     if (typeof kvibeToggleRepost === 'function') {
@@ -5536,6 +5975,20 @@
       kvibeToggleRepost(postId, realBtn || btn);
     }
   };
+
+
+  /* ─── Restore saved view mode on page load ─────── */
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!isMobile()) return;
+    var saved;
+    try { saved = localStorage.getItem('kvibe_view_mode'); } catch(e) {}
+    if (saved === 'swipp') {
+      // Small delay so the feed has a chance to render first
+      setTimeout(function () {
+        if (!swipeActive) kvibeToggleSwipeMode();
+      }, 350);
+    }
+  });
 
 })();
 </script>
