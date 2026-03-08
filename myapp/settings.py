@@ -158,33 +158,34 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # PWA Settings
-PWA_APP_NAME = 'KVibes'
-PWA_APP_DESCRIPTION = "Let Vibes"
-PWA_APP_THEME_COLOR = '#0A0302'
-PWA_APP_BACKGROUND_COLOR = '#ffffff'
-PWA_APP_DISPLAY = 'standalone'
-PWA_APP_SCOPE = '/'
-PWA_APP_ORIENTATION = 'natural'
-PWA_APP_START_URL = '/'
-PWA_APP_STATUS_BAR_COLOR = 'white'
+PWA_APP_NAME            = 'KVibe'
+PWA_APP_DESCRIPTION     = "Let Vibes"
+PWA_APP_THEME_COLOR     = '#0A0302'
+PWA_APP_BACKGROUND_COLOR= '#ffffff'
+PWA_APP_DISPLAY         = 'standalone'
+PWA_APP_SCOPE           = '/'
+PWA_APP_ORIENTATION     = 'natural'
+PWA_APP_START_URL       = '/'
+PWA_APP_STATUS_BAR_COLOR= 'white'
+
 PWA_APP_ICONS = [
-    {
-        'src': '/static/images/small.png',
-        'sizes': '192x192',
-        'type': 'image/png'
-    },
-    {
-        'src': '/static/images/big.png',
-        'sizes': '512x512',
-        'type': 'image/png'
-    },
+    {'src': '/static/images/small.png', 'sizes': '192x192', 'type': 'image/png'},
+    {'src': '/static/images/big.png',   'sizes': '512x512', 'type': 'image/png'},
     {
         'src': '/static/images/big.png',
         'sizes': '512x512',
         'type': 'image/png',
         'purpose': 'maskable'
-    }
+    },
 ]
+
+# Point django-pwa at your custom service worker
+PWA_SERVICE_WORKER_PATH = BASE_DIR / 'staticfiles' / 'js' / 'serviceworker.js'
+
+# The offline fallback URL — must match urls.py
+PWA_APP_FETCH_URL = '/offline/'
+
+
 
 # ==============================================================================
 # AUTHENTICATION & SECURITY (AXES)

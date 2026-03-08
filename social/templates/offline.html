@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0A0302">
+  <title>KVibe — Offline</title>
+  <link rel="shortcut icon" href="/static/images/logo.jpg" type="image/x-icon">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    /* ── Design tokens (matches home.html) ── */
+    :root {
+      --kvibe-bg:         #fafafa;
+      --kvibe-white:      #ffffff;
+      --kvibe-text:       #262626;
+      --kvibe-text-light: #8e8e8e;
+      --kvibe-primary:    #0095f6;
+      --kvibe-border:     #dbdbdb;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kvibe-bg);
+      color: var(--kvibe-text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Top header (mirrors home.html) ── */
+    .kvibe-header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: var(--kvibe-white);
+      border-bottom: 1px solid var(--kvibe-border);
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+    }
+
+    .kvibe-header-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    .kvibe-header-logo img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .kvibe-header-logo span {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--kvibe-text);
+      letter-spacing: -0.3px;
+    }
+
+    /* ── Offline banner ── */
+    .kvibe-offline-banner {
+      margin-top: 54px;   /* below fixed header */
+      background: #fff3cd;
+      border-bottom: 1px solid #ffc107;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #664d03;
+      font-weight: 500;
+    }
+
+    .kvibe-offline-banner i {
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .kvibe-offline-banner .kvibe-retry-btn {
+      margin-left: auto;
+      background: #ffc107;
+      color: #212529;
+      border: none;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .kvibe-offline-banner .kvibe-retry-btn:hover {
+      background: #e0a800;
+    }
+
+    /* ── Main area ── */
+    .kvibe-offline-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+      text-align: center;
+      gap: 16px;
+    }
+
+    /* ── Animated wifi-off icon ── */
+    .kvibe-offline-icon-wrap {
+      width: 88px;
+      height: 88px;
+      background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: kvibe-pulse 2.4s ease-in-out infinite;
+    }
+
+    .kvibe-offline-icon-wrap i {
+      font-size: 36px;
+      color: var(--kvibe-primary);
+    }
+
+    @keyframes kvibe-pulse {
+      0%, 100% { transform: scale(1);    box-shadow: 0 0 0   0   rgba(0,149,246,0.15); }
+      50%       { transform: scale(1.04); box-shadow: 0 0 0 14px rgba(0,149,246,0);    }
+    }
+
+    .kvibe-offline-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--kvibe-text);
+      letter-spacing: -0.3px;
+    }
+
+    .kvibe-offline-subtitle {
+      font-size: 14px;
+      color: var(--kvibe-text-light);
+      max-width: 300px;
+      line-height: 1.6;
+    }
+
+    /* ── Divider ── */
+    .kvibe-divider {
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--kvibe-text-light);
+      font-size: 12px;
+    }
+
+    .kvibe-divider::before,
+    .kvibe-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--kvibe-border);
+    }
+
+    /* ── Cached content notice ── */
+    .kvibe-cached-notice {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      width: 100%;
+      max-width: 360px;
+      text-align: left;
+    }
+
+    .kvibe-cached-notice-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--kvibe-text);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .kvibe-cached-notice-title i {
+      color: var(--kvibe-primary);
+    }
+
+    .kvibe-cached-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--kvibe-border);
+      text-decoration: none;
+      color: var(--kvibe-text);
+      font-size: 13px;
+      transition: opacity 0.2s;
+    }
+
+    .kvibe-cached-item:last-child { border-bottom: none; }
+
+    .kvibe-cached-item:hover { opacity: 0.7; }
+
+    .kvibe-cached-item i {
+      width: 20px;
+      text-align: center;
+      color: var(--kvibe-text-light);
+    }
+
+    /* ── Retry button (large) ── */
+    .kvibe-btn-primary {
+      background: var(--kvibe-primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 32px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      max-width: 360px;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .kvibe-btn-primary:hover  { background: #0081d6; }
+    .kvibe-btn-primary:active { transform: scale(0.98); }
+
+    .kvibe-btn-primary i { margin-right: 8px; }
+
+    /* ── Connection status dot ── */
+    .kvibe-status-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--kvibe-text-light);
+    }
+
+    .kvibe-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ff4444;
+      animation: kvibe-blink 1.6s step-start infinite;
+    }
+
+    @keyframes kvibe-blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.2; }
+    }
+
+    /* ── Mobile bottom nav placeholder (visual continuity) ── */
+    .kvibe-offline-bottom-nav {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--kvibe-white);
+      border-top: 1px solid var(--kvibe-border);
+      height: 56px;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 8px;
+    }
+
+    @media (max-width: 767px) {
+      .kvibe-offline-bottom-nav { display: flex; }
+      .kvibe-offline-main { padding-bottom: 80px; }
+    }
+
+    .kvibe-bottom-nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      color: var(--kvibe-text-light);
+      font-size: 10px;
+      text-decoration: none;
+      padding: 6px 10px;
+    }
+
+    .kvibe-bottom-nav-item i { font-size: 20px; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="kvibe-header">
+    <a class="kvibe-header-logo" href="/">
+      <img src="/static/images/logo.jpg" alt="KVibe" onerror="this.style.display='none'">
+      <span>KVibe</span>
+    </a>
+    <div class="kvibe-status-row">
+      <div class="kvibe-status-dot" id="statusDot"></div>
+      <span id="statusText">No connection</span>
+    </div>
+  </header>
+
+  <!-- ── Offline banner ── -->
+  <div class="kvibe-offline-banner" id="offlineBanner">
+    <i class="fas fa-wifi"></i>
+    <span>You're in <strong>Offline Mode</strong> — showing cached content only</span>
+    <button class="kvibe-retry-btn" onclick="kvibeRetry()">
+      <i class="fas fa-rotate-right"></i> Retry
+    </button>
+  </div>
+
+  <!-- ── Main content ── -->
+  <main class="kvibe-offline-main">
+
+    <!-- Icon -->
+    <div class="kvibe-offline-icon-wrap">
+      <i class="fas fa-wifi-slash"></i>
+    </div>
+
+    <!-- Heading -->
+    <h1 class="kvibe-offline-title">You're offline</h1>
+    <p class="kvibe-offline-subtitle">
+      Check your internet connection and try again.<br>
+      Your cached pages are still available below.
+    </p>
+
+    <!-- Retry -->
+    <button class="kvibe-btn-primary" onclick="kvibeRetry()">
+      <i class="fas fa-rotate-right"></i> Try again
+    </button>
+
+    <div class="kvibe-divider">Cached pages</div>
+
+    <!-- Cached pages list -->
+    <div class="kvibe-cached-notice">
+      <div class="kvibe-cached-notice-title">
+        <i class="fas fa-clock-rotate-left"></i>
+        Available offline
+      </div>
+
+      <a class="kvibe-cached-item" href="/" id="homeLink">
+        <i class="fas fa-house"></i>
+        <span>Home feed</span>
+      </a>
+      <a class="kvibe-cached-item" href="/explore/" id="exploreLink">
+        <i class="fas fa-compass"></i>
+        <span>Explore</span>
+      </a>
+      <a class="kvibe-cached-item" href="/notifications/" id="notifLink">
+        <i class="fas fa-bell"></i>
+        <span>Notifications</span>
+      </a>
+      <a class="kvibe-cached-item" href="/messages/" id="messagesLink">
+        <i class="fas fa-paper-plane"></i>
+        <span>Messages</span>
+      </a>
+    </div>
+
+  </main>
+
+  <!-- ── Mobile bottom nav (visual continuity) ── -->
+  <nav class="kvibe-offline-bottom-nav">
+    <a class="kvibe-bottom-nav-item" href="/"><i class="fas fa-house"></i><span>Home</span></a>
+    <a class="kvibe-bottom-nav-item" href="/explore/"><i class="fas fa-compass"></i><span>Explore</span></a>
+    <a class="kvibe-bottom-nav-item" href="/create/"><i class="fas fa-circle-plus"></i><span>Create</span></a>
+    <a class="kvibe-bottom-nav-item" href="/notifications/"><i class="fas fa-bell"></i><span>Alerts</span></a>
+    <a class="kvibe-bottom-nav-item" href="/messages/"><i class="fas fa-paper-plane"></i><span>DMs</span></a>
+  </nav>
+
+  <script>
+    // ── Retry logic ────────────────────────────────────────────────────────────
+    function kvibeRetry() {
+      const btn = document.querySelector('.kvibe-btn-primary');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
+      }
+      // Try to reach the home page; redirect if successful
+      fetch('/', { method: 'HEAD', cache: 'no-store' })
+        .then(() => { window.location.href = '/'; })
+        .catch(() => {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-rotate-right"></i> Try again';
+          }
+          showToast('Still offline. Please check your connection.');
+        });
+    }
+
+    // ── Listen for connectivity changes ───────────────────────────────────────
+    function updateOnlineStatus() {
+      const dot        = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+      const banner     = document.getElementById('offlineBanner');
+
+      if (navigator.onLine) {
+        dot.style.background        = '#00cc66';
+        dot.style.animation         = 'none';
+        statusText.textContent      = 'Back online';
+        banner.style.background     = '#d4edda';
+        banner.style.borderColor    = '#28a745';
+        banner.style.color          = '#155724';
+        banner.querySelector('span').innerHTML =
+          'Connection restored! <strong>Redirecting…</strong>';
+        // Auto redirect after a short delay
+        setTimeout(() => { window.location.href = '/'; }, 1500);
+      } else {
+        dot.style.background   = '#ff4444';
+        dot.style.animation    = '';
+        statusText.textContent = 'No connection';
+      }
+    }
+
+    window.addEventListener('online',  updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    // ── Check cache availability for each link ────────────────────────────────
+    async function checkCachedLinks() {
+      if (!('caches' in window)) return;
+
+      const links = [
+        { id: 'homeLink',     url: '/'              },
+        { id: 'exploreLink',  url: '/explore/'      },
+        { id: 'notifLink',    url: '/notifications/'},
+        { id: 'messagesLink', url: '/messages/'     },
+      ];
+
+      for (const { id, url } of links) {
+        const el     = document.getElementById(id);
+        const cached = await caches.match(url);
+        if (!cached && el) {
+          el.style.opacity      = '0.35';
+          el.style.pointerEvents = 'none';
+          el.title               = 'Not available offline';
+          const badge            = document.createElement('span');
+          badge.textContent      = 'Not cached';
+          badge.style.cssText    =
+            'margin-left:auto;font-size:10px;color:#8e8e8e;';
+          el.appendChild(badge);
+        }
+      }
+    }
+
+    // ── Toast helper ──────────────────────────────────────────────────────────
+    function showToast(msg) {
+      const t = document.createElement('div');
+      t.textContent = msg;
+      Object.assign(t.style, {
+        position:     'fixed',
+        bottom:       '80px',
+        left:         '50%',
+        transform:    'translateX(-50%)',
+        background:   '#262626',
+        color:        '#fff',
+        padding:      '10px 20px',
+        borderRadius: '20px',
+        fontSize:     '13px',
+        fontWeight:   '500',
+        zIndex:       '9999',
+        whiteSpace:   'nowrap',
+        boxShadow:    '0 4px 12px rgba(0,0,0,0.2)',
+        animation:    'none',
+        opacity:      '0',
+        transition:   'opacity 0.3s',
+      });
+      document.body.appendChild(t);
+      requestAnimationFrame(() => { t.style.opacity = '1'; });
+      setTimeout(() => {
+        t.style.opacity = '0';
+        setTimeout(() => t.remove(), 300);
+      }, 3000);
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      updateOnlineStatus();
+      checkCachedLinks();
+    });
+  </script>
+</body>
+</html>
