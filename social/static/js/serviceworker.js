@@ -1,23 +1,25 @@
 /**
- * KVibe Service Worker
- * Version: 1.0.0
- * Strategy: Cache-first for static assets, Network-first for pages,
- *            offline fallback served from cache on failure.
+ * KVibe Service Worker v2.0
+ * Strategies:
+ *   - Static assets     : Cache-first
+ *   - HTML pages        : Network-first + offline fallback
+ *   - /load-more-posts/ : Network-first + saves posts JSON to kvibe-posts cache
+ *   - Everything else   : Network-first
  */
 
 'use strict';
 
-// ─── Cache Configuration ──────────────────────────────────────────────────────
+// --- Cache names -------------------------------------------------------------
 
-const CACHE_VERSION  = 'v1';
-const STATIC_CACHE   = `kvibe-static-${CACHE_VERSION}`;
-const DYNAMIC_CACHE  = `kvibe-dynamic-${CACHE_VERSION}`;
-const OFFLINE_URL    = '/offline/';
+const CACHE_VERSION = 'v2';
+const STATIC_CACHE  = 'kvibe-static-' + CACHE_VERSION;
+const DYNAMIC_CACHE = 'kvibe-dynamic-' + CACHE_VERSION;
+const POSTS_CACHE   = 'kvibe-posts-' + CACHE_VERSION;
+const OFFLINE_URL   = '/offline/';
+const POSTS_KEY     = '/kvibe-cached-posts-data/';
 
-/**
- * Static assets pre-cached at install time.
- * Add any CSS/JS/image paths that must work offline.
- */
+// --- Pre-cache at install ----------------------------------------------------
+
 const PRECACHE_URLS = [
   OFFLINE_URL,
   '/static/images/logo.jpg',
@@ -25,190 +27,224 @@ const PRECACHE_URLS = [
   '/static/images/big.png',
 ];
 
-// ─── Install ──────────────────────────────────────────────────────────────────
+// --- Install -----------------------------------------------------------------
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())   // Activate immediately on first install
-      .catch((err) => console.error('[SW] Pre-cache failed:', err))
+      .then(function(cache) { return cache.addAll(PRECACHE_URLS); })
+      .then(function() { return self.skipWaiting(); })
+      .catch(function(err) { console.error('[SW] Pre-cache failed:', err); })
   );
 });
 
-// ─── Activate ─────────────────────────────────────────────────────────────────
+// --- Activate - clean old caches ---------------------------------------------
 
-self.addEventListener('activate', (event) => {
-  const VALID_CACHES = [STATIC_CACHE, DYNAMIC_CACHE];
-
+self.addEventListener('activate', function(event) {
+  var VALID = [STATIC_CACHE, DYNAMIC_CACHE, POSTS_CACHE];
   event.waitUntil(
-    caches.keys()
-      .then((cacheNames) =>
-        Promise.all(
-          cacheNames
-            .filter((name) => !VALID_CACHES.includes(name))
-            .map((name) => {
-              console.log('[SW] Deleting stale cache:', name);
-              return caches.delete(name);
-            })
-        )
-      )
-      .then(() => self.clients.claim())  // Take control of all open tabs
+    caches.keys().then(function(names) {
+      return Promise.all(
+        names.filter(function(n) { return !VALID.includes(n); })
+             .map(function(n) {
+               console.log('[SW] Deleting stale cache:', n);
+               return caches.delete(n);
+             })
+      );
+    }).then(function() { return self.clients.claim(); })
   );
 });
 
-// ─── Fetch ────────────────────────────────────────────────────────────────────
+// --- Fetch -------------------------------------------------------------------
 
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
+self.addEventListener('fetch', function(event) {
+  var request = event.request;
+  var url = new URL(request.url);
 
-  // Only handle same-origin requests (skip CDN, Cloudinary, etc.)
+  // Only same-origin GET requests
   if (url.origin !== self.location.origin) return;
-
-  // Skip non-GET requests (POST/PUT/DELETE must always go to network)
   if (request.method !== 'GET') return;
 
-  // Skip Django admin, API endpoints, and auth routes
-  if (
-    url.pathname.startsWith('/admin/') ||
-    url.pathname.startsWith('/api/') ||
-    url.pathname.startsWith('/accounts/') ||
-    url.pathname.startsWith('/load-more-posts/')
-  ) return;
+  // Skip admin / auth
+  if (url.pathname.startsWith('/admin/') ||
+      url.pathname.startsWith('/api/') ||
+      url.pathname.startsWith('/accounts/')) return;
 
-  // ── Static assets: Cache-first ──────────────────────────────────────────────
-  if (
-    url.pathname.startsWith('/static/') ||
-    url.pathname.match(/\.(js|css|woff2?|ttf|eot|ico|png|jpg|jpeg|gif|svg|webp)$/)
-  ) {
+  // /load-more-posts/ -- intercept to cache post data
+  if (url.pathname.startsWith('/load-more-posts/')) {
+    event.respondWith(fetchAndCachePosts(request));
+    return;
+  }
+
+  // Static assets -- cache-first
+  if (url.pathname.startsWith('/static/') ||
+      /\.(js|css|woff2?|ttf|eot|ico|png|jpg|jpeg|gif|svg|webp)$/.test(url.pathname)) {
     event.respondWith(cacheFirst(request));
     return;
   }
 
-  // ── HTML navigation: Network-first with offline fallback ────────────────────
-  if (request.mode === 'navigate' || request.headers.get('Accept')?.includes('text/html')) {
+  // HTML navigation -- network-first with offline fallback
+  if (request.mode === 'navigate' ||
+      (request.headers.get('Accept') || '').includes('text/html')) {
     event.respondWith(networkFirstWithOfflineFallback(request));
     return;
   }
 
-  // ── Everything else: Network-first ─────────────────────────────────────────
+  // Everything else -- network-first
   event.respondWith(networkFirst(request));
 });
 
-// ─── Strategies ───────────────────────────────────────────────────────────────
+// --- Strategy: fetch posts and save to POSTS_CACHE --------------------------
 
-/**
- * Cache-first: serve from cache, fall back to network and update cache.
- */
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
-  try {
-    const response = await fetch(request);
+function fetchAndCachePosts(request) {
+  return fetch(request).then(function(response) {
     if (response.ok) {
-      const cache = await caches.open(STATIC_CACHE);
-      cache.put(request, response.clone());
+      var clone = response.clone();
+      clone.json().then(function(data) {
+        if (data.posts && data.posts.length) {
+          caches.open(POSTS_CACHE).then(function(cache) {
+            var existing = [];
+            cache.match(POSTS_KEY).then(function(prev) {
+              if (prev) {
+                prev.json().then(function(old) {
+                  existing = old || [];
+                }).catch(function() {}).finally(function() {
+                  saveMerged(cache, data.posts, existing);
+                });
+              } else {
+                saveMerged(cache, data.posts, existing);
+              }
+            }).catch(function() {
+              saveMerged(cache, data.posts, existing);
+            });
+          }).catch(function() {});
+        }
+      }).catch(function() {});
     }
     return response;
-  } catch {
-    // Static asset not available offline — return empty 204
-    return new Response('', { status: 204 });
-  }
+  }).catch(function() {
+    // Offline - return empty valid response so home page does not crash
+    return new Response(JSON.stringify({ posts: [], has_next: false }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  });
 }
 
-/**
- * Network-first: try network, fall back to cache, then offline page.
- */
-async function networkFirst(request) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, response.clone());
+function saveMerged(cache, newPosts, existing) {
+  var merged = newPosts.concat(existing);
+  var seen   = {};
+  var unique = [];
+  for (var i = 0; i < merged.length; i++) {
+    var id = merged[i].post_id;
+    if (!seen[id]) {
+      seen[id] = true;
+      unique.push(merged[i]);
     }
-    return response;
-  } catch {
-    const cached = await caches.match(request);
-    return cached ?? new Response('Offline', { status: 503 });
+    if (unique.length >= 50) break;
   }
+  cache.put(POSTS_KEY, new Response(JSON.stringify(unique), {
+    headers: { 'Content-Type': 'application/json' }
+  }));
+  console.log('[SW] Cached ' + unique.length + ' posts for offline');
 }
 
-/**
- * Network-first for HTML pages with full offline page fallback.
- */
-async function networkFirstWithOfflineFallback(request) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      // Cache the home page so we have something meaningful offline
-      if (new URL(request.url).pathname === '/') {
-        const cache = await caches.open(DYNAMIC_CACHE);
-        cache.put(request, response.clone());
-      }
-    }
-    return response;
-  } catch {
-    // Network failed — try cached version of same page first
-    const cached = await caches.match(request);
+// --- Strategy: cache-first ---------------------------------------------------
+
+function cacheFirst(request) {
+  return caches.match(request).then(function(cached) {
     if (cached) return cached;
-
-    // Final fallback: offline page
-    const offlinePage = await caches.match(OFFLINE_URL);
-    return offlinePage ?? new Response(
-      '<h1>You are offline</h1>',
-      { status: 503, headers: { 'Content-Type': 'text/html' } }
-    );
-  }
+    return fetch(request).then(function(response) {
+      if (response.ok) {
+        caches.open(STATIC_CACHE).then(function(cache) {
+          cache.put(request, response.clone());
+        });
+      }
+      return response;
+    }).catch(function() {
+      return new Response('', { status: 204 });
+    });
+  });
 }
 
-// ─── Background Sync (optional future use) ────────────────────────────────────
+// --- Strategy: network-first -------------------------------------------------
 
-self.addEventListener('sync', (event) => {
+function networkFirst(request) {
+  return fetch(request).then(function(response) {
+    if (response.ok) {
+      caches.open(DYNAMIC_CACHE).then(function(cache) {
+        cache.put(request, response.clone());
+      });
+    }
+    return response;
+  }).catch(function() {
+    return caches.match(request).then(function(cached) {
+      return cached || new Response('Offline', { status: 503 });
+    });
+  });
+}
+
+// --- Strategy: network-first for HTML with offline fallback ------------------
+
+function networkFirstWithOfflineFallback(request) {
+  return fetch(request).then(function(response) {
+    if (response.ok && new URL(request.url).pathname === '/') {
+      caches.open(DYNAMIC_CACHE).then(function(cache) {
+        cache.put(request, response.clone());
+      });
+    }
+    return response;
+  }).catch(function() {
+    return caches.match(request).then(function(cached) {
+      if (cached) return cached;
+      return caches.match(OFFLINE_URL).then(function(offlinePage) {
+        return offlinePage || new Response(
+          '<h1>You are offline</h1>',
+          { status: 503, headers: { 'Content-Type': 'text/html' } }
+        );
+      });
+    });
+  });
+}
+
+// --- Background sync (future use) --------------------------------------------
+
+self.addEventListener('sync', function(event) {
   if (event.tag === 'kvibe-sync') {
     console.log('[SW] Background sync triggered');
-    // Future: replay queued POST requests (likes, follows, etc.)
   }
 });
 
-// ─── Push Notifications (future use) ─────────────────────────────────────────
+// --- Push notifications ------------------------------------------------------
 
-self.addEventListener('push', (event) => {
+self.addEventListener('push', function(event) {
   if (!event.data) return;
-
-  let data = {};
-  try { data = event.data.json(); } catch { data = { title: 'KVibe', body: event.data.text() }; }
-
-  const options = {
-    body:    data.body    || 'You have a new notification',
-    icon:    '/static/images/small.png',
-    badge:   '/static/images/small.png',
-    vibrate: [100, 50, 100],
-    data:    { url: data.url || '/' },
-    actions: [
-      { action: 'open',    title: 'Open KVibe' },
-      { action: 'dismiss', title: 'Dismiss'    },
-    ],
-  };
+  var data = {};
+  try { data = event.data.json(); } catch(e) { data = { title: 'KVibe', body: event.data.text() }; }
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'KVibe', options)
+    self.registration.showNotification(data.title || 'KVibe', {
+      body:    data.body || 'You have a new notification',
+      icon:    '/static/images/small.png',
+      badge:   '/static/images/small.png',
+      vibrate: [100, 50, 100],
+      data:    { url: data.url || '/' },
+      actions: [
+        { action: 'open',    title: 'Open KVibe' },
+        { action: 'dismiss', title: 'Dismiss'    }
+      ]
+    })
   );
 });
 
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-
   if (event.action === 'dismiss') return;
-
-  const targetUrl = event.notification.data?.url || '/';
+  var targetUrl = (event.notification.data && event.notification.data.url) || '/';
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((windowClients) => {
-        const existing = windowClients.find((c) => c.url === targetUrl && 'focus' in c);
-        if (existing) return existing.focus();
-        if (clients.openWindow) return clients.openWindow(targetUrl);
-      })
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(wcs) {
+      var existing = wcs.find(function(c) { return c.url === targetUrl && 'focus' in c; });
+      if (existing) return existing.focus();
+      if (clients.openWindow) return clients.openWindow(targetUrl);
+    })
   );
 });

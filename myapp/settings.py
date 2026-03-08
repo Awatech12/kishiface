@@ -180,7 +180,7 @@ PWA_APP_ICONS = [
 ]
 
 # Point django-pwa at your custom service worker
-PWA_SERVICE_WORKER_PATH = BASE_DIR / 'staticfiles' / 'js' / 'serviceworker.js'
+PWA_SERVICE_WORKER_PATH = BASE_DIR / 'social' / 'static' / 'js' / 'serviceworker.js'
 
 # The offline fallback URL — must match urls.py
 PWA_APP_FETCH_URL = '/offline/'
