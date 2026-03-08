@@ -215,21 +215,29 @@ function networkFirstWithOfflineFallback(request) {
     return response;
   }).catch(function() {
     return caches.match(request).then(function(cached) {
-      // Page was previously visited -- serve it
+      // Page was previously visited -- serve it from cache
       if (cached) return cached;
 
-      // Page not in cache -- redirect to offline page with the attempted URL
-      // so offline.html can show "this page isn't available offline" message
+      // Page not in cache -- serve the offline page but inject the attempted
+      // path into the HTML so offline.html knows what page was requested.
+      // We NEVER use Response.redirect() here as it causes redirect loops.
       var attemptedPath = new URL(requestUrl).pathname;
       return caches.match(OFFLINE_URL).then(function(offlinePage) {
         if (offlinePage) {
-          // Clone the offline page response and rewrite the URL so the
-          // browser navigates to /offline/?next=<path> giving offline.html
-          // the context it needs to show the right message
-          var offlineRedirect = Response.redirect(
-            OFFLINE_URL + '?next=' + encodeURIComponent(attemptedPath), 302
-          );
-          return offlineRedirect;
+          return offlinePage.text().then(function(html) {
+            // Inject a small script at the top of <body> so offline.html
+            // can read window.KVIBE_REQUESTED_PATH without any redirect
+            var injected = html.replace(
+              '<body>',
+              '<body><script>window.KVIBE_REQUESTED_PATH=' +
+                JSON.stringify(attemptedPath) +
+              ';<\/script>'
+            );
+            return new Response(injected, {
+              status: 200,
+              headers: { 'Content-Type': 'text/html; charset=utf-8' }
+            });
+          });
         }
         return new Response(
           '<h1>You are offline</h1>',

@@ -640,16 +640,17 @@
   }
 
   // -- Detect if we landed here because a specific page was not cached ------
-  function kvibeGetNextParam() {
-    try {
-      return new URLSearchParams(window.location.search).get('next');
-    } catch(e) { return null; }
+  // The SW injects window.KVIBE_REQUESTED_PATH into the page (no redirect needed)
+  function kvibeGetRequestedPath() {
+    return (typeof window.KVIBE_REQUESTED_PATH !== 'undefined')
+      ? window.KVIBE_REQUESTED_PATH
+      : null;
   }
 
   // -- Init ------------------------------------------------------------------
   window.addEventListener('online', function() {
-    var next = kvibeGetNextParam();
-    // If we know the page they wanted, go there directly on reconnect
+    var next = kvibeGetRequestedPath();
+    // Go to the page they originally wanted, or home
     var target = (next && next !== '/offline/') ? next : '/';
     var bar  = document.getElementById('kvibe-offline-bar');
     var icon = document.getElementById('kvibe-bar-icon');
@@ -667,27 +668,23 @@
   window.addEventListener('offline', kvibeUpdateStatus);
 
   document.addEventListener('DOMContentLoaded', function() {
-    var next = kvibeGetNextParam();
+    var next = kvibeGetRequestedPath();
 
     if (next && next !== '/' && next !== '/offline/') {
-      // User clicked a link that is not cached yet -- show page-specific message
+      // User clicked a link that is not cached -- show friendly message
       var feed      = document.getElementById('kvibe-offline-feed');
       var skeletons = document.getElementById('kvibe-skeletons');
       var moodBar   = document.querySelector('.kvibe-mood-filter-bar');
       if (skeletons) skeletons.remove();
       if (moodBar)   moodBar.style.display = 'none';
 
-      // Decode the page name for a friendly label
-      var pageName = decodeURIComponent(next).replace(/\/+/g, ' ').trim() || next;
-
       var card = document.createElement('div');
       card.className = 'kvibe-offline-card';
       card.innerHTML =
         '<div class="kvibe-offline-card-icon"><i class="fas fa-file-slash"></i></div>' +
         '<h2>Page not available offline</h2>' +
-        '<p><strong>' + kvibeEscapeHtml(decodeURIComponent(next)) + '</strong><br>' +
-        'You need an internet connection to view this page for the first time.<br>' +
-        'Once you visit it online it will be saved for offline use.</p>' +
+        '<p><strong>' + kvibeEscapeHtml(next) + '</strong><br>' +
+        'Visit this page while online and it will be saved for offline use.</p>' +
         '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
           '<button class="kvibe-offline-card-btn" onclick="history.back()" style="background:#8e8e8e;">' +
             '<i class="fas fa-arrow-left"></i> Go back' +
@@ -698,11 +695,10 @@
         '</div>';
       if (feed) feed.appendChild(card);
 
-      // Still update the banner
       kvibeUpdateStatus();
 
     } else {
-      // Normal offline landing -- show cached posts
+      // Normal offline landing -- show cached posts feed
       kvibeUpdateStatus();
       kvibeLoadCachedPosts();
     }
