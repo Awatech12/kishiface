@@ -12,9 +12,9 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
   {% progressive_web_app_meta %}
-  <script src="{% static 'js/pwa-install.js' %}"></script>
-  <title>Kvibe - Home</title>
+  <title>KishiVibe - Home</title>
 <script src="{% static 'js/home.js' %}"></script>
+<script src="{% static 'js/pwa-install.js' %}"></script>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   
@@ -4035,6 +4035,9 @@
 
         // Init infinite scroll AFTER real feed is visible so IntersectionObserver works
         kvibeInitInfiniteScroll();
+
+        // Seed offline cache with page 1 posts on every home page load
+        kvibeSeedOfflineCache();
       }
 
       // Reveal after a short delay to show kvibe-skeleton effect, or on load if already ready
@@ -4521,6 +4524,46 @@
           if (v) v.currentTime = Math.max(0, v.currentTime + seconds);
         }
 
+        // -- Seed offline cache on page load (fetches page 1 as JSON) ----------
+        function kvibeSeedOfflineCache() {
+          if (!('caches' in window)) return;
+          fetch('/load-more-posts/?page=1', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          }).then(function(resp) {
+            return resp.ok ? resp.json() : null;
+          }).then(function(data) {
+            if (data && data.posts && data.posts.length) {
+              kvibeCachePostsForOffline(data.posts);
+            }
+          }).catch(function() {});
+        }
+
+        // -- Cache posts for offline display ----------------------------------
+        function kvibeCachePostsForOffline(newPosts) {
+          if (!newPosts || !newPosts.length || !('caches' in window)) return;
+          const POSTS_CACHE = 'kvibe-posts-v2';
+          const POSTS_KEY   = '/kvibe-cached-posts-data/';
+          caches.open(POSTS_CACHE).then(async (cache) => {
+            // Merge with existing
+            let existing = [];
+            try {
+              const prev = await cache.match(POSTS_KEY);
+              if (prev) existing = await prev.json();
+            } catch { existing = []; }
+            // Deduplicate by post_id, keep newest 50
+            const merged = [...newPosts, ...existing];
+            const seen   = new Set();
+            const unique = merged.filter(p => {
+              if (seen.has(p.post_id)) return false;
+              seen.add(p.post_id);
+              return true;
+            }).slice(0, 50);
+            cache.put(POSTS_KEY, new Response(JSON.stringify(unique), {
+              headers: { 'Content-Type': 'application/json' }
+            }));
+          }).catch(() => {});
+        }
+
         async function loadMorePosts() {
           if (isLoading || !hasMore) return;
           isLoading = true;
@@ -4543,6 +4586,9 @@
               feed.appendChild(fragment);
               // Re-process HTMX on new elements so hx-get like buttons work
               if (typeof htmx !== 'undefined') htmx.process(feed);
+
+              // Save posts to service worker cache for offline display
+              kvibeCachePostsForOffline(data.posts);
             }
 
             hasMore   = data.has_next;

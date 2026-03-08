@@ -215,19 +215,21 @@ def home(request):
 
 def _safe_pic_url(user_obj):
     """
-    Return picture URL safely — works in both debug (ImageField) and
-    production (CloudinaryField). CloudinaryField.url returns only the
-    public_id in production, so we use cloudinary.CloudinaryImage to
-    build the full https URL explicitly.
+    Return picture URL safely. Works in both debug (ImageField) and
+    production (CloudinaryField). Always returns a full https URL.
     """
     try:
         if hasattr(user_obj, 'profile') and user_obj.profile.picture:
             pic = user_obj.profile.picture
-            if hasattr(pic, 'public_id'):
-                # CloudinaryField — build the full URL
-                return cloudinary.CloudinaryImage(pic.public_id).build_url()
-            # ImageField — .url is fine
-            return pic.url
+            if hasattr(pic, 'public_id') and pic.public_id:
+                # CloudinaryField -- build secure https URL explicitly
+                return cloudinary.CloudinaryImage(pic.public_id).build_url(secure=True)
+            # ImageField -- .url is fine locally
+            if hasattr(pic, 'url') and pic.url:
+                url = pic.url
+                if url.startswith('http://'):
+                    url = 'https://' + url[7:]
+                return url
     except Exception:
         pass
     return ''
