@@ -2520,8 +2520,9 @@
     .kvibe-swipe-media img {
       width: 100%;
       height: 100%;
-      object-fit: contain;
+      object-fit: cover;
       display: block;
+      opacity: 1;
     }
 
     /* Text-only post — styled card over dark bg */
@@ -2565,7 +2566,8 @@
     .kvibe-swipe-carousel-slide img {
       width: 100%;
       height: 100%;
-      object-fit: contain;
+      object-fit: cover;
+      opacity: 1;
     }
     .kvibe-swipe-carousel-btn {
       position: absolute;
@@ -5145,15 +5147,16 @@
       /* ── Detect media ─────────────────────────── */
       // Video
       const videoEl     = article.querySelector('video.kvibe-video');
-      // Images (from carousel or single)
+      // Images (from carousel or single) — use src OR data-src for lazy-loaded images
       const imageEls    = Array.from(article.querySelectorAll(
         '.kvibe-image-slide img, .kvibe-mixed-media-slide .kvibe-image-slide img'
       ));
-      // Remove duplicates by src
+      // Remove duplicates by effective src
       const imagesSeen = new Set();
       const images = imageEls.filter(img => {
-        if (imagesSeen.has(img.src)) return false;
-        imagesSeen.add(img.src);
+        const key = img.src || img.dataset.src || '';
+        if (!key || imagesSeen.has(key)) return false;
+        imagesSeen.add(key);
         return true;
       });
 
@@ -5187,20 +5190,22 @@
             <i class="fas fa-pause kvibe-swipe-play-icon" id="kvibe-swipe-play-${postId}"></i>
           </div>`;
       } else if (hasImages && images.length === 1) {
+        const imgSrc = images[0].src || images[0].dataset.src || '';
         badgeHtml = `<div class="kvibe-swipe-media-badge"><i class="fas fa-image"></i> Photo</div>`;
         mediaHtml = `
           <div class="kvibe-swipe-media" id="kvibe-swipe-media-${postId}">
             ${badgeHtml}
-            <img src="${esc(images[0].src)}" alt="Post image" loading="lazy">
+            <img src="${esc(imgSrc)}" alt="Post image" style="opacity:1;" onload="this.style.opacity='1';">
             <div class="kvibe-swipe-overlay"></div>
           </div>`;
       } else if (hasImages && images.length > 1) {
         badgeHtml = `<div class="kvibe-swipe-media-badge"><i class="fas fa-images"></i> ${images.length} Photos</div>`;
-        const imgSlides = images.map((img, i) =>
-          `<div class="kvibe-swipe-carousel-slide" data-ci="${i}">
-             <img src="${esc(img.src)}" alt="Image ${i+1}" loading="${i===0?'eager':'lazy'}">
-           </div>`
-        ).join('');
+        const imgSlides = images.map((img, i) => {
+          const s = img.src || img.dataset.src || '';
+          return `<div class="kvibe-swipe-carousel-slide" data-ci="${i}">
+             <img src="${esc(s)}" alt="Image ${i+1}" style="opacity:1;width:100%;height:100%;object-fit:cover;" onload="this.style.opacity='1';">
+           </div>`;
+        }).join('');
         const dots = images.map((_, i) =>
           `<span class="kvibe-swipe-carousel-dot${i===0?' active':''}" data-di="${i}"></span>`
         ).join('');
@@ -5541,3 +5546,4 @@
 </script>
 </body>
 </html>
+
