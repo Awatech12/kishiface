@@ -158,15 +158,15 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # PWA Settings
-PWA_APP_NAME            = 'KVibe'
+PWA_APP_NAME            = 'KishiVibe'
 PWA_APP_DESCRIPTION     = "Let Vibes"
-PWA_APP_THEME_COLOR     = '#0A0302'
+PWA_APP_THEME_COLOR     = '#ffffff'
 PWA_APP_BACKGROUND_COLOR= '#ffffff'
 PWA_APP_DISPLAY         = 'standalone'
 PWA_APP_SCOPE           = '/'
 PWA_APP_ORIENTATION     = 'natural'
 PWA_APP_START_URL       = '/'
-PWA_APP_STATUS_BAR_COLOR= 'white'
+PWA_APP_STATUS_BAR_COLOR= 'default'
 
 PWA_APP_ICONS = [
     {'src': '/static/images/small.png', 'sizes': '192x192', 'type': 'image/png'},
