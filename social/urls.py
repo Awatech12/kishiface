@@ -6,7 +6,6 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('register/', views.register, name='register'),
     path('home', views.home, name='home'),
-   path('load-more-posts/', views.load_more_posts, name='load_more_posts'),
     path('open/<uuid:post_id>/<str:notification_type>', views.open_notification, name='open_notification'),
     path('comments/<uuid:post_id>', views.postcomment, name='postcomment'),
     path('comment_like/<uuid:comment_id>', views.comment_like, name='comment_like'),

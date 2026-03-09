@@ -122,52 +122,44 @@ def home(request):
             'message_type': msg_type
         })
     
-    # Get data - include reposts from followed users
-    posts = Post.objects.filter(
-        Q(author__in=following) | 
-        Q(author=request.user) |
-        Q(is_repost=True, author__in=following)  # Include reposts by followed users
-    ).order_by('?')  # Changed from '?' to '-created_at' for chronological order
-    
     users = list(User.objects.exclude(id__in=following).exclude(id=request.user.id).order_by('?'))
-    
+
     # Get unread follow notifications count
     unread_follow_count = FollowNotification.objects.filter(
         to_user=request.user,
         is_read=False
     ).count()
-    
+
     # Get unread notifications count
     unread_notifications_count = Notification.objects.filter(
         recipient=request.user,
         is_read=False
     ).count()
-    
+
     # ===== BUILD FEED =====
     feed = []
-    
+
     # Get trending hashtags (optional - for right sidebar)
     from django.db.models import Count
     trending_hashtags = []
-    
+
     # Extract hashtags from recent posts
     recent_posts = Post.objects.filter(
         Q(author__in=following) | Q(author=request.user)
     )[:100]
-    
+
     hashtag_counts = {}
     for post in recent_posts:
         hashtags = extract_hashtags(post.content)
         for tag in hashtags:
             hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
-    
+
     # Get top 5 trending hashtags
     trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-    
-    # All users (new or existing) see posts - new users see all posts with follow option
-    # For new users with no following, show all posts (so they can discover & follow)
+
+    # New users (no followings) see all posts including their own — random order
     if not following:
-        posts = Post.objects.exclude(author=request.user).order_by('-created_at').select_related(
+        posts = Post.objects.all().order_by('?').select_related(
             'author', 'author__profile',
             'original_post', 'original_post__author', 'original_post__author__profile'
         ).prefetch_related('likes', 'reposts', 'images')
@@ -176,23 +168,50 @@ def home(request):
             Q(author__in=following) |
             Q(author=request.user) |
             Q(is_repost=True, author__in=following)
-        ).order_by('-created_at').select_related(
+        ).order_by('?').select_related(
             'author', 'author__profile',
             'original_post', 'original_post__author', 'original_post__author__profile'
         ).prefetch_related('likes', 'reposts', 'images')
 
-    # Paginate: 10 posts per page on initial load
-    POSTS_PER_PAGE = 20
-    paginator = Paginator(posts, POSTS_PER_PAGE)
-    page_obj = paginator.get_page(1)
-
-    for i, post in enumerate(page_obj.object_list, 1):
-        feed.append({'type': 'post', 'data': post})
-        if i % 4 == 2 and users:
-            feed.append({'type': 'user_suggestion', 'data': users.pop(0)})
-
     # Pass following ids to template for follow button state
     following_ids = list(following)
+    following_ids_set = set(following)
+
+    # Build friend-of-friend (2nd-degree) set:
+    # Users followed by people the current user follows, but not directly followed themselves
+    fof_ids = set()
+    for followed_user_id in following_ids_set:
+        try:
+            followed_profile = Profile.objects.get(user_id=followed_user_id)
+            their_followings = followed_profile.followings.values_list('user', flat=True)
+            fof_ids.update(
+                uid for uid in their_followings
+                if uid not in following_ids_set and uid != request.user.id
+            )
+        except Profile.DoesNotExist:
+            pass
+
+    # For each FOF user, collect ALL followed users who follow them (not just the first)
+    fof_via_cache = {}  # fof_uid -> [User, User, ...]
+    for fof_uid in fof_ids:
+        for followed_user_id in following_ids_set:
+            try:
+                followed_profile = Profile.objects.get(user_id=followed_user_id)
+                if followed_profile.followings.filter(user_id=fof_uid).exists():
+                    fof_via_cache.setdefault(fof_uid, []).append(
+                        User.objects.get(id=followed_user_id)
+                    )
+            except (Profile.DoesNotExist, User.DoesNotExist):
+                pass
+
+    # Build feed with FOF flag
+    for i, post in enumerate(posts, 1):
+        actual_author_id = post.original_post.author_id if post.is_repost and post.original_post else post.author_id
+        is_fof = actual_author_id in fof_ids
+        fof_via = fof_via_cache.get(actual_author_id, []) if is_fof else []
+        feed.append({'type': 'post', 'data': post, 'is_fof': is_fof, 'fof_via': fof_via})
+        if i % 4 == 2 and users:
+            feed.append({'type': 'user_suggestion', 'data': users.pop(0)})
 
     # Sidebar: followers and followings lists
     sidebar_followings = profile.followings.select_related('user').all()
@@ -206,8 +225,6 @@ def home(request):
         'users': users[:3],
         'trending_hashtags': trending_hashtags,
         'following_ids': following_ids,
-        'has_more_posts': page_obj.has_next(),
-        'total_pages': paginator.num_pages,
         'sidebar_followings': sidebar_followings,
         'sidebar_followers': sidebar_followers,
     })
@@ -235,152 +252,6 @@ def _safe_pic_url(user_obj):
     return ''
 
 
-def load_more_posts(request):
-    """AJAX endpoint: returns the next page of posts as JSON for infinite scroll."""
-    if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({'error': 'Invalid request'}, status=400)
-
-    profile = Profile.objects.get(user=request.user)
-    following = profile.followings.values_list('user', flat=True)
-
-    page_number = int(request.GET.get('page', 2))
-    POSTS_PER_PAGE = 10
-
-    base_qs = Post.objects.select_related(
-        'author', 'author__profile',
-        'original_post', 'original_post__author', 'original_post__author__profile'
-    ).prefetch_related('likes', 'reposts', 'images')
-
-    if not following:
-        posts = base_qs.exclude(author=request.user).order_by('-created_at')
-    else:
-        posts = base_qs.filter(
-            Q(author__in=following) |
-            Q(author=request.user) |
-            Q(is_repost=True, author__in=following)
-        ).order_by('-created_at')
-
-    paginator = Paginator(posts, POSTS_PER_PAGE)
-    page_obj = paginator.get_page(page_number)
-    following_ids = list(following)
-
-    posts_data = []
-    for post in page_obj.object_list:
-        media = []
-        if post.video_file:
-            media.append({
-                'type': 'video', 
-                'url': post.video_file.url,
-                'thumbnail': post.video_thumbnail.url if hasattr(post, 'video_thumbnail') and post.video_thumbnail else ''
-            })
-        for img in post.images.all():
-            media.append({'type': 'image', 'url': img.image.url})
-
-        original_media = []
-        if post.is_repost and post.original_post:
-            op = post.original_post
-            if op.video_file:
-                original_media.append({
-                    'type': 'video', 
-                    'url': op.video_file.url,
-                    'thumbnail': op.video_thumbnail.url if hasattr(op, 'video_thumbnail') and op.video_thumbnail else ''
-                })
-            for img in op.images.all():
-                original_media.append({'type': 'image', 'url': img.image.url})
-
-        mood_display = ''
-        mood_color = ''
-        if post.is_repost and post.original_post:
-            mood_data = post.original_post.get_mood_data() if hasattr(post.original_post, 'get_mood_data') else {}
-        else:
-            mood_data = post.get_mood_data() if hasattr(post, 'get_mood_data') else {}
-        if mood_data:
-            mood_display = mood_data.get('display', '')
-            mood_color = mood_data.get('color', '')
-
-        is_following_author = False
-        if hasattr(post, 'get_original_author'):
-            is_following_author = post.get_original_author().id in following_ids
-
-        # Determine original author info safely
-        if post.is_repost and post.original_post:
-            orig_author = post.original_post.author
-            orig_username = orig_author.username
-            orig_name = '{} {}'.format(orig_author.first_name, orig_author.last_name)
-            orig_pic = _safe_pic_url(orig_author)
-            try:
-                orig_verified = orig_author.profile.is_verify
-            except Exception:
-                orig_verified = False
-            orig_id = orig_author.id
-            content = post.original_post.content
-            orig_created = post.original_post.created_at.isoformat()
-        else:
-            orig_author = post.author
-            orig_username = post.author.username
-            orig_name = '{} {}'.format(post.author.first_name, post.author.last_name)
-            orig_pic = _safe_pic_url(post.author)
-            try:
-                orig_verified = post.author.profile.is_verify
-            except Exception:
-                orig_verified = False
-            orig_id = post.author.id
-            content = post.content
-            orig_created = post.created_at.isoformat()
-
-        # Safely get current author verified status
-        try:
-            author_verified = post.author.profile.is_verify
-        except Exception:
-            author_verified = False
-
-        posts_data.append({
-            'post_id': str(post.post_id),
-            'is_repost': post.is_repost,
-            'author_username': post.author.username,
-            'author_name': '{} {}'.format(post.author.first_name, post.author.last_name),
-            'author_pic': _safe_pic_url(post.author),
-            'author_verified': author_verified,
-            'author_id': post.author.id,
-            
-            'original_author_username': orig_username,
-            'original_author_name': orig_name,
-            'original_author_pic': orig_pic,
-            'original_author_verified': orig_verified,
-            'original_author_id': orig_id,
-            
-            'content': content,
-            'repost_content': post.repost_content or '',
-            'created_at': post.created_at.isoformat(),
-            'original_created_at': orig_created,
-            
-            'mood': post.mood or '',
-            'custom_mood': post.custom_mood or '',
-            'mood_display': mood_display,
-            'mood_color': mood_color,
-            'has_mood': bool(mood_display),
-            
-            'media': media,
-            'original_media': original_media,
-            
-            'like_count': post.likes.count(),
-            'is_liked': request.user in post.likes.all(),
-            'is_following_author': is_following_author,
-            'is_own_post': post.author == request.user,
-            
-            # Engagement bar extras
-            'is_reposted': request.user in post.reposts.all() if hasattr(post, 'reposts') else False,
-            'repost_count': post.reposts.count() if hasattr(post, 'reposts') else 0,
-            'view_count': post.view if hasattr(post, 'view') and post.view else 0,
-            'liker_pics': [_safe_pic_url(u) for u in post.likes.all()[:3] if _safe_pic_url(u)],
-        })
-
-    return JsonResponse({
-        'posts': posts_data,
-        'has_next': page_obj.has_next(),
-        'next_page': page_number + 1 if page_obj.has_next() else None,
-        'total_pages': paginator.num_pages,
-    })
 from django.views.decorators.http import require_POST
 @login_required(login_url='/')
 @require_POST
