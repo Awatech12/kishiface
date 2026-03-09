@@ -538,4 +538,6 @@ window.kfDownloadPostMedia = kfDownloadPostMedia;
 window.kfClosePanel = (panelId) => kfClosePanel(panelId || 'kf-profile-panel');
 window.kfClosePanel2 = () => kfClosePanel('kf-comments-panel');
 window.kfSlideCarousel = kfSlideCarousel;
+window.kvibeInitAllCarouselSwipe = kvibeInitAllCarouselSwipe;
+window.kvibeAttachSwipeHandlers  = kvibeAttachSwipeHandlers;
 
