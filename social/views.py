@@ -519,12 +519,6 @@ def post_comment(request, post_id):
 
 
 @login_required(login_url='/')
-def commentpopup(request, post_id):
-    post=get_object_or_404(Post, post_id=post_id)
-    
-    comments=PostComment.objects.filter(post=post).order_by('-created_at')
-    return render(request, 'commentpopup.html', {'post':post, 'comments': comments})
-@login_required(login_url='/')
 def postcomment(request, post_id):
     post = get_object_or_404(Post, post_id=post_id)
 
@@ -890,28 +884,6 @@ def profile_videos(request, username):
         return render(request, 'profile_videos_partial.html', context)
 
     # Direct page load — render full page; JS will read active_tab and show grid
-    return render(request, 'profile.html', context)
-
-def profile_audios(request, username):
-    user = get_object_or_404(User, username=username)
-    profile = user.profile
-    
-    # Get audio posts
-    audio_posts = Post.objects.filter(
-        author=user,
-        file__isnull=False
-    ).prefetch_related('images')[:30]
-    
-    context = {
-        'user': user,
-        'profile': profile,
-        'posts': audio_posts,
-    }
-    
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
-        return render(request, 'profile_audios_partial.html', context)
-    
-    context['posts'] = audio_posts
     return render(request, 'profile.html', context)
 
 def profile_text_posts(request, username):
