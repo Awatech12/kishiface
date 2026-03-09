@@ -192,26 +192,23 @@ function kvibeSeekVideo(videoId, seconds) {
 function kvibeSlideCarousel(postId, direction) {
   const carousel = document.getElementById(`kvibe-carousel-${postId}`);
   const track = document.getElementById(`kvibe-track-${postId}`);
-
+  const indicators = carousel?.querySelectorAll('.kvibe-indicator');
+  
   if (!carousel || !track) return;
-
+  
   let current = parseInt(carousel.dataset.slide || 0);
   const total = parseInt(carousel.dataset.total || 1);
-
+  
   if (total <= 1) return;
-
-  current = Math.max(0, Math.min(current + direction, total - 1));
-
-  track.style.transition = 'transform 0.30s cubic-bezier(0.25,0.46,0.45,0.94)';
+  
+  current = (current + direction + total) % total;
+  
   track.style.transform = `translateX(-${current * 100}%)`;
   carousel.dataset.slide = current;
-
-  carousel.querySelectorAll('.kvibe-indicator').forEach((dot, i) => {
-    dot.classList.toggle('active', i === current);
+  
+  indicators?.forEach((indicator, index) => {
+    indicator.classList.toggle('active', index === current);
   });
-
-  const counter = carousel.querySelector('.kvibe-slide-counter');
-  if (counter) counter.textContent = `${current + 1} / ${total}`;
 }
 
 // ===== SWIPE SUPPORT FOR CAROUSELS =====
@@ -223,12 +220,14 @@ function kvibeAttachSwipeHandlers(carousel) {
   if (!carousel || carousel.dataset.swipeAttached) return;
   carousel.dataset.swipeAttached = 'true';
 
-  let startX = 0;
-  let startY = 0;
+  let startX    = 0;
+  let startY    = 0;
+  let axisLocked = null; // 'h' | 'v' | null
   let isDragging = false;
   let dragOffset = 0;
-  const SWIPE_THRESHOLD = 40;   // px needed to trigger slide change
-  const DRAG_THRESHOLD  = 5;    // px of horizontal movement before locking axis
+  let mouseActive = false; // true while mouse button held on THIS carousel
+  const SWIPE_THRESHOLD = 40;
+  const DRAG_THRESHOLD  = 6;
 
   const isMixed = carousel.classList.contains('kvibe-mixed-media-carousel');
   const postId  = carousel.id.replace(isMixed ? 'kvibe-mixed-carousel-' : 'kvibe-carousel-', '');
@@ -261,8 +260,9 @@ function kvibeAttachSwipeHandlers(carousel) {
   // ── Touch events ──────────────────────────────────────────
   carousel.addEventListener('touchstart', function(e) {
     const touch = e.touches[0];
-    startX    = touch.clientX;
-    startY    = touch.clientY;
+    startX     = touch.clientX;
+    startY     = touch.clientY;
+    axisLocked = null;
     isDragging = false;
     dragOffset = 0;
     track.style.transition = 'none';
@@ -274,86 +274,112 @@ function kvibeAttachSwipeHandlers(carousel) {
     const dx = touch.clientX - startX;
     const dy = touch.clientY - startY;
 
-    // Lock to horizontal swipe only after enough horizontal movement
-    if (!isDragging && Math.abs(dx) < DRAG_THRESHOLD) return;
-    if (!isDragging && Math.abs(dy) > Math.abs(dx)) return; // vertical scroll wins
+    // Determine axis on first significant movement
+    if (!axisLocked) {
+      if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+      axisLocked = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
+    }
 
+    if (axisLocked === 'v') return; // let vertical scroll happen
+
+    // Horizontal swipe — prevent page scroll
+    e.preventDefault();
     isDragging = true;
-    e.preventDefault(); // prevent page scroll while swiping
-
     dragOffset = dx;
     const current = getCurrent();
-    const baseOffset = -(current * 100);
-    const percentOffset = (dx / carousel.offsetWidth) * 100;
-    track.style.transform = `translateX(calc(${baseOffset}% + ${dx}px))`;
+    track.style.transform = `translateX(calc(${-(current * 100)}% + ${dx}px))`;
   }, { passive: false });
 
-  carousel.addEventListener('touchend', function(e) {
-    if (!isDragging) return;
+  carousel.addEventListener('touchend', function() {
+    if (!isDragging) { axisLocked = null; return; }
     isDragging = false;
-
+    axisLocked = null;
     const current = getCurrent();
     const total   = getTotal();
-
-    if (dragOffset < -SWIPE_THRESHOLD && current < total - 1) {
-      kvibeSlideTo(current + 1);
-    } else if (dragOffset > SWIPE_THRESHOLD && current > 0) {
-      kvibeSlideTo(current - 1);
-    } else {
-      // Snap back
-      kvibeSlideTo(current);
-    }
+    if      (dragOffset < -SWIPE_THRESHOLD && current < total - 1) kvibeSlideTo(current + 1);
+    else if (dragOffset >  SWIPE_THRESHOLD && current > 0)         kvibeSlideTo(current - 1);
+    else                                                            kvibeSlideTo(current);
     dragOffset = 0;
   }, { passive: true });
 
-  // ── Mouse drag events (desktop) ───────────────────────────
+  // ── Mouse drag events (desktop) — scoped to THIS carousel ─
   carousel.addEventListener('mousedown', function(e) {
-    // Ignore clicks on buttons/controls
     if (e.target.closest('button, .kvibe-seek-overlay-btn, video')) return;
-    startX     = e.clientX;
-    startY     = e.clientY;
-    isDragging = false;
-    dragOffset = 0;
+    startX      = e.clientX;
+    startY      = e.clientY;
+    isDragging  = false;
+    mouseActive = true;
+    dragOffset  = 0;
     track.style.transition = 'none';
     carousel.style.cursor  = 'grabbing';
     e.preventDefault();
   });
 
-  window.addEventListener('mousemove', function(e) {
-    if (startX === 0 && !isDragging) return;
-    // Only active when mouse is held (button 0)
-    if (e.buttons !== 1) return;
-
+  // Use document-level listeners but only act when mouseActive for THIS carousel
+  const onMouseMove = function(e) {
+    if (!mouseActive || e.buttons !== 1) return;
     const dx = e.clientX - startX;
     if (!isDragging && Math.abs(dx) < DRAG_THRESHOLD) return;
-
     isDragging = true;
     dragOffset = dx;
     const current = getCurrent();
     track.style.transform = `translateX(calc(${-(current * 100)}% + ${dx}px))`;
-  });
+  };
 
-  window.addEventListener('mouseup', function(e) {
-    if (!isDragging) {
-      startX = 0;
-      return;
-    }
-    isDragging = false;
+  const onMouseUp = function() {
+    if (!mouseActive) return;
+    mouseActive = false;
     carousel.style.cursor = '';
+    if (!isDragging) { dragOffset = 0; return; }
+    isDragging = false;
     const current = getCurrent();
     const total   = getTotal();
-
-    if (dragOffset < -SWIPE_THRESHOLD && current < total - 1) {
-      kvibeSlideTo(current + 1);
-    } else if (dragOffset > SWIPE_THRESHOLD && current > 0) {
-      kvibeSlideTo(current - 1);
-    } else {
-      kvibeSlideTo(current);
-    }
+    if      (dragOffset < -SWIPE_THRESHOLD && current < total - 1) kvibeSlideTo(current + 1);
+    else if (dragOffset >  SWIPE_THRESHOLD && current > 0)         kvibeSlideTo(current - 1);
+    else                                                            kvibeSlideTo(current);
     dragOffset = 0;
-    startX     = 0;
+  };
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup',   onMouseUp);
+
+  // ── Keyboard navigation (on hover/focus) ──────────────────
+  carousel.setAttribute('tabindex', '0');
+
+  const onCarouselKey = function(e) {
+    const total = getTotal();
+    if (total <= 1) return;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      kvibeSlideTo(getCurrent() - 1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      kvibeSlideTo(getCurrent() + 1);
+    }
+  };
+
+  // Keyboard fires while hovering (mouseenter gives focus hint) or when focused
+  let hovered = false;
+  carousel.addEventListener('mouseenter', () => {
+    hovered = true;
+    document.addEventListener('keydown', onCarouselKey);
+  });
+  carousel.addEventListener('mouseleave', () => {
+    hovered = false;
+    document.removeEventListener('keydown', onCarouselKey);
+  });
+  carousel.addEventListener('focus', () => {
+    if (!hovered) document.addEventListener('keydown', onCarouselKey);
+  });
+  carousel.addEventListener('blur', () => {
+    if (!hovered) document.removeEventListener('keydown', onCarouselKey);
   });
 }
+
+/**
+ * Initializes swipe on all carousels currently in the DOM,
+ * then watches for new ones added dynamically (infinite scroll).
+ */
 
 /**
  * Initializes swipe on all carousels currently in the DOM,
@@ -491,220 +517,6 @@ function kvibeInit() {
         }
     });
 }
-
-// ===== FEED CAROUSEL KEYBOARD NAVIGATION =====
-/**
- * Tracks which feed carousel the user is hovering over / has focused,
- * so arrow keys can navigate slides without affecting the page scroll.
- */
-(function kvibeInitFeedCarouselKeyboard() {
-  let activeCarousel = null;
-
-  function setActive(el) {
-    activeCarousel = el;
-  }
-  function clearActive(el) {
-    if (activeCarousel === el) activeCarousel = null;
-  }
-
-  function attachHoverListeners(carousel) {
-    if (carousel.dataset.kbAttached) return;
-    carousel.dataset.kbAttached = 'true';
-    carousel.addEventListener('mouseenter', () => setActive(carousel));
-    carousel.addEventListener('mouseleave', () => clearActive(carousel));
-    carousel.addEventListener('focusin',    () => setActive(carousel));
-    carousel.addEventListener('focusout',   () => clearActive(carousel));
-  }
-
-  function attachToAll() {
-    document.querySelectorAll('.kvibe-image-carousel, .kvibe-mixed-media-carousel')
-      .forEach(attachHoverListeners);
-  }
-
-  document.addEventListener('keydown', function(e) {
-    if (!activeCarousel) return;
-    const isMixed = activeCarousel.classList.contains('kvibe-mixed-media-carousel');
-    const total   = parseInt(activeCarousel.dataset.total || 1);
-    if (total <= 1) return;
-
-    let current = parseInt(activeCarousel.dataset.slide || 0);
-
-    if (e.key === 'ArrowLeft'  && current > 0)           { e.preventDefault(); current--; }
-    else if (e.key === 'ArrowRight' && current < total-1) { e.preventDefault(); current++; }
-    else return;
-
-    // Get the right track id
-    const postId  = activeCarousel.id.replace(isMixed ? 'kvibe-mixed-carousel-' : 'kvibe-carousel-', '');
-    const trackId = isMixed ? `kvibe-mixed-track-${postId}` : `kvibe-track-${postId}`;
-    const track   = document.getElementById(trackId);
-    if (!track) return;
-
-    track.style.transition = 'transform 0.30s cubic-bezier(0.25,0.46,0.45,0.94)';
-    track.style.transform  = `translateX(-${current * 100}%)`;
-    activeCarousel.dataset.slide = current;
-
-    const dotClass = isMixed ? '.kvibe-mixed-indicator' : '.kvibe-indicator';
-    activeCarousel.querySelectorAll(dotClass).forEach((d, i) => {
-      d.classList.toggle('active', i === current);
-    });
-
-    const counter = activeCarousel.querySelector('.kvibe-slide-counter');
-    if (counter) counter.textContent = `${current + 1} / ${total}`;
-  });
-
-  // Attach to existing carousels and watch for dynamically added ones
-  attachToAll();
-  if ('MutationObserver' in window) {
-    const feedEl = document.getElementById('kvibe-real-feed');
-    if (feedEl) {
-      new MutationObserver(() => attachToAll()).observe(feedEl, { childList: true, subtree: true });
-    }
-  }
-})();
-
-
-// ===== SWIPE-MODE INNER CAROUSEL: TOUCH + KEYBOARD =====
-/**
- * Attaches horizontal touch/mouse swipe and keyboard nav to a
- * .kvibe-swipe-carousel element inside the vertical swipe view.
- */
-function kvibeAttachSwipeCarouselHandlers(car) {
-  if (!car || car.dataset.scAttached) return;
-  car.dataset.scAttached = 'true';
-
-  const postId  = car.id.replace('kvibe-swipe-car-', '');
-  const track   = document.getElementById('kvibe-swipe-car-track-' + postId);
-  const dotsEl  = document.getElementById('kvibe-swipe-car-dots-'  + postId);
-  if (!track) return;
-
-  const SWIPE_THRESHOLD = 40;
-  const DRAG_THRESHOLD  = 5;
-  let startX = 0, dragOffset = 0, isDragging = false;
-
-  function getTotal()   { return track.querySelectorAll('.kvibe-swipe-carousel-slide').length; }
-  function getCurrent() { return parseInt(track.dataset.current || '0'); }
-
-  function slideTo(index) {
-    const total = getTotal();
-    const clamped = Math.max(0, Math.min(index, total - 1));
-    track.style.transition = 'transform 0.28s cubic-bezier(0.25,0.46,0.45,0.94)';
-    track.style.transform  = `translateX(-${clamped * 100}%)`;
-    track.dataset.current  = clamped;
-
-    if (dotsEl) {
-      dotsEl.querySelectorAll('.kvibe-swipe-carousel-dot').forEach((d, i) => {
-        d.classList.toggle('active', i === clamped);
-      });
-    }
-    const counter = car.querySelector('.kvibe-swipe-carousel-counter');
-    if (counter) counter.textContent = `${clamped + 1} / ${total}`;
-  }
-
-  // Touch
-  car.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX;
-    isDragging = false; dragOffset = 0;
-    track.style.transition = 'none';
-  }, { passive: true });
-
-  car.addEventListener('touchmove', e => {
-    const dx = e.touches[0].clientX - startX;
-    const dy = e.touches[0].clientY - (e.touches[0].clientY); // placeholder
-    if (!isDragging && Math.abs(dx) < DRAG_THRESHOLD) return;
-    isDragging = true;
-    dragOffset = dx;
-    e.stopPropagation(); // don't let vertical swipe handler steal this
-    const base = -(getCurrent() * 100);
-    track.style.transform = `translateX(calc(${base}% + ${dx}px))`;
-  }, { passive: true });
-
-  car.addEventListener('touchend', () => {
-    if (!isDragging) return;
-    isDragging = false;
-    const cur = getCurrent(), total = getTotal();
-    if      (dragOffset < -SWIPE_THRESHOLD && cur < total - 1) slideTo(cur + 1);
-    else if (dragOffset >  SWIPE_THRESHOLD && cur > 0)         slideTo(cur - 1);
-    else                                                        slideTo(cur);
-    dragOffset = 0;
-  }, { passive: true });
-
-  // Mouse drag
-  car.addEventListener('mousedown', e => {
-    startX = e.clientX; isDragging = false; dragOffset = 0;
-    track.style.transition = 'none';
-    car.style.cursor = 'grabbing';
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', e => {
-    if (!car.style.cursor || e.buttons !== 1) return;
-    const dx = e.clientX - startX;
-    if (!isDragging && Math.abs(dx) < DRAG_THRESHOLD) return;
-    isDragging = true; dragOffset = dx;
-    track.style.transform = `translateX(calc(${-(getCurrent()*100)}% + ${dx}px))`;
-  });
-  window.addEventListener('mouseup', () => {
-    if (!car.style.cursor) return;
-    car.style.cursor = '';
-    if (!isDragging) { startX = 0; return; }
-    isDragging = false;
-    const cur = getCurrent(), total = getTotal();
-    if      (dragOffset < -SWIPE_THRESHOLD && cur < total - 1) slideTo(cur + 1);
-    else if (dragOffset >  SWIPE_THRESHOLD && cur > 0)         slideTo(cur - 1);
-    else                                                        slideTo(cur);
-    dragOffset = 0; startX = 0;
-  });
-
-  // Keyboard (when this carousel is active)
-  car.setAttribute('tabindex', '0');
-  car.addEventListener('keydown', e => {
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); e.stopPropagation(); slideTo(getCurrent() - 1); }
-    if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); slideTo(getCurrent() + 1); }
-  });
-}
-
-/**
- * Expose updated kvibeSwipeCarousel so it also updates the counter.
- * Overrides the inline definition inside the swipe IIFE if called after load.
- */
-window.kvibeSwipeCarousel = function(postId, dir, evt) {
-  if (evt) evt.stopPropagation();
-  const track  = document.getElementById('kvibe-swipe-car-track-' + postId);
-  const dotsEl = document.getElementById('kvibe-swipe-car-dots-'  + postId);
-  if (!track) return;
-  const slides  = track.querySelectorAll('.kvibe-swipe-carousel-slide');
-  const dots    = dotsEl ? dotsEl.querySelectorAll('.kvibe-swipe-carousel-dot') : [];
-  const current = parseInt(track.dataset.current || '0');
-  const next    = Math.max(0, Math.min(slides.length - 1, current + dir));
-  track.dataset.current = next;
-  track.style.transition = 'transform 0.28s cubic-bezier(0.25,0.46,0.45,0.94)';
-  track.style.transform  = `translateX(-${next * 100}%)`;
-  dots.forEach((d, i) => d.classList.toggle('active', i === next));
-  const car     = document.getElementById('kvibe-swipe-car-' + postId);
-  const counter = car ? car.querySelector('.kvibe-swipe-carousel-counter') : null;
-  if (counter) counter.textContent = `${next + 1} / ${slides.length}`;
-};
-
-// Watch for swipe carousels added to the DOM and attach handlers
-(function kvibeWatchSwipeCarousels() {
-  function attachAll() {
-    document.querySelectorAll('.kvibe-swipe-carousel').forEach(kvibeAttachSwipeCarouselHandlers);
-  }
-  attachAll();
-  if ('MutationObserver' in window) {
-    const body = document.body;
-    new MutationObserver(mutations => {
-      mutations.forEach(m => m.addedNodes.forEach(node => {
-        if (node.nodeType !== 1) return;
-        if (node.classList && node.classList.contains('kvibe-swipe-carousel')) {
-          kvibeAttachSwipeCarouselHandlers(node);
-        }
-        node.querySelectorAll && node.querySelectorAll('.kvibe-swipe-carousel')
-          .forEach(kvibeAttachSwipeCarouselHandlers);
-      }));
-    }).observe(body, { childList: true, subtree: true });
-  }
-})();
-
 
 // ===== START WHEN READY =====
 if (document.readyState === 'loading') {
