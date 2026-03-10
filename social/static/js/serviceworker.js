@@ -155,7 +155,7 @@ function networkFirst(request) {
     return response;
   }).catch(function() {
     return caches.match(request).then(function(cached) {
-      return cached || new Response('Offline', { status: 503 });
+      return cached || new Response('Offline \u2022 Keep the KVibe going \ud83d\udd25', { status: 503 });
     });
   });
 }
@@ -192,7 +192,7 @@ function networkFirstWithOfflineFallback(request) {
             '<\/style>' +
             '<div id="kvibe-offline-banner">' +
               '<i class="fas fa-wifi" style="margin-right:8px;opacity:0.6;"></i>' +
-              'You\'re offline \u2014 showing cached content' +
+              'You\'re offline \u2014 showing cached content \u2022 Keep the KVibe going \ud83d\udd25' +
               '<button onclick="location.reload()" style="' +
                 'margin-left:12px;padding:4px 10px;' +
                 'border:1px solid #ffc107;background:transparent;' +
@@ -228,7 +228,7 @@ function networkFirstWithOfflineFallback(request) {
         // offline.html itself not cached — show a better minimal fallback
         return new Response(
           '<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px">' +
-          '<h2>You are offline</h2><p>Please check your connection and try again.</p>' +
+          '<h2>You are offline</h2><p>No connection? No problem \u2014 keep the KVibe going \ud83d\udd25</p><p style="color:#888;font-size:14px;">Check your connection and try again.</p>' +
           '<button onclick="location.reload()">Retry</button></body></html>',
           { status: 503, headers: { 'Content-Type': 'text/html' } }
         );
