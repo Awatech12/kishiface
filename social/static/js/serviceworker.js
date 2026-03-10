@@ -1,64 +1,82 @@
 /**
- * KVibe Service Worker v2.0
+ * KVibe Service Worker v3.0
  * Strategies:
- *   - Static assets     : Cache-first
- *   - HTML pages        : Network-first + offline fallback
- *   - /load-more-posts/ : Network-first + saves posts JSON to kvibe-posts cache
- *   - Everything else   : Network-first
+ *   - Static assets : Cache-first
+ *   - HTML pages    : Network-first + offline fallback
+ *   - Everything else: Network-first
+ *
+ * URLs verified against urls.py:
+ *   home              → /home         (no trailing slash)
+ *   notification_list → /list
+ *   inbox             → /inbox        (no trailing slash)
+ *   search            → /search       (no trailing slash)
+ *   post              → /post         (no trailing slash)
+ *   spotlight         → /spotlight/
+ *   explore           → /explore/
+ *   channel_create    → /create_channel
  */
 
 'use strict';
 
 // --- Cache names -------------------------------------------------------------
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE  = 'kvibe-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'kvibe-dynamic-' + CACHE_VERSION;
-const POSTS_CACHE   = 'kvibe-posts-' + CACHE_VERSION;
 const OFFLINE_URL   = '/offline/';
-const POSTS_KEY     = '/kvibe-cached-posts-data/';
 
 // --- Pre-cache at install ----------------------------------------------------
-// All key navigation pages + static assets cached immediately on SW install
-// so they are available offline even before the user visits them.
 
 const PRECACHE_URLS = [
-  // Offline fallback page
-  OFFLINE_URL,
+  // --- Core navigation pages (verified from urls.py) ---
+  '/home',           // {% url 'home' %}
+  '/explore/',       // {% url 'explore' %}
+  '/search',         // {% url 'search' %}
+  '/post',           // {% url 'post' %}
+  '/spotlight/',     // {% url 'spotlight' %}
+  '/list',           // {% url 'notification_list' %}
+  '/inbox',          // {% url 'inbox' %}
+  '/create_channel', // {% url 'channel_create' %}
 
-  // --- Core navigation pages (from footer nav bar) ---
-  '/',               // Home       {% url 'home' %}
-  '/explore/',       // Explore    {% url 'explore' %}
-  '/post/',          // Create     {% url 'post' %}
-  '/spotlight/',     // Spotlight  {% url 'spotlight' %}
-  '/notification/',  // Alerts     {% url 'notification_list' %}
-
-  // --- Header nav links ---
-  '/channel/create/', // Channel create  {% url 'channel_create' %}
-  '/inbox/',          // Messages        {% url 'inbox' %}
-
-  // --- Static assets used in header/footer ---
+  // --- Static assets ---
   '/static/images/logo.jpg',
   '/static/images/chat.png',
   '/static/images/small.png',
   '/static/images/big.png',
+  '/static/images/verify1.jpg',
 ];
 
 // --- Install -----------------------------------------------------------------
+// Cache the offline page FIRST separately so a single bad URL in PRECACHE_URLS
+// never prevents the offline fallback from being stored.
 
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then(function(cache) { return cache.addAll(PRECACHE_URLS); })
+      .then(function(cache) {
+        // 1. Offline page — this MUST succeed
+        return cache.add(OFFLINE_URL);
+      })
+      .then(function() {
+        // 2. Everything else — skip individual failures silently
+        return caches.open(STATIC_CACHE).then(function(cache) {
+          return Promise.all(
+            PRECACHE_URLS.map(function(url) {
+              return cache.add(url).catch(function(err) {
+                console.warn('[SW] Skipped precache (404?):', url, err);
+              });
+            })
+          );
+        });
+      })
       .then(function() { return self.skipWaiting(); })
-      .catch(function(err) { console.error('[SW] Pre-cache failed:', err); })
   );
 });
 
 // --- Activate - clean old caches ---------------------------------------------
 
 self.addEventListener('activate', function(event) {
-  var VALID = [STATIC_CACHE, DYNAMIC_CACHE, POSTS_CACHE];
+  var VALID = [STATIC_CACHE, DYNAMIC_CACHE];
   event.waitUntil(
     caches.keys().then(function(names) {
       return Promise.all(
@@ -89,12 +107,6 @@ self.addEventListener('fetch', function(event) {
       url.pathname.startsWith('/hx/') ||
       url.pathname.startsWith('/ws/')) return;
 
-  // /load-more-posts/ -- intercept to cache post data
-  if (url.pathname.startsWith('/load-more-posts/')) {
-    event.respondWith(fetchAndCachePosts(request));
-    return;
-  }
-
   // Static assets -- cache-first
   if (url.pathname.startsWith('/static/') ||
       /\.(js|css|woff2?|ttf|eot|ico|png|jpg|jpeg|gif|svg|webp)$/.test(url.pathname)) {
@@ -112,59 +124,6 @@ self.addEventListener('fetch', function(event) {
   // Everything else -- network-first
   event.respondWith(networkFirst(request));
 });
-
-// --- Strategy: fetch posts and save to POSTS_CACHE --------------------------
-
-function fetchAndCachePosts(request) {
-  return fetch(request).then(function(response) {
-    if (response.ok) {
-      var clone = response.clone();
-      clone.json().then(function(data) {
-        if (data.posts && data.posts.length) {
-          caches.open(POSTS_CACHE).then(function(cache) {
-            var existing = [];
-            cache.match(POSTS_KEY).then(function(prev) {
-              if (prev) {
-                prev.json().then(function(old) {
-                  existing = old || [];
-                }).catch(function() {}).finally(function() {
-                  saveMerged(cache, data.posts, existing);
-                });
-              } else {
-                saveMerged(cache, data.posts, existing);
-              }
-            }).catch(function() {
-              saveMerged(cache, data.posts, existing);
-            });
-          }).catch(function() {});
-        }
-      }).catch(function() {});
-    }
-    return response;
-  }).catch(function() {
-    return new Response(JSON.stringify({ posts: [], has_next: false }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  });
-}
-
-function saveMerged(cache, newPosts, existing) {
-  var merged = newPosts.concat(existing);
-  var seen   = {};
-  var unique = [];
-  for (var i = 0; i < merged.length; i++) {
-    var id = merged[i].post_id;
-    if (!seen[id]) {
-      seen[id] = true;
-      unique.push(merged[i]);
-    }
-    if (unique.length >= 50) break;
-  }
-  cache.put(POSTS_KEY, new Response(JSON.stringify(unique), {
-    headers: { 'Content-Type': 'application/json' }
-  }));
-  console.log('[SW] Cached ' + unique.length + ' posts for offline');
-}
 
 // --- Strategy: cache-first ---------------------------------------------------
 
@@ -215,18 +174,45 @@ function networkFirstWithOfflineFallback(request) {
     return response;
   }).catch(function() {
     return caches.match(request).then(function(cached) {
-      // Page was previously visited -- serve it from cache
-      if (cached) return cached;
 
-      // Page not in cache -- serve the offline page but inject the attempted
-      // path into the HTML so offline.html knows what page was requested.
-      // We NEVER use Response.redirect() here as it causes redirect loops.
+      // Page was previously visited — inject offline banner then serve from cache
+      if (cached) {
+        return cached.text().then(function(html) {
+          var banner =
+            '<style>' +
+              '#kvibe-offline-banner{' +
+                'position:fixed;top:54px;left:0;right:0;z-index:99998;' +
+                'background:#fff3cd;border-bottom:2px solid #ffc107;' +
+                'color:#664d03;text-align:center;padding:8px 16px;' +
+                'font-family:-apple-system,BlinkMacSystemFont,sans-serif;' +
+                'font-size:13px;font-weight:500;height:40px;' +
+                'display:flex;align-items:center;justify-content:center;}' +
+              /* Push mood filter bar + any sticky element below the banner */
+              '.kvibe-mood-filter-bar{top:94px !important;}' +
+            '<\/style>' +
+            '<div id="kvibe-offline-banner">' +
+              '<i class="fas fa-wifi" style="margin-right:8px;opacity:0.6;"></i>' +
+              'You\'re offline \u2014 showing cached content' +
+              '<button onclick="location.reload()" style="' +
+                'margin-left:12px;padding:4px 10px;' +
+                'border:1px solid #ffc107;background:transparent;' +
+                'border-radius:12px;cursor:pointer;' +
+                'font-size:12px;color:#664d03;">Retry</button>' +
+            '</div>';
+          var injected = html.replace('<body>', '<body>' + banner);
+          return new Response(injected, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+          });
+        });
+      }
+
+      // Page not in cache -- serve offline.html with injected path
+      // Never use Response.redirect() as it causes redirect loops
       var attemptedPath = new URL(requestUrl).pathname;
       return caches.match(OFFLINE_URL).then(function(offlinePage) {
         if (offlinePage) {
           return offlinePage.text().then(function(html) {
-            // Inject a small script at the top of <body> so offline.html
-            // can read window.KVIBE_REQUESTED_PATH without any redirect
             var injected = html.replace(
               '<body>',
               '<body><script>window.KVIBE_REQUESTED_PATH=' +
@@ -239,8 +225,11 @@ function networkFirstWithOfflineFallback(request) {
             });
           });
         }
+        // offline.html itself not cached — show a better minimal fallback
         return new Response(
-          '<h1>You are offline</h1>',
+          '<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px">' +
+          '<h2>You are offline</h2><p>Please check your connection and try again.</p>' +
+          '<button onclick="location.reload()">Retry</button></body></html>',
           { status: 503, headers: { 'Content-Type': 'text/html' } }
         );
       });
@@ -269,7 +258,7 @@ self.addEventListener('push', function(event) {
       icon:    '/static/images/small.png',
       badge:   '/static/images/small.png',
       vibrate: [100, 50, 100],
-      data:    { url: data.url || '/' },
+      data:    { url: data.url || '/home' },
       actions: [
         { action: 'open',    title: 'Open KVibe' },
         { action: 'dismiss', title: 'Dismiss'    }
@@ -281,7 +270,7 @@ self.addEventListener('push', function(event) {
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   if (event.action === 'dismiss') return;
-  var targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  var targetUrl = (event.notification.data && event.notification.data.url) || '/home';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(wcs) {
       var existing = wcs.find(function(c) { return c.url === targetUrl && 'focus' in c; });
