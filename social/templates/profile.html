@@ -673,6 +673,28 @@
             background: var(--kvibe-white);
         }
 
+        /* Online status dot on profile avatar */
+        .kvibe-avatar-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .kvibe-profile-online-dot {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ccc;
+            border: 2.5px solid var(--kvibe-white);
+            transition: background 0.3s;
+            z-index: 3;
+        }
+
+        .kvibe-profile-online-dot.online  { background: #4caf50; }
+        .kvibe-profile-online-dot.offline { background: #ccc; }
+
         /* Actions — right-aligned row */
         .kvibe-profile-actions {
             display: flex;
@@ -3573,11 +3595,18 @@
 
                     <!-- Centered avatar -->
                     <div class="kvibe-avatar-container">
-                        <img src="{{user.profile.picture.url}}" 
-                             alt="{{user.username}}" 
-                             class="kvibe-profile-avatar"
-                             loading="lazy"
-                             id="mainProfilePicture">
+                        <div class="kvibe-avatar-wrapper">
+                            <img src="{{user.profile.picture.url}}" 
+                                 alt="{{user.username}}" 
+                                 class="kvibe-profile-avatar"
+                                 loading="lazy"
+                                 id="mainProfilePicture">
+                            {% if request.user != user %}
+                            <span class="kvibe-profile-online-dot user-status"
+                                  data-user-id="{{ user.id }}"
+                                  title="Offline"></span>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <!-- Profile details: name, username, bio, meta, stats — all centered -->
@@ -5810,6 +5839,33 @@ function profileFilterMood(mood, btn) {
         }
     });
 }
+</script>
+
+{% include 'onlineStatus.html' %}
+
+<script>
+// Request current status of the profile user on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const dot = document.querySelector('.kvibe-profile-online-dot');
+    if (!dot) return; // own profile — dot not shown
+
+    // Poll the profile user's status once via the existing broadcast mechanism.
+    // The onlineStatus WebSocket will update the dot automatically via
+    // the shared user-status[data-user-id] selector whenever a status_update arrives.
+    // To get an immediate reading, we fetch the status from the server.
+    const profileUserId = dot.getAttribute('data-user-id');
+    if (!profileUserId) return;
+
+    fetch(`/api/online-status/${profileUserId}/`)
+        .then(r => r.json())
+        .then(data => {
+            const isOnline = data.is_online;
+            dot.classList.toggle('online', isOnline);
+            dot.classList.toggle('offline', !isOnline);
+            dot.title = isOnline ? 'Online' : 'Offline';
+        })
+        .catch(() => {});
+});
 </script>
 
 </body>

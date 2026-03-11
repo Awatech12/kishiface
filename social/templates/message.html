@@ -3125,74 +3125,28 @@
 
         window.userId = "{{ request.user.id|default:'' }}";
 
-class RealTimeStatus {
-    constructor() {
-        this.ws = null;
-        this.userId = window.userId;
-        this.pingInterval = null;
-        this.reconnectTimeout = 1000;
-        this.connect();
-    }
-
-    connect() {
-        if (!this.userId || this.userId === 'None') return;
-        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        this.ws = new WebSocket(`${protocol}${window.location.host}/ws/online-status/`);
-        this.ws.onopen = () => {
-            this.reconnectTimeout = 1000;
-            this.startHeartbeat();
-        };
-        this.ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'status_update') this.updateUI(data.user_id, data.status);
-            } catch(e) {}
-        };
-        this.ws.onclose = () => {
-            this.stopHeartbeat();
-            setTimeout(() => {
-                this.reconnectTimeout = Math.min(this.reconnectTimeout * 2, 30000);
-                this.connect();
-            }, this.reconnectTimeout);
-        };
-        this.ws.onerror = () => this.ws.close();
-    }
-
-    startHeartbeat() {
-        this.pingInterval = setInterval(() => {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ type: 'ping' }));
-            }
-        }, 20000);
-    }
-
-    stopHeartbeat() {
-        if (this.pingInterval) clearInterval(this.pingInterval);
-    }
-
-    updateUI(userId, status) {
-        const isOnline = status.toLowerCase() === 'online';
-        const receiverId = String(String(userId));
-
-        document.querySelectorAll(`.user-status[data-user-id="${receiverId}"]`).forEach(el => {
-            // Don't overwrite "typing..." text while the other person is typing
-            const typingEl = document.getElementById('kishifaceHeaderTyping');
-            if (typingEl && typingEl.style.display === 'inline') return;
-
-            el.textContent = isOnline ? 'Online' : 'Offline';
-            el.classList.toggle('online', isOnline);
-            el.classList.toggle('offline', !isOnline);
-        });
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.userId && window.userId !== 'None') {
-        window.statusManager = new RealTimeStatus();
-    }
-});
-
      
+    </script>
+
+    {% include 'onlineStatus.html' %}
+
+    <script>
+    // Override updateUI on the message page to respect the typing indicator
+    document.addEventListener('DOMContentLoaded', () => {
+        if (window.statusManager) {
+            window.statusManager.updateUI = function(userId, status) {
+                const isOnline = status.toLowerCase() === 'online';
+                const receiverId = String(userId);
+                document.querySelectorAll(`.user-status[data-user-id="${receiverId}"]`).forEach(el => {
+                    const typingEl = document.getElementById('kishifaceHeaderTyping');
+                    if (typingEl && typingEl.style.display === 'inline') return;
+                    el.textContent = isOnline ? 'Online' : 'Offline';
+                    el.classList.toggle('online', isOnline);
+                    el.classList.toggle('offline', !isOnline);
+                });
+            };
+        }
+    });
     </script>
 </body>
 </html>

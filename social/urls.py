@@ -40,6 +40,9 @@ urlpatterns = [
    path('mark-follow-notifications-read/', views.mark_follow_notifications_read, name='mark_follow_notifications_read'),
    path('notifications/delete-group/', views.delete_notification_group, name='delete_notification_group'),
    
+    # ===== Online Status API =====
+    path('api/online-status/<int:user_id>/', views.online_status_api, name='online_status_api'),
+
     #====== Profials codes =======
     path('<str:username>/', views.profile, name='profile'),
     path('block/<str:username>/',   views.block_user,   name='block_user'),

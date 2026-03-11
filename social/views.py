@@ -1947,6 +1947,25 @@ def error_404(request, exception):
 def error_500(request, exception):
     return render(request, '500.html', status=500)
 def logout(request):
+    # Mark user offline before session is cleared
+    if request.user.is_authenticated:
+        try:
+            from social.models import Profile
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            Profile.mark_user_offline(request.user.id)
+            # Broadcast offline status to all connected users immediately
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                'online_status_group',
+                {
+                    'type': 'user_status_event',
+                    'user_id': request.user.id,
+                    'status': 'Offline',
+                }
+            )
+        except Exception:
+            pass
     auth.logout(request)
     messages.info(request, 'Logout Successfully')
     return redirect('/')
@@ -2135,3 +2154,19 @@ def hashtag_view(request, tag_name):
         'unread_follow_count': unread_follow_count,
         'unread_notifications_count': unread_notifications_count,
     })
+
+# ─── Online Status API ────────────────────────────────────────────────────────
+@login_required
+def online_status_api(request, user_id):
+    """
+    Returns the current online status of a user by their ID.
+    Used by profile.html to show the green/grey dot on page load
+    before a WebSocket status_update arrives.
+    GET /api/online-status/<user_id>/
+    """
+    try:
+        from social.models import Profile
+        profile = Profile.objects.get(user__id=user_id)
+        return JsonResponse({'is_online': profile.is_online})
+    except Profile.DoesNotExist:
+        return JsonResponse({'is_online': False})

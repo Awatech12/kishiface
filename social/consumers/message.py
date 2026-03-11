@@ -81,6 +81,19 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
             'reply_to': event.get('reply_to'),
         }))
 
+        # Broadcast inbox update to both users' personal inbox channels
+        inbox_payload = {
+            'type': 'inbox_update',
+            'sender': event.get('sender'),
+            'sender_avatar': event.get('sender_avatar'),
+            'receiver': event.get('receiver'),
+            'message': event.get('message'),
+            'file_type': event.get('file_type'),
+            'time': event.get('time'),
+        }
+        await self.channel_layer.group_send(f"inbox_{event.get('sender')}", inbox_payload)
+        await self.channel_layer.group_send(f"inbox_{event.get('receiver')}", inbox_payload)
+
     async def message_deleted(self, event):
         """Handle deletion events from delete_message view."""
         await self.send(text_data=json.dumps({
