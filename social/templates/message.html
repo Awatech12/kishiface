@@ -179,6 +179,18 @@
             border-radius: 50%;
         }
 
+        /* Emoji Burst Particles */
+        .kishiface-emoji-particle {
+            position: fixed;
+            pointer-events: none;
+            z-index: 99999;
+            font-size: 20px;
+            line-height: 1;
+            user-select: none;
+            will-change: transform, opacity;
+            transform-origin: center center;
+        }
+
         .kishiface-send-btn:hover:not(:disabled) {
             background: var(--kishiface-primary-hover);
             transform: scale(1.05);
@@ -972,12 +984,14 @@
         }
 
         .kishiface-input-container {
-            padding: 12px 16px 16px;
+            padding: 8px 16px 16px;
             background: var(--kishiface-white);
             border-top: none;
             position: sticky;
             bottom: 0;
             z-index: 100;
+            display: flex;
+            flex-direction: column;
         }
 
         .kishiface-input-wrapper {
@@ -1489,6 +1503,118 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
         }
+
+        /* ── Quick Reply Vibe Messages ─────────────────────────────────────── */
+        .kvibe-quick-replies {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 4px 8px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+            flex-shrink: 0;
+        }
+
+        .kvibe-quick-replies.hidden {
+            display: none;
+        }
+
+        .kvibe-quick-replies::-webkit-scrollbar { display: none; }
+
+        .kvibe-quick-reply-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1.5px solid #e8e8e8;
+            background: #fafafa;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--kishiface-text);
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+            transition: all 0.18s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kvibe-quick-reply-chip:hover {
+            background: #f0f0f0;
+            border-color: #d0d0d0;
+            transform: translateY(-1px);
+        }
+
+        .kvibe-quick-reply-chip:active {
+            transform: scale(0.94) translateY(0);
+            background: #e8e8e8;
+        }
+
+        .kvibe-quick-reply-chip .chip-emoji {
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .kvibe-quick-reply-chip .chip-label {
+            color: var(--kishiface-text);
+        }
+
+        /* Ripple on tap */
+        .kvibe-quick-reply-chip::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, rgba(0,149,246,0.18) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .kvibe-quick-reply-chip.tapped::after {
+            opacity: 1;
+        }
+
+        /* Sent flash animation */
+        @keyframes kvVibeChipFlash {
+            0%   { background: rgba(0,149,246,0.15); border-color: var(--kishiface-primary); }
+            100% { background: #fafafa; border-color: #e8e8e8; }
+        }
+
+        .kvibe-quick-reply-chip.sent-flash {
+            animation: kvVibeChipFlash 0.5s ease forwards;
+        }
+
+        /* Toggle button */
+        .kvibe-quick-reply-toggle {
+            background: none;
+            border: none;
+            color: var(--kishiface-text-light);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+        }
+
+        .kvibe-quick-reply-toggle:hover {
+            background: #f0f0f0;
+            color: var(--kishiface-text);
+        }
+
+        .kvibe-quick-reply-toggle.active {
+            color: var(--kishiface-primary);
+            background: rgba(0,149,246,0.08);
+        }
+        /* ───────────────────────────────────────────────────────────────────── */
         
     </style>
 </head>
@@ -1668,6 +1794,10 @@
         </div>
 
         <div class="kishiface-input-container">
+            <!-- Quick Reply Vibe Messages -->
+            <div class="kvibe-quick-replies" id="kvibeQuickReplies">
+                <!-- chips injected by JS -->
+            </div>
             <div class="kishiface-input-wrapper">
                 <div class="kishiface-input-actions">
                     <button type="button" class="kishiface-emoji-btn" id="kishifaceEmojiBtn" onclick="toggleKishifaceEmojiPicker()" title="Emoji">
@@ -1675,6 +1805,9 @@
                     </button>
                     <button type="button" class="kishiface-input-action-btn" onclick="document.getElementById('kishifaceFileUpload').click()" title="Attach file">
                         <i class="far fa-image"></i>
+                    </button>
+                    <button type="button" class="kvibe-quick-reply-toggle" id="kvibeVibeToggle" onclick="toggleKvibeQuickReplies()" title="Vibe replies">
+                        <i class="fas fa-bolt"></i>
                     </button>
                 </div>
                 
@@ -2768,12 +2901,97 @@
             }
         }
 
+        // ── Emoji Burst on Send ──────────────────────────────────────────────
+        function extractEmojisFromText(text) {
+            // Match emoji sequences (including ZWJ sequences, skin tones, etc.)
+            const emojiRegex = /(\p{Emoji_Presentation}|\p{Extended_Pictographic})(\u200d(\p{Emoji_Presentation}|\p{Extended_Pictographic})|\uFE0F|\p{Emoji_Modifier})*/gu;
+            const found = [...text.matchAll(emojiRegex)].map(m => m[0]);
+            return found.length > 0 ? found : null;
+        }
+
+        function triggerKishifaceEmojiBurst(messageText) {
+            const btn = document.getElementById('kishifaceSendBtn');
+            if (!btn) return;
+
+            const defaults = ['✨', '💬', '🔥', '💫'];
+            const sourceEmojis = extractEmojisFromText(messageText) || defaults;
+            const PARTICLE_COUNT = 18;
+
+            const btnRect = btn.getBoundingClientRect();
+            const originX = btnRect.left + btnRect.width / 2;
+            const originY = btnRect.top + btnRect.height / 2;
+
+            // Send button pulse
+            btn.style.transform = 'scale(1.35)';
+            setTimeout(() => { btn.style.transform = ''; }, 200);
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const emoji = sourceEmojis[i % sourceEmojis.length];
+
+                // Spread in a wide upward arc (angles: 200° to 340° in standard coords = upper half)
+                const angleSpread = 140; // degrees
+                const angleStart = 200;  // start angle (degrees, 0=right, 90=down)
+                const angleDeg = angleStart + (angleSpread / (PARTICLE_COUNT - 1)) * i;
+                const angleRad = (angleDeg * Math.PI) / 180;
+
+                // Random speed with some variance
+                const speed = 3.5 + Math.random() * 5;
+                const vx = Math.cos(angleRad) * speed;
+                const vy = Math.sin(angleRad) * speed;
+
+                const gravity = 0.18 + Math.random() * 0.10;
+                const rotationSpeed = (Math.random() - 0.5) * 18;
+                const size = 16 + Math.random() * 10;
+                const delay = i * 18; // stagger each particle slightly
+
+                setTimeout(() => {
+                    const el = document.createElement('div');
+                    el.className = 'kishiface-emoji-particle';
+                    el.textContent = emoji;
+                    el.style.fontSize = size + 'px';
+                    el.style.left = originX + 'px';
+                    el.style.top = originY + 'px';
+                    document.body.appendChild(el);
+
+                    let x = 0, y = 0;
+                    let currentVx = vx, currentVy = vy;
+                    let rotation = 0;
+                    let opacity = 1;
+                    let frame = 0;
+                    const totalFrames = 55 + Math.floor(Math.random() * 20);
+
+                    function animate() {
+                        frame++;
+                        currentVy += gravity;         // gravity pulls down
+                        currentVx *= 0.985;           // slight air resistance
+                        x += currentVx;
+                        y += currentVy;
+                        rotation += rotationSpeed;
+                        // Fade out in last 40% of life
+                        opacity = frame < totalFrames * 0.6 ? 1 : 1 - ((frame - totalFrames * 0.6) / (totalFrames * 0.4));
+
+                        el.style.transform = `translate(${x}px, ${y}px) rotate(${rotation}deg)`;
+                        el.style.opacity = Math.max(0, opacity);
+
+                        if (frame < totalFrames) {
+                            requestAnimationFrame(animate);
+                        } else {
+                            el.remove();
+                        }
+                    }
+                    requestAnimationFrame(animate);
+                }, delay);
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         async function sendKishifaceMessage() {
             stopTypingIndicator();
             const message = kishifaceMessageInput.value.trim();
             if (!message && !fileToUpload) return;
-            if (fileToUpload) { await uploadKishifaceFileWithMessage(message); return; }
+            if (fileToUpload) { triggerKishifaceEmojiBurst(message); await uploadKishifaceFileWithMessage(message); return; }
             if (message) {
+                triggerKishifaceEmojiBurst(message);
                 try {
                     const messageData = { receiver, message };
                     if (replyToMessageId) messageData.reply_to = replyToMessageId;
@@ -3124,8 +3342,94 @@
         });
 
         window.userId = "{{ request.user.id|default:'' }}";
-
      
+    </script>
+
+    <script>
+    // ── Quick Reply Vibe Messages ────────────────────────────────────────────
+    const kvibeQuickRepliesData = [
+        { emoji: '🔥', label: 'Fire',       text: "🔥 That's fire!" },
+        { emoji: '😂', label: 'LOL',        text: '😂 Lmaoo' },
+        { emoji: '💯', label: '100',         text: '💯 Facts' },
+        { emoji: '👀', label: 'Seen',        text: '👀 Omg' },
+        { emoji: '❤️', label: 'Love',        text: '❤️ Love this' },
+        { emoji: '😭', label: 'Dead',        text: "😭 I'm dead" },
+        { emoji: '✨', label: 'Vibe',        text: '✨ Vibes only' },
+        { emoji: '🫶', label: 'Support',     text: '🫶 I got you' },
+        { emoji: '🤣', label: 'Haha',        text: '🤣 Hahahaha' },
+        { emoji: '👏', label: 'Clap',        text: '👏 Say it louder!' },
+        { emoji: '🙏', label: 'Please',      text: '🙏 Please!' },
+        { emoji: '😍', label: 'Obsessed',    text: '😍 Obsessed' },
+        { emoji: '💀', label: 'Ded',         text: "💀 I can't" },
+        { emoji: '🎉', label: "Let's go",    text: "🎉 Let's go!" },
+        { emoji: '👑', label: 'The best',    text: "👑 You're the best" },
+    ];
+
+    let kvibeQuickRepliesVisible = true; // visible by default
+
+    function initKvibeQuickReplies() {
+        const container = document.getElementById('kvibeQuickReplies');
+        const toggleBtn = document.getElementById('kvibeVibeToggle');
+        if (!container) return;
+        container.innerHTML = '';
+        kvibeQuickRepliesData.forEach(function(item) {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'kvibe-quick-reply-chip';
+            chip.setAttribute('aria-label', item.text);
+            chip.innerHTML = '<span class="chip-emoji">' + item.emoji + '</span><span class="chip-label">' + item.label + '</span>';
+            chip.addEventListener('click', function() { sendKvibeQuickReply(chip, item.text); });
+            container.appendChild(chip);
+        });
+        // Show by default
+        container.classList.remove('hidden');
+        if (toggleBtn) toggleBtn.classList.add('active');
+    }
+
+    function toggleKvibeQuickReplies() {
+        const container = document.getElementById('kvibeQuickReplies');
+        const toggleBtn = document.getElementById('kvibeVibeToggle');
+        if (!container) return;
+        kvibeQuickRepliesVisible = !kvibeQuickRepliesVisible;
+        container.classList.toggle('hidden', !kvibeQuickRepliesVisible);
+        if (toggleBtn) toggleBtn.classList.toggle('active', kvibeQuickRepliesVisible);
+    }
+
+    async function sendKvibeQuickReply(chipEl, text) {
+        chipEl.classList.add('tapped');
+        setTimeout(function() { chipEl.classList.remove('tapped'); }, 150);
+        setTimeout(function() { chipEl.classList.add('sent-flash'); }, 10);
+        setTimeout(function() { chipEl.classList.remove('sent-flash'); }, 520);
+
+        if (typeof triggerKishifaceEmojiBurst === 'function') triggerKishifaceEmojiBurst(text);
+
+        try {
+            const messageData = { receiver: receiver, message: text };
+            if (typeof replyToMessageId !== 'undefined' && replyToMessageId) messageData.reply_to = replyToMessageId;
+            const response = await fetch('/send_message/' + receiver + '/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/json' },
+                body: JSON.stringify(messageData)
+            });
+            const result = await response.json();
+            if (result.status === 'success') {
+                if (typeof cancelKishifaceReply === 'function') cancelKishifaceReply();
+            }
+        } catch (error) {
+            console.error('Error sending vibe reply:', error);
+        }
+    }
+
+    // Run immediately — script is at bottom of body so DOM is already parsed
+    initKvibeQuickReplies();
+    // Fallback: also run on load in case template rendering delayed DOM
+    window.addEventListener('load', function() {
+        const container = document.getElementById('kvibeQuickReplies');
+        if (container && container.children.length === 0) {
+            initKvibeQuickReplies();
+        }
+    });
+    // ────────────────────────────────────────────────────────────────────────
     </script>
 
     {% include 'onlineStatus.html' %}
