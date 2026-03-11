@@ -2,87 +2,62 @@
 class RealTimeStatus {
     constructor() {
         this.ws = null;
-        this.userId = window.userId; 
+        this.userId = window.userId;
         this.pingInterval = null;
         this.reconnectTimeout = 1000;
+        this.activityBound = false;
         this.connect();
     }
-    
+
     connect() {
-        if (!this.userId || this.userId === 'None') {
-            console.log('🔴 Real-time status: No user ID found, skipping connection.');
-            return;
-        }
-        
+        if (!this.userId || this.userId === 'None') return;
+
         const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const wsUrl = `${protocol}${window.location.host}/ws/online-status/`;
-        
-        console.log('📡 Connecting to status server...');
-        this.ws = new WebSocket(wsUrl);
-        
+        this.ws = new WebSocket(`${protocol}${window.location.host}/ws/online-status/`);
+
         this.ws.onopen = () => {
-            console.log('✅ Status System Connected');
-            this.reconnectTimeout = 1000; 
+            this.reconnectTimeout = 1000;
             this.startHeartbeat();
         };
-        
+
         this.ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'status_update') {
                     this.updateUI(data.user_id, data.status);
                 }
-            } catch(e) {
-                console.error("Error parsing status message", e);
-            }
+            } catch(e) {}
         };
-        
-        this.ws.onclose = (e) => {
+
+        this.ws.onclose = () => {
             this.stopHeartbeat();
-            console.log(`🔴 Connection closed. Reconnecting in ${this.reconnectTimeout/1000}s...`);
             setTimeout(() => {
                 this.reconnectTimeout = Math.min(this.reconnectTimeout * 2, 30000);
                 this.connect();
             }, this.reconnectTimeout);
         };
 
-        this.ws.onerror = (err) => {
-            console.error('WebSocket Error:', err);
-            this.ws.close();
-        };
+        this.ws.onerror = () => this.ws.close();
     }
-    
+
     startHeartbeat() {
-        // Keep the connection alive
         this.pingInterval = setInterval(() => {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify({ type: 'ping' }));
             }
         }, 20000);
     }
-    
+
     stopHeartbeat() {
-        if (this.pingInterval) {
-            clearInterval(this.pingInterval);
-        }
+        if (this.pingInterval) clearInterval(this.pingInterval);
     }
-    
+
     updateUI(userId, status) {
-        const targetId = String(userId);
-        const elements = document.querySelectorAll(`.user-status[data-user-id="${targetId}"]`);
-        
-        elements.forEach(el => {
-            el.textContent = status;
-            
-            if (status.toLowerCase() === 'online') {
-                el.classList.add('online');
-                el.classList.remove('offline');
-            } else {
-                el.classList.add('offline');
-                el.classList.remove('online');
-                // Strictly show Offline
-                el.textContent = "Offline"; 
-            }
+        const isOnline = status.toLowerCase() === 'online';
+        document.querySelectorAll(`.user-status[data-user-id="${String(userId)}"]`).forEach(el => {
+            el.textContent = isOnline ? 'Online' : 'Offline';
+            el.classList.toggle('online', isOnline);
+            el.classList.toggle('offline', !isOnline);
         });
     }
 }
@@ -90,15 +65,6 @@ class RealTimeStatus {
 document.addEventListener('DOMContentLoaded', () => {
     if (window.userId && window.userId !== 'None') {
         window.statusManager = new RealTimeStatus();
-        
-        // Ping on activity to keep connection hot
-        ['mousedown', 'keydown', 'touchstart'].forEach(event => {
-            document.addEventListener(event, () => {
-                if (window.statusManager && window.statusManager.ws && window.statusManager.ws.readyState === WebSocket.OPEN) {
-                    window.statusManager.ws.send(JSON.stringify({ type: 'ping' }));
-                }
-            }, { passive: true });
-        });
     }
 });
 </script>

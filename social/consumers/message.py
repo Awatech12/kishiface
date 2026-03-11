@@ -9,6 +9,7 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
     def get_user(self, username):
         from django.contrib.auth.models import User
         return User.objects.get(username=username)
+
     async def connect(self):
         from django.contrib.auth.models import User
         self.user = self.scope['user']
@@ -16,44 +17,44 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        # Get the other user from URL parameters
         self.other_username = self.scope['url_route']['kwargs']['username']
-        
         try:
             self.other_user = await self.get_user(self.other_username)
         except User.DoesNotExist:
             await self.close()
             return
 
-        # Create a consistent room name for both users
         user_ids = sorted([self.user.id, self.other_user.id])
         self.room_name = f"dm_{user_ids[0]}_{user_ids[1]}"
         self.room_group_name = f"chat_{self.room_name}"
 
-        # Join room group
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
         )
-
         await self.accept()
-        print(f"✅ Direct message connected: {self.user.username} with {self.other_username} in room {self.room_group_name}")
 
     async def disconnect(self, close_code):
-        # Leave room group
+        # Clear typing indicator when user disconnects mid-typing
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'typing_indicator',
+                'sender': self.user.username,
+                'is_typing': False
+            }
+        )
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
         )
-        print(f"🔌 Direct message disconnected: {self.user.username}")
 
     async def receive(self, text_data):
         try:
             data = json.loads(text_data)
             action = data.get('action')
-            
+
             if action == 'typing':
-                # Broadcast typing indicator
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -63,51 +64,37 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
                     }
                 )
         except json.JSONDecodeError:
-            print("❌ Invalid JSON received")
+            pass
 
     async def chat_message(self, event):
-        """
-        Handle NEW messages from send_message view
-        """
-        print(f"📨 Sending message to WebSocket: {event.get('sender')} -> {event.get('receiver')}")
-        
-        # Send message to WebSocket client
+        """Handle new messages from send_message view."""
         await self.send(text_data=json.dumps({
             'type': 'new_message',
             'message_id': event.get('message_id'),
             'sender': event.get('sender'),
+            'sender_avatar': event.get('sender_avatar'),
             'receiver': event.get('receiver'),
             'message': event.get('message'),
             'file_type': event.get('file_type'),
             'file_url': event.get('file_url'),
             'time': event.get('time'),
-            'date_label': event.get('date_label'),
-            'created_at': event.get('created_at'),
-            'reply_to': event.get('reply_to')
+            'reply_to': event.get('reply_to'),
         }))
 
     async def message_deleted(self, event):
-        """
-        Handle DELETION events from delete_message view
-        This is called when event['type'] == 'message_deleted'
-        """
-        print(f"🗑️ Message deletion event: {event.get('message_id')}")
-        
+        """Handle deletion events from delete_message view."""
         await self.send(text_data=json.dumps({
             'type': 'message_deleted',
             'message_id': event.get('message_id'),
             'sender': event.get('sender'),
-            'receiver': event.get('receiver')
+            'receiver': event.get('receiver'),
         }))
 
     async def typing_indicator(self, event):
-        """
-        Handle typing indicators.
-        Only send to the opposite user.
-        """
+        """Forward typing indicator only to the other user."""
         if event['sender'] != self.user.username:
             await self.send(text_data=json.dumps({
                 'type': 'typing',
                 'sender': event['sender'],
-                'is_typing': event['is_typing']
+                'is_typing': event['is_typing'],
             }))

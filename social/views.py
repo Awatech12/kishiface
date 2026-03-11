@@ -1277,10 +1277,6 @@ def send_message(request, username):
         
         file_url = message.file.url if message.file else None
         
-        print(f"📤 Broadcasting message to room: {room_group_name}")
-        print(f"👤 From: {request.user.username}")
-        print(f"👥 To: {receiver.username}")
-        
         # Prepare reply data for WebSocket
         reply_data = None
         if reply_to:
@@ -1289,22 +1285,22 @@ def send_message(request, username):
                 'message': reply_to.conversation,
                 'file_type': reply_to.file_type
             }
-        
-        # Send to both users in the room
+
+        sender_avatar = request.user.profile.picture.url if request.user.profile.picture else ''
+
         async_to_sync(channel_layer.group_send)(
-            room_group_name,  # Use the SAME group name as in consumer
+            room_group_name,
             {
-                'type': 'chat_message',  # This MUST match the method name in consumer
+                'type': 'chat_message',
                 'message_id': message.id,
                 'sender': request.user.username,
+                'sender_avatar': sender_avatar,
                 'receiver': receiver.username,
                 'message': message_text,
                 'file_type': file_type,
                 'file_url': file_url,
                 'time': message.chat_time,
-                'date_label': message.chat_date_label,
-                'created_at': message.created_at.isoformat(),
-                'reply_to': reply_data
+                'reply_to': reply_data,
             }
         )
         
@@ -1343,11 +1339,10 @@ def delete_message(request, message_id):
             async_to_sync(channel_layer.group_send)(
                 room_group_name,
                 {
-                    'type': 'chat_message',
-                    'message_id': message.id,
                     'type': 'message_deleted',
+                    'message_id': message.id,
                     'sender': message.sender.username,
-                    'receiver': message.receiver.username
+                    'receiver': message.receiver.username,
                 }
             )
             
