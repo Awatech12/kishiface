@@ -109,6 +109,53 @@ def format_comment_text(text):
     return mark_safe(text)
 
 @register.filter
+def format_message_text(text):
+    """
+    Full formatting for direct messages.
+    Handles: BB codes, @mentions, #hashtags, URLs, line breaks.
+    No <p> wrapping — keeps output inline-safe for message bubbles.
+    Matches the JS formatMessageText() function in message.html exactly.
+    """
+    if not text:
+        return ""
+
+    # 1. Normalise line endings
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+    # 2. BB codes
+    text = re.sub(r'\[b\](.*?)\[/b\]', r'<strong>\1</strong>', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'\[i\](.*?)\[/i\]', r'<em>\1</em>',         text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'\[u\](.*?)\[/u\]', r'<u>\1</u>',           text, flags=re.IGNORECASE | re.DOTALL)
+
+    # 3. URLs (before mentions/hashtags so # and @ inside URLs are untouched)
+    url_pattern = r'(https?://[^\s<>"\']+|www\.[^\s<>"\']+)(?=[^.,?!:\s]|$)'
+    def replace_url(match):
+        url = match.group(0)
+        href = url if url.startswith(('http://', 'https://')) else 'http://' + url
+        return f'<a href="{href}" target="_blank" rel="noopener noreferrer" class="kf-url-link">{url}</a>'
+    text = re.sub(url_pattern, replace_url, text)
+
+    # 4. @mentions
+    def replace_mention(match):
+        username = match.group(1)
+        if User.objects.filter(username=username).exists():
+            return f'<a href="/{username}/" class="kf-mention-link">@{username}</a>'
+        return match.group(0)
+    text = re.sub(r'@(\w+)', replace_mention, text)
+
+    # 5. #hashtags
+    def replace_hashtag(match):
+        tag = match.group(1)
+        return f'<a href="/hashtag/{tag}/" class="kf-hashtag">#{tag}</a>'
+    text = re.sub(r'#(\w+)', replace_hashtag, text)
+
+    # 6. Line breaks
+    text = text.replace('\n', '<br>')
+
+    return mark_safe(text)
+
+
+@register.filter
 def truncate_with_ellipsis(text, length=150):
     if not text or len(text) <= length:
         return text

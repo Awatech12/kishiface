@@ -1,4 +1,5 @@
 
+{% load text_filters %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1794,6 +1795,40 @@
             background: rgba(0,149,246,0.08);
         }
         /* ───────────────────────────────────────────────────────────────────── */
+
+        /* ── format_message_text link & BB code styles ───────────────────── */
+        .kf-mention-link,
+        .kf-hashtag,
+        .kf-url-link {
+            text-decoration: none;
+            font-weight: 600;
+            word-break: break-all;
+        }
+        .kishiface-message-bubble.sent .kf-mention-link,
+        .kishiface-message-bubble.sent .kf-hashtag,
+        .kishiface-message-bubble.sent .kf-url-link {
+            color: rgba(255, 255, 255, 0.92);
+            text-decoration: underline;
+            text-decoration-color: rgba(255, 255, 255, 0.5);
+            text-underline-offset: 2px;
+        }
+        .kishiface-message-bubble.sent .kf-mention-link:hover,
+        .kishiface-message-bubble.sent .kf-hashtag:hover,
+        .kishiface-message-bubble.sent .kf-url-link:hover { color: #ffffff; }
+        .kishiface-message-bubble.received .kf-mention-link,
+        .kishiface-message-bubble.received .kf-hashtag,
+        .kishiface-message-bubble.received .kf-url-link {
+            color: var(--kishiface-primary);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .kishiface-message-bubble.received .kf-mention-link:hover,
+        .kishiface-message-bubble.received .kf-hashtag:hover,
+        .kishiface-message-bubble.received .kf-url-link:hover { opacity: 0.8; }
+        .kishiface-message-text strong { font-weight: 700; }
+        .kishiface-message-text em     { font-style: italic; }
+        .kishiface-message-text u      { text-decoration: underline; }
+        /* ─────────────────────────────────────────────────────────────────── */
         
     </style>
 </head>
@@ -1891,7 +1926,7 @@
                                         {% elif message.reply_to.file_type == 'audio' %}
                                             🎤 Audio
                                         {% else %}
-                                            {{ message.reply_to.conversation|truncatechars:60 }}
+                                            {{ message.reply_to.conversation|truncate_with_ellipsis:60 }}
                                         {% endif %}
                                     </div>
                                 </div>
@@ -1904,7 +1939,7 @@
                                         <div class="kishiface-image-attachment" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'image', '{{ message.chat_time }}', '{{ message.conversation|default:'' }}', '{{ message.sender.username }}', '{% if message.sender.profile.picture %}{{ message.sender.profile.picture.url }}{% endif %}')">
                                             <img src="{{ message.file.url }}" alt="Image">
                                             {% if message.conversation %}
-                                                <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation }}</div>
+                                                <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation|format_message_text }}</div>
                                             {% endif %}
                                         </div>
                                     {% elif message.file_type == 'video' %}
@@ -1918,7 +1953,7 @@
                                                 </div>
                                             </div>
                                             {% if message.conversation %}
-                                                <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation }}</div>
+                                                <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation|format_message_text }}</div>
                                             {% endif %}
                                         </div>
                                     {% elif message.file_type == 'audio' %}
@@ -1937,13 +1972,13 @@
                                             <audio src="{{ message.file.url }}" preload="metadata" id="audio-{{ message.id }}"></audio>
                                         </div>
                                         {% if message.conversation %}
-                                            <div class="kishiface-message-text kishiface-audio-caption" data-full-text="{{ message.conversation }}">{{ message.conversation }}</div>
+                                            <div class="kishiface-message-text kishiface-audio-caption" data-full-text="{{ message.conversation }}">{{ message.conversation|format_message_text }}</div>
                                         {% endif %}
                                     {% endif %}
                                 </div>
                             {% elif message.conversation %}
                                 <div class="kishiface-message-bubble {% if message.sender.username == request.user.username %}sent{% else %}received{% endif %}">
-                                    <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation }}</div>
+                                    <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation|format_message_text }}</div>
                                     <div class="kishiface-message-meta">
                                         <span class="kishiface-message-time">{{ message.chat_time }}</span>
                                         {% if message.sender.username == request.user.username %}
@@ -2991,6 +3026,47 @@
             div.textContent = text;
             return div.innerHTML;
         }
+
+        /**
+         * JS equivalent of text_filters.py › format_message_text
+         * Handles: line breaks, BB codes, @mentions, #hashtags, URLs
+         * Safe to call on untrusted input — escapes raw text first.
+         */
+        function formatMessageText(text) {
+            if (!text) return '';
+
+            // 1. Escape raw HTML so user input can't inject tags
+            text = escapeHtml(text);
+
+            // 2. BB codes  [b]..[/b]  [i]..[/i]  [u]..[/u]
+            text = text.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>');
+            text = text.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '<em>$1</em>');
+            text = text.replace(/\[u\]([\s\S]*?)\[\/u\]/gi, '<u>$1</u>');
+
+            // 3. URLs  (before mentions/hashtags so # and @ inside URLs are untouched)
+            text = text.replace(
+                /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)(?=[^.,?!:\s]|$)/g,
+                (match) => {
+                    const href = match.startsWith('http') ? match : 'http://' + match;
+                    return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="kf-url-link">${match}</a>`;
+                }
+            );
+
+            // 4. @mentions
+            text = text.replace(/@(\w+)/g, (match, username) => {
+                return `<a href="/${username}/" class="kf-mention-link">@${username}</a>`;
+            });
+
+            // 5. #hashtags
+            text = text.replace(/#(\w+)/g, (match, tag) => {
+                return `<a href="/hashtag/${tag}/" class="kf-hashtag">#${tag}</a>`;
+            });
+
+            // 6. Line breaks
+            text = text.replace(/\n/g, '<br>');
+
+            return text;
+        }
         
         function getCurrentTime() {
             const now = new Date();
@@ -3053,74 +3129,217 @@
         
         function appendKishifaceMessage(data) {
             const isSender = data.sender === sender;
+            // Sanitise every field coming off the wire before touching the DOM
+            const safeMessageId  = String(data.message_id  || '');
+            const safeSender     = String(data.sender       || '');
+            const safeFileUrl    = String(data.file_url     || '');
+            const safeSenderAvt  = String(data.sender_avatar || '');
+            const safeTime       = String(data.time         || '');
+            const safeFileType   = String(data.file_type    || '');
+            const safeMessage    = data.message ? String(data.message) : '';
+
             const messageRow = document.createElement('div');
             messageRow.className = `kishiface-message-row ${isSender ? 'sent' : 'received'}`;
-            messageRow.dataset.messageId = data.message_id;
-            let innerHTML = '';
-            if (isSender && data.reply_to) {
-                innerHTML += `<div class="kishiface-replied-indicator"><i class="fas fa-reply"></i><span>You replied</span></div>`;
-            }
-            if (data.reply_to) {
-                const replySender = data.reply_to.sender === sender ? 'You' : data.reply_to.sender;
-                let replyContent = '';
-                if (data.reply_to.file_type === 'image') replyContent = '<i class="fas fa-image"></i> Photo';
-                else if (data.reply_to.file_type === 'video') replyContent = '<i class="fas fa-video"></i> Video';
-                else if (data.reply_to.file_type === 'audio') replyContent = '<i class="fas fa-microphone"></i> Audio';
-                else {
-                    replyContent = data.reply_to.message ? escapeHtml(data.reply_to.message).substring(0, 60) : '';
-                    if (data.reply_to.message && data.reply_to.message.length > 60) replyContent += '...';
-                }
-                const replyLabel = (data.reply_to.sender === sender) ? 'Replied to you:' : `Replied to ${data.reply_to.sender}:`;
-                innerHTML += `
-                    <div class="kishiface-reply-indicator" onclick="scrollToKishifaceMessage('${data.reply_to.message_id}')">
-                        <span class="kvibe-reply-label">${replyLabel}</span>
-                        <div class="kvibe-reply-quote">
-                            <div class="kvibe-reply-bar"></div>
-                            <div class="kvibe-reply-quote-text">${replyContent}</div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            const hasText = data.message && data.message.trim();
-            const hasMedia = data.file_url;
-            const hasCombined = hasText && hasMedia;
-            
-            if (hasMedia) {
-                innerHTML += `<div class="kishiface-message-bubble ${isSender ? 'sent' : 'received'} has-media">`;
-                const sndr = escapeHtml(data.sender || '');
-                const savt = data.sender_avatar || '';
-                const overlayText = hasText ? `<div class="kishiface-message-text" data-full-text="${escapeHtml(data.message)}">${escapeHtml(data.message)}</div>` : '';
-                if (data.file_type === 'image') {
-                    innerHTML += `<div class="kishiface-image-attachment" onclick="openKishifaceMediaModal('${data.file_url}', 'image', '${data.time || ''}', '${data.message || ''}', '${sndr}', '${savt}')"><img src="${data.file_url}" alt="Image" onerror="this.src='https://placehold.co/250x250/cccccc/666666?text=Image+Error'">${overlayText}</div>`;
-                } else if (data.file_type === 'video') {
-                    const videoId = data.message_id || Date.now();
-                    innerHTML += `<div class="kishiface-video-player" onclick="openKishifaceMediaModal('${data.file_url}', 'video', '${data.time || ''}', '${data.message || ''}', '${sndr}', '${savt}')"><video preload="metadata" id="video-${videoId}"><source src="${data.file_url}"></video><div class="kishiface-video-overlay"><div class="kishiface-video-play-icon"><i class="fas fa-play"></i></div></div>${overlayText}</div>`;
-                } else if (data.file_type === 'audio') {
-                    const messageId = data.message_id || Date.now();
-                    innerHTML += `<div class="kishiface-audio-player" onclick="openKishifaceMediaModal('${data.file_url}', 'audio', '${data.time || ''}', '${data.message || ''}', '${sndr}', '${savt}')"><div class="kishiface-audio-content"><button class="kishiface-audio-play-btn" onclick="event.stopPropagation(); toggleKishifaceAudioPlayback(this, '${messageId}')"><i class="fas fa-play"></i></button><div class="kishiface-audio-info"><div class="kishiface-audio-waveform" id="waveform-${messageId}" onclick="kvibeWaveformClick(event, '${messageId}')"><div class="kishiface-wave-container" id="wave-container-${messageId}"></div></div><div class="kishiface-audio-duration" id="duration-${messageId}">0:00</div></div></div><audio src="${data.file_url}" preload="metadata" id="audio-${messageId}"></audio></div>${overlayText}`;
-                }
-                innerHTML += `</div>`;
-            } else if (hasText) {
-                innerHTML += `<div class="kishiface-message-bubble ${isSender ? 'sent' : 'received'}"><div class="kishiface-message-text" data-full-text="${escapeHtml(data.message)}">${escapeHtml(data.message)}</div><div class="kishiface-message-meta"><span class="kishiface-message-time">${data.time || getCurrentTime()}</span>${isSender ? '<span class="kishiface-message-check"><i class="fas fa-check"></i></span>' : ''}</div></div>`;
-            }
-            
+            messageRow.dataset.messageId = safeMessageId;
+
+            // ── Wrapper for received messages ────────────────────────────────
+            let contentTarget = messageRow; // where bubble + strips go
             if (!isSender) {
-                const avatarHTML = `<img class="kvibe-receiver-avatar" src="${receiverAvatarUrl}" alt="${receiver}" onerror="this.src='https://placehold.co/28x28/0095f6/FFFFFF?text=${encodeURIComponent((receiver||'?').charAt(0).toUpperCase())}'" style="align-self:flex-end;margin-bottom:2px;">`;
-                messageRow.innerHTML = avatarHTML + `<div class="kvibe-received-content">${innerHTML}</div>`;
-            } else {
-                messageRow.innerHTML = innerHTML;
+                const avatarImg = document.createElement('img');
+                avatarImg.className = 'kvibe-receiver-avatar';
+                avatarImg.src = receiverAvatarUrl;
+                avatarImg.alt = receiver;
+                avatarImg.style.cssText = 'align-self:flex-end;margin-bottom:2px;';
+                avatarImg.onerror = function() {
+                    this.src = `https://placehold.co/28x28/0095f6/FFFFFF?text=${encodeURIComponent((receiver||'?').charAt(0).toUpperCase())}`;
+                };
+                messageRow.appendChild(avatarImg);
+                const receivedWrap = document.createElement('div');
+                receivedWrap.className = 'kvibe-received-content';
+                messageRow.appendChild(receivedWrap);
+                contentTarget = receivedWrap;
             }
-            
+
+            // ── Replied-to indicator (sent side) ─────────────────────────────
+            if (isSender && data.reply_to) {
+                const ind = document.createElement('div');
+                ind.className = 'kishiface-replied-indicator';
+                ind.innerHTML = '<i class="fas fa-reply"></i>';
+                const sp = document.createElement('span');
+                sp.textContent = 'You replied';
+                ind.appendChild(sp);
+                contentTarget.appendChild(ind);
+            }
+
+            // ── Reply quote block ─────────────────────────────────────────────
+            if (data.reply_to) {
+                const safeReplyId     = String(data.reply_to.message_id || '');
+                const safeReplySender = String(data.reply_to.sender     || '');
+                const replyIndicator  = document.createElement('div');
+                replyIndicator.className = 'kishiface-reply-indicator';
+                replyIndicator.addEventListener('click', () => scrollToKishifaceMessage(safeReplyId));
+
+                const label = document.createElement('span');
+                label.className = 'kvibe-reply-label';
+                label.textContent = (data.reply_to.sender === sender)
+                    ? 'Replied to you:'
+                    : `Replied to ${safeReplySender}:`;
+
+                const quote = document.createElement('div');
+                quote.className = 'kvibe-reply-quote';
+                const bar = document.createElement('div');
+                bar.className = 'kvibe-reply-bar';
+                const quoteText = document.createElement('div');
+                quoteText.className = 'kvibe-reply-quote-text';
+
+                const ft = data.reply_to.file_type;
+                if (ft === 'image')      quoteText.innerHTML = '<i class="fas fa-image"></i> Photo';
+                else if (ft === 'video') quoteText.innerHTML = '<i class="fas fa-video"></i> Video';
+                else if (ft === 'audio') quoteText.innerHTML = '<i class="fas fa-microphone"></i> Audio';
+                else {
+                    const raw = data.reply_to.message ? String(data.reply_to.message) : '';
+                    quoteText.textContent = raw.length > 60 ? raw.substring(0, 60) + '...' : raw;
+                }
+
+                quote.appendChild(bar);
+                quote.appendChild(quoteText);
+                replyIndicator.appendChild(label);
+                replyIndicator.appendChild(quote);
+                contentTarget.appendChild(replyIndicator);
+            }
+
+            // ── Message bubble ────────────────────────────────────────────────
+            const hasText  = safeMessage.trim().length > 0;
+            const hasMedia = safeFileUrl.length > 0;
+
+            if (hasMedia) {
+                const bubble = document.createElement('div');
+                bubble.className = `kishiface-message-bubble ${isSender ? 'sent' : 'received'} has-media`;
+
+                // Helper: build overlay caption node
+                const makeCaption = () => {
+                    if (!hasText) return null;
+                    const cap = document.createElement('div');
+                    cap.className = 'kishiface-message-text';
+                    cap.dataset.fullText = safeMessage;
+                    cap.innerHTML = formatMessageText(safeMessage);
+                    return cap;
+                };
+
+                if (safeFileType === 'image') {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'kishiface-image-attachment';
+                    wrap.addEventListener('click', () =>
+                        openKishifaceMediaModal(safeFileUrl, 'image', safeTime, safeMessage, safeSender, safeSenderAvt));
+                    const img = document.createElement('img');
+                    img.src = safeFileUrl;
+                    img.alt = 'Image';
+                    img.onerror = function() { this.src = 'https://placehold.co/250x250/cccccc/666666?text=Image+Error'; };
+                    wrap.appendChild(img);
+                    const cap = makeCaption();
+                    if (cap) wrap.appendChild(cap);
+                    bubble.appendChild(wrap);
+
+                } else if (safeFileType === 'video') {
+                    const videoId = safeMessageId || Date.now();
+                    const wrap = document.createElement('div');
+                    wrap.className = 'kishiface-video-player';
+                    wrap.addEventListener('click', () =>
+                        openKishifaceMediaModal(safeFileUrl, 'video', safeTime, safeMessage, safeSender, safeSenderAvt));
+                    const vid = document.createElement('video');
+                    vid.preload = 'metadata';
+                    vid.id = `video-${videoId}`;
+                    const src = document.createElement('source');
+                    src.src = safeFileUrl;
+                    vid.appendChild(src);
+                    const overlay = document.createElement('div');
+                    overlay.className = 'kishiface-video-overlay';
+                    overlay.innerHTML = '<div class="kishiface-video-play-icon"><i class="fas fa-play"></i></div>';
+                    wrap.appendChild(vid);
+                    wrap.appendChild(overlay);
+                    const cap = makeCaption();
+                    if (cap) wrap.appendChild(cap);
+                    bubble.appendChild(wrap);
+
+                } else if (safeFileType === 'audio') {
+                    const messageId = safeMessageId || Date.now();
+                    const audioWrap = document.createElement('div');
+                    audioWrap.className = 'kishiface-audio-player';
+                    audioWrap.addEventListener('click', () =>
+                        openKishifaceMediaModal(safeFileUrl, 'audio', safeTime, safeMessage, safeSender, safeSenderAvt));
+                    const content = document.createElement('div');
+                    content.className = 'kishiface-audio-content';
+                    const playBtn = document.createElement('button');
+                    playBtn.className = 'kishiface-audio-play-btn';
+                    playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    playBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleKishifaceAudioPlayback(playBtn, messageId);
+                    });
+                    const info = document.createElement('div');
+                    info.className = 'kishiface-audio-info';
+                    const waveform = document.createElement('div');
+                    waveform.className = 'kishiface-audio-waveform';
+                    waveform.id = `waveform-${messageId}`;
+                    waveform.addEventListener('click', (e) => kvibeWaveformClick(e, messageId));
+                    const waveContainer = document.createElement('div');
+                    waveContainer.className = 'kishiface-wave-container';
+                    waveContainer.id = `wave-container-${messageId}`;
+                    waveform.appendChild(waveContainer);
+                    const dur = document.createElement('div');
+                    dur.className = 'kishiface-audio-duration';
+                    dur.id = `duration-${messageId}`;
+                    dur.textContent = '0:00';
+                    info.appendChild(waveform);
+                    info.appendChild(dur);
+                    content.appendChild(playBtn);
+                    content.appendChild(info);
+                    const audioEl = document.createElement('audio');
+                    audioEl.src = safeFileUrl;
+                    audioEl.preload = 'metadata';
+                    audioEl.id = `audio-${messageId}`;
+                    audioWrap.appendChild(content);
+                    audioWrap.appendChild(audioEl);
+                    const cap = makeCaption();
+                    if (cap) audioWrap.appendChild(cap);
+                    bubble.appendChild(audioWrap);
+                }
+
+                contentTarget.appendChild(bubble);
+
+            } else if (hasText) {
+                const bubble = document.createElement('div');
+                bubble.className = `kishiface-message-bubble ${isSender ? 'sent' : 'received'}`;
+                const textDiv = document.createElement('div');
+                textDiv.className = 'kishiface-message-text';
+                textDiv.dataset.fullText = safeMessage;
+                textDiv.innerHTML = formatMessageText(safeMessage);
+                const meta = document.createElement('div');
+                meta.className = 'kishiface-message-meta';
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'kishiface-message-time';
+                timeSpan.textContent = safeTime || getCurrentTime();
+                meta.appendChild(timeSpan);
+                if (isSender) {
+                    const check = document.createElement('span');
+                    check.className = 'kishiface-message-check';
+                    check.innerHTML = '<i class="fas fa-check"></i>';
+                    meta.appendChild(check);
+                }
+                bubble.appendChild(textDiv);
+                bubble.appendChild(meta);
+                contentTarget.appendChild(bubble);
+            }
+
             const emptyState = kishifaceMessages.querySelector('.kishiface-empty-state');
             if (emptyState) emptyState.remove();
 
-            // Inject desktop hover reaction button
+            // ── Desktop hover reaction button (DOM API — no onclick injection) ─
             const hoverBtn = document.createElement('button');
             hoverBtn.className = 'kvibe-hover-react-btn';
             hoverBtn.title = 'React';
             hoverBtn.textContent = '😊';
-            hoverBtn.setAttribute('onclick', `kvOpenHoverReaction(event, '${data.message_id}')`);
+            hoverBtn.addEventListener('click', (e) => kvOpenHoverReaction(e, safeMessageId));
             messageRow.insertBefore(hoverBtn, messageRow.firstChild);
 
             // Inject empty reaction strip into the right container
@@ -3729,7 +3948,7 @@
     function kvOpenHoverReaction(event, messageId) {
         event.stopPropagation();
         kvReactionTargetMessageId = messageId;
-        const messageRow = event.currentTarget.closest('.kishiface-message-row');
+        const messageRow = (event.currentTarget || event.target).closest('.kishiface-message-row');
         if (messageRow) showKvReactionPicker(messageRow);
     }
 
