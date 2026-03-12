@@ -1,0 +1,371 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KishiFace - Home</title>
+   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    /*
+     * COMBINED STYLE: LinkedIn Boxed Card with Instagram Carousel Functionality
+     */
+    :root {
+      --main-bg: #f0f2f5;
+      --white: #ffffff;
+      --border-color: #e0e0e0;
+      --primary-color: #0077b5;
+      --text-dark: #1f1f1f;
+      --text-muted: #6a6a6a;
+      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      font-family: var(--font-stack);
+      background-color: var(--main-bg);
+      margin: 0;
+      padding-top: 54px;
+      padding-bottom: 49px;
+      color: var(--text-dark);
+      min-height: 100vh;
+    }
+    /* ===== Header (Top Bar) ===== */
+    header {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 54px;
+      background: var(--white);
+      border-bottom: 1px solid var(--border-color);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px;
+      z-index: 1000;
+    }
+    header h1 {
+      /* Keep the stylistic font for the logo */
+      font-family: 'Billabong', cursive, 'Brush Script MT', cursive;
+      font-size: 28px;
+      font-weight: normal;
+    }
+    /* Updated: Added gap for the header icons */
+    header .icon-group {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    /* Updated: Increased icon size for better tap target */
+    header .icon-group i {
+      font-size: 26px;
+      color: var(--text-dark);
+      cursor: pointer;
+    }
+    /* ===== Global Utility & Card Style (Boxed) ===== */
+    .container { max-width: 600px; margin: 0 auto; padding: 0; }
+    .card {
+      background: var(--white);
+      margin-bottom: 15px;
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+    }
+    .btn { padding: 6px 12px; border-radius: 4px; cursor: pointer; border: none; font-weight: 600; font-size: 14px; }
+    .btn-blue { background: var(--primary-color); color: var(--white); }
+    .btn-blue:hover { background: #006093; }
+    .text-center { text-align: center; }
+
+    /* Post Creation Form (Re-used) */
+    .post-form { padding: 12px; border: 1px solid var(--border-color);  margin-bottom: 15px; box-shadow: 0 1px 1px rgba(0,0,0,0.05); }
+    input { width: 95%; padding: 8px; border: 1px solid #ccc; border-radius: 2px; resize: none; margin-bottom: 10px; font-size: 14px; }
+    .form-actions { display:flex; justify-content:space-between; align-items:center; }
+    .file-label {
+      color: var(--primary-color); cursor: pointer; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px;
+      padding: 6px 8px; border: 1px solid transparent; border-radius: 4px; transition: background-color 0.2s;
+    }
+    .file-label:hover { background-color: #f0f8ff; border-color: #b0d8f0; }
+    input[type=file] { display: none; }
+
+    /* Post Header (LinkedIn Style) */
+    .post-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      padding: 12px 16px 8px 16px;
+    }
+    .post-user { display: flex; align-items: center; gap: 10px; }
+    .profile-pic { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: none; }
+    .username-link { font-weight: 600; text-decoration: none; color: var(--text-dark); font-size: 15px; line-height: 1.2; }
+    .user-details { display: flex; flex-direction: column; justify-content: center; }
+    .post-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Post Title (LinkedIn Style) */
+    .post-title {
+      padding: 0 16px 12px 16px; color: var(--text-dark); margin: 0; line-height: 1.3;
+    }
+
+    /* ===== Image Carousel Styles (RE-ENABLED) ===== */
+    .post-image-carousel {
+      position: relative;
+      overflow: hidden;
+      max-height: 70vh; /* Re-enabled and adjusted */
+      background-color: #efefef;
+    }
+    .slider-track {
+      display: flex;
+      transition: transform 0.3s ease-in-out;
+    }
+    .post-image-slide {
+      width: 100%;
+      flex-shrink: 0;
+      height: auto;
+      max-height: 70vh;
+      object-fit: cover; /* Use cover for better look on mixed images */
+      display: block;
+    }
+
+    /* Slide Nav Arrows */
+    .slide-nav {
+      position: absolute; top: 0; bottom: 0; width: 100%; display: flex; justify-content: space-between; align-items: center;
+      padding: 0 8px; pointer-events: none;
+    }
+    .slide-nav button {
+      background: rgba(0, 0, 0, 0.4); color: white; border: none; border-radius: 50%; width: 30px; height: 30px;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; font-size: 14px;
+      opacity: 0.8; pointer-events: all;
+    }
+    .slide-nav button.hidden { visibility: hidden; }
+
+    /* Indicators (Dots) */
+    .slider-indicators {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 10;
+    }
+    .indicator-dot {
+      width: 6px; height: 6px; background: rgba(255, 255, 255, 0.8); border-radius: 50%; transition: background 0.3s;
+    }
+    .indicator-dot.active { background: var(--primary-color); }
+    /* ===== End Carousel Styles ===== */
+
+    /* Liked Profile Pictures Section (Re-used) */
+    .likers-container { display: flex; align-items: center; gap: 5px; }
+    .liker-pic {
+      width: 20px; height: 20px; border-radius: 50%; object-fit: cover; border: 1px solid var(--white); margin-left: -5px;
+    }
+    .liker-pic:first-child { margin-left: 0; }
+
+    /* Engagement (Re-used) */
+    .engagement {
+      display: flex; align-items: center; padding: 8px 16px 12px 16px; font-size: 13px; color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+    }
+    .engagement a { color: var(--text-muted); text-decoration: none; font-weight: 600; }
+    .engagement a:hover { text-decoration: underline; }
+
+    /* Actions Bar (Re-used) */
+    .actions-container { display: flex; justify-content: center; padding: 8px 16px; border-top: 1px solid var(--border-color); }
+    .actions-left { display: flex; gap: 50px; }
+    .action-item {
+        display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-weight: 600;
+        font-size: 13px; cursor: pointer; text-decoration: none; padding: 6px 10px; border-radius: 4px;
+    }
+    .action-item:hover { background-color: #f6f6f6; }
+    .action-icon { font-size: 18px; color: var(--text-muted); }
+    .action-icon.liked { color: #ed4956; }
+
+    .post-content-section { display: none; } /* Keeping caption hidden for LinkedIn-style look */
+    .post-management { display: none; }
+    .pagination { display: flex; justify-content: center; gap: 12px; padding: 20px 0; }
+    .pagination a { background: var(--white); padding: 8px 14px; border-radius: 4px; border: 1px solid var(--border-color); text-decoration: none; color: var(--text-dark); font-size: 14px; }
+    .pagination a:hover { background: #eee; }
+
+
+  /* for comment style */
+.video-details {
+            display: flex;
+            align-items: flex-start;
+            margin: 0 30px;
+            padding-right: 24px; /* Space for a potential menu button if needed */
+        }
+  .channel-picture {
+            flex-shrink: 0; /* Prevents the image from shrinking */
+            margin-right: 12px;
+        }
+
+        .channel-picture img {
+            border-radius: 50%;
+            height: 30px;
+            width: 30px;
+            object-fit: cover;
+        }
+
+        .metadata {
+            display: flex;
+            flex-direction: column;
+            min-width: 0; 
+        }
+
+        .video-title {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.4;
+            max-height: 5px; 
+            overflow: none;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            margin: 0 0 2px 0;
+        }
+
+        .channel-name {
+            font-size: 0.85rem;
+            color: #606060; /* Gray for secondary text */
+            margin-bottom: 2px;
+        }
+
+        .video-stats {
+            font-size: 0.85rem;
+            color: #606060;
+        }
+
+        /* Hide 'about' text in the grid view (YouTube style) */
+        .video-card .video-about {
+            display: none;
+        }
+
+#icon{
+  margin:0 10px;
+}
+
+
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>KishiFace</h1>
+  <div class="icon-group">
+    <a href="{% url 'notification_list' %}" style="text-decoration: none; position: relative;">
+        <i class="fa-regular fa-bell" style="cursor:pointer;"></i>
+        {% if notifications.count > 0 %}
+            <sup style="color: red; font-weight: bold; position: absolute; top: 0; right: -5px; font-size: 10px;">{{notifications.count}}</sup>
+        {% endif %}
+    </a>
+    <a href="{% url 'inbox' %}"><i class="fa-regular fa-paper-plane" style="cursor:pointer;"></i></a>
+  </div>
+</header>
+
+
+<main class="container">
+ 
+  <div class="video-details">
+      <div class="channel-picture">
+      <a href="{% url 'profile' comment.author.username %}"><img src="{{comment.author.profile.picture.url}}" alt="{{comment.author}}'s Profile" ></a>
+      </div>
+
+      <div class="metadata">
+      <p class="video-title">{% if comment.author.first_name %} {{comment.author.first_name}} {{comment.author.last_name}} {% else %} {{comment.author}} {% endif %}</p>
+      <p class="channel-name">{{comment.comment}} 
+      </p>
+      {% if comment.image %}
+        <img src="{{ comment.image.url }}" alt="" style="width:200px; height:200px; border-radius:8px;">
+      {% endif %}
+
+      {% if comment.file %}
+        <audio controls>
+          <source src="{{ comment.file.url }}" type="audio/webm">
+        </audio>
+      {% endif %}
+
+                       
+        <p class="channel-name"><i id="icon" class="far fa-clock"></i>{{comment.created_at|naturaltime}} &bull;  
+            <span id="comment_like-{{comment.comment_id}}">
+                {% include 'snippet/comment_like.html' %}
+            </span>
+        <a href="{% url 'comment_reply' comment.comment_id %}"> <i id="icon" class="fa-regular fa-comment action-icon"></i></a>
+        </p>        
+      </div>
+</div> <hr style="width: 90%; margin: 10px auto;"/>
+  </div>
+</main>
+
+
+
+
+<script>
+  /**
+   * Handles sliding of a post's image carousel.
+   * (Original JavaScript is re-enabled to support the carousel HTML structure above)
+   * @param {string} postId - The unique ID of the post.
+   * @param {number} direction - -1 for previous, 1 for next.
+   */
+  function slidePost(postId, direction) {
+    const carousel = document.getElementById(`carousel-${postId}`);
+    const track = document.getElementById(`track-${postId}`);
+    const indicatorsContainer = document.getElementById(`indicators-${postId}`);
+    const prevButton = document.getElementById(`prev-${postId}`);
+    const nextButton = document.getElementById(`next-${postId}`);
+
+    if (!carousel || !track) return;
+
+    let currentSlide = parseInt(carousel.getAttribute('data-current-slide') || '0');
+    const totalSlides = parseInt(carousel.getAttribute('data-total-slides') || '1');
+
+    if (totalSlides <= 1) return;
+
+    let newSlide = currentSlide;
+
+    if (direction !== 0) { // Only update slide index if direction is provided
+        newSlide = currentSlide + direction;
+    }
+
+    // Clamp the new slide index
+    if (newSlide < 0) {
+      newSlide = 0;
+    } else if (newSlide >= totalSlides) {
+      newSlide = totalSlides - 1;
+    }
+
+    // 1. Update the slider position using CSS transform
+    const slideWidth = carousel.clientWidth;
+    const offset = newSlide * slideWidth;
+    track.style.transform = `translateX(-${offset}px)`;
+
+    // 2. Update the state attribute
+    carousel.setAttribute('data-current-slide', newSlide);
+
+    // 3. Update indicators
+    if (indicatorsContainer) {
+      indicatorsContainer.querySelectorAll('.indicator-dot').forEach((dot, index) => {
+        dot.classList.toggle('active', index === newSlide);
+      });
+    }
+
+    // 4. Update navigation buttons visibility
+    if (prevButton) {
+      prevButton.classList.toggle('hidden', newSlide === 0);
+    }
+    if (nextButton) {
+      nextButton.classList.toggle('hidden', newSlide === totalSlides - 1);
+    }
+  }
+
+  /**
+   * Initializes all carousels on the page.
+   */
+  function initCarousels() {
+    // Select all carousels that have more than one slide (checked by total-slides attribute)
+    document.querySelectorAll('.post-image-carousel[data-total-slides]:not([data-total-slides="1"])').forEach(carousel => {
+        const postId = carousel.id.split('-')[1];
+        // Call slidePost with 0 direction to initialize current position and button visibility
+        slidePost(postId, 0);
+    });
+  }
+
+  // Ensure carousels are initialized and responsive on load and resize
+  window.addEventListener('resize', initCarousels);
+  window.addEventListener('load', initCarousels);
+
+  // Fallback for immediate execution if the document is already ready
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      initCarousels();
+  }
+</script>
+</body>
+</html>
+{% include 'footer.html' %}

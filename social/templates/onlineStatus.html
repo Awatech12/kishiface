@@ -1,0 +1,89 @@
+<script>
+    window.userId = "{{ request.user.id|default:'' }}";
+</script>
+
+<script>
+class RealTimeStatus {
+    constructor() {
+        this.ws = null;
+        this.userId = window.userId;
+        this.pingInterval = null;
+        this.reconnectTimeout = 1000;
+        this.connect();
+    }
+
+    connect() {
+        if (!this.userId || this.userId === 'None') return;
+
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        this.ws = new WebSocket(`${protocol}${window.location.host}/ws/online-status/`);
+
+        this.ws.onopen = () => {
+            this.reconnectTimeout = 1000;
+            this.startHeartbeat();
+            // On connect, ask server to re-broadcast all current online statuses
+            // This fixes: user logs back in but viewer's page still shows them offline
+            this.ws.send(JSON.stringify({ type: 'request_snapshot' }));
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'status_update') {
+                    this.updateUI(data.user_id, data.status);
+                }
+            } catch(e) {}
+        };
+
+        this.ws.onclose = () => {
+            this.stopHeartbeat();
+            setTimeout(() => {
+                this.reconnectTimeout = Math.min(this.reconnectTimeout * 2, 30000);
+                this.connect();
+            }, this.reconnectTimeout);
+        };
+
+        this.ws.onerror = () => this.ws.close();
+    }
+
+    startHeartbeat() {
+        this.pingInterval = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 20000);
+    }
+
+    stopHeartbeat() {
+        if (this.pingInterval) clearInterval(this.pingInterval);
+    }
+
+    updateUI(userId, status) {
+        const isOnline = status.toLowerCase() === 'online';
+
+        document.querySelectorAll(`.user-status[data-user-id="${String(userId)}"]`).forEach(el => {
+            el.classList.toggle('online', isOnline);
+            el.classList.toggle('offline', !isOnline);
+
+            // Only set text on text-style elements
+            if (el.classList.contains('user-status-text')) {
+                el.textContent = isOnline ? 'Online' : 'Offline';
+            }
+
+            // Update tooltip on dot elements
+            if (el.classList.contains('kvibe-profile-online-dot')) {
+                el.title = isOnline ? 'Online' : 'Offline';
+            }
+        });
+    }
+}
+
+// Only create one instance globally — prevent duplicates if included multiple times
+if (!window.statusManager) {
+    document.addEventListener('DOMContentLoaded', () => {
+        if (window.userId && window.userId !== 'None') {
+            window.statusManager = new RealTimeStatus();
+        }
+    });
+}
+</script>

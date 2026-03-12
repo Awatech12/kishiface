@@ -1,0 +1,237 @@
+{% load static %}
+{% load humanize %}
+{% load text_filters %}
+
+{% if posts %}
+<div class="kvibe-text-feed">
+  {% for post in posts %}
+
+  <article class="kvibe-post"
+           data-post-id="{{ post.post_id }}"
+           data-mood="{{ post.mood|default:'' }}"
+           data-custom-mood="{{ post.custom_mood|default:'' }}">
+
+    <!-- Header -->
+    <div class="kvibe-post-header">
+      {% if post.author.profile.picture %}
+        <img src="{{ post.author.profile.picture.url }}"
+             class="kvibe-profile-pic" alt="{{ post.author.username }}"
+             loading="lazy"
+             onerror="this.onerror=null;this.src='https://placehold.co/36x36/efefef/888?text=U';">
+      {% else %}
+        <img src="https://placehold.co/36x36/efefef/888?text=U"
+             class="kvibe-profile-pic" alt="{{ post.author.username }}">
+      {% endif %}
+
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;">
+          <a href="{% url 'profile' post.author.username %}" class="kvibe-username">
+            {{ post.author.first_name }} {{ post.author.last_name }}
+          </a>
+          {% if post.author.profile.is_verify %}
+            <img src="{% static 'images/verify1.jpg' %}" width="15" height="15"
+                 alt="✓" style="vertical-align:middle;flex-shrink:0;">
+          {% endif %}
+          {% if post.mood %}
+            <span class="kvibe-mood-badge kvibe-mood-{{ post.mood }}">
+              <i class="fa-regular fa-face-smile"></i>
+              {{ post.get_mood_display|default:post.mood }}
+            </span>
+          {% endif %}
+        </div>
+        <div class="kvibe-post-time">
+          @{{ post.author.username }}&nbsp;&middot;&nbsp;{{ post.created_at|timesince }} ago
+        </div>
+      </div>
+
+      {% if request.user == post.author %}
+        <a href="{% url 'editpost' post.post_id %}" class="kvibe-edit-icon" title="Edit">
+          <i class="fas fa-edit"></i>
+        </a>
+      {% endif %}
+    </div>
+
+    <!-- Text content -->
+    <div class="kvibe-post-content">
+      <div class="kvibe-post-text {% if post.content|length > 150 %}collapsed{% endif %}"
+           id="kvibe-text-{{ post.post_id }}">
+        {{ post.content|format_post_text|safe }}
+      </div>
+      {% if post.content|length > 150 %}
+        <button class="kvibe-text-toggle" onclick="kvibeToggleText('{{ post.post_id }}')">
+          <span>more</span><i class="fas fa-chevron-down"></i>
+        </button>
+      {% endif %}
+    </div>
+
+    <!-- Action buttons -->
+    <div class="kvibe-actions-container">
+
+      <!-- LIKE -->
+      <button class="kvibe-action-item kvibe-like-btn"
+              data-post-id="{{ post.post_id }}"
+              data-liked="{% if request.user in post.likes.all %}true{% else %}false{% endif %}"
+              onclick="kvibeLikePost(this)"
+              style="border:none;font-family:inherit;cursor:pointer;">
+        {% if request.user in post.likes.all %}
+          <i class="fas fa-heart kvibe-action-icon" style="color:var(--kvibe-primary);"></i>
+        {% else %}
+          <i class="fa-regular fa-heart kvibe-action-icon"></i>
+        {% endif %}
+        <span class="kvibe-like-count" id="kvibe-like-count-{{ post.post_id }}">{% if post.likes.count > 0 %}{{ post.likes.count|intcomma }}{% endif %}</span>
+      </button>
+
+      <!-- COMMENT -->
+      <a href="{% url 'post_comment' post.post_id %}" class="kvibe-action-item">
+        <i class="fa-regular fa-comment kvibe-action-icon"></i>
+        <span>{{ post.comments.count|intcomma }}</span>
+      </a>
+
+      <!-- REPOST -->
+      <button class="kvibe-action-item"
+              data-post-id="{% if post.is_repost and post.original_post %}{{ post.original_post.post_id }}{% else %}{{ post.post_id }}{% endif %}"
+              data-reposted="{% if request.user in post.reposts.all %}true{% else %}false{% endif %}"
+              onclick="kvibeToggleRepost(this)"
+              style="border:none;font-family:inherit;cursor:pointer;">
+        <i class="fas fa-retweet kvibe-action-icon {% if request.user in post.reposts.all %}kvibe-reposted{% endif %}"></i>
+        <span class="kvibe-repost-count {% if post.reposts.count > 0 %}kvibe-show{% endif %}"
+              id="kvibe-repost-count-{{ post.post_id }}">
+          {% if post.reposts.count > 0 %}{{ post.reposts.count|intcomma }}{% endif %}
+        </span>
+      </button>
+
+      <!-- SHARE -->
+      <button class="kvibe-action-item"
+              onclick="kvibeOpenShareModal('{{ post.post_id }}','{{ post.content|escapejs|truncatechars:100 }}')"
+              style="border:none;font-family:inherit;cursor:pointer;">
+        <i class="fa-regular fa-paper-plane kvibe-action-icon"></i>
+        <span class="kvibe-share-count {% if post.share > 0 %}kvibe-show{% endif %}"
+              id="kvibe-share-count-{{ post.post_id }}">
+          {% if post.share > 0 %}{{ post.share|intcomma }}{% endif %}
+        </span>
+      </button>
+
+    </div>
+
+    <!-- Likers + view count row -->
+    <div class="kvibe-engagement-row">
+      <!-- Likers avatars — always in DOM so JS can populate after first like -->
+      <div class="kvibe-likers-container" id="kvibe-likers-{{ post.post_id }}"{% if post.likes.count == 0 %} style="display:none;"{% endif %}>
+        {% for liker in post.liker_data %}
+          <a href="{% url 'profile' liker.username %}" aria-label="{{ liker.username }}">
+            {% if liker.url %}
+              <img src="{{ liker.url }}"
+                   onerror="this.onerror=null;this.src='https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}';"
+                   alt="{{ liker.username }}" class="kvibe-liker-pic">
+            {% else %}
+              <img src="https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}"
+                   alt="{{ liker.username }}" class="kvibe-liker-pic">
+            {% endif %}
+          </a>
+        {% endfor %}
+      </div>
+
+      <span class="kvibe-like-text" id="kvibe-like-text-{{ post.post_id }}">
+        {% if post.likes.count == 0 %}
+          <span class="kvibe-no-likes">Be the first to like this</span>
+        {% elif request.user in post.likes.all %}
+          {% if post.likes.count == 1 %}
+            <span class="kvibe-you-text">Liked by You</span>
+          {% else %}
+            <span class="kvibe-you-text">Liked by You</span> and {{ post.likes.count|add:"-1" }} others
+          {% endif %}
+        {% else %}
+          {% with liker=post.likes.first %}
+            Liked by <a href="{% url 'profile' liker.username %}"
+                        style="color:var(--kvibe-text);text-decoration:none;">{{ liker.username }}</a>{% if post.likes.count > 1 %} and {{ post.likes.count|add:"-1" }} others{% endif %}
+          {% endwith %}
+        {% endif %}
+      </span>
+
+      <span class="kvibe-separator-dot">·</span>
+
+      <span class="kvibe-view-text">
+        <i class="fa-regular fa-chart-bar"></i> {{ post.view|intcomma }}
+      </span>
+    </div>
+
+    <!-- Share modal -->
+    <div class="kvibe-share-modal" id="kvibe-share-modal-{{ post.post_id }}"
+         onclick="kvibeCloseShareModal('{{ post.post_id }}')">
+      <div class="kvibe-share-modal-content" onclick="event.stopPropagation()">
+        <div class="kvibe-share-header">
+          Share to
+          <i class="fa-solid fa-xmark" style="cursor:pointer"
+             onclick="kvibeCloseShareModal('{{ post.post_id }}')"></i>
+        </div>
+        <div class="kvibe-share-grid">
+          <div class="kvibe-share-item" onclick="kvibeShareVia('whatsapp','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
+            <span>WhatsApp</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('facebook','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-facebook"><i class="fa-brands fa-facebook-f"></i></div>
+            <span>Facebook</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('telegram','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-telegram"><i class="fa-brands fa-telegram"></i></div>
+            <span>Telegram</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('snapchat','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-snapchat" style="color:#000"><i class="fa-brands fa-snapchat"></i></div>
+            <span>Snapchat</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('sms','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-sms"><i class="fa-solid fa-comment-sms"></i></div>
+            <span>SMS</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('email','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-email"><i class="fa-solid fa-envelope"></i></div>
+            <span>Email</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('x','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-x"><i class="fa-brands fa-x-twitter"></i></div>
+            <span>X</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('copy','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-copy"><i class="fa-solid fa-link"></i></div>
+            <span>Copy link</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Repost modal -->
+    <div class="kvibe-repost-modal" id="kvibe-repost-modal-{{ post.post_id }}"
+         onclick="kvibeCloseRepostModal('{{ post.post_id }}')">
+      <div class="kvibe-repost-modal-content" onclick="event.stopPropagation()">
+        <div class="kvibe-share-header">
+          Repost
+          <i class="fa-solid fa-xmark" style="cursor:pointer"
+             onclick="kvibeCloseRepostModal('{{ post.post_id }}')"></i>
+        </div>
+        <textarea class="kvibe-repost-caption"
+                  id="kvibe-repost-caption-{{ post.post_id }}"
+                  placeholder="Add a comment (optional)…" rows="3"></textarea>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="kvibe-repost-cancel-btn"
+                  onclick="kvibeCloseRepostModal('{{ post.post_id }}')">Cancel</button>
+          <button class="kvibe-repost-confirm-btn"
+                  id="kvibe-repost-confirm-{{ post.post_id }}"
+                  onclick="kvibeConfirmRepost('{{ post.post_id }}', this)">Repost</button>
+        </div>
+      </div>
+    </div>
+
+  </article>
+  {% endfor %}
+</div>
+
+{% else %}
+<div style="padding:64px 24px;text-align:center;color:#8e8e8e;">
+  <div style="font-size:48px;margin-bottom:14px;">✍️</div>
+  <h3 style="font-size:18px;font-weight:600;margin:0 0 6px;color:#262626;">No text posts yet</h3>
+  <p style="font-size:14px;margin:0;">Text posts will appear here.</p>
+</div>
+{% endif %}
+

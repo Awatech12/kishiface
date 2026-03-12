@@ -1,0 +1,846 @@
+{% load static %}
+{% load time %}
+{% load pwa %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preload" href="{% static 'images/logo.jpg' %}" as="image">
+   <meta name="csrf-token" content="{{ csrf_token }}">
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <title>Explore Users - KishiVibe</title>
+  {% progressive_web_app_meta %}
+  <script src="{% static 'js/pwa-install.js' %}"></script>
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <!-- Deferred scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  
+  <!-- CSS -->
+  <style>
+    :root {
+      --kf-bg: #fafafa;
+      --kf-white: #ffffff;
+      --kf-text: #262626;
+      --kf-text-light: #8e8e8e;
+      --kf-primary: #0095f6;
+      --kf-border: #dbdbdb;
+      --kf-success: #4caf50;
+      --kf-notification: #ed4956;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kf-bg);
+      color: var(--kf-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    .kf-container {
+      max-width: 100%;
+      width: 100%;
+    }
+    
+    /* Header */
+    .kf-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: var(--kf-white);
+      border-bottom: 1px solid var(--kf-border);
+      z-index: 100;
+      padding: 12px 16px;
+    }
+    
+    .kf-header-content {
+      max-width: 600px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .kf-back-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--kf-text);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 50%;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .kf-back-btn:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    
+    .kf-header-title {
+      font-weight: 600;
+      font-size: 18px;
+    }
+    
+    .kf-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .kf-notification-btn {
+      position: relative;
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--kf-text);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 50%;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .kf-notification-btn:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    
+    .kf-notification-badge {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: var(--kf-notification);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+    }
+    
+    /* Search Icon Link */
+    .kf-search-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--kf-text);
+      transition: color 0.2s;
+      padding: 8px;
+      border-radius: 50%;
+    }
+    
+    .kf-search-link:hover {
+      background: rgba(0, 0, 0, 0.05);
+      color: var(--kf-primary);
+    }
+    
+    .kf-search-link svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+    }
+    
+    /* Main content */
+    .kf-explore-main {
+      max-width: 600px;
+      margin: 0 auto;
+      padding-top: 60px;
+      padding-bottom: 20px;
+    }
+    
+    /* Notifications Panel */
+    .kf-notifications-panel {
+      background: var(--kf-white);
+      margin-bottom: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--kf-border);
+      overflow: hidden;
+      display: none;
+    }
+    
+    .kf-notifications-panel.active {
+      display: block;
+      animation: kfSlideDown 0.3s ease;
+    }
+    
+    @keyframes kfSlideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .kf-notifications-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--kf-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .kf-notifications-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--kf-text);
+    }
+    
+    .kf-notifications-count {
+      background: var(--kf-primary);
+      color: white;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    
+    .kf-notification-item {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--kf-border);
+      transition: background 0.2s;
+    }
+    
+    .kf-notification-item:last-child {
+      border-bottom: none;
+    }
+    
+    .kf-notification-item:hover {
+      background: rgba(0, 0, 0, 0.02);
+    }
+    
+    .kf-notification-item.unread {
+      background: rgba(0, 149, 246, 0.03);
+    }
+    
+    .kf-notification-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    
+    .kf-notification-content {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .kf-notification-text {
+      font-size: 14px;
+      color: var(--kf-text);
+      margin-bottom: 2px;
+    }
+    
+    .kf-notification-username {
+      font-weight: 600;
+      color: var(--kf-text);
+    }
+    
+    .kf-notification-time {
+      font-size: 12px;
+      color: var(--kf-text-light);
+    }
+    
+    .kf-notification-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .kf-notification-follow-btn {
+      padding: 6px 12px;
+      background: var(--kf-primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    
+    .kf-notification-follow-btn:hover {
+      opacity: 0.9;
+    }
+    
+    .kf-notification-follow-btn.following {
+      background: var(--kf-success);
+    }
+    
+    .kf-empty-notifications {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--kf-text-light);
+    }
+    
+    .kf-empty-notifications-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+    
+    /* User suggestion card */
+    .kf-user-suggestion {
+      background: var(--kf-white);
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--kf-border);
+    }
+    
+    .kf-user-suggestion-header {
+      padding: 12px 16px 0 16px;
+      background: var(--kf-white);
+    }
+    
+    .kf-user-suggestion-badge {
+      font-size: 12px;
+      color: var(--kf-text-light);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    
+    .kf-user-suggestion-content {
+      padding: 0 16px 16px 16px;
+    }
+    
+    .kf-user-suggestion-profile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .kf-user-suggestion-picture {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    
+    .kf-user-suggestion-details {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .kf-user-suggestion-name {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--kf-text);
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .kf-user-suggestion-username {
+      font-size: 13px;
+      color: var(--kf-text-light);
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .kf-user-suggestion-bio {
+      font-size: 13px;
+      color: var(--kf-text);
+      line-height: 1.4;
+      display: -webkit-box;
+    
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    
+    .kf-user-suggestion-actions {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .kf-user-suggestion-btn-primary {
+      flex: 1;
+      padding: 10px;
+      background: var(--kf-primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 14px;
+      transition: opacity 0.2s;
+    }
+    
+    .kf-user-suggestion-btn-primary:hover {
+      opacity: 0.9;
+    }
+    
+    .kf-user-suggestion-btn-secondary {
+      flex: 1;
+      padding: 10px;
+      background: transparent;
+      color: var(--kf-primary);
+      border: 1px solid var(--kf-border);
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .kf-user-suggestion-btn-secondary:hover {
+      border-color: var(--kf-primary);
+      background: rgba(0, 149, 246, 0.05);
+    }
+    
+    .kf-user-suggestion-btn-success {
+      flex: 1;
+      padding: 10px;
+      background: var(--kf-success);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 14px;
+      transition: opacity 0.2s;
+    }
+    
+    .kf-user-suggestion-btn-success:hover {
+      opacity: 0.9;
+    }
+    
+    /* Empty state */
+    .kf-empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      background: var(--kf-white);
+    }
+    
+    .kf-empty-icon {
+      font-size: 48px;
+      color: var(--kf-text-light);
+      margin-bottom: 16px;
+    }
+    
+    .kf-empty-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--kf-text);
+    }
+    
+    .kf-empty-text {
+      color: var(--kf-text-light);
+      margin-bottom: 24px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    /* Toast notification */
+    .kf-toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: var(--kf-primary);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      animation: kfSlideIn 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .kf-success-toast {
+      background: var(--kf-success);
+    }
+    
+    @keyframes kfSlideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes kfSlideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+    
+    /* Responsive */
+    @media (min-width: 768px) {
+      .kf-explore-main {
+        padding-top: 80px;
+      }
+      
+      .kf-user-suggestion {
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border: 1px solid var(--kf-border);
+      }
+      
+      .kf-user-suggestion-header {
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+      }
+      
+      .kf-notifications-panel {
+        border-radius: 10px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .kf-search-link svg {
+        width: 18px;
+        height: 18px;
+      }
+      
+      .kf-notification-btn {
+        font-size: 18px;
+        padding: 6px;
+      }
+      
+      .kf-back-btn {
+        font-size: 18px;
+        padding: 6px;
+      }
+      
+      .kf-header-title {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="kf-header">
+    <div class="kf-header-content">
+      <button class="kf-back-btn" onclick="window.history.back()">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <h1 class="kf-header-title">Explore Users</h1>
+      <div class="kf-header-actions">
+        <button class="kf-notification-btn" onclick="toggleNotifications()" title="Follow Notifications">
+          <i class="fas fa-user-plus"></i>
+          {% if unread_follow_count > 0 %}
+          <span class="kf-notification-badge" id="notificationBadge">{{ unread_follow_count }}</span>
+          {% endif %}
+        </button>
+        
+        <!-- Search Icon with Link -->
+        <a href="{% url 'search' %}" class="kf-search-link" title="Search">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="kf-container">
+    <div class="kf-explore-main">
+      <!-- Notifications Panel -->
+      <div class="kf-notifications-panel" id="notificationsPanel">
+        <div class="kf-notifications-header">
+          <h3 class="kf-notifications-title">Recent Followers</h3>
+          {% if unread_follow_count > 0 %}
+          <span class="kf-notifications-count">{{ unread_follow_count }} new</span>
+          {% endif %}
+        </div>
+        
+        <div class="kf-notifications-list">
+          {% if recent_follows %}
+            {% for notification in recent_follows %}
+            <div class="kf-notification-item {% if not notification.is_read %}unread{% endif %}" data-notification-id="{{ notification.id }}">
+              <img src="{{ notification.from_user.profile.picture.url }}" alt="{{ notification.from_user.username }}" class="kf-notification-avatar">
+              <div class="kf-notification-content">
+                <p class="kf-notification-text">
+                  <span class="kf-notification-username">{{ notification.from_user.profile.full_name|default:notification.from_user.username }}</span>
+                  started following you
+                </p>
+                <p class="kf-notification-time" title="{{ notification.created_at|date:'M d, Y H:i' }}">
+                  {{ notification.created_at|insta_timesince }} ago
+                </p>
+              </div>
+              <div class="kf-notification-actions">
+                {% if notification.from_user.profile in request.user.profile.followings.all %}
+                <button class="kf-notification-follow-btn following" onclick="kfToggleFollow('{{ notification.from_user.id }}', '{{ notification.from_user.username }}', this)">
+                  <i class="fas fa-check"></i> Following
+                </button>
+                {% else %}
+                <button class="kf-notification-follow-btn" onclick="kfToggleFollow('{{ notification.from_user.id }}', '{{ notification.from_user.username }}', this)">
+                  <i class="fas fa-user-plus"></i> Follow Back
+                </button>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="kf-empty-notifications">
+              <div class="kf-empty-notifications-icon">
+                <i class="fas fa-user-friends"></i>
+              </div>
+              <p>No followers yet</p>
+              <p style="font-size: 13px; margin-top: 4px;">When someone follows you, you'll see it here</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Users List -->
+      <div id="kf-users-container">
+        {% include 'snippet/user_list.html' %}
+      </div>
+    </div>
+  </main>
+  
+  {% include 'footer.html' %}
+  
+  <!-- JavaScript -->
+  <script>
+    function getCsrfFromMeta(){
+      return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    }
+    
+    let notificationsOpen = false;
+    
+    // Toggle notifications panel
+    function toggleNotifications() {
+      const panel = document.getElementById('notificationsPanel');
+      const badge = document.getElementById('notificationBadge');
+      
+      notificationsOpen = !notificationsOpen;
+      
+      if (notificationsOpen) {
+        panel.classList.add('active');
+        
+        // Mark notifications as read
+        if (badge) {
+          markNotificationsAsRead();
+        }
+      } else {
+        panel.classList.remove('active');
+      }
+    }
+    
+    // Mark notifications as read via AJAX
+    function markNotificationsAsRead() {
+      fetch('/mark-follow-notifications-read/', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfFromMeta(),
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Remove badge
+          const badge = document.getElementById('notificationBadge');
+          if (badge) {
+            badge.style.display = 'none';
+          }
+          
+          // Update footer notification count
+          const exploreBadge = document.getElementById('exploreNotificationBadge');
+          if (exploreBadge) {
+            exploreBadge.style.display = 'none';
+          }
+          
+          // Remove unread class from notifications
+          document.querySelectorAll('.kf-notification-item.unread').forEach(item => {
+            item.classList.remove('unread');
+          });
+        }
+      })
+      .catch(error => console.error('Error marking notifications as read:', error));
+    }
+    
+    // Follow/Unfollow user
+    function kfToggleFollow(userId, username, button) {
+      const isFollowing = button.classList.contains('following') || button.classList.contains('kf-user-suggestion-btn-success');
+      const originalText = button.innerHTML;
+      
+      // Show loading state
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      button.disabled = true;
+      
+      // Send AJAX request
+      fetch(`/follow/${userId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfFromMeta(),
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          if (data.followed) {
+            // Now following
+            showToast(`You are now following @${username}`, 'success');
+            
+            // Update button state
+            if (button.classList.contains('kf-notification-follow-btn')) {
+              button.innerHTML = '<i class="fas fa-check"></i> Following';
+              button.classList.add('following');
+            } else {
+              button.innerHTML = '<i class="fas fa-check"></i> Following';
+              button.classList.remove('kf-user-suggestion-btn-primary');
+              button.classList.add('kf-user-suggestion-btn-success');
+            }
+            
+            // Update follower count if available
+            updateFollowerCount(button, 1);
+          } else {
+            // Unfollowed
+            showToast(`Unfollowed @${username}`, 'info');
+            
+            // Update button state
+            if (button.classList.contains('kf-notification-follow-btn')) {
+              button.innerHTML = '<i class="fas fa-user-plus"></i> Follow Back';
+              button.classList.remove('following');
+            } else {
+              button.innerHTML = '<i class="fas fa-user-plus"></i> Follow';
+              button.classList.remove('kf-user-suggestion-btn-success');
+              button.classList.add('kf-user-suggestion-btn-primary');
+            }
+            
+            // Update follower count if available
+            updateFollowerCount(button, -1);
+          }
+        } else {
+          // Show error
+          showToast('Error: ' + data.error, 'error');
+          button.innerHTML = originalText;
+        }
+        button.disabled = false;
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        showToast('Something went wrong. Please try again.', 'error');
+        button.innerHTML = originalText;
+        button.disabled = false;
+      });
+    }
+    
+    // Helper function to update follower count display
+    function updateFollowerCount(button, change) {
+      // Try to find follower count in user card
+      const userCard = button.closest('.kf-user-suggestion-content') || button.closest('.kf-notification-item');
+      if (userCard) {
+        // Look for follower count in stats (adjust selector as needed)
+        const statsDiv = userCard.querySelector('.kf-user-stats');
+        if (statsDiv) {
+          const followerText = statsDiv.querySelector('div:nth-child(2)');
+          if (followerText) {
+            const match = followerText.textContent.match(/\d+/);
+            if (match) {
+              const currentCount = parseInt(match[0]);
+              const newCount = Math.max(0, currentCount + change);
+              followerText.innerHTML = `<span style="font-weight: 600; color: var(--kf-text);">${newCount}</span> Followers`;
+            }
+          }
+        }
+      }
+    }
+    
+    // Toast notification
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = `kf-toast ${type === 'success' ? 'kf-success-toast' : ''}`;
+      toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+        <span>${message}</span>
+      `;
+      
+      document.body.appendChild(toast);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        toast.style.animation = 'kfSlideOut 0.3s ease';
+        setTimeout(() => {
+          document.body.removeChild(toast);
+        }, 300);
+      }, 3000);
+    }
+    
+    // Close notifications when clicking outside
+    document.addEventListener('click', function(e) {
+      const panel = document.getElementById('notificationsPanel');
+      const btn = document.querySelector('.kf-notification-btn');
+      
+      if (notificationsOpen && panel && btn && 
+          !panel.contains(e.target) && 
+          !btn.contains(e.target)) {
+        panel.classList.remove('active');
+        notificationsOpen = false;
+      }
+    });
+    
+    // Close notifications with Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && notificationsOpen) {
+        const panel = document.getElementById('notificationsPanel');
+        if (panel) {
+          panel.classList.remove('active');
+          notificationsOpen = false;
+        }
+      }
+    });
+  </script>
+</body>
+</html>

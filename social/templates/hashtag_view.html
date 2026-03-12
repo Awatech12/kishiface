@@ -1,0 +1,1384 @@
+{% load static %}
+{% load humanize %}
+{% load time %}
+{% load text_filters %}
+{% load post_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>#{{ tag_name }} - Kvibe</title>
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
+
+  <style>
+    /* ── Root variables — exact match to home.html ── */
+    :root {
+      --kvibe-bg: #fafafa;
+      --kvibe-white: #ffffff;
+      --kvibe-text: #262626;
+      --kvibe-text-light: #8e8e8e;
+      --kvibe-primary: #0095f6;
+      --kvibe-border: #dbdbdb;
+      --kvibe-repost: #0095f6;
+      --kvibe-repost-bg: #ffffff;
+      --mood-slay: #ff1493; --mood-vibing: #9933ff; --mood-sheesh: #00cc66;
+      --mood-periodt: #ff6b00; --mood-no-cap: #ff4444; --mood-bussin: #ffd700;
+      --mood-mid: #808080; --mood-cringe: #8b4513;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kvibe-bg);
+      color: var(--kvibe-text);
+      line-height: 1.4;
+    }
+
+    /* ── Layout — mirrors home.html exactly ── */
+    .kvibe-container { max-width: 100%; width: 100%; }
+
+    .kvibe-desktop-layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px 20px 0 20px;
+      gap: 20px;
+    }
+
+    .kvibe-left-sidebar {
+      width: 245px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+
+    .kvibe-main-feed { flex: 1; max-width: 600px; margin: 0 auto; }
+
+    .kvibe-right-sidebar {
+      width: 380px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-left: 10px;
+    }
+
+    .kvibe-desktop-only { display: none; }
+
+    /* ── Desktop nav ── */
+    .kvibe-desktop-nav {
+      width: 100%; display: flex; flex-direction: column;
+      gap: 8px; padding: 20px 0; background: var(--kvibe-white);
+    }
+    .kvibe-desktop-nav-item {
+      display: flex; align-items: center; text-decoration: none;
+      width: 100%; padding: 12px; position: relative;
+      transition: all 0.2s ease; cursor: pointer; border-radius: 8px;
+      color: var(--kvibe-text);
+    }
+    .kvibe-desktop-nav-item:hover, .kvibe-desktop-nav-item.active { background: var(--kvibe-bg); }
+    .kvibe-desktop-nav-icon { width: 24px; height: 24px; margin-right: 12px; position: relative; flex-shrink: 0; }
+    .kvibe-desktop-nav-icon svg { width: 24px; height: 24px; stroke: var(--kvibe-text-light); }
+    .kvibe-desktop-nav-label { font-size: 14px; font-weight: 500; color: var(--kvibe-text-light); }
+    .kvibe-desktop-notification-badge {
+      position: absolute; top: -4px; right: -6px;
+      background: #ff3b30; color: white; font-size: 9px; font-weight: 700;
+      min-width: 16px; height: 16px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; padding: 0 3px;
+    }
+
+    /* ── Hashtag hero ── */
+    .kvibe-hashtag-hero {
+      background: var(--kvibe-white);
+      border-bottom: 1px solid var(--kvibe-border);
+      padding: 20px 16px;
+      margin-bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .kvibe-hashtag-hero-icon {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--kvibe-primary), #6c63ff);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; color: white; flex-shrink: 0;
+    }
+    .kvibe-hashtag-hero-title {
+      font-size: 22px; font-weight: 700; color: var(--kvibe-text);
+    }
+    .kvibe-hashtag-hero-title span { color: var(--kvibe-primary); }
+    .kvibe-hashtag-hero-stats {
+      font-size: 13px; color: var(--kvibe-text-light);
+      display: flex; align-items: center; gap: 6px; margin-top: 4px;
+    }
+
+    /* ── Back button ── */
+    .kvibe-back-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px; background: var(--kvibe-white);
+      color: var(--kvibe-text); text-decoration: none;
+      border-radius: 8px; font-size: 13px; font-weight: 500;
+      border: 1px solid var(--kvibe-border); margin: 12px 16px;
+      transition: all 0.2s ease;
+    }
+    .kvibe-back-btn:hover { background: var(--kvibe-bg); color: var(--kvibe-primary); }
+
+    /* ── Post card — exact same as home.html ── */
+    .kvibe-post {
+      background: var(--kvibe-white);
+      margin-bottom: 0;
+      border-bottom: 1px solid var(--kvibe-border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .kvibe-repost-header {
+      display: flex; align-items: center; padding: 8px 16px;
+      background: var(--kvibe-bg); font-size: 12px; color: var(--kvibe-repost);
+    }
+    .kvibe-repost-header i { color: var(--kvibe-repost); margin-right: 6px; }
+    .kvibe-repost-header a { color: var(--kvibe-primary); text-decoration: none; font-weight: 500; margin: 0 4px; }
+    .kvibe-repost-header a:hover { text-decoration: underline; }
+    .kvibe-post-header { display: flex; align-items: center; padding: 14px 16px; flex-wrap: wrap; }
+    .kvibe-profile-pic { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; margin-right: 12px; }
+    .kvibe-username { font-weight: 600; font-size: 14px; color: var(--kvibe-text); text-decoration: none; }
+    .kvibe-username:hover { color: var(--kvibe-primary); }
+    .kvibe-post-time { font-size: 12px; color: var(--kvibe-text-light); margin-top: 2px; }
+    .kvibe-post-actions { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+    .kvibe-edit-icon {
+      color: var(--kvibe-text); padding: 8px; border-radius: 50%;
+      transition: all 0.15s ease-in-out; text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .kvibe-edit-icon:hover { color: var(--kvibe-primary); background-color: #f3f4f6; }
+
+    /* ── Follow / Following buttons — matches home.html exactly ── */
+    .kvibe-follow-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1.5px solid var(--kvibe-primary);
+      background: var(--kvibe-primary);
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      font-family: inherit;
+      line-height: 1;
+    }
+
+    .kvibe-follow-btn:hover {
+      background: #0074cc;
+      border-color: #0074cc;
+      color: white;
+    }
+
+    .kvibe-follow-btn--following {
+      background: transparent;
+      color: #65676b;
+      border: 1.5px solid #ccc;
+    }
+
+    .kvibe-follow-btn--following:hover {
+      background: #fff0f0;
+      border-color: #e53935;
+      color: #e53935;
+    }
+
+    .kvibe-follow-btn--following:hover i::before {
+      content: "\f235"; /* fa-user-minus unicode */
+    }
+
+    .kvibe-follow-btn--following:hover span::after {
+      content: "Unfollow";
+    }
+
+    .kvibe-follow-btn--following:hover span {
+      font-size: 0;
+    }
+
+    .kvibe-follow-btn--following:hover span::after {
+      font-size: 12px;
+    }
+
+    .kvibe-follow-btn i {
+      font-size: 11px;
+    }
+
+    /* Mood badge */
+    .kvibe-mood-badge {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+      background: linear-gradient(135deg, var(--mood-color, var(--kvibe-primary)), color-mix(in srgb, var(--mood-color, var(--kvibe-primary)) 70%, white));
+      border-radius: 20px; color: white; font-size: 12px; font-weight: 600; margin-left: 8px;
+    }
+
+    /* Repost caption */
+    .kvibe-repost-caption-container { padding: 12px 16px 0 16px; background: white; }
+    .kvibe-repost-caption { padding: 10px; background: var(--kvibe-white); border: 1px solid whitesmoke; border-radius: 8px; font-size: 14px; line-height: 1.5; }
+    .kvibe-repost-caption-author { font-weight: 600; color: var(--kvibe-repost); display: block; margin-bottom: 4px; }
+    .kvibe-repost-caption-text { color: var(--kvibe-text); }
+
+    /* Post content */
+    .kvibe-post-content { padding: 0 16px 12px; font-size: 14px; line-height: 1.5; position: relative; }
+    .kvibe-post-text { overflow: hidden; transition: max-height 0.3s ease; }
+    .kvibe-post-text.collapsed { max-height: 60px; }
+    .kvibe-post-text.expanded { max-height: 1000px; }
+    .kvibe-post-paragraph { margin-bottom: 10px; line-height: 1.5; }
+    .kvibe-post-paragraph:last-child { margin-bottom: 0; }
+    .kvibe-post-paragraph a, .kvibe-post-text a { color: var(--kvibe-primary); text-decoration: none; font-weight: 500; }
+    .kvibe-post-paragraph a:hover, .kvibe-post-text a:hover { text-decoration: underline; }
+    .kvibe-mention-link { color: var(--kvibe-primary); text-decoration: none; font-weight: 600; background: rgba(0,149,246,.1); padding: 0 2px; border-radius: 3px; }
+    .kvibe-mention-link:hover { text-decoration: underline; background: rgba(0,149,246,.2); }
+    .kvibe-hashtag { color: var(--kvibe-primary); text-decoration: none; font-weight: 600; background: rgba(0,149,246,.1); padding: 0 2px; border-radius: 3px; }
+    .kvibe-hashtag:hover { text-decoration: underline; background: rgba(0,149,246,.2); }
+    .kvibe-url-link { color: var(--kvibe-primary); text-decoration: none; font-weight: 500; word-break: break-word; }
+    .kvibe-url-link:hover { text-decoration: underline; }
+    .kvibe-text-toggle {
+      background: none; border: none; color: var(--kvibe-text-light);
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      padding: 4px 0; margin-top: 4px; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .kvibe-text-toggle:hover { color: var(--kvibe-text); }
+    .kvibe-text-toggle i { font-size: 12px; }
+
+    /* Media */
+    .kvibe-media-container { width: 100%; position: relative; overflow: hidden; }
+    .kvibe-image-slide { width: 100%; position: relative; background: #fafafa; }
+    .kvibe-image-slide img { width: 100%; max-height: 600px; object-fit: contain; display: block; }
+    .kvibe-video-container { position: relative; width: 100%; background: #000; min-height: 200px; display: flex; justify-content: center; align-items: center; }
+    .kvibe-video { max-width: 100%; max-height: 600px; object-fit: contain; }
+    .kvibe-play-pause-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 4em; color: white; background: rgba(0,0,0,.4); border-radius: 50%; padding: 15px 20px 15px 23px; pointer-events: none; opacity: 0; transition: opacity .3s ease; }
+    .kvibe-video-container.paused .kvibe-play-pause-icon { opacity: 1; }
+    .kvibe-seek-overlay-btn { position: absolute; bottom: 10px; background: rgba(0,0,0,.4); color: white; border: none; border-radius: 5px; padding: 8px 10px; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 5px; z-index: 10; opacity: 0; transition: opacity .3s ease; }
+    .kvibe-video-container.paused .kvibe-seek-overlay-btn, .kvibe-video-container:hover .kvibe-seek-overlay-btn { opacity: 1; }
+    .kvibe-backward-btn { left: 10px; } .kvibe-forward-btn { right: 10px; }
+    .kvibe-mixed-media-carousel { width: 100%; position: relative; overflow: hidden; }
+    .kvibe-mixed-media-track { display: flex; transition: transform .3s ease; }
+    .kvibe-mixed-media-slide { width: 100%; flex-shrink: 0; display: flex; flex-direction: column; position: relative; background: #000; }
+    .kvibe-media-type-badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; z-index: 25; display: flex; align-items: center; gap: 4px; }
+    .kvibe-mixed-carousel-controls { position: absolute; top: 0; bottom: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; pointer-events: none; }
+    .kvibe-mixed-carousel-prev, .kvibe-mixed-carousel-next { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,.5); border: none; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: all; opacity: .8; transition: opacity .2s; z-index: 30; }
+    .kvibe-mixed-carousel-indicators { position: absolute; bottom: 16px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; z-index: 30; }
+    .kvibe-mixed-indicator { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.5); transition: background .2s, transform .2s; cursor: pointer; }
+    .kvibe-mixed-indicator.active { background: white; transform: scale(1.2); }
+    .kvibe-image-carousel { width: 100%; position: relative; overflow: hidden; }
+    .kvibe-image-track { display: flex; transition: transform .3s ease; }
+    .kvibe-carousel-controls { position: absolute; top: 0; bottom: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; pointer-events: none; }
+    .kvibe-carousel-prev, .kvibe-carousel-next { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,.5); border: none; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: all; opacity: .8; transition: opacity .2s; }
+    .kvibe-carousel-indicators { position: absolute; bottom: 16px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
+    .kvibe-indicator { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.5); transition: background .2s; }
+    .kvibe-indicator.active { background: white; }
+
+    /* ── Empty state ── */
+    .kvibe-empty-state { text-align: center; padding: 60px 20px; background: var(--kvibe-white); border-radius: 8px; }
+    .kvibe-empty-state i { font-size: 48px; color: var(--kvibe-text-light); margin-bottom: 16px; display: block; }
+    .kvibe-empty-state h3 { font-size: 20px; margin-bottom: 8px; }
+    .kvibe-empty-state p { color: var(--kvibe-text-light); }
+
+    /* ── Repost modal ── */
+    .kvibe-repost-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5); display: flex; justify-content: center; align-items: center; z-index: 2000; opacity: 0; visibility: hidden; transition: opacity .3s, visibility .3s; }
+    .kvibe-repost-modal.active { opacity: 1; visibility: visible; }
+    .kvibe-repost-modal-content { background: var(--kvibe-white); border-radius: 12px; width: 90%; max-width: 400px; overflow: hidden; }
+    .kvibe-repost-modal-header { padding: 16px; border-bottom: 1px solid var(--kvibe-border); text-align: center; font-weight: 600; }
+    .kvibe-repost-modal-body { padding: 16px; }
+    .kvibe-repost-textarea { width: 100%; border: 1px solid var(--kvibe-border); border-radius: 8px; padding: 12px; font-family: inherit; font-size: 14px; resize: vertical; min-height: 80px; margin-bottom: 16px; }
+    .kvibe-repost-modal-footer { padding: 16px; border-top: 1px solid var(--kvibe-border); display: flex; gap: 12px; }
+    .kvibe-repost-btn { flex: 1; padding: 10px; background: var(--kvibe-repost); color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .kvibe-repost-cancel-btn { flex: 1; padding: 10px; background: transparent; color: var(--kvibe-text); border: 1px solid var(--kvibe-border); border-radius: 6px; font-weight: 500; cursor: pointer; }
+    .kvibe-repost-btn:hover { opacity: .9; }
+    .kvibe-repost-cancel-btn:hover { background: var(--kvibe-bg); }
+
+    /* ── Logout modal ── */
+    .kvibe-logout-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5); display: none; justify-content: center; align-items: center; z-index: 3000; }
+    .kvibe-logout-modal.active { display: flex; }
+    .kvibe-logout-modal-content { background: var(--kvibe-white); border-radius: 12px; padding: 24px; max-width: 320px; width: 90%; animation: kvibeFadeIn .2s ease; }
+    @keyframes kvibeFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .kvibe-logout-modal-title { font-size: 18px; font-weight: 600; margin-bottom: 12px; color: #000; }
+    .kvibe-logout-modal-message { font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.5; }
+    .kvibe-logout-modal-buttons { display: flex; gap: 12px; }
+    .kvibe-logout-modal-btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all .2s ease; }
+    .logout-modal-cancel { background: #f5f5f5; color: #333; }
+    .logout-modal-cancel:hover { background: #e5e5e5; }
+    .logout-modal-confirm { background: #ff4444; color: white; }
+    .logout-modal-confirm:hover { background: #ff0000; }
+
+    /* ── Toast ── */
+    .kvibe-toast {
+      position: fixed; top: 20px; right: 20px; background: var(--kvibe-primary); color: white;
+      padding: 12px 20px; border-radius: 6px; font-size: 14px; z-index: 9999;
+      animation: kvibeSlideIn .3s ease; display: flex; align-items: center; gap: 8px;
+    }
+    @keyframes kvibeSlideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes kvibeSlideOut { from { opacity: 1; } to { opacity: 0; transform: translateX(20px); } }
+
+    /* ── Right sidebar ── */
+    .kvibe-sidebar-social { background: var(--kvibe-white); border-radius: 12px; overflow: hidden; }
+    .kvibe-sidebar-tabs { display: flex; border-bottom: 1px solid var(--kvibe-border); }
+    .kvibe-sidebar-tab { flex: 1; padding: 12px 8px; background: none; border: none; font-size: 13px; font-weight: 600; color: var(--kvibe-text-light); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all .2s ease; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit; }
+    .kvibe-sidebar-tab:hover { color: var(--kvibe-text); background: var(--kvibe-bg); }
+    .kvibe-sidebar-tab.active { color: var(--kvibe-primary); border-bottom-color: var(--kvibe-primary); background: none; }
+    .kvibe-sidebar-tab-count { background: var(--kvibe-border); color: var(--kvibe-text); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center; transition: background .2s, color .2s; }
+    .kvibe-sidebar-tab.active .kvibe-sidebar-tab-count { background: rgba(0,149,246,.12); color: var(--kvibe-primary); }
+    .kvibe-sidebar-tab-panel { display: none; max-height: 340px; overflow-y: auto; padding: 8px 0; scrollbar-width: thin; scrollbar-color: var(--kvibe-border) transparent; }
+    .kvibe-sidebar-tab-panel::-webkit-scrollbar { width: 4px; }
+    .kvibe-sidebar-tab-panel::-webkit-scrollbar-thumb { background: var(--kvibe-border); border-radius: 2px; }
+    .kvibe-sidebar-tab-panel.active { display: block; }
+    .kvibe-sidebar-user-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; text-decoration: none; transition: background .15s ease; border-radius: 0; }
+    .kvibe-sidebar-user-row:hover { background: var(--kvibe-bg); }
+    .kvibe-sidebar-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--kvibe-border); }
+    .kvibe-sidebar-user-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .kvibe-sidebar-user-name { font-size: 13px; font-weight: 600; color: var(--kvibe-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kvibe-sidebar-user-handle { font-size: 11px; color: var(--kvibe-text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kvibe-sidebar-empty { text-align: center; padding: 24px 16px; color: var(--kvibe-text-light); }
+    .kvibe-sidebar-empty i { font-size: 22px; margin-bottom: 8px; opacity: .4; display: block; }
+    .kvibe-sidebar-empty p { font-size: 12px; }
+
+    /* ── Trending hashtags ── */
+    .kvibe-trending-hashtags { background: var(--kvibe-white); border-radius: 16px; overflow: hidden; margin-bottom: 20px; }
+    .kvibe-trending-header { padding: 16px; border-bottom: 1px solid var(--kvibe-border); }
+    .kvibe-trending-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .kvibe-trending-list { padding: 8px; }
+    .kvibe-trending-item { display: flex; align-items: center; padding: 12px; border-radius: 8px; transition: background .2s ease; cursor: pointer; text-decoration: none; color: var(--kvibe-text); }
+    .kvibe-trending-item:hover { background: var(--kvibe-bg); }
+    .kvibe-trending-hashtag { font-weight: 600; color: var(--kvibe-primary); margin-right: 8px; }
+    .kvibe-trending-count { font-size: 12px; color: var(--kvibe-text-light); margin-left: auto; }
+    .kvibe-btn-secondary { display: block; text-align: center; padding: 8px 16px; background: transparent; color: var(--kvibe-primary); border: 1px solid var(--kvibe-border); border-radius: 6px; font-size: 13px; font-weight: 500; text-decoration: none; transition: all .2s ease; }
+    .kvibe-btn-secondary:hover { background: var(--kvibe-bg); }
+
+    /* ── Mobile sidebar ── */
+    .kvibe-mobile-footer-only { display: none; }
+    @media (max-width: 767px) { .kvibe-mobile-footer-only { display: block; } }
+
+    .kvibe-mobile-sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1100; opacity: 0; transition: opacity .3s ease; }
+    .kvibe-mobile-sidebar-overlay.active { display: block; opacity: 1; }
+    .kvibe-mobile-right-sidebar { position: fixed; top: 0; right: -100%; width: 82vw; max-width: 320px; height: 100dvh; background: var(--kvibe-white); z-index: 1101; overflow-y: auto; transition: right .32s cubic-bezier(.4,0,.2,1); box-shadow: -4px 0 24px rgba(0,0,0,.15); padding-bottom: 80px; }
+    .kvibe-mobile-right-sidebar.open { right: 0; }
+    .kvibe-mobile-sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--kvibe-border); position: sticky; top: 0; background: var(--kvibe-white); z-index: 2; }
+    .kvibe-mobile-sidebar-title { font-size: 15px; font-weight: 700; color: var(--kvibe-text); }
+    .kvibe-mobile-sidebar-close { width: 32px; height: 32px; border: none; background: var(--kvibe-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--kvibe-text); font-size: 16px; }
+    .kvibe-mobile-sidebar-body { padding: 16px; }
+    .kvibe-mobile-sidebar-toggle { display: none; }
+    @media (max-width: 767px) {
+      .kvibe-mobile-sidebar-toggle { display: flex; align-items: center; justify-content: center; position: fixed; top: 50%; right: 0; transform: translateY(-50%); z-index: 1200; background: var(--kvibe-primary); color: white; border: none; border-radius: 8px 0 0 8px; width: 28px; height: 64px; cursor: pointer; box-shadow: -2px 2px 10px rgba(0,0,0,.18); flex-direction: column; gap: 4px; padding: 0; }
+      .kvibe-mobile-sidebar-toggle i { font-size: 13px; }
+      .kvibe-mobile-sidebar-toggle span { font-size: 9px; font-weight: 700; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: .5px; }
+    }
+
+    /* ── Snippet action bar styles (copied from home.html) ── */
+    @keyframes heartMorph { 0% { transform:scale(1) rotate(0deg); } 10% { transform:scale(.7) rotate(-8deg); } 30% { transform:scale(1.45) rotate(4deg); } 50% { transform:scale(.9) rotate(-2deg); } 65% { transform:scale(1.15) rotate(1deg); } 80% { transform:scale(.97) rotate(0deg); } 100% { transform:scale(1) rotate(0deg); } }
+    @keyframes jellyPop { 0% { transform:scale(1); } 25% { transform:scale(1.3,.75); } 50% { transform:scale(.85,1.2); } 75% { transform:scale(1.1,.9); } 100% { transform:scale(1); } }
+    @keyframes repostSpin { 0% { transform:rotate(0deg) scale(1); } 40% { transform:rotate(200deg) scale(.8); } 70% { transform:rotate(340deg) scale(1.1); } 100% { transform:rotate(360deg) scale(1); } }
+    @keyframes commentBounce { 0% { transform:translateY(0) scaleY(1); } 25% { transform:translateY(-6px) scaleY(.9); } 55% { transform:translateY(2px) scaleY(1.05); } 75% { transform:translateY(-2px) scaleY(.98); } 100% { transform:translateY(0) scaleY(1); } }
+    @keyframes youShimmer { 0% { background-position:-100% center; } 100% { background-position:200% center; } }
+    @keyframes avatarPeek { 0% { transform:translateX(-6px) scale(.8);opacity:0; } 60% { transform:translateX(2px) scale(1.05);opacity:1; } 100% { transform:translateX(0) scale(1);opacity:1; } }
+    @keyframes countTick { 0% { transform:translateY(0);opacity:1; } 30% { transform:translateY(-14px);opacity:0; } 31% { transform:translateY(14px);opacity:0; } 70% { transform:translateY(0);opacity:1; } }
+    .kvibe-engagement { display:flex;flex-wrap:wrap;align-items:center;padding:10px 16px 8px;border-top:1px solid var(--kvibe-border);gap:10px;background:var(--kvibe-white); }
+    .kvibe-likers-container { display:flex;margin-right:6px; }
+    .kvibe-liker-pic { width:24px;height:24px;border-radius:50%;border:2px solid var(--kvibe-white);margin-left:-6px;animation:avatarPeek .4s cubic-bezier(.34,1.56,.64,1) both; }
+    .kvibe-likers-container a:first-child .kvibe-liker-pic { margin-left:0; }
+    .kvibe-like-text { font-weight:normal;color:var(--kvibe-text);font-size:13.5px; }
+    .kvibe-no-likes { color:var(--kvibe-text-light);font-size:13px; }
+    .kvibe-view-text { font-size:13px;color:var(--kvibe-text-light); }
+    .kvibe-separator-dot { color:var(--kvibe-border);font-size:12px;margin:0 2px; }
+    .kvibe-engagement-item { display:flex;align-items:center;gap:4px; }
+    .kvibe-you-text { font-weight:600;background:linear-gradient(90deg,var(--kvibe-text) 30%,var(--kvibe-text-light) 50%,var(--kvibe-text) 70%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:youShimmer 1.8s ease; }
+    .kvibe-actions-container { display:flex;align-items:center;justify-content:space-between;padding:4px 8px;background:var(--kvibe-white);border-top:1px solid var(--kvibe-border); }
+    .kvibe-action-item { display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;color:var(--kvibe-text-light);font-size:13.5px;font-weight:500;padding:10px 16px;border-radius:999px;transition:background .2s ease,color .2s ease;position:relative;overflow:visible;cursor:pointer;background:none;border:none;flex:1;min-width:0;font-family:inherit; }
+    .kvibe-action-item::after { content:'';position:absolute;inset:0;border-radius:999px;background:currentColor;opacity:0;transform:scale(.7);transition:opacity .25s ease,transform .25s cubic-bezier(.34,1.56,.64,1);pointer-events:none; }
+    .kvibe-action-item:hover::after { opacity:.06;transform:scale(1); }
+    .kvibe-action-item:hover { color:var(--kvibe-text); }
+    .kvibe-action-icon { font-size:19px;transition:color .25s ease;position:relative;display:inline-block; }
+    .kvibe-heart-animate { animation:heartMorph .65s cubic-bezier(.34,1.56,.64,1) forwards; }
+    .kvibe-action-item:hover .fa-comment { animation:commentBounce .5s cubic-bezier(.34,1.56,.64,1); }
+    .kvibe-repost-icon { display:flex;align-items:center;justify-content:center;gap:8px;color:var(--kvibe-text-light);font-size:13.5px;font-weight:500;padding:10px 16px;border-radius:999px;transition:background .2s ease,color .2s ease;position:relative;cursor:pointer;background:none;border:none;font-family:inherit;flex:1;min-width:0; }
+    .kvibe-repost-icon::after { content:'';position:absolute;inset:0;border-radius:999px;background:currentColor;opacity:0;transform:scale(.7);transition:opacity .25s ease,transform .25s cubic-bezier(.34,1.56,.64,1);pointer-events:none; }
+    .kvibe-repost-icon:hover::after { opacity:.06;transform:scale(1); }
+    .kvibe-repost-icon:hover .fa-retweet { animation:repostSpin .55s cubic-bezier(.34,1.56,.64,1);color:#10b981; }
+    .kvibe-repost-icon:hover { color:#10b981; }
+    .fa-retweet.reposted { color:#10b981; }
+    .kvibe-repost-count { font-size:13.5px;display:none; }
+    .kvibe-repost-count.kvibe-show { display:inline; }
+    .kvibe-share-count { font-size:13.5px;display:none; }
+    .kvibe-share-count.kvibe-show { display:inline; }
+    .kvibe-share-btn:hover .kvibe-action-icon { color:var(--kvibe-primary);animation:jellyPop .45s cubic-bezier(.34,1.56,.64,1); }
+    .kvibe-share-modal { position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:flex-end;z-index:6000; }
+    .kvibe-share-modal.active { display:flex; }
+    .kvibe-share-modal-content { background:var(--kvibe-white);width:100%;border-radius:20px 20px 0 0;padding:20px;max-width:500px;animation:kvibeShareSlideUp .3s ease-out; }
+    @keyframes kvibeShareSlideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+    .kvibe-share-header { display:flex;justify-content:space-between;align-items:center;font-weight:bold;font-size:18px;margin-bottom:20px;color:var(--kvibe-text); }
+    .kvibe-share-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:20px 10px;text-align:center;max-height:60vh;overflow-y:auto;padding-bottom:10px; }
+    .kvibe-share-item { display:flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none;color:var(--kvibe-text);font-size:11px;cursor:pointer; }
+    .kvibe-share-icon-wrap { width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;color:white;transition:transform .2s; }
+    .kvibe-share-icon-wrap:active { transform:scale(.9); }
+    .si-whatsapp{background:#25D366;}.si-facebook{background:#1877F2;}.si-x{background:#000;}.si-telegram{background:#0088cc;}.si-snapchat{background:#FFFC00;}.si-sms{background:#4cd964;}.si-email{background:var(--kvibe-text-light);}.si-copy{background:var(--kvibe-text-light);}
+
+    /* ── Responsive ── */
+    @media (min-width: 768px) {
+      .kvibe-desktop-only { display: block; }
+    }
+    @media (max-width: 767px) {
+      .kvibe-desktop-layout { display: block; padding: 2px 0 0 0; }
+      .kvibe-left-sidebar, .kvibe-right-sidebar { display: none; }
+      .kvibe-main-feed { max-width: 100%; padding: 0; }
+      .kvibe-desktop-only { display: none; }
+      .kvibe-post { border-radius: 0; margin-bottom: 8px; }
+      .kvibe-actions-container { padding: 2px 4px; }
+      .kvibe-action-item { padding: 8px 10px; font-size: 13px; }
+      .kvibe-action-icon { font-size: 18px; }
+      .kvibe-repost-icon { padding: 8px 10px; font-size: 13px; }
+    }
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .kvibe-desktop-layout { padding: 4px 15px 0 15px; }
+      .kvibe-left-sidebar { width: 245px; }
+      .kvibe-right-sidebar { width: 200px; }
+    }
+    @media (min-width: 1024px) {
+      .kvibe-desktop-layout { padding: 44px 20px 0 20px; }
+      .kvibe-left-sidebar { width: 245px; }
+      .kvibe-right-sidebar { width: 330px; }
+    }
+  </style>
+</head>
+<body>
+  {% include 'header.html' %}
+
+  <!-- Repost Modal -->
+  <div class="kvibe-repost-modal" id="kvibe-repost-modal">
+    <div class="kvibe-repost-modal-content">
+      <div class="kvibe-repost-modal-header">Repost</div>
+      <div class="kvibe-repost-modal-body">
+        <textarea class="kvibe-repost-textarea" id="kvibe-repost-caption" placeholder="Add a comment to your repost (optional)" maxlength="500"></textarea>
+        <div style="font-size:12px;color:var(--kvibe-text-light);text-align:right;"><span id="kvibe-repost-char-count">0</span>/500</div>
+      </div>
+      <div class="kvibe-repost-modal-footer">
+        <button class="kvibe-repost-cancel-btn" onclick="kvibeCloseRepostModal()">Cancel</button>
+        <button class="kvibe-repost-btn" id="kvibe-repost-confirm-btn"><i class="fas fa-retweet"></i> Repost</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logout Modal -->
+  <div class="kvibe-logout-modal" id="kvibeLogoutModal">
+    <div class="kvibe-logout-modal-content">
+      <h3 class="kvibe-logout-modal-title">Log Out?</h3>
+      <p class="kvibe-logout-modal-message">Are you sure you want to log out of your account?</p>
+      <div class="kvibe-logout-modal-buttons">
+        <button class="kvibe-logout-modal-btn logout-modal-cancel" id="kvibeCancelLogout">Cancel</button>
+        <button class="kvibe-logout-modal-btn logout-modal-confirm" id="kvibeConfirmLogout">Log Out</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="kvibe-container">
+    <div class="kvibe-desktop-layout">
+
+      <!-- ═══ LEFT SIDEBAR ═══ -->
+      <aside class="kvibe-left-sidebar kvibe-desktop-only">
+        <div class="kvibe-desktop-nav">
+          <a href="{% url 'home' %}" class="kvibe-desktop-nav-item" title="Home">
+            <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <span class="kvibe-desktop-nav-label">Home</span>
+          </a>
+          <a href="{% url 'explore' %}" class="kvibe-desktop-nav-item" title="Explore">
+            <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z"/><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8.25 15.75l1.5-1.5 2.25 2.25 4.5-4.5 1.5 1.5-6 6z"/></svg></div>
+            <span class="kvibe-desktop-nav-label">Explore</span>
+          </a>
+          <a href="{% url 'search' %}" class="kvibe-desktop-nav-item" title="Search">
+            <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <span class="kvibe-desktop-nav-label">Search</span>
+          </a>
+          <a href="{% url 'post' %}" class="kvibe-desktop-nav-item" title="Create Post">
+            <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/><line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/></svg></div>
+            <span class="kvibe-desktop-nav-label">Create</span>
+          </a>
+          <a href="{% url 'notification_list' %}" class="kvibe-desktop-nav-item" title="Notifications">
+            <div class="kvibe-desktop-nav-icon"><i class="fa-regular fa-bell" style="font-size:20px;color:var(--kvibe-text-light);"></i></div>
+            <span class="kvibe-desktop-nav-label">Alerts</span>
+          </a>
+          <a href="{% url 'profile' request.user.username %}" class="kvibe-desktop-nav-item" title="Profile">
+            <div class="kvibe-desktop-nav-icon"><i class="fa-regular fa-user" style="font-size:20px;color:var(--kvibe-text-light);"></i></div>
+            <span class="kvibe-desktop-nav-label">Profile</span>
+          </a>
+          <a href="{% url 'channel_create' %}" class="kvibe-desktop-nav-item" title="Channels">
+            <div class="kvibe-desktop-nav-icon"><i class="fa-regular fa-newspaper" style="font-size:20px;color:var(--kvibe-text-light);"></i></div>
+            <span class="kvibe-desktop-nav-label">Channels</span>
+          </a>
+          <a href="#" class="kvibe-desktop-nav-item" title="Log Out" id="desktopLogoutIcon">
+            <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg></div>
+            <span class="kvibe-desktop-nav-label">Logout</span>
+          </a>
+        </div>
+      </aside>
+
+      <!-- ═══ MAIN FEED ═══ -->
+      <div class="kvibe-main-feed">
+
+        <!-- Back button -->
+        <a href="javascript:history.back()" class="kvibe-back-btn">
+          <i class="fas fa-arrow-left"></i> Back
+        </a>
+
+        <!-- Hashtag hero -->
+        <div class="kvibe-hashtag-hero">
+          <div class="kvibe-hashtag-hero-icon"><i class="fas fa-hashtag"></i></div>
+          <div>
+            <div class="kvibe-hashtag-hero-title"><span>#</span>{{ tag_name }}</div>
+            <div class="kvibe-hashtag-hero-stats">
+              <i class="fas fa-file-alt"></i> {{ post_count }} post{{ post_count|pluralize }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Posts -->
+        {% if posts %}
+          {% for post in posts %}
+          <article class="kvibe-post" data-post-id="{{ post.post_id }}" data-mood="{{ post.mood|default:'' }}" data-custom-mood="{% if post.mood == 'custom' or not post.mood %}{{ post.custom_mood|default:'' }}{% endif %}">
+
+            {% if post.is_repost %}
+            <div class="kvibe-repost-header">
+              <i class="fas fa-retweet"></i>
+              <span><a href="/{{ post.author.username }}/">{{ post.author.first_name }} {{ post.author.last_name }}</a> reposted</span>
+            </div>
+            {% endif %}
+
+            <!-- Post Header -->
+            <div class="kvibe-post-header">
+              <img
+                src="{% if post.is_repost and post.original_post %}{{ post.original_post.author.profile.picture.url }}{% else %}{{ post.author.profile.picture.url }}{% endif %}"
+                class="kvibe-profile-pic"
+                alt="profile"
+                loading="lazy"
+                onerror="this.onerror=null;this.src='https://placehold.co/32x32/dbdbdb/8e8e8e?text=U';"
+              >
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;flex-wrap:wrap;">
+                  <a href="/{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}/" class="kvibe-username" data-user="{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}">
+                    {% if post.is_repost and post.original_post %}
+                      {{ post.original_post.author.first_name }} {{ post.original_post.author.last_name }}
+                      {% if post.original_post.author.profile.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align:middle;margin-left:3px;">{% endif %}
+                    {% else %}
+                      {{ post.author.first_name }} {{ post.author.last_name }}
+                      {% if post.author.profile.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align:middle;margin-left:3px;">{% endif %}
+                    {% endif %}
+                  </a>
+                  {% if post.mood %}
+                  <span class="kvibe-mood-badge" style="--mood-color:var(--mood-{{ post.mood }}, var(--kvibe-primary));">
+                    <i class="fa-regular fa-face-smile"></i>
+                    {% if post.mood == 'custom' %}{{ post.custom_mood }}{% else %}{{ post.mood }}{% endif %}
+                  </span>
+                  {% endif %}
+                </div>
+                <div class="kvibe-post-time">
+                  {% if post.is_repost %}
+                    @{% if post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}
+                    · Original: {{ post.original_post.created_at|insta_timesince }}
+                    · Reposted: {{ post.created_at|insta_timesince }}
+                  {% else %}
+                    @{{ post.author.username }} · {{ post.created_at|insta_timesince }}
+                  {% endif %}
+                </div>
+              </div>
+              <div class="kvibe-post-actions">
+                {% if request.user == post.author and not post.is_repost %}
+                  <a href="{% url 'editpost' post.post_id %}" title="Edit" class="kvibe-edit-icon"><i class="fas fa-edit"></i></a>
+                {% endif %}
+                {% with post_author=post.get_original_author %}
+                {% if request.user != post_author %}
+                  {% if post_author.id in following_ids %}
+                    <button class="kvibe-follow-btn kvibe-follow-btn--following"
+                            data-user-id="{{ post_author.id }}"
+                            data-username="{{ post_author.username }}"
+                            onclick="kvibeToggleFollow(this)"
+                            title="Unfollow {{ post_author.username }}">
+                      <i class="fas fa-user-check"></i>
+                      <span>Following</span>
+                    </button>
+                  {% else %}
+                    <button class="kvibe-follow-btn"
+                            data-user-id="{{ post_author.id }}"
+                            data-username="{{ post_author.username }}"
+                            onclick="kvibeToggleFollow(this)"
+                            title="Follow {{ post_author.username }}">
+                      <i class="fas fa-user-plus"></i>
+                      <span>Follow</span>
+                    </button>
+                  {% endif %}
+                {% endif %}
+                {% endwith %}
+              </div>
+            </div>
+
+            <!-- Repost caption -->
+            {% if post.is_repost and post.repost_content %}
+            <div class="kvibe-repost-caption-container">
+              <div class="kvibe-repost-caption">
+                <span class="kvibe-repost-caption-author">
+                  {{ post.author.first_name }} {{ post.author.last_name }}
+                  {% if post.author.profile.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="13" width="13" alt="✓" style="vertical-align:middle;">{% endif %}
+                </span>
+                <div class="kvibe-repost-caption-text">{{ post.repost_content|format_post_text|safe }}</div>
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Post content -->
+            {% if post.content or post.is_repost %}
+            <div class="kvibe-post-content">
+              <div class="kvibe-post-text collapsed" id="kvibe-text-{{ post.post_id }}">
+                {% if post.is_repost and post.original_post %}
+                  {{ post.original_post.content|format_post_text|safe }}
+                {% else %}
+                  {{ post.content|format_post_text|safe }}
+                {% endif %}
+              </div>
+              {% with txt=post.original_post.content|default:post.content %}
+                {% if txt|length > 150 %}
+                <button class="kvibe-text-toggle" onclick="kvibeToggleText('{{ post.post_id }}')">
+                  <span>more</span><i class="fas fa-chevron-down"></i>
+                </button>
+                {% endif %}
+              {% endwith %}
+            </div>
+            {% endif %}
+
+            <!-- Media -->
+            {% if post.file or post.video_file or post.images.all or post.is_repost %}
+            <div class="kvibe-media-container">
+              {% if post.is_repost and post.original_post %}
+                {% with op=post.original_post %}
+                  {% if op.video_file %}
+                  <div class="kvibe-video-container paused" id="kvibe-container-{{ post.post_id }}">
+                    <video class="kvibe-video" id="kvibe-post-video-{{ post.post_id }}" preload="metadata"
+                           poster="{% if op.video_thumbnail %}{{ op.video_thumbnail.url }}{% endif %}"
+                           data-src="{{ op.video_file.url }}"
+                           onclick="kvibeTogglePlayPause('kvibe-post-video-{{ post.post_id }}', event)">
+                      <source data-src="{{ op.video_file.url }}#t=0.5" type="video/mp4">
+                    </video>
+                    <i class="fa-solid fa-play kvibe-play-pause-icon"></i>
+                    <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ post.post_id }}',-10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
+                    <button class="kvibe-seek-overlay-btn kvibe-forward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ post.post_id }}',10)">10s <i class="fa-solid fa-forward-step"></i></button>
+                  </div>
+                  {% elif op.images.count > 1 %}
+                  <div class="kvibe-image-carousel" id="kvibe-carousel-{{ post.post_id }}" data-slide="0" data-total="{{ op.images.count }}">
+                    <div class="kvibe-image-track" id="kvibe-track-{{ post.post_id }}">
+                      {% for img in op.images.all %}<div class="kvibe-image-slide"><img src="{{ img.image.url }}" alt="Image {{ forloop.counter }}" loading="lazy" onload="this.classList.add('loaded')"></div>{% endfor %}
+                    </div>
+                    <div class="kvibe-carousel-controls">
+                      <button class="kvibe-carousel-prev" onclick="kvibeSlideCarousel('{{ post.post_id }}',-1)"><i class="fas fa-chevron-left"></i></button>
+                      <button class="kvibe-carousel-next" onclick="kvibeSlideCarousel('{{ post.post_id }}',1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div class="kvibe-carousel-indicators">{% for img in op.images.all %}<span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>{% endfor %}</div>
+                  </div>
+                  {% elif op.images.first %}
+                  <div class="kvibe-image-slide"><img src="{{ op.images.first.image.url }}" alt="Post image" loading="lazy" onload="this.classList.add('loaded')"></div>
+                  {% endif %}
+                {% endwith %}
+              {% else %}
+                {% if post.video_file %}
+                <div class="kvibe-video-container paused" id="kvibe-container-{{ post.post_id }}">
+                  <video class="kvibe-video" id="kvibe-post-video-{{ post.post_id }}" preload="metadata"
+                         poster="{% if post.video_thumbnail %}{{ post.video_thumbnail.url }}{% endif %}"
+                         data-src="{{ post.video_file.url }}"
+                         onclick="kvibeTogglePlayPause('kvibe-post-video-{{ post.post_id }}', event)">
+                    <source data-src="{{ post.video_file.url }}#t=0.5" type="video/mp4">
+                  </video>
+                  <i class="fa-solid fa-play kvibe-play-pause-icon"></i>
+                  <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ post.post_id }}',-10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
+                  <button class="kvibe-seek-overlay-btn kvibe-forward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ post.post_id }}',10)">10s <i class="fa-solid fa-forward-step"></i></button>
+                </div>
+                {% elif post.images.count > 1 %}
+                <div class="kvibe-image-carousel" id="kvibe-carousel-{{ post.post_id }}" data-slide="0" data-total="{{ post.images.count }}">
+                  <div class="kvibe-image-track" id="kvibe-track-{{ post.post_id }}">
+                    {% for img in post.images.all %}<div class="kvibe-image-slide"><img src="{{ img.image.url }}" alt="Image {{ forloop.counter }}" loading="lazy" onload="this.classList.add('loaded')"></div>{% endfor %}
+                  </div>
+                  <div class="kvibe-carousel-controls">
+                    <button class="kvibe-carousel-prev" onclick="kvibeSlideCarousel('{{ post.post_id }}',-1)"><i class="fas fa-chevron-left"></i></button>
+                    <button class="kvibe-carousel-next" onclick="kvibeSlideCarousel('{{ post.post_id }}',1)"><i class="fas fa-chevron-right"></i></button>
+                  </div>
+                  <div class="kvibe-carousel-indicators">{% for img in post.images.all %}<span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>{% endfor %}</div>
+                </div>
+                {% elif post.images.first %}
+                <div class="kvibe-image-slide"><img src="{{ post.images.first.image.url }}" alt="Post image" loading="lazy" onload="this.classList.add('loaded')"></div>
+                {% endif %}
+              {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Post actions — same snippet as home -->
+            {% include 'snippet/post_like.html' with post=post %}
+
+          </article>
+          {% endfor %}
+        {% else %}
+        <div class="kvibe-empty-state">
+          <i class="fas fa-hashtag"></i>
+          <h3>No posts yet</h3>
+          <p>There are no posts with #{{ tag_name }} yet.<br>Be the first to use this hashtag!</p>
+        </div>
+        {% endif %}
+
+      </div><!-- end .kvibe-main-feed -->
+
+      <!-- ═══ RIGHT SIDEBAR ═══ -->
+      <aside class="kvibe-right-sidebar kvibe-desktop-only">
+
+        <!-- Following / Followers tabs -->
+        <div class="kvibe-sidebar-social">
+          <div class="kvibe-sidebar-tabs">
+            <button class="kvibe-sidebar-tab active" data-tab="following" onclick="kvibeSwitchTab('following', this)">
+              Following <span class="kvibe-sidebar-tab-count">{{ sidebar_followings.count }}</span>
+            </button>
+            <button class="kvibe-sidebar-tab" data-tab="followers" onclick="kvibeSwitchTab('followers', this)">
+              Followers <span class="kvibe-sidebar-tab-count">{{ sidebar_followers.count }}</span>
+            </button>
+          </div>
+          <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-following">
+            {% for profile_obj in sidebar_followings %}
+            {% if profile_obj.user != request.user %}
+            <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
+              <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
+              <div class="kvibe-sidebar-user-info">
+                <span class="kvibe-sidebar-user-name">{{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}{% if profile_obj.user.profile.is_verify %} <img src="{% static 'images/verify1.jpg' %}" height="11" width="11" alt="✓" style="vertical-align:middle;">{% endif %}</span>
+                <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
+              </div>
+            </a>
+            {% endif %}
+            {% empty %}
+            <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>Not following anyone yet</p></div>
+            {% endfor %}
+          </div>
+          <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-followers">
+            {% for profile_obj in sidebar_followers %}
+            {% if profile_obj.user != request.user %}
+            <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
+              <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
+              <div class="kvibe-sidebar-user-info">
+                <span class="kvibe-sidebar-user-name">{{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}{% if profile_obj.user.profile.is_verify %} <img src="{% static 'images/verify1.jpg' %}" height="11" width="11" alt="✓" style="vertical-align:middle;">{% endif %}</span>
+                <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
+              </div>
+            </a>
+            {% endif %}
+            {% empty %}
+            <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>No followers yet</p></div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Related Hashtags -->
+        {% if related_hashtags %}
+        <div class="kvibe-trending-hashtags" style="margin-top:16px;">
+          <div class="kvibe-trending-header">
+            <h3 class="kvibe-trending-title"><i class="fas fa-hashtag"></i> Related Hashtags</h3>
+          </div>
+          <div class="kvibe-trending-list">
+            {% for tag, count in related_hashtags|slice:":10" %}
+            <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+              <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+              <span class="kvibe-trending-count">{{ count }} post{{ count|pluralize }}</span>
+            </a>
+            {% endfor %}
+          </div>
+          <div style="padding:8px 16px 16px;">
+            <a href="{% url 'search' %}?q=%23" class="kvibe-btn-secondary" style="text-align:center;display:block;font-size:12px;">
+              <i class="fas fa-search"></i> Explore All Hashtags
+            </a>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Trending Hashtags (global) -->
+        {% if trending_hashtags %}
+        <div class="kvibe-trending-hashtags" style="margin-top:16px;">
+          <div class="kvibe-trending-header">
+            <h3 class="kvibe-trending-title"><i class="fas fa-fire"></i> Trending Hashtags</h3>
+          </div>
+          <div class="kvibe-trending-list">
+            {% for tag, count in trending_hashtags %}
+            <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+              <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+              <span class="kvibe-trending-count">{{ count }} post{{ count|pluralize }}</span>
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+      </aside>
+
+    </div>
+  </main>
+
+  <div class="kvibe-mobile-footer-only">
+    {% include 'footer.html' %}
+  </div>
+
+  <!-- Mobile sidebar toggle -->
+  <button class="kvibe-mobile-sidebar-toggle" id="kvibe-mobile-sidebar-toggle" onclick="kvibeOpenMobileSidebar()" aria-label="Open sidebar">
+    <i class="fas fa-chevron-left"></i><span>MORE</span>
+  </button>
+
+  <!-- Mobile sidebar overlay -->
+  <div class="kvibe-mobile-sidebar-overlay" id="kvibe-mobile-sidebar-overlay" onclick="kvibeCloseMobileSidebar()"></div>
+
+  <!-- Mobile right sidebar -->
+  <aside class="kvibe-mobile-right-sidebar" id="kvibe-mobile-right-sidebar">
+    <div class="kvibe-mobile-sidebar-header">
+      <span class="kvibe-mobile-sidebar-title">Discover</span>
+      <button class="kvibe-mobile-sidebar-close" onclick="kvibeCloseMobileSidebar()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="kvibe-mobile-sidebar-body">
+      <div class="kvibe-sidebar-social" style="margin-bottom:16px;">
+        <div class="kvibe-sidebar-tabs">
+          <button class="kvibe-sidebar-tab active" data-tab="mob-following" onclick="kvibeSwitchTab('mob-following', this)">
+            Following <span class="kvibe-sidebar-tab-count">{{ sidebar_followings.count }}</span>
+          </button>
+          <button class="kvibe-sidebar-tab" data-tab="mob-followers" onclick="kvibeSwitchTab('mob-followers', this)">
+            Followers <span class="kvibe-sidebar-tab-count">{{ sidebar_followers.count }}</span>
+          </button>
+        </div>
+        <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-mob-following">
+          {% for profile_obj in sidebar_followings %}
+          {% if profile_obj.user != request.user %}
+          <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
+            <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
+            <div class="kvibe-sidebar-user-info">
+              <span class="kvibe-sidebar-user-name">{{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}</span>
+              <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
+            </div>
+          </a>
+          {% endif %}
+          {% empty %}
+          <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>Not following anyone yet</p></div>
+          {% endfor %}
+        </div>
+        <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-mob-followers">
+          {% for profile_obj in sidebar_followers %}
+          {% if profile_obj.user != request.user %}
+          <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
+            <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
+            <div class="kvibe-sidebar-user-info">
+              <span class="kvibe-sidebar-user-name">{{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}</span>
+              <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
+            </div>
+          </a>
+          {% endif %}
+          {% empty %}
+          <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>No followers yet</p></div>
+          {% endfor %}
+        </div>
+      </div>
+      {% if related_hashtags %}
+      <div class="kvibe-trending-hashtags">
+        <div class="kvibe-trending-header"><h3 class="kvibe-trending-title"><i class="fas fa-hashtag"></i> Related Hashtags</h3></div>
+        <div class="kvibe-trending-list">
+          {% for tag, count in related_hashtags|slice:":10" %}
+          <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+            <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+            <span class="kvibe-trending-count">{{ count }} post{{ count|pluralize }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% if trending_hashtags %}
+      <div class="kvibe-trending-hashtags" style="margin-top:12px;">
+        <div class="kvibe-trending-header"><h3 class="kvibe-trending-title"><i class="fas fa-fire"></i> Trending Hashtags</h3></div>
+        <div class="kvibe-trending-list">
+          {% for tag, count in trending_hashtags %}
+          <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+            <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+            <span class="kvibe-trending-count">{{ count }} post{{ count|pluralize }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </aside>
+
+  <script>
+    /* ─── CSRF ─── */
+    function getCsrfFromMeta() {
+      return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    }
+
+    /* ─── Current logged-in user ID (for self-follow guard) ─── */
+    const KVIBE_CURRENT_USER_ID = "{{ request.user.id }}";
+
+    /* ─── Repost state ─── */
+    let currentRepostPostId = null;
+    let currentRepostButton = null;
+
+    /* ─── Toast ─── */
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = 'kvibe-toast';
+      toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i><span>${message}</span>`;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.animation = 'kvibeSlideOut 0.3s ease';
+        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+      }, 3000);
+    }
+
+    // ── Follow / Unfollow — matches home.html exactly ──
+    function kvibeToggleFollow(btn) {
+      const userId = btn.dataset.userId;
+      const username = btn.dataset.username;
+      const isFollowing = btn.classList.contains('kvibe-follow-btn--following');
+
+      // Optimistic UI update
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      fetch(`/follow/${userId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfFromMeta(),
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+          if (data.followed) {
+            btn.classList.add('kvibe-follow-btn--following');
+            btn.title = `Unfollow ${username}`;
+            btn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>';
+            showToast(`You are now following @${username}`, 'success');
+          } else {
+            btn.classList.remove('kvibe-follow-btn--following');
+            btn.title = `Follow ${username}`;
+            btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>';
+            showToast(`Unfollowed @${username}`, 'info');
+          }
+        } else {
+          // Restore old state on error
+          btn.innerHTML = isFollowing
+            ? '<i class="fas fa-user-check"></i><span>Following</span>'
+            : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+          showToast('Something went wrong. Please try again.', 'error');
+        }
+      })
+      .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = isFollowing
+          ? '<i class="fas fa-user-check"></i><span>Following</span>'
+          : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+        showToast('Something went wrong. Please try again.', 'error');
+      });
+    }
+
+    /* ─── Sidebar tab switcher ─── */
+    function kvibeSwitchTab(tab, btn) {
+      const container = btn.closest('.kvibe-sidebar-social');
+      if (!container) return;
+      container.querySelectorAll('.kvibe-sidebar-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      container.querySelectorAll('.kvibe-sidebar-tab-panel').forEach(p => p.classList.remove('active'));
+      const panel = document.getElementById('kvibe-tab-' + tab);
+      if (panel) panel.classList.add('active');
+    }
+
+    // ── Repost — matches home.html / post_like.html exactly ────────────────
+    function kvibeToggleRepost(postId, button) {
+      currentRepostPostId = postId;
+      currentRepostButton = button;
+      if (button.getAttribute('data-reposted') === 'true') {
+        // Already reposted → undo immediately, no modal needed
+        kvibePerformRepost(postId, '', true);
+      } else {
+        kvibeOpenRepostModal();
+      }
+    }
+
+    function kvibeOpenRepostModal() {
+      const modal = document.getElementById('kvibe-repost-modal');
+      if (!modal) return;
+      // Reset textarea + char counter
+      const ta = modal.querySelector('textarea');
+      if (ta) ta.value = '';
+      const counter = document.getElementById('kvibe-repost-char-count');
+      if (counter) counter.textContent = '0';
+      modal.classList.add('active');
+    }
+
+    function kvibeCloseRepostModal() {
+      const modal = document.getElementById('kvibe-repost-modal');
+      if (modal) {
+        modal.classList.remove('active');
+        const ta = modal.querySelector('textarea');
+        if (ta) ta.value = '';
+        const counter = document.getElementById('kvibe-repost-char-count');
+        if (counter) counter.textContent = '0';
+      }
+      currentRepostPostId = null;
+      currentRepostButton = null;
+    }
+
+    function kvibeSubmitRepost() {
+      const caption = document.getElementById('kvibe-repost-caption')?.value.trim() || '';
+      if (currentRepostPostId) kvibePerformRepost(currentRepostPostId, caption, false);
+    }
+
+    function kvibePerformRepost(postId, caption, undo) {
+      // Disable the confirm button while in-flight
+      const confirmBtn = document.getElementById('kvibe-repost-confirm-btn');
+      if (confirmBtn && !undo) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reposting…';
+      }
+
+      fetch(`/repost/${postId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption, undo })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = '<i class="fas fa-retweet"></i> Repost';
+        }
+        if (data.success) {
+          if (currentRepostButton) {
+            const reposted = data.reposted;
+            // Update data attribute
+            currentRepostButton.setAttribute('data-reposted', reposted ? 'true' : 'false');
+            // Update icon colour
+            const icon = currentRepostButton.querySelector('i.fa-retweet');
+            if (icon) icon.classList.toggle('reposted', reposted);
+            // Update count by ID — same pattern as post_like.html
+            const countEl = document.getElementById(`kvibe-repost-count-${postId}`);
+            if (countEl) {
+              const count = data.repost_count ?? 0;
+              countEl.textContent = count > 0 ? count : '';
+              countEl.classList.toggle('kvibe-show', count > 0);
+            }
+          }
+          showToast(data.message || (data.reposted ? 'Reposted!' : 'Repost removed'), 'success');
+          kvibeCloseRepostModal();
+        } else {
+          showToast(data.error || 'Something went wrong', 'error');
+        }
+      })
+      .catch(() => {
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = '<i class="fas fa-retweet"></i> Repost';
+        }
+        showToast('Something went wrong.', 'error');
+      });
+    }
+
+    /* ─── Like ─── */
+    function kvibeToggleLike(postId, btn) {
+      fetch(`/like/${postId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.liked !== undefined) {
+          const icon = btn.querySelector('i');
+          if (icon) {
+            icon.className = data.liked ? 'fas fa-heart' : 'far fa-heart';
+            icon.style.color = data.liked ? '#ed4956' : '';
+          }
+          const countEl = btn.nextElementSibling;
+          if (countEl) countEl.textContent = data.like_count ?? data.likes_count ?? '';
+        }
+      })
+      .catch(() => {});
+    }
+
+    /* ─── Share modal ─── */
+    function kvibeOpenShareModal(postId) {
+      const modal = document.getElementById(`kvibe-share-modal-${postId}`);
+      if (modal) modal.classList.add('active');
+    }
+
+    function kvibeCloseShareModal(postId) {
+      const modal = document.getElementById(`kvibe-share-modal-${postId}`);
+      if (modal) modal.classList.remove('active');
+    }
+
+    function kvibeCopyLink(url) {
+      navigator.clipboard.writeText(url).then(() => showToast('Link copied!', 'success'));
+    }
+
+    /* ─── Text expand/collapse ─── */
+    function kvibeToggleText(postId) {
+      const el = document.getElementById(`kvibe-text-${postId}`);
+      if (!el) return;
+      const btn = el.nextElementSibling;
+      const expanded = el.classList.toggle('expanded');
+      el.classList.toggle('collapsed', !expanded);
+      if (btn && btn.classList.contains('kvibe-text-toggle')) {
+        const span = btn.querySelector('span');
+        const icon = btn.querySelector('i');
+        if (span) span.textContent = expanded ? 'less' : 'more';
+        if (icon) { icon.className = expanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'; }
+      }
+    }
+
+    /* ─── Mobile sidebar ─── */
+    function kvibeOpenMobileSidebar() {
+      document.getElementById('kvibe-mobile-right-sidebar')?.classList.add('open');
+      document.getElementById('kvibe-mobile-sidebar-overlay')?.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+    function kvibeCloseMobileSidebar() {
+      document.getElementById('kvibe-mobile-right-sidebar')?.classList.remove('open');
+      document.getElementById('kvibe-mobile-sidebar-overlay')?.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    // ─── GLOBAL MEDIA TRACKING (matches home.js) ───────────────────────────
+    let kvibeCurrentlyPlayingMedia = null;
+
+    // ─── Pause every other video when a new one starts ───────────────────────
+    function kvibePauseAllOtherMedia(currentMediaElement) {
+      if (kvibeCurrentlyPlayingMedia && kvibeCurrentlyPlayingMedia !== currentMediaElement) {
+        kvibeCurrentlyPlayingMedia.pause();
+        if (kvibeCurrentlyPlayingMedia.tagName === 'VIDEO') {
+          const prevContainer = kvibeCurrentlyPlayingMedia.closest('.kvibe-video-container');
+          if (prevContainer) {
+            prevContainer.classList.add('paused');
+            const prevPlayIcon = prevContainer.querySelector('.kvibe-play-pause-icon');
+            if (prevPlayIcon) prevPlayIcon.style.opacity = '1';
+          }
+        }
+      }
+      if (currentMediaElement && !currentMediaElement.paused) {
+        kvibeCurrentlyPlayingMedia = currentMediaElement;
+      }
+    }
+
+    // ─── Toggle play / pause for a video ─────────────────────────────────────
+    function kvibeTogglePlayPause(videoId, e) {
+      if (e && e.target.closest('.kvibe-seek-overlay-btn')) return;
+      const video = document.getElementById(videoId);
+      if (!video) return;
+      if (video.paused || video.ended) {
+        kvibePauseAllOtherMedia(video);
+        video.play().then(() => {
+          const container = video.closest('.kvibe-video-container');
+          if (container) {
+            container.classList.remove('paused');
+            const playIcon = container.querySelector('.kvibe-play-pause-icon');
+            if (playIcon) playIcon.style.opacity = '0';
+          }
+        }).catch(err => console.error('Video play error:', err));
+      } else {
+        video.pause();
+        const container = video.closest('.kvibe-video-container');
+        if (container) {
+          container.classList.add('paused');
+          const playIcon = container.querySelector('.kvibe-play-pause-icon');
+          if (playIcon) playIcon.style.opacity = '1';
+        }
+      }
+    }
+
+    // ─── Seek forward / backward ──────────────────────────────────────────────
+    function kvibeSeekVideo(videoId, seconds) {
+      const video = document.getElementById(videoId);
+      if (!video) return;
+      let t = video.currentTime + seconds;
+      t = Math.max(0, t);
+      if (video.duration) t = Math.min(t, video.duration);
+      video.currentTime = t;
+    }
+
+    // ─── Image-only carousel ──────────────────────────────────────────────────
+    function kvibeSlideCarousel(postId, direction) {
+      const carousel = document.getElementById(`kvibe-carousel-${postId}`);
+      const track    = document.getElementById(`kvibe-track-${postId}`);
+      const indicators = carousel?.querySelectorAll('.kvibe-indicator');
+      if (!carousel || !track) return;
+      let current = parseInt(carousel.dataset.slide || 0);
+      const total = parseInt(carousel.dataset.total || 1);
+      if (total <= 1) return;
+      current = (current + direction + total) % total;
+      track.style.transform = `translateX(-${current * 100}%)`;
+      carousel.dataset.slide = current;
+      indicators?.forEach((ind, i) => ind.classList.toggle('active', i === current));
+    }
+
+    // ─── Mixed-media carousel (image + video slides) ─────────────────────────
+    function kvibeSlideMixedCarousel(postId, direction) {
+      const carousel   = document.getElementById(`kvibe-mixed-${postId}`);
+      const track      = document.getElementById(`kvibe-mixed-track-${postId}`);
+      const indicators = carousel?.querySelectorAll('.kvibe-mixed-indicator');
+      if (!carousel || !track) return;
+      // Pause any playing video in the current slide before navigating
+      const currentSlide = track.querySelector(`.kvibe-mixed-media-slide:nth-child(${parseInt(carousel.dataset.slide || 0) + 1})`);
+      if (currentSlide) {
+        const vid = currentSlide.querySelector('.kvibe-video');
+        if (vid && !vid.paused) {
+          vid.pause();
+          const container = vid.closest('.kvibe-video-container');
+          if (container) {
+            container.classList.add('paused');
+            const playIcon = container.querySelector('.kvibe-play-pause-icon');
+            if (playIcon) playIcon.style.opacity = '1';
+          }
+          if (kvibeCurrentlyPlayingMedia === vid) kvibeCurrentlyPlayingMedia = null;
+        }
+      }
+      let current = parseInt(carousel.dataset.slide || 0);
+      const total = parseInt(carousel.dataset.total || 1);
+      if (total <= 1) return;
+      current = (current + direction + total) % total;
+      track.style.transform = `translateX(-${current * 100}%)`;
+      carousel.dataset.slide = current;
+      indicators?.forEach((ind, i) => ind.classList.toggle('active', i === current));
+    }
+
+    // ─── Lazy-load videos with data-src ──────────────────────────────────────
+    function kvibeInitVideoLazyLoad() {
+      const lazyVideos = document.querySelectorAll('video[data-src]');
+      if (!lazyVideos.length) return;
+      if ('IntersectionObserver' in window) {
+        const obs = new IntersectionObserver(entries => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              const video = entry.target;
+              video.src = video.dataset.src;
+              video.removeAttribute('data-src');
+              obs.unobserve(video);
+            }
+          });
+        });
+        lazyVideos.forEach(v => obs.observe(v));
+      } else {
+        lazyVideos.forEach(v => { v.src = v.dataset.src; v.removeAttribute('data-src'); });
+      }
+    }
+
+    // ─── Auto-pause videos when they scroll out of view ──────────────────────
+    function kvibeInitMediaObserver() {
+      if (!('IntersectionObserver' in window)) return;
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) {
+            const container = entry.target;
+            const video = container.querySelector('.kvibe-video');
+            if (video && !video.paused) {
+              video.pause();
+              container.classList.add('paused');
+              const playIcon = container.querySelector('.kvibe-play-pause-icon');
+              if (playIcon) playIcon.style.opacity = '1';
+              if (kvibeCurrentlyPlayingMedia === video) kvibeCurrentlyPlayingMedia = null;
+            }
+          }
+        });
+      }, { threshold: 0.25 });
+
+      document.querySelectorAll('.kvibe-video-container').forEach(container => {
+        observer.observe(container);
+      });
+    }
+
+    // ─── Attach play/pause/ended listeners to every video container ──────────
+    function kvibeInitVideoContainers() {
+      document.querySelectorAll('.kvibe-video-container').forEach(container => {
+        const video = container.querySelector('.kvibe-video');
+        if (!video) return;
+
+        // Show play icon initially
+        container.classList.add('paused');
+
+        video.addEventListener('play', () => {
+          container.classList.remove('paused');
+          const playIcon = container.querySelector('.kvibe-play-pause-icon');
+          if (playIcon) playIcon.style.opacity = '0';
+          kvibeCurrentlyPlayingMedia = video;
+        });
+
+        video.addEventListener('pause', () => {
+          container.classList.add('paused');
+          const playIcon = container.querySelector('.kvibe-play-pause-icon');
+          if (playIcon) playIcon.style.opacity = '1';
+          if (kvibeCurrentlyPlayingMedia === video) kvibeCurrentlyPlayingMedia = null;
+        });
+
+        video.addEventListener('ended', () => {
+          container.classList.add('paused');
+          const playIcon = container.querySelector('.kvibe-play-pause-icon');
+          if (playIcon) playIcon.style.opacity = '1';
+          if (kvibeCurrentlyPlayingMedia === video) kvibeCurrentlyPlayingMedia = null;
+        });
+      });
+    }
+
+    /* ─── DOMContentLoaded init ─── */
+    document.addEventListener('DOMContentLoaded', function() {
+      kvibeInitVideoLazyLoad();
+      kvibeInitVideoContainers();
+      kvibeInitMediaObserver();
+
+      // Wire repost confirm button
+      const repostConfirmBtn = document.getElementById('kvibe-repost-confirm-btn');
+      if (repostConfirmBtn) repostConfirmBtn.onclick = kvibeSubmitRepost;
+
+      // Live char counter for repost textarea
+      const repostTextarea = document.getElementById('kvibe-repost-caption');
+      const repostCharCount = document.getElementById('kvibe-repost-char-count');
+      if (repostTextarea && repostCharCount) {
+        repostTextarea.addEventListener('input', () => {
+          repostCharCount.textContent = repostTextarea.value.length;
+        });
+      }
+
+      const sidebar = document.getElementById('kvibe-mobile-right-sidebar');
+      if (sidebar) {
+        let startX = 0;
+        sidebar.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+        sidebar.addEventListener('touchend', e => { if (e.changedTouches[0].clientX - startX > 60) kvibeCloseMobileSidebar(); }, { passive: true });
+      }
+
+      const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
+      if (desktopLogoutIcon) {
+        desktopLogoutIcon.addEventListener('click', function(e) {
+          e.preventDefault();
+          const modal = document.getElementById('kvibeLogoutModal');
+          if (modal) {
+            modal.classList.add('active');
+            document.getElementById('kvibeCancelLogout').onclick = () => modal.classList.remove('active');
+            document.getElementById('kvibeConfirmLogout').onclick = () => { window.location.href = "{% url 'logout' %}"; };
+          }
+        });
+      }
+
+      document.addEventListener('click', e => {
+        if (e.target === document.getElementById('kvibe-repost-modal')) kvibeCloseRepostModal();
+        const logoutModal = document.getElementById('kvibeLogoutModal');
+        if (logoutModal && logoutModal.classList.contains('active') && e.target === logoutModal) logoutModal.classList.remove('active');
+      });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+          kvibeCloseRepostModal();
+          document.querySelectorAll('.kvibe-share-modal.active').forEach(m => m.classList.remove('active'));
+          document.getElementById('kvibeLogoutModal')?.classList.remove('active');
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>

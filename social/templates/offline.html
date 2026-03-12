@@ -1,0 +1,708 @@
+{% include 'header.html' %}
+
+<style>
+  /* -- Design tokens -- */
+  :root {
+    --kvibe-bg:         #fafafa;
+    --kvibe-white:      #ffffff;
+    --kvibe-text:       #262626;
+    --kvibe-text-light: #8e8e8e;
+    --kvibe-primary:    #0095f6;
+    --kvibe-border:     #dbdbdb;
+    --kvibe-repost:     #0095f6;
+  }
+
+  /* -- Offline banner -- */
+  .kvibe-offline-bar {
+    position: fixed;
+    top: 54px; left: 0; right: 0;
+    z-index: 999;
+    background: #fff3cd;
+    border-bottom: 1px solid #ffc107;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    font-size: 13px;
+    color: #664d03;
+    font-weight: 500;
+    transition: background 0.3s, border-color 0.3s, color 0.3s;
+  }
+  .kvibe-offline-bar i        { font-size: 14px; flex-shrink: 0; }
+  .kvibe-offline-bar-text     { flex: 1; line-height: 1.4; }
+  .kvibe-offline-bar-retry {
+    background: #ffc107; color: #212529; border: none;
+    border-radius: 20px; padding: 5px 13px; font-size: 12px;
+    font-weight: 600; cursor: pointer; flex-shrink: 0; transition: background 0.2s;
+  }
+  .kvibe-offline-bar-retry:hover { background: #e0a800; }
+
+  /* -- Page offset: body already has padding-top:54px from header.html -- */
+  .kvibe-offline-page { padding-top: 38px; }
+
+  /* -- Layout -- */
+  .kvibe-desktop-layout {
+    display: flex; max-width: 1400px; margin: 0 auto;
+    padding: 20px 20px 0 20px; gap: 20px;
+  }
+  .kvibe-left-sidebar {
+    width: 245px; flex-shrink: 0; position: sticky;
+    top: 100px; height: calc(100vh - 140px);
+    overflow-y: auto; padding-right: 10px; display: none;
+  }
+  .kvibe-desktop-nav { display: flex; flex-direction: column; gap: 8px; padding: 20px 0; background: var(--kvibe-white); }
+  .kvibe-desktop-nav-item { display:flex; align-items:center; text-decoration:none; padding:12px; border-radius:8px; transition:background 0.2s; }
+  .kvibe-desktop-nav-item:hover { background: var(--kvibe-bg); }
+  .kvibe-desktop-nav-icon { width:24px; height:24px; margin-right:12px; flex-shrink:0; }
+  .kvibe-desktop-nav-icon svg { width:100%; height:100%; stroke:var(--kvibe-text-light); }
+  .kvibe-desktop-nav-label { font-size:14px; color:var(--kvibe-text-light); white-space:nowrap; }
+  .kvibe-main-feed { flex:1; max-width:600px; margin:0 auto; }
+  .kvibe-right-sidebar {
+    width: 330px; flex-shrink: 0; position: sticky;
+    top: 100px; height: calc(100vh - 140px);
+    overflow-y: auto; padding-left: 10px; display: none;
+  }
+
+  /* -- Mood filter bar -- */
+  .kvibe-mood-filter-bar {
+    background: var(--kvibe-white); border-bottom: 1px solid var(--kvibe-border);
+    padding: 10px 12px; display: flex; align-items: center; gap: 8px;
+    overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+    position: sticky; top: 92px; z-index: 50; height: 48px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .kvibe-mood-filter-bar::-webkit-scrollbar { display: none; }
+  .kvibe-mood-filter-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px;
+    border-radius: 20px; border: 1.5px solid var(--kvibe-border);
+    background: var(--kvibe-white); color: var(--kvibe-text); font-size: 12px;
+    font-weight: 500; cursor: default; white-space: nowrap; flex-shrink: 0; opacity: 0.55;
+  }
+  .kvibe-mood-filter-chip.active { background:var(--kvibe-text); border-color:var(--kvibe-text); color:white; opacity:1; }
+  .kvibe-chip-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
+
+  /* -- Skeleton shimmer -- */
+  @keyframes skeleton-shimmer {
+    0%   { background-position: -468px 0; }
+    100% { background-position:  468px 0; }
+  }
+  .kvibe-skeleton {
+    background: #e8e8e8;
+    background-image: linear-gradient(to right, #e8e8e8 0%, #f5f5f5 20%, #e8e8e8 40%, #e8e8e8 100%);
+    background-repeat: no-repeat; background-size: 800px 100%;
+    animation: skeleton-shimmer 1.4s ease-in-out infinite; border-radius: 4px;
+  }
+  .kvibe-skeleton-post { background:var(--kvibe-white); border-radius:8px; margin-bottom:12px; padding:16px; overflow:hidden; border-bottom:1px solid var(--kvibe-border); }
+  .kvibe-skeleton-post-header { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .kvibe-skeleton-avatar      { width:40px; height:40px; border-radius:50%; flex-shrink:0; }
+  .kvibe-skeleton-meta        { flex:1; display:flex; flex-direction:column; gap:8px; }
+  .kvibe-skeleton-name        { height:13px; width:140px; border-radius:6px; }
+  .kvibe-skeleton-time        { height:11px; width:90px; border-radius:6px; }
+  .kvibe-skeleton-text-line   { height:13px; border-radius:6px; margin-bottom:8px; }
+  .kvibe-skeleton-media       { width:100%; height:260px; border-radius:8px; margin:14px 0; }
+  .kvibe-skeleton-actions     { display:flex; gap:16px; margin-top:14px; padding-top:10px; border-top:1px solid var(--kvibe-border); }
+  .kvibe-skeleton-action-btn  { height:22px; width:52px; border-radius:6px; }
+  .kvibe-skeleton-sidebar-user   { display:flex; align-items:center; gap:10px; padding:10px 0; }
+  .kvibe-skeleton-sidebar-avatar { width:40px; height:40px; border-radius:50%; flex-shrink:0; }
+  .kvibe-skeleton-sidebar-meta   { flex:1; display:flex; flex-direction:column; gap:7px; }
+  .kvibe-skeleton-sidebar-name   { height:12px; width:110px; border-radius:5px; }
+  .kvibe-skeleton-sidebar-sub    { height:10px; width:75px; border-radius:5px; }
+
+  /* -- Offline notice card (shown when NO cached posts) -- */
+  .kvibe-offline-card {
+    background: var(--kvibe-white); border: 1px solid var(--kvibe-border);
+    border-radius: 12px; padding: 28px 20px; text-align: center; margin-bottom: 16px;
+  }
+  .kvibe-offline-card-icon {
+    width:72px; height:72px;
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    border-radius:50%; display:flex; align-items:center; justify-content:center;
+    margin: 0 auto 16px; animation: kvibe-pulse 2.4s ease-in-out infinite;
+  }
+  .kvibe-offline-card-icon i { font-size:30px; color:var(--kvibe-primary); }
+  @keyframes kvibe-pulse {
+    0%,100% { box-shadow: 0 0 0   0   rgba(0,149,246,0.15); }
+    50%      { box-shadow: 0 0 0 12px rgba(0,149,246,0); }
+  }
+  .kvibe-offline-card h2 { font-size:17px; font-weight:700; margin-bottom:8px; color:var(--kvibe-text); }
+  .kvibe-offline-card p  { font-size:13px; color:var(--kvibe-text-light); line-height:1.6; margin-bottom:18px; }
+  .kvibe-offline-card-btn {
+    background:var(--kvibe-primary); color:#fff; border:none; border-radius:8px;
+    padding:11px 28px; font-size:14px; font-weight:600; cursor:pointer;
+    transition:background 0.2s, transform 0.1s;
+  }
+  .kvibe-offline-card-btn:hover  { background:#0081d6; }
+  .kvibe-offline-card-btn:active { transform:scale(0.97); }
+  .kvibe-offline-card-btn i { margin-right:6px; }
+
+  /* -- Cached posts label -- */
+  .kvibe-cached-label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--kvibe-text-light);
+    padding: 10px 16px 6px;
+    background: var(--kvibe-white);
+    border-bottom: 1px solid var(--kvibe-border);
+  }
+  .kvibe-cached-label i { color: var(--kvibe-primary); }
+
+  /* -- Post styles (copied from home.html) -- */
+  .kvibe-post { background:var(--kvibe-white); margin-bottom:0; border-bottom:1px solid var(--kvibe-border); border-radius:8px; overflow:hidden; }
+  .kvibe-post-header { display:flex; align-items:center; padding:14px 16px; flex-wrap:wrap; }
+  .kvibe-profile-pic { width:32px; height:32px; border-radius:50%; object-fit:cover; margin-right:12px; }
+  .kvibe-username { font-weight:600; font-size:14px; color:var(--kvibe-text); text-decoration:none; }
+  .kvibe-post-time { font-size:12px; color:var(--kvibe-text-light); margin-top:2px; }
+  .kvibe-post-actions { margin-left:auto; display:flex; gap:12px; align-items:center; }
+  .kvibe-post-content { padding:0 16px 12px; font-size:14px; line-height:1.5; }
+  .kvibe-post-text.collapsed { max-height:60px; overflow:hidden; }
+  .kvibe-hashtag { color:var(--kvibe-primary); text-decoration:none; font-weight:600; }
+  .kvibe-repost-header { display:flex; align-items:center; padding:8px 16px; background:var(--kvibe-bg); font-size:12px; color:var(--kvibe-repost); }
+  .kvibe-repost-header i { margin-right:6px; }
+  .kvibe-repost-header a { color:var(--kvibe-primary); text-decoration:none; font-weight:500; margin:0 4px; }
+  .kvibe-repost-caption-container { padding:12px 16px 0; background:white; }
+  .kvibe-repost-caption { padding:10px; background:var(--kvibe-white); border:1px solid whitesmoke; border-radius:8px; font-size:14px; line-height:1.5; }
+  .kvibe-repost-caption-author { font-weight:600; color:var(--kvibe-repost); display:block; margin-bottom:4px; }
+  .kvibe-media-container { width:100%; position:relative; overflow:hidden; }
+  .kvibe-image-slide { width:100%; flex-shrink:0; display:block; background:#fafafa; }
+  .kvibe-image-slide img { width:100%; height:auto; display:block; }
+  .kvibe-video-container { position:relative; width:100%; overflow:hidden; background:#000; min-height:200px; display:flex; justify-content:center; align-items:center; }
+  .kvibe-video { max-width:100%; height:auto; object-fit:contain; display:block; }
+  .kvibe-mood-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; background:linear-gradient(135deg,var(--mood-color,#0095f6),color-mix(in srgb,var(--mood-color,#0095f6) 70%,white)); border-radius:20px; color:white; font-size:12px; font-weight:600; margin-left:8px; }
+  .kvibe-actions-container { display:flex; align-items:center; justify-content:space-between; padding:4px 8px; background:var(--kvibe-white); border-top:1px solid var(--kvibe-border); }
+  .kvibe-action-item { display:flex; align-items:center; justify-content:center; gap:8px; text-decoration:none; color:var(--kvibe-text-light); font-size:13.5px; font-weight:500; padding:10px 16px; border-radius:999px; background:none; border:none; flex:1; font-family:inherit; cursor:default; }
+  .kvibe-action-icon { font-size:19px; }
+  .kvibe-repost-icon { display:flex; align-items:center; justify-content:center; gap:8px; color:var(--kvibe-text-light); font-size:13.5px; padding:10px 16px; border-radius:999px; background:none; border:none; flex:1; font-family:inherit; cursor:default; }
+  .fa-retweet.reposted { color:#10b981; }
+  .kvibe-repost-count { font-size:13.5px; display:none; }
+  .kvibe-repost-count.kvibe-show { display:inline; }
+  .kvibe-engagement { display:flex; flex-wrap:wrap; align-items:center; padding:10px 16px 8px; border-top:1px solid var(--kvibe-border); gap:10px; background:var(--kvibe-white); }
+  .kvibe-engagement-item { display:flex; align-items:center; gap:4px; }
+  .kvibe-like-text { font-weight:normal; color:var(--kvibe-text); font-size:13.5px; }
+  .kvibe-no-likes  { color:var(--kvibe-text-light); font-size:13px; }
+  .kvibe-view-text { font-size:13px; color:var(--kvibe-text-light); }
+  .kvibe-separator-dot { color:var(--kvibe-border); font-size:12px; margin:0 2px; }
+  .kvibe-liker-pic { width:24px; height:24px; border-radius:50%; border:2px solid var(--kvibe-white); margin-left:-6px; }
+  .kvibe-likers-container { display:flex; margin-right:6px; }
+
+  /* Offline dimming on cached posts */
+  .kvibe-post.kvibe-cached { opacity: 0.88; }
+  .kvibe-cached-overlay-msg {
+    text-align:center; font-size:11px; color:var(--kvibe-text-light);
+    padding:4px 0 8px; display:flex; align-items:center; justify-content:center; gap:5px;
+  }
+
+  /* -- Responsive -- */
+  @media (min-width: 768px) {
+    .kvibe-left-sidebar, .kvibe-right-sidebar { display: block; }
+  }
+  @media (max-width: 767px) {
+    .kvibe-desktop-layout { display:block; padding:2px 0 0 0; }
+    .kvibe-main-feed { max-width:100%; padding:0; }
+    .kvibe-skeleton-post, .kvibe-post { border-radius:0; margin-bottom:8px; }
+  }
+  @media (min-width: 1024px) {
+    .kvibe-desktop-layout { padding:20px 20px 0 20px; }
+  }
+</style>
+
+<!-- Offline banner -->
+<div class="kvibe-offline-bar" id="kvibe-offline-bar">
+  <i class="fas fa-wifi" id="kvibe-bar-icon"></i>
+  <span class="kvibe-offline-bar-text" id="kvibe-bar-text">
+    You're <strong>offline</strong> -- showing your last viewed posts
+  </span>
+  <button class="kvibe-offline-bar-retry" onclick="kvibeRetry()">
+    <i class="fas fa-rotate-right"></i> Retry
+  </button>
+</div>
+
+<div class="kvibe-offline-page">
+  <div class="kvibe-desktop-layout">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="kvibe-left-sidebar">
+      <div class="kvibe-desktop-nav">
+        <a href="/home" class="kvibe-desktop-nav-item">
+          <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <span class="kvibe-desktop-nav-label">Home</span>
+        </a>
+        <a href="/explore/" class="kvibe-desktop-nav-item">
+          <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round"/></svg></div>
+          <span class="kvibe-desktop-nav-label">Explore</span>
+        </a>
+        <a href="/post" class="kvibe-desktop-nav-item">
+          <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/><line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/></svg></div>
+          <span class="kvibe-desktop-nav-label">Create</span>
+        </a>
+        <a href="/list" class="kvibe-desktop-nav-item">
+          <div class="kvibe-desktop-nav-icon"><i class="fa-regular fa-bell" style="font-size:20px;color:var(--kvibe-text-light);"></i></div>
+          <span class="kvibe-desktop-nav-label">Alerts</span>
+        </a>
+        <a href="/inbox" class="kvibe-desktop-nav-item">
+          <div class="kvibe-desktop-nav-icon"><i class="fa-regular fa-paper-plane" style="font-size:20px;color:var(--kvibe-text-light);"></i></div>
+          <span class="kvibe-desktop-nav-label">Messages</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- MAIN FEED -->
+    <div class="kvibe-main-feed">
+
+      <!-- Mood filter bar (visual only) -->
+      <div class="kvibe-mood-filter-bar">
+        <button class="kvibe-mood-filter-chip active"><span class="kvibe-chip-dot"></span> All</button>
+        <button class="kvibe-mood-filter-chip"><span class="kvibe-chip-dot"></span> 💅 slay</button>
+        <button class="kvibe-mood-filter-chip"><span class="kvibe-chip-dot"></span> 🎵 vibing</button>
+        <button class="kvibe-mood-filter-chip"><span class="kvibe-chip-dot"></span> 🥶 sheesh</button>
+        <button class="kvibe-mood-filter-chip"><span class="kvibe-chip-dot"></span> ⏸️ periodt</button>
+        <button class="kvibe-mood-filter-chip"><span class="kvibe-chip-dot"></span> 🎯 no cap</button>
+        <button class="kvibe-mood-filter-chip"><span class="kvibe-chip-dot"></span> 🔥 bussin</button>
+      </div>
+
+      <!-- Feed: skeleton while loading, then replaced by cached posts or empty card -->
+      <div id="kvibe-offline-feed">
+
+        <!-- Skeletons shown while JS checks cache -->
+        <div id="kvibe-skeletons">
+          <div class="kvibe-skeleton-post">
+            <div class="kvibe-skeleton-post-header">
+              <div class="kvibe-skeleton-avatar kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-meta">
+                <div class="kvibe-skeleton-name kvibe-skeleton"></div>
+                <div class="kvibe-skeleton-time kvibe-skeleton"></div>
+              </div>
+            </div>
+            <div class="kvibe-skeleton-text-line kvibe-skeleton" style="width:90%"></div>
+            <div class="kvibe-skeleton-text-line kvibe-skeleton" style="width:70%"></div>
+            <div class="kvibe-skeleton-media kvibe-skeleton"></div>
+            <div class="kvibe-skeleton-actions">
+              <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+            </div>
+          </div>
+          <div class="kvibe-skeleton-post">
+            <div class="kvibe-skeleton-post-header">
+              <div class="kvibe-skeleton-avatar kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-meta">
+                <div class="kvibe-skeleton-name kvibe-skeleton"></div>
+                <div class="kvibe-skeleton-time kvibe-skeleton"></div>
+              </div>
+            </div>
+            <div class="kvibe-skeleton-text-line kvibe-skeleton" style="width:95%"></div>
+            <div class="kvibe-skeleton-text-line kvibe-skeleton" style="width:55%"></div>
+            <div class="kvibe-skeleton-actions">
+              <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+            </div>
+          </div>
+          <div class="kvibe-skeleton-post">
+            <div class="kvibe-skeleton-post-header">
+              <div class="kvibe-skeleton-avatar kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-meta">
+                <div class="kvibe-skeleton-name kvibe-skeleton"></div>
+                <div class="kvibe-skeleton-time kvibe-skeleton"></div>
+              </div>
+            </div>
+            <div class="kvibe-skeleton-text-line kvibe-skeleton" style="width:80%"></div>
+            <div class="kvibe-skeleton-media kvibe-skeleton" style="height:200px"></div>
+            <div class="kvibe-skeleton-actions">
+              <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+              <div class="kvibe-skeleton-action-btn kvibe-skeleton"></div>
+            </div>
+          </div>
+        </div><!-- /#kvibe-skeletons -->
+
+      </div><!-- /#kvibe-offline-feed -->
+
+    </div><!-- /.kvibe-main-feed -->
+
+    <!-- RIGHT SIDEBAR skeletons -->
+    <aside class="kvibe-right-sidebar">
+      <div style="padding:16px 0;">
+        <div style="font-size:13px;font-weight:600;color:var(--kvibe-text);margin-bottom:12px;">Suggested for you</div>
+        <div class="kvibe-skeleton-sidebar-user">
+          <div class="kvibe-skeleton-sidebar-avatar kvibe-skeleton"></div>
+          <div class="kvibe-skeleton-sidebar-meta">
+            <div class="kvibe-skeleton-sidebar-name kvibe-skeleton"></div>
+            <div class="kvibe-skeleton-sidebar-sub kvibe-skeleton"></div>
+          </div>
+        </div>
+        <div class="kvibe-skeleton-sidebar-user">
+          <div class="kvibe-skeleton-sidebar-avatar kvibe-skeleton"></div>
+          <div class="kvibe-skeleton-sidebar-meta">
+            <div class="kvibe-skeleton-sidebar-name kvibe-skeleton"></div>
+            <div class="kvibe-skeleton-sidebar-sub kvibe-skeleton"></div>
+          </div>
+        </div>
+        <div class="kvibe-skeleton-sidebar-user">
+          <div class="kvibe-skeleton-sidebar-avatar kvibe-skeleton"></div>
+          <div class="kvibe-skeleton-sidebar-meta">
+            <div class="kvibe-skeleton-sidebar-name kvibe-skeleton"></div>
+            <div class="kvibe-skeleton-sidebar-sub kvibe-skeleton"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<script>
+  // -- Helpers (same as home.html) -------------------------------------------
+  function kvibeTimeAgo(isoString) {
+    const diff = Math.floor((Date.now() - new Date(isoString)) / 1000);
+    if (diff < 60)    return diff + 's';
+    if (diff < 3600)  return Math.floor(diff / 60) + 'm';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+    return Math.floor(diff / 86400) + 'd';
+  }
+
+  function kvibeEscapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function kvibeLinkifyContent(text) {
+    let safe = kvibeEscapeHtml(text);
+    safe = safe.replace(/#(\w+)/g, (m, tag) =>
+      `<a href="/hashtag/${tag}/" class="kvibe-hashtag">${m}</a>`);
+    safe = safe.replace(/@(\w+)/g, (m, u) =>
+      `<a href="/${u}/" style="color:var(--kvibe-primary);font-weight:600;">${m}</a>`);
+    return safe;
+  }
+
+  // -- Build post HTML -- mirrors kvibeBuildPostHtml from home.html -----------
+  function kvibeBuildOfflinePostHtml(p) {
+    const timeAgo    = kvibeTimeAgo(p.is_repost ? p.original_created_at : p.created_at);
+    const repostTime = kvibeTimeAgo(p.created_at);
+    const contentTxt = p.content ? kvibeLinkifyContent(p.content) : '';
+
+    const verifiedBadge = (v) => v
+      ? `<img src="/static/images/verify1.jpg" height="16" width="16" alt="✓" style="vertical-align:middle;">`
+      : '';
+
+    const moodBadge = p.has_mood
+      ? `<span class="kvibe-mood-badge kvibe-mood-${kvibeEscapeHtml(p.mood||'custom')}"
+              style="${p.mood_color ? '--mood-color:'+kvibeEscapeHtml(p.mood_color)+';' : ''}">
+              <i class="fa-regular fa-face-smile"></i> ${kvibeEscapeHtml(p.mood_display)}
+           </span>` : '';
+
+    const repostHeader = p.is_repost
+      ? `<div class="kvibe-repost-header">
+           <i class="fas fa-retweet"></i>
+           <span><a href="/${kvibeEscapeHtml(p.author_username)}/">${kvibeEscapeHtml(p.author_name)}</a> reposted</span>
+         </div>` : '';
+
+    const repostCaption = (p.is_repost && p.repost_content)
+      ? `<div class="kvibe-repost-caption-container">
+           <div class="kvibe-repost-caption">
+             <span class="kvibe-repost-caption-author">${kvibeEscapeHtml(p.author_name)}</span>
+             <div class="kvibe-repost-caption-text">${kvibeEscapeHtml(p.repost_content)}</div>
+           </div>
+         </div>` : '';
+
+    // Media -- images and videos render, but no JS controls (offline)
+    let mediaHtml = '';
+    const media = (p.is_repost && p.original_media && p.original_media.length)
+      ? p.original_media : (p.media || []);
+
+    if (media.length === 1) {
+      const m = media[0];
+      mediaHtml = m.type === 'video'
+        ? `<div class="kvibe-video-container">
+             <video class="kvibe-video" preload="metadata"
+               poster="${kvibeEscapeHtml(m.thumbnail||'')}" controls playsinline>
+               <source src="${kvibeEscapeHtml(m.url)}" type="video/mp4">
+             </video>
+           </div>`
+        : `<div class="kvibe-image-slide">
+             <img src="${kvibeEscapeHtml(m.url)}" alt="Post image" loading="lazy"
+                  style="opacity:1;">
+           </div>`;
+    } else if (media.length > 1) {
+      // Simple stacked view for multiple media offline (no carousel JS needed)
+      mediaHtml = media.slice(0, 3).map((m, i) =>
+        m.type === 'video'
+          ? `<div class="kvibe-video-container" style="margin-bottom:4px;">
+               <video class="kvibe-video" preload="metadata" controls playsinline
+                 poster="${kvibeEscapeHtml(m.thumbnail||'')}">
+                 <source src="${kvibeEscapeHtml(m.url)}" type="video/mp4">
+               </video>
+             </div>`
+          : `<div class="kvibe-image-slide" style="margin-bottom:4px;">
+               <img src="${kvibeEscapeHtml(m.url)}" alt="Image ${i+1}" loading="lazy" style="opacity:1;">
+             </div>`
+      ).join('');
+    }
+
+    const timeStr = p.is_repost
+      ? `@${kvibeEscapeHtml(p.original_author_username)} · Original: ${timeAgo} · Reposted: ${repostTime}`
+      : `@${kvibeEscapeHtml(p.original_author_username)} · ${timeAgo}`;
+
+    const likeIcon  = p.is_liked ? 'fas' : 'far';
+    const likeColor = p.is_liked ? 'color:var(--kvibe-primary);' : '';
+
+    return `
+      <article class="kvibe-post kvibe-cached" data-post-id="${kvibeEscapeHtml(p.post_id)}">
+        ${repostHeader}
+        <div class="kvibe-post-header">
+          <img src="${p.original_author_pic || 'https://placehold.co/40x40/dbdbdb/8e8e8e?text=U'}"
+               class="kvibe-profile-pic"
+               onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U'">
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;">
+              <a href="/${kvibeEscapeHtml(p.original_author_username)}/" class="kvibe-username">
+                ${kvibeEscapeHtml(p.original_author_name)} ${verifiedBadge(p.original_author_verified)}
+              </a>
+              ${moodBadge}
+            </div>
+            <div class="kvibe-post-time">${timeStr}</div>
+          </div>
+        </div>
+        ${repostCaption}
+        ${contentTxt
+          ? `<div class="kvibe-post-content">
+               <div class="kvibe-post-text collapsed">${contentTxt}</div>
+             </div>` : ''}
+        ${mediaHtml ? `<div class="kvibe-media-container">${mediaHtml}</div>` : ''}
+
+        <!-- Action bar -- read-only offline -->
+        <div class="kvibe-actions-container">
+          <button class="kvibe-action-item">
+            <i class="${likeIcon} fa-heart kvibe-action-icon" style="${likeColor}"></i>
+            <span class="kvibe-count">${p.like_count > 0 ? p.like_count : ''}</span>
+          </button>
+          <a href="/comment/${p.post_id}" class="kvibe-action-item" style="pointer-events:none;">
+            <i class="fa-regular fa-comment kvibe-action-icon"></i>
+          </a>
+          <button class="kvibe-repost-icon">
+            <i class="fas fa-retweet${p.is_reposted ? ' reposted' : ''}"></i>
+            <span class="kvibe-repost-count${p.repost_count > 0 ? ' kvibe-show' : ''}">
+              ${p.repost_count > 0 ? p.repost_count : ''}
+            </span>
+          </button>
+          <button class="kvibe-action-item">
+            <i class="fa-regular fa-paper-plane kvibe-action-icon"></i>
+          </button>
+        </div>
+
+        <!-- Engagement row -->
+        <div class="kvibe-engagement">
+          ${p.like_count > 0 && p.liker_pics && p.liker_pics.length
+            ? `<div class="kvibe-likers-container">
+                 ${p.liker_pics.map(pic =>
+                   `<img src="${kvibeEscapeHtml(pic)}" class="kvibe-liker-pic" alt="liker">`
+                 ).join('')}
+               </div>` : ''}
+          <div class="kvibe-engagement-item">
+            <span class="kvibe-like-text">
+              ${p.like_count === 0
+                ? '<span class="kvibe-no-likes">Be the first to like this</span>'
+                : p.is_liked
+                  ? `<span style="font-weight:600;">Liked by You</span>${p.like_count > 1 ? ' and '+(p.like_count-1)+' others' : ''}`
+                  : `Liked by ${p.like_count} ${p.like_count === 1 ? 'person' : 'people'}`
+              }
+            </span>
+          </div>
+          <span class="kvibe-separator-dot">·</span>
+          <div class="kvibe-engagement-item">
+            <span class="kvibe-view-text"><i class="fa-regular fa-chart-bar"></i> ${p.view_count || 0}</span>
+          </div>
+        </div>
+      </article>`;
+  }
+
+  // -- Load cached posts from service worker cache ---------------------------
+  async function kvibeLoadCachedPosts() {
+    const feed      = document.getElementById('kvibe-offline-feed');
+    const skeletons = document.getElementById('kvibe-skeletons');
+
+    if (!('caches' in window)) {
+      // Browser doesn't support Cache API -- show empty card
+      showEmptyCard(feed, skeletons);
+      return;
+    }
+
+    try {
+      // Try both cache version names gracefully
+      let posts = null;
+      const cacheNames = await caches.keys();
+      for (const name of cacheNames) {
+        if (!name.startsWith('kvibe-posts-')) continue;
+        const cache  = await caches.open(name);
+        const cached = await cache.match('/kvibe-cached-posts-data/');
+        if (cached) {
+          posts = await cached.json();
+          break;
+        }
+      }
+
+      if (!posts || !posts.length) {
+        showEmptyCard(feed, skeletons);
+        return;
+      }
+
+      // Remove skeletons
+      if (skeletons) skeletons.remove();
+
+      // "Cached content" label
+      const label = document.createElement('div');
+      label.className = 'kvibe-cached-label';
+      label.innerHTML = '<i class="fas fa-clock-rotate-left"></i> Cached -- your last viewed posts';
+      feed.prepend(label);
+
+      // Render posts
+      const fragment = document.createDocumentFragment();
+      posts.forEach((p) => {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = kvibeBuildOfflinePostHtml(p);
+        while (tmp.firstChild) fragment.appendChild(tmp.firstChild);
+      });
+      feed.appendChild(fragment);
+
+    } catch (e) {
+      console.warn('[Offline] Cache read error:', e);
+      showEmptyCard(feed, skeletons);
+    }
+  }
+
+  function showEmptyCard(feed, skeletons) {
+    if (skeletons) skeletons.remove();
+    const card = document.createElement('div');
+    card.className = 'kvibe-offline-card';
+    card.innerHTML = `
+      <div class="kvibe-offline-card-icon"><i class="fas fa-wifi-slash"></i></div>
+      <h2>You're offline</h2>
+      <p>No cached posts found yet.<br>Browse your feed while online and they'll appear here next time.</p>
+      <button class="kvibe-offline-card-btn" onclick="kvibeRetry()">
+        <i class="fas fa-rotate-right"></i> Try again
+      </button>`;
+    feed.appendChild(card);
+  }
+
+  // -- Retry -----------------------------------------------------------------
+  function kvibeRetry() {
+    const btns = document.querySelectorAll('.kvibe-offline-card-btn, .kvibe-offline-bar-retry');
+    btns.forEach(b => { b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...'; });
+    fetch('/home', { method: 'HEAD', cache: 'no-store' })
+      .then(() => { window.location.href = '/home'; })
+      .catch(() => {
+        btns.forEach(b => {
+          b.disabled = false;
+          b.innerHTML = b.classList.contains('kvibe-offline-bar-retry')
+            ? '<i class="fas fa-rotate-right"></i> Retry'
+            : '<i class="fas fa-rotate-right"></i> Try again';
+        });
+        kvibeToast('Still offline. Please check your connection.');
+      });
+  }
+
+  // -- Connection status ----------------------------------------------------
+  function kvibeUpdateStatus() {
+    const bar  = document.getElementById('kvibe-offline-bar');
+    const icon = document.getElementById('kvibe-bar-icon');
+    const text = document.getElementById('kvibe-bar-text');
+    if (!bar) return;
+    if (navigator.onLine) {
+      bar.style.background  = '#d4edda';
+      bar.style.borderColor = '#28a745';
+      bar.style.color       = '#155724';
+      icon.className        = 'fas fa-signal';
+      text.innerHTML        = 'Connection restored! <strong>Taking you back...</strong>';
+      setTimeout(() => { window.location.href = '/home'; }, 1200);
+    } else {
+      bar.style.background  = '#fff3cd';
+      bar.style.borderColor = '#ffc107';
+      bar.style.color       = '#664d03';
+      icon.className        = 'fas fa-wifi';
+      text.innerHTML        = "You're <strong>offline</strong> -- showing your last viewed posts";
+    }
+  }
+
+  // -- Toast ----------------------------------------------------------------
+  function kvibeToast(msg) {
+    const t = document.createElement('div');
+    t.textContent = msg;
+    Object.assign(t.style, {
+      position:'fixed', bottom:'90px', left:'50%', transform:'translateX(-50%)',
+      background:'#262626', color:'#fff', padding:'10px 20px', borderRadius:'20px',
+      fontSize:'13px', fontWeight:'500', zIndex:'9999', whiteSpace:'nowrap',
+      boxShadow:'0 4px 12px rgba(0,0,0,0.2)', opacity:'0', transition:'opacity 0.3s',
+    });
+    document.body.appendChild(t);
+    requestAnimationFrame(() => { t.style.opacity = '1'; });
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+  }
+
+  // -- Detect if we landed here because a specific page was not cached ------
+  // The SW injects window.KVIBE_REQUESTED_PATH into the page (no redirect needed)
+  function kvibeGetRequestedPath() {
+    return (typeof window.KVIBE_REQUESTED_PATH !== 'undefined')
+      ? window.KVIBE_REQUESTED_PATH
+      : null;
+  }
+
+  // -- Init ------------------------------------------------------------------
+  window.addEventListener('online', function() {
+    var next = kvibeGetRequestedPath();
+    // Go to the page they originally wanted, or home
+    var target = (next && next !== '/offline/') ? next : '/';
+    var bar  = document.getElementById('kvibe-offline-bar');
+    var icon = document.getElementById('kvibe-bar-icon');
+    var text = document.getElementById('kvibe-bar-text');
+    if (bar) {
+      bar.style.background  = '#d4edda';
+      bar.style.borderColor = '#28a745';
+      bar.style.color       = '#155724';
+    }
+    if (icon) icon.className = 'fas fa-signal';
+    if (text) text.innerHTML = 'Connection restored! <strong>Taking you back...</strong>';
+    setTimeout(function() { window.location.href = target; }, 1200);
+  });
+
+  window.addEventListener('offline', kvibeUpdateStatus);
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var next = kvibeGetRequestedPath();
+
+    if (next && next !== '/' && next !== '/offline/') {
+      // User clicked a link that is not cached -- show friendly message
+      var feed      = document.getElementById('kvibe-offline-feed');
+      var skeletons = document.getElementById('kvibe-skeletons');
+      var moodBar   = document.querySelector('.kvibe-mood-filter-bar');
+      if (skeletons) skeletons.remove();
+      if (moodBar)   moodBar.style.display = 'none';
+
+      var card = document.createElement('div');
+      card.className = 'kvibe-offline-card';
+      card.innerHTML =
+        '<div class="kvibe-offline-card-icon"><i class="fas fa-file-slash"></i></div>' +
+        '<h2>Page not available offline</h2>' +
+        '<p><strong>' + kvibeEscapeHtml(next) + '</strong><br>' +
+        'Visit this page while online and it will be saved for offline use.</p>' +
+        '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
+          '<button class="kvibe-offline-card-btn" onclick="history.back()" style="background:#8e8e8e;">' +
+            '<i class="fas fa-arrow-left"></i> Go back' +
+          '</button>' +
+          '<button class="kvibe-offline-card-btn" onclick="kvibeRetry()">' +
+            '<i class="fas fa-rotate-right"></i> Retry' +
+          '</button>' +
+        '</div>';
+      if (feed) feed.appendChild(card);
+
+      kvibeUpdateStatus();
+
+    } else {
+      // Normal offline landing -- show cached posts feed
+      kvibeUpdateStatus();
+      kvibeLoadCachedPosts();
+    }
+  });
+</script>
+
+{% include 'footer.html' %}
