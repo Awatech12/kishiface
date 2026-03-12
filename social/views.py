@@ -1187,17 +1187,49 @@ def message(request, username):
     conversations = Message.objects.filter(
         Q(sender=sender, receiver=receiver) | Q(sender=receiver, receiver=sender)
     ).order_by('created_at')
+
+    # Attach reaction summaries to each message
+    from social.models import MessageReaction
+    from django.db.models import Count as _Count
+
+    # Build a lookup: message_id → {emoji: count}
+    reaction_rows = (
+        MessageReaction.objects
+        .filter(message__in=conversations)
+        .values('message_id', 'emoji')
+        .annotate(count=_Count('id'))
+    )
+    reactions_by_msg = {}
+    for row in reaction_rows:
+        reactions_by_msg.setdefault(row['message_id'], {})[row['emoji']] = row['count']
+
+    # Build per-message user reactions lookup
+    user_reaction_rows = MessageReaction.objects.filter(
+        message__in=conversations, user=request.user
+    ).values('message_id', 'emoji')
+    user_reactions = {r['message_id']: r['emoji'] for r in user_reaction_rows}
+
+    # Attach to message objects for template use
+    conversations_list = list(conversations)
+    for msg in conversations_list:
+        msg.reactions_summary = reactions_by_msg.get(msg.id, {})
+        my_emoji = user_reactions.get(msg.id)
+        # Expose as a set of users so template {% if request.user in message.reaction_users %} works
+        msg.reaction_users = [request.user] if my_emoji else []
+        msg.my_reaction = my_emoji  # "❤️" or None
     
-    # Group messages by date
+    # Group messages by date (re-group from annotated list)
     grouped_messages = {}
-    for label, msgs in groupby(conversations, key=lambda m: m.chat_date_label):
-        grouped_messages[label] = list(msgs)
+    for msg in conversations_list:
+        label = msg.chat_date_label
+        grouped_messages.setdefault(label, []).append(msg)
     
     context = {
         'grouped_messages': grouped_messages,
         'receiver': receiver
     }
     return render(request, 'message.html', context)
+
 
 @login_required(login_url='/')
 def send_message(request, username):
@@ -1366,6 +1398,97 @@ def delete_message(request, message_id):
             })
     
     return JsonResponse({'status': 'error', 'message': 'Invalid method'})
+
+
+@login_required(login_url='/')
+def react_to_message(request, message_id):
+    """
+    POST  /react_message/<message_id>/
+    Body: { "emoji": "❤️" }
+
+    Toggle logic:
+      - If the user has no reaction → add it.
+      - If the user reacted with the SAME emoji → remove it (toggle off).
+      - If the user reacted with a DIFFERENT emoji → replace it.
+
+    Returns the full reaction summary for the message so the UI can update.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
+
+    from social.models import MessageReaction
+
+    try:
+        message = Message.objects.get(id=message_id)
+    except Message.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Message not found'}, status=404)
+
+    # Only participants in the conversation may react
+    if request.user not in (message.sender, message.receiver):
+        return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
+
+    try:
+        body  = json.loads(request.body)
+        emoji = body.get('emoji', '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+
+    ALLOWED_EMOJIS = {'❤️', '😂', '😮', '😢', '😡', '👍', '🔥', '🎉'}
+    if emoji not in ALLOWED_EMOJIS:
+        return JsonResponse({'status': 'error', 'message': 'Invalid emoji'}, status=400)
+
+    existing = MessageReaction.objects.filter(message=message, user=request.user).first()
+
+    if existing:
+        if existing.emoji == emoji:
+            # Same emoji — toggle off
+            existing.delete()
+            user_reaction = None
+        else:
+            # Different emoji — replace
+            existing.emoji = emoji
+            existing.save()
+            user_reaction = emoji
+    else:
+        MessageReaction.objects.create(message=message, user=request.user, emoji=emoji)
+        user_reaction = emoji
+
+    # Build summary: { emoji: count }
+    from django.db.models import Count as _Count
+    summary = (
+        MessageReaction.objects
+        .filter(message=message)
+        .values('emoji')
+        .annotate(count=_Count('id'))
+        .order_by('emoji')
+    )
+    reaction_summary = {row['emoji']: row['count'] for row in summary}
+
+    # Broadcast via WebSocket so the other participant sees the update instantly
+    try:
+        user_ids = sorted([message.sender_id, message.receiver_id])
+        room_group_name = f"chat_dm_{user_ids[0]}_{user_ids[1]}"
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            room_group_name,
+            {
+                'type': 'message_reaction',
+                'message_id': message.id,
+                'reactions': reaction_summary,
+                'actor': request.user.username,
+            }
+        )
+    except Exception:
+        pass  # WebSocket broadcast is best-effort
+
+    return JsonResponse({
+        'status': 'success',
+        'message_id': message.id,
+        'reactions': reaction_summary,
+        'user_reaction': user_reaction,
+    })
+
+
 @login_required(login_url='/')
 def open_notification(request, post_id, notification_type):
 

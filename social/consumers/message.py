@@ -111,3 +111,12 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
                 'sender': event['sender'],
                 'is_typing': event['is_typing'],
             }))
+
+    async def message_reaction(self, event):
+        """Broadcast reaction updates to both participants."""
+        await self.send(text_data=json.dumps({
+            'type': 'message_reaction',
+            'message_id': event.get('message_id'),
+            'reactions': event.get('reactions', {}),
+            'actor': event.get('actor'),
+        }))

@@ -781,6 +781,33 @@ class Message(models.Model):
         return self.created_at.strftime("%I:%M %p")
 
 
+class MessageReaction(models.Model):
+    """Stores emoji reactions on direct messages."""
+    REACTION_CHOICES = [
+        ('❤️',  'Heart'),
+        ('😂',  'Laugh'),
+        ('😮',  'Wow'),
+        ('😢',  'Sad'),
+        ('😡',  'Angry'),
+        ('👍',  'Thumbs Up'),
+        ('🔥',  'Fire'),
+        ('🎉',  'Party'),
+    ]
+
+    message  = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='reactions')
+    user     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='message_reactions')
+    emoji    = models.CharField(max_length=10, choices=REACTION_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # One emoji type per user per message — toggle replaces the old one
+        unique_together = ('message', 'user')
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.user.username} reacted {self.emoji} to message {self.message_id}"
+
+
 class Channel(models.Model):
     channel_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     channel_owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_channels')

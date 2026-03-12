@@ -18,6 +18,7 @@ urlpatterns = [
     path('mark-follow-notifications-read/', views.mark_follow_notifications_read, name='mark_follow_notifications_read'),
       
   path('delete_message/<int:message_id>/', views.delete_message, name='delete_message'),
+    path('react_message/<int:message_id>/', views.react_to_message, name='react_to_message'),
     
     # If you want both /explore/ and /explore-users/ to work: and nexted comments
     path('hashtag/<str:tag_name>/', views.hashtag_view, name='hashtag_view'),
