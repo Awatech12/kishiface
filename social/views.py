@@ -2294,3 +2294,4 @@ def online_status_api(request, user_id):
         return JsonResponse({'is_online': profile.is_online})
     except Profile.DoesNotExist:
         return JsonResponse({'is_online': False})
+
