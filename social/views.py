@@ -13,7 +13,9 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
-import time, json, logging
+import time, json, logging, re, requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 from django.http import JsonResponse, Http404
 from django.conf import settings
 from django.utils import timezone
