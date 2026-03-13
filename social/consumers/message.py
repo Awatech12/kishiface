@@ -77,6 +77,7 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
             'message': event.get('message'),
             'file_type': event.get('file_type'),
             'file_url': event.get('file_url'),
+            'file_name': event.get('file_name', ''),
             'time': event.get('time'),
             'reply_to': event.get('reply_to'),
             'link_preview': event.get('link_preview'),

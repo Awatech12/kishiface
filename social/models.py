@@ -117,7 +117,7 @@ def validate_file_extension(value):
     """Validate file extensions"""
     if value:
         ext = os.path.splitext(value.name)[1].lower()
-        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.webm', '.mov', '.avi', '.mp3', '.wav', '.pdf', '.doc', '.docx']
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.webm', '.mov', '.avi', '.mp3', '.wav', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt']
         
         if ext not in allowed_extensions:
             raise ValidationError(f'File type {ext} is not allowed. Allowed types: {", ".join(allowed_extensions)}')
