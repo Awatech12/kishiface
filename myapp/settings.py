@@ -1,7 +1,7 @@
 from pathlib import Path
 import os
 import dj_database_url
-# from dotenv import load_dotenv
+#from dotenv import load_dotenv
 import cloudinary
 
 BASE_DIR = Path(__file__).resolve().parent.parent

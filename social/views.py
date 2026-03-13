@@ -1313,6 +1313,7 @@ def send_message(request, username):
         reply_data = None
         if reply_to:
             reply_data = {
+                'message_id': str(reply_to.id),
                 'sender': reply_to.sender.username,
                 'message': reply_to.conversation,
                 'file_type': reply_to.file_type
@@ -1324,14 +1325,14 @@ def send_message(request, username):
             room_group_name,
             {
                 'type': 'chat_message',
-                'message_id': message.id,
+                'message_id': str(message.id),
                 'sender': request.user.username,
                 'sender_avatar': sender_avatar,
                 'receiver': receiver.username,
                 'message': message_text,
                 'file_type': file_type,
                 'file_url': file_url,
-                'time': message.chat_time,
+                'time': str(message.chat_time),
                 'reply_to': reply_data,
             }
         )
