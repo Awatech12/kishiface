@@ -3982,6 +3982,40 @@
                     e.returnValue = 'You are currently recording or uploading. Are you sure you want to leave?';
                 }
             });
+
+            // Send offline beacon when tab/browser is closed.
+            // Mirrors the exact logic in onlineStatus.html _sendBeaconOffline():
+            // URLSearchParams sends content-type application/x-www-form-urlencoded
+            // so csrfmiddlewaretoken lands in request.POST — Django's CSRF
+            // middleware validates it automatically, no csrf_exempt needed.
+            function kvibeSendBeaconOffline() {
+                const userId = window.userId;
+                if (!userId || userId === 'None') return;
+                // Prefer <meta name="csrf-token">, fall back to csrftoken cookie
+                const metaTag   = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = metaTag
+                    ? metaTag.getAttribute('content')
+                    : (document.cookie.split('; ').find(r => r.startsWith('csrftoken=')) || '').split('=')[1] || '';
+                const body = new URLSearchParams({
+                    csrfmiddlewaretoken: csrfToken,
+                    user_id: userId,
+                });
+                navigator.sendBeacon('/set-offline/', body);
+            }
+
+            // Guard: only send offline beacon AFTER the page has fully loaded.
+            // Without this, visibilitychange fires during initial navigation
+            // (the previous page goes hidden), triggering a false offline beacon
+            // the moment the message page opens — making both users appear offline.
+            let kvibePageReady = false;
+            window.addEventListener('load', () => { kvibePageReady = true; });
+
+            window.addEventListener('pagehide', () => {
+                // Fires on tab close, browser close, or navigation away.
+                // pagehide is safe — it only fires when truly leaving the page.
+                kvibeSendBeaconOffline();
+            });
+
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
                     if (currentlyPlayingAudio) {
@@ -3990,8 +4024,17 @@
                         currentlyPlayingAudio = null;
                     }
                     if (isRecording) stopKishifaceRecording();
-                    // Stop typing indicator when user switches tabs
                     stopTypingIndicator();
+                    // Only mark offline if the page has already fully loaded —
+                    // prevents false offline signal during initial page navigation
+                    if (kvibePageReady) {
+                        kvibeSendBeaconOffline();
+                    }
+                } else {
+                    // Tab visible again — re-open WebSocket if it closed
+                    if (!socket || socket.readyState === WebSocket.CLOSED) {
+                        initKishifaceWebSocket();
+                    }
                 }
             });
         });

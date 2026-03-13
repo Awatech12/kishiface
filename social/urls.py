@@ -43,6 +43,7 @@ urlpatterns = [
    
     # ===== Online Status API =====
     path('api/online-status/<int:user_id>/', views.online_status_api, name='online_status_api'),
+    path('set-offline/', views.set_offline, name='set_offline'),
 
     #====== Profials codes =======
     path('<str:username>/', views.profile, name='profile'),

@@ -9,8 +9,63 @@ class RealTimeStatus {
         this.userId = window.userId;
         this.pingInterval = null;
         this.reconnectTimeout = 1000;
+        this._isIntentionalClose = false;
+        this._boundHandleVisibility = this._handleVisibility.bind(this);
+        this._boundHandlePageHide   = this._handlePageHide.bind(this);
         this.connect();
+        this._attachLifecycleListeners();
     }
+
+    // ── Lifecycle: go offline when tab/app is closed ──────────────────────
+    _attachLifecycleListeners() {
+        // visibilitychange: fires reliably when tab is hidden / app backgrounded
+        document.addEventListener('visibilitychange', this._boundHandleVisibility);
+
+        // pagehide: fires when tab/window is closed or navigated away.
+        // Use sendBeacon so the request survives the page being torn down.
+        window.addEventListener('pagehide', this._boundHandlePageHide);
+    }
+
+    _handleVisibility() {
+        if (!this.userId || this.userId === 'None') return;
+        if (document.visibilityState === 'hidden') {
+            // Tab hidden (minimised, switched, or closed) — mark offline via beacon
+            this._sendBeaconOffline();
+        } else {
+            // Tab visible again — re-connect WebSocket so status goes back online
+            this._isIntentionalClose = false;
+            if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+                this.connect();
+            }
+        }
+    }
+
+    _handlePageHide() {
+        // Last-resort signal for tab/browser close
+        this._isIntentionalClose = true;
+        this._sendBeaconOffline();
+    }
+
+    _sendBeaconOffline() {
+        if (!this.userId || this.userId === 'None') return;
+
+        // Read CSRF token: prefer the <meta name="csrf-token"> tag (present on
+        // every page via the base template), fall back to the csrftoken cookie.
+        // sendBeacon() cannot set headers, so we send everything as a standard
+        // form-encoded POST body — Django reads csrfmiddlewaretoken from
+        // request.POST automatically, no csrf_exempt needed on the view.
+        const metaTag   = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = metaTag
+            ? metaTag.getAttribute('content')
+            : (document.cookie.split('; ').find(r => r.startsWith('csrftoken=')) || '').split('=')[1] || '';
+
+        const body = new URLSearchParams({
+            csrfmiddlewaretoken: csrfToken,
+            user_id: this.userId,
+        });
+        navigator.sendBeacon('/set-offline/', body);
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     connect() {
         if (!this.userId || this.userId === 'None') return;
@@ -37,6 +92,8 @@ class RealTimeStatus {
 
         this.ws.onclose = () => {
             this.stopHeartbeat();
+            // Don't reconnect if the page is being closed/hidden
+            if (this._isIntentionalClose || document.visibilityState === 'hidden') return;
             setTimeout(() => {
                 this.reconnectTimeout = Math.min(this.reconnectTimeout * 2, 30000);
                 this.connect();

@@ -2093,7 +2093,42 @@ def logout(request):
     auth.logout(request)
     messages.info(request, 'Logout Successfully')
     return redirect('/')
-    
+
+
+@require_POST
+def set_offline(request):
+    """
+    Beacon endpoint: marks user offline when their tab or browser is closed.
+
+    sendBeacon() sends content-type application/x-www-form-urlencoded, so
+    both the CSRF token and user_id arrive in request.POST — Django's standard
+    CSRF middleware validates request.POST['csrfmiddlewaretoken'] automatically,
+    meaning no csrf_exempt and no manual middleware calls are needed.
+    """
+    try:
+        user_id = int(request.POST.get('user_id', 0))
+
+        # Only allow marking offline for the currently logged-in user
+        if not request.user.is_authenticated or request.user.id != user_id:
+            return HttpResponse(status=403)
+
+        Profile.mark_user_offline(user_id)
+
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            'online_status_group',
+            {
+                'type': 'user_status_event',
+                'user_id': user_id,
+                'status': 'Offline',
+            }
+        )
+    except Exception:
+        pass
+
+    return HttpResponse(status=204)
+
+
 @login_required
 @require_POST
 def add_comment_reply(request, comment_id):
