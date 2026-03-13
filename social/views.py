@@ -1332,7 +1332,7 @@ def send_message(request, username):
                 'message': message_text,
                 'file_type': file_type,
                 'file_url': file_url,
-                'time': str(message.chat_time),
+                'time': message.created_at.isoformat(),
                 'reply_to': reply_data,
             }
         )
@@ -1744,7 +1744,7 @@ def channel_message(request, channel_id):
                 'message': channelMessage.message,
                 'file_type': file_type,
                 'file_url': file_url,
-                "time": channelMessage.chat_time,
+                "time": channelMessage.created_at.isoformat(),
                 "message_id": str(channelMessage.channelmessage_id),
                 "reply_to": reply_data,
             }
@@ -2294,4 +2294,3 @@ def online_status_api(request, user_id):
         return JsonResponse({'is_online': profile.is_online})
     except Profile.DoesNotExist:
         return JsonResponse({'is_online': False})
-

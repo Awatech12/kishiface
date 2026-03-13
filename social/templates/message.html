@@ -2034,14 +2034,14 @@
                             {% if message.file %}
                                 <div class="kishiface-message-bubble {% if message.sender.username == request.user.username %}sent{% else %}received{% endif %} has-media">
                                     {% if message.file_type == 'image' %}
-                                        <div class="kishiface-image-attachment" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'image', '{{ message.chat_time }}', '{{ message.conversation|default:'' }}', '{{ message.sender.username }}', '{% if message.sender.profile.picture %}{{ message.sender.profile.picture.url }}{% endif %}')">
+                                        <div class="kishiface-image-attachment" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'image', '{{ message.created_at.isoformat }}', '{{ message.conversation|default:'' }}', '{{ message.sender.username }}', '{% if message.sender.profile.picture %}{{ message.sender.profile.picture.url }}{% endif %}')">
                                             <img src="{{ message.file.url }}" alt="Image">
                                             {% if message.conversation %}
                                                 <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation|format_message_text }}</div>
                                             {% endif %}
                                         </div>
                                     {% elif message.file_type == 'video' %}
-                                        <div class="kishiface-video-player" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'video', '{{ message.chat_time }}', '{{ message.conversation|default:'' }}', '{{ message.sender.username }}', '{% if message.sender.profile.picture %}{{ message.sender.profile.picture.url }}{% endif %}')">
+                                        <div class="kishiface-video-player" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'video', '{{ message.created_at.isoformat }}', '{{ message.conversation|default:'' }}', '{{ message.sender.username }}', '{% if message.sender.profile.picture %}{{ message.sender.profile.picture.url }}{% endif %}')">
                                             <video preload="metadata" poster="">
                                                 <source src="{{ message.file.url }}">
                                             </video>
@@ -2055,7 +2055,7 @@
                                             {% endif %}
                                         </div>
                                     {% elif message.file_type == 'audio' %}
-                                        <div class="kishiface-audio-player" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'audio', '{{ message.chat_time }}', '{{ message.conversation|default:'' }}', '{{ message.sender.username }}', '{% if message.sender.profile.picture %}{{ message.sender.profile.picture.url }}{% endif %}')">
+                                        <div class="kishiface-audio-player" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'audio', '{{ message.created_at.isoformat }}', '{{ message.conversation|default:'' }}', '{{ message.sender.username }}', '{% if message.sender.profile.picture %}{{ message.sender.profile.picture.url }}{% endif %}')">
                                             <div class="kishiface-audio-content">
                                                 <button class="kishiface-audio-play-btn" onclick="event.stopPropagation(); toggleKishifaceAudioPlayback(this, '{{ message.id }}')">
                                                     <i class="fas fa-play"></i>
@@ -2078,7 +2078,7 @@
                                 <div class="kishiface-message-bubble {% if message.sender.username == request.user.username %}sent{% else %}received{% endif %}">
                                     <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation|format_message_text }}</div>
                                     <div class="kishiface-message-meta">
-                                        <span class="kishiface-message-time">{{ message.chat_time }}</span>
+                                        <span class="kishiface-message-time" data-utc="{{ message.created_at.isoformat }}"></span>
                                         {% if message.sender.username == request.user.username %}
                                             <span class="kishiface-message-check">
                                                 <i class="fas fa-check {% if message.is_read %}read{% endif %}"></i>
@@ -2870,8 +2870,9 @@
             const modal = kishifaceMediaModal;
             const body = document.getElementById('kvModalBody');
 
-            document.getElementById('kishifaceModalTime').textContent = time;
-            document.getElementById('kvModalFooterTime').textContent = time;
+            const formattedTime = formatMessageTime(time);
+            document.getElementById('kishifaceModalTime').textContent = formattedTime;
+            document.getElementById('kvModalFooterTime').textContent = formattedTime;
 
             const capEl = document.getElementById('kvModalCaption');
             const footer = document.getElementById('kvModalFooter');
@@ -3205,6 +3206,29 @@
             hours = hours ? hours : 12;
             return `${hours}:${minutes} ${ampm}`;
         }
+
+        // Converts a UTC ISO string (from message.created_at.isoformat) to the
+        // user's local time in 12-hour format. Falls back to getCurrentTime().
+        function formatMessageTime(isoString) {
+            if (!isoString) return getCurrentTime();
+            // Django's isoformat() may omit the Z suffix — append it so the
+            // browser always parses it as UTC rather than local time.
+            const normalized = isoString.endsWith('Z') || isoString.includes('+') ? isoString : isoString + 'Z';
+            const d = new Date(normalized);
+            if (isNaN(d.getTime())) return getCurrentTime();
+            let h = d.getHours();
+            const m = d.getMinutes().toString().padStart(2, '0');
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return `${h}:${m} ${ampm}`;
+        }
+
+        // Run once on page load to convert all template-rendered time spans.
+        function kvibeInitMessageTimes() {
+            document.querySelectorAll('.kishiface-message-time[data-utc]').forEach(function(el) {
+                el.textContent = formatMessageTime(el.dataset.utc);
+            });
+        }
         
         function initKishifaceWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
@@ -3447,7 +3471,7 @@
                 meta.className = 'kishiface-message-meta';
                 const timeSpan = document.createElement('span');
                 timeSpan.className = 'kishiface-message-time';
-                timeSpan.textContent = safeTime || getCurrentTime();
+                timeSpan.textContent = formatMessageTime(safeTime) || getCurrentTime();
                 meta.appendChild(timeSpan);
                 if (isSender) {
                     const check = document.createElement('span');
@@ -4224,6 +4248,9 @@
     <script>
     // Override updateUI on the message page to respect the typing indicator
     document.addEventListener('DOMContentLoaded', () => {
+        // Convert all template-rendered UTC timestamps to local time
+        kvibeInitMessageTimes();
+
         if (window.statusManager) {
             window.statusManager.updateUI = function(userId, status) {
                 const isOnline = status.toLowerCase() === 'online';
@@ -4241,8 +4268,4 @@
     </script>
 </body>
 </html>
-<<<<<<< HEAD
  
-=======
- 
->>>>>>> 506a2a32893ea10a40294867cd13f3c367075901
