@@ -13,7 +13,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
-import time, json, logging, re, requests
+import time, json, logging, re, requests, ipaddress
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from django.http import JsonResponse, Http404
@@ -1283,6 +1283,53 @@ def send_message(request, username):
             except Message.DoesNotExist:
                 reply_to = None
         
+        # Auto-fetch link preview if a URL is present in the text
+        link_preview = None
+        if message_text:
+            url_match = re.search(r'https?://[^\s]+', message_text)
+            if url_match:
+                preview_url = url_match.group(0)
+                if _is_safe_url_for_preview(preview_url):
+                    try:
+                        _headers = {
+                            'User-Agent': 'Mozilla/5.0 (compatible; KvibeBot/1.0)',
+                            'Accept': 'text/html,application/xhtml+xml',
+                        }
+                        _resp = requests.get(
+                            preview_url,
+                            headers=_headers,
+                            timeout=4,
+                            allow_redirects=True,
+                            stream=True,
+                        )
+                        _content = b''
+                        for _chunk in _resp.iter_content(chunk_size=8192):
+                            _content += _chunk
+                            if len(_content) > 500_000:
+                                break
+                        _soup = BeautifulSoup(_content, 'html.parser')
+
+                        def _og(prop):
+                            tag = (
+                                _soup.find('meta', property=f'og:{prop}')
+                                or _soup.find('meta', attrs={'name': f'twitter:{prop}'})
+                            )
+                            return tag['content'].strip() if tag and tag.get('content') else ''
+
+                        _image = _og('image')
+                        if _image and not _image.startswith(('http://', 'https://')):
+                            _image = ''
+
+                        link_preview = {
+                            'title':       (_og('title') or (_soup.title.string.strip() if _soup.title else ''))[:200],
+                            'description': _og('description')[:400],
+                            'image':       _image[:500],
+                            'domain':      urlparse(_resp.url).netloc.replace('www.', '')[:100],
+                            'url':         preview_url,
+                        }
+                    except Exception:
+                        link_preview = None
+
         # Create message
         message = Message.objects.create(
             sender=request.user,
@@ -1290,7 +1337,8 @@ def send_message(request, username):
             conversation=message_text if message_text else '',
             file_type=file_type,
             file=file_upload if file_upload else None,
-            reply_to=reply_to
+            reply_to=reply_to,
+            link_preview=link_preview,
         )
         
         # Mark any unread messages from this sender as read
@@ -1336,6 +1384,7 @@ def send_message(request, username):
                 'file_url': file_url,
                 'time': message.created_at.isoformat(),
                 'reply_to': reply_data,
+                'link_preview': link_preview,
             }
         )
         
@@ -1490,6 +1539,141 @@ def react_to_message(request, message_id):
         'reactions': reaction_summary,
         'user_reaction': user_reaction,
     })
+
+
+# ── SSRF protection ──────────────────────────────────────────────────────────
+
+# Explicitly blocked hostnames and IP ranges — internal/cloud metadata targets
+_BLOCKED_HOSTS = {
+    'localhost',
+    'metadata.google.internal',
+}
+
+# Private IP networks to block when a raw IP is used as hostname
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network('10.0.0.0/8'),
+    ipaddress.ip_network('172.16.0.0/12'),
+    ipaddress.ip_network('192.168.0.0/16'),
+    ipaddress.ip_network('127.0.0.0/8'),       # loopback
+    ipaddress.ip_network('169.254.0.0/16'),     # link-local / AWS metadata
+    ipaddress.ip_network('::1/128'),            # IPv6 loopback
+    ipaddress.ip_network('fc00::/7'),           # IPv6 private
+    ipaddress.ip_network('fe80::/10'),          # IPv6 link-local
+]
+
+def _is_safe_url_for_preview(url: str) -> bool:
+    """
+    Returns False only when the URL:
+      - Uses a non http/https scheme
+      - Has no hostname
+      - Is a blocked hostname (localhost, cloud metadata endpoints)
+      - Uses a raw IP address that falls in a private/loopback range
+
+    We deliberately do NOT resolve public hostnames like facebook.com to IPs —
+    CDN infrastructure can legitimately resolve to RFC-1918 ranges on some
+    networks, and blocking based on resolution would reject valid public URLs.
+    """
+    try:
+        parsed = urlparse(url)
+
+        # Must be http or https
+        if parsed.scheme not in ('http', 'https'):
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Block explicitly listed dangerous hostnames
+        if hostname.lower() in _BLOCKED_HOSTS:
+            return False
+
+        # If the hostname IS a raw IP address, check it against private ranges
+        try:
+            ip = ipaddress.ip_address(hostname)
+            for network in _PRIVATE_NETWORKS:
+                if ip in network:
+                    return False
+        except ValueError:
+            # It's a regular domain name — allow it
+            pass
+
+        return True
+    except Exception:
+        return False
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@login_required(login_url='/')
+def fetch_link_preview(request):
+    """
+    GET /fetch_link_preview/?url=https://...
+    Fetches Open Graph / Twitter Card metadata for the given URL.
+    Returns: { title, description, image, domain, url }
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+    url = request.GET.get('url', '').strip()
+    if not url:
+        return JsonResponse({'error': 'No URL provided'}, status=400)
+
+    # Must be http/https
+    if not url.startswith(('http://', 'https://')):
+        return JsonResponse({'error': 'Invalid URL'}, status=400)
+
+    # SSRF guard — block internal/private network targets
+    if not _is_safe_url_for_preview(url):
+        return JsonResponse({'error': 'URL not allowed'}, status=400)
+
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (compatible; KvibeBot/1.0)',
+            'Accept': 'text/html,application/xhtml+xml',
+        }
+        resp = requests.get(
+            url,
+            headers=headers,
+            timeout=5,
+            allow_redirects=True,
+            stream=True,        # stream so we can cap download size
+        )
+
+        # Cap at 500 KB — we only need the <head>, not the full page
+        content = b''
+        for chunk in resp.iter_content(chunk_size=8192):
+            content += chunk
+            if len(content) > 500_000:
+                break
+
+        soup = BeautifulSoup(content, 'html.parser')
+
+        def og(prop):
+            tag = (
+                soup.find('meta', property=f'og:{prop}')
+                or soup.find('meta', attrs={'name': f'twitter:{prop}'})
+                or soup.find('meta', attrs={'name': prop})
+            )
+            return tag['content'].strip() if tag and tag.get('content') else ''
+
+        title       = og('title') or (soup.title.string.strip() if soup.title else '')
+        description = og('description')
+        image       = og('image')
+        domain      = urlparse(resp.url).netloc.replace('www.', '')
+
+        # Only return image if it's a safe http/https URL (no data: URIs etc.)
+        if image and not image.startswith(('http://', 'https://')):
+            image = ''
+
+        return JsonResponse({
+            'title':       title[:200],
+            'description': description[:400],
+            'image':       image[:500],
+            'domain':      domain[:100],
+            'url':         url,
+        })
+    except Exception:
+        return JsonResponse({'title': '', 'description': '', 'image': '', 'domain': '', 'url': url})
 
 
 @login_required(login_url='/')

@@ -737,6 +737,7 @@ class Message(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
     like = models.ManyToManyField(User, related_name='liked_messages', blank=True)
+    link_preview = models.JSONField(null=True, blank=True)
     
     def __str__(self):
         return f"{self.sender} to {self.receiver}: {self.conversation[:50]}"

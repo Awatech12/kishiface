@@ -45,6 +45,9 @@ urlpatterns = [
     path('api/online-status/<int:user_id>/', views.online_status_api, name='online_status_api'),
     path('set-offline/', views.set_offline, name='set_offline'),
 
+    # ===== Link Preview (must be above <str:username>/ catch-all) =====
+    path('fetch_link_preview/', views.fetch_link_preview, name='fetch_link_preview'),
+
     #====== Profials codes =======
     path('<str:username>/', views.profile, name='profile'),
     path('block/<str:username>/',   views.block_user,   name='block_user'),
