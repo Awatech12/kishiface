@@ -1,3 +1,5 @@
+import os
+import re
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse 
 from .models import FollowNotification
 from django.template.loader import render_to_string
@@ -1238,6 +1240,18 @@ def send_message(request, username):
     receiver = get_object_or_404(User, username=username)
     
     if request.method == 'POST':
+        # ── Fix 4: Block check — blocked users cannot message each other
+        try:
+            sender_profile   = request.user.profile
+            receiver_profile = receiver.profile
+            if sender_profile.has_blocked(receiver_profile) or receiver_profile.has_blocked(sender_profile):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Unable to send message.'
+                }, status=403)
+        except Exception:
+            pass
+
         # Check if it's JSON data
         if request.content_type == 'application/json':
             data = json.loads(request.body)
@@ -1257,19 +1271,35 @@ def send_message(request, username):
             })
         
         file_type = None
+        file_name = None
         if file_upload:
-            content_type = file_upload.content_type
-            if content_type.startswith('image/'):
-                file_type = 'image'
-            elif content_type.startswith('video/'):
-                file_type = 'video'
-            elif content_type.startswith('audio/'):
-                file_type = 'audio'
-            else:
+            # ── Fix 1: Sanitize filename — strip path traversal, bad chars, cap length
+            raw_name = file_upload.name or 'file'
+            raw_name = os.path.basename(raw_name.replace('\\', '/'))
+            raw_name = re.sub(r'[^\w\s\-\.]', '', raw_name).strip()[:100] or 'file'
+            file_name = raw_name
+
+            # ── Fix 2: Classify by EXTENSION, not content-type (content-type is user-controlled)
+            ext = os.path.splitext(file_name)[1].lower()
+            ALLOWED_EXTENSIONS = {
+                'image':    {'.jpg', '.jpeg', '.png', '.gif'},
+                'video':    {'.mp4', '.webm', '.mov', '.avi'},
+                'audio':    {'.mp3', '.wav'},
+                'document': {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'},
+            }
+            file_type = next((t for t, exts in ALLOWED_EXTENSIONS.items() if ext in exts), None)
+            if not file_type:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Unsupported file type'
-                })
+                }, status=400)
+
+            # ── Fix 5: Enforce file size limit in the view before hitting storage
+            if file_upload.size > 50 * 1024 * 1024:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'File too large. Maximum size is 50MB.'
+                }, status=400)
         
         # Get reply_to message if exists
         reply_to = None
@@ -1382,6 +1412,7 @@ def send_message(request, username):
                 'message': message_text,
                 'file_type': file_type,
                 'file_url': file_url,
+                'file_name': file_name or '',
                 'time': message.created_at.isoformat(),
                 'reply_to': reply_data,
                 'link_preview': link_preview,
@@ -1889,15 +1920,19 @@ def channel_message(request, channel_id):
 
         file_type = None
         if file_upload:
-            content_type = file_upload.content_type
-            if content_type.startswith('image/'):
-                file_type = 'image'
-            elif content_type.startswith('video/'):
-                file_type = 'video'
-            elif content_type.startswith('audio/'):
-                file_type = 'audio'
-            else:
-                return JsonResponse({'status': 'error', 'message': 'Unsupported file type'})
+            # Classify by extension — content-type is user-controlled and cannot be trusted
+            _ext = os.path.splitext(file_upload.name or '')[1].lower()
+            _ALLOWED = {
+                'image':    {'.jpg', '.jpeg', '.png', '.gif'},
+                'video':    {'.mp4', '.webm', '.mov', '.avi'},
+                'audio':    {'.mp3', '.wav'},
+                'document': {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'},
+            }
+            file_type = next((t for t, exts in _ALLOWED.items() if _ext in exts), None)
+            if not file_type:
+                return JsonResponse({'status': 'error', 'message': 'Unsupported file type'}, status=400)
+            if file_upload.size > 50 * 1024 * 1024:
+                return JsonResponse({'status': 'error', 'message': 'File too large. Maximum size is 50MB.'}, status=400)
 
         # Create the message instance
         channelMessage = ChannelMessage.objects.create(
