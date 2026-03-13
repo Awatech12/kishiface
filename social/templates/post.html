@@ -6130,6 +6130,15 @@
         const loadingSubtext = document.getElementById('loadingSubtext');
         const fileSizeInfo = document.getElementById('fileSizeInfo');
         const vibeCheckBtn = document.getElementById('vibeCheckBtn');
+
+        // ── Message Mode: detect ?send_to=username ──────────────────────────
+        const kvibeSendToUser = new URLSearchParams(window.location.search).get('send_to') || '';
+        const kvibeMessageMode = !!kvibeSendToUser;
+        if (kvibeMessageMode) {
+            const postTitle = document.querySelector('.kvibe-post-title');
+            if (postTitle) postTitle.innerHTML = '<i class="fas fa-paper-plane"></i> send vibe to <strong style="color:var(--kvibe-primary)">@' + kvibeSendToUser + '</strong>';
+            if (sharePostBtn) sharePostBtn.innerHTML = '<i class="fas fa-paper-plane"></i> send';
+        }
         
         const mediaEditorModal = document.getElementById('mediaEditorModal');
         const editorCanvas = document.getElementById('editorCanvas');
@@ -9872,17 +9881,18 @@
 
                 // =================== Other Functions ===================
         function closePost() {
+            const backUrl = kvibeMessageMode ? '/private/' + kvibeSendToUser : '/';
             if (textarea.value.trim() || selectedImages.length > 0 || currentVideoBlob || selectedMood || selectedCustomMood) {
                 showAlert('discard vibe?', 'discard this vibe? 💔', '💔', [
                     {text: 'cancel', type: 'secondary'},
                     {text: 'discard', type: 'danger'}
                 ]).then(result => {
                     if (result === 'discard') {
-                        window.location.href = '/';
+                        window.location.href = backUrl;
                     }
                 });
             } else {
-                window.location.href = '/';
+                window.location.href = backUrl;
             }
         }
 
@@ -10006,6 +10016,45 @@
             if (audioInput && audioInput.files && audioInput.files[0]) {
                 fd.append('audio_file', audioInput.files[0]);
             }
+
+            // ── MESSAGE MODE: send as DM via /send_message/<username>/ ────────
+            if (kvibeMessageMode) {
+                // send_message view accepts a single 'file_upload' + optional 'message' text
+                const dmFd = new FormData();
+                const csrfVal = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+                if (textarea.value.trim()) dmFd.append('message', textarea.value.trim());
+                // Attach first image, or video blob, whichever is present
+                if (currentVideoBlob) {
+                    const ext = currentVideoBlob.type.includes('webm') ? 'webm' : 'mp4';
+                    dmFd.append('file_upload', currentVideoBlob, 'vibe.' + ext);
+                } else if (selectedImages.length > 0) {
+                    const f = selectedImages[0];
+                    dmFd.append('file_upload', f, f.name || 'vibe_image');
+                } else if (textImageBlob) {
+                    dmFd.append('file_upload', textImageBlob, 'vibe_text.png');
+                }
+                fetch('/send_message/' + kvibeSendToUser + '/', {
+                    method: 'POST',
+                    body: dmFd,
+                    headers: { 'X-CSRFToken': csrfVal }
+                })
+                .then(res => {
+                    if (res.ok || res.redirected) {
+                        window.location.href = '/private/' + kvibeSendToUser;
+                    } else {
+                        throw new Error('send failed');
+                    }
+                })
+                .catch(err => {
+                    loadingOverlay.classList.remove('active');
+                    sharePostBtn.disabled = false;
+                    sharePostBtn.innerHTML = '<i class="fas fa-paper-plane"></i> send';
+                    console.error('Send vibe failed:', err);
+                    showAlert('oops!', 'could not send vibe 😅', '❌', [{text: 'ok', type: 'primary'}]);
+                });
+                return;
+            }
+            // ────────────────────────────────────────────────────────────────
 
             fetch(this.action, {
                 method: 'POST',

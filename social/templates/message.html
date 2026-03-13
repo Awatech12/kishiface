@@ -1500,6 +1500,82 @@
             animation: kishifaceTypingPulse 1.2s ease-in-out infinite;
         }
 
+        /* ── Header selection action bar ───────────────────────────────────── */
+        .kvibe-header-action-bar {
+            position: absolute;
+            inset: 0;
+            background: var(--kishiface-white);
+            display: flex;
+            align-items: center;
+            padding: 0 8px 0 4px;
+            gap: 4px;
+            z-index: 200;
+            transform: translateY(-100%);
+            transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+
+        .kvibe-header-action-bar.active {
+            transform: translateY(0);
+            pointer-events: all;
+        }
+
+        .kvibe-header-close-btn {
+            background: none;
+            border: none;
+            color: var(--kishiface-text);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            margin-right: 4px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .kvibe-header-selected-preview {
+            flex: 1;
+            font-size: 13px;
+            color: var(--kishiface-text-light);
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+
+        .kvibe-header-action-btns {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            flex-shrink: 0;
+        }
+
+        .kvibe-header-msg-action-btn {
+            background: none;
+            border: none;
+            color: var(--kishiface-text);
+            font-size: 19px;
+            cursor: pointer;
+            padding: 8px 10px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+            width: 40px;
+            height: 40px;
+        }
+
+        .kvibe-header-msg-action-btn:hover {
+            background: rgba(0,0,0,0.06);
+        }
+
+        .kvibe-header-msg-action-btn.delete-btn {
+            color: var(--kishiface-heart);
+        }
+        /* ─────────────────────────────────────────────────────────────────── */
+
         @keyframes kishifaceTypingPulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
@@ -1838,7 +1914,7 @@
     </div>
 
     <div class="kishiface-messenger-container">
-        <div class="kishiface-chat-header">
+        <div class="kishiface-chat-header" style="overflow:hidden;">
             <div class="kishiface-chat-user-info">
                 <button class="kishiface-back-btn" onclick="window.history.back()">
                     <i class="fas fa-chevron-left"></i>
@@ -1858,6 +1934,28 @@
         <span class="kishiface-header-typing" id="kishifaceHeaderTyping">typing...</span>
     </div>
 </div>
+            </div>
+
+            <!-- Header action bar — slides down on double-click / long-press desktop -->
+            <div class="kvibe-header-action-bar" id="kvHeaderActionBar">
+                <button class="kvibe-header-close-btn" onclick="hideKishifaceContextMenu()" title="Dismiss">
+                    <i class="fas fa-times"></i>
+                </button>
+                <span class="kvibe-header-selected-preview" id="kvHeaderSelectedPreview"></span>
+                <div class="kvibe-header-action-btns">
+                    <button class="kvibe-header-msg-action-btn" onclick="openKvReactionPickerForSelected()" title="React">
+                        <i class="far fa-smile"></i>
+                    </button>
+                    <button class="kvibe-header-msg-action-btn" onclick="replyToKishifaceMessage()" title="Reply">
+                        <i class="fas fa-reply"></i>
+                    </button>
+                    <button class="kvibe-header-msg-action-btn" id="kvHeaderCopyBtn" onclick="copyKishifaceMessage()" title="Copy">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                    <button class="kvibe-header-msg-action-btn delete-btn" onclick="showKishifaceDeleteConfirm()" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -2050,6 +2148,9 @@
                     </button>
                     <button type="button" class="kvibe-quick-reply-toggle" id="kvibeVibeToggle" onclick="toggleKvibeQuickReplies()" title="Vibe replies">
                         <i class="fas fa-bolt"></i>
+                    </button>
+                    <button type="button" class="kishiface-input-action-btn kvibe-create-vibe-btn" id="kvibeCreateVibeBtn" onclick="kvibeOpenPostEditor()" title="Create a vibe to send">
+                        <i class="fas fa-pen-nib"></i>
                     </button>
                 </div>
                 
@@ -2420,9 +2521,31 @@
         
         function showKishifaceContextMenu(x, y) {
             hideKishifaceContextMenu();
-            kishifaceContextMenu.style.left = `${Math.min(x, window.innerWidth - 170)}px`;
-            kishifaceContextMenu.style.top = `${Math.min(y, window.innerHeight - 150)}px`;
-            kishifaceContextMenu.style.display = 'flex';
+            // Show action bar in header
+            const actionBar = document.getElementById('kvHeaderActionBar');
+            const previewEl = document.getElementById('kvHeaderSelectedPreview');
+            const copyBtn   = document.getElementById('kvHeaderCopyBtn');
+            if (actionBar) {
+                // Preview text — only for text messages
+                if (previewEl) {
+                    if (selectedMessageType === 'text' && selectedMessageContent) {
+                        const preview = selectedMessageContent.length > 30
+                            ? selectedMessageContent.slice(0, 30) + '…'
+                            : selectedMessageContent;
+                        previewEl.textContent = preview;
+                    } else {
+                        previewEl.textContent = selectedMessageType === 'image' ? '📷 Photo'
+                                              : selectedMessageType === 'video' ? '🎥 Video'
+                                              : selectedMessageType === 'audio' ? '🎤 Audio'
+                                              : '';
+                    }
+                }
+                // Hide copy button for non-text messages
+                if (copyBtn) {
+                    copyBtn.style.display = selectedMessageType === 'text' ? '' : 'none';
+                }
+                actionBar.classList.add('active');
+            }
             setTimeout(() => {
                 kishifaceSelectionOverlay.addEventListener('click', hideKishifaceContextMenu, { once: true });
             }, 100);
@@ -2431,6 +2554,8 @@
         function hideKishifaceContextMenu() {
             kishifaceContextMenu.style.display = 'none';
             kishifaceSelectionOverlay.style.display = 'none';
+            const actionBar = document.getElementById('kvHeaderActionBar');
+            if (actionBar) actionBar.classList.remove('active');
             if (selectedMessage) {
                 const bubble = selectedMessage.querySelector('.kishiface-message-bubble');
                 if (bubble) bubble.classList.remove('long-press');
@@ -3900,6 +4025,11 @@
         kvibeQuickRepliesVisible = !kvibeQuickRepliesVisible;
         container.classList.toggle('hidden', !kvibeQuickRepliesVisible);
         if (toggleBtn) toggleBtn.classList.toggle('active', kvibeQuickRepliesVisible);
+    }
+
+    function kvibeOpenPostEditor() {
+        // Navigate to post editor with send_to param — post.html will send it as a DM
+        window.location.href = '/post?send_to=' + encodeURIComponent(receiver);
     }
 
     async function sendKvibeQuickReply(chipEl, text) {
