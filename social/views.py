@@ -13,7 +13,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
-import time, json
+import time, json, logging
 from django.http import JsonResponse, Http404
 from django.conf import settings
 from django.utils import timezone
@@ -2104,14 +2104,27 @@ def set_offline(request):
     both the CSRF token and user_id arrive in request.POST — Django's standard
     CSRF middleware validates request.POST['csrfmiddlewaretoken'] automatically,
     meaning no csrf_exempt and no manual middleware calls are needed.
+
+    Security layers:
+      1. CSRF — validated automatically by CsrfViewMiddleware via request.POST
+      2. @require_POST — rejects GET/PUT/DELETE with 405
+      3. Session ownership — user can only mark themselves offline
+      4. Type validation — invalid user_id returns 403 before any DB access
     """
+    logger = logging.getLogger(__name__)
+
+    # Validate user_id is a real integer before touching anything
     try:
         user_id = int(request.POST.get('user_id', 0))
+    except (ValueError, TypeError):
+        return HttpResponse(status=400)
 
-        # Only allow marking offline for the currently logged-in user
-        if not request.user.is_authenticated or request.user.id != user_id:
-            return HttpResponse(status=403)
+    # Session ownership check — must be logged in and can only mark yourself offline
+    if not request.user.is_authenticated or request.user.id != user_id:
+        return HttpResponse(status=403)
 
+    # Mark offline and broadcast — log real errors instead of silencing them
+    try:
         Profile.mark_user_offline(user_id)
 
         channel_layer = get_channel_layer()
@@ -2124,7 +2137,7 @@ def set_offline(request):
             }
         )
     except Exception:
-        pass
+        logger.exception('set_offline: failed to mark user %s offline', user_id)
 
     return HttpResponse(status=204)
 
