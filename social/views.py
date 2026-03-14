@@ -1,13 +1,14 @@
 import os
 import re
-from django.shortcuts import render, redirect, get_object_or_404, HttpResponse 
+import uuid as uuid_module
+from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
 from .models import FollowNotification
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage,UserReport,BlockedUser, CommentReply,ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
+from social.models import Profile, Post, PostImage, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -25,6 +26,7 @@ from datetime import datetime, timedelta
 import random
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.contenttypes.models import ContentType
+from django.views.decorators.http import require_POST
 import cloudinary
 
 # Create your views here.
@@ -77,23 +79,21 @@ def register(request):
             messages.success(request, f'Welcome {username}, You can now Login')
             return redirect('/')
 
-
     return render(request, 'register.html')
 
-# Add this function to extract hashtags from content
+
 def extract_hashtags(content):
     """Extract hashtags from post content"""
     import re
     hashtags = re.findall(r'#(\w+)', content)
     return hashtags
 
-# Update the home view function
+
 @login_required(login_url='/')
 def home(request):
     profile = Profile.objects.get(user=request.user)
     following = profile.followings.values_list('user', flat=True)
     
-    # Get channel data (keep existing code)
     followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
         last_app_activity=Max('channel_messages__created_at')
     ).order_by('-last_app_activity', '-created_at')
@@ -104,11 +104,7 @@ def home(request):
     for channel in followed_channels:
         unread = channel.unread_count_for_user(request.user)
         total_unread += unread
-        
-        # Get the actual last message object
         last_msg = channel.channel_messages.order_by('-created_at').first()
-        
-        # Determine the message type for the initial page load icons
         msg_type = 'text'
         if last_msg:
             if last_msg.file_type == 'audio':
@@ -117,7 +113,6 @@ def home(request):
                 msg_type = 'video'
             elif last_msg.file_type == 'image':
                 msg_type = 'image'
-        
         followed_list.append({
             'channel': channel,
             'unread_count': unread,
@@ -128,26 +123,19 @@ def home(request):
     
     users = list(User.objects.exclude(id__in=following).exclude(id=request.user.id).order_by('?'))
 
-    # Get unread follow notifications count
     unread_follow_count = FollowNotification.objects.filter(
         to_user=request.user,
         is_read=False
     ).count()
 
-    # Get unread notifications count
     unread_notifications_count = Notification.objects.filter(
         recipient=request.user,
         is_read=False
     ).count()
 
-    # ===== BUILD FEED =====
     feed = []
 
-    # Get trending hashtags (optional - for right sidebar)
-    from django.db.models import Count
     trending_hashtags = []
-
-    # Extract hashtags from recent posts
     recent_posts = Post.objects.filter(
         Q(author__in=following) | Q(author=request.user)
     )[:100]
@@ -158,10 +146,8 @@ def home(request):
         for tag in hashtags:
             hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
 
-    # Get top 5 trending hashtags
     trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 
-    # New users (no followings) see all posts including their own — random order
     if not following:
         posts = Post.objects.all().order_by('?').select_related(
             'author', 'author__profile',
@@ -177,12 +163,9 @@ def home(request):
             'original_post', 'original_post__author', 'original_post__author__profile'
         ).prefetch_related('likes', 'reposts', 'images')
 
-    # Pass following ids to template for follow button state
     following_ids = list(following)
     following_ids_set = set(following)
 
-    # Build friend-of-friend (2nd-degree) set:
-    # Users followed by people the current user follows, but not directly followed themselves
     fof_ids = set()
     for followed_user_id in following_ids_set:
         try:
@@ -195,8 +178,7 @@ def home(request):
         except Profile.DoesNotExist:
             pass
 
-    # For each FOF user, collect ALL followed users who follow them (not just the first)
-    fof_via_cache = {}  # fof_uid -> [User, User, ...]
+    fof_via_cache = {}
     for fof_uid in fof_ids:
         for followed_user_id in following_ids_set:
             try:
@@ -208,7 +190,6 @@ def home(request):
             except (Profile.DoesNotExist, User.DoesNotExist):
                 pass
 
-    # Build feed with FOF flag
     for i, post in enumerate(posts, 1):
         actual_author_id = post.original_post.author_id if post.is_repost and post.original_post else post.author_id
         is_fof = actual_author_id in fof_ids
@@ -217,7 +198,6 @@ def home(request):
         if i % 4 == 2 and users:
             feed.append({'type': 'user_suggestion', 'data': users.pop(0)})
 
-    # Sidebar: followers and followings lists
     sidebar_followings = profile.followings.select_related('user').all()
     sidebar_followers  = profile.followers.select_related('user').all()
 
@@ -243,9 +223,7 @@ def _safe_pic_url(user_obj):
         if hasattr(user_obj, 'profile') and user_obj.profile.picture:
             pic = user_obj.profile.picture
             if hasattr(pic, 'public_id') and pic.public_id:
-                # CloudinaryField -- build secure https URL explicitly
                 return cloudinary.CloudinaryImage(pic.public_id).build_url(secure=True)
-            # ImageField -- .url is fine locally
             if hasattr(pic, 'url') and pic.url:
                 url = pic.url
                 if url.startswith('http://'):
@@ -256,109 +234,110 @@ def _safe_pic_url(user_obj):
     return ''
 
 
-from django.views.decorators.http import require_POST
 @login_required(login_url='/')
 @require_POST
 def repost_post(request, post_id):
-    """Handle reposting a post"""
+    """Handle reposting a post and notify the original author."""
     try:
-        original_post = Post.objects.get(post_id=post_id)
+        original_post = get_object_or_404(Post, post_id=post_id)
         user = request.user
-        
-        # Parse JSON data
-        import json
-        data = json.loads(request.body)
+
+        data    = json.loads(request.body)
         caption = data.get('caption', '').strip()
-        undo = data.get('undo', False)
-        
-        # Check if user has already reposted this
+        undo    = data.get('undo', False)
+
         existing_repost = Post.objects.filter(
-            author=user, 
-            is_repost=True, 
-            original_post=original_post
+            author=user,
+            is_repost=True,
+            original_post=original_post,
         ).first()
-        
+
         if undo and existing_repost:
-            # User wants to undo repost
             existing_repost.delete()
             original_post.reposts.remove(user)
+
+            # Remove repost notification
+            Notification.objects.filter(
+                recipient=original_post.author,
+                actor=user,
+                post=original_post,
+                notification_type=Notification.REPOST,
+            ).delete()
+
             reposted = False
-            message = "Repost removed"
+            message  = 'Repost removed'
+
         elif not undo and not existing_repost:
-            # Create a new repost
             repost = Post.objects.create(
                 author=user,
                 is_repost=True,
                 original_post=original_post,
                 repost_content=caption,
-                content=""  # Empty content for repost
+                content='',
             )
-            # Add to reposts count
             original_post.reposts.add(user)
+
+            # Notify original author (not for self-reposts)
+            if original_post.author != user:
+                Notification.objects.get_or_create(
+                    recipient=original_post.author,
+                    actor=user,
+                    post=original_post,
+                    notification_type=Notification.REPOST,
+                )
+
             reposted = True
-            message = "Post reposted successfully!"
+            message  = 'Post reposted successfully!'
+
         elif not undo and existing_repost:
-            # Update existing repost caption
             existing_repost.repost_content = caption
             existing_repost.save()
             reposted = True
-            message = "Repost updated!"
+            message  = 'Repost updated!'
+
         else:
             return JsonResponse({'success': False, 'error': 'Invalid operation'})
-        
-        # Get updated counts
-        repost_count = original_post.reposts.count()
-        
+
         return JsonResponse({
-            'success': True,
-            'reposted': reposted,
-            'repost_count': repost_count,
-            'message': message,
-            'caption': caption  # Return the caption
+            'success':      True,
+            'reposted':     reposted,
+            'repost_count': original_post.reposts.count(),
+            'message':      message,
+            'caption':      caption,
         })
-        
+
     except Post.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Post not found'})
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Invalid data'}, status=400)
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 @login_required(login_url='/')
 def follow_user(request, user_id):
     if request.method == 'POST':
         try:
-            # Get the user to follow
             user_to_follow = User.objects.get(id=user_id)
-            
-            # Get current user's profile
             current_profile = Profile.objects.get(user=request.user)
-            
-            # Get target user's profile
             target_profile = Profile.objects.get(user=user_to_follow)
-            
-            # Check if already following
+
             if target_profile in current_profile.followings.all():
-                # Unfollow
                 current_profile.followings.remove(target_profile)
                 followed = False
-                
-                # Delete follow notification if exists
                 FollowNotification.objects.filter(
                     from_user=request.user,
                     to_user=user_to_follow
                 ).delete()
             else:
-                # Follow
                 current_profile.followings.add(target_profile)
                 followed = True
-                
-                # Create follow notification (only create if not self)
                 if request.user != user_to_follow:
                     FollowNotification.objects.get_or_create(
                         from_user=request.user,
                         to_user=user_to_follow
                     )
             
-            # Save the profile
             current_profile.save()
             
             return JsonResponse({
@@ -376,7 +355,6 @@ def follow_user(request, user_id):
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
 
-
 @login_required(login_url='/')
 def post(request):
     if request.method =='POST':
@@ -385,27 +363,17 @@ def post(request):
         audio = request.FILES.get('audio_file')
         video = request.FILES.get('video_file')
         
-        # Get mood data
         mood = request.POST.get('mood', '')
         custom_mood = request.POST.get('custom_mood', '').strip()
         
-        # Mood emoji mapping
         mood_emojis = {
-            'slay': '💅',
-            'vibing': '🎵',
-            'sheesh': '🥶',
-            'periodt': '⏸️',
-            'no-cap': '🎯',
-            'bussin': '🔥',
-            'mid': '😐',
-            'cringe': '😬'
+            'slay': '💅', 'vibing': '🎵', 'sheesh': '🥶', 'periodt': '⏸️',
+            'no-cap': '🎯', 'bussin': '🔥', 'mid': '😐', 'cringe': '😬'
         }
         
-        # Determine final mood and emoji
         final_mood = custom_mood if custom_mood else mood
         emoji = mood_emojis.get(mood, '✨') if not custom_mood else '✨'
         
-        # If no content but has mood, create a mood-only post
         if not content and not images and not audio and not video and final_mood:
             content = f"{emoji} feeling {final_mood}"
         
@@ -413,8 +381,7 @@ def post(request):
             messages.error(request, 'Add something to your post bestie ✨')
             return redirect('post')
         
-        # Create post with mood data
-        post = Post.objects.create(
+        new_post = Post.objects.create(
             author=request.user,
             content=content if content else '',
             file=audio if audio else None,
@@ -425,28 +392,28 @@ def post(request):
         )
         
         for image in images:
-            PostImage.objects.create(post=post, image=image)
+            PostImage.objects.create(post=new_post, image=image)
         
         messages.success(request, 'Post dropped successfully! ✨')
         
-        # If called via fetch (AJAX), return JSON so JS can redirect
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({'success': True, 'redirect': '/home'})
         return redirect('home')
     
     return render(request, 'post.html')
 
+
 @login_required(login_url='/')
 def editpost(request, post_id):
-    post = get_object_or_404(Post, post_id=post_id, author=request.user)
-    image = PostImage.objects.filter(post=post)
+    post_obj = get_object_or_404(Post, post_id=post_id, author=request.user)
+    image = PostImage.objects.filter(post=post_obj)
     if request.method =='POST':
         content = request.POST.get('comment')
         images = request.FILES.getlist('images')
         if not content and not images:
             return
-        post.content=content
-        post.save()
+        post_obj.content=content
+        post_obj.save()
         if images:
             for m in images:
                 if image:
@@ -454,45 +421,41 @@ def editpost(request, post_id):
                         n.image=m
                         n.save()
                 else:
-                    PostImage.objects.create(post=post, image=m)
+                    PostImage.objects.create(post=post_obj, image=m)
         return redirect(request.META.get('HTTP_REFERER'))
     context = {
-        'post':post,
-        'post_id':post_id
+        'post': post_obj,
+        'post_id': post_id
     }
     return render(request, 'editpost.html', context)
-        
+
+
 @login_required(login_url='/')
 def like_post(request, post_id):
-    post = get_object_or_404(Post, post_id=post_id)
+    post_obj = get_object_or_404(Post, post_id=post_id)
 
-    if request.user in post.likes.all():
-        post.likes.remove(request.user)
-
-        # Remove like notification on unlike
+    if request.user in post_obj.likes.all():
+        post_obj.likes.remove(request.user)
         Notification.objects.filter(
-            recipient=post.author,
+            recipient=post_obj.author,
             actor=request.user,
-            post=post,
-            notification_type='like'
+            post=post_obj,
+            notification_type=Notification.LIKE
         ).delete()
-
     else:
-        post.likes.add(request.user)
-
-        if post.author != request.user:
+        post_obj.likes.add(request.user)
+        if post_obj.author != request.user:
             Notification.objects.create(
-                recipient=post.author,
+                recipient=post_obj.author,
                 actor=request.user,
-                post=post,
-                notification_type='like'
+                post=post_obj,
+                notification_type=Notification.LIKE
             )
 
-    # Return JSON for AJAX callers (profile text posts, home feed, etc.)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        likers      = list(post.likes.all()[:3])
-        like_count  = post.likes.count()
-        is_liked    = request.user in post.likes.all()
+        likers      = list(post_obj.likes.all()[:3])
+        like_count  = post_obj.likes.count()
+        is_liked    = request.user in post_obj.likes.all()
         liker_pics  = [_safe_pic_url(u) for u in likers]
         liker_names = [u.username for u in likers]
         return JsonResponse({
@@ -504,90 +467,124 @@ def like_post(request, post_id):
         })
 
     return render(request, 'snippet/post_like.html', {
-        'post': post,
+        'post': post_obj,
         'post_id': post_id
     })
 
-       
 
 @login_required(login_url='/')
 def post_comment(request, post_id):
-    post=get_object_or_404(Post, post_id=post_id)
-    post.view +=1
-    post.save()
-    comments=PostComment.objects.filter(post=post).order_by('-created_at')
+    post_obj = get_object_or_404(Post, post_id=post_id)
+    post_obj.view += 1
+    post_obj.save()
+    comments = PostComment.objects.filter(post=post_obj).order_by('-created_at')
     following_ids = []
     if request.user.is_authenticated:
         following_ids = list(Profile.objects.get(user=request.user).followings.values_list('user', flat=True))
-    return render(request, 'postcomment.html', {'post':post, 'comments': comments, 'following_ids': following_ids})
+    return render(request, 'postcomment.html', {'post': post_obj, 'comments': comments, 'following_ids': following_ids})
 
 
 @login_required(login_url='/')
 def postcomment(request, post_id):
-    post = get_object_or_404(Post, post_id=post_id)
+    post_obj = get_object_or_404(Post, post_id=post_id)
 
     if request.method == 'POST':
         content = request.POST.get('comment')
-        image = request.FILES.get('image')
-        audio = request.FILES.get('audio_file')
+        image   = request.FILES.get('image')
+        audio   = request.FILES.get('audio_file')
 
-        # If nothing was submitted, return an empty successful response
         if not content and not image and not audio:
-            return HttpResponse(status=204) # 204 No Content
+            return HttpResponse(status=204)
 
         comment = PostComment.objects.create(
-            post=post,
+            post=post_obj,
             author=request.user,
-            comment=content or "",
+            comment=content or '',
             image=image,
-            file=audio
+            file=audio,
         )
-      
-        if post.author != request.user:
+
+        # ── Comment notification ──────────────────────────────────────────
+        if post_obj.author != request.user:
             Notification.objects.create(
-                recipient=post.author,
+                recipient=post_obj.author,
                 actor=request.user,
-                post=post,
-                notification_type='comment'
+                post=post_obj,
+                notification_type=Notification.COMMENT,
             )
 
-        # Return just the new comment (used by HTMX 'afterbegin')
+        # ── Mention notifications (@username in comment text) ─────────────
+        if content:
+            mentioned_usernames = set(re.findall(r'@(\w+)', content))
+            for username in mentioned_usernames:
+                try:
+                    mentioned_user = User.objects.get(username=username)
+                except User.DoesNotExist:
+                    continue
+
+                # Skip self-mentions only
+                if mentioned_user == request.user:
+                    continue
+                # NOTE: We intentionally do NOT skip the post author here.
+                # A mention (@username) is a distinct event from a comment
+                # notification — the post author deserves to know they were
+                # specifically called out, even if they also got a comment notif.
+
+                # Create a new mention notification for each comment that
+                # contains the @mention. Don't deduplicate across comments —
+                # each mention in a new comment is a distinct event.
+                # Only skip if this exact comment already triggered one
+                # (guards against double-saves).
+                already_exists = Notification.objects.filter(
+                    recipient=mentioned_user,
+                    actor=request.user,
+                    post=post_obj,
+                    comment=comment,
+                    notification_type=Notification.MENTION,
+                ).exists()
+
+                if not already_exists:
+                    Notification.objects.create(
+                        recipient=mentioned_user,
+                        actor=request.user,
+                        post=post_obj,
+                        comment=comment,
+                        notification_type=Notification.MENTION,
+                    )
+
         return render(
             request,
             'snippet/comment_list.html',
-            {'post': post, 'comment': comment}
+            {'post': post_obj, 'comment': comment}
         )
 
-    # --- HANDLE GET REQUEST (Modal loading) ---
-    # This fetches all existing comments when you open the modal
-    comments = post.comments.all().order_by('-created_at')
+    # GET — load comments for modal
+    comments = post_obj.comments.all().order_by('-created_at')
     following_ids = list(Profile.objects.get(user=request.user).followings.values_list('user', flat=True))
-    
     return render(
-        request, 
-        'postcomment.html', # Or the specific template fragment containing the list
-        {'post': post, 'comments': comments, 'following_ids': following_ids}
+        request,
+        'postcomment.html',
+        {'post': post_obj, 'comments': comments, 'following_ids': following_ids}
     )
+
 
 @login_required(login_url='/')
 def comment_like(request, comment_id):
-    comment=get_object_or_404(PostComment, comment_id=comment_id)
+    comment = get_object_or_404(PostComment, comment_id=comment_id)
     if request.user in comment.like.all():
         comment.like.remove(request.user)
     else:
         comment.like.add(request.user)
-    return render(request, 'snippet/comment_like.html', {'comment':comment, 'comment_id':comment_id})
+    return render(request, 'snippet/comment_like.html', {'comment': comment, 'comment_id': comment_id})
+
 
 @login_required(login_url='/')
 def comment_reply(request, comment_id):
     comment = get_object_or_404(PostComment, comment_id=comment_id)
-    context = {
-        'comment': comment,
-        'comment_id': comment_id
-    }
+    context = {'comment': comment, 'comment_id': comment_id}
     return render(request, 'comment_reply.html', context)
 
-    
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Profile View
 # ─────────────────────────────────────────────────────────────────────────────
@@ -597,46 +594,34 @@ def profile(request, username):
     user    = get_object_or_404(User, username=username)
     profile = user.profile
 
-    # ── Block status ──────────────────────────────────────────────────────────
-    is_blocked        = False  # viewer blocked the profile owner
-    viewer_is_blocked = False  # profile owner blocked the viewer
+    is_blocked        = False
+    viewer_is_blocked = False
 
     if request.user.is_authenticated and request.user != user:
         is_blocked = BlockedUser.objects.filter(
             blocker=request.user, blocked=user
         ).exists()
-
         viewer_is_blocked = BlockedUser.objects.filter(
             blocker=user, blocked=request.user
         ).exists()
 
-    # Profile owner blocked the viewer → deny access entirely
     if viewer_is_blocked:
         return render(request, 'blocked.html', {'blocked_by': user})
 
-    # Viewer blocked the profile owner → render a limited view so they
-    # can still reach the ··· menu and choose to unblock
     if is_blocked:
         context = {
-            'user':                    user,
-            'profile':                 profile,
-            'posts':                   [],
-            'current_profile':         request.user.profile if request.user.is_authenticated else None,
-            'total_view':              0,
-            'total_like_recieved':     0,
-            'total_comments_received': 0,
-            'mutual_followings':       None,
-            'mutual_count':            0,
-            'is_blocked':              True,
+            'user': user, 'profile': profile, 'posts': [],
+            'current_profile': request.user.profile if request.user.is_authenticated else None,
+            'total_view': 0, 'total_like_recieved': 0,
+            'total_comments_received': 0, 'mutual_followings': None,
+            'mutual_count': 0, 'is_blocked': True,
         }
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, 'profile_posts_partial.html', context)
         return render(request, 'profile.html', context)
 
-    # ── Normal full profile ───────────────────────────────────────────────────
     user_posts = Post.objects.filter(author=user)
-    total_view = sum(post.view for post in user_posts)
-
+    total_view = sum(p.view for p in user_posts)
     total_like_recieved      = user_posts.aggregate(total=Count('likes'))['total'] or 0
     total_comments_received  = PostComment.objects.filter(post__author=user).count()
 
@@ -648,26 +633,20 @@ def profile(request, username):
         mutual_count      = my_following.filter(followings=profile).count()
 
     posts = Post.objects.filter(
-        author=user,
-        images__isnull=False
+        author=user, images__isnull=False
     ).prefetch_related('images').distinct()[:30]
 
     context = {
-        'user':                    user,
-        'posts':                   posts,
-        'profile':                 profile,
-        'current_profile':         request.user.profile if request.user.is_authenticated else None,
-        'total_view':              total_view,
-        'total_like_recieved':     total_like_recieved,
+        'user': user, 'posts': posts, 'profile': profile,
+        'current_profile': request.user.profile if request.user.is_authenticated else None,
+        'total_view': total_view, 'total_like_recieved': total_like_recieved,
         'total_comments_received': total_comments_received,
-        'mutual_followings':       mutual_followings,
-        'mutual_count':            mutual_count,
-        'is_blocked':              False,
+        'mutual_followings': mutual_followings, 'mutual_count': mutual_count,
+        'is_blocked': False,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render(request, 'profile_posts_partial.html', context)
-
     return render(request, 'profile.html', context)
 
 
@@ -697,16 +676,11 @@ def update_profile(request, username):
                 user.save()
 
             if phone or address or location or bio or website:
-                if phone:
-                    profile.phone = phone
-                if address:
-                    profile.address = address
-                if location:
-                    profile.location = location
-                if bio:
-                    profile.bio = bio
-                if website:
-                    profile.website = website
+                if phone:    profile.phone    = phone
+                if address:  profile.address  = address
+                if location: profile.location = location
+                if bio:      profile.bio      = bio
+                if website:  profile.website  = website
                 profile.save()
 
             if image:
@@ -717,14 +691,10 @@ def update_profile(request, username):
                 return JsonResponse({
                     'success': True,
                     'data': {
-                        'first_name':  user.first_name,
-                        'last_name':   user.last_name,
-                        'bio':         profile.bio,
-                        'phone':       profile.phone,
-                        'address':     profile.address,
-                        'location':    profile.location,
-                        'picture_url': profile.picture.url,
-                        'website':     profile.website,
+                        'first_name': user.first_name, 'last_name': user.last_name,
+                        'bio': profile.bio, 'phone': profile.phone,
+                        'address': profile.address, 'location': profile.location,
+                        'picture_url': profile.picture.url, 'website': profile.website,
                     },
                     'message': 'Profile updated successfully!'
                 })
@@ -739,21 +709,15 @@ def update_profile(request, username):
                 messages.error(request, f'Error updating profile: {str(e)}')
                 return redirect('profile', username=request.user.username)
 
-    # GET fallback
     return render(request, 'update_profile.html', {'profile': profile})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Block / Unblock View  (single toggle endpoint)
+# Block / Unblock View
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required(login_url='/')
 def block_user(request, username):
-    """
-    POST /block/<username>/
-    Toggles block state — one endpoint handles both block and unblock.
-    Returns JSON: { success, action: 'blocked' | 'unblocked' }
-    """
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Method not allowed.'}, status=405)
 
@@ -763,20 +727,15 @@ def block_user(request, username):
         return JsonResponse({'success': False, 'error': "You can't block yourself."}, status=400)
 
     block_record, created = BlockedUser.objects.get_or_create(
-        blocker=request.user,
-        blocked=target_user
+        blocker=request.user, blocked=target_user
     )
 
     if not created:
-        # Record already existed → UNBLOCK
         block_record.delete()
         return JsonResponse({'success': True, 'action': 'unblocked'})
 
-    # Newly created → BLOCK
-    # Remove mutual follows so the relationship is fully severed
     request.user.profile.followings.remove(target_user.profile)
     target_user.profile.followings.remove(request.user.profile)
-
     return JsonResponse({'success': True, 'action': 'blocked'})
 
 
@@ -786,10 +745,6 @@ def block_user(request, username):
 
 @login_required(login_url='/')
 def report_user(request, username):
-    """
-    POST /report/<username>/
-    Accepts JSON body: { reason: str, note: str }
-    """
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Method not allowed.'}, status=405)
 
@@ -798,7 +753,6 @@ def report_user(request, username):
     if target_user == request.user:
         return JsonResponse({'success': False, 'error': "You can't report yourself."}, status=400)
 
-    # Parse JSON body sent by the frontend
     try:
         body   = json.loads(request.body)
         reason = body.get('reason', '').strip()
@@ -810,7 +764,6 @@ def report_user(request, username):
     if not reason:
         return JsonResponse({'success': False, 'error': 'Please select a reason.'}, status=400)
 
-    # Prevent duplicate reports from the same user within 24 hours
     already_reported = UserReport.objects.filter(
         reporter=request.user,
         reported=target_user,
@@ -824,23 +777,18 @@ def report_user(request, username):
         })
 
     UserReport.objects.create(
-        reporter=request.user,
-        reported=target_user,
-        reason=reason,
-        note=note,
+        reporter=request.user, reported=target_user, reason=reason, note=note,
     )
-
     return JsonResponse({'success': True})
+
 
 @login_required(login_url='/')
 def profile_videos(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
 
-    # ── Block checks (mirrors profile view) ──────────────────────────────────
     is_blocked = False
     if request.user.is_authenticated and request.user != user:
-        from .models import BlockedUser  # noqa: F401 – already imported at top
         viewer_is_blocked = BlockedUser.objects.filter(
             blocker=user, blocked=request.user
         ).exists()
@@ -850,13 +798,10 @@ def profile_videos(request, username):
             blocker=request.user, blocked=user
         ).exists()
 
-    # Get video posts
     video_posts = Post.objects.filter(
-        author=user,
-        video_file__isnull=False
+        author=user, video_file__isnull=False
     ).prefetch_related('images')[:30]
 
-    # Build a full context so profile.html renders correctly on direct access
     user_posts = Post.objects.filter(author=user)
     total_view = sum(p.view for p in user_posts)
     total_like_recieved = user_posts.aggregate(total=Count('likes'))['total'] or 0
@@ -870,31 +815,23 @@ def profile_videos(request, username):
         mutual_count = my_following.filter(followings=profile).count()
 
     context = {
-        'user': user,
-        'profile': profile,
-        'posts': video_posts,
+        'user': user, 'profile': profile, 'posts': video_posts,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
-        'total_view': total_view,
-        'total_like_recieved': total_like_recieved,
+        'total_view': total_view, 'total_like_recieved': total_like_recieved,
         'total_comments_received': total_comments_received,
-        'mutual_followings': mutual_followings,
-        'mutual_count': mutual_count,
-        'is_blocked': is_blocked,
-        'active_tab': 'videos',   # tell the template which tab is active
+        'mutual_followings': mutual_followings, 'mutual_count': mutual_count,
+        'is_blocked': is_blocked, 'active_tab': 'videos',
     }
 
-    # AJAX / partial request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
         return render(request, 'profile_videos_partial.html', context)
-
-    # Direct page load — render full page; JS will read active_tab and show grid
     return render(request, 'profile.html', context)
+
 
 def profile_text_posts(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
 
-    # ── Block checks ──────────────────────────────────────────────────────────
     is_blocked = False
     if request.user.is_authenticated and request.user != user:
         viewer_is_blocked = BlockedUser.objects.filter(
@@ -906,14 +843,12 @@ def profile_text_posts(request, username):
             blocker=request.user, blocked=user
         ).exists()
 
-    # Use annotate+Count to reliably exclude posts that have any image rows.
-    # images__isnull=True on a M2M join is unreliable and returns wrong results.
     text_posts = (
         Post.objects.filter(author=user)
         .annotate(image_count=Count('images'))
-        .filter(image_count=0)                         # no images attached
-        .filter(Q(video_file__isnull=True) | Q(video_file=''))  # no video
-        .filter(Q(file__isnull=True) | Q(file=''))     # no audio
+        .filter(image_count=0)
+        .filter(Q(video_file__isnull=True) | Q(video_file=''))
+        .filter(Q(file__isnull=True) | Q(file=''))
         .filter(content__isnull=False)
         .exclude(content__exact='')
         .select_related('author', 'author__profile')
@@ -921,7 +856,6 @@ def profile_text_posts(request, username):
         .order_by('-created_at')[:30]
     )
 
-    # Full context for direct page loads
     user_posts = Post.objects.filter(author=user)
     total_view = sum(p.view for p in user_posts)
     total_like_recieved = user_posts.aggregate(total=Count('likes'))['total'] or 0
@@ -934,148 +868,54 @@ def profile_text_posts(request, username):
         mutual_followings = my_following.filter(followings=profile)[:3]
         mutual_count = my_following.filter(followings=profile).count()
 
-    # Pre-build liker pic URLs on each post so the template never calls
-    # .url on CloudinaryField directly — works in both debug and production
-    for post in text_posts:
-        post.liker_data = [
+    for p in text_posts:
+        p.liker_data = [
             {'url': _safe_pic_url(u), 'username': u.username}
-            for u in post.likes.all()[:3]
+            for u in p.likes.all()[:3]
         ]
 
     context = {
-        'user': user,
-        'profile': profile,
-        'posts': text_posts,
+        'user': user, 'profile': profile, 'posts': text_posts,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
-        'total_view': total_view,
-        'total_like_recieved': total_like_recieved,
+        'total_view': total_view, 'total_like_recieved': total_like_recieved,
         'total_comments_received': total_comments_received,
-        'mutual_followings': mutual_followings,
-        'mutual_count': mutual_count,
-        'is_blocked': is_blocked,
-        'active_tab': 'text',
+        'mutual_followings': mutual_followings, 'mutual_count': mutual_count,
+        'is_blocked': is_blocked, 'active_tab': 'text',
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
         return render(request, 'profile_text_posts_partial.html', context)
-
     return render(request, 'profile.html', context)
 
-@login_required(login_url='/')
-def update_profile(request, username):
-    user = request.user
-    profile = request.user.profile
-    
-    if request.method == 'POST':
-        fname = request.POST.get('fname')
-        lname = request.POST.get('lname')
-        phone = request.POST.get('phone')
-        address = request.POST.get('address')
-        location = request.POST.get('location')
-        image = request.FILES.get('image')
-        bio = request.POST.get('bio')
-        website = request.POST.get('website')
-        
-        try:
-            if fname and lname:
-                user.first_name = fname
-                user.last_name = lname
-                user.save()
-            
-            if phone or address or location or bio or website:
-                if phone:
-                    profile.phone = phone
-                if address:
-                    profile.address = address
-                if location:
-                    profile.location = location
-                if bio:
-                    profile.bio = bio
-                if website:
-                    profile.website =website
-                profile.save()
-            
-            if image:
-                profile.picture = image
-                profile.save()
-            
-            # Check if it's an AJAX request
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({
-                    'success': True,
-                    'data': {
-                        'first_name': user.first_name,
-                        'last_name': user.last_name,
-                        'bio': profile.bio,
-                        'phone': profile.phone,
-                        'address': profile.address,
-                        'location': profile.location,
-                        'picture_url': profile.picture.url,
-                        'website':profile.website
-                    },
-                    'message': 'Profile updated successfully!'
-                })
-            else:
-                messages.info(request, 'Profile Updated Successfully')
-                return redirect('profile', username=request.user.username)
-                
-        except Exception as e:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({
-                    'success': False,
-                    'error': str(e)
-                })
-            else:
-                messages.error(request, f'Error updating profile: {str(e)}')
-                return redirect('profile', username=request.user.username)
-    
-    # For GET requests, still render the old page as fallback
-    return render(request, 'update_profile.html', {'profile': profile})
+
 @login_required
 def mark_follow_notifications_read(request):
     if request.method == 'POST':
-        # Mark all unread follow notifications as read
         updated = FollowNotification.objects.filter(
-            to_user=request.user,
-            is_read=False
+            to_user=request.user, is_read=False
         ).update(is_read=True)
-        
-        return JsonResponse({
-            'success': True,
-            'updated_count': updated
-        })
-    
+        return JsonResponse({'success': True, 'updated_count': updated})
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+
 @login_required
 def explore_users(request):
-    # Get current user's profile
     current_profile = get_object_or_404(Profile, user=request.user)
-    
-    # Get unread follow notifications count
+
     unread_follow_count = FollowNotification.objects.filter(
-        to_user=request.user,
-        is_read=False
+        to_user=request.user, is_read=False
     ).count()
-    
-    # Get recent follow notifications (last 10)
+
     recent_follows = FollowNotification.objects.filter(
         to_user=request.user
     ).select_related('from_user', 'from_user__profile').order_by('-created_at')[:10]
-    
-    # Get Profile IDs of people the current user follows
+
     following_profile_ids = current_profile.followings.values_list('id', flat=True)
-    
-    # Base queryset - exclude self profile and already followed profiles
+
     profiles = Profile.objects.exclude(user=request.user).exclude(id__in=following_profile_ids)
-    
-    # Order by popularity (most followers first) by default
-    profiles = profiles.annotate(
-        follower_count=Count('followers')
-    ).order_by('-follower_count', '-created_at')
-    
-    # For initial page load, limit to 30 profiles
+    profiles = profiles.annotate(follower_count=Count('followers')).order_by('-follower_count', '-created_at')
     profiles = profiles[:30]
-    
+
     return render(request, 'explore_users.html', {
         'profiles': profiles,
         'title': 'Explore Users',
@@ -1084,11 +924,9 @@ def explore_users(request):
     })
 
 
-
-
 def follow(request, username):
     other_user = get_object_or_404(User, username=username)
-    current_profile=request.user.profile
+    current_profile = request.user.profile
     other_profile = other_user.profile
 
     if other_profile not in current_profile.followings.all():
@@ -1099,87 +937,67 @@ def follow(request, username):
         current_profile.followings.remove(other_profile)
         messages.info(request, 'unFollowing')
         return redirect(request.META.get('HTTP_REFERER'))
-    
+
+
 @login_required(login_url='/')
 def follower_list(request, username):
     user = get_object_or_404(User, username=username)
-    profile=user.profile
+    profile = user.profile
     followers = profile.followers.all()
-
-    context = {
-        'user':user,
-        'profile': profile,
-        'followers': followers
-    }
-
-
+    context = {'user': user, 'profile': profile, 'followers': followers}
     return render(request, 'followers_list.html', context)
+
 
 @login_required(login_url='/')
 def following_list(request, username):
     user = get_object_or_404(User, username=username)
     profile = user.profile
     followings = profile.followings.all()
-
-    context = {
-        'user': user,
-        'profile': profile,
-        'followings': followings
-    }
-
-
+    context = {'user': user, 'profile': profile, 'followings': followings}
     return render(request, 'following_list.html', context)
+
+
 @login_required(login_url='/')
 def search(request):
     query = request.GET.get('q', '').strip()
     
     if query:
-        # Save search to history
         SearchHistory.objects.create(user=request.user, query=query)
-        
-        # Perform search
         users = User.objects.filter(
-            Q(username__icontains=query) | 
-            Q(first_name__icontains=query) | 
+            Q(username__icontains=query) |
+            Q(first_name__icontains=query) |
             Q(last_name__icontains=query)
         )
-        
-        # Get recent searches (excluding current)
         recent_searches = SearchHistory.objects.filter(
             user=request.user
         ).exclude(query=query).order_by('-created_at')[:5]
-        
         return render(request, 'search.html', {
-            'query': query,
-            'users': users,
-            'recent_searches': recent_searches
+            'query': query, 'users': users, 'recent_searches': recent_searches
         })
     
-    # Show search history when no query
     search_history = SearchHistory.objects.filter(
         user=request.user
     ).order_by('-created_at')[:20]
-    
-    return render(request, 'search.html', {
-        'search_history': search_history
-    })
+    return render(request, 'search.html', {'search_history': search_history})
+
 
 @login_required
 def delete_history(request, history_id):
     SearchHistory.objects.filter(id=history_id, user=request.user).delete()
     return redirect('search')
 
+
 @login_required
 def clear_history(request):
     SearchHistory.objects.filter(user=request.user).delete()
     return redirect('search')
+
 
 @login_required(login_url='/')
 def message(request, username):
     receiver = get_object_or_404(User, username=username)
     sender = request.user
 
-    # Block check — neither party should be able to open a blocked conversation
     try:
         if sender.profile.has_blocked(receiver.profile) or receiver.profile.has_blocked(sender.profile):
             from django.contrib import messages as _msgs
@@ -1188,24 +1006,16 @@ def message(request, username):
     except Exception:
         pass
 
-    # Mark unread messages as read
-    unread_messages = Message.objects.filter(
-        sender=receiver,
-        receiver=sender,
-        is_read=False
-    )
+    unread_messages = Message.objects.filter(sender=receiver, receiver=sender, is_read=False)
     unread_messages.update(is_read=True)
     
-    # Get conversations
     conversations = Message.objects.filter(
         Q(sender=sender, receiver=receiver) | Q(sender=receiver, receiver=sender)
     ).order_by('created_at')
 
-    # Attach reaction summaries to each message
     from social.models import MessageReaction
     from django.db.models import Count as _Count
 
-    # Build a lookup: message_id → {emoji: count}
     reaction_rows = (
         MessageReaction.objects
         .filter(message__in=conversations)
@@ -1216,31 +1026,24 @@ def message(request, username):
     for row in reaction_rows:
         reactions_by_msg.setdefault(row['message_id'], {})[row['emoji']] = row['count']
 
-    # Build per-message user reactions lookup
     user_reaction_rows = MessageReaction.objects.filter(
         message__in=conversations, user=request.user
     ).values('message_id', 'emoji')
     user_reactions = {r['message_id']: r['emoji'] for r in user_reaction_rows}
 
-    # Attach to message objects for template use
     conversations_list = list(conversations)
     for msg in conversations_list:
         msg.reactions_summary = reactions_by_msg.get(msg.id, {})
         my_emoji = user_reactions.get(msg.id)
-        # Expose as a set of users so template {% if request.user in message.reaction_users %} works
         msg.reaction_users = [request.user] if my_emoji else []
-        msg.my_reaction = my_emoji  # "❤️" or None
+        msg.my_reaction = my_emoji
     
-    # Group messages by date (re-group from annotated list)
     grouped_messages = {}
     for msg in conversations_list:
         label = msg.chat_date_label
         grouped_messages.setdefault(label, []).append(msg)
     
-    context = {
-        'grouped_messages': grouped_messages,
-        'receiver': receiver
-    }
+    context = {'grouped_messages': grouped_messages, 'receiver': receiver}
     return render(request, 'message.html', context)
 
 
@@ -1249,21 +1052,16 @@ def send_message(request, username):
     receiver = get_object_or_404(User, username=username)
     
     if request.method == 'POST':
-        # ── Fix 4: Block check — blocked users cannot message each other
         try:
             sender_profile   = request.user.profile
             receiver_profile = receiver.profile
             if sender_profile.has_blocked(receiver_profile) or receiver_profile.has_blocked(sender_profile):
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Unable to send message.'
-                }, status=403)
+                return JsonResponse({'status': 'error', 'message': 'Unable to send message.'}, status=403)
         except Exception:
             pass
 
-        # Check if it's JSON data
         if request.content_type == 'application/json':
-            if len(request.body) > 100_000:  # 100 KB hard cap on JSON body
+            if len(request.body) > 100_000:
                 return JsonResponse({'status': 'error', 'message': 'Request too large.'}, status=413)
             try:
                 data = json.loads(request.body)
@@ -1277,30 +1075,19 @@ def send_message(request, username):
         
         file_upload = request.FILES.get('file_upload')
 
-        # Cap message text length in the view — defense-in-depth before model
         if message_text and len(message_text) > 5000:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Message too long. Maximum 5000 characters.'
-            }, status=400)
+            return JsonResponse({'status': 'error', 'message': 'Message too long. Maximum 5000 characters.'}, status=400)
 
-        # If no message and no file, just return success
         if not message_text and not file_upload:
-            return JsonResponse({
-                'status': 'success',
-                'message': 'No content to send'
-            })
+            return JsonResponse({'status': 'success', 'message': 'No content to send'})
         
         file_type = None
         file_name = None
         if file_upload:
-            # ── Fix 1: Sanitize filename — strip path traversal, bad chars, cap length
             raw_name = file_upload.name or 'file'
             raw_name = os.path.basename(raw_name.replace('\\', '/'))
             raw_name = re.sub(r'[^\w\s\-\.]', '', raw_name).strip()[:100] or 'file'
             file_name = raw_name
-
-            # ── Fix 2: Classify by EXTENSION, not content-type (content-type is user-controlled)
             ext = os.path.splitext(file_name)[1].lower()
             ALLOWED_EXTENSIONS = {
                 'image':    {'.jpg', '.jpeg', '.png', '.gif'},
@@ -1310,31 +1097,20 @@ def send_message(request, username):
             }
             file_type = next((t for t, exts in ALLOWED_EXTENSIONS.items() if ext in exts), None)
             if not file_type:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Unsupported file type'
-                }, status=400)
-
-            # ── Fix 5: Enforce file size limit in the view before hitting storage
+                return JsonResponse({'status': 'error', 'message': 'Unsupported file type'}, status=400)
             if file_upload.size > 50 * 1024 * 1024:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'File too large. Maximum size is 50MB.'
-                }, status=400)
+                return JsonResponse({'status': 'error', 'message': 'File too large. Maximum size is 50MB.'}, status=400)
         
-        # Get reply_to message if exists
         reply_to = None
         if reply_to_id:
             try:
                 reply_to = Message.objects.get(id=reply_to_id)
-                # Verify reply_to message is in the same conversation
                 if not (reply_to.sender == request.user or reply_to.receiver == request.user or
                         reply_to.sender == receiver or reply_to.receiver == receiver):
                     reply_to = None
             except Message.DoesNotExist:
                 reply_to = None
         
-        # Auto-fetch link preview if a URL is present in the text
         link_preview = None
         if message_text:
             url_match = re.search(r'https?://[^\s]+', message_text)
@@ -1346,13 +1122,7 @@ def send_message(request, username):
                             'User-Agent': 'Mozilla/5.0 (compatible; KvibeBot/1.0)',
                             'Accept': 'text/html,application/xhtml+xml',
                         }
-                        _resp = requests.get(
-                            preview_url,
-                            headers=_headers,
-                            timeout=4,
-                            allow_redirects=True,
-                            stream=True,
-                        )
+                        _resp = requests.get(preview_url, headers=_headers, timeout=4, allow_redirects=True, stream=True)
                         _content = b''
                         for _chunk in _resp.iter_content(chunk_size=8192):
                             _content += _chunk
@@ -1381,10 +1151,8 @@ def send_message(request, username):
                     except Exception:
                         link_preview = None
 
-        # Create message
-        message = Message.objects.create(
-            sender=request.user,
-            receiver=receiver,
+        msg_obj = Message.objects.create(
+            sender=request.user, receiver=receiver,
             conversation=message_text if message_text else '',
             file_type=file_type,
             file=file_upload if file_upload else None,
@@ -1392,25 +1160,15 @@ def send_message(request, username):
             link_preview=link_preview,
         )
         
-        # Mark any unread messages from this sender as read
-        unread_messages = Message.objects.filter(
-            sender=receiver,
-            receiver=request.user,
-            is_read=False
-        )
-        unread_messages.update(is_read=True)
+        Message.objects.filter(sender=receiver, receiver=request.user, is_read=False).update(is_read=True)
         
-        # Broadcast via WebSocket
         channel_layer = get_channel_layer()
-        
-        # Create consistent room name (MUST match consumer)
         user_ids = sorted([request.user.id, receiver.id])
         room_name = f"dm_{user_ids[0]}_{user_ids[1]}"
         room_group_name = f"chat_{room_name}"
         
-        file_url = message.file.url if message.file else None
+        file_url = msg_obj.file.url if msg_obj.file else None
         
-        # Prepare reply data for WebSocket
         reply_data = None
         if reply_to:
             reply_data = {
@@ -1426,7 +1184,7 @@ def send_message(request, username):
             room_group_name,
             {
                 'type': 'chat_message',
-                'message_id': str(message.id),
+                'message_id': str(msg_obj.id),
                 'sender': request.user.username,
                 'sender_avatar': sender_avatar,
                 'receiver': receiver.username,
@@ -1434,101 +1192,64 @@ def send_message(request, username):
                 'file_type': file_type,
                 'file_url': file_url,
                 'file_name': file_name or '',
-                'time': message.created_at.isoformat(),
+                'time': msg_obj.created_at.isoformat(),
                 'reply_to': reply_data,
                 'link_preview': link_preview,
             }
         )
         
-        return JsonResponse({
-            'status': 'success',
-            'message': 'Message sent',
-            'message_id': message.id,
-            'file_url': file_url
-        })
+        return JsonResponse({'status': 'success', 'message': 'Message sent', 'message_id': msg_obj.id, 'file_url': file_url})
     
-    # Handle GET requests by redirecting to message page
     return redirect('message', username=username)
+
 
 @login_required(login_url='/')
 def delete_message(request, message_id):
     if request.method == 'POST':
         try:
-            message = Message.objects.get(id=message_id)
+            msg_obj = Message.objects.get(id=message_id)
+            if msg_obj.sender != request.user and msg_obj.receiver != request.user:
+                return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
             
-            # Check if user is authorized to delete (sender or receiver)
-            if message.sender != request.user and message.receiver != request.user:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Unauthorized'
-                }, status=403)
-            
-            # Broadcast deletion via WebSocket
             channel_layer = get_channel_layer()
-            
-            # Create consistent room name
-            user_ids = sorted([message.sender.id, message.receiver.id])
+            user_ids = sorted([msg_obj.sender.id, msg_obj.receiver.id])
             room_name = f"dm_{user_ids[0]}_{user_ids[1]}"
             room_group_name = f"chat_{room_name}"
             
-            # Broadcast deletion to both users
             async_to_sync(channel_layer.group_send)(
                 room_group_name,
                 {
                     'type': 'message_deleted',
-                    'message_id': message.id,
-                    'sender': message.sender.username,
-                    'receiver': message.receiver.username,
+                    'message_id': msg_obj.id,
+                    'sender': msg_obj.sender.username,
+                    'receiver': msg_obj.receiver.username,
                 }
             )
             
-            # Delete the message
-            message.delete()
-            
-            return JsonResponse({
-                'status': 'success',
-                'message': 'Message deleted successfully'
-            })
+            msg_obj.delete()
+            return JsonResponse({'status': 'success', 'message': 'Message deleted successfully'})
             
         except Message.DoesNotExist:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Message not found'
-            })
+            return JsonResponse({'status': 'error', 'message': 'Message not found'})
         except Exception:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'An error occurred. Please try again.'
-            }, status=500)
+            return JsonResponse({'status': 'error', 'message': 'An error occurred. Please try again.'}, status=500)
     
     return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
 
 
 @login_required(login_url='/')
 def react_to_message(request, message_id):
-    """
-    POST  /react_message/<message_id>/
-    Body: { "emoji": "❤️" }
-
-    Toggle logic:
-      - If the user has no reaction → add it.
-      - If the user reacted with the SAME emoji → remove it (toggle off).
-      - If the user reacted with a DIFFERENT emoji → replace it.
-
-    Returns the full reaction summary for the message so the UI can update.
-    """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
 
     from social.models import MessageReaction
 
     try:
-        message = Message.objects.get(id=message_id)
+        msg_obj = Message.objects.get(id=message_id)
     except Message.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Message not found'}, status=404)
 
-    # Only participants in the conversation may react
-    if request.user not in (message.sender, message.receiver):
+    if request.user not in (msg_obj.sender, msg_obj.receiver):
         return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
 
     try:
@@ -1541,53 +1262,46 @@ def react_to_message(request, message_id):
     if emoji not in ALLOWED_EMOJIS:
         return JsonResponse({'status': 'error', 'message': 'Invalid emoji'}, status=400)
 
-    existing = MessageReaction.objects.filter(message=message, user=request.user).first()
+    existing = MessageReaction.objects.filter(message=msg_obj, user=request.user).first()
 
     if existing:
         if existing.emoji == emoji:
-            # Same emoji — toggle off
             existing.delete()
             user_reaction = None
         else:
-            # Different emoji — replace
             existing.emoji = emoji
             existing.save()
             user_reaction = emoji
     else:
-        MessageReaction.objects.create(message=message, user=request.user, emoji=emoji)
+        MessageReaction.objects.create(message=msg_obj, user=request.user, emoji=emoji)
         user_reaction = emoji
 
-    # Build summary: { emoji: count }
     from django.db.models import Count as _Count
     summary = (
-        MessageReaction.objects
-        .filter(message=message)
-        .values('emoji')
-        .annotate(count=_Count('id'))
-        .order_by('emoji')
+        MessageReaction.objects.filter(message=msg_obj)
+        .values('emoji').annotate(count=_Count('id')).order_by('emoji')
     )
     reaction_summary = {row['emoji']: row['count'] for row in summary}
 
-    # Broadcast via WebSocket so the other participant sees the update instantly
     try:
-        user_ids = sorted([message.sender_id, message.receiver_id])
+        user_ids = sorted([msg_obj.sender_id, msg_obj.receiver_id])
         room_group_name = f"chat_dm_{user_ids[0]}_{user_ids[1]}"
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             room_group_name,
             {
                 'type': 'message_reaction',
-                'message_id': message.id,
+                'message_id': msg_obj.id,
                 'reactions': reaction_summary,
                 'actor': request.user.username,
             }
         )
     except Exception:
-        pass  # WebSocket broadcast is best-effort
+        pass
 
     return JsonResponse({
         'status': 'success',
-        'message_id': message.id,
+        'message_id': msg_obj.id,
         'reactions': reaction_summary,
         'user_reaction': user_reaction,
     })
@@ -1595,74 +1309,42 @@ def react_to_message(request, message_id):
 
 # ── SSRF protection ──────────────────────────────────────────────────────────
 
-# Explicitly blocked hostnames and IP ranges — internal/cloud metadata targets
-_BLOCKED_HOSTS = {
-    'localhost',
-    'metadata.google.internal',
-}
-
-# Private IP networks to block when a raw IP is used as hostname
+_BLOCKED_HOSTS = {'localhost', 'metadata.google.internal'}
 _PRIVATE_NETWORKS = [
     ipaddress.ip_network('10.0.0.0/8'),
     ipaddress.ip_network('172.16.0.0/12'),
     ipaddress.ip_network('192.168.0.0/16'),
-    ipaddress.ip_network('127.0.0.0/8'),       # loopback
-    ipaddress.ip_network('169.254.0.0/16'),     # link-local / AWS metadata
-    ipaddress.ip_network('::1/128'),            # IPv6 loopback
-    ipaddress.ip_network('fc00::/7'),           # IPv6 private
-    ipaddress.ip_network('fe80::/10'),          # IPv6 link-local
+    ipaddress.ip_network('127.0.0.0/8'),
+    ipaddress.ip_network('169.254.0.0/16'),
+    ipaddress.ip_network('::1/128'),
+    ipaddress.ip_network('fc00::/7'),
+    ipaddress.ip_network('fe80::/10'),
 ]
 
 def _is_safe_url_for_preview(url: str) -> bool:
-    """
-    Returns False only when the URL:
-      - Uses a non http/https scheme
-      - Has no hostname
-      - Is a blocked hostname (localhost, cloud metadata endpoints)
-      - Uses a raw IP address that falls in a private/loopback range
-
-    We deliberately do NOT resolve public hostnames like facebook.com to IPs —
-    CDN infrastructure can legitimately resolve to RFC-1918 ranges on some
-    networks, and blocking based on resolution would reject valid public URLs.
-    """
     try:
         parsed = urlparse(url)
-
-        # Must be http or https
         if parsed.scheme not in ('http', 'https'):
             return False
-
         hostname = parsed.hostname
         if not hostname:
             return False
-
-        # Block explicitly listed dangerous hostnames
         if hostname.lower() in _BLOCKED_HOSTS:
             return False
-
-        # If the hostname IS a raw IP address, check it against private ranges
         try:
             ip = ipaddress.ip_address(hostname)
             for network in _PRIVATE_NETWORKS:
                 if ip in network:
                     return False
         except ValueError:
-            # It's a regular domain name — allow it
             pass
-
         return True
     except Exception:
         return False
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 @login_required(login_url='/')
 def fetch_link_preview(request):
-    """
-    GET /fetch_link_preview/?url=https://...
-    Fetches Open Graph / Twitter Card metadata for the given URL.
-    Returns: { title, description, image, domain, url }
-    """
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -1670,11 +1352,9 @@ def fetch_link_preview(request):
     if not url:
         return JsonResponse({'error': 'No URL provided'}, status=400)
 
-    # Must be http/https
     if not url.startswith(('http://', 'https://')):
         return JsonResponse({'error': 'Invalid URL'}, status=400)
 
-    # SSRF guard — block internal/private network targets
     if not _is_safe_url_for_preview(url):
         return JsonResponse({'error': 'URL not allowed'}, status=400)
 
@@ -1683,15 +1363,7 @@ def fetch_link_preview(request):
             'User-Agent': 'Mozilla/5.0 (compatible; KvibeBot/1.0)',
             'Accept': 'text/html,application/xhtml+xml',
         }
-        resp = requests.get(
-            url,
-            headers=headers,
-            timeout=5,
-            allow_redirects=True,
-            stream=True,        # stream so we can cap download size
-        )
-
-        # Cap at 500 KB — we only need the <head>, not the full page
+        resp = requests.get(url, headers=headers, timeout=5, allow_redirects=True, stream=True)
         content = b''
         for chunk in resp.iter_content(chunk_size=8192):
             content += chunk
@@ -1713,104 +1385,200 @@ def fetch_link_preview(request):
         image       = og('image')
         domain      = urlparse(resp.url).netloc.replace('www.', '')
 
-        # Only return image if it's a safe http/https URL (no data: URIs etc.)
         if image and not image.startswith(('http://', 'https://')):
             image = ''
 
         return JsonResponse({
-            'title':       title[:200],
-            'description': description[:400],
-            'image':       image[:500],
-            'domain':      domain[:100],
-            'url':         url,
+            'title': title[:200], 'description': description[:400],
+            'image': image[:500], 'domain': domain[:100], 'url': url,
         })
     except Exception:
         return JsonResponse({'title': '', 'description': '', 'image': '', 'domain': '', 'url': url})
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Notification Views
+# ─────────────────────────────────────────────────────────────────────────────
+
 @login_required(login_url='/')
 def open_notification(request, post_id, notification_type):
-
-
-    # Ensure post exists
-    post = get_object_or_404(Post, post_id=post_id)
-
+    post_obj = get_object_or_404(Post, post_id=post_id)
     Notification.objects.filter(
-        recipient = request.user,
-        post = post,
+        recipient=request.user,
+        post=post_obj,
         notification_type=notification_type,
-        is_read = False
+        is_read=False
     ).update(is_read=True)
+    return redirect('post_comment', post_id=post_obj.post_id)
 
-    # Redirect to post comment page
-    return redirect('post_comment', post_id=post.post_id)
-    
+
+@login_required(login_url='/')
+def notification_list(request):
+    """
+    Renders the notification page.
+    Marks all post-based notifications read on page load.
+    Follow notifications are marked read by mark_follow_notifications_read or
+    mark_all_notifications_read.
+    """
+    Notification.objects.filter(
+        recipient=request.user, is_read=False
+    ).update(is_read=True)
+    return render(request, 'notification.html')
+
+
+def notification_partial(request):
+    if request.user.is_authenticated:
+        unread_count = Notification.objects.filter(
+            recipient=request.user, is_read=False
+        ).count()
+        unread_follow_count = FollowNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
+    else:
+        unread_count = 0
+        unread_follow_count = 0
+    return render(request, 'snippet/notification_count.html', {
+        'unread_notifications_count': unread_count,
+        'unread_follow_count': unread_follow_count,
+    })
+
+
+def inbox_partial(request):
+    return render(request, 'snippet/inbox_count.html')
+
+
+@login_required
+@require_POST
+def delete_notification_group(request):
+    """
+    Deletes either:
+      • a group of post-based notifications  → body: {post_id, notification_type}
+      • a single follow notification          → body: {follow_id}
+
+    The recipient/to_user check ensures users can only delete their own data.
+    """
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+
+    # ── Follow notification ───────────────────────────────────────────────────
+    follow_id = data.get('follow_id')
+    if follow_id is not None:
+        try:
+            follow_id = int(follow_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid follow_id'}, status=400)
+
+        deleted_count, _ = FollowNotification.objects.filter(
+            pk=follow_id,
+            to_user=request.user,  # security: own notifications only
+        ).delete()
+
+        return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
+
+    # ── Post-based notification group ─────────────────────────────────────────
+    post_id           = data.get('post_id')
+    notification_type = data.get('notification_type')
+    actor_id          = data.get('actor_id')  # required for mention dismissal
+
+    if not post_id or not notification_type:
+        return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
+
+    # Validate UUID to prevent injection
+    try:
+        post_uuid = uuid_module.UUID(str(post_id))
+    except (ValueError, AttributeError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid post_id'}, status=400)
+
+    # Whitelist notification types
+    VALID_TYPES = {'like', 'comment', 'repost', 'mention'}
+    if notification_type not in VALID_TYPES:
+        return JsonResponse({'status': 'error', 'message': 'Invalid notification_type'}, status=400)
+
+    qs = Notification.objects.filter(
+        recipient=request.user,  # security: own notifications only
+        post_id=post_uuid,
+        notification_type=notification_type,
+    )
+
+    # For mention notifications the group_id includes the actor_id —
+    # only delete notifications from that specific actor, not all mentions.
+    if notification_type == 'mention' and actor_id:
+        try:
+            qs = qs.filter(actor_id=int(actor_id))
+        except (TypeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid actor_id'}, status=400)
+
+    deleted_count, _ = qs.delete()
+
+    return JsonResponse({
+        'status': 'success',
+        'deleted_count': deleted_count,
+        'message': f'Deleted {deleted_count} notification(s)',
+    })
+
+
+@login_required
+@require_POST
+def mark_all_notifications_read(request):
+    """Marks all unread post-based AND follow notifications as read."""
+    Notification.objects.filter(
+        recipient=request.user, is_read=False
+    ).update(is_read=True)
+    FollowNotification.objects.filter(
+        to_user=request.user, is_read=False
+    ).update(is_read=True)
+    return JsonResponse({'status': 'success'})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Inbox
+# ─────────────────────────────────────────────────────────────────────────────
+
 @login_required(login_url='/')
 def inbox(request):
-    # Get all unique conversations for the current user
     conversations = {}
-    
-    # Get the last message for each conversation
-    # First, get all messages involving the current user
     all_messages = Message.objects.filter(
         Q(sender=request.user) | Q(receiver=request.user)
     )
-    
-    # Get distinct conversation partners
     conversation_partners = set()
     for msg in all_messages:
         other_user = msg.sender if msg.sender != request.user else msg.receiver
         conversation_partners.add(other_user)
     
-    # For each conversation partner, get the most recent message
     for partner in conversation_partners:
-        # Get the last message in this conversation
         last_message = Message.objects.filter(
             Q(sender=request.user, receiver=partner) |
             Q(sender=partner, receiver=request.user)
         ).order_by('-created_at').first()
         
         if last_message:
-            # Get unread count for this conversation
             unread_count = Message.objects.filter(
-                sender=partner,
-                receiver=request.user,
-                is_read=False
+                sender=partner, receiver=request.user, is_read=False
             ).count()
-            
-            conversations[partner] = {
-                'last_message': last_message,
-                'unread_count': unread_count
-            }
+            conversations[partner] = {'last_message': last_message, 'unread_count': unread_count}
     
-    # Sort conversations by last message time (most recent first)
     sorted_conversations = sorted(
         conversations.items(),
         key=lambda x: x[1]['last_message'].created_at,
         reverse=True
     )
     
-    # Get contacts for stories (all conversation partners)
     contacts = conversation_partners
-    
     return render(request, 'inbox.html', {
         'conversations': dict(sorted_conversations),
         'contacts': contacts,
         'user': request.user
     })
 
-login_required(login_url='/')
-def notification_list(request):
-    return render(request, 'notification.html')
 
 @login_required
 def channel_create(request):
-    # 1. Handle New Channel Creation (POST)
     if request.method == 'POST':
-        name = request.POST.get('name')
+        name  = request.POST.get('name')
         about = request.POST.get('about')
-        icon = request.FILES.get('icon')
-        
+        icon  = request.FILES.get('icon')
         new_channel = Channel.objects.create(
             channel_owner=request.user,
             channel_name=name,
@@ -1820,7 +1588,6 @@ def channel_create(request):
         new_channel.subscriber.add(request.user)
         return redirect('channel', channel_id=new_channel.channel_id)
 
-    # 2. Logic for Followed Channels
     followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
         last_app_activity=Max('channel_messages__created_at')
     ).order_by('-last_app_activity', '-created_at')
@@ -1831,37 +1598,25 @@ def channel_create(request):
     for c in followed_channels:
         unread = c.unread_count_for_user(request.user)
         total_unread += unread
-        
-        # Get the actual last message object
         last_msg = c.channel_messages.order_by('-created_at').first()
-        
-        # Determine the message type for the initial page load icons
         msg_type = 'text'
         if last_msg:
-            if last_msg.file_type == 'audio':
-                msg_type = 'audio'
-            elif last_msg.file_type == 'video':
-                msg_type = 'video'
-            elif last_msg.file_type == 'image':
-                msg_type = 'image'
-
+            if last_msg.file_type == 'audio':   msg_type = 'audio'
+            elif last_msg.file_type == 'video': msg_type = 'video'
+            elif last_msg.file_type == 'image': msg_type = 'image'
         followed_list.append({
-            'channel': c,
-            'unread_count': unread,
+            'channel': c, 'unread_count': unread,
             'last_message': last_msg.message if last_msg else "No messages yet",
             'last_time': last_msg.created_at if last_msg else None,
-            'message_type': msg_type 
+            'message_type': msg_type
         })
 
-    # 3. Logic for Unfollowed Channels (Discover)
     unfollowed_channels = Channel.objects.exclude(subscriber=request.user).order_by('-created_at')
-
     context = {
         'followed_list': followed_list,
         'unfollowed_channels': unfollowed_channels,
-        'total_followed_unread': total_unread, 
+        'total_followed_unread': total_unread,
     }
-
     return render(request, 'channel_create.html', context)
 
 
@@ -1872,76 +1627,59 @@ def follow_channel(request, channel_id):
     else:
         channel.subscriber.remove(request.user)
     return redirect(request.META.get('HTTP_REFERER'))
-    
-    
+
+
 @login_required
 def channel(request, channel_id):
-    """
-    Renders the channel page with grouped messages and channel details.
-    Includes security check for blocked users.
-    """
-    channel = get_object_or_404(Channel, channel_id=channel_id)
+    channel_obj = get_object_or_404(Channel, channel_id=channel_id)
     
-    # SECURITY: Check if current user is blocked from this channel
-    if request.user in channel.blocked_users.all():
-        # Redirect to a generic page or home if blocked
-        return redirect('home') 
+    if request.user in channel_obj.blocked_users.all():
+        return redirect('home')
 
-    # Update user's last seen timestamp for unread calculation
     ChannelUserLastSeen.objects.update_or_create(
-        channel=channel,
-        user=request.user,
+        channel=channel_obj, user=request.user,
         defaults={'last_seen_at': timezone.now()}
     )
     
-    # Get all messages and group them by date
-    messages = ChannelMessage.objects.filter(channel=channel).order_by('created_at')
+    channel_messages_qs = ChannelMessage.objects.filter(channel=channel_obj).order_by('created_at')
     grouped_messages = {}
-    for message in messages:
-        date_label = message.chat_date_label
+    for msg in channel_messages_qs:
+        date_label = msg.chat_date_label
         if date_label not in grouped_messages:
             grouped_messages[date_label] = []
-        grouped_messages[date_label].append(message)
+        grouped_messages[date_label].append(msg)
     
-    # Get total unread count across all subscribed channels for the sidebar/footer
     subscribed_channels = Channel.objects.filter(subscriber=request.user)
     total_unread = sum(ch.unread_count_for_user(request.user) for ch in subscribed_channels)
     
-    # User notifications
     notifications = request.user.notifications.filter(is_read=False)
     
     context = {
-        'channel': channel,
+        'channel': channel_obj,
         'grouped_messages': grouped_messages,
         'channel_id': str(channel_id),
         'total_unread': total_unread,
         'notifications': notifications,
-        'is_admin': channel.is_user_admin(request.user), 
-        'is_owner': channel.channel_owner == request.user
+        'is_admin': channel_obj.is_user_admin(request.user),
+        'is_owner': channel_obj.channel_owner == request.user
     }
-    
     return render(request, 'channel.html', context)
- 
+
+
 @login_required
 def channel_message(request, channel_id):
-    """
-    Handles sending messages (text, files, audio) and broadcasts via WebSockets.
-    Respects Broadcast Mode (Admins only if enabled).
-    """
-    channel = get_object_or_404(Channel, channel_id=channel_id)
+    channel_obj = get_object_or_404(Channel, channel_id=channel_id)
     
-    # SECURITY: Prevent non-admins from posting if broadcast mode is ON
-    if channel.is_broadcast_only and request.user != channel.channel_owner:
+    if channel_obj.is_broadcast_only and request.user != channel_obj.channel_owner:
         return JsonResponse({'status': 'error', 'message': 'Only admins can post in this channel.'}, status=403)
 
     if request.method == 'POST':
         message_text = request.POST.get('message', '')
-        file_upload = request.FILES.get('file_upload')
-        reply_to_id = request.POST.get('reply_to')
+        file_upload  = request.FILES.get('file_upload')
+        reply_to_id  = request.POST.get('reply_to')
 
         file_type = None
         if file_upload:
-            # Classify by extension — content-type is user-controlled and cannot be trusted
             _ext = os.path.splitext(file_upload.name or '')[1].lower()
             _ALLOWED = {
                 'image':    {'.jpg', '.jpeg', '.png', '.gif'},
@@ -1955,9 +1693,8 @@ def channel_message(request, channel_id):
             if file_upload.size > 50 * 1024 * 1024:
                 return JsonResponse({'status': 'error', 'message': 'File too large. Maximum size is 50MB.'}, status=400)
 
-        # Create the message instance
-        channelMessage = ChannelMessage.objects.create(
-            channel=channel,
+        channel_msg = ChannelMessage.objects.create(
+            channel=channel_obj,
             author=request.user,
             message=message_text if message_text else '',
             file_type=file_type,
@@ -1965,128 +1702,97 @@ def channel_message(request, channel_id):
             reply_to_id=reply_to_id if reply_to_id else None
         )
 
-        # Real-time Broadcast via WebSockets
         layer = get_channel_layer()
         group_name = f'channel_{channel_id}'
-        file_url = channelMessage.file.url if channelMessage.file else None
+        file_url = channel_msg.file.url if channel_msg.file else None
         
-        # Determine reply data for real-time update
         reply_data = None
-        if channelMessage.reply_to:
+        if channel_msg.reply_to:
             reply_data = {
-                'author': channelMessage.reply_to.author.username,
-                'message': channelMessage.reply_to.message[:50] if channelMessage.reply_to.message else "Media file"
+                'author': channel_msg.reply_to.author.username,
+                'message': channel_msg.reply_to.message[:50] if channel_msg.reply_to.message else "Media file"
             }
 
         async_to_sync(layer.group_send)(
             group_name,
             {
-                'type': 'channel_message', # This triggers appendNewMessage in your JS
-                'author': channelMessage.author.username,
-                'message': channelMessage.message,
+                'type': 'channel_message',
+                'author': channel_msg.author.username,
+                'message': channel_msg.message,
                 'file_type': file_type,
                 'file_url': file_url,
-                "time": channelMessage.created_at.isoformat(),
-                "message_id": str(channelMessage.channelmessage_id),
-                "reply_to": reply_data,
+                'time': channel_msg.created_at.isoformat(),
+                'message_id': str(channel_msg.channelmessage_id),
+                'reply_to': reply_data,
             }
         )
         
-        # Update unread counts for all other subscribers
-        subscribers = channel.subscriber.exclude(id=request.user.id)
+        subscribers = channel_obj.subscriber.exclude(id=request.user.id)
         for subscriber in subscribers:
-            unread_count = channel.unread_count_for_user(subscriber)
+            unread_count = channel_obj.unread_count_for_user(subscriber)
             user_group_name = f'user_{subscriber.id}_channels'
             async_to_sync(layer.group_send)(
                 user_group_name,
                 {
                     'type': 'unread_update',
-                    'channel_id': str(channel.channel_id),
+                    'channel_id': str(channel_obj.channel_id),
                     'unread_count': unread_count,
-                    'channel_name': channel.channel_name,
+                    'channel_name': channel_obj.channel_name,
                     'message_preview': message_text[:30] if message_text else "New media message",
                 }
             )
         
-        return JsonResponse({
-            'status': 'success',
-            'message_id': str(channelMessage.channelmessage_id),
-        })
+        return JsonResponse({'status': 'success', 'message_id': str(channel_msg.channelmessage_id)})
     
     return JsonResponse({'status': 'error', 'message': 'Invalid request'})
 
+
 @login_required
 def update_channel(request, channel_id):
-    """
-    View for the Channel Owner to update settings (Name, About, Image, Broadcast Mode).
-    """
-    channel = get_object_or_404(Channel, channel_id=channel_id)
-    
-    if request.user != channel.channel_owner:
+    channel_obj = get_object_or_404(Channel, channel_id=channel_id)
+    if request.user != channel_obj.channel_owner:
         return redirect('channel', channel_id=channel_id)
 
     if request.method == 'POST':
-        channel.channel_name = request.POST.get('name', channel.channel_name)
-        channel.about = request.POST.get('about', channel.about)
-        
-        # Handle Broadcast Mode Toggle
+        channel_obj.channel_name = request.POST.get('name', channel_obj.channel_name)
+        channel_obj.about = request.POST.get('about', channel_obj.about)
         broadcast = request.POST.get('broadcast')
-        channel.is_broadcast_only = (broadcast == 'true')
-        
-        # Handle Channel Icon
+        channel_obj.is_broadcast_only = (broadcast == 'true')
         if request.FILES.get('image'):
-            channel.image = request.FILES.get('image')
-            
-        channel.save()
+            channel_obj.image = request.FILES.get('image')
+        channel_obj.save()
         
     return redirect('channel', channel_id=channel_id)
 
+
 @login_required
 def manage_member(request, channel_id, user_id):
-    """
-    Handles removing or blocking users from a channel.
-    Respects hierarchy: Regular Admins can manage members, 
-    but only the primary Owner can manage other Admins.
-    """
-    channel = get_object_or_404(Channel, channel_id=channel_id)
+    channel_obj = get_object_or_404(Channel, channel_id=channel_id)
     
-    # 1. Permission Check: Must be an Admin or the Owner to perform management
-    if not channel.is_user_admin(request.user):
+    if not channel_obj.is_user_admin(request.user):
         return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
     
     if request.method == 'POST':
         try:
-            # Parse the JSON data from the request body
             data = json.loads(request.body)
             action = data.get('action')
             target_user = get_object_or_404(User, id=user_id)
             
-            # 2. Hierarchy Check:
-            # Check if the target is an admin or the primary creator
-            is_target_admin = channel.admins.filter(id=target_user.id).exists()
-            is_target_owner = (target_user == channel.channel_owner)
+            is_target_admin = channel_obj.admins.filter(id=target_user.id).exists()
+            is_target_owner = (target_user == channel_obj.channel_owner)
 
-            # Security logic: Regular Admins cannot remove the Owner or other Admins.
-            if (is_target_admin or is_target_owner) and request.user != channel.channel_owner:
+            if (is_target_admin or is_target_owner) and request.user != channel_obj.channel_owner:
                 return JsonResponse({
-                    'success': False, 
+                    'success': False,
                     'message': 'Permission denied: Only the owner can remove admins.'
                 }, status=403)
             
-            # 3. Execute Actions
-            if action == 'remove' or action == 'block':
-                # Remove from subscribers list
-                channel.subscriber.remove(target_user)
-                
-                # Cleanup: Always remove from admin list if they are being kicked out
-                channel.admins.remove(target_user) 
-                
+            if action in ('remove', 'block'):
+                channel_obj.subscriber.remove(target_user)
+                channel_obj.admins.remove(target_user)
                 if action == 'block':
-                    # Add to the blocked_users ManyToMany field
-                    channel.blocked_users.add(target_user)
-                    
+                    channel_obj.blocked_users.add(target_user)
                 return JsonResponse({'success': True})
-            
             else:
                 return JsonResponse({'success': False, 'message': 'Unknown action'}, status=400)
 
@@ -2095,96 +1801,77 @@ def manage_member(request, channel_id, user_id):
 
     return JsonResponse({'success': False, 'message': 'Method not allowed'}, status=405)
 
+
 @login_required
 def toggle_admin(request, channel_id, user_id):
-    """View to promote/demote a user."""
-    channel = get_object_or_404(Channel, channel_id=channel_id)
-    if request.user != channel.channel_owner:
+    channel_obj = get_object_or_404(Channel, channel_id=channel_id)
+    if request.user != channel_obj.channel_owner:
         return JsonResponse({'success': False}, status=403)
 
     target_user = get_object_or_404(User, id=user_id)
-    if channel.admins.filter(id=target_user.id).exists():
-        channel.admins.remove(target_user)
+    if channel_obj.admins.filter(id=target_user.id).exists():
+        channel_obj.admins.remove(target_user)
     else:
-        channel.admins.add(target_user)
+        channel_obj.admins.add(target_user)
     return JsonResponse({'success': True})
+
 
 @login_required
 def channelmessage_like(request, channelmessage_id):
     channelmessage = get_object_or_404(ChannelMessage, channelmessage_id=channelmessage_id)
-    
     if request.user not in channelmessage.like.all():
         channelmessage.like.add(request.user)
         liked = True
     else:
         channelmessage.like.remove(request.user)
         liked = False
-    
-    return JsonResponse({
-        'liked': liked,
-        'like_count': channelmessage.like.count()
-    })
-  
-
-
+    return JsonResponse({'liked': liked, 'like_count': channelmessage.like.count()})
 
 
 # ======= Marketplace =======
 
 @login_required(login_url='/')
 def market(request):
-    # Handle category filtering
     category = request.GET.get('category', 'all')
-
-    # Filter products based on category
     if category == 'all':
         products = Market.objects.all().order_by('-posted_on')
     else:
         products = Market.objects.filter(product_category=category).order_by('-posted_on')
 
-    # Calculate stats
     highest_price = products.aggregate(Max('product_price'))['product_price__max']
-    lowest_price = products.aggregate(Min('product_price'))['product_price__min']
+    lowest_price  = products.aggregate(Min('product_price'))['product_price__min']
 
-    # Handle POST request for product creation
     if request.method == 'POST' and 'form_type' in request.POST:
         if request.POST['form_type'] == 'marketplace':
-            product_owner = request.user
-            product_name = request.POST.get('product_name')
-            product_price = request.POST.get('product_price')
-            product_location = request.POST.get('location', 'Ilorin, Nigeria')
+            product_owner       = request.user
+            product_name        = request.POST.get('product_name')
+            product_price       = request.POST.get('product_price')
+            product_location    = request.POST.get('location', 'Ilorin, Nigeria')
             product_description = request.POST.get('description')
-            product_availability = request.POST.get('availability', 'Single Item')
-            product_category = request.POST.get('category')
-            product_condition = request.POST.get('product_condition', 'New')
-            whatsapp_number = request.POST.get('whatsapp_number')
+            product_availability= request.POST.get('availability', 'Single Item')
+            product_category    = request.POST.get('category')
+            product_condition   = request.POST.get('product_condition', 'New')
+            whatsapp_number     = request.POST.get('whatsapp_number')
 
-            # Validate required fields
             if not all([product_name, product_price, product_category, product_description, whatsapp_number]):
                 messages.error(request, 'Please fill in all required fields.')
                 return redirect('market')
 
-            # Check if at least one image is uploaded
-            images = request.FILES.getlist('images')
-            if len(images) == 0:
+            product_images = request.FILES.getlist('images')
+            if len(product_images) == 0:
                 messages.error(request, 'Please upload at least one image.')
                 return redirect('market')
 
-            # Create the product
             product = Market.objects.create(
-                product_owner=product_owner,
-                product_name=product_name,
-                product_price=product_price,
-                product_location=product_location,
+                product_owner=product_owner, product_name=product_name,
+                product_price=product_price, product_location=product_location,
                 product_description=product_description,
                 product_availability=product_availability,
-                product_category=product_category,
-                product_condition=product_condition,
+                product_category=product_category, product_condition=product_condition,
                 whatsapp_number=whatsapp_number
             )
 
-            # Save images (limit to 5)
-            for image in images[:5]:
+            for image in product_images[:5]:
                 MarketImage.objects.create(product=product, product_image=image)
 
             messages.success(request, 'Product Added Successfully', extra_tags='marketplace_success')
@@ -2193,7 +1880,7 @@ def market(request):
     context = {
         'products': products,
         'highest_price': highest_price or 0,
-        'lowest_price': lowest_price or 0,
+        'lowest_price':  lowest_price  or 0,
     }
     return render(request, 'marketplace.html', context)
 
@@ -2206,129 +1893,61 @@ def product_detail(request, product_id):
     product.views_count += 1
     product.save()
 
-    # Get all images for this product
     images = product.images.all()
-
-    # Get related products (same category, excluding current)
     related_products = Market.objects.filter(
         product_category=product.product_category
     ).exclude(product_id=product_id)[:4]
-
     seller_profile = get_object_or_404(Profile, user=product.product_owner)
 
     context = {
-        'product': product,
-        'images': images,
-        'related_products': related_products,
-        'seller': seller_profile,
+        'product': product, 'images': images,
+        'related_products': related_products, 'seller': seller_profile,
     }
     return render(request, 'product_details.html', context)
 
 
-def notification_partial(request):
-    if request.user.is_authenticated:
-        # Calculate unread notifications count
-        unread_count = Notification.objects.filter(
-            recipient=request.user,
-            is_read=False
-        ).count()
-    else:
-        unread_count = 0
-    
-    # Return the complete badge HTML
-    return render(request, 'snippet/notification_count.html', {
-        'unread_notifications_count': unread_count
-    })
-def inbox_partial(request):
-    return render(request, 'snippet/inbox_count.html')
-# Alternative simpler delete view
-@login_required
-def delete_notification_group(request):
-    if request.method == 'POST':
-        import json
-        data = json.loads(request.body)
-        
-        post_id = data.get('post_id')
-        notification_type = data.get('notification_type')
-        
-        if not post_id or not notification_type:
-            return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
-        
-        # Delete all notifications in this group
-        deleted_count, _ = Notification.objects.filter(
-            recipient=request.user,
-            post_id=post_id,
-            notification_type=notification_type
-        ).delete()
-        
-        return JsonResponse({
-            'status': 'success',
-            'deleted_count': deleted_count,
-            'message': f'Deleted {deleted_count} notifications'
-        })
-    
-    return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=400)
-
-
 def spotlight_view(request):
-    # Filter: (Has video) OR (Is a repost AND original has video)
     spotlight_posts = Post.objects.filter(
-        Q(video_file__isnull=False) & ~Q(video_file='') | 
+        Q(video_file__isnull=False) & ~Q(video_file='') |
         Q(is_repost=True, original_post__video_file__isnull=False) & ~Q(original_post__video_file='')
     ).order_by('?').select_related('author', 'original_post')
-
     return render(request, 'spotlight.html', {'posts': spotlight_posts})
-
 
 
 @require_POST
 def track_share(request, post_id):
-    # Fetch the post using the ID
-    post = get_object_or_404(Post, post_id=post_id)
-    
-    # Increment the share count (handling None if field is null)
-    if post.share is None:
-        post.share = 0
-    post.share += 1
-    post.save()
-    
-    # Return the new count to the frontend
-    return JsonResponse({
-        'success': True, 
-        'new_count': post.share
-    })
+    post_obj = get_object_or_404(Post, post_id=post_id)
+    if post_obj.share is None:
+        post_obj.share = 0
+    post_obj.share += 1
+    post_obj.save()
+    return JsonResponse({'success': True, 'new_count': post_obj.share})
 
 
-def get_location(request, username): 
+def get_location(request, username):
     user = Profile.objects.get(user__username=username)
-    return JsonResponse({
-        'lat': user.latitude,
-        'lng': user.longitude
-    })
+    return JsonResponse({'lat': user.latitude, 'lng': user.longitude})
 
 
 def error_404(request, exception):
     return render(request, '404.html', status=404)
 
+
 def error_500(request, exception):
     return render(request, '500.html', status=500)
+
+
 def logout(request):
-    # Mark user offline before session is cleared
     if request.user.is_authenticated:
         try:
             from social.models import Profile
             from asgiref.sync import async_to_sync
             from channels.layers import get_channel_layer
             Profile.mark_user_offline(request.user.id)
-            # Broadcast offline status to all connected users immediately
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 'online_status_group',
-                {
-                    'type': 'user_status_event',
-                    'user_id': request.user.id,
-                    'status': 'Offline',
-                }
+                {'type': 'user_status_event', 'user_id': request.user.id, 'status': 'Offline'}
             )
         except Exception:
             pass
@@ -2339,44 +1958,21 @@ def logout(request):
 
 @require_POST
 def set_offline(request):
-    """
-    Beacon endpoint: marks user offline when their tab or browser is closed.
-
-    sendBeacon() sends content-type application/x-www-form-urlencoded, so
-    both the CSRF token and user_id arrive in request.POST — Django's standard
-    CSRF middleware validates request.POST['csrfmiddlewaretoken'] automatically,
-    meaning no csrf_exempt and no manual middleware calls are needed.
-
-    Security layers:
-      1. CSRF — validated automatically by CsrfViewMiddleware via request.POST
-      2. @require_POST — rejects GET/PUT/DELETE with 405
-      3. Session ownership — user can only mark themselves offline
-      4. Type validation — invalid user_id returns 403 before any DB access
-    """
     logger = logging.getLogger(__name__)
-
-    # Validate user_id is a real integer before touching anything
     try:
         user_id = int(request.POST.get('user_id', 0))
     except (ValueError, TypeError):
         return HttpResponse(status=400)
 
-    # Session ownership check — must be logged in and can only mark yourself offline
     if not request.user.is_authenticated or request.user.id != user_id:
         return HttpResponse(status=403)
 
-    # Mark offline and broadcast — log real errors instead of silencing them
     try:
         Profile.mark_user_offline(user_id)
-
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             'online_status_group',
-            {
-                'type': 'user_status_event',
-                'user_id': user_id,
-                'status': 'Offline',
-            }
+            {'type': 'user_status_event', 'user_id': user_id, 'status': 'Offline'}
         )
     except Exception:
         logger.exception('set_offline: failed to mark user %s offline', user_id)
@@ -2387,87 +1983,60 @@ def set_offline(request):
 @login_required
 @require_POST
 def add_comment_reply(request, comment_id):
-    """Add a reply to a comment"""
     comment = get_object_or_404(PostComment, comment_id=comment_id)
     reply_text = request.POST.get('reply_text', '').strip()
     
     if reply_text:
         reply = CommentReply.objects.create(
-            comment=comment,
-            author=request.user,
-            reply_text=reply_text
+            comment=comment, author=request.user, reply_text=reply_text
         )
-        
-        # Return just the new reply HTML
-        return render(request, 'snippet/comment_replies.html', {
-            'replies': [reply]
-        })
+        return render(request, 'snippet/comment_replies.html', {'replies': [reply]})
     
     return JsonResponse({'error': 'Reply text is required'}, status=400)
+
 
 @login_required
 @require_POST
 def like_reply(request, reply_id):
-    """Like/unlike a reply"""
     reply = get_object_or_404(CommentReply, reply_id=reply_id)
-    
     if request.user in reply.like.all():
         reply.like.remove(request.user)
         liked = False
     else:
         reply.like.add(request.user)
         liked = True
-    
-    return JsonResponse({
-        'liked': liked,
-        'likes_count': reply.like.count()
-    })
+    return JsonResponse({'liked': liked, 'likes_count': reply.like.count()})
+
 
 @login_required
 @require_POST
 def edit_reply(request, reply_id):
-    """Edit a reply"""
     reply = get_object_or_404(CommentReply, reply_id=reply_id, author=request.user)
     new_text = request.POST.get('reply_text', '').strip()
-    
     if new_text:
         reply.reply_text = new_text
         reply.is_edited = True
         reply.save()
-        
-        # Return the updated reply HTML
-        return render(request, 'snippet/reply_content.html', {
-            'reply': reply
-        })
-        
-    
+        return render(request, 'snippet/reply_content.html', {'reply': reply})
     return JsonResponse({'success': False, 'error': 'Reply text is required'}, status=400)
+
 
 @login_required
 @require_POST
 def delete_reply(request, reply_id):
-    """Delete a reply"""
     reply = get_object_or_404(CommentReply, reply_id=reply_id, author=request.user)
     reply.delete()
     return JsonResponse({'success': True})
 
+
 @login_required(login_url='/')
 def comments_poll(request, post_id):
-    """
-    GET /comments/poll/<post_id>/?after=<iso_timestamp>
-    Returns rendered HTML for comments newer than `after` timestamp.
-    Returns 204 No Content if nothing new.
-    Used by the live polling JS in postcomment.js.
-    """
-    post = get_object_or_404(Post, post_id=post_id)
-
+    post_obj = get_object_or_404(Post, post_id=post_id)
     after_str = request.GET.get('after', '')
     after_dt = None
     if after_str:
-        # django.utils.dateparse.parse_datetime handles ISO 8601 strings
         from django.utils.dateparse import parse_datetime
         after_dt = parse_datetime(after_str)
-        # Fallback: try dateutil if Django's parser returns None
         if after_dt is None:
             try:
                 from dateutil.parser import parse as du_parse
@@ -2475,13 +2044,12 @@ def comments_poll(request, post_id):
             except Exception:
                 after_dt = None
 
-    qs = PostComment.objects.filter(post=post)
+    qs = PostComment.objects.filter(post=post_obj)
     if after_dt:
         qs = qs.filter(created_at__gt=after_dt)
 
     new_comments = (
-        qs
-        .select_related('author', 'author__profile')
+        qs.select_related('author', 'author__profile')
         .prefetch_related('like', 'replies', 'replies__author', 'replies__author__profile')
         .order_by('-created_at')
     )
@@ -2498,18 +2066,16 @@ def comments_poll(request, post_id):
                 request=request,
             )
         )
-
     return HttpResponse(''.join(html_parts))
+
 
 @login_required(login_url='/')
 @login_required(login_url='login')
 def hashtag_view(request, tag_name):
-    """View posts containing a specific hashtag"""
     from django.db.models import Q
 
     profile = request.user.profile
 
-    # Posts containing this hashtag (original + reposts of matching originals)
     posts = Post.objects.filter(
         Q(content__icontains=f'#{tag_name}') |
         Q(original_post__content__icontains=f'#{tag_name}')
@@ -2520,10 +2086,9 @@ def hashtag_view(request, tag_name):
 
     post_count = posts.count()
 
-    # Related hashtags — from the same post set (exclude current tag)
     all_hashtags = {}
-    for post in posts[:200]:
-        content = post.original_post.content if post.is_repost and post.original_post else post.content
+    for p in posts[:200]:
+        content = p.original_post.content if p.is_repost and p.original_post else p.content
         if content:
             for tag in extract_hashtags(content):
                 if tag.lower() != tag_name.lower():
@@ -2531,24 +2096,18 @@ def hashtag_view(request, tag_name):
 
     related_hashtags = sorted(all_hashtags.items(), key=lambda x: x[1], reverse=True)[:10]
 
-    # following_ids — flat list of user IDs the current user follows (same as home view)
-    # Used in template for O(1) follow button state: {% if post_author.id in following_ids %}
     following_ids = list(profile.followings.values_list('user', flat=True))
-
-    # Sidebar: following / followers lists (same as home view)
     sidebar_followings = profile.followings.select_related('user', 'user__profile').all()
     sidebar_followers  = profile.followers.select_related('user', 'user__profile').all()
 
-    # Trending hashtags for sidebar (from recent global posts)
     hashtag_counts = {}
     recent_posts = Post.objects.filter(content__isnull=False).order_by('-created_at')[:200]
-    for post in recent_posts:
-        if post.content:
-            for tag in extract_hashtags(post.content):
+    for p in recent_posts:
+        if p.content:
+            for tag in extract_hashtags(p.content):
                 hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
     trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 
-    # Unread counts for nav badges
     unread_follow_count = FollowNotification.objects.filter(
         to_user=request.user, is_read=False
     ).count()
@@ -2569,18 +2128,14 @@ def hashtag_view(request, tag_name):
         'unread_notifications_count': unread_notifications_count,
     })
 
+
 # ─── Online Status API ────────────────────────────────────────────────────────
+
 @login_required
 def online_status_api(request, user_id):
-    """
-    Returns the current online status of a user by their ID.
-    Used by profile.html to show the green/grey dot on page load
-    before a WebSocket status_update arrives.
-    GET /api/online-status/<user_id>/
-    """
     try:
         from social.models import Profile
-        profile = Profile.objects.get(user__id=user_id)
-        return JsonResponse({'is_online': profile.is_online})
+        profile_obj = Profile.objects.get(user__id=user_id)
+        return JsonResponse({'is_online': profile_obj.is_online})
     except Profile.DoesNotExist:
         return JsonResponse({'is_online': False})

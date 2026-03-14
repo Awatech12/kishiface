@@ -1,13 +1,11 @@
-{% comment %} notification_count.html - ALWAYS returns a badge element {% endcomment %}
-<div class="footer-notification-badge {% if unread_notifications_count == 0 %}hidden{% endif %}" 
-     id="footerNotificationBadge"
-     data-count="{{ unread_notifications_count|default:0 }}">
-  <span
-    hx-get="{% url 'notification_partial' %}"
-    hx-trigger="every 0.15s"
-    hx-target="#footerNotificationBadge"
-    hx-swap="outerHTML"   
-  >
-  {{ unread_notifications_count|default:0 }}
-  </span>
-</div>
+{% comment %}
+  notification_count.html
+  Returned by the 'notification_partial' view every 10 s via HTMX.
+  Outputs only the combined unread count as plain text so the poller
+  can swap it into #footerNotificationCount with hx-swap="innerHTML".
+  Combines: post-based notifications (likes/comments/reposts/mentions)
+            + follow notifications.
+{% endcomment %}
+{% with total=unread_notifications_count|add:unread_follow_count %}
+{% if total > 99 %}99+{% else %}{{ total|default:0 }}{% endif %}
+{% endwith %}

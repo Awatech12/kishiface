@@ -135,7 +135,7 @@ def validate_file_size(value, max_size_mb=50):
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     followings = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
-    blocked_users = models.ManyToManyField('self', symmetrical=False, related_name='blocked_by', blank=True)  # NEW
+    blocked_users = models.ManyToManyField('self', symmetrical=False, related_name='blocked_by', blank=True)
     phone = models.CharField(max_length=20, blank=True, default='')
     full_name = models.CharField(max_length=200, blank=True)
     is_verify = models.BooleanField(default=False)
@@ -221,7 +221,6 @@ class Profile(models.Model):
     def block(self, profile):
         """Block another profile. Also removes any existing follow relationship."""
         self.blocked_users.add(profile)
-        # clean up follow relationships in both directions
         self.followings.remove(profile)
         profile.followings.remove(self)
 
@@ -284,7 +283,6 @@ class UserReport(models.Model):
 
     class Meta:
         db_table = 'UserReport_Table'
-        # prevent a user from filing the same reason against same person multiple times
         unique_together = ('reporter', 'reported', 'reason')
         ordering = ['-created_at']
 
@@ -308,10 +306,9 @@ class Post(models.Model):
     share = models.IntegerField(default=0, null=True, blank=True)
     content = models.TextField(blank=True, null=True)
     
-    # NEW: Mood fields
-    mood = models.CharField(max_length=50, blank=True, null=True)  # e.g., 'slay', 'vibing'
-    custom_mood = models.CharField(max_length=50, blank=True, null=True)  # for custom moods
-    mood_emoji = models.CharField(max_length=10, blank=True, null=True)  # store the emoji
+    mood = models.CharField(max_length=50, blank=True, null=True)
+    custom_mood = models.CharField(max_length=50, blank=True, null=True)
+    mood_emoji = models.CharField(max_length=10, blank=True, null=True)
     
     is_repost = models.BooleanField(default=False)
     original_post = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='reposts_made')
@@ -336,12 +333,10 @@ class Post(models.Model):
         """Validate post data"""
         super().clean()
         
-        # Sanitize text content
         self.content = sanitize_text(self.content, 'content')
         if self.repost_content:
             self.repost_content = sanitize_text(self.repost_content, 'content')
         
-        # Validate files
         if self.video_file and hasattr(self.video_file, 'name'):
             validate_file_extension(self.video_file)
             validate_file_size(self.video_file, max_size_mb=100)
@@ -350,13 +345,11 @@ class Post(models.Model):
             validate_file_extension(self.file)
             validate_file_size(self.file, max_size_mb=50)
         
-        # Validate view and share counts
         if self.view and self.view < 0:
             self.view = 0
         if self.share and self.share < 0:
             self.share = 0
         
-        # Validate mood fields
         valid_moods = ['slay', 'vibing', 'sheesh', 'periodt', 'no-cap', 'bussin', 'mid', 'cringe']
         if self.mood and self.mood not in valid_moods:
             self.mood = None
@@ -369,9 +362,7 @@ class Post(models.Model):
         super().save(*args, **kwargs)
     
     def preview_type(self):
-        """Get preview type for the post"""
         if self.is_repost and self.original_post:
-            # For reposts, show the original post's media type
             return self.original_post.preview_type()
         if self.images.exists():
             return 'image'
@@ -386,7 +377,6 @@ class Post(models.Model):
         return 'empty'
     
     def preview_url(self):
-        """Get preview URL for the post"""
         if self.is_repost and self.original_post:
             return self.original_post.preview_url()
         if self.images.exists():
@@ -398,56 +388,40 @@ class Post(models.Model):
         return None
     
     def get_original_author(self):
-        """Get the original author for reposts"""
         if self.is_repost and self.original_post:
             return self.original_post.author
         return self.author
     
     def get_original_post_id(self):
-        """Get the original post ID for reposts"""
         if self.is_repost and self.original_post:
             return self.original_post.post_id
         return self.post_id
     
     def get_republished_content(self):
-        """Get content for display, handling reposts"""
         if self.is_repost and self.original_post:
             return self.original_post.content
         return self.content
     
-    # =================== NEW MOOD-RELATED METHODS ===================
-    
     def get_mood_display(self):
-        """Get the mood with emoji for display"""
         mood_emojis = {
-            'slay': '💅',
-            'vibing': '🎵',
-            'sheesh': '🥶',
-            'periodt': '⏸️',
-            'no-cap': '🎯',
-            'bussin': '🔥',
-            'mid': '😐',
-            'cringe': '😬'
+            'slay': '💅', 'vibing': '🎵', 'sheesh': '🥶', 'periodt': '⏸️',
+            'no-cap': '🎯', 'bussin': '🔥', 'mid': '😐', 'cringe': '😬'
         }
-        
         if self.custom_mood:
-            # Check if custom mood already has emoji
             import re
             emoji_pattern = re.compile("["
-                u"\U0001F300-\U0001F6FF"  # symbols & pictographs
-                u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-                u"\U00002700-\U000027BF"  # dingbats
-                u"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
-                u"\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
-                u"\U00002600-\U000026FF"  # Miscellaneous Symbols
-                u"\U00002B50-\U00002B50"  # star
-                u"\U0001F004-\U0001F0CF"  # playing cards
+                u"\U0001F300-\U0001F6FF"
+                u"\U0001F1E0-\U0001F1FF"
+                u"\U00002700-\U000027BF"
+                u"\U0001F900-\U0001F9FF"
+                u"\U0001FA70-\U0001FAFF"
+                u"\U00002600-\U000026FF"
+                u"\U00002B50-\U00002B50"
+                u"\U0001F004-\U0001F0CF"
                 "]+", flags=re.UNICODE)
-            
             if emoji_pattern.search(self.custom_mood):
                 return self.custom_mood
             else:
-                # Add emoji if none present
                 return f"{self.mood_emoji or '✨'} {self.custom_mood}"
         elif self.mood:
             emoji = mood_emojis.get(self.mood, '✨')
@@ -455,27 +429,17 @@ class Post(models.Model):
         return None
     
     def get_mood_color(self):
-        """Get color for mood badge"""
         mood_colors = {
-            'slay': '#ff1493',
-            'vibing': '#9933ff',
-            'sheesh': '#00cc66',
-            'periodt': '#ff6b00',
-            'no-cap': '#ff4444',
-            'bussin': '#ffd700',
-            'mid': '#808080',
-            'cringe': '#8b4513'
+            'slay': '#ff1493', 'vibing': '#9933ff', 'sheesh': '#00cc66',
+            'periodt': '#ff6b00', 'no-cap': '#ff4444', 'bussin': '#ffd700',
+            'mid': '#808080', 'cringe': '#8b4513'
         }
-        
         if self.custom_mood:
-            # Return a default gradient for custom moods
             return '#0095f6'
         return mood_colors.get(self.mood, '#0095f6')
     
     def get_mood_hashtag(self):
-        """Get mood as hashtag for SEO/search"""
         if self.custom_mood:
-            # Remove emojis and special characters for hashtag
             import re
             clean_mood = re.sub(r'[^\w\s]', '', self.custom_mood)
             clean_mood = clean_mood.replace(' ', '')
@@ -485,18 +449,10 @@ class Post(models.Model):
         return None
     
     def get_mood_emoji_only(self):
-        """Get only the mood emoji"""
         mood_emojis = {
-            'slay': '💅',
-            'vibing': '🎵',
-            'sheesh': '🥶',
-            'periodt': '⏸️',
-            'no-cap': '🎯',
-            'bussin': '🔥',
-            'mid': '😐',
-            'cringe': '😬'
+            'slay': '💅', 'vibing': '🎵', 'sheesh': '🥶', 'periodt': '⏸️',
+            'no-cap': '🎯', 'bussin': '🔥', 'mid': '😐', 'cringe': '😬'
         }
-        
         if self.mood_emoji:
             return self.mood_emoji
         elif self.mood:
@@ -504,11 +460,9 @@ class Post(models.Model):
         return '✨'
     
     def has_mood(self):
-        """Check if post has any mood set"""
         return bool(self.mood or self.custom_mood)
     
     def get_mood_type(self):
-        """Get the type of mood (predefined or custom)"""
         if self.custom_mood:
             return 'custom'
         elif self.mood:
@@ -516,7 +470,6 @@ class Post(models.Model):
         return None
     
     def get_mood_data(self):
-        """Get all mood data as a dictionary"""
         return {
             'has_mood': self.has_mood(),
             'mood': self.mood,
@@ -528,20 +481,16 @@ class Post(models.Model):
             'type': self.get_mood_type()
         }
     
-    # =================== ANALYTICS METHODS ===================
-    
     def get_engagement_rate(self):
-        """Calculate engagement rate for the post"""
         total_engagement = self.likes.count() + self.reposts.count() + (self.comments.count() if hasattr(self, 'comments') else 0)
         if self.view and self.view > 0:
             return (total_engagement / self.view) * 100
         return 0
     
     def get_vibe_score(self):
-        """Calculate a vibe score based on engagement and mood"""
         base_score = self.likes.count() * 1 + self.reposts.count() * 2
         if self.has_mood():
-            base_score *= 1.2  # 20% boost for posts with mood
+            base_score *= 1.2
         return round(base_score, 1)
     
     class Meta:
@@ -549,8 +498,8 @@ class Post(models.Model):
         indexes = [
             models.Index(fields=['-created_at']),
             models.Index(fields=['author', '-created_at']),
-            models.Index(fields=['mood']),  # For mood filtering
-            models.Index(fields=['custom_mood']),  # For custom mood filtering
+            models.Index(fields=['mood']),
+            models.Index(fields=['custom_mood']),
         ]
 
 
@@ -559,7 +508,6 @@ class PostImage(models.Model):
     image = models.ImageField(upload_to='post_images/')
     
     def clean(self):
-        """Validate image"""
         super().clean()
         if self.image:
             validate_file_extension(self.image)
@@ -568,7 +516,6 @@ class PostImage(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
-
 
 
 class PostComment(models.Model):
@@ -587,17 +534,11 @@ class PostComment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     def clean(self):
-        """Validate comment data"""
         super().clean()
-        
-        # Sanitize comment text
         self.comment = sanitize_text(self.comment, 'comment')
-        
-        # Validate files
         if self.image and hasattr(self.image, 'name'):
             validate_file_extension(self.image)
             validate_file_size(self.image, max_size_mb=10)
-        
         if self.file and hasattr(self.file, 'name'):
             validate_file_extension(self.file)
             validate_file_size(self.file, max_size_mb=20)
@@ -606,10 +547,6 @@ class PostComment(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-# models.py - Add this model
-# models.py - Update CommentReply model
-
-# models.py - Updated CommentReply model (no nested replies)
 
 class CommentReply(models.Model):
     reply_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -625,21 +562,15 @@ class CommentReply(models.Model):
     
     like = models.ManyToManyField(User, related_name='reply_likes', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)  # Track edits
-    is_edited = models.BooleanField(default=False)  # Track if edited
+    updated_at = models.DateTimeField(auto_now=True)
+    is_edited = models.BooleanField(default=False)
     
     def clean(self):
-        """Validate reply data"""
         super().clean()
-        
-        # Sanitize reply text
         self.reply_text = sanitize_text(self.reply_text, 'reply')
-        
-        # Validate files
         if self.image and hasattr(self.image, 'name'):
             validate_file_extension(self.image)
             validate_file_size(self.image, max_size_mb=10)
-        
         if self.file and hasattr(self.file, 'name'):
             validate_file_extension(self.file)
             validate_file_size(self.file, max_size_mb=20)
@@ -653,13 +584,23 @@ class CommentReply(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+
+
+# =============================================================================
+# Notification — covers like / comment / repost / mention
+# =============================================================================
+
 class Notification(models.Model):
-    LIKE = 'like'
+    LIKE    = 'like'
     COMMENT = 'comment'
+    REPOST  = 'repost'
+    MENTION = 'mention'
 
     TYPES = (
-        (LIKE, 'Like'),
+        (LIKE,    'Like'),
         (COMMENT, 'Comment'),
+        (REPOST,  'Repost'),
+        (MENTION, 'Mention'),
     )
 
     recipient = models.ForeignKey(
@@ -678,20 +619,37 @@ class Notification(models.Model):
         null=True,
         blank=True
     )
-
+    # Populated only for 'mention' notifications — links directly to the comment
+    comment = models.ForeignKey(
+        'PostComment',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='mention_notifications'
+    )
     notification_type = models.CharField(
         max_length=20,
         choices=TYPES,
         blank=True,
         null=True
     )
-
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', '-created_at']),
+            models.Index(fields=['recipient', 'is_read']),
+        ]
 
+    def __str__(self):
+        return f'{self.actor} → {self.recipient} [{self.notification_type}]'
+
+
+# =============================================================================
+# FollowNotification — fires when someone follows you
+# =============================================================================
 
 class FollowNotification(models.Model):
     from_user = models.ForeignKey(
@@ -743,17 +701,11 @@ class Message(models.Model):
         return f"{self.sender} to {self.receiver}: {self.conversation[:50]}"
     
     def clean(self):
-        """Validate message data"""
         super().clean()
-        
-        
         self.conversation = sanitize_text(self.conversation, 'conversation')
-        
         if self.file and hasattr(self.file, 'name'):
             validate_file_extension(self.file)
             validate_file_size(self.file, max_size_mb=50)
-        
-        
         if self.file_type:
             self.file_type = sanitize_text(self.file_type)
             if self.file_type not in ['image', 'video', 'audio', 'document']:
@@ -801,7 +753,6 @@ class MessageReaction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # One emoji type per user per message — toggle replaces the old one
         unique_together = ('message', 'user')
         ordering = ['created_at']
 
@@ -828,14 +779,9 @@ class Channel(models.Model):
         return self.channel_name
     
     def clean(self):
-        """Validate channel data"""
         super().clean()
-        
-        # Sanitize text fields
         self.channel_name = sanitize_text(self.channel_name, 'channel_name')
         self.about = sanitize_text(self.about, 'about')
-        
-        # Validate image
         if self.image and hasattr(self.image, 'name') and self.image.name != 'male.png':
             validate_file_extension(self.image)
             validate_file_size(self.image, max_size_mb=10)
@@ -845,33 +791,16 @@ class Channel(models.Model):
         super().save(*args, **kwargs)
 
     def unread_count_for_user(self, user):
-        """
-        Calculates the number of messages sent after the user's last visit.
-        Note: Requires ChannelUserLastSeen and ChannelMessage models to exist.
-        """
         if not user.is_authenticated:
             return 0
-        
-        # We import inside the method to avoid circular import issues if models are in the same file
         from .models import ChannelMessage, ChannelUserLastSeen
-        
-        # Get user's last seen timestamp for this specific channel
-        last_seen = ChannelUserLastSeen.objects.filter(
-            channel=self,
-            user=user
-        ).first()
-        
+        last_seen = ChannelUserLastSeen.objects.filter(channel=self, user=user).first()
         if last_seen:
-            # Count messages created after the 'last_seen_at' timestamp
             return ChannelMessage.objects.filter(
                 channel=self,
                 created_at__gt=last_seen.last_seen_at
             ).exclude(author=user).count()
-        
-        # If the user has never opened the channel, count all messages they didn't author
-        return ChannelMessage.objects.filter(
-            channel=self
-        ).exclude(author=user).count()
+        return ChannelMessage.objects.filter(channel=self).exclude(author=user).count()
 
     class Meta:
         verbose_name = "Channel"
@@ -902,7 +831,6 @@ class ChannelMessage(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     message = models.TextField(blank=True, null=True)
     like = models.ManyToManyField(User, blank=True, related_name='message_likers')
-    # Add reply_to field for message replies
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, 
                                 null=True, blank=True, related_name='replies')
     file_type = models.CharField(max_length=50, blank=True, null=True)
@@ -921,18 +849,11 @@ class ChannelMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     def clean(self):
-        """Validate channel message data"""
         super().clean()
-        
-        # Sanitize message text
         self.message = sanitize_text(self.message, 'content')
-        
-        # Validate file
         if self.file and hasattr(self.file, 'name'):
             validate_file_extension(self.file)
             validate_file_size(self.file, max_size_mb=50)
-        
-        # Sanitize file_type if provided
         if self.file_type:
             self.file_type = sanitize_text(self.file_type)
             if self.file_type not in ['image', 'video', 'audio', 'document']:
@@ -974,34 +895,25 @@ class Market(models.Model):
     product_description = models.TextField(blank=True, null=True)
     product_availability = models.CharField(max_length=150)
     product_condition = models.CharField(max_length=50, choices=[('New', 'New'), ('Used', 'Used - Like New'), ('Fair', 'Used - Fair Condition')], default='New')
-    views_count = models.PositiveIntegerField(default=0)  # Track how many people saw the product
-    is_promoted = models.BooleanField(default=False)  # For paid ads
+    views_count = models.PositiveIntegerField(default=0)
+    is_promoted = models.BooleanField(default=False)
     product_category = models.CharField(max_length=100)
     whatsapp_number = models.CharField(max_length=15, blank=True, null=True)
     posted_on = models.DateTimeField(auto_now_add=True)
     
     def clean(self):
-        """Validate market product data"""
         super().clean()
-        
-        # Sanitize text fields
         self.product_name = sanitize_text(self.product_name, 'product_name')
         self.product_location = sanitize_text(self.product_location)
         self.product_description = sanitize_text(self.product_description, 'product_description')
         self.product_availability = sanitize_text(self.product_availability)
         self.product_category = sanitize_text(self.product_category)
-        
-        # Validate product price (prevent negative or excessive prices)
         if self.product_price < 0:
             raise ValidationError({'product_price': 'Price cannot be negative'})
-        if self.product_price > 1000000000:  # 1 billion limit
+        if self.product_price > 1000000000:
             raise ValidationError({'product_price': 'Price is too high'})
-        
-        # Validate views_count
         if self.views_count < 0:
             self.views_count = 0
-        
-        # Validate WhatsApp number if provided
         if self.whatsapp_number:
             try:
                 self.whatsapp_number = validate_phone_number(self.whatsapp_number)
@@ -1019,7 +931,6 @@ class MarketImage(models.Model):
     product_image = models.ImageField(upload_to='product_images/')
     
     def clean(self):
-        """Validate market image"""
         super().clean()
         if self.product_image:
             validate_file_extension(self.product_image)
@@ -1036,23 +947,19 @@ class SearchHistory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        ordering = ['-created_at']  # Most recent first
+        ordering = ['-created_at']
         verbose_name_plural = 'Search Histories'
     
     def __str__(self):
         return f"{self.user.username} - {self.query}"
     
     def clean(self):
-        """Sanitize search query"""
         super().clean()
         self.query = sanitize_text(self.query)
     
     def save(self, *args, **kwargs):
         self.full_clean()
-        
         super().save(*args, **kwargs)
-        
-        # Optional: Limit history to last 50 searches per user
         user_history = SearchHistory.objects.filter(user=self.user)
         if user_history.count() > 50:
             oldest = user_history.order_by('created_at').first()

@@ -1,0 +1,136 @@
+
+{% load static %}
+{% load humanize %}
+
+<div class="kvibe-notif-wrapper {% if not n.is_read %}kvibe-unread{% endif %}"
+     id="kvibe-notif-{{ n.group_id }}">
+
+    <div class="kvibe-notif-item"
+         onclick="kvibeNotifClick(event,
+                  '{{ n.type }}',
+                  '{% if n.post %}{{ n.post.post_id }}{% endif %}',
+                  '{{ n.latest_actor.username }}')">
+
+        {# ── Avatar + type badge ─────────────────────────────────────── #}
+        <div class="kvibe-avatar-wrap">
+            <a href="/{{ n.latest_actor.username }}/" onclick="event.stopPropagation()">
+                {% if n.latest_actor.profile.picture %}
+                    <img class="kvibe-avatar"
+                         src="{{ n.latest_actor.profile.picture.url }}"
+                         alt="{{ n.latest_actor.username }}"
+                         loading="lazy">
+                {% else %}
+                    <img class="kvibe-avatar"
+                         src="{% static 'images/male.png' %}"
+                         alt="{{ n.latest_actor.username }}"
+                         loading="lazy">
+                {% endif %}
+            </a>
+
+            <span class="kvibe-type-badge
+                {% if n.type == 'like'    %}badge-like
+                {% elif n.type == 'comment' %}badge-comment
+                {% elif n.type == 'repost'  %}badge-repost
+                {% elif n.type == 'mention' %}badge-mention
+                {% elif n.type == 'follow'  %}badge-follow
+                {% endif %}">
+                <i class="fas
+                    {% if n.type == 'like'    %}fa-heart
+                    {% elif n.type == 'comment' %}fa-comment
+                    {% elif n.type == 'repost'  %}fa-retweet
+                    {% elif n.type == 'mention' %}fa-at
+                    {% elif n.type == 'follow'  %}fa-user-plus
+                    {% endif %}"></i>
+            </span>
+        </div>
+
+        {# ── Text ────────────────────────────────────────────────────── #}
+        <div class="kvibe-notif-text">
+            <span>
+                <a href="/{{ n.latest_actor.username }}/"
+                   onclick="event.stopPropagation()">
+                    <strong>{{ n.latest_actor.username }}</strong>
+                </a>
+
+                {% if n.type == 'like' %}
+                    {% if n.others_count == 1 %}
+                        &nbsp;and <strong>1 other</strong> liked your post.
+                    {% elif n.others_count > 1 %}
+                        &nbsp;and <strong>{{ n.others_count }} others</strong> liked your post.
+                    {% else %}
+                        &nbsp;liked your post.
+                    {% endif %}
+
+                {% elif n.type == 'comment' %}
+                    {% if n.others_count == 1 %}
+                        &nbsp;and <strong>1 other</strong> commented on your post.
+                    {% elif n.others_count > 1 %}
+                        &nbsp;and <strong>{{ n.others_count }} others</strong> commented on your post.
+                    {% else %}
+                        &nbsp;commented on your post.
+                    {% endif %}
+
+                {% elif n.type == 'repost' %}
+                    {% if n.others_count == 1 %}
+                        &nbsp;and <strong>1 other</strong> reposted your post.
+                    {% elif n.others_count > 1 %}
+                        &nbsp;and <strong>{{ n.others_count }} others</strong> reposted your post.
+                    {% else %}
+                        &nbsp;reposted your post.
+                    {% endif %}
+
+                {% elif n.type == 'mention' %}
+                    &nbsp;mentioned you in a comment.
+
+                {% elif n.type == 'follow' %}
+                    &nbsp;started following you.
+                {% endif %}
+            </span>
+
+            <span class="kvibe-notif-time">{{ n.created_at|naturaltime }}</span>
+        </div>
+
+        {# ── Right-side element ──────────────────────────────────────── #}
+
+        {% if n.type == 'follow' %}
+            {# Follow / Following toggle #}
+            <button class="kvibe-follow-btn btn-follow"
+                    onclick="event.stopPropagation(); kvibeFollowFromNotif({{ n.latest_actor.id }}, this)">
+                Follow
+            </button>
+
+        {% elif n.post %}
+            {# Post thumbnail #}
+            {% if n.post.images.exists %}
+                <img class="kvibe-thumb"
+                     src="{{ n.post.images.first.image.url }}"
+                     alt="post"
+                     loading="lazy">
+            {% elif n.post.video_file %}
+                <div class="kvibe-thumb-placeholder"><i class="fas fa-play"></i></div>
+            {% elif n.post.file %}
+                <div class="kvibe-thumb-placeholder"><i class="fas fa-music"></i></div>
+            {% else %}
+                <div class="kvibe-thumb-placeholder"><i class="fas fa-align-left"></i></div>
+            {% endif %}
+        {% endif %}
+
+        {# Unread blue dot #}
+        {% if not n.is_read %}
+            <span class="kvibe-unread-dot"></span>
+        {% endif %}
+
+    </div>{# /.kvibe-notif-item #}
+
+    {# ── Dismiss button ──────────────────────────────────────────────── #}
+    <button class="kvibe-remove-btn" aria-label="Dismiss"
+        {% if n.type == 'follow' %}
+            onclick="kvibeRemoveFollow({{ n.follow_id }}, this)"
+        {% else %}
+            onclick="kvibeRemoveNotif('{{ n.post.post_id }}', '{{ n.type }}', this)"
+        {% endif %}
+    >
+        <i class="fas fa-times"></i>
+    </button>
+
+</div>

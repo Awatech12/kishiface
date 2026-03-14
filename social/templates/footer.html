@@ -1,4 +1,3 @@
-
 {% load static %}
 {% load pwa %}
 <html lang="en">  
@@ -15,11 +14,11 @@
     :root {
       --nav-bg: rgba(255, 255, 255, 0.97);
       --nav-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.06);
-      --nav-icon-color: #8e8e8e;   /* matches --kvibe-text-light */
-      --nav-icon-active: #0095f6;  /* matches --kvibe-primary */
-      --nav-accent: #0095f6;       /* matches --kvibe-primary */
-      --badge-color: #0095f6;      /* matches --kvibe-primary */
-      --nav-border: #dbdbdb;       /* matches --kvibe-border */
+      --nav-icon-color: #8e8e8e;
+      --nav-icon-active: #0095f6;
+      --nav-accent: #0095f6;
+      --badge-color: #0095f6;
+      --nav-border: #dbdbdb;
     }
 
     body { 
@@ -47,14 +46,13 @@
       
       display: flex; 
       align-items: center; 
-      justify-content: space-evenly; /* Even spacing for 5 items */
+      justify-content: space-evenly;
       padding: 0 5px;
       z-index: 1000; 
       
       transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
     }
     
-    /* Scroll Hide State */
     .bottom-nav.hidden { 
       transform: translate(-50%, 150%); 
       opacity: 0; 
@@ -127,7 +125,22 @@
     
     .hidden-badge { display: none !important; }
 
-    /* Responsive adjustments */
+    /* Bell animation when there are unread notifications */
+    @keyframes kvibe-bell-ring {
+      0%  { transform: rotate(0deg); }
+      10% { transform: rotate(15deg); }
+      20% { transform: rotate(-12deg); }
+      30% { transform: rotate(10deg); }
+      40% { transform: rotate(-8deg); }
+      50% { transform: rotate(5deg); }
+      60% { transform: rotate(0deg); }
+      100%{ transform: rotate(0deg); }
+    }
+    .bell-ringing {
+      animation: kvibe-bell-ring 0.6s ease forwards;
+      display: inline-block;
+    }
+
     @media (max-width: 360px) {
       .bottom-nav { width: 96%; height: 60px; }
       .nav-item { font-size: 20px; width: 35px; }
@@ -141,16 +154,21 @@
 <nav class="bottom-nav" id="bottomNav">
     
     <!-- 1. Home -->
-    <a href="{% url 'home' %}" class="nav-item {% if request.path == '/' or request.path == '/home/' %}active{% endif %}" title="Home">
+    <a href="{% url 'home' %}" 
+       class="nav-item {% if request.path == '/' or 'home' in request.path %}active{% endif %}" 
+       title="Home">
         <i class="fas fa-home"></i>
     </a>
     
-    <!-- 2. Explore -->
-    <a href="{% url 'explore' %}" class="nav-item {% if '/explore' in request.path %}active{% endif %}" title="Explore">
+    <!-- 2. Explore — shows follow notification badge -->
+    <a href="{% url 'explore' %}" 
+       class="nav-item {% if '/explore' in request.path %}active{% endif %}" 
+       title="Explore">
         <i class="far fa-compass"></i>
-        <!-- Follow Badge -->
         {% if unread_follow_count and unread_follow_count > 0 %}
-        <span class="nav-badge-count" id="exploreBadge">{{ unread_follow_count }}</span>
+        <span class="nav-badge-count" id="exploreBadge">
+            {{ unread_follow_count }}
+        </span>
         {% endif %}
     </a>
     
@@ -160,74 +178,81 @@
     </a>
     
     <!-- 4. Spotlight -->
-    <a href="{% url 'spotlight' %}" class="nav-item {% if '/spotlight' in request.path %}active{% endif %}" title="Spotlight">
+    <a href="{% url 'spotlight' %}" 
+       class="nav-item {% if '/spotlight' in request.path %}active{% endif %}" 
+       title="Spotlight">
         <i class="fas fa-play"></i>
     </a>
     
-    <!-- 5. Notifications -->
-    <a href="{% url 'notification_list' %}" class="nav-item notification-link {% if '/notifications' in request.path %}active{% endif %}" title="Notifications">
-        <i class="far fa-bell"></i>
-        
-        <!-- Badge wrapper stays in DOM permanently — only the inner count text updates -->
-        <div class="nav-badge-count {% if unread_notifications_count == 0 %}hidden-badge{% endif %}"
+    <!-- 5. Notifications — unified badge (likes + comments + reposts + mentions + follows) -->
+    <a href="{% url 'notification_list' %}" 
+       class="nav-item notification-link {% if '/list' in request.path %}active{% endif %}" 
+       title="Activity">
+
+        <i class="far fa-bell" id="footerBellIcon"></i>
+
+        {# Compute combined unread count: post-based + follow notifications #}
+        {% with total_unread=unread_notifications_count|add:unread_follow_count %}
+        <div class="nav-badge-count {% if total_unread == 0 %}hidden-badge{% endif %}"
              id="footerNotificationBadge"
-             data-count="{{ unread_notifications_count|default:0 }}">
-          <span id="footerNotificationCount">{{ unread_notifications_count|default:0 }}</span>
-          <!-- Hidden HTMX poller: updates only the count text, never touches the badge div -->
-          <span
-            hx-get="{% url 'notification_partial' %}"
-            hx-trigger="every 5s"
-            hx-target="#footerNotificationCount"
-            hx-swap="innerHTML"
-            style="display:none;"
-          ></span>
+             data-count="{{ total_unread|default:0 }}">
+            <span id="footerNotificationCount">
+                {% if total_unread > 99 %}99+{% else %}{{ total_unread|default:0 }}{% endif %}
+            </span>
+            {# Silent HTMX poller — refreshes only the count text every 10s #}
+            <span
+              hx-get="{% url 'notification_partial' %}"
+              hx-trigger="every 10s"
+              hx-target="#footerNotificationCount"
+              hx-swap="innerHTML"
+              style="display:none;"
+            ></span>
         </div>
+        {% endwith %}
     </a>
 
 </nav>  
 
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const bottomNav = document.getElementById('bottomNav');
-    
-    // --- Scroll Handling (Hide on Down, Show on Up) ---
-    let lastScrollTop = 0;
-    const scrollThreshold = 10;
-    let isNavVisible = true;
-    
+  document.addEventListener('DOMContentLoaded', function () {
+
+    var bottomNav  = document.getElementById('bottomNav');
+    var bellIcon   = document.getElementById('footerBellIcon');
+
+    // ── Scroll hide / show ────────────────────────────────────────────────
+    var lastScrollTop  = 0;
+    var scrollThreshold = 10;
+    var isNavVisible   = true;
+
     function handleScroll() {
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-      const scrollDelta = scrollTop - lastScrollTop;
-      
-      // Prevent bouncing at top/bottom from triggering
+      var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      var scrollDelta = scrollTop - lastScrollTop;
+
       if (scrollTop < 0 || scrollTop + window.innerHeight > document.documentElement.scrollHeight) return;
 
       if (Math.abs(scrollDelta) > scrollThreshold) {
         if (scrollDelta > 0 && isNavVisible) {
-          // Scrolling DOWN -> Hide
           bottomNav.classList.add('hidden');
           isNavVisible = false;
         } else if (scrollDelta < 0 && !isNavVisible) {
-          // Scrolling UP -> Show
           bottomNav.classList.remove('hidden');
           isNavVisible = true;
         }
         lastScrollTop = scrollTop;
       }
     }
-    
-    // Throttle scroll event
-    let scrollTimeout;
-    window.addEventListener('scroll', function() {
+
+    var scrollTimeout;
+    window.addEventListener('scroll', function () {
       if (!scrollTimeout) {
-        scrollTimeout = setTimeout(function() {
+        scrollTimeout = setTimeout(function () {
           handleScroll();
           scrollTimeout = null;
         }, 100);
       }
     });
-    
-    // --- Interaction: Always show nav if user touches screen (UX improvement) ---
+
+    // Always show nav on touch/click (UX improvement)
     function showNav() {
       if (!isNavVisible) {
         bottomNav.classList.remove('hidden');
@@ -237,46 +262,56 @@
     document.addEventListener('touchstart', showNav);
     document.addEventListener('mousedown', showNav);
 
-    // --- Badge Updating Logic ---
-    function updateNotificationIndicators() {
-      const footerBadge = document.getElementById('footerNotificationBadge');
-      const countEl = document.getElementById('footerNotificationCount');
-      
-      if (footerBadge && countEl) {
-        const count = parseInt(countEl.innerText.trim()) || 0;
-        
-        if (count > 0) {
-          footerBadge.classList.remove('hidden-badge');
-          footerBadge.style.display = 'flex';
-          footerBadge.dataset.count = count;
-        } else {
-          footerBadge.classList.add('hidden-badge');
-          footerBadge.style.display = 'none';
-          footerBadge.dataset.count = 0;
+    // ── Badge update helper ───────────────────────────────────────────────
+    function updateNotificationBadge() {
+      var badge   = document.getElementById('footerNotificationBadge');
+      var countEl = document.getElementById('footerNotificationCount');
+      if (!badge || !countEl) return;
+
+      var raw   = countEl.innerText.trim().replace('+', '');
+      var count = parseInt(raw) || 0;
+
+      if (count > 0) {
+        badge.classList.remove('hidden-badge');
+        badge.style.display = 'flex';
+        badge.dataset.count = count;
+
+        // Ring the bell once if it wasn't ringing already
+        if (bellIcon && !bellIcon.classList.contains('bell-ringing')) {
+          bellIcon.classList.add('bell-ringing');
+          bellIcon.addEventListener('animationend', function () {
+            bellIcon.classList.remove('bell-ringing');
+          }, { once: true });
         }
+      } else {
+        badge.classList.add('hidden-badge');
+        badge.style.display = 'none';
+        badge.dataset.count = 0;
       }
     }
-    
-    // Initial check
-    setTimeout(updateNotificationIndicators, 500);
-    
-    // HTMX Hooks
-    document.body.addEventListener('htmx:afterSwap', function(event) {
-      if (event.target.id === 'footerNotificationBadge') {
-        setTimeout(updateNotificationIndicators, 100);
+
+    // Run once on load
+    setTimeout(updateNotificationBadge, 300);
+
+    // Re-run every time HTMX swaps in new count
+    document.body.addEventListener('htmx:afterSwap', function (e) {
+      if (e.target && e.target.id === 'footerNotificationCount') {
+        setTimeout(updateNotificationBadge, 100);
       }
     });
-    
-    // Click listener to clear badge visually (actual clear happens on page load/API)
-    const notifLink = document.querySelector('.notification-link');
-    if(notifLink) {
-        notifLink.addEventListener('click', () => {
-            setTimeout(updateNotificationIndicators, 1000);
-        });
+
+    // Clear badge visually when user taps the notification link
+    var notifLink = document.querySelector('.notification-link');
+    if (notifLink) {
+      notifLink.addEventListener('click', function () {
+        var badge   = document.getElementById('footerNotificationBadge');
+        var countEl = document.getElementById('footerNotificationCount');
+        if (badge)   { badge.classList.add('hidden-badge'); badge.style.display = 'none'; }
+        if (countEl) { countEl.innerText = '0'; }
+      });
     }
+
   });
-
-
 </script>
 
   {% if user.is_authenticated %}
