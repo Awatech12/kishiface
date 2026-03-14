@@ -2496,11 +2496,9 @@
             padding: 10px 12px;
             background: #f8f8f8;
             border-radius: 12px;
-            cursor: pointer;
             transition: background 0.15s;
         }
-        .kv-gallery-audio-row:active { background: #f0f0f0; }
-        .kv-gallery-audio-icon {
+        .kv-gallery-audio-play {
             width: 38px;
             height: 38px;
             border-radius: 50%;
@@ -2511,7 +2509,11 @@
             justify-content: center;
             font-size: 14px;
             flex-shrink: 0;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.15s, background 0.15s;
         }
+        .kv-gallery-audio-play:active { transform: scale(0.9); }
         .kv-gallery-audio-info { flex: 1; min-width: 0; }
         .kv-gallery-audio-name {
             font-size: 13px;
@@ -2526,6 +2528,23 @@
             color: var(--kishiface-text-light);
             margin-top: 1px;
         }
+        .kv-gallery-audio-dl {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(0,149,246,0.1);
+            color: var(--kishiface-primary);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            cursor: pointer;
+            flex-shrink: 0;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+        .kv-gallery-audio-dl:hover { background: rgba(0,149,246,0.2); }
 
         /* Empty state */
         .kv-gallery-empty {
@@ -2677,7 +2696,7 @@
                                         {% if message.conversation %}
                                             <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation|format_message_text }}</div>
                                         {% endif %}
-                                        <div class="kv-doc-card">
+                                        <div class="kv-doc-card" data-url="{{ message.file.url }}" data-filename="{{ message.file.url|slice:'-60:'|cut:'/' }}" data-utc="{{ message.created_at.isoformat }}">
                                             <div class="kv-doc-card-icon">
                                                 {% if '.pdf' in message.file.url|lower %}<i class="fas fa-file-pdf"></i>
                                                 {% elif '.doc' in message.file.url|lower %}<i class="fas fa-file-word"></i>
@@ -2700,14 +2719,11 @@
                                                     {% else %}FILE{% endif %}
                                                 </div>
                                             </div>
-                                            <a class="kv-doc-card-dl"
-                                               href="{{ message.file.url }}"
-                                               download
-                                               target="_blank"
-                                               title="Download"
-                                               onclick="event.stopPropagation()">
+                                            <button class="kv-doc-card-dl"
+                                               onclick="event.stopPropagation(); downloadKishifaceFile('{{ message.file.url }}', '{{ message.file.url|slice:'-60:'|cut:'/' }}')"
+                                               title="Download">
                                                 <i class="fas fa-download"></i>
-                                            </a>
+                                            </button>
                                         </div>
                                         <div class="kishiface-message-meta">
                                             <span class="kishiface-message-time" data-utc="{{ message.created_at.isoformat }}"></span>
@@ -2739,7 +2755,7 @@
                                                 {% endif %}
                                             </div>
                                         {% elif message.file_type == 'audio' %}
-                                            <div class="kishiface-audio-player" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'audio', '{{ message.created_at.isoformat }}', '{{ message.conversation|default:'' }}', '{{ message.sender.username }}', '{% if message.sender.profile.picture %}{{ message.sender.profile.picture.url }}{% endif %}')">
+                                            <div class="kishiface-audio-player" data-utc="{{ message.created_at.isoformat }}" onclick="openKishifaceMediaModal('{{ message.file.url }}', 'audio', '{{ message.created_at.isoformat }}', '{{ message.conversation|default:'' }}', '{{ message.sender.username }}', '{% if message.sender.profile.picture %}{{ message.sender.profile.picture.url }}{% endif %}')">
                                                 <div class="kishiface-audio-content">
                                                     <button class="kishiface-audio-play-btn" onclick="event.stopPropagation(); toggleKishifaceAudioPlayback(this, '{{ message.id }}')">
                                                         <i class="fas fa-play"></i>
@@ -3861,16 +3877,28 @@
         }
         
         function downloadKishifaceFile(url, filename) {
-            event.stopPropagation();
-            
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename || getFilenameFromUrl(url);
-            link.target = '_blank';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Use fetch→blob so the browser saves the file regardless of origin.
+            // Falls back to a plain anchor click for same-origin / local URLs.
+            const name = filename || getFilenameFromUrl(url);
+            fetch(url, { credentials: 'omit' })
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.blob();
+                })
+                .then(blob => {
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = name;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+                })
+                .catch(() => {
+                    // Fallback — open in new tab so user can save manually
+                    window.open(url, '_blank');
+                });
         }
         
         function downloadKishifaceModalFile() {
@@ -4229,6 +4257,9 @@
                     // Build inline doc card
                     const card = document.createElement('div');
                     card.className = 'kv-doc-card';
+                    card.dataset.url = safeFileUrl;
+                    card.dataset.filename = displayName;
+                    card.dataset.utc = safeTime;
 
                     const ext = (safeFileName || safeFileUrl).split('.').pop().toLowerCase();
                     const iconMap = { pdf: 'fa-file-pdf', doc: 'fa-file-word', docx: 'fa-file-word',
@@ -4257,14 +4288,14 @@
                     infoEl.appendChild(nameEl);
                     infoEl.appendChild(typeEl);
 
-                    const dlLink = document.createElement('a');
+                    const dlLink = document.createElement('button');
                     dlLink.className = 'kv-doc-card-dl';
-                    dlLink.href = safeFileUrl;
-                    dlLink.download = displayName;
-                    dlLink.target = '_blank';
                     dlLink.title = 'Download';
                     dlLink.innerHTML = '<i class="fas fa-download"></i>';
-                    dlLink.addEventListener('click', e => e.stopPropagation());
+                    dlLink.addEventListener('click', e => {
+                        e.stopPropagation();
+                        downloadKishifaceFile(safeFileUrl, displayName);
+                    });
 
                     card.appendChild(iconEl);
                     card.appendChild(infoEl);
@@ -5290,6 +5321,40 @@
     let kvGalleryActiveTab = 'image';
 
     /**
+     * Format an ISO timestamp for gallery display.
+     * Returns e.g. "Today · 7:26 AM", "Yesterday · 3:00 PM", "Monday · 9:15 AM",
+     * or "Mar 10 · 2:00 PM" for older dates.
+     */
+    function kvGalleryFormatTime(isoString) {
+        if (!isoString) return '';
+        const normalized = isoString.endsWith('Z') || isoString.includes('+')
+            ? isoString : isoString + 'Z';
+        const d = new Date(normalized);
+        if (isNaN(d.getTime())) return isoString;
+
+        const now   = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const diffDays = Math.round((today - msgDay) / 86400000);
+
+        // Clock time
+        let h = d.getHours();
+        const m = d.getMinutes().toString().padStart(2, '0');
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12 || 12;
+        const clock = `${h}:${m} ${ampm}`;
+
+        // Day label
+        let dayLabel;
+        if (diffDays === 0)      dayLabel = 'Today';
+        else if (diffDays === 1) dayLabel = 'Yesterday';
+        else if (diffDays < 7)  dayLabel = d.toLocaleDateString('en-US', { weekday: 'long' });
+        else                     dayLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        return `${dayLabel} · ${clock}`;
+    }
+
+    /**
      * Parse the 6th argument (senderAvatar) out of an openKishifaceMediaModal onclick string.
      * e.g. openKishifaceMediaModal('url','image','time','caption','username','AVATAR_URL')
      */
@@ -5353,21 +5418,24 @@
                 if (!src) return;
                 const onclick = wrap.getAttribute('onclick') || '';
                 const wAvatar = kvGalleryExtractAvatar(onclick) || avatar;
-                const parts = onclick.split("'");
-                const isoTime = parts.length >= 6 ? parts[5] : '';
+                // Prefer data-utc (reliable), fallback to parsing onclick arg
+                const isoTime = wrap.dataset.utc || (() => {
+                    const parts = onclick.split("'");
+                    return parts.length >= 6 ? parts[5] : '';
+                })();
                 items.push({ type: 'audio', url: src, time: isoTime || time, caption: '', sender: senderName, avatar: wAvatar, messageId: msgId });
             });
 
-            // Documents — scrape .kv-doc-card download links
+            // Documents — scrape .kv-doc-card via data attributes (button has no href)
             row.querySelectorAll('.kv-doc-card').forEach(card => {
-                const dlLink = card.querySelector('.kv-doc-card-dl');
-                const src = dlLink ? dlLink.href : '';
+                const src = card.dataset.url || '';
                 if (!src) return;
                 const nameEl = card.querySelector('.kv-doc-card-name');
                 const typeEl = card.querySelector('.kv-doc-card-type');
-                const fileName = nameEl ? nameEl.textContent.trim() : src.split('/').pop();
+                const fileName = card.dataset.filename || (nameEl ? nameEl.textContent.trim() : src.split('/').pop());
                 const fileType = typeEl ? typeEl.textContent.trim() : '';
-                items.push({ type: 'document', url: src, time, caption: '', sender: senderName, avatar, messageId: msgId, fileName, fileType });
+                const isoTime = card.dataset.utc || time;
+                items.push({ type: 'document', url: src, time: isoTime, caption: '', sender: senderName, avatar, messageId: msgId, fileName, fileType });
             });
         });
 
@@ -5405,17 +5473,20 @@
                                      txt: 'fa-file-alt' };
                 const ext = (item.fileName || item.url).split('.').pop().toLowerCase();
                 const iconClass = extIconMap[ext] || 'fa-file';
+                const formattedTime = kvGalleryFormatTime(item.time);
+                const proxyUrl = item.url;
+                const dlFileName = item.fileName || item.url.split('/').pop();
                 const row = document.createElement('div');
                 row.className = 'kv-gallery-file-row';
                 row.innerHTML = `
                     <div class="kv-gallery-file-icon"><i class="fas ${iconClass}"></i></div>
                     <div class="kv-gallery-file-info">
-                        <div class="kv-gallery-file-name">${item.fileName || item.url.split('/').pop()}</div>
-                        <div class="kv-gallery-file-meta">${item.sender} · ${item.time}</div>
+                        <div class="kv-gallery-file-name">${dlFileName}</div>
+                        <div class="kv-gallery-file-meta">${item.sender} · ${formattedTime}</div>
                     </div>
-                    <a class="kv-gallery-file-dl" href="${item.url}" download target="_blank" title="Download" onclick="event.stopPropagation()">
+                    <button class="kv-gallery-file-dl" title="Download" onclick="event.stopPropagation(); downloadKishifaceFile('${proxyUrl.replace(/'/g, "\\'")}', '${dlFileName.replace(/'/g, "\\'")}')">
                         <i class="fas fa-download"></i>
-                    </a>`;
+                    </button>`;
                 list.appendChild(row);
             });
             body.appendChild(list);
@@ -5423,23 +5494,64 @@
         }
 
         if (kvGalleryActiveTab === 'audio') {
-            // List view for audio
+            // List view for audio — inline mini-player, no modal
             const list = document.createElement('div');
             list.className = 'kv-gallery-list';
             filtered.forEach((item, idx) => {
+                const formattedTime = kvGalleryFormatTime(item.time);
+
                 const row = document.createElement('div');
                 row.className = 'kv-gallery-audio-row';
-                row.innerHTML = `
-                    <div class="kv-gallery-audio-icon"><i class="fas fa-microphone"></i></div>
-                    <div class="kv-gallery-audio-info">
-                        <div class="kv-gallery-audio-name">Voice message ${idx + 1}</div>
-                        <div class="kv-gallery-audio-meta">${item.sender} · ${item.time}</div>
-                    </div>
-                    <i class="fas fa-play" style="color:var(--kishiface-primary);font-size:13px;"></i>`;
-                row.addEventListener('click', () => {
-                    kvCloseGallery();
-                    openKishifaceMediaModal(item.url, 'audio', item.time, item.caption, item.sender, item.avatar);
+
+                // Hidden <audio> element
+                const audioEl = document.createElement('audio');
+                audioEl.src = item.url;
+                audioEl.preload = 'none';
+                row.appendChild(audioEl);
+
+                // Play / pause button
+                const playBtn = document.createElement('button');
+                playBtn.className = 'kv-gallery-audio-play';
+                playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                playBtn.addEventListener('click', () => {
+                    if (audioEl.paused) {
+                        // Pause any other playing gallery audio
+                        document.querySelectorAll('.kv-gallery-list audio').forEach(a => {
+                            if (a !== audioEl && !a.paused) {
+                                a.pause();
+                                const btn = a.closest('.kv-gallery-audio-row')?.querySelector('.kv-gallery-audio-play');
+                                if (btn) btn.innerHTML = '<i class="fas fa-play"></i>';
+                            }
+                        });
+                        audioEl.play();
+                        playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                        audioEl.onended = () => { playBtn.innerHTML = '<i class="fas fa-play"></i>'; };
+                    } else {
+                        audioEl.pause();
+                        playBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    }
                 });
+                row.appendChild(playBtn);
+
+                // Info
+                const info = document.createElement('div');
+                info.className = 'kv-gallery-audio-info';
+                info.innerHTML = `
+                    <div class="kv-gallery-audio-name">Voice message ${idx + 1}</div>
+                    <div class="kv-gallery-audio-meta">${item.sender} · ${formattedTime}</div>`;
+                row.appendChild(info);
+
+                // Download button — fetch→blob approach, works for all origins
+                const dlBtn = document.createElement('button');
+                dlBtn.className = 'kv-gallery-audio-dl';
+                dlBtn.title = 'Download';
+                dlBtn.innerHTML = '<i class="fas fa-download"></i>';
+                dlBtn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    downloadKishifaceFile(item.url, `Voice message ${idx + 1}`);
+                });
+                row.appendChild(dlBtn);
+
                 list.appendChild(row);
             });
             body.appendChild(list);

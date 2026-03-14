@@ -1178,7 +1178,16 @@ def clear_history(request):
 def message(request, username):
     receiver = get_object_or_404(User, username=username)
     sender = request.user
-    
+
+    # Block check — neither party should be able to open a blocked conversation
+    try:
+        if sender.profile.has_blocked(receiver.profile) or receiver.profile.has_blocked(sender.profile):
+            from django.contrib import messages as _msgs
+            _msgs.error(request, 'You cannot view this conversation.')
+            return redirect('inbox')
+    except Exception:
+        pass
+
     # Mark unread messages as read
     unread_messages = Message.objects.filter(
         sender=receiver,
@@ -1254,15 +1263,27 @@ def send_message(request, username):
 
         # Check if it's JSON data
         if request.content_type == 'application/json':
-            data = json.loads(request.body)
-            message_text = data.get('message', '')
+            if len(request.body) > 100_000:  # 100 KB hard cap on JSON body
+                return JsonResponse({'status': 'error', 'message': 'Request too large.'}, status=413)
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                return JsonResponse({'status': 'error', 'message': 'Invalid JSON.'}, status=400)
+            message_text = str(data.get('message', ''))
             reply_to_id = data.get('reply_to')
         else:
             message_text = request.POST.get('message', '')
             reply_to_id = request.POST.get('reply_to')
         
         file_upload = request.FILES.get('file_upload')
-        
+
+        # Cap message text length in the view — defense-in-depth before model
+        if message_text and len(message_text) > 5000:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Message too long. Maximum 5000 characters.'
+            }, status=400)
+
         # If no message and no file, just return success
         if not message_text and not file_upload:
             return JsonResponse({
@@ -1440,7 +1461,7 @@ def delete_message(request, message_id):
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Unauthorized'
-                })
+                }, status=403)
             
             # Broadcast deletion via WebSocket
             channel_layer = get_channel_layer()
@@ -1474,13 +1495,13 @@ def delete_message(request, message_id):
                 'status': 'error',
                 'message': 'Message not found'
             })
-        except Exception as e:
+        except Exception:
             return JsonResponse({
                 'status': 'error',
-                'message': str(e)
-            })
+                'message': 'An error occurred. Please try again.'
+            }, status=500)
     
-    return JsonResponse({'status': 'error', 'message': 'Invalid method'})
+    return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
 
 
 @login_required(login_url='/')
@@ -1724,7 +1745,7 @@ def open_notification(request, post_id, notification_type):
     # Redirect to post comment page
     return redirect('post_comment', post_id=post.post_id)
     
-login_required(login_url='/')
+@login_required(login_url='/')
 def inbox(request):
     # Get all unique conversations for the current user
     conversations = {}
