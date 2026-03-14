@@ -21,6 +21,8 @@
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- HTMX (required for comment bottom sheet) -->
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
     <!-- Google Fonts: DM Serif Display + DM Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,6 +37,7 @@
             --kvibe-border-light: #efefef;
             --kvibe-text:         #262626;
             --kvibe-text-muted:   #8e8e8e;
+            --kvibe-text-light:   #8e8e8e;
             --kvibe-gray:         #8e8e8e;
             --kvibe-gray-light:   #c7c7c7;
             --kvibe-primary:      #0095f6;
@@ -3046,6 +3049,192 @@
         }
         .kv-heart-pop { animation: kvHeart 0.4s ease forwards; }
 
+        /* ── Post Link Preview Card ──────────────────────────────────────── */
+        .kvibe-post-link-preview {
+            display: block;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 8px 16px 4px;
+            text-decoration: none;
+            border: 1px solid var(--kvibe-border);
+            background: var(--kvibe-white);
+            transition: opacity 0.15s, box-shadow 0.15s;
+            cursor: pointer;
+        }
+        .kvibe-post-link-preview:hover { opacity: 0.88; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        .kvibe-plp-image { width:100%; max-height:180px; object-fit:cover; display:block; border-bottom:1px solid var(--kvibe-border); }
+        .kvibe-plp-body { padding: 9px 12px 10px; }
+        .kvibe-plp-domain { font-size:10px; text-transform:uppercase; letter-spacing:0.6px; color:var(--kvibe-primary); margin-bottom:3px; font-weight:500; }
+        .kvibe-plp-title { font-size:14px; font-weight:600; color:var(--kvibe-text); line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+        .kvibe-plp-desc { font-size:12px; color:var(--kvibe-text-muted); margin-top:3px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.4; }
+        /* ─────────────────────────────────────────────────────────────────── */
+
+        /* ── Comment Bottom Sheet — full styles from postcomment.css ────────── */
+        .comment-sheet-overlay { position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:5000;display:none;align-items:flex-end; }
+        .comment-sheet-overlay.active { display:flex; }
+        .comment-sheet-content { background:#fff;width:100%;height:75vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;position:relative;animation:slideUp 0.3s ease-out; }
+        @keyframes slideUp { from{transform:translateY(100%);} to{transform:translateY(0);} }
+        .comment-sheet-header { padding:16px;border-bottom:1px solid #eee;text-align:center;font-weight:600;font-size:16px;color:#262626;flex-shrink:0;position:relative; }
+        .close-sheet { position:absolute;right:16px;top:16px;font-size:20px;cursor:pointer;color:#8e8e8e; }
+        .close-sheet:hover { color:#262626; }
+        #modal_comment_list { flex:1;overflow-y:auto;background:#fff;padding-bottom:80px; }
+        #modal_comment_list::-webkit-scrollbar { width:0; }
+
+        /* Comment row */
+        .kvibe-comment { display:flex; gap:10px; padding:12px 16px; position:relative; align-items:flex-start; background:var(--kvibe-white); }
+
+        /* Avatar column */
+        .kvibe-cmt-avatar-wrap { display:flex; flex-direction:column; align-items:center; flex-shrink:0; width:36px; }
+        .kvibe-cmt-avatar { width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0; display:block; }
+        .kvibe-cmt-avatar-letter { background:linear-gradient(135deg,var(--kvibe-primary,#0095f6),#4fb3f7); color:#fff; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+        .kvibe-cmt-thread-line { width:2px; flex:1; background:var(--kvibe-border); border-radius:1px; margin-top:6px; display:none; min-height:20px; }
+        .kvibe-cmt-thread-line.visible { display:block; }
+
+        /* Body */
+        .kvibe-cmt-body { flex:1; min-width:0; }
+        .kvibe-cmt-meta-row { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-bottom:3px; }
+        .kvibe-cmt-username { font-size:13px; font-weight:700; color:var(--kvibe-text); text-decoration:none; line-height:1.2; }
+        .kvibe-cmt-username:hover { text-decoration:underline; }
+        .kvibe-cmt-verify { vertical-align:middle; flex-shrink:0; }
+        .kvibe-cmt-time { font-size:11px; color:var(--kvibe-text-light); line-height:1.2; }
+        .kvibe-cmt-text { font-size:14px; line-height:1.45; color:var(--kvibe-text); margin:0 0 6px; word-break:break-word; }
+        .kvibe-cmt-image { max-width:180px; border-radius:10px; margin-bottom:6px; display:block; }
+        .kvibe-cmt-actions-row { display:flex; align-items:center; gap:14px; margin-top:4px; flex-wrap:wrap; }
+        .kvibe-cmt-action-link { background:none; border:none; padding:0; font-size:12px; font-weight:600; color:var(--kvibe-text-light); cursor:pointer; line-height:1; transition:color 0.15s; }
+        .kvibe-cmt-action-link:hover { color:var(--kvibe-text); }
+        .kvibe-cmt-view-replies { background:none; border:none; padding:0; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--kvibe-text-light); cursor:pointer; transition:color 0.15s; line-height:1; }
+        .kvibe-cmt-view-replies:hover { color:var(--kvibe-text); }
+        .kvibe-cmt-line-dash { display:inline-block; width:20px; height:2px; background:var(--kvibe-border); border-radius:1px; vertical-align:middle; }
+
+        /* Like column */
+        .kvibe-cmt-like-wrap { display:flex; flex-direction:column; align-items:center; flex-shrink:0; padding-top:2px; }
+        .kvibe-comment-like-btn { display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; padding:4px 2px; user-select:none; -webkit-tap-highlight-color:transparent; text-decoration:none; }
+        .kvibe-clb-icon { font-size:18px; color:var(--kvibe-text-light); transition:color 0.15s ease, transform 0.2s cubic-bezier(0.175,0.885,0.32,1.5); line-height:1; }
+        .kvibe-clb-icon--liked { color:var(--kvibe-primary); }
+        .kvibe-clb-pulse { animation:kvibePulse 0.35s cubic-bezier(0.175,0.885,0.32,1.5) forwards; }
+        @keyframes kvibePulse { 0%{transform:scale(1);} 40%{transform:scale(1.45);} 70%{transform:scale(0.88);} 100%{transform:scale(1);} }
+        .kvibe-clb-count { font-size:11px; font-weight:600; color:var(--kvibe-text-light); line-height:1; min-height:13px; display:block; text-align:center; transition:color 0.15s ease; }
+        .kvibe-clb-count--liked { color:var(--kvibe-primary); }
+        .kvibe-comment-like-btn:active .kvibe-clb-icon { transform:scale(0.85); }
+
+        /* Reply form */
+        .kvibe-reply-form-container { margin-top:10px; }
+        .kvibe-reply-input-row { display:flex; align-items:center; gap:8px; }
+        .kvibe-reply-mini-avatar { width:26px; height:26px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+        .kvibe-reply-input { flex:1; padding:7px 12px; border:1.5px solid var(--kvibe-border); border-radius:20px; font-size:13px; color:var(--kvibe-text); background:var(--kvibe-bg); outline:none; transition:border-color 0.2s; font-family:inherit; }
+        .kvibe-reply-input:focus { border-color:var(--kvibe-primary); background:var(--kvibe-white); }
+        .kvibe-reply-send-btn { background:none; border:none; color:var(--kvibe-primary); font-size:15px; cursor:pointer; padding:4px; transition:opacity 0.15s; flex-shrink:0; }
+        .kvibe-reply-send-btn:hover { opacity:0.75; }
+        .kvibe-replies-container { margin-top:8px; }
+
+        /* Reply items */
+        .kvibe-reply-item { display:flex; gap:8px; padding:8px 0; position:relative; align-items:flex-start; animation:kvibeFadeIn 0.22s ease forwards; }
+        @keyframes kvibeFadeIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
+        .kvibe-rpl-avatar-wrap { flex-shrink:0; width:28px; }
+        .kvibe-rpl-avatar { width:28px; height:28px; border-radius:50%; object-fit:cover; display:block; }
+        .kvibe-rpl-avatar-letter { background:linear-gradient(135deg,#4fb3f7,var(--kvibe-primary,#0095f6)); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; border-radius:50%; width:28px; height:28px; }
+        .kvibe-rpl-body { flex:1; min-width:0; }
+        .kvibe-rpl-meta-row { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-bottom:2px; }
+        .kvibe-rpl-username { font-size:12.5px; font-weight:700; color:var(--kvibe-text); text-decoration:none; line-height:1.2; }
+        .kvibe-rpl-username:hover { text-decoration:underline; }
+        .kvibe-rpl-time { font-size:11px; color:var(--kvibe-text-light); line-height:1.2; }
+        .kvibe-rpl-content { font-size:13.5px; line-height:1.45; color:var(--kvibe-text); word-break:break-word; margin-bottom:4px; }
+        .kvibe-rpl-actions-row { display:flex; align-items:center; gap:10px; }
+        .kvibe-rpl-action { background:none; border:none; font-size:11.5px; font-weight:600; color:var(--kvibe-text-light); cursor:pointer; padding:0; transition:color 0.15s; line-height:1; }
+        .kvibe-rpl-action:hover { color:var(--kvibe-text); }
+        .kvibe-rpl-action--delete:hover { color:#ed4956; }
+        .kvibe-rpl-like-wrap { display:flex; flex-direction:column; align-items:center; flex-shrink:0; padding-top:2px; }
+        .kvibe-rpl-like-right-btn { display:flex; flex-direction:column; align-items:center; gap:2px; background:none; border:none; cursor:pointer; padding:4px 2px; -webkit-tap-highlight-color:transparent; }
+        .kvibe-rpl-heart-right { font-size:16px; color:var(--kvibe-text-light); transition:color 0.15s ease, transform 0.2s cubic-bezier(0.175,0.885,0.32,1.5); line-height:1; }
+        .kvibe-rpl-heart-right--liked { color:var(--kvibe-primary); }
+        .kvibe-rpl-like-right-count { font-size:10.5px; font-weight:600; color:var(--kvibe-text-light); line-height:1; min-height:12px; display:block; text-align:center; }
+        .kvibe-rpl-like-right-count--liked { color:var(--kvibe-primary); }
+        .kvibe-rpl-like-right-btn:active .kvibe-rpl-heart-right { transform:scale(0.82); }
+
+        /* Audio player in comments */
+        .kvibe-hidden-audio { display:none; }
+        .kvibe-audio-container { display:flex; align-items:center; gap:8px; background:var(--kvibe-bg); border-radius:20px; padding:6px 10px; max-width:240px; margin-bottom:6px; border:1px solid var(--kvibe-border); }
+        .kvibe-play-pause-btn { background:var(--kvibe-primary); border:none; color:#fff; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; flex-shrink:0; transition:opacity 0.15s; }
+        .kvibe-play-pause-btn:hover { opacity:0.85; }
+        .kvibe-play-pause-btn i { color:#fff; }
+        .kvibe-progress-wrapper { display:flex; align-items:center; gap:6px; flex:1; }
+        .kvibe-progress-bar { flex:1; height:3px; background:var(--kvibe-border); border-radius:2px; overflow:hidden; cursor:pointer; position:relative; }
+        .kvibe-progress-filled { height:100%; width:0%; background:var(--kvibe-primary); border-radius:2px; position:absolute; top:0; left:0; transition:width 0.1s linear; }
+        .kvibe-time-display { font-size:10px; color:var(--kvibe-text-light); white-space:nowrap; font-weight:500; flex-shrink:0; min-width:30px; }
+        .kvibe-audio-wave { display:flex; align-items:center; gap:2px; }
+        .kvibe-wave-bar { width:3px; background:var(--kvibe-text-light); border-radius:2px; transition:height 0.2s ease; }
+        .kvibe-audio-download-btn { background:none; border:none; color:var(--kvibe-text-light); cursor:pointer; font-size:13px; padding:2px; transition:color 0.15s; display:flex; align-items:center; justify-content:center; }
+        .kvibe-audio-download-btn:hover { color:var(--kvibe-primary); }
+        .kvibe-audio-container.playing .kvibe-wave-bar { background:var(--kvibe-primary); }
+
+        /* Input area */
+        .kf-comment-input-area { position:absolute;bottom:0;left:0;right:0;z-index:999;padding:10px 12px;background:#fff;border-top:1px solid #e4e6eb; }
+        .kf-comment-input-wrapper { display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #e4e6eb;border-radius:24px;padding:0 10px;min-height:42px;transition:border-color 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+        .kf-comment-input-wrapper:focus-within { border-color:#0095f6;box-shadow:0 1px 4px rgba(0,149,246,0.15); }
+        .kf-comment-profile-img { width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0; }
+        .kf-comment-input { flex:1;padding:8px 4px;border:none;background:transparent;font-size:15px;outline:none;min-width:0;resize:none;max-height:100px;line-height:1.4;color:#262626;font-family:inherit; }
+        .kf-comment-input::placeholder { color:#8e8e8e; }
+        .kf-comment-action-btn { width:34px;height:34px;border-radius:50%;border:none;background:transparent;color:var(--kvibe-text-light);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;margin:0;transition:color 0.15s,background 0.15s; }
+        .kf-comment-action-btn:hover { color:var(--kvibe-text);background:rgba(0,0,0,0.04); }
+        .kf-comment-send-btn { width:34px;height:34px;border-radius:50%;border:none;background:#0095f6;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;margin:0;transition:opacity 0.15s; }
+        .kf-comment-send-btn:hover { opacity:0.85; }
+        .kvibe-cs-ai-btn { background:-webkit-linear-gradient(45deg,#8e2de2,#4a00e0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;transition:transform 0.2s; }
+        .kvibe-cs-ai-btn:hover { transform:scale(1.1); }
+        .record-mode-hidden { display:none !important; }
+        .kf-audio-preview-container { display:flex;align-items:center;gap:8px;flex-grow:1;background:var(--kvibe-bg,#fafafa);border-radius:20px;padding:4px 10px;height:38px;box-sizing:border-box; }
+        .kf-recording-indicator { font-size:13px;color:#ff3b30;font-weight:500;white-space:nowrap; }
+        .kf-stop-recording-btn { background:transparent;color:#ff3b30;font-size:22px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;margin:0; }
+        .recording { animation:kvcsPulse 1s infinite;color:#ff3b30; }
+        @keyframes kvcsPulse { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.1);opacity:0.7;} }
+
+        /* No-comments empty state */
+        .kvibe-no-comments { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 24px; text-align:center; }
+        .kvibe-no-cmt-icon { font-size:42px; color:var(--kvibe-border); margin-bottom:14px; line-height:1; }
+        .kvibe-no-cmt-title { font-size:16px; font-weight:700; color:var(--kvibe-text); margin:0 0 6px; }
+        .kvibe-no-cmt-sub { font-size:13px; color:var(--kvibe-text-light); margin:0; }
+
+        /* Comment input area (kvibe- prefixed variants used by postcomment partial) */
+        .kvibe-comment-input-area { padding:8px 12px 10px; background:var(--kvibe-white); border-top:1px solid var(--kvibe-border); flex-shrink:0; position:sticky; bottom:0; z-index:20; }
+        .kvibe-comment-input-wrapper { display:flex; align-items:center; gap:6px; background:var(--kvibe-white); border:1px solid var(--kvibe-border); border-radius:24px; padding:0 10px; transition:border-color 0.2s ease; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+        .kvibe-comment-input-wrapper:focus-within { border-color:var(--kvibe-primary); box-shadow:0 1px 4px rgba(0,149,246,0.15); }
+        .kvibe-comment-profile-img { width:30px; height:30px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+        .kvibe-comment-action-btn, .kvibe-cmt-tool-btn { width:34px; height:34px; border-radius:50%; border:none; background:transparent; color:var(--kvibe-text-light); font-size:17px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:color 0.15s,background 0.15s; flex-shrink:0; }
+        .kvibe-comment-action-btn:hover, .kvibe-cmt-tool-btn:hover { color:var(--kvibe-text); background:rgba(0,0,0,0.04); }
+        .kvibe-comment-input { flex:1; padding:8px 4px; border:none; background:transparent; font-size:14px; outline:none; min-width:0; resize:none; max-height:100px; line-height:1.4; color:var(--kvibe-text); font-family:inherit; }
+        .kvibe-comment-input::placeholder { color:var(--kvibe-text-light); }
+        .kvibe-cmt-send-btn { background:none; border:none; font-size:14px; font-weight:700; color:var(--kvibe-primary); cursor:pointer; padding:4px 6px; flex-shrink:0; white-space:nowrap; transition:opacity 0.15s; }
+        .kvibe-cmt-send-btn:hover { opacity:0.75; }
+        .kvibe-comment-send-btn { width:34px; height:34px; border-radius:50%; border:none; background:var(--kvibe-primary); color:#fff; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.2s; flex-shrink:0; box-shadow:0 2px 4px rgba(0,149,246,0.3); }
+        .kvibe-comment-send-btn:hover:not(:disabled) { opacity:0.85; }
+        .kvibe-comment-send-btn:disabled { background:var(--kvibe-text-light); cursor:not-allowed; opacity:0.5; }
+        .kvibe-comment-image { max-width:180px; border-radius:10px; margin-bottom:6px; display:block; }
+        .kvibe-audio-preview-container { display:flex; align-items:center; gap:8px; flex-grow:1; background:var(--kvibe-bg,#fafafa); border-radius:20px; padding:4px 10px; height:38px; box-sizing:border-box; }
+        .kvibe-audio-player { width:100%; }
+
+        /* Reply edit / delete modals */
+        .kvibe-rpl-edit-form { margin-bottom:6px; }
+        .kvibe-rpl-edit-textarea { width:100%; border:1.5px solid var(--kvibe-border); border-radius:8px; padding:7px 10px; font-size:13px; color:var(--kvibe-text); resize:vertical; outline:none; transition:border-color 0.2s; font-family:inherit; }
+        .kvibe-rpl-edit-textarea:focus { border-color:var(--kvibe-primary); }
+        .kvibe-rpl-edit-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:5px; }
+        .kvibe-rpl-edit-cancel { background:none; border:none; font-size:12px; color:var(--kvibe-text-light); cursor:pointer; padding:3px 8px; font-weight:600; }
+        .kvibe-rpl-edit-save { background:var(--kvibe-primary); border:none; border-radius:5px; font-size:12px; font-weight:700; color:#fff; cursor:pointer; padding:4px 12px; transition:opacity 0.15s; }
+        .kvibe-rpl-edit-save:hover { opacity:0.85; }
+        .kvibe-rpl-edited { font-size:10px; color:var(--kvibe-text-light); }
+        .kvibe-rpl-verify { vertical-align:middle; flex-shrink:0; }
+        .kvibe-rpl-like-btn { display:none; }
+        .kvibe-rpl-delete-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:6000; align-items:flex-end; justify-content:center; }
+        .kvibe-rpl-delete-modal.active { display:flex; }
+        .kvibe-rpl-delete-modal-inner { background:var(--kvibe-white); border-radius:20px 20px 0 0; padding:24px 24px 36px; width:100%; max-width:480px; text-align:center; animation:kvibeSlideUpModal 0.25s ease; }
+        @keyframes kvibeSlideUpModal { from{transform:translateY(60px);opacity:0;} to{transform:translateY(0);opacity:1;} }
+        .kvibe-rpl-delete-title { font-size:16px; font-weight:700; color:var(--kvibe-text); margin:0 0 4px; }
+        .kvibe-rpl-delete-sub { font-size:13px; color:var(--kvibe-text-light); margin:0 0 20px; }
+        .kvibe-rpl-delete-btns { display:flex; gap:10px; }
+        .kvibe-rpl-delete-cancel, .kvibe-rpl-delete-confirm { flex:1; padding:12px; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; transition:opacity 0.15s; }
+        .kvibe-rpl-delete-cancel { background:var(--kvibe-bg); color:var(--kvibe-text); border:1px solid var(--kvibe-border); }
+        .kvibe-rpl-delete-confirm { background:#ed4956; color:#fff; }
+        .kvibe-rpl-delete-cancel:hover, .kvibe-rpl-delete-confirm:hover { opacity:0.85; }
+        /* ─────────────────────────────────────────────────────────────────── */
+
     </style>
 </head>
 <body>
@@ -5165,6 +5354,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tabName === 'posts' && typeof run === 'function') {
             setTimeout(run, 0);
         }
+        // scan for URL previews in freshly injected text posts,
+        // then re-save the cache AFTER injection so video thumbnails
+        // are preserved when the user switches tabs and comes back
+        if (tabName === 'text' && typeof window.kvibeScanFeedLpCards === 'function') {
+            window.kvibeScanFeedLpCards(postsContainer);
+            // wait for all oEmbed fetches to settle (max 4 s) then snapshot the DOM
+            setTimeout(function() {
+                tabCache['text'] = postsContainer.innerHTML;
+            }, 4000);
+        }
     }
 
     /* ── loader ── */
@@ -5866,6 +6065,327 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(() => {});
 });
+</script>
+
+  <!-- ── Comment Bottom Sheet ────────────────────────────────────────────── -->
+  <div class="comment-sheet-overlay" id="commentSheet">
+    <div class="comment-sheet-content">
+      <div class="comment-sheet-header">
+        Comments
+        <i class="fa-solid fa-xmark close-sheet" onclick="kvibeCloseCommentSheet()"></i>
+      </div>
+      <div id="modal_comment_list">
+        <div style="text-align:center;padding:40px 16px;color:#8e8e8e;">
+          <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Loading...
+        </div>
+      </div>
+      <div class="kf-comment-input-area">
+        <form id="modalPostForm"
+          hx-post=""
+          hx-target="#modal_comment_list"
+          hx-encoding="multipart/form-data"
+          hx-swap="afterbegin"
+          hx-on::after-request="if(event.detail.successful){ this.reset(); kvibeCSResetInputUI(); }">
+          {% csrf_token %}
+          <div class="kf-comment-input-wrapper">
+            <img src="{{ user.profile.picture.url }}" alt="" class="kf-comment-profile-img"
+                 onerror="this.onerror=null;this.src='https://placehold.co/30x30/efefef/888?text=U';">
+            <button type="button" class="kf-comment-action-btn"
+                    onclick="document.getElementById('modal_image_input').click()" title="Attach image">
+              <i class="fa-regular fa-image"></i>
+            </button>
+            <input type="file" id="modal_image_input" name="image" multiple hidden onchange="kvibeCSUpdateSendBtn()">
+            <input type="file" id="modal_audio_file" name="audio_file" hidden>
+            <button type="button" class="kf-comment-action-btn kvibe-cs-ai-btn"
+                    onclick="kvibeCSToggleAI()" title="Quick replies">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
+            <textarea class="kf-comment-input" name="comment" id="modalTextInput"
+                      placeholder="Write a comment..." rows="1"
+                      oninput="kvibeCSOnInput()"></textarea>
+            <div class="kf-audio-preview-container record-mode-hidden" id="modalAudioPreview">
+              <button id="modalDeleteAudioBtn" type="button" class="kf-comment-action-btn">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+              <button id="modalStopBtn" type="button" class="kf-stop-recording-btn" style="display:none;">
+                <i class="fa-solid fa-square"></i>
+              </button>
+              <div style="flex-grow:1;display:flex;align-items:center;gap:8px;">
+                <audio id="modalPreviewAudio" style="height:32px;width:100%;"></audio>
+                <div id="modalRecordingStatus" class="kf-recording-indicator"></div>
+              </div>
+            </div>
+            <button type="submit" class="kf-comment-send-btn" id="modalSendBtn" style="display:none;">
+              <i class="fa-solid fa-paper-plane" style="font-size:14px;"></i>
+            </button>
+            <button type="button" class="kf-comment-action-btn" id="modalMicBtn">
+              <i class="fa-solid fa-microphone"></i>
+            </button>
+          </div>
+        </form>
+        <div id="kvibe-cs-ai-box" style="display:none;overflow-x:auto;white-space:nowrap;padding:6px 4px 2px;scrollbar-width:none;"></div>
+      </div>
+    </div>
+  </div>
+  <!-- ──────────────────────────────────────────────────────────────────────── -->
+
+<script>
+  // ── Comment Sheet ─────────────────────────────────────────────────────────
+  var _kvcsMediaRecorder = null;
+  var _kvcsAudioChunks   = [];
+  var _kvcsCurrentPostId = null;
+  var _kvcsQuickReplies  = [
+    'This is amazing!','Great post!','Love the vibe!',
+    'Facts only.','Well said!','Totally agree.',
+    'Big mood.','We move!','So inspiring!'
+  ];
+
+  function kvibeOpenCommentSheet(postId) {
+    _kvcsCurrentPostId = postId;
+    var sheet  = document.getElementById('commentSheet');
+    var form   = document.getElementById('modalPostForm');
+    var listEl = document.getElementById('modal_comment_list');
+    kvibeCSResetInputUI();
+    sheet.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    form.setAttribute('hx-post', '/comments/' + postId);
+    htmx.process(form);
+    listEl.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#8e8e8e;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Loading...</div>';
+    htmx.ajax('GET', '/comment/' + postId, {
+      target: '#modal_comment_list',
+      select: '#comment_list',
+      swap: 'innerHTML'
+    });
+    setTimeout(function() {
+      var ta = document.getElementById('modalTextInput');
+      if (ta) ta.focus();
+    }, 300);
+  }
+
+  function kvibeCloseCommentSheet() {
+    var sheet = document.getElementById('commentSheet');
+    sheet.classList.remove('active');
+    document.body.style.overflow = '';
+    if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') {
+      _kvcsMediaRecorder.stop();
+    }
+    kvibeCSResetInputUI();
+    _kvcsCurrentPostId = null;
+  }
+
+  document.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.target && evt.target.id === 'modalPostForm' && evt.detail.successful) {
+      if (_kvcsCurrentPostId) {
+        var el = document.getElementById('kvibe-comment-count-' + _kvcsCurrentPostId);
+        if (el) {
+          var n = parseInt(el.textContent.replace(/,/g, '')) || 0;
+          el.textContent = (n + 1).toLocaleString();
+        }
+      }
+    }
+  });
+
+  function kvibeCSOnInput() {
+    var ta = document.getElementById('modalTextInput');
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 100) + 'px';
+    kvibeCSUpdateSendBtn();
+  }
+
+  function kvibeCSUpdateSendBtn() {
+    var ta    = document.getElementById('modalTextInput');
+    var send  = document.getElementById('modalSendBtn');
+    var mic   = document.getElementById('modalMicBtn');
+    var imgIn = document.getElementById('modal_image_input');
+    var audIn = document.getElementById('modal_audio_file');
+    var has = (ta    && ta.value.trim().length > 0)
+           || (imgIn && imgIn.files && imgIn.files.length > 0)
+           || (audIn && audIn.files && audIn.files.length > 0);
+    if (send) send.style.display = has ? 'flex' : 'none';
+    if (mic)  { if (has) mic.classList.add('record-mode-hidden');
+                else     mic.classList.remove('record-mode-hidden'); }
+  }
+
+  function kvibeCSResetInputUI() {
+    var ta      = document.getElementById('modalTextInput');
+    var send    = document.getElementById('modalSendBtn');
+    var mic     = document.getElementById('modalMicBtn');
+    var audPrev = document.getElementById('modalAudioPreview');
+    var audIn   = document.getElementById('modal_audio_file');
+    var imgIn   = document.getElementById('modal_image_input');
+    var aiBox   = document.getElementById('kvibe-cs-ai-box');
+    var stopBtn = document.getElementById('modalStopBtn');
+    var status  = document.getElementById('modalRecordingStatus');
+    var preview = document.getElementById('modalPreviewAudio');
+    if (ta)      { ta.value = ''; ta.style.height = 'auto'; ta.classList.remove('record-mode-hidden'); }
+    if (send)    send.style.display = 'none';
+    if (mic)     { mic.style.display = ''; mic.classList.remove('record-mode-hidden'); }
+    if (audPrev) audPrev.classList.add('record-mode-hidden');
+    if (audIn)   audIn.value = '';
+    if (imgIn)   imgIn.value = '';
+    if (aiBox)   { aiBox.style.display = 'none'; aiBox.innerHTML = ''; }
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (status)  status.innerHTML = '';
+    if (preview) { preview.src = ''; preview.controls = false; preview.load(); }
+  }
+
+  function kvibeCSToggleAI() {
+    var box = document.getElementById('kvibe-cs-ai-box');
+    var hidden = !box.style.display || box.style.display === 'none';
+    if (!hidden) { box.style.display = 'none'; return; }
+    box.innerHTML = '';
+    _kvcsQuickReplies.slice().sort(function() { return 0.5 - Math.random(); }).slice(0, 6)
+      .forEach(function(text) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.style.cssText = 'display:inline-block;background:#f5f5f5;border:1px solid #dbdbdb;border-radius:16px;padding:6px 12px;font-size:13px;color:#262626;cursor:pointer;font-family:inherit;margin-right:6px;white-space:nowrap;';
+        chip.textContent = text;
+        chip.onclick = function() {
+          var ta = document.getElementById('modalTextInput');
+          ta.value = text;
+          kvibeCSOnInput();
+          ta.focus();
+        };
+        box.appendChild(chip);
+      });
+    box.style.display = 'flex';
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var micBtn     = document.getElementById('modalMicBtn');
+    var stopBtn    = document.getElementById('modalStopBtn');
+    var deleteBtn  = document.getElementById('modalDeleteAudioBtn');
+    var textInput  = document.getElementById('modalTextInput');
+    var audioInput = document.getElementById('modal_audio_file');
+    var audPrev    = document.getElementById('modalAudioPreview');
+    var previewAud = document.getElementById('modalPreviewAudio');
+    var statusEl   = document.getElementById('modalRecordingStatus');
+    if (!micBtn) return;
+
+    micBtn.addEventListener('click', async function() {
+      if (textInput.value.trim()) return;
+      try {
+        var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _kvcsMediaRecorder = new MediaRecorder(stream);
+        _kvcsAudioChunks = [];
+        _kvcsMediaRecorder.ondataavailable = function(e) { _kvcsAudioChunks.push(e.data); };
+        _kvcsMediaRecorder.onstop = function() {
+          stream.getTracks().forEach(function(t) { t.stop(); });
+          var blob = new Blob(_kvcsAudioChunks, { type: 'audio/webm' });
+          var file = new File([blob], 'recording.webm', { type: 'audio/webm' });
+          var dt = new DataTransfer();
+          dt.items.add(file);
+          audioInput.files = dt.files;
+          previewAud.src = URL.createObjectURL(blob);
+          previewAud.controls = true;
+          stopBtn.style.display = 'none';
+          statusEl.innerHTML = '';
+          kvibeCSUpdateSendBtn();
+        };
+        _kvcsMediaRecorder.start();
+        textInput.classList.add('record-mode-hidden');
+        audPrev.classList.remove('record-mode-hidden');
+        micBtn.classList.add('record-mode-hidden');
+        stopBtn.style.display = 'flex';
+        statusEl.innerHTML = '<i class="fa-solid fa-circle recording"></i> Recording...';
+      } catch(e) {
+        alert('Microphone access was denied. Please allow it in your browser settings.');
+      }
+    });
+
+    stopBtn.addEventListener('click', function() {
+      if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') _kvcsMediaRecorder.stop();
+    });
+
+    deleteBtn.addEventListener('click', function() { kvibeCSResetInputUI(); });
+
+    var sheet = document.getElementById('commentSheet');
+    if (sheet) {
+      sheet.addEventListener('click', function(e) {
+        if (e.target === sheet) kvibeCloseCommentSheet();
+      });
+    }
+  });
+
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') kvibeCloseCommentSheet(); });
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Client-side link preview loader ──────────────────────────────────────
+  (function kvibeFeedLpInit() {
+    const URL_RE = /(https?:\/\/[^\s"'<>]{4,})/;
+
+    function kvibeBuildFeedLpCard(lp) {
+      if (!lp || (!lp.title && !lp.image)) return null;
+      const a = document.createElement('a');
+      a.className = 'kvibe-post-link-preview';
+      a.href      = lp.url || '#';
+      a.target    = '_blank';
+      a.rel       = 'noopener noreferrer';
+      a.addEventListener('click', e => e.stopPropagation());
+      if (lp.image) {
+        const img   = document.createElement('img');
+        img.className = 'kvibe-plp-image';
+        img.src     = lp.image;
+        img.alt     = '';
+        img.onerror = () => { img.style.display = 'none'; };
+        a.appendChild(img);
+      }
+      const body = document.createElement('div');
+      body.className = 'kvibe-plp-body';
+      if (lp.domain) {
+        const d = document.createElement('div');
+        d.className = 'kvibe-plp-domain';
+        d.textContent = lp.domain;
+        body.appendChild(d);
+      }
+      if (lp.title) {
+        const t = document.createElement('div');
+        t.className = 'kvibe-plp-title';
+        t.textContent = lp.title;
+        body.appendChild(t);
+      }
+      if (lp.description) {
+        const desc = document.createElement('div');
+        desc.className = 'kvibe-plp-desc';
+        desc.textContent = lp.description;
+        body.appendChild(desc);
+      }
+      a.appendChild(body);
+      return a;
+    }
+
+    async function kvibeFetchAndInjectLp(article) {
+      const rawContent = article.dataset.lpUrl || '';
+      const match      = rawContent.match(URL_RE);
+      if (!match) return;
+      const url  = match[1];
+      const slot = article.querySelector('.kvibe-lp-slot');
+      if (!slot) return;
+      if (article.querySelector('.kvibe-post-link-preview')) return;
+      try {
+        const res  = await fetch(`/fetch_link_preview/?url=${encodeURIComponent(url)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.title && !data.image) return;
+        const card = kvibeBuildFeedLpCard({ ...data, url });
+        if (card) slot.appendChild(card);
+      } catch (_) { /* silent */ }
+    }
+
+    function kvibeScanCards(root) {
+      (root || document).querySelectorAll('.kvibe-post[data-lp-url]').forEach(article => {
+        kvibeFetchAndInjectLp(article);
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => kvibeScanCards());
+    } else {
+      kvibeScanCards();
+    }
+    window.kvibeScanFeedLpCards = kvibeScanCards;
+  })();
+  // ─────────────────────────────────────────────────────────────────────────
 </script>
 
 </body>

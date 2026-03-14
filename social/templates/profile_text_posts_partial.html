@@ -9,7 +9,12 @@
   <article class="kvibe-post"
            data-post-id="{{ post.post_id }}"
            data-mood="{{ post.mood|default:'' }}"
-           data-custom-mood="{{ post.custom_mood|default:'' }}">
+           data-custom-mood="{{ post.custom_mood|default:'' }}"
+           {% if not post.file and not post.video_file and not post.images.all %}
+             {% if not post.link_preview or not post.link_preview.title and not post.link_preview.image %}
+               {% if post.content %}data-lp-url="{{ post.content|truncatechars:2048 }}"{% endif %}
+             {% endif %}
+           {% endif %}>
 
     <!-- Header -->
     <div class="kvibe-post-header">
@@ -64,6 +69,26 @@
       {% endif %}
     </div>
 
+    <!-- Link Preview Card -->
+    {% with lp=post.link_preview %}
+    {% if lp %}{% if lp.title or lp.image %}
+    <a class="kvibe-post-link-preview"
+       href="{{ lp.url }}"
+       target="_blank"
+       rel="noopener noreferrer"
+       onclick="event.stopPropagation()">
+      {% if lp.image %}<img class="kvibe-plp-image" src="{{ lp.image }}" alt="" onerror="this.style.display='none'">{% endif %}
+      <div class="kvibe-plp-body">
+        {% if lp.domain %}<div class="kvibe-plp-domain">{{ lp.domain }}</div>{% endif %}
+        {% if lp.title %}<div class="kvibe-plp-title">{{ lp.title }}</div>{% endif %}
+        {% if lp.description %}<div class="kvibe-plp-desc">{{ lp.description }}</div>{% endif %}
+      </div>
+    </a>
+    {% endif %}{% endif %}
+    {% endwith %}
+    <!-- client-side lp injection point -->
+    <div class="kvibe-lp-slot"></div>
+
     <!-- Action buttons -->
     <div class="kvibe-actions-container">
 
@@ -82,10 +107,12 @@
       </button>
 
       <!-- COMMENT -->
-      <a href="{% url 'post_comment' post.post_id %}" class="kvibe-action-item">
+      <button class="kvibe-action-item"
+              onclick="kvibeOpenCommentSheet('{{ post.post_id }}')"
+              style="border:none;font-family:inherit;cursor:pointer;">
         <i class="fa-regular fa-comment kvibe-action-icon"></i>
-        <span>{{ post.comments.count|intcomma }}</span>
-      </a>
+        <span class="kvibe-comment-count" id="kvibe-comment-count-{{ post.post_id }}">{{ post.comments.count|intcomma }}</span>
+      </button>
 
       <!-- REPOST -->
       <button class="kvibe-action-item"
