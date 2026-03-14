@@ -1,6 +1,9 @@
 import os
 import re
 import uuid as uuid_module
+import socket
+import threading
+from html import escape as html_escape, unescape as html_unescape
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
 from .models import FollowNotification
 from django.template.loader import render_to_string
@@ -64,6 +67,12 @@ def register(request):
         if (len(username) < 5):
             messages.error(request, 'Username must contain atleast 5 Characters')
             return redirect('register')
+        elif len(username) > 30:
+            messages.error(request, 'Username must be 30 characters or less')
+            return redirect('register')
+        elif len(password) < 8:
+            messages.error(request, 'Password must be at least 8 characters')
+            return redirect('register')
         elif User.objects.filter(username=username):
             messages.error(request, ' Username is taken Already')
             return redirect('register')
@@ -87,6 +96,23 @@ def extract_hashtags(content):
     import re
     hashtags = re.findall(r'#(\w+)', content)
     return hashtags
+
+
+def _safe_redirect_back(request, fallback='home'):
+    """
+    Redirect back to the referring page only if the referer is our own domain.
+    Prevents open-redirect attacks where a forged Referer header sends users
+    to an external site.
+    """
+    referer = request.META.get('HTTP_REFERER', '')
+    allowed_origins = (
+        'http://127.0.0.1',
+        'http://localhost',
+        'https://kishiface.onrender.com',
+    )
+    if referer and any(referer.startswith(origin) for origin in allowed_origins):
+        return redirect(referer)
+    return redirect(fallback)
 
 
 @login_required(login_url='/')
@@ -243,7 +269,7 @@ def repost_post(request, post_id):
         user = request.user
 
         data    = json.loads(request.body)
-        caption = data.get('caption', '').strip()
+        caption = data.get('caption', '').strip()[:500]
         undo    = data.get('undo', False)
 
         existing_repost = Post.objects.filter(
@@ -311,7 +337,7 @@ def repost_post(request, post_id):
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({'success': False, 'error': 'Invalid data'}, status=400)
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({'success': False, 'error': 'Something went wrong.'}, status=500)
 
 
 @login_required(login_url='/')
@@ -350,7 +376,7 @@ def follow_user(request, user_id):
         except User.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'User not found'})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({'success': False, 'error': 'Something went wrong.'})
     
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
@@ -394,6 +420,68 @@ def post(request):
         for image in images:
             PostImage.objects.create(post=new_post, image=image)
         
+        # ── Auto-fetch link preview from post content (background thread) ─
+        # Fix 4: runs in a daemon thread so it never blocks the HTTP response.
+        # Fix 2: html_escape() all text fields from the external site.
+        # Fix 3: image URL validated to http/https only before storing.
+        _url_match = re.search(r'https?://[^\s]{4,}', content or '')
+        if _url_match and not images and not audio and not video:
+            # html_unescape handles &amp; that sanitize_text may have introduced
+            _url_for_preview = html_unescape(_url_match.group(0))
+
+            def _bg_fetch_preview(post_pk, fetch_url):
+                try:
+                    if not _is_safe_url_for_preview(fetch_url):
+                        return
+                    _headers = {
+                        'User-Agent': 'Mozilla/5.0 (compatible; KvibeBot/1.0)',
+                        'Accept':     'text/html,application/xhtml+xml',
+                    }
+                    _resp = requests.get(fetch_url, headers=_headers, timeout=5, allow_redirects=True, stream=True)
+                    _raw = b''
+                    for _chunk in _resp.iter_content(8192):
+                        _raw += _chunk
+                        if len(_raw) > 500_000:
+                            break
+                    _soup = BeautifulSoup(_raw, 'html.parser')
+
+                    def _og(p):
+                        t = (
+                            _soup.find('meta', property=f'og:{p}')
+                            or _soup.find('meta', attrs={'name': f'twitter:{p}'})
+                            or _soup.find('meta', attrs={'name': p})
+                        )
+                        return t['content'].strip() if t and t.get('content') else ''
+
+                    _title       = _og('title') or (_soup.title.string.strip() if _soup.title else '')
+                    _description = _og('description')
+                    _image       = _og('image')
+                    _domain      = urlparse(_resp.url).netloc.replace('www.', '')
+
+                    # Fix 3: reject non-http/https image URLs
+                    if _image and not _image.startswith(('http://', 'https://')):
+                        _image = ''
+
+                    _lp = {
+                        'title':       html_escape(_title[:200]),        # Fix 2
+                        'description': html_escape(_description[:400]),  # Fix 2
+                        'image':       _image[:500],
+                        'domain':      html_escape(_domain[:100]),       # Fix 2
+                        'url':         fetch_url,
+                    }
+                    if _lp['title'] or _lp['image']:
+                        # update() bypasses full_clean / Cloudinary re-upload
+                        Post.objects.filter(pk=post_pk).update(link_preview=_lp)
+                except Exception:
+                    pass  # preview is best-effort, never crash silently into main thread
+
+            threading.Thread(
+                target=_bg_fetch_preview,
+                args=(new_post.pk, _url_for_preview),
+                daemon=True,
+            ).start()
+        # ──────────────────────────────────────────────────────────────────
+        
         messages.success(request, 'Post dropped successfully! ✨')
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -422,7 +510,7 @@ def editpost(request, post_id):
                         n.save()
                 else:
                     PostImage.objects.create(post=post_obj, image=m)
-        return redirect(request.META.get('HTTP_REFERER'))
+        return _safe_redirect_back(request, fallback='home')
     context = {
         'post': post_obj,
         'post_id': post_id
@@ -704,9 +792,9 @@ def update_profile(request, username):
 
         except Exception as e:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'error': str(e)})
+                return JsonResponse({'success': False, 'error': 'Failed to update profile.'})
             else:
-                messages.error(request, f'Error updating profile: {str(e)}')
+                messages.error(request, 'Failed to update profile. Please try again.')
                 return redirect('profile', username=request.user.username)
 
     return render(request, 'update_profile.html', {'profile': profile})
@@ -924,6 +1012,7 @@ def explore_users(request):
     })
 
 
+@login_required(login_url='/')
 def follow(request, username):
     other_user = get_object_or_404(User, username=username)
     current_profile = request.user.profile
@@ -932,11 +1021,11 @@ def follow(request, username):
     if other_profile not in current_profile.followings.all():
         current_profile.followings.add(other_profile)
         messages.info(request, 'Following')
-        return redirect(request.META.get('HTTP_REFERER'))
+        return _safe_redirect_back(request, fallback='home')
     else:
         current_profile.followings.remove(other_profile)
         messages.info(request, 'unFollowing')
-        return redirect(request.META.get('HTTP_REFERER'))
+        return _safe_redirect_back(request, fallback='home')
 
 
 @login_required(login_url='/')
@@ -1142,10 +1231,10 @@ def send_message(request, username):
                             _image = ''
 
                         link_preview = {
-                            'title':       (_og('title') or (_soup.title.string.strip() if _soup.title else ''))[:200],
-                            'description': _og('description')[:400],
+                            'title':       html_escape((_og('title') or (_soup.title.string.strip() if _soup.title else ''))[:200]),
+                            'description': html_escape(_og('description')[:400]),
                             'image':       _image[:500],
-                            'domain':      urlparse(_resp.url).netloc.replace('www.', '')[:100],
+                            'domain':      html_escape(urlparse(_resp.url).netloc.replace('www.', '')[:100]),
                             'url':         preview_url,
                         }
                     except Exception:
@@ -1309,19 +1398,50 @@ def react_to_message(request, message_id):
 
 # ── SSRF protection ──────────────────────────────────────────────────────────
 
-_BLOCKED_HOSTS = {'localhost', 'metadata.google.internal'}
+# ── SSRF protection: expanded blocklist ──────────────────────────────────────
+_BLOCKED_HOSTS = {
+    'localhost',
+    'metadata.google.internal',   # GCP metadata
+    '169.254.169.254',            # AWS / Azure / GCP IMDS (IP literal)
+    '100.100.100.200',            # Alibaba Cloud metadata
+    'fd00:ec2::254',              # AWS IPv6 IMDS
+}
 _PRIVATE_NETWORKS = [
     ipaddress.ip_network('10.0.0.0/8'),
     ipaddress.ip_network('172.16.0.0/12'),
     ipaddress.ip_network('192.168.0.0/16'),
     ipaddress.ip_network('127.0.0.0/8'),
-    ipaddress.ip_network('169.254.0.0/16'),
+    ipaddress.ip_network('169.254.0.0/16'),   # link-local / IMDS
+    ipaddress.ip_network('100.64.0.0/10'),    # shared address space (RFC6598)
+    ipaddress.ip_network('0.0.0.0/8'),
     ipaddress.ip_network('::1/128'),
     ipaddress.ip_network('fc00::/7'),
     ipaddress.ip_network('fe80::/10'),
+    ipaddress.ip_network('::ffff:0:0/96'),    # IPv4-mapped IPv6
 ]
 
+def _is_ip_safe(ip_str: str) -> bool:
+    """Return True only if the IP is a publicly routable, non-special address."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        if not ip.is_global:
+            return False  # loopback, private, link-local, multicast, unspecified
+        for network in _PRIVATE_NETWORKS:
+            if ip in network:
+                return False
+        return True
+    except ValueError:
+        return False
+
 def _is_safe_url_for_preview(url: str) -> bool:
+    """
+    Guards against SSRF.
+    - Allows only http/https.
+    - Rejects known dangerous hostnames.
+    - Resolves DNS and rejects every result that maps to a private/internal IP
+      (prevents DNS rebinding attacks).
+    - If DNS resolution fails entirely, denies the request.
+    """
     try:
         parsed = urlparse(url)
         if parsed.scheme not in ('http', 'https'):
@@ -1331,13 +1451,17 @@ def _is_safe_url_for_preview(url: str) -> bool:
             return False
         if hostname.lower() in _BLOCKED_HOSTS:
             return False
+        # Resolve every A/AAAA record and check them all
         try:
-            ip = ipaddress.ip_address(hostname)
-            for network in _PRIVATE_NETWORKS:
-                if ip in network:
-                    return False
-        except ValueError:
-            pass
+            results = socket.getaddrinfo(hostname, None)
+        except socket.gaierror:
+            return False  # unresolvable hostname -> deny
+        if not results:
+            return False
+        for res in results:
+            ip_str = res[4][0]
+            if not _is_ip_safe(ip_str):
+                return False
         return True
     except Exception:
         return False
@@ -1352,6 +1476,16 @@ def fetch_link_preview(request):
     if not url:
         return JsonResponse({'error': 'No URL provided'}, status=400)
 
+    # Unescape HTML entities (e.g. &amp; -> &) that occur when the JS regex
+    # picks up a URL from rendered post text where format_post_text has
+    # already HTML-encoded special characters.
+    url = html_unescape(url)
+
+    # Sanity cap — reject absurdly long URLs
+    if len(url) > 2048:
+        return JsonResponse({'error': 'URL too long'}, status=400)
+
+    # Fix 3: enforce safe scheme before anything else
     if not url.startswith(('http://', 'https://')):
         return JsonResponse({'error': 'Invalid URL'}, status=400)
 
@@ -1385,12 +1519,17 @@ def fetch_link_preview(request):
         image       = og('image')
         domain      = urlparse(resp.url).netloc.replace('www.', '')
 
+        # Fix 3: reject non-http/https image URLs (blocks javascript: data: etc.)
         if image and not image.startswith(('http://', 'https://')):
             image = ''
 
+        # Fix 2: sanitise all text fields from the external site before returning
         return JsonResponse({
-            'title': title[:200], 'description': description[:400],
-            'image': image[:500], 'domain': domain[:100], 'url': url,
+            'title':       html_escape(title[:200]),
+            'description': html_escape(description[:400]),
+            'image':       image[:500],        # URL — not rendered as HTML
+            'domain':      html_escape(domain[:100]),
+            'url':         url,                # already validated as http/https above
         })
     except Exception:
         return JsonResponse({'title': '', 'description': '', 'image': '', 'domain': '', 'url': url})
@@ -1620,13 +1759,14 @@ def channel_create(request):
     return render(request, 'channel_create.html', context)
 
 
+@login_required(login_url='/')
 def follow_channel(request, channel_id):
     channel = get_object_or_404(Channel, channel_id=channel_id)
     if request.user not in channel.subscriber.all():
         channel.subscriber.add(request.user)
     else:
         channel.subscriber.remove(request.user)
-    return redirect(request.META.get('HTTP_REFERER'))
+    return _safe_redirect_back(request, fallback='home')
 
 
 @login_required
@@ -1914,6 +2054,7 @@ def spotlight_view(request):
     return render(request, 'spotlight.html', {'posts': spotlight_posts})
 
 
+@login_required(login_url='/')
 @require_POST
 def track_share(request, post_id):
     post_obj = get_object_or_404(Post, post_id=post_id)

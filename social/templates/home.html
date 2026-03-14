@@ -764,7 +764,63 @@
     .kvibe-repost-caption-text {
       color: var(--kvibe-text);
     }
-    
+
+    /* ── Post Link Preview Card ─────────────────────────────────────────── */
+    .kvibe-post-link-preview {
+      display: block;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 8px 16px 4px;
+      text-decoration: none;
+      border: 1px solid var(--kvibe-border);
+      background: var(--kvibe-white);
+      transition: opacity 0.15s, box-shadow 0.15s;
+      cursor: pointer;
+    }
+    .kvibe-post-link-preview:hover {
+      opacity: 0.88;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .kvibe-plp-image {
+      width: 100%;
+      max-height: 180px;
+      object-fit: cover;
+      display: block;
+      border-bottom: 1px solid var(--kvibe-separator);
+    }
+    .kvibe-plp-body {
+      padding: 9px 12px 10px;
+    }
+    .kvibe-plp-domain {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--kvibe-primary);
+      margin-bottom: 3px;
+      font-weight: 500;
+    }
+    .kvibe-plp-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--kvibe-text);
+      line-height: 1.35;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .kvibe-plp-desc {
+      font-size: 12px;
+      color: var(--kvibe-text-light);
+      margin-top: 3px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      line-height: 1.4;
+    }
+    /* ──────────────────────────────────────────────────────────────────── */
+
     /* Media containers */
     .kvibe-media-container {
       width: 100%;
@@ -2758,7 +2814,13 @@
     {% for item in posts_with_ads %}
           {% if item.type == 'post' %}
             <!-- Regular Post -->
-            <article class="kvibe-post" data-post-id="{{ item.data.post_id }}" data-mood="{{ item.data.mood|default:'' }}" data-custom-mood="{% if item.data.mood == 'custom' or not item.data.mood %}{{ item.data.custom_mood|default:'' }}{% endif %}">
+            <article class="kvibe-post" data-post-id="{{ item.data.post_id }}" data-mood="{{ item.data.mood|default:'' }}" data-custom-mood="{% if item.data.mood == 'custom' or not item.data.mood %}{{ item.data.custom_mood|default:'' }}{% endif %}"
+              {% if not item.data.is_repost and not item.data.link_preview and not item.data.file and not item.data.video_file and not item.data.images.all %}
+                {% if item.data.content %}data-lp-url="{{ item.data.content|truncatechars:2048 }}"{% endif %}
+              {% elif item.data.is_repost and item.data.original_post and not item.data.original_post.link_preview and not item.data.original_post.file and not item.data.original_post.video_file and not item.data.original_post.images.all %}
+                {% if item.data.original_post.content %}data-lp-url="{{ item.data.original_post.content|truncatechars:2048 }}"{% endif %}
+              {% endif %}
+            >
               <!-- Repost Header (if this is a repost) -->
               {% if item.data.is_repost %}
               <div class="kvibe-repost-header">
@@ -2940,6 +3002,45 @@
                 {% endif %}
               </div>
               {% endif %}
+
+              <!-- Link Preview Card -->
+              {% if item.data.is_repost and item.data.original_post %}
+                {% with lp=item.data.original_post.link_preview %}
+                {% if lp %}{% if lp.title or lp.image %}
+                <a class="kvibe-post-link-preview"
+                   href="{{ lp.url }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   onclick="event.stopPropagation()">
+                  {% if lp.image %}<img class="kvibe-plp-image" src="{{ lp.image }}" alt="" onerror="this.style.display='none'">{% endif %}
+                  <div class="kvibe-plp-body">
+                    {% if lp.domain %}<div class="kvibe-plp-domain">{{ lp.domain }}</div>{% endif %}
+                    {% if lp.title %}<div class="kvibe-plp-title">{{ lp.title }}</div>{% endif %}
+                    {% if lp.description %}<div class="kvibe-plp-desc">{{ lp.description }}</div>{% endif %}
+                  </div>
+                </a>
+                {% endif %}{% endif %}
+                {% endwith %}
+              {% else %}
+                {% with lp=item.data.link_preview %}
+                {% if lp %}{% if lp.title or lp.image %}
+                <a class="kvibe-post-link-preview"
+                   href="{{ lp.url }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   onclick="event.stopPropagation()">
+                  {% if lp.image %}<img class="kvibe-plp-image" src="{{ lp.image }}" alt="" onerror="this.style.display='none'">{% endif %}
+                  <div class="kvibe-plp-body">
+                    {% if lp.domain %}<div class="kvibe-plp-domain">{{ lp.domain }}</div>{% endif %}
+                    {% if lp.title %}<div class="kvibe-plp-title">{{ lp.title }}</div>{% endif %}
+                    {% if lp.description %}<div class="kvibe-plp-desc">{{ lp.description }}</div>{% endif %}
+                  </div>
+                </a>
+                {% endif %}{% endif %}
+                {% endwith %}
+              {% endif %}
+              <!-- client-side lp injection point -->
+              <div class="kvibe-lp-slot"></div>
 
               <!-- Media Container - Handle all media types -->
               {% if item.data.file or item.data.video_file or item.data.images.all or item.data.is_repost %}
@@ -4629,6 +4730,99 @@
   }
 
   document.addEventListener('keydown', function(e) { if (e.key === 'Escape') kvibeCloseCommentSheet(); });
+
+  // ── Client-side link preview loader ──────────────────────────────────────
+  // Fires after DOMContentLoaded. Scans every post card that has a
+  // data-lp-url attribute (set by the template when link_preview is null).
+  // Extracts the first URL from the raw content, fetches /fetch_link_preview/,
+  // and injects the card into the card's .kvibe-lp-slot div.
+
+  (function kvibeFeedLpInit() {
+    const URL_RE = /(https?:\/\/[^\s"'<>]{4,})/;
+
+    function kvibeBuildFeedLpCard(lp) {
+      if (!lp || (!lp.title && !lp.image)) return null;
+      const a = document.createElement('a');
+      a.className   = 'kvibe-post-link-preview';
+      a.href        = lp.url || '#';
+      a.target      = '_blank';
+      a.rel         = 'noopener noreferrer';
+      a.addEventListener('click', e => e.stopPropagation());
+
+      if (lp.image) {
+        const img   = document.createElement('img');
+        img.className = 'kvibe-plp-image';
+        img.src     = lp.image;
+        img.alt     = '';
+        img.onerror = () => { img.style.display = 'none'; };
+        a.appendChild(img);
+      }
+
+      const body  = document.createElement('div');
+      body.className = 'kvibe-plp-body';
+
+      if (lp.domain) {
+        const d = document.createElement('div');
+        d.className   = 'kvibe-plp-domain';
+        d.textContent = lp.domain;
+        body.appendChild(d);
+      }
+      if (lp.title) {
+        const t = document.createElement('div');
+        t.className   = 'kvibe-plp-title';
+        t.textContent = lp.title;
+        body.appendChild(t);
+      }
+      if (lp.description) {
+        const desc = document.createElement('div');
+        desc.className   = 'kvibe-plp-desc';
+        desc.textContent = lp.description;
+        body.appendChild(desc);
+      }
+
+      a.appendChild(body);
+      return a;
+    }
+
+    async function kvibeFetchAndInjectLp(article) {
+      const rawContent = article.dataset.lpUrl || '';
+      const match      = rawContent.match(URL_RE);
+      if (!match) return;
+
+      const url  = match[1];
+      const slot = article.querySelector('.kvibe-lp-slot');
+      if (!slot) return;
+
+      // Already has a rendered card from the template — skip
+      if (article.querySelector('.kvibe-post-link-preview')) return;
+
+      try {
+        const res  = await fetch(`/fetch_link_preview/?url=${encodeURIComponent(url)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.title && !data.image) return;
+        const card = kvibeBuildFeedLpCard({ ...data, url });
+        if (card) slot.appendChild(card);
+      } catch (_) { /* silent — preview is best-effort */ }
+    }
+
+    // Run on all cards already in the DOM
+    function kvibeScanCards(root) {
+      (root || document).querySelectorAll('.kvibe-post[data-lp-url]').forEach(article => {
+        kvibeFetchAndInjectLp(article);
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => kvibeScanCards());
+    } else {
+      kvibeScanCards();
+    }
+
+    // Expose so infinite-scroll / dynamically added cards can call it
+    window.kvibeScanFeedLpCards = kvibeScanCards;
+  })();
+  // ─────────────────────────────────────────────────────────────────────────
 </script>
 </body>
 </html>

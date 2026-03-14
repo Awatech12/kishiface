@@ -491,6 +491,73 @@
             color: var(--kvibe-text-light);
         }
 
+        /* ── Compose Link Preview Banner ────────────────────────────────────── */
+        .kvibe-compose-lp-banner {
+            display: none;
+            align-items: flex-start;
+            gap: 10px;
+            margin: 0 16px 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--kvibe-input-bg);
+            border: 1px solid var(--kvibe-border);
+            position: relative;
+            animation: kvLpFadeIn 0.2s ease;
+        }
+        @keyframes kvLpFadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+        .kvibe-compose-lp-thumb {
+            width: 52px;
+            height: 52px;
+            border-radius: 6px;
+            object-fit: cover;
+            flex-shrink: 0;
+            display: none;
+        }
+        .kvibe-compose-lp-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .kvibe-compose-lp-domain {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--kvibe-primary);
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        .kvibe-compose-lp-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--kvibe-text);
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            line-height: 1.3;
+        }
+        .kvibe-compose-lp-desc {
+            font-size: 11px;
+            color: var(--kvibe-text-light);
+            margin-top: 2px;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+        }
+        .kvibe-compose-lp-dismiss {
+            background: none;
+            border: none;
+            color: var(--kvibe-text-light);
+            cursor: pointer;
+            font-size: 14px;
+            padding: 0 0 0 4px;
+            line-height: 1;
+            flex-shrink: 0;
+            margin-top: -2px;
+        }
+        .kvibe-compose-lp-dismiss:hover { color: var(--kvibe-text); }
+        /* ──────────────────────────────────────────────────────────────────── */
+
         /* ===== TEXT STYLE MODE (Kvibe-like) ===== */
         .kvibe-text-style-toggle {
             display: flex;
@@ -5611,7 +5678,20 @@
                 </div>
                 
                 <div class="kvibe-textarea-container">
-                    <textarea name="content" class="kvibe-textarea" placeholder="what's the tea? ☕" rows="3" oninput="updatePreview()"></textarea>
+                    <textarea name="content" class="kvibe-textarea" placeholder="what's the tea? ☕" rows="3" oninput="updatePreview(); kvComposeLpOnInput(this.value)"></textarea>
+                </div>
+
+                <!-- Compose Link Preview Banner -->
+                <div class="kvibe-compose-lp-banner" id="kvComposeLpBanner">
+                    <img class="kvibe-compose-lp-thumb" id="kvComposeLpThumb" src="" alt="">
+                    <div class="kvibe-compose-lp-info">
+                        <div class="kvibe-compose-lp-domain" id="kvComposeLpDomain"></div>
+                        <div class="kvibe-compose-lp-title" id="kvComposeLpTitle"></div>
+                        <div class="kvibe-compose-lp-desc" id="kvComposeLpDesc"></div>
+                    </div>
+                    <button class="kvibe-compose-lp-dismiss" onclick="kvComposeLpDismiss()" title="Remove preview">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
 
                 <!-- Text Style Toggle -->
@@ -12874,6 +12954,62 @@
         function showSsExportDone(blob) {
             openSsExportPreview(blob);
         }
+
+        // ── Compose Link Preview ──────────────────────────────────────────────
+        let _kvComposeLpTimer     = null;
+        let _kvComposeLpLastUrl   = null;
+        let _kvComposeLpDismissed = false;
+        let _kvComposeLpData      = null;
+        const _kvComposeLpRegex   = /(https?:\/\/[^\s]{4,})/;
+
+        function kvComposeLpDismiss() {
+            _kvComposeLpDismissed = true;
+            _kvComposeLpData      = null;
+            document.getElementById('kvComposeLpBanner').style.display = 'none';
+        }
+
+        function kvComposeLpShow(data) {
+            _kvComposeLpData = data;
+            document.getElementById('kvComposeLpDomain').textContent = data.domain      || '';
+            document.getElementById('kvComposeLpTitle').textContent  = data.title       || data.url;
+            document.getElementById('kvComposeLpDesc').textContent   = data.description || '';
+            const thumb = document.getElementById('kvComposeLpThumb');
+            if (data.image) {
+                thumb.src           = data.image;
+                thumb.style.display = 'block';
+                thumb.onerror       = () => { thumb.style.display = 'none'; };
+            } else {
+                thumb.style.display = 'none';
+            }
+            document.getElementById('kvComposeLpBanner').style.display = 'flex';
+        }
+
+        function kvComposeLpOnInput(val) {
+            const match = val.match(_kvComposeLpRegex);
+            if (!match) {
+                clearTimeout(_kvComposeLpTimer);
+                _kvComposeLpDismissed = false;
+                _kvComposeLpData      = null;
+                _kvComposeLpLastUrl   = null;
+                document.getElementById('kvComposeLpBanner').style.display = 'none';
+                return;
+            }
+            const url = match[1];
+            if (_kvComposeLpDismissed)           return;
+            if (url === _kvComposeLpLastUrl)     return;
+            clearTimeout(_kvComposeLpTimer);
+            _kvComposeLpTimer = setTimeout(async () => {
+                _kvComposeLpLastUrl = url;
+                try {
+                    const res  = await fetch(`/fetch_link_preview/?url=${encodeURIComponent(url)}`);
+                    const data = await res.json();
+                    if (data.title || data.image) {
+                        kvComposeLpShow({ ...data, url });
+                    }
+                } catch (e) { /* silent — preview is best-effort */ }
+            }, 750);
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
     </script>
 

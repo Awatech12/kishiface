@@ -325,6 +325,7 @@ class Post(models.Model):
         file = models.FileField(upload_to='post_file', blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
+    link_preview = models.JSONField(null=True, blank=True)
 
     def __str__(self):
         return self.author.username
