@@ -21,7 +21,7 @@ from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
 import time, json, logging, re, requests, ipaddress
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote as url_quote
 from django.http import JsonResponse, Http404
 from django.conf import settings
 from django.utils import timezone
@@ -1472,6 +1472,15 @@ def fetch_link_preview(request):
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
+    # ── Rate limit: max 30 preview fetches per user per minute ───────────
+    from django.core.cache import cache
+    rate_key = f'lp_rate_{request.user.id}'
+    rate_count = cache.get(rate_key, 0)
+    if rate_count >= 30:
+        return JsonResponse({'error': 'Too many requests'}, status=429)
+    cache.set(rate_key, rate_count + 1, timeout=60)
+    # ─────────────────────────────────────────────────────────────────────
+
     url = request.GET.get('url', '').strip()
     if not url:
         return JsonResponse({'error': 'No URL provided'}, status=400)
@@ -1485,12 +1494,64 @@ def fetch_link_preview(request):
     if len(url) > 2048:
         return JsonResponse({'error': 'URL too long'}, status=400)
 
-    # Fix 3: enforce safe scheme before anything else
+    # Enforce safe scheme before anything else
     if not url.startswith(('http://', 'https://')):
         return JsonResponse({'error': 'Invalid URL'}, status=400)
 
     if not _is_safe_url_for_preview(url):
         return JsonResponse({'error': 'URL not allowed'}, status=400)
+
+    # ── oEmbed fast-path for video platforms ─────────────────────────────
+    # YouTube, YouTube Shorts, Vimeo, TikTok, and Twitter/X all expose an
+    # oEmbed endpoint that reliably returns title + thumbnail without
+    # requiring a full page scrape (which these sites block for bots).
+    def _try_oembed(target_url):
+        parsed_host = urlparse(target_url).hostname or ''
+        # URL-encode target_url so it is safe inside a query string
+        encoded = url_quote(target_url, safe='')
+        oembed_endpoint = None
+
+        if 'youtube.com' in parsed_host or 'youtu.be' in parsed_host:
+            oembed_endpoint = f'https://www.youtube.com/oembed?url={encoded}&format=json'
+        elif 'vimeo.com' in parsed_host:
+            oembed_endpoint = f'https://vimeo.com/api/oembed.json?url={encoded}'
+        elif 'tiktok.com' in parsed_host:
+            oembed_endpoint = f'https://www.tiktok.com/oembed?url={encoded}'
+        elif 'twitter.com' in parsed_host or 'x.com' in parsed_host:
+            oembed_endpoint = f'https://publish.twitter.com/oembed?url={encoded}'
+
+        if not oembed_endpoint:
+            return None
+        try:
+            r = requests.get(oembed_endpoint, timeout=5,
+                             headers={'User-Agent': 'Mozilla/5.0 (compatible; KvibeBot/1.0)'},
+                             allow_redirects=False)  # oEmbed APIs never redirect; block open-redirect abuse
+            if not r.ok:
+                return None
+            data = r.json()
+            thumb  = data.get('thumbnail_url', '') or ''
+            title  = data.get('title', '') or ''
+            author = data.get('author_name', '') or ''
+            domain = parsed_host.replace('www.', '')
+            desc   = f'By {author}' if author else ''
+            # Reject non-http/https thumbnail URLs
+            if thumb and not thumb.startswith(('http://', 'https://')):
+                thumb = ''
+            return {
+                'title':       html_escape(title[:200]),
+                'description': html_escape(desc[:400]),
+                'image':       thumb[:500],
+                'domain':      html_escape(domain[:100]),
+                'url':         target_url,
+            }
+        except Exception:
+            return None
+    # ─────────────────────────────────────────────────────────────────────
+
+    # Try oEmbed first — if it works, return immediately
+    oembed_result = _try_oembed(url)
+    if oembed_result and (oembed_result['title'] or oembed_result['image']):
+        return JsonResponse(oembed_result)
 
     try:
         headers = {
