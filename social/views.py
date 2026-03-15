@@ -129,6 +129,7 @@ def index(request):
 
     # ── POST — login attempt ──────────────────────────────────────────────────
     if request.method == 'POST':
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
         # ── Brute-force rate limit: max 10 attempts per IP per 15 minutes ────
         from django.core.cache import cache
@@ -2628,3 +2629,4 @@ def change_password(request):
         'success': True,
         'message': 'Password updated successfully!',
     })
+
