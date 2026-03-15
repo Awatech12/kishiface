@@ -27,68 +27,264 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta
 import random
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.contrib.contenttypes.models import ContentType
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 import cloudinary
 
-# Create your views here.
-def index(request):
-    if request.user.is_authenticated:
-        messages.info(request, f'{request.user.username} welcome')
-        return redirect(request.GET.get('next','home'))
-    if request.method =='POST':
-        user_check = request.POST.get('user_check').strip()
-        password = request.POST.get('password').strip()
+# ─────────────────────────────────────────────────────────────────────────────
+# Registration helpers — compiled once, reused by view + AJAX endpoints
+# ─────────────────────────────────────────────────────────────────────────────
 
+_USERNAME_RE = re.compile(r'^[A-Za-z0-9_]{5,30}$')
+_EMAIL_RE    = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+
+_COMMON_PASSWORDS = {
+    'password', 'password1', '12345678', '123456789', 'qwerty123',
+    'iloveyou', 'admin123', 'letmein1', 'welcome1', 'monkey123',
+    'dragon12', 'master12', 'abc12345', 'passw0rd', 'superman',
+    'baseball', 'football', 'shadow12', 'master12', 'qwerty12',
+    '1q2w3e4r', '123qwe', 'zxcvbnm', 'trustno1', 'starwars',
+}
+
+def _score_password(pw: str):
+    score = 0
+    if len(pw) >= 8:   score += 1
+    if len(pw) >= 12:  score += 1
+    if re.search(r'[A-Z]', pw): score += 1
+    if re.search(r'[0-9]', pw): score += 1
+    if re.search(r'[^A-Za-z0-9]', pw): score += 1
+    labels = ['Very Weak', 'Weak', 'Fair', 'Strong', 'Very Strong']
+    return min(score, 4), labels[min(score, 4)]
+
+def _validate_registration(username, email, password, password2):
+    """Central validation — single source of truth for view + AJAX."""
+    errors = []
+    if not username:
+        errors.append('Username is required.')
+    elif len(username) < 5:
+        errors.append('Username must be at least 5 characters.')
+    elif len(username) > 30:
+        errors.append('Username must be 30 characters or fewer.')
+    elif not _USERNAME_RE.match(username):
+        errors.append('Username may only contain letters, numbers and underscores.')
+    elif User.objects.filter(username__iexact=username).exists():
+        errors.append('That username is already taken.')
+
+    if not email:
+        errors.append('Email address is required.')
+    elif not _EMAIL_RE.match(email):
+        errors.append('Please enter a valid email address.')
+    elif User.objects.filter(email__iexact=email).exists():
+        errors.append('An account with that email already exists.')
+
+    if not password:
+        errors.append('Password is required.')
+    elif len(password) < 8:
+        errors.append('Password must be at least 8 characters.')
+    elif password.lower() in _COMMON_PASSWORDS:
+        errors.append('That password is too common — please choose a stronger one.')
+    elif username and password.lower() == username.lower():
+        errors.append('Password cannot be the same as your username.')
+
+    if password and password != password2:
+        errors.append('Passwords do not match.')
+
+    return errors
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Create your views here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Safe-redirect helper — prevents open-redirect attacks via ?next= parameter
+# ─────────────────────────────────────────────────────────────────────────────
+_ALLOWED_ORIGINS = (
+    'http://127.0.0.1',
+    'http://localhost',
+    'https://kishiface.onrender.com',
+)
+
+def _safe_next(request, fallback='/home'):
+    """
+    Validate the ?next= parameter.
+    Only allows relative paths that start with /  and rejects
+    protocol-relative (//evil.com) and absolute external URLs.
+    """
+    next_url = request.GET.get('next', '').strip()
+    if (
+        next_url
+        and next_url.startswith('/')
+        and not next_url.startswith('//')   # block //evil.com
+        and '\x00' not in next_url          # block null bytes
+    ):
+        return next_url
+    return fallback
+
+def index(request):
+    # ── Already logged in ──────────────────────────────────────────────────────
+    if request.user.is_authenticated:
+        next_url = _safe_next(request, '/home')
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'redirect': next_url, 'message': f'Welcome back {request.user.username}!'})
+        return redirect(next_url)
+
+    # ── POST — login attempt ───────────────────────────────────────────────────
+    if request.method == 'POST':
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+        # ── Brute-force rate limit: max 10 attempts per IP per 15 minutes ────
+        from django.core.cache import cache
+        ip = (
+            request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR', 'unknown')
+        )
+        rate_key    = f'login_attempts_{ip}'
+        attempts    = cache.get(rate_key, 0)
+        LIMIT       = 10
+        WINDOW_SECS = 900  # 15 minutes
+        if attempts >= LIMIT:
+            err = 'Too many login attempts. Please try again in 15 minutes.'
+            if is_ajax:
+                return JsonResponse({'success': False, 'message': err}, status=429)
+            messages.error(request, err)
+            return redirect('/')
+        # Increment attempt counter (set with timeout on first hit)
+        cache.set(rate_key, attempts + 1, timeout=WINDOW_SECS)
+
+        user_check = (request.POST.get('user_check') or '').strip()
+        password   = (request.POST.get('password')   or '').strip()
+
+        # kishivibe: basic empty-field guard (belt-and-suspenders; JS guards first)
+        if not user_check or not password:
+            if is_ajax:
+                return JsonResponse({'success': False, 'message': 'Please fill in all fields.'}, status=400)
+            messages.error(request, 'Please fill in all fields.')
+            return redirect('/')
+
+        # kishivibe: allow login by email OR username
         try:
-            user_obj = User.objects.get(email=user_check)
+            user_obj = User.objects.get(email__iexact=user_check)
             username = user_obj.username
         except User.DoesNotExist:
-            username=user_check
-        user =authenticate(request, username=username, password=password)
+            username = user_check
+
+        user = authenticate(request, username=username, password=password)
+
         if user is not None:
             login(request, user)
-            request.session.set_expiry(None)
-            messages.success(request, f"Welcome back {user.username}")
-            return redirect(request.GET.get('next', 'home'))
+            request.session.set_expiry(None)   # session persists until browser close
+            # Clear brute-force counter on successful login
+            cache.delete(rate_key)
+            next_url = _safe_next(request, '/home')
+            if is_ajax:
+                return JsonResponse({
+                    'success':  True,
+                    'message':  f'Welcome back, {user.username}!',
+                    'redirect': next_url,
+                })
+            messages.success(request, f'Welcome back {user.username}')
+            return redirect(next_url)
+
         else:
-            messages.error(request,'Invalid Login details')
+            # kishivibe: deliberately vague — don't reveal whether user exists
+            err = 'Invalid username or password. Please try again.'
+            if is_ajax:
+                return JsonResponse({'success': False, 'message': err}, status=401)
+            messages.error(request, err)
             return redirect('/')
+
+    # ── GET ────────────────────────────────────────────────────────────────────
     return render(request, 'index.html')
 
 
+@csrf_protect
 def register(request):
+    if request.user.is_authenticated:
+        return redirect('home')
+
     if request.method == 'POST':
-        username = request.POST.get('username')
-        email = request.POST.get('email')
-        password = request.POST.get('pass1')
-        password2 = request.POST.get('pass2')
-        if (len(username) < 5):
-            messages.error(request, 'Username must contain atleast 5 Characters')
+        username  = html_escape(request.POST.get('username', '').strip())
+        email     = html_escape(request.POST.get('email', '').strip().lower())
+        password  = request.POST.get('pass1', '')
+        password2 = request.POST.get('pass2', '')
+
+        errors = _validate_registration(username, email, password, password2)
+        if errors:
+            for err in errors:
+                messages.error(request, err)
             return redirect('register')
-        elif len(username) > 30:
-            messages.error(request, 'Username must be 30 characters or less')
-            return redirect('register')
-        elif len(password) < 8:
-            messages.error(request, 'Password must be at least 8 characters')
-            return redirect('register')
-        elif User.objects.filter(username=username):
-            messages.error(request, ' Username is taken Already')
-            return redirect('register')
-        elif User.objects.filter(email=email):
-            messages.error(request, 'Email is taken Already')
-            return redirect('register')
-        elif (password != password2):
-            messages.error(request, 'Password are not the Same')
-            return redirect('register')
-        else:
-            user=User.objects.create_user(username=username, email=email, password=password)
-            Profile.objects.create(user=user)
-            messages.success(request, f'Welcome {username}, You can now Login')
-            return redirect('/')
+
+        user = User.objects.create_user(username=username, email=email, password=password)
+        Profile.objects.create(user=user)
+        messages.success(request, f'Welcome {username}! You can now log in.')
+        return redirect('/')
 
     return render(request, 'register.html')
+
+
+# ── AJAX real-time validation endpoints ──────────────────────────────────────
+
+@require_GET
+def validate_username(request):
+    """GET /register/check-username/?username=…"""
+    from django.core.cache import cache
+    ip = (request.META.get('HTTP_X_FORWARDED_FOR','').split(',')[0].strip()
+          or request.META.get('REMOTE_ADDR','unknown'))
+    rk = f'reg_check_{ip}'
+    hits = cache.get(rk, 0)
+    if hits >= 60:  # 60 checks per minute per IP
+        return JsonResponse({'available': False, 'error': 'Too many requests. Please slow down.'}, status=429)
+    cache.set(rk, hits + 1, timeout=60)
+    raw = request.GET.get('username', '').strip()
+    if len(raw) < 5:
+        return JsonResponse({'available': False, 'error': 'Too short (min 5 characters)'})
+    if len(raw) > 30:
+        return JsonResponse({'available': False, 'error': 'Too long (max 30 characters)'})
+    if not _USERNAME_RE.match(raw):
+        return JsonResponse({'available': False, 'error': 'Letters, numbers and underscores only'})
+    if User.objects.filter(username__iexact=raw).exists():
+        return JsonResponse({'available': False, 'error': 'Username is already taken'})
+    return JsonResponse({'available': True, 'error': None})
+
+
+@require_GET
+def validate_email(request):
+    """GET /register/check-email/?email=…"""
+    from django.core.cache import cache
+    ip = (request.META.get('HTTP_X_FORWARDED_FOR','').split(',')[0].strip()
+          or request.META.get('REMOTE_ADDR','unknown'))
+    rk = f'reg_check_{ip}'
+    hits = cache.get(rk, 0)
+    if hits >= 60:
+        return JsonResponse({'available': False, 'error': 'Too many requests. Please slow down.'}, status=429)
+    cache.set(rk, hits + 1, timeout=60)
+    raw = request.GET.get('email', '').strip().lower()
+    if not raw:
+        return JsonResponse({'available': False, 'error': 'Email is required'})
+    if not _EMAIL_RE.match(raw):
+        return JsonResponse({'available': False, 'error': 'Invalid email format'})
+    if User.objects.filter(email__iexact=raw).exists():
+        return JsonResponse({'available': False, 'error': 'Email is already registered'})
+    return JsonResponse({'available': True, 'error': None})
+
+
+@require_GET
+def validate_password_strength(request):
+    """GET /register/check-password/?password=…&username=…"""
+    pw       = request.GET.get('password', '')
+    username = request.GET.get('username', '').strip().lower()
+    if len(pw) < 8:
+        return JsonResponse({'score': 0, 'label': 'Too Short', 'error': 'Minimum 8 characters'})
+    if pw.lower() in _COMMON_PASSWORDS:
+        return JsonResponse({'score': 0, 'label': 'Breached', 'error': 'Too common — choose a stronger password'})
+    if username and pw.lower() == username:
+        return JsonResponse({'score': 0, 'label': 'Insecure', 'error': 'Password cannot match username'})
+    score, label = _score_password(pw)
+    return JsonResponse({'score': score, 'label': label, 'error': None})
+
+
 
 
 def extract_hashtags(content):
@@ -703,6 +899,8 @@ def profile(request, username):
             'total_view': 0, 'total_like_recieved': 0,
             'total_comments_received': 0, 'mutual_followings': None,
             'mutual_count': 0, 'is_blocked': True,
+            'can_view_details': False,
+            'is_own_profile': False,
         }
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, 'profile_posts_partial.html', context)
@@ -724,6 +922,9 @@ def profile(request, username):
         author=user, images__isnull=False
     ).prefetch_related('images').distinct()[:30]
 
+    # ── Privacy: determine if viewer can see personal details ───────────────
+    can_view_details = profile.can_view_details(request.user)
+
     context = {
         'user': user, 'posts': posts, 'profile': profile,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
@@ -731,6 +932,8 @@ def profile(request, username):
         'total_comments_received': total_comments_received,
         'mutual_followings': mutual_followings, 'mutual_count': mutual_count,
         'is_blocked': False,
+        'can_view_details': can_view_details,
+        'is_own_profile': request.user.is_authenticated and request.user == user,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -744,18 +947,26 @@ def profile(request, username):
 
 @login_required(login_url='/')
 def update_profile(request, username):
+    # Security: only the owner can update their own profile
+    # The username URL param is ignored — we always use request.user
     user    = request.user
     profile = request.user.profile
 
     if request.method == 'POST':
-        fname    = request.POST.get('fname')
-        lname    = request.POST.get('lname')
-        phone    = request.POST.get('phone')
-        address  = request.POST.get('address')
-        location = request.POST.get('location')
-        image    = request.FILES.get('image')
-        bio      = request.POST.get('bio')
-        website  = request.POST.get('website')
+        fname         = request.POST.get('fname')
+        lname         = request.POST.get('lname')
+        phone         = request.POST.get('phone')
+        address       = request.POST.get('address')
+        location      = request.POST.get('location')
+        image         = request.FILES.get('image')
+        bio           = request.POST.get('bio')
+        website       = request.POST.get('website')
+        privacy_level = request.POST.get('privacy_level', '').strip()
+
+        # ── Whitelist privacy values — never trust raw POST ───────────────
+        VALID_PRIVACY = {'public', 'followers_only', 'private'}
+        if privacy_level not in VALID_PRIVACY:
+            privacy_level = None   # ignore invalid value silently
 
         try:
             if fname and lname:
@@ -763,12 +974,17 @@ def update_profile(request, username):
                 user.last_name  = lname
                 user.save()
 
-            if phone or address or location or bio or website:
-                if phone:    profile.phone    = phone
-                if address:  profile.address  = address
-                if location: profile.location = location
-                if bio:      profile.bio      = bio
-                if website:  profile.website  = website
+            profile_dirty = False
+            if phone:    profile.phone    = phone;    profile_dirty = True
+            if address:  profile.address  = address;  profile_dirty = True
+            if location: profile.location = location; profile_dirty = True
+            if bio is not None: profile.bio = bio;    profile_dirty = True
+            if website:  profile.website  = website;  profile_dirty = True
+            if privacy_level:
+                profile.privacy_level = privacy_level
+                profile_dirty = True
+
+            if profile_dirty:
                 profile.save()
 
             if image:
@@ -779,10 +995,15 @@ def update_profile(request, username):
                 return JsonResponse({
                     'success': True,
                     'data': {
-                        'first_name': user.first_name, 'last_name': user.last_name,
-                        'bio': profile.bio, 'phone': profile.phone,
-                        'address': profile.address, 'location': profile.location,
-                        'picture_url': profile.picture.url, 'website': profile.website,
+                        'first_name':    user.first_name,
+                        'last_name':     user.last_name,
+                        'bio':           profile.bio,
+                        'phone':         profile.phone,
+                        'address':       profile.address,
+                        'location':      profile.location,
+                        'picture_url':   profile.picture.url,
+                        'website':       profile.website,
+                        'privacy_level': profile.privacy_level,
                     },
                     'message': 'Profile updated successfully!'
                 })
@@ -2341,3 +2562,95 @@ def online_status_api(request, user_id):
         return JsonResponse({'is_online': profile_obj.is_online})
     except Profile.DoesNotExist:
         return JsonResponse({'is_online': False})
+
+
+# ─── Change Password ──────────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def change_password(request):
+    """
+    AJAX-only endpoint. Verifies the current password then sets the new one.
+    Keeps the user logged in via update_session_auth_hash so the session
+    token stays valid after the password rotation.
+    """
+    # ── Rate limit: max 5 password-change attempts per user per hour ─────────
+    from django.core.cache import cache
+    rate_key  = f'chpw_{request.user.id}'
+    pw_hits   = cache.get(rate_key, 0)
+    if pw_hits >= 5:
+        return JsonResponse({
+            'success': False,
+            'message': 'Too many password change attempts. Please try again in an hour.',
+        }, status=429)
+    cache.set(rate_key, pw_hits + 1, timeout=3600)
+
+    _COMMON_PW = {
+        'password', 'password1', '12345678', '123456789', 'qwerty123',
+        'iloveyou', 'admin123', 'letmein1', 'welcome1', 'monkey123',
+    }
+
+    current = request.POST.get('current_password', '').strip()
+    new_pw  = request.POST.get('new_password', '')
+    confirm = request.POST.get('confirm_password', '')
+
+    # ── Validate current password ─────────────────────────────────────────────
+    if not current:
+        return JsonResponse({
+            'success': False,
+            'message': 'Current password is required.',
+            'field':   'current',
+        }, status=400)
+
+    if not request.user.check_password(current):
+        return JsonResponse({
+            'success': False,
+            'message': 'Current password is incorrect.',
+            'field':   'current',
+        }, status=400)
+
+    # ── Validate new password ─────────────────────────────────────────────────
+    if not new_pw:
+        return JsonResponse({
+            'success': False,
+            'message': 'New password is required.',
+        }, status=400)
+
+    if len(new_pw) < 8:
+        return JsonResponse({
+            'success': False,
+            'message': 'New password must be at least 8 characters.',
+        }, status=400)
+
+    if new_pw.lower() in _COMMON_PW:
+        return JsonResponse({
+            'success': False,
+            'message': 'That password is too common — please choose a stronger one.',
+        }, status=400)
+
+    if new_pw == current:
+        return JsonResponse({
+            'success': False,
+            'message': 'New password must be different from your current password.',
+        }, status=400)
+
+    if new_pw != confirm:
+        return JsonResponse({
+            'success': False,
+            'message': 'Passwords do not match.',
+        }, status=400)
+
+    # ── Apply ─────────────────────────────────────────────────────────────────
+    request.user.set_password(new_pw)
+    request.user.save()
+
+    # Keep the user logged in — Django rotates the session hash on password change
+    from django.contrib.auth import update_session_auth_hash
+    update_session_auth_hash(request, request.user)
+    # Clear the rate-limit counter on success
+    cache.delete(rate_key)
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Password updated successfully!',
+    })

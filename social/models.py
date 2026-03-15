@@ -143,6 +143,23 @@ class Profile(models.Model):
     website = models.URLField(max_length=500, blank=True, default='')
     bio = models.CharField(max_length=300, blank=True, default='')
     location = models.CharField(max_length=200, blank=True, default='')
+
+    # ── Privacy settings ─────────────────────────────────────────
+    PRIVACY_PUBLIC        = 'public'
+    PRIVACY_FOLLOWERS     = 'followers_only'
+    PRIVACY_PRIVATE       = 'private'
+    PRIVACY_CHOICES = [
+        (PRIVACY_PUBLIC,    'Everyone'),
+        (PRIVACY_FOLLOWERS, 'Followers only'),
+        (PRIVACY_PRIVATE,   'Nobody (Hidden)'),
+    ]
+    privacy_level = models.CharField(
+        max_length=20,
+        choices=PRIVACY_CHOICES,
+        default=PRIVACY_PUBLIC,
+        db_index=True,
+        help_text='Controls who can view this profile details',
+    )
     
     if settings.USE_CLOUDINARY:
         picture = CloudinaryField('picture', folder='profile_image', default='logo_iowyea')
@@ -177,9 +194,49 @@ class Profile(models.Model):
             except ValidationError as e:
                 raise ValidationError({'phone': str(e)})
         
+        # Validate privacy_level against allowed values
+        valid_privacy = [c[0] for c in self.PRIVACY_CHOICES]
+        if self.privacy_level not in valid_privacy:
+            self.privacy_level = self.PRIVACY_PUBLIC
+
         if self.picture and hasattr(self.picture, 'name'):
             validate_file_extension(self.picture)
             validate_file_size(self.picture, max_size_mb=10)
+
+    # ── Privacy helpers ─────────────────────────────────────────
+    def can_view_details(self, viewer):
+        """
+        Returns True if `viewer` (a User or AnonymousUser) is allowed
+        to see this profile's personal details (bio, phone, location etc.)
+        based on the owner's privacy_level setting.
+
+        Rules:
+          public        → everyone can see
+          followers_only→ only users who follow this profile can see
+          private       → only the owner themselves can see
+        """
+        owner = self.user
+
+        # The owner always sees everything
+        if hasattr(viewer, 'is_authenticated') and viewer.is_authenticated:
+            if viewer == owner:
+                return True
+
+        if self.privacy_level == self.PRIVACY_PUBLIC:
+            return True
+
+        if self.privacy_level == self.PRIVACY_FOLLOWERS:
+            if not hasattr(viewer, 'is_authenticated') or not viewer.is_authenticated:
+                return False
+            # viewer must follow the owner
+            try:
+                viewer_profile = viewer.profile
+                return viewer_profile.followings.filter(pk=self.pk).exists()
+            except Exception:
+                return False
+
+        # PRIVACY_PRIVATE — only owner (already handled above)
+        return False
 
     def save(self, *args, **kwargs):
         self.full_clean()

@@ -5,6 +5,15 @@ from . import views
 urlpatterns = [
     path('', views.index, name='index'),
     path('register/', views.register, name='register'),
+
+    # ── Register — real-time AJAX validation (GET, read-only, no auth required) ──
+    path('register/check-username/', views.validate_username,          name='validate_username'),
+    path('register/check-email/',    views.validate_email,             name='validate_email'),
+    path('register/check-password/', views.validate_password_strength, name='validate_password_strength'),
+
+    # ── Account — password change (POST, login required) ──────────────────────
+    path('change-password/', views.change_password, name='change_password'),
+
     path('home', views.home, name='home'),
 
     # ── Notifications ──────────────────────────────────────────────────────────
