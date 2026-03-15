@@ -1022,3 +1022,75 @@ class SearchHistory(models.Model):
         if user_history.count() > 50:
             oldest = user_history.order_by('created_at').first()
             oldest.delete()
+
+
+class LoginAttempt(models.Model):
+    """
+    Layer 2 brute-force protection (Layer 1 = django-axes in settings.py).
+    Tracks failed login attempts per username in the DB.
+    Works on every deployment — no cache/Redis dependency.
+    Auto-cleans entries older than 24 hours on every write.
+    """
+    username     = models.CharField(max_length=254, db_index=True)
+    attempted_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    succeeded    = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'LoginAttempt_Table'
+        ordering = ['-attempted_at']
+        indexes  = [
+            models.Index(fields=['username', 'attempted_at'], name='login_attempt_user_time_idx'),
+        ]
+
+    def __str__(self):
+        status = 'success' if self.succeeded else 'failed'
+        return f'{self.username} — {status} at {self.attempted_at}'
+
+    @classmethod
+    def is_blocked(cls, username):
+        """
+        Returns (blocked: bool, seconds_left: int).
+        Blocks after 10 failed attempts within 15 minutes.
+        This runs alongside axes — catches attackers who rotate IPs/VPNs.
+        """
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        LIMIT        = 10
+        WINDOW_MINS  = 15
+        window_start = tz.now() - timedelta(minutes=WINDOW_MINS)
+
+        recent = cls.objects.filter(
+            username=username.lower(),
+            attempted_at__gte=window_start,
+            succeeded=False,
+        ).count()
+
+        if recent >= LIMIT:
+            oldest = cls.objects.filter(
+                username=username.lower(),
+                attempted_at__gte=window_start,
+                succeeded=False,
+            ).order_by('attempted_at').first()
+            if oldest:
+                unlock_at    = oldest.attempted_at + timedelta(minutes=WINDOW_MINS)
+                seconds_left = max(0, int((unlock_at - tz.now()).total_seconds()))
+            else:
+                seconds_left = 0
+            return True, seconds_left
+        return False, 0
+
+    @classmethod
+    def record(cls, username, succeeded):
+        """Record an attempt and clean up entries older than 24 hours."""
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        cls.objects.create(username=username.lower(), succeeded=succeeded)
+        # Keep table small — delete old entries
+        cls.objects.filter(
+            attempted_at__lt=tz.now() - timedelta(hours=24)
+        ).delete()
+
+    @classmethod
+    def clear(cls, username):
+        """Clear all failed attempts for a username on successful login."""
+        cls.objects.filter(username=username.lower(), succeeded=False).delete()

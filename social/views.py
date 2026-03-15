@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory
+from social.models import Profile, Post, PostImage, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -130,24 +130,28 @@ def index(request):
     # ── POST — login attempt ──────────────────────────────────────────────────
     if request.method == 'POST':
 
-        # ── Brute-force rate limit: max 10 attempts per IP per 15 minutes ────
-        from django.core.cache import cache
-        ip = (
-            request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
-            or request.META.get('REMOTE_ADDR', 'unknown')
-        )
-        rate_key    = f'login_attempts_{ip}'
-        attempts    = cache.get(rate_key, 0)
-        if attempts >= 10:
-            messages.error(request, 'Too many login attempts. Please try again in 15 minutes.')
-            return redirect('/')
-        cache.set(rate_key, attempts + 1, timeout=900)
-
         user_check = (request.POST.get('user_check') or '').strip()
         password   = (request.POST.get('password')   or '').strip()
 
         if not user_check or not password:
             messages.error(request, 'Please fill in all fields.')
+            return redirect('/')
+
+        # ── Layer 1: django-axes (settings.py) ───────────────────────────────
+        # Handled automatically by AxesMiddleware + AxesStandaloneBackend.
+        # Locks after AXES_FAILURE_LIMIT=5 attempts for 1 hour by username+IP.
+
+        # ── Layer 2: LoginAttempt DB (username-only, any device/IP) ──────────
+        # Catches attackers who rotate IPs/VPNs to bypass axes.
+        # Locks after 10 failed attempts within 15 minutes per username.
+        blocked, seconds_left = LoginAttempt.is_blocked(user_check)
+        if blocked:
+            mins = max(1, round(seconds_left / 60))
+            messages.error(
+                request,
+                f'Too many failed attempts on this account. '
+                f'Please wait {mins} minute(s) before trying again.'
+            )
             return redirect('/')
 
         # Allow login by email OR username
@@ -162,16 +166,18 @@ def index(request):
         if user is not None:
             login(request, user)
             request.session.set_expiry(None)
-            cache.delete(rate_key)  # clear rate limit on success
+            # Clear Layer 2 failed attempts on successful login
+            LoginAttempt.clear(user_check)
             return redirect(_safe_next(request, '/home'))
         else:
+            # Record failed attempt for Layer 2
+            LoginAttempt.record(user_check, succeeded=False)
             # Deliberately vague — don't reveal whether the username exists
             messages.error(request, 'Invalid username or password. Please try again.')
             return redirect('/')
 
     # ── GET ───────────────────────────────────────────────────────────────────
     return render(request, 'index.html')
-
 
 @csrf_protect
 def register(request):
@@ -2629,18 +2635,3 @@ def change_password(request):
         'message': 'Password updated successfully!',
     })
 
-
-
-def clear_login_lock(request):
-    """
-    TEMPORARY dev utility — clears ALL login rate limit keys from cache.
-    Visit /clear-login-lock/ to unlock every blocked username at once.
-    REMOVE this view and its URL once you are done testing.
-    """
-    from django.core.cache import cache
-    # Clear every possible key pattern for any username/IP
-    # Django's default cache doesn't support wildcard delete,
-    # so we clear the whole cache — safe in development
-    cache.clear()
-    messages.success(request, 'All login locks cleared. You can now log in.')
-    return redirect('/')
