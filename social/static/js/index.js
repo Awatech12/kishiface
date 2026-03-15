@@ -192,41 +192,47 @@
         headers: {
           'Content-Type':     'application/x-www-form-urlencoded',
           'X-Requested-With': 'XMLHttpRequest',
+          'Accept':           'application/json',
         },
         body: body.toString(),
         credentials: 'same-origin',
       })
-      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        /* If server redirected (e.g. already logged in), follow it */
+        if (res.redirected) {
+          window.location.href = res.url;
+          return null;
+        }
+        /* If response is not JSON (HTML error page etc), throw cleanly */
+        var ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          throw new Error('server_html:' + res.status);
+        }
+        return res.json();
+      })
       .then(function (data) {
+        if (!data) return;  /* handled by redirect above */
         if (data.success) {
-          /* ── Success: show tick then redirect ── */
           loginBtn.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i> Welcome back!';
           showAlert('success', data.message || 'Login successful — redirecting…');
           setTimeout(function () {
             window.location.href = data.redirect || '/home';
           }, 600);
         } else {
-          /* ── Error: show banner + highlight fields ── */
           loginBtn.innerHTML = '<i class="fas fa-sign-in-alt" aria-hidden="true"></i> Log In';
           loginBtn.disabled  = false;
-
           showAlert('error', data.message || 'Invalid credentials. Please try again.');
-
-          /* kishivibe: Highlight both fields on auth failure — don't reveal which is wrong */
           setInputState(uInp, 'error');
           setInputState(pInp, 'error');
           shake(form);
-
-          /* kishivibe: Clear password field so user retypes it — security best practice */
           if (pInp) { pInp.value = ''; pInp.focus(); }
-          /* kishivibe: Reset password input to hidden after clearing */
           if (pInp && pInp.type === 'text') {
             pInp.type = 'password';
             if (toggle) toggle.querySelector('i').className = 'fas fa-eye';
           }
         }
       })
-      .catch(function () {
+      .catch(function (err) {
         /* ── Network / server error ── */
         loginBtn.innerHTML = '<i class="fas fa-sign-in-alt" aria-hidden="true"></i> Log In';
         loginBtn.disabled  = false;
@@ -238,3 +244,4 @@
   });
 
 })();
+
