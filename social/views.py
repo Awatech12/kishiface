@@ -129,7 +129,6 @@ def index(request):
 
     # ── POST — login attempt ──────────────────────────────────────────────────
     if request.method == 'POST':
-        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
         # ── Brute-force rate limit: max 10 attempts per IP per 15 minutes ────
         from django.core.cache import cache
@@ -2630,3 +2629,18 @@ def change_password(request):
         'message': 'Password updated successfully!',
     })
 
+
+
+def clear_login_lock(request):
+    """
+    TEMPORARY dev utility — clears ALL login rate limit keys from cache.
+    Visit /clear-login-lock/ to unlock every blocked username at once.
+    REMOVE this view and its URL once you are done testing.
+    """
+    from django.core.cache import cache
+    # Clear every possible key pattern for any username/IP
+    # Django's default cache doesn't support wildcard delete,
+    # so we clear the whole cache — safe in development
+    cache.clear()
+    messages.success(request, 'All login locks cleared. You can now log in.')
+    return redirect('/')
