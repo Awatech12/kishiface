@@ -3663,28 +3663,6 @@
 </div>
 
 
-            {% if not can_view_details and not is_own_profile %}
-            <div class="kv-details-hidden">
-                <div class="kv-details-hidden-icon">
-                    <i class="fas fa-{% if profile.privacy_level == 'followers_only' %}user-friends{% else %}lock{% endif %}"></i>
-                </div>
-                <div class="kv-details-hidden-title">
-                    {% if profile.privacy_level == 'followers_only' %}
-                        Follow to see details
-                    {% else %}
-                        Details are private
-                    {% endif %}
-                </div>
-                <div class="kv-details-hidden-sub">
-                    {% if profile.privacy_level == 'followers_only' %}
-                        {{ user.username }} only shares their profile details with followers.
-                    {% else %}
-                        {{ user.username }} has chosen to keep their profile details private.
-                    {% endif %}
-                </div>
-            </div>
-            {% endif %}
-
 <!-- ═══ MOBILE STICKY SCROLL HEADER ═══ -->
 <div class="kvibe-scroll-header" id="kvibeScrollHeader">
     <button class="kvibe-scroll-header-back" onclick="history.back()">
@@ -3807,6 +3785,7 @@
 {% if not is_blocked %}
 <div class="kvibe-mobile-details">
 
+    {% if can_view_details %}
     <!-- Location + Website pill row -->
     {% if profile.location or profile.website or profile.address %}
     <div class="kvibe-mobile-pills-row">
@@ -3836,8 +3815,9 @@
     {% if profile.bio %}
     <div class="kvibe-mobile-bio-block">{{ profile.bio }}</div>
     {% endif %}
+    {% endif %}
 
-    <!-- Joined date -->
+    <!-- Joined date always visible -->
     <div class="kvibe-mobile-joined">
         <i class="far fa-calendar-alt"></i> Joined {{ profile.created_at|date:"F Y" }}
     </div>
@@ -4058,8 +4038,10 @@
 
                         <div class="kvibe-profile-username">@{{user.username}}</div>
 
+                        {% if can_view_details %}
                         {% if profile.bio %}
                         <div class="kvibe-profile-bio" id="mainProfileBio">{{profile.bio}}</div>
+                        {% endif %}
                         {% endif %}
 
                         <!-- Vibe Summary Badge (populated by JS) -->
@@ -4070,6 +4052,7 @@
 
                         <!-- Meta info row -->
                         <div class="kvibe-profile-meta">
+                            {% if can_view_details %}
                             {% if profile.location %}
                             <div class="kvibe-meta-item">
                                 <i class="fas fa-map-marker-alt"></i>
@@ -4092,6 +4075,7 @@
                                     </a>
                                 </span>
                             </div>
+                            {% endif %}
                             {% endif %}
                             <div class="kvibe-meta-item">
                                 <i class="far fa-calendar"></i>
@@ -4213,6 +4197,8 @@
 
                 </section>
 
+                <!-- Tabs + Posts — hidden when privacy blocks access -->
+                {% if can_view_details or is_own_profile %}
                 <!-- Tabs — outside profile-info so they show on mobile too -->
                 <nav class="kvibe-tabs">
                     <button data-tab="posts" data-url="{% url 'profile' user.username %}" class="kvibe-tab kvibe-tab-active">
@@ -4300,6 +4286,23 @@
                     </div>
                     {% endif %}
                 </section>
+                {% else %}
+                <div class="kv-details-hidden" style="margin:24px 16px;">
+                    <div class="kv-details-hidden-icon">
+                        <i class="fas fa-{% if profile.privacy_level == 'followers_only' %}user-friends{% else %}lock{% endif %}"></i>
+                    </div>
+                    <div class="kv-details-hidden-title">
+                        {% if profile.privacy_level == 'followers_only' %}Posts are for followers only{% else %}Posts are private{% endif %}
+                    </div>
+                    <div class="kv-details-hidden-sub">
+                        {% if profile.privacy_level == 'followers_only' %}
+                            Follow {{ user.username }} to see their posts.
+                        {% else %}
+                            {{ user.username }} has set their profile to private.
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
 
             </main>
         </div>
