@@ -15,7 +15,7 @@ urlpatterns = [
     path('change-password/', views.change_password, name='change_password'),
 
     path('home', views.home, name='home'),
-
+path('clear-login-lock/', views.clear_login_lock, name='clear_login_lock'),
     # ── Notifications ──────────────────────────────────────────────────────────
     path('open/<uuid:post_id>/<str:notification_type>', views.open_notification, name='open_notification'),
     path('list', views.notification_list, name='notification_list'),
@@ -102,3 +102,4 @@ urlpatterns = [
     path('<str:username>/text-posts/', views.profile_text_posts, name='profile_text_posts'),
     path('<str:username>/', views.profile, name='profile'),
 ]
+
