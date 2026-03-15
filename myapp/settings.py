@@ -32,7 +32,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
-    #'axes',    # Brute-force protection
+    'axes',    # Brute-force protection
     'social.apps.SocialConfig',
     'pwa',
 ]
@@ -85,7 +85,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    #'axes.middleware.AxesMiddleware',   
+    'axes.middleware.AxesMiddleware',   
 ]
 
 ROOT_URLCONF = 'myapp.urls'
@@ -192,7 +192,7 @@ PWA_APP_FETCH_URL = '/offline/'
 # ==============================================================================
 
 AUTHENTICATION_BACKENDS = [
-    #'axes.backends.AxesStandaloneBackend',  # Axes must be first
+    'axes.backends.AxesStandaloneBackend',  # Axes must be first
     'django.contrib.auth.backends.ModelBackend',
 ]
 
