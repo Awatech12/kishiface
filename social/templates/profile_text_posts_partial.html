@@ -89,29 +89,56 @@
     <!-- client-side lp injection point -->
     <div class="kvibe-lp-slot"></div>
 
-    <!-- Action buttons -->
+    <!-- Action buttons — Vibe Reactions (WebSocket real-time) -->
     <div class="kvibe-actions-container">
 
-      <!-- LIKE -->
-      <button class="kvibe-action-item kvibe-like-btn"
-              data-post-id="{{ post.post_id }}"
-              data-liked="{% if request.user in post.likes.all %}true{% else %}false{% endif %}"
-              onclick="kvibeLikePost(this)"
-              style="border:none;font-family:inherit;cursor:pointer;">
-        {% if request.user in post.likes.all %}
-          <i class="fas fa-heart kvibe-action-icon" style="color:var(--kvibe-primary);"></i>
-        {% else %}
-          <i class="fa-regular fa-heart kvibe-action-icon"></i>
-        {% endif %}
-        <span class="kvibe-like-count" id="kvibe-like-count-{{ post.post_id }}">{% if post.likes.count > 0 %}{{ post.likes.count|intcomma }}{% endif %}</span>
-      </button>
+      <!-- VIBE BUTTON -->
+      <div class="kvibe-action-item kv-vibe-btn"
+           id="kv-vibe-btn-{{ post.post_id }}"
+           data-post-id="{{ post.post_id }}"
+           data-user-vibe=""
+           onmouseenter="kvOpenPicker('{{ post.post_id }}')"
+           onmouseleave="kvScheduleClose('{{ post.post_id }}')"
+           onclick="kvTogglePicker('{{ post.post_id }}')">
+
+        <!-- Picker popover -->
+        <div class="kv-picker"
+             id="kv-picker-{{ post.post_id }}"
+             onmouseenter="kvCancelClose('{{ post.post_id }}')"
+             onmouseleave="kvScheduleClose('{{ post.post_id }}')">
+          <div class="kv-vibe-opt" data-vibe="fire"   onclick="kvSendVibe(event,'{{ post.post_id }}','fire')">
+            <span class="kv-opt-emoji">🔥</span><span class="kv-opt-label">Fire</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="real"   onclick="kvSendVibe(event,'{{ post.post_id }}','real')">
+            <span class="kv-opt-emoji">💯</span><span class="kv-opt-label">Real</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="vibing" onclick="kvSendVibe(event,'{{ post.post_id }}','vibing')">
+            <span class="kv-opt-emoji">🎵</span><span class="kv-opt-label">Vibing</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="dead"   onclick="kvSendVibe(event,'{{ post.post_id }}','dead')">
+            <span class="kv-opt-emoji">😂</span><span class="kv-opt-label">Dead</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="cringe" onclick="kvSendVibe(event,'{{ post.post_id }}','cringe')">
+            <span class="kv-opt-emoji">😬</span><span class="kv-opt-label">Cringe</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="chill"  onclick="kvSendVibe(event,'{{ post.post_id }}','chill')">
+            <span class="kv-opt-emoji">🧊</span><span class="kv-opt-label">Chill</span>
+          </div>
+        </div>
+
+        <span id="kv-active-emoji-{{ post.post_id }}" class="kvibe-action-icon">
+          <i class="fa-regular fa-face-smile"></i>
+        </span>
+        <span class="kv-vibe-count" id="kv-vibe-count-{{ post.post_id }}">0</span>
+        <span class="kv-live-dot offline" id="kv-live-dot-{{ post.post_id }}" title="Connecting…"></span>
+      </div>
 
       <!-- COMMENT -->
       <button class="kvibe-action-item"
               onclick="kvibeOpenCommentSheet('{{ post.post_id }}')"
               style="border:none;font-family:inherit;cursor:pointer;">
         <i class="fa-regular fa-comment kvibe-action-icon"></i>
-        <span class="kvibe-comment-count" id="kvibe-comment-count-{{ post.post_id }}">{{ post.comments.count|intcomma }}</span>
+        <span class="kv-vibe-count" id="kvibe-comment-count-{{ post.post_id }}">{{ post.comments.count|intcomma }}</span>
       </button>
 
       <!-- REPOST -->
@@ -140,43 +167,13 @@
 
     </div>
 
-    <!-- Likers + view count row -->
+    <!-- Vibe summary + view count row -->
     <div class="kvibe-engagement-row">
-      <!-- Likers avatars — always in DOM so JS can populate after first like -->
-      <div class="kvibe-likers-container" id="kvibe-likers-{{ post.post_id }}"{% if post.likes.count == 0 %} style="display:none;"{% endif %}>
-        {% for liker in post.liker_data %}
-          <a href="{% url 'profile' liker.username %}" aria-label="{{ liker.username }}">
-            {% if liker.url %}
-              <img src="{{ liker.url }}"
-                   onerror="this.onerror=null;this.src='https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}';"
-                   alt="{{ liker.username }}" class="kvibe-liker-pic">
-            {% else %}
-              <img src="https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}"
-                   alt="{{ liker.username }}" class="kvibe-liker-pic">
-            {% endif %}
-          </a>
-        {% endfor %}
+      <div class="kv-vibe-summary" id="kv-vibe-summary-{{ post.post_id }}">
+        <span class="kv-no-vibes">Be the first to vibe this ✨</span>
       </div>
-
-      <span class="kvibe-like-text" id="kvibe-like-text-{{ post.post_id }}">
-        {% if post.likes.count == 0 %}
-          <span class="kvibe-no-likes">Be the first to like this</span>
-        {% elif request.user in post.likes.all %}
-          {% if post.likes.count == 1 %}
-            <span class="kvibe-you-text">Liked by You</span>
-          {% else %}
-            <span class="kvibe-you-text">Liked by You</span> and {{ post.likes.count|add:"-1" }} others
-          {% endif %}
-        {% else %}
-          {% with liker=post.likes.first %}
-            Liked by <a href="{% url 'profile' liker.username %}"
-                        style="color:var(--kvibe-text);text-decoration:none;">{{ liker.username }}</a>{% if post.likes.count > 1 %} and {{ post.likes.count|add:"-1" }} others{% endif %}
-          {% endwith %}
-        {% endif %}
-      </span>
-
+      <span class="kv-total-text" id="kv-vibe-total-{{ post.post_id }}" style="display:none;"></span>
       <span class="kvibe-separator-dot">·</span>
-
       <span class="kvibe-view-text">
         <i class="fa-regular fa-chart-bar"></i> {{ post.view|intcomma }}
       </span>

@@ -1,7 +1,27 @@
-from .models import Message, Notification, FollowNotification, Channel
+from .models import Message, Notification, FollowNotification, Channel, PostVibe
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
+
+
+# Vibe emoji lookup — mirrors PostVibe.VIBE_EMOJIS
+_VIBE_EMOJIS = {
+    'fire':   '🔥',
+    'real':   '💯',
+    'vibing': '🎵',
+    'dead':   '😂',
+    'cringe': '😬',
+    'chill':  '🧊',
+}
+
+_VIBE_LABELS = {
+    'fire':   'Fire',
+    'real':   'Real',
+    'vibing': 'Vibing',
+    'dead':   'Dead',
+    'cringe': 'Cringe',
+    'chill':  'Chill',
+}
 
 
 def unread_count_processor(request):
@@ -64,6 +84,17 @@ def user_notifications(request):
         if not latest:
             continue
 
+        # For vibe (like) notifications, look up the actor's actual vibe type
+        vibe_type  = None
+        vibe_emoji = None
+        if g['notification_type'] == 'like' and latest.post:
+            pv = PostVibe.objects.filter(
+                post=latest.post, user=latest.actor
+            ).first()
+            if pv:
+                vibe_type  = pv.vibe_type
+                vibe_emoji = _VIBE_EMOJIS.get(pv.vibe_type, '✨')
+
         all_items.append({
             'kind':         'post',
             'latest_actor': latest.actor,
@@ -74,6 +105,8 @@ def user_notifications(request):
             'created_at':   latest.created_at,
             'is_read':      g['unread_count'] == 0,
             'group_id':     f"post-{g['post']}-{g['notification_type']}",
+            'vibe_type':    vibe_type,
+            'vibe_emoji':   vibe_emoji,
         })
 
     # ── 1b. Mention notifications — grouped by post + actor ──────────────────
@@ -116,6 +149,8 @@ def user_notifications(request):
             'created_at':   latest.created_at,
             'is_read':      g['unread_count'] == 0,
             'group_id':     f"post-{g['post']}-mention-{g['actor']}",
+            'vibe_type':    None,
+            'vibe_emoji':   None,
         })
 
     # ── 2. Follow notifications ───────────────────────────────────────────────
@@ -138,6 +173,8 @@ def user_notifications(request):
             'is_read':      fn.is_read,
             'follow_id':    fn.pk,
             'group_id':     f"follow-{fn.pk}",
+            'vibe_type':    None,
+            'vibe_emoji':   None,
         })
 
     # ── 3. Sort unified list newest-first ─────────────────────────────────────

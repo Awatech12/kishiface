@@ -576,6 +576,74 @@ class PostImage(models.Model):
         super().save(*args, **kwargs)
 
 
+# =============================================================================
+# PostVibe — replaces simple Like with 6 mood-based reactions
+# Real-time updates via PostVibeConsumer (WebSocket)
+# =============================================================================
+
+class PostVibe(models.Model):
+    """Stores vibe reactions on posts. One vibe per user per post (toggle/switch)."""
+
+    FIRE    = 'fire'
+    REAL    = 'real'
+    VIBING  = 'vibing'
+    DEAD    = 'dead'
+    CRINGE  = 'cringe'
+    CHILL   = 'chill'
+
+    VIBE_CHOICES = [
+        (FIRE,   '🔥 Fire'),
+        (REAL,   '💯 Real'),
+        (VIBING, '🎵 Vibing'),
+        (DEAD,   '😂 Dead'),
+        (CRINGE, '😬 Cringe'),
+        (CHILL,  '🧊 Chill'),
+    ]
+
+    # Lookup maps used by the consumer and views
+    VIBE_EMOJIS = {
+        FIRE:   '🔥',
+        REAL:   '💯',
+        VIBING: '🎵',
+        DEAD:   '😂',
+        CRINGE: '😬',
+        CHILL:  '🧊',
+    }
+
+    VIBE_LABELS = {
+        FIRE:   'Fire',
+        REAL:   'Real',
+        VIBING: 'Vibing',
+        DEAD:   'Dead',
+        CRINGE: 'Cringe',
+        CHILL:  'Chill',
+    }
+
+    VIBE_COLORS = {
+        FIRE:   '#ff4500',
+        REAL:   '#ff0080',
+        VIBING: '#3b82f6',
+        DEAD:   '#f59e0b',
+        CRINGE: '#8b5cf6',
+        CHILL:  '#06b6d4',
+    }
+
+    post       = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='post_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('post', 'user')   # one vibe per user per post
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['post', 'vibe_type']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on post {self.post_id}"
+
+
 class PostComment(models.Model):
     comment_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')

@@ -52,6 +52,9 @@ urlpatterns = [
     path('comment_like/<uuid:comment_id>', views.comment_like, name='comment_like'),
     path('comment_reply/<uuid:comment_id>', views.comment_reply, name='comment_reply'),
 
+    # ── Post Vibes (real-time reactions) ──────────────────────────────────────
+    path('vibe/<uuid:post_id>/', views.get_post_vibes, name='get_post_vibes'),
+
     # ── Comment Replies ────────────────────────────────────────────────────────
     path('comment/<uuid:comment_id>/add-reply/', views.add_comment_reply, name='add_comment_reply'),
     path('api/like-reply/<uuid:reply_id>/', views.like_reply, name='like_reply'),

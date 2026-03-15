@@ -2,6 +2,106 @@
 {% load static %}
 {% load humanize %}
 
+{% comment %}
+  Inject badge styles once per page — guard prevents duplicates when
+  this row is rendered multiple times (e.g. real-time WS stream).
+{% endcomment %}
+{% if not kvibe_notif_styles_loaded %}
+<style id="kvibe-notif-row-styles">
+.kvibe-notif-wrapper {
+    position: relative;
+    transition: background .2s;
+}
+.kvibe-notif-wrapper:hover { background: #fafafa; }
+.kvibe-unread { background: #f0f7ff; }
+
+.kvibe-notif-item {
+    display: flex; align-items: center;
+    padding: 12px 48px 12px 16px;
+    cursor: pointer; gap: 12px;
+}
+
+.kvibe-avatar-wrap {
+    position: relative; flex-shrink: 0;
+    width: 44px; height: 44px;
+}
+.kvibe-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%; object-fit: cover;
+    border: 1px solid #efefef; display: block;
+}
+.kvibe-type-badge {
+    position: absolute; bottom: -2px; right: -4px;
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; border: 2px solid #fff;
+    color: #fff; pointer-events: none;
+    line-height: 1;
+}
+/* Vibe (like) badge uses CSS variable set inline */
+.badge-like    { background: var(--vibe-color, #ff4500); }
+.badge-comment { background: #0095f6; }
+.badge-repost  { background: #00c96e; }
+.badge-mention { background: #9b59b6; }
+.badge-follow  { background: #fd8c00; }
+
+.kvibe-notif-text {
+    flex: 1; font-size: 14px; line-height: 1.4; color: #262626;
+    min-width: 0;
+}
+.kvibe-notif-time {
+    display: block; font-size: 12px;
+    color: #8e8e8e; margin-top: 2px;
+}
+.kvibe-thumb {
+    width: 44px; height: 44px;
+    border-radius: 4px; object-fit: cover;
+    border: 1px solid #efefef; flex-shrink: 0;
+}
+.kvibe-thumb-placeholder {
+    width: 44px; height: 44px;
+    border-radius: 4px; background: #f5f5f5;
+    border: 1px solid #efefef; flex-shrink: 0;
+    display: flex; align-items: center;
+    justify-content: center; color: #8e8e8e;
+    font-size: 18px;
+}
+.kvibe-follow-btn {
+    flex-shrink: 0; padding: 6px 16px;
+    border-radius: 8px; font-size: 13px;
+    font-weight: 600; cursor: pointer;
+    border: none; transition: background .15s, color .15s;
+}
+.btn-follow    { background: #0095f6; color: #fff; }
+.btn-follow:hover    { background: #0086e0; }
+.btn-following { background: #efefef; color: #262626; }
+.btn-following:hover { background: #dbdbdb; }
+.kvibe-unread-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #0095f6; flex-shrink: 0;
+}
+.kvibe-remove-btn {
+    position: absolute; right: 12px; top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,.9);
+    border: 1px solid #efefef; color: #8e8e8e;
+    cursor: pointer; width: 28px; height: 28px;
+    display: flex; align-items: center;
+    justify-content: center; border-radius: 50%;
+    opacity: 0; transition: opacity .2s, background .15s, color .15s;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    z-index: 10; font-size: 11px;
+}
+.kvibe-notif-wrapper:hover .kvibe-remove-btn { opacity: 1; }
+.kvibe-remove-btn:hover {
+    background: #ffe5e5; color: #ed4956; border-color: #ed4956;
+}
+@media (max-width: 600px) {
+    .kvibe-remove-btn { opacity: .7; }
+}
+</style>
+{% endif %}
+
 <div class="kvibe-notif-wrapper {% if not n.is_read %}kvibe-unread{% endif %}"
      id="kvibe-notif-{{ n.group_id }}">
 
@@ -33,14 +133,21 @@
                 {% elif n.type == 'repost'  %}badge-repost
                 {% elif n.type == 'mention' %}badge-mention
                 {% elif n.type == 'follow'  %}badge-follow
-                {% endif %}">
-                <i class="fas
-                    {% if n.type == 'like'    %}fa-heart
-                    {% elif n.type == 'comment' %}fa-comment
-                    {% elif n.type == 'repost'  %}fa-retweet
-                    {% elif n.type == 'mention' %}fa-at
-                    {% elif n.type == 'follow'  %}fa-user-plus
-                    {% endif %}"></i>
+                {% endif %}"
+                {% if n.type == 'like' %}style="
+                    --vibe-color:{% if n.vibe_type == 'fire' %}#ff4500{% elif n.vibe_type == 'real' %}#ff0080{% elif n.vibe_type == 'vibing' %}#3b82f6{% elif n.vibe_type == 'dead' %}#f59e0b{% elif n.vibe_type == 'cringe' %}#8b5cf6{% elif n.vibe_type == 'chill' %}#06b6d4{% else %}#ff4500{% endif %};
+                    font-size:13px;line-height:1;"
+                {% endif %}>
+                {% if n.type == 'like' %}
+                    {{ n.vibe_emoji|default:"✨" }}
+                {% else %}
+                    <i class="fas
+                        {% if n.type == 'comment' %}fa-comment
+                        {% elif n.type == 'repost'  %}fa-retweet
+                        {% elif n.type == 'mention' %}fa-at
+                        {% elif n.type == 'follow'  %}fa-user-plus
+                        {% endif %}"></i>
+                {% endif %}
             </span>
         </div>
 
@@ -54,11 +161,11 @@
 
                 {% if n.type == 'like' %}
                     {% if n.others_count == 1 %}
-                        &nbsp;and <strong>1 other</strong> liked your post.
+                        &nbsp;and <strong>1 other</strong> vibed {{ n.vibe_emoji|default:"✨" }}{% if n.vibe_type %} <strong>{{ n.vibe_type|capfirst }}</strong>{% endif %} your post.
                     {% elif n.others_count > 1 %}
-                        &nbsp;and <strong>{{ n.others_count }} others</strong> liked your post.
+                        &nbsp;and <strong>{{ n.others_count }} others</strong> vibed {{ n.vibe_emoji|default:"✨" }}{% if n.vibe_type %} <strong>{{ n.vibe_type|capfirst }}</strong>{% endif %} your post.
                     {% else %}
-                        &nbsp;liked your post.
+                        &nbsp;vibed {{ n.vibe_emoji|default:"✨" }}{% if n.vibe_type %} <strong>{{ n.vibe_type|capfirst }}</strong>{% endif %} your post.
                     {% endif %}
 
                 {% elif n.type == 'comment' %}

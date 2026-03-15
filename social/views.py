@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt
+from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -436,8 +436,58 @@ def _safe_pic_url(user_obj):
     return ''
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Vibe helpers — shared by like_post and get_post_vibes
+# ─────────────────────────────────────────────────────────────────────────────
+
+_VIBE_EMOJIS = {
+    'fire':   '🔥',
+    'real':   '💯',
+    'vibing': '🎵',
+    'dead':   '😂',
+    'cringe': '😬',
+    'chill':  '🧊',
+}
+
+_VIBE_COLORS = {
+    'fire':   '#ff4500',
+    'real':   '#ff0080',
+    'vibing': '#3b82f6',
+    'dead':   '#f59e0b',
+    'cringe': '#8b5cf6',
+    'chill':  '#06b6d4',
+}
+
+
+def _get_vibe_context(post_obj, user):
+    """
+    Returns vibe_summary, vibe_total, user_vibe, user_vibe_emoji,
+    vibe_emojis, and vibe_colors for a given post and user.
+    Used by both like_post (HTMX) and get_post_vibes (JSON).
+    """
+    vibe_rows = (
+        PostVibe.objects
+        .filter(post=post_obj)
+        .values('vibe_type')
+        .annotate(count=Count('id'))
+    )
+    vibe_summary = {row['vibe_type']: row['count'] for row in vibe_rows}
+    vibe_total   = sum(vibe_summary.values())
+
+    user_vibe_obj = PostVibe.objects.filter(post=post_obj, user=user).first()
+    user_vibe     = user_vibe_obj.vibe_type if user_vibe_obj else None
+
+    return {
+        'vibe_summary':    vibe_summary,
+        'vibe_total':      vibe_total,
+        'user_vibe':       user_vibe,
+        'user_vibe_emoji': _VIBE_EMOJIS.get(user_vibe, ''),
+        'vibe_emojis':     _VIBE_EMOJIS,
+        'vibe_colors':     _VIBE_COLORS,
+    }
+
+
 @login_required(login_url='/')
-@require_POST
 def repost_post(request, post_id):
     """Handle reposting a post and notify the original author."""
     try:
@@ -597,12 +647,8 @@ def post(request):
             PostImage.objects.create(post=new_post, image=image)
         
         # ── Auto-fetch link preview from post content (background thread) ─
-        # Fix 4: runs in a daemon thread so it never blocks the HTTP response.
-        # Fix 2: html_escape() all text fields from the external site.
-        # Fix 3: image URL validated to http/https only before storing.
         _url_match = re.search(r'https?://[^\s]{4,}', content or '')
         if _url_match and not images and not audio and not video:
-            # html_unescape handles &amp; that sanitize_text may have introduced
             _url_for_preview = html_unescape(_url_match.group(0))
 
             def _bg_fetch_preview(post_pk, fetch_url):
@@ -634,29 +680,26 @@ def post(request):
                     _image       = _og('image')
                     _domain      = urlparse(_resp.url).netloc.replace('www.', '')
 
-                    # Fix 3: reject non-http/https image URLs
                     if _image and not _image.startswith(('http://', 'https://')):
                         _image = ''
 
                     _lp = {
-                        'title':       html_escape(_title[:200]),        # Fix 2
-                        'description': html_escape(_description[:400]),  # Fix 2
+                        'title':       html_escape(_title[:200]),
+                        'description': html_escape(_description[:400]),
                         'image':       _image[:500],
-                        'domain':      html_escape(_domain[:100]),       # Fix 2
+                        'domain':      html_escape(_domain[:100]),
                         'url':         fetch_url,
                     }
                     if _lp['title'] or _lp['image']:
-                        # update() bypasses full_clean / Cloudinary re-upload
                         Post.objects.filter(pk=post_pk).update(link_preview=_lp)
                 except Exception:
-                    pass  # preview is best-effort, never crash silently into main thread
+                    pass
 
             threading.Thread(
                 target=_bg_fetch_preview,
                 args=(new_post.pk, _url_for_preview),
                 daemon=True,
             ).start()
-        # ──────────────────────────────────────────────────────────────────
         
         messages.success(request, 'Post dropped successfully! ✨')
         
@@ -696,25 +739,21 @@ def editpost(request, post_id):
 
 @login_required(login_url='/')
 def like_post(request, post_id):
+    """
+    Legacy HTMX like endpoint — kept for backwards compatibility.
+    The new vibe system runs through WebSocket (PostVibeConsumer).
+    This view now renders post_like.html with full vibe context so
+    the snippet displays correctly when it falls back to HTMX.
+    NOTE: Notifications are fired by PostVibeConsumer.toggle_vibe()
+    — we do NOT create them here to avoid duplicates.
+    """
     post_obj = get_object_or_404(Post, post_id=post_id)
 
+    # Keep the old likes M2M in sync (used by older parts of the UI)
     if request.user in post_obj.likes.all():
         post_obj.likes.remove(request.user)
-        Notification.objects.filter(
-            recipient=post_obj.author,
-            actor=request.user,
-            post=post_obj,
-            notification_type=Notification.LIKE
-        ).delete()
     else:
         post_obj.likes.add(request.user)
-        if post_obj.author != request.user:
-            Notification.objects.create(
-                recipient=post_obj.author,
-                actor=request.user,
-                post=post_obj,
-                notification_type=Notification.LIKE
-            )
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         likers      = list(post_obj.likes.all()[:3])
@@ -730,9 +769,28 @@ def like_post(request, post_id):
             'liker_names': liker_names,
         })
 
+    vibe_ctx = _get_vibe_context(post_obj, request.user)
     return render(request, 'snippet/post_like.html', {
-        'post': post_obj,
-        'post_id': post_id
+        'post':    post_obj,
+        'post_id': post_id,
+        **vibe_ctx,
+    })
+
+
+@login_required(login_url='/')
+def get_post_vibes(request, post_id):
+    """
+    REST endpoint — returns current vibe snapshot for a post as JSON.
+    Called on initial page load so the UI is hydrated before WS connects.
+    Also used as a fallback if the WebSocket is unavailable.
+    """
+    post_obj  = get_object_or_404(Post, post_id=post_id)
+    vibe_ctx  = _get_vibe_context(post_obj, request.user)
+
+    return JsonResponse({
+        'summary':   vibe_ctx['vibe_summary'],
+        'total':     vibe_ctx['vibe_total'],
+        'user_vibe': vibe_ctx['user_vibe'],
     })
 
 
@@ -786,19 +844,9 @@ def postcomment(request, post_id):
                 except User.DoesNotExist:
                     continue
 
-                # Skip self-mentions only
                 if mentioned_user == request.user:
                     continue
-                # NOTE: We intentionally do NOT skip the post author here.
-                # A mention (@username) is a distinct event from a comment
-                # notification — the post author deserves to know they were
-                # specifically called out, even if they also got a comment notif.
 
-                # Create a new mention notification for each comment that
-                # contains the @mention. Don't deduplicate across comments —
-                # each mention in a new comment is a distinct event.
-                # Only skip if this exact comment already triggered one
-                # (guards against double-saves).
                 already_exists = Notification.objects.filter(
                     recipient=mentioned_user,
                     actor=request.user,
@@ -928,7 +976,6 @@ def profile(request, username):
 @login_required(login_url='/')
 def update_profile(request, username):
     # Security: only the owner can update their own profile
-    # The username URL param is ignored — we always use request.user
     user    = request.user
     profile = request.user.profile
 
@@ -943,10 +990,9 @@ def update_profile(request, username):
         website       = request.POST.get('website')
         privacy_level = request.POST.get('privacy_level', '').strip()
 
-        # ── Whitelist privacy values — never trust raw POST ───────────────
         VALID_PRIVACY = {'public', 'followers_only', 'private'}
         if privacy_level not in VALID_PRIVACY:
-            privacy_level = None   # ignore invalid value silently
+            privacy_level = None
 
         try:
             if fname and lname:
@@ -1599,34 +1645,32 @@ def react_to_message(request, message_id):
 
 # ── SSRF protection ──────────────────────────────────────────────────────────
 
-# ── SSRF protection: expanded blocklist ──────────────────────────────────────
 _BLOCKED_HOSTS = {
     'localhost',
-    'metadata.google.internal',   # GCP metadata
-    '169.254.169.254',            # AWS / Azure / GCP IMDS (IP literal)
-    '100.100.100.200',            # Alibaba Cloud metadata
-    'fd00:ec2::254',              # AWS IPv6 IMDS
+    'metadata.google.internal',
+    '169.254.169.254',
+    '100.100.100.200',
+    'fd00:ec2::254',
 }
 _PRIVATE_NETWORKS = [
     ipaddress.ip_network('10.0.0.0/8'),
     ipaddress.ip_network('172.16.0.0/12'),
     ipaddress.ip_network('192.168.0.0/16'),
     ipaddress.ip_network('127.0.0.0/8'),
-    ipaddress.ip_network('169.254.0.0/16'),   # link-local / IMDS
-    ipaddress.ip_network('100.64.0.0/10'),    # shared address space (RFC6598)
+    ipaddress.ip_network('169.254.0.0/16'),
+    ipaddress.ip_network('100.64.0.0/10'),
     ipaddress.ip_network('0.0.0.0/8'),
     ipaddress.ip_network('::1/128'),
     ipaddress.ip_network('fc00::/7'),
     ipaddress.ip_network('fe80::/10'),
-    ipaddress.ip_network('::ffff:0:0/96'),    # IPv4-mapped IPv6
+    ipaddress.ip_network('::ffff:0:0/96'),
 ]
 
 def _is_ip_safe(ip_str: str) -> bool:
-    """Return True only if the IP is a publicly routable, non-special address."""
     try:
         ip = ipaddress.ip_address(ip_str)
         if not ip.is_global:
-            return False  # loopback, private, link-local, multicast, unspecified
+            return False
         for network in _PRIVATE_NETWORKS:
             if ip in network:
                 return False
@@ -1635,14 +1679,6 @@ def _is_ip_safe(ip_str: str) -> bool:
         return False
 
 def _is_safe_url_for_preview(url: str) -> bool:
-    """
-    Guards against SSRF.
-    - Allows only http/https.
-    - Rejects known dangerous hostnames.
-    - Resolves DNS and rejects every result that maps to a private/internal IP
-      (prevents DNS rebinding attacks).
-    - If DNS resolution fails entirely, denies the request.
-    """
     try:
         parsed = urlparse(url)
         if parsed.scheme not in ('http', 'https'):
@@ -1652,11 +1688,10 @@ def _is_safe_url_for_preview(url: str) -> bool:
             return False
         if hostname.lower() in _BLOCKED_HOSTS:
             return False
-        # Resolve every A/AAAA record and check them all
         try:
             results = socket.getaddrinfo(hostname, None)
         except socket.gaierror:
-            return False  # unresolvable hostname -> deny
+            return False
         if not results:
             return False
         for res in results:
@@ -1673,42 +1708,30 @@ def fetch_link_preview(request):
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
-    # ── Rate limit: max 30 preview fetches per user per minute ───────────
     from django.core.cache import cache
     rate_key = f'lp_rate_{request.user.id}'
     rate_count = cache.get(rate_key, 0)
     if rate_count >= 30:
         return JsonResponse({'error': 'Too many requests'}, status=429)
     cache.set(rate_key, rate_count + 1, timeout=60)
-    # ─────────────────────────────────────────────────────────────────────
 
     url = request.GET.get('url', '').strip()
     if not url:
         return JsonResponse({'error': 'No URL provided'}, status=400)
 
-    # Unescape HTML entities (e.g. &amp; -> &) that occur when the JS regex
-    # picks up a URL from rendered post text where format_post_text has
-    # already HTML-encoded special characters.
     url = html_unescape(url)
 
-    # Sanity cap — reject absurdly long URLs
     if len(url) > 2048:
         return JsonResponse({'error': 'URL too long'}, status=400)
 
-    # Enforce safe scheme before anything else
     if not url.startswith(('http://', 'https://')):
         return JsonResponse({'error': 'Invalid URL'}, status=400)
 
     if not _is_safe_url_for_preview(url):
         return JsonResponse({'error': 'URL not allowed'}, status=400)
 
-    # ── oEmbed fast-path for video platforms ─────────────────────────────
-    # YouTube, YouTube Shorts, Vimeo, TikTok, and Twitter/X all expose an
-    # oEmbed endpoint that reliably returns title + thumbnail without
-    # requiring a full page scrape (which these sites block for bots).
     def _try_oembed(target_url):
         parsed_host = urlparse(target_url).hostname or ''
-        # URL-encode target_url so it is safe inside a query string
         encoded = url_quote(target_url, safe='')
         oembed_endpoint = None
 
@@ -1726,7 +1749,7 @@ def fetch_link_preview(request):
         try:
             r = requests.get(oembed_endpoint, timeout=5,
                              headers={'User-Agent': 'Mozilla/5.0 (compatible; KvibeBot/1.0)'},
-                             allow_redirects=False)  # oEmbed APIs never redirect; block open-redirect abuse
+                             allow_redirects=False)
             if not r.ok:
                 return None
             data = r.json()
@@ -1735,7 +1758,6 @@ def fetch_link_preview(request):
             author = data.get('author_name', '') or ''
             domain = parsed_host.replace('www.', '')
             desc   = f'By {author}' if author else ''
-            # Reject non-http/https thumbnail URLs
             if thumb and not thumb.startswith(('http://', 'https://')):
                 thumb = ''
             return {
@@ -1747,9 +1769,7 @@ def fetch_link_preview(request):
             }
         except Exception:
             return None
-    # ─────────────────────────────────────────────────────────────────────
 
-    # Try oEmbed first — if it works, return immediately
     oembed_result = _try_oembed(url)
     if oembed_result and (oembed_result['title'] or oembed_result['image']):
         return JsonResponse(oembed_result)
@@ -1781,17 +1801,15 @@ def fetch_link_preview(request):
         image       = og('image')
         domain      = urlparse(resp.url).netloc.replace('www.', '')
 
-        # Fix 3: reject non-http/https image URLs (blocks javascript: data: etc.)
         if image and not image.startswith(('http://', 'https://')):
             image = ''
 
-        # Fix 2: sanitise all text fields from the external site before returning
         return JsonResponse({
             'title':       html_escape(title[:200]),
             'description': html_escape(description[:400]),
-            'image':       image[:500],        # URL — not rendered as HTML
+            'image':       image[:500],
             'domain':      html_escape(domain[:100]),
-            'url':         url,                # already validated as http/https above
+            'url':         url,
         })
     except Exception:
         return JsonResponse({'title': '', 'description': '', 'image': '', 'domain': '', 'url': url})
@@ -1814,16 +1832,18 @@ def open_notification(request, post_id, notification_type):
 
 
 @login_required(login_url='/')
+@login_required(login_url='/')
 def notification_list(request):
     """
     Renders the notification page.
-    Marks all post-based notifications read on page load.
-    Follow notifications are marked read by mark_follow_notifications_read or
-    mark_all_notifications_read.
+    Marks ALL notifications (post-based + follow) as read on page load.
+    Grouped data is provided by the user_notifications context processor.
     """
     Notification.objects.filter(
         recipient=request.user, is_read=False
     ).update(is_read=True)
+    from .models import FollowNotification as _FN
+    _FN.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
     return render(request, 'notification.html')
 
 
@@ -1851,13 +1871,6 @@ def inbox_partial(request):
 @login_required
 @require_POST
 def delete_notification_group(request):
-    """
-    Deletes either:
-      • a group of post-based notifications  → body: {post_id, notification_type}
-      • a single follow notification          → body: {follow_id}
-
-    The recipient/to_user check ensures users can only delete their own data.
-    """
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -1873,7 +1886,7 @@ def delete_notification_group(request):
 
         deleted_count, _ = FollowNotification.objects.filter(
             pk=follow_id,
-            to_user=request.user,  # security: own notifications only
+            to_user=request.user,
         ).delete()
 
         return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
@@ -1881,31 +1894,30 @@ def delete_notification_group(request):
     # ── Post-based notification group ─────────────────────────────────────────
     post_id           = data.get('post_id')
     notification_type = data.get('notification_type')
-    actor_id          = data.get('actor_id')  # required for mention dismissal
+    actor_id          = data.get('actor_id')
 
     if not post_id or not notification_type:
         return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
 
-    # Validate UUID to prevent injection
     try:
         post_uuid = uuid_module.UUID(str(post_id))
     except (ValueError, AttributeError):
         return JsonResponse({'status': 'error', 'message': 'Invalid post_id'}, status=400)
 
-    # Whitelist notification types
-    VALID_TYPES = {'like', 'comment', 'repost', 'mention'}
+    VALID_TYPES = {'like', 'vibe', 'comment', 'repost', 'mention'}
     if notification_type not in VALID_TYPES:
         return JsonResponse({'status': 'error', 'message': 'Invalid notification_type'}, status=400)
 
+    # 'vibe' is the frontend alias for 'like' stored in the DB
+    db_type = 'like' if notification_type == 'vibe' else notification_type
+
     qs = Notification.objects.filter(
-        recipient=request.user,  # security: own notifications only
+        recipient=request.user,
         post_id=post_uuid,
-        notification_type=notification_type,
+        notification_type=db_type,
     )
 
-    # For mention notifications the group_id includes the actor_id —
-    # only delete notifications from that specific actor, not all mentions.
-    if notification_type == 'mention' and actor_id:
+    if db_type == 'mention' and actor_id:
         try:
             qs = qs.filter(actor_id=int(actor_id))
         except (TypeError, ValueError):
@@ -1923,7 +1935,6 @@ def delete_notification_group(request):
 @login_required
 @require_POST
 def mark_all_notifications_read(request):
-    """Marks all unread post-based AND follow notifications as read."""
     Notification.objects.filter(
         recipient=request.user, is_read=False
     ).update(is_read=True)
@@ -2551,10 +2562,8 @@ def online_status_api(request, user_id):
 def change_password(request):
     """
     AJAX-only endpoint. Verifies the current password then sets the new one.
-    Keeps the user logged in via update_session_auth_hash so the session
-    token stays valid after the password rotation.
+    Keeps the user logged in via update_session_auth_hash.
     """
-    # ── Rate limit: max 5 password-change attempts per user per hour ─────────
     from django.core.cache import cache
     rate_key  = f'chpw_{request.user.id}'
     pw_hits   = cache.get(rate_key, 0)
@@ -2574,64 +2583,32 @@ def change_password(request):
     new_pw  = request.POST.get('new_password', '')
     confirm = request.POST.get('confirm_password', '')
 
-    # ── Validate current password ─────────────────────────────────────────────
     if not current:
-        return JsonResponse({
-            'success': False,
-            'message': 'Current password is required.',
-            'field':   'current',
-        }, status=400)
+        return JsonResponse({'success': False, 'message': 'Current password is required.', 'field': 'current'}, status=400)
 
     if not request.user.check_password(current):
-        return JsonResponse({
-            'success': False,
-            'message': 'Current password is incorrect.',
-            'field':   'current',
-        }, status=400)
+        return JsonResponse({'success': False, 'message': 'Current password is incorrect.', 'field': 'current'}, status=400)
 
-    # ── Validate new password ─────────────────────────────────────────────────
     if not new_pw:
-        return JsonResponse({
-            'success': False,
-            'message': 'New password is required.',
-        }, status=400)
+        return JsonResponse({'success': False, 'message': 'New password is required.'}, status=400)
 
     if len(new_pw) < 8:
-        return JsonResponse({
-            'success': False,
-            'message': 'New password must be at least 8 characters.',
-        }, status=400)
+        return JsonResponse({'success': False, 'message': 'New password must be at least 8 characters.'}, status=400)
 
     if new_pw.lower() in _COMMON_PW:
-        return JsonResponse({
-            'success': False,
-            'message': 'That password is too common — please choose a stronger one.',
-        }, status=400)
+        return JsonResponse({'success': False, 'message': 'That password is too common — please choose a stronger one.'}, status=400)
 
     if new_pw == current:
-        return JsonResponse({
-            'success': False,
-            'message': 'New password must be different from your current password.',
-        }, status=400)
+        return JsonResponse({'success': False, 'message': 'New password must be different from your current password.'}, status=400)
 
     if new_pw != confirm:
-        return JsonResponse({
-            'success': False,
-            'message': 'Passwords do not match.',
-        }, status=400)
+        return JsonResponse({'success': False, 'message': 'Passwords do not match.'}, status=400)
 
-    # ── Apply ─────────────────────────────────────────────────────────────────
     request.user.set_password(new_pw)
     request.user.save()
 
-    # Keep the user logged in — Django rotates the session hash on password change
     from django.contrib.auth import update_session_auth_hash
     update_session_auth_hash(request, request.user)
-    # Clear the rate-limit counter on success
     cache.delete(rate_key)
 
-    return JsonResponse({
-        'success': True,
-        'message': 'Password updated successfully!',
-    })
-
+    return JsonResponse({'success': True, 'message': 'Password updated successfully!'})

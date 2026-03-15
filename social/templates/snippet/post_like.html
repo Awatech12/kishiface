@@ -1,664 +1,391 @@
-<!-- kvibe-post-like.html -->
+{% comment %}
+  snippet/post_like.html
+  ──────────────────────────────────────────────────────────────────────────
+  KVibe Post Engagement — Vibe Reactions (🔥 💯 🎵 😂 😬 🧊)
+  ──────────────────────────────────────────────────────────────────────────
+  USAGE (simple — home.html style):
+    {% include 'snippet/post_like.html' with post=item.data %}
+
+  USAGE (with pre-fetched context — faster, skips the REST hydration call):
+    {% include 'snippet/post_like.html' with post=post_obj
+       vibe_summary=vibe_summary vibe_total=vibe_total user_vibe=user_vibe %}
+
+  REAL-TIME:  WebSocket → ws/post_vibes/<post_id>/  (PostVibeConsumer)
+  FALLBACK:   REST GET  → /vibe/<post_id>/          (get_post_vibes view)
+  ──────────────────────────────────────────────────────────────────────────
+{% endcomment %}
 {% load humanize %}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-     <meta name="csrf-token" content="{{ csrf_token }}">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kvibe Post Engagement</title>
-    
-    <link rel="stylesheet" 
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" 
-          integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PNO+I+9klVjKjK4FOGQJZp+QAUU9QJxO6g4aJiHXb8k1YQkT3qO+2Cjw==" 
-          crossorigin="anonymous" 
-          referrerpolicy="no-referrer" />
-    
-    <style>
-        /* =====================
-           KEYFRAMES — GEN Z EDITION
-        ===================== */
+<!-- ─── One-time global styles (injected via JS, safe to include N times) ─── -->
+<script>
+(function(){
+  if (document.getElementById('kv-global-styles')) return;
+  var s = document.createElement('style');
+  s.id  = 'kv-global-styles';
+  s.textContent = `
+/* ── Keyframes ──────────────────────────────────────────────────────── */
+@keyframes kv-picker-in   { from{transform:translateY(10px) scale(.9);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
+@keyframes kv-item-pop    { from{transform:scale(.5) translateY(8px);opacity:0}  to{transform:scale(1) translateY(0);opacity:1} }
+@keyframes kv-particle    { 0%{transform:translate(0,0) scale(1);opacity:1} 100%{transform:translate(var(--tx),var(--ty)) scale(0);opacity:0} }
+@keyframes kv-count-tick  { 0%{transform:translateY(0);opacity:1} 30%{transform:translateY(-14px);opacity:0} 31%{transform:translateY(14px);opacity:0} 70%{transform:translateY(0);opacity:1} }
+@keyframes kv-bounce-in   { 0%{transform:scale(0);opacity:0} 60%{transform:scale(1.2);opacity:1} 100%{transform:scale(1);opacity:1} }
+@keyframes kv-label-pop   { 0%{transform:translate(-50%,-50%) scale(.7);opacity:0} 60%{transform:translate(-50%,-160%) scale(1.05);opacity:1} 80%{transform:translate(-50%,-150%) scale(.97);opacity:1} 100%{transform:translate(-50%,-150%) scale(1);opacity:0} }
+@keyframes kv-shimmer     { 0%{background-position:-200% center} 100%{background-position:200% center} }
+@keyframes kv-repost-spin { 0%{transform:rotate(0) scale(1)} 40%{transform:rotate(200deg) scale(.8)} 70%{transform:rotate(340deg) scale(1.1)} 100%{transform:rotate(360deg) scale(1)} }
+@keyframes kv-pulse-dot   { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.5)} 50%{box-shadow:0 0 0 5px rgba(16,185,129,0)} }
+@keyframes kv-share-up    { from{transform:translateY(100%)} to{transform:translateY(0)} }
+@keyframes kv-avatar-peek { 0%{transform:translateX(-6px) scale(.8);opacity:0} 60%{transform:translateX(2px) scale(1.05);opacity:1} 100%{transform:translateX(0) scale(1);opacity:1} }
+@keyframes kv-jelly       { 0%{transform:scale(1)} 25%{transform:scale(1.3,.75)} 50%{transform:scale(.85,1.2)} 75%{transform:scale(1.1,.9)} 100%{transform:scale(1)} }
+@keyframes kv-comment-bop { 0%{transform:translateY(0) scaleY(1)} 25%{transform:translateY(-6px) scaleY(.9)} 55%{transform:translateY(2px) scaleY(1.05)} 75%{transform:translateY(-2px) scaleY(.98)} 100%{transform:translateY(0) scaleY(1)} }
 
-        /* Liquid morph heart: squish → snap → settle */
-        @keyframes heartMorph {
-            0%   { transform: scale(1) rotate(0deg); }
-            10%  { transform: scale(0.7) rotate(-8deg); }
-            30%  { transform: scale(1.45) rotate(4deg); }
-            50%  { transform: scale(0.9) rotate(-2deg); }
-            65%  { transform: scale(1.15) rotate(1deg); }
-            80%  { transform: scale(0.97) rotate(0deg); }
-            100% { transform: scale(1) rotate(0deg); }
-        }
+/* ── Wrapper ─────────────────────────────────────────────────────────── */
+.kvibe-engagement-wrapper { position: relative; }
 
-        /* Count slot machine tick */
-        @keyframes countTick {
-            0%   { transform: translateY(0); opacity: 1; }
-            30%  { transform: translateY(-14px); opacity: 0; }
-            31%  { transform: translateY(14px); opacity: 0; }
-            70%  { transform: translateY(0); opacity: 1; }
-        }
+/* ── Action bar ──────────────────────────────────────────────────────── */
+.kvibe-actions-container {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--kvibe-white, #fff);
+  border-top: 1px solid var(--kvibe-border, #efefef);
+}
+.kvibe-action-item {
+  display: flex; align-items: center; justify-content: center;
+  gap: 7px; text-decoration: none;
+  color: var(--kvibe-text-light, #8e8e8e);
+  font-size: 13.5px; font-weight: 500;
+  padding: 10px 14px; border-radius: 999px;
+  transition: background .2s, color .2s;
+  position: relative; cursor: pointer;
+  background: none; border: none; font-family: inherit;
+  flex: 1; min-width: 0; overflow: visible;
+}
+.kvibe-action-item::after {
+  content: ''; position: absolute; inset: 0; border-radius: 999px;
+  background: currentColor; opacity: 0; transform: scale(.7);
+  transition: opacity .25s, transform .25s cubic-bezier(.34,1.56,.64,1);
+  pointer-events: none;
+}
+.kvibe-action-item:hover::after { opacity: .06; transform: scale(1); }
+.kvibe-action-item:hover         { color: var(--kvibe-text, #262626); }
+.kvibe-action-icon { font-size: 19px; transition: color .25s; display: inline-block; position: relative; }
 
-        /* Icon jelly on hover */
-        @keyframes jellyPop {
-            0%   { transform: scale(1); }
-            25%  { transform: scale(1.3, 0.75); }
-            50%  { transform: scale(0.85, 1.2); }
-            75%  { transform: scale(1.1, 0.9); }
-            100% { transform: scale(1); }
-        }
+/* ── Vibe button face ────────────────────────────────────────────────── */
+.kv-vibe-btn { position: static; }  /* picker is position:fixed, no longer needs relative parent */
+.kv-vibe-btn.has-vibe .kv-active-emoji {
+  font-size: 20px;
+  animation: kv-bounce-in .4s cubic-bezier(.34,1.56,.64,1);
+}
+.kv-vibe-count { font-size: 13.5px; transition: all .25s; display: inline-block; }
+.kv-vibe-count.tick { animation: kv-count-tick .5s cubic-bezier(.4,0,.2,1); }
 
-        /* Soft shimmer scan on like row */
-        @keyframes shimmerScan {
-            0%   { background-position: -200% center; }
-            100% { background-position: 200% center; }
-        }
+/* ── Vibe Picker ─────────────────────────────────────────────────────── */
+.kv-picker {
+  /* Fixed to viewport — escapes any parent overflow:hidden */
+  position: fixed;
+  background: var(--kvibe-white, #fff);
+  border: 1px solid var(--kvibe-border, #efefef);
+  border-radius: 50px; padding: 8px 12px;
+  display: none; gap: 6px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.18), 0 2px 10px rgba(0,0,0,.10);
+  z-index: 99999; white-space: nowrap;
+  animation: kv-picker-in .25s cubic-bezier(.34,1.56,.64,1);
+  /* top/left set dynamically by JS */
+}
+.kv-picker.open { display: flex; }
+.kv-picker::after {
+  content: ''; position: absolute; bottom: -6px;
+  left: var(--arrow-left, 50%);
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px; height: 10px;
+  background: var(--kvibe-white, #fff);
+  border-right: 1px solid var(--kvibe-border, #efefef);
+  border-bottom: 1px solid var(--kvibe-border, #efefef);
+}
+.kv-vibe-opt {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 3px; cursor: pointer;
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1);
+  padding: 4px 5px; border-radius: 12px;
+  animation: kv-item-pop .3s cubic-bezier(.34,1.56,.64,1) both;
+}
+.kv-vibe-opt:nth-child(1){animation-delay:.03s}
+.kv-vibe-opt:nth-child(2){animation-delay:.06s}
+.kv-vibe-opt:nth-child(3){animation-delay:.09s}
+.kv-vibe-opt:nth-child(4){animation-delay:.12s}
+.kv-vibe-opt:nth-child(5){animation-delay:.15s}
+.kv-vibe-opt:nth-child(6){animation-delay:.18s}
+.kv-vibe-opt:hover        { transform: scale(1.35) translateY(-4px); }
+.kv-vibe-opt.selected     { background: rgba(0,0,0,.07); }
+.kv-opt-emoji             { font-size: 26px; line-height: 1; }
+.kv-opt-label             { font-size: 9px; font-weight: 600; color: var(--kvibe-text-light,#8e8e8e); text-transform: uppercase; letter-spacing: .04em; }
 
-        /* Avatar stack entrance */
-        @keyframes avatarPeek {
-            0%   { transform: translateX(-6px) scale(0.8); opacity: 0; }
-            60%  { transform: translateX(2px) scale(1.05); opacity: 1; }
-            100% { transform: translateX(0) scale(1); opacity: 1; }
-        }
+/* ── Engagement bar ──────────────────────────────────────────────────── */
+.kvibe-engagement {
+  display: flex; flex-wrap: wrap; align-items: center;
+  padding: 10px 16px 8px;
+  border-top: 1px solid var(--kvibe-border, #efefef);
+  gap: 10px; background: var(--kvibe-white, #fff);
+}
+.kv-vibe-summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 24px; }
+.kv-vibe-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(0,0,0,.05); border-radius: 999px;
+  padding: 3px 9px; font-size: 13px; font-weight: 600;
+  cursor: default; transition: transform .2s, background .2s;
+}
+.kv-vibe-pill:hover        { transform: scale(1.07); background: rgba(0,0,0,.09); }
+.kv-vibe-pill.mine         {
+  background: var(--pill-bg, rgba(59,130,246,.15));
+  color:      var(--pill-fg, #1d4ed8);
+  box-shadow: 0 0 0 1.5px var(--pill-border, rgba(59,130,246,.3));
+}
+.kv-pill-emoji             { font-size: 15px; }
+.kv-pill-count             { font-size: 12px; font-weight: 700; }
+.kv-total-text             { font-size: 13px; color: var(--kvibe-text-light,#8e8e8e); font-weight: 500; }
+.kv-you-text {
+  font-weight: 600;
+  background: linear-gradient(90deg, var(--kvibe-text,#262626) 30%, var(--kvibe-text-light,#8e8e8e) 50%, var(--kvibe-text,#262626) 70%);
+  background-size: 200% auto;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  animation: kv-shimmer 1.8s ease once;
+}
+.kv-no-vibes  { color: var(--kvibe-text-light,#8e8e8e); font-size: 13px; }
+.kvibe-separator-dot { color: var(--kvibe-border,#efefef); font-size: 12px; margin: 0 2px; }
+.kvibe-view-text { font-size: 13px; color: var(--kvibe-text-light,#8e8e8e); }
+.kvibe-engagement-item { display: flex; align-items: center; gap: 4px; }
 
-        /* Particle burst for like */
-        @keyframes particleBurst {
-            0%   { transform: translate(0,0) scale(1); opacity: 1; }
-            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
-        }
+/* ── Repost button ───────────────────────────────────────────────────── */
+.kvibe-repost-icon {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: var(--kvibe-text-light,#8e8e8e); font-size: 13.5px; font-weight: 500;
+  padding: 10px 14px; border-radius: 999px;
+  transition: background .2s, color .2s;
+  position: relative; cursor: pointer;
+  background: none; border: none; font-family: inherit; flex: 1; min-width: 0;
+}
+.kvibe-repost-icon::after { content:'';position:absolute;inset:0;border-radius:999px;background:currentColor;opacity:0;transform:scale(.7);transition:opacity .25s,transform .25s cubic-bezier(.34,1.56,.64,1);pointer-events:none }
+.kvibe-repost-icon:hover::after { opacity:.06;transform:scale(1) }
+.kvibe-repost-icon:hover .fa-retweet { animation:kv-repost-spin .55s cubic-bezier(.34,1.56,.64,1);color:#10b981 }
+.kvibe-repost-icon:hover    { color: #10b981; }
+.fa-retweet.reposted        { color: #10b981; }
+.kvibe-repost-count         { font-size: 13.5px; display: none; }
+.kvibe-repost-count.kvibe-show { display: inline; }
 
-        /* Subtle breathing dot */
-        @keyframes breatheDot {
-            0%, 100% { transform: scale(1); opacity: 0.35; }
-            50%       { transform: scale(1.6); opacity: 0.7; }
-        }
+/* ── Comment / Share hover anim ─────────────────────────────────────── */
+.kvibe-action-item:hover .fa-comment     { animation: kv-comment-bop .5s cubic-bezier(.34,1.56,.64,1); }
+.kvibe-action-item:hover .fa-paper-plane { animation: kv-jelly .45s cubic-bezier(.34,1.56,.64,1); }
+.kvibe-share-count         { font-size: 13.5px; display: none; }
+.kvibe-share-count.kvibe-show { display: inline; }
 
-        /* Repost spinning twist */
-        @keyframes repostSpin {
-            0%   { transform: rotate(0deg) scale(1); }
-            40%  { transform: rotate(200deg) scale(0.8); }
-            70%  { transform: rotate(340deg) scale(1.1); }
-            100% { transform: rotate(360deg) scale(1); }
-        }
+/* ── Live dot ────────────────────────────────────────────────────────── */
+.kv-live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #10b981; display: inline-block; flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(16,185,129,.6);
+  animation: kv-pulse-dot 1.8s ease infinite;
+}
+.kv-live-dot.offline { background: #d1d5db; animation: none; }
 
-        /* Comment bounce-in */
-        @keyframes commentBounce {
-            0%   { transform: translateY(0) scaleY(1); }
-            25%  { transform: translateY(-6px) scaleY(0.9); }
-            55%  { transform: translateY(2px) scaleY(1.05); }
-            75%  { transform: translateY(-2px) scaleY(0.98); }
-            100% { transform: translateY(0) scaleY(1); }
-        }
+/* ── Particles + float label ─────────────────────────────────────────── */
+.kv-pc  { position:absolute;top:50%;left:50%;width:0;height:0;pointer-events:none;z-index:20 }
+.kv-dot { position:absolute;width:6px;height:6px;border-radius:50%;animation:kv-particle .55s cubic-bezier(.4,0,.2,1) forwards }
+.kv-lbl { position:absolute;top:50%;left:50%;font-size:12px;font-weight:700;color:var(--kvibe-primary,#0095f6);pointer-events:none;white-space:nowrap;animation:kv-label-pop .7s cubic-bezier(.34,1.56,.64,1) forwards;z-index:30 }
 
-        /* Text highlight shimmer for "Liked by You" */
-        @keyframes youShimmer {
-            0%   { background-position: -100% center; }
-            100% { background-position: 200% center; }
-        }
+/* ── Share modal ─────────────────────────────────────────────────────── */
+.kvibe-share-modal { position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:flex-end;z-index:6000 }
+.kvibe-share-modal.active { display:flex }
+.kvibe-share-modal-content { background:var(--kvibe-white,#fff);width:100%;border-radius:20px 20px 0 0;padding:20px;animation:kv-share-up .3s ease-out;max-width:500px }
+.kvibe-share-header { display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:18px;margin-bottom:20px;color:var(--kvibe-text,#262626) }
+.kvibe-share-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:20px 10px;text-align:center;max-height:60vh;overflow-y:auto;padding-bottom:10px }
+.kvibe-share-item { display:flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none;color:var(--kvibe-text,#262626);font-size:11px;cursor:pointer }
+.kvibe-share-icon-wrap { width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;transition:transform .2s }
+.kvibe-share-icon-wrap:active { transform:scale(.9) }
+.si-whatsapp{background:#25D366}.si-facebook{background:#1877F2}.si-x{background:#000}.si-telegram{background:#0088cc}.si-snapchat{background:#FFFC00}.si-sms{background:#4cd964}.si-email{background:#8e8e8e}.si-copy{background:#8e8e8e}
 
-        /* Floating label pop */
-        @keyframes labelPop {
-            0%   { transform: translateY(0) scale(0.7); opacity: 0; }
-            60%  { transform: translateY(-22px) scale(1.05); opacity: 1; }
-            80%  { transform: translateY(-20px) scale(0.97); opacity: 1; }
-            100% { transform: translateY(-20px) scale(1); opacity: 0; }
-        }
+/* ── Mobile ──────────────────────────────────────────────────────────── */
+@media(max-width:767px){
+  .kvibe-actions-container{padding:2px 4px}
+  .kvibe-action-item{padding:8px 10px;font-size:13px;gap:6px}
+  .kvibe-action-icon{font-size:18px}
+  .kvibe-repost-icon{padding:8px 10px;font-size:13px}
+  .kv-picker{padding:6px 8px;gap:4px}
+  .kv-opt-emoji{font-size:23px}
+}
+  `;
+  document.head.appendChild(s);
+})();
+</script>
 
-        /* =====================
-           ENGAGEMENT SECTION
-        ===================== */
-        .kvibe-engagement {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            padding: 10px 16px 8px;
-            border-top: 1px solid var(--kvibe-border);
-            gap: 10px;
-            background: var(--kvibe-white);
-        }
-
-        .kvibe-likers-container {
-            display: flex;
-            margin-right: 6px;
-        }
-
-        .kvibe-liker-pic {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            border: 2px solid var(--kvibe-white);
-            margin-left: -6px;
-            position: relative;
-            transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
-            animation: avatarPeek 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
-        }
-
-        .kvibe-likers-container a:first-child .kvibe-liker-pic {
-            margin-left: 0;
-            animation-delay: 0s;
-        }
-        .kvibe-likers-container a:nth-child(2) .kvibe-liker-pic { animation-delay: 0.06s; }
-        .kvibe-likers-container a:nth-child(3) .kvibe-liker-pic { animation-delay: 0.12s; }
-
-        .kvibe-liker-pic:hover {
-            transform: translateY(-3px) scale(1.15);
-            z-index: 10;
-        }
-
-        .kvibe-like-text       { font-weight: normal; color: var(--kvibe-text); font-size: 13.5px; }
-        .kvibe-no-likes        { color: var(--kvibe-text-light); font-size: 13px; letter-spacing: 0.01em; }
-        .kvibe-comment-text    { font-size: 14px; color: var(--kvibe-text-light); }
-        .kvibe-comment-text a  { color: var(--kvibe-text); text-decoration: none; }
-        .kvibe-comment-text a:hover { text-decoration: underline; }
-        .kvibe-view-text       { font-size: 13px; color: var(--kvibe-text-light); }
-
-        .kvibe-separator-dot {
-            color: var(--kvibe-border);
-            font-size: 12px;
-            margin: 0 2px;
-        }
-
-        .kvibe-engagement-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        /* Shimmer on "Liked by You" */
-        .kvibe-you-text {
-            font-weight: 600;
-            background: linear-gradient(90deg, var(--kvibe-text) 30%, var(--kvibe-text-light) 50%, var(--kvibe-text) 70%);
-            background-size: 200% auto;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: youShimmer 1.8s ease once;
-        }
-
-        /* =====================
-           ACTION BUTTONS
-        ===================== */
-        .kvibe-actions-container {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 4px 8px;
-            gap: 0;
-            background: var(--kvibe-white);
-            border-top: 1px solid var(--kvibe-border);
-        }
-
-        .kvibe-action-item {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-decoration: none;
-            color: var(--kvibe-text-light);
-            font-size: 13.5px;
-            font-weight: 500;
-            padding: 10px 16px;
-            border-radius: 999px;
-            transition: background 0.2s ease, color 0.2s ease;
-            position: relative;
-            overflow: visible;
-            cursor: pointer;
-            background: none;
-            flex: 1;
-            min-width: 0;
-        }
-
-        /* Pill hover fill — subtle ink wash */
-        .kvibe-action-item::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: 999px;
-            background: currentColor;
-            opacity: 0;
-            transform: scale(0.7);
-            transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
-            pointer-events: none;
-        }
-
-        .kvibe-action-item:hover::after {
-            opacity: 0.06;
-            transform: scale(1);
-        }
-
-        .kvibe-action-item:hover {
-            color: var(--kvibe-text);
-        }
-
-        .kvibe-action-icon {
-            font-size: 19px;
-            transition: color 0.25s ease;
-            position: relative;
-            display: inline-block;
-        }
-
-        /* Count spans */
-        .kvibe-action-item span.comment-count {
-            display: inline-block;
-            overflow: hidden;
-            position: relative;
-        }
-
-        /* =====================
-           LIKE BUTTON — ANIMATED
-        ===================== */
-        .kvibe-like-btn .kvibe-action-icon {
-            transition: color 0.2s ease;
-        }
-
-        /* Active liked state icon */
-        .kvibe-heart-animate {
-            animation: heartMorph 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-        }
-
-        /* Count slot machine */
-        .kvibe-count-tick {
-            animation: countTick 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Particle container */
-        .kvibe-particle-container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            pointer-events: none;
-            z-index: 20;
-        }
-
-        .kvibe-particle {
-            position: absolute;
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            animation: particleBurst 0.55s cubic-bezier(0.4,0,0.2,1) forwards;
-        }
-
-        /* Floating "+1" label */
-        .kvibe-float-label {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--kvibe-primary);
-            pointer-events: none;
-            white-space: nowrap;
-            animation: labelPop 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards;
-            z-index: 30;
-        }
-
-        /* =====================
-           COMMENT BUTTON
-        ===================== */
-        .kvibe-action-item:hover .fa-comment {
-            animation: commentBounce 0.5s cubic-bezier(0.34,1.56,0.64,1);
-        }
-
-        /* =====================
-           REPOST BUTTON
-        ===================== */
-        .kvibe-repost-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-decoration: none;
-            color: var(--kvibe-text-light);
-            font-size: 13.5px;
-            font-weight: 500;
-            padding: 10px 16px;
-            border-radius: 999px;
-            transition: background 0.2s ease, color 0.2s ease;
-            position: relative;
-            overflow: visible;
-            cursor: pointer;
-            background: none;
-            border: none;
-            font-family: inherit;
-            flex: 1;
-            min-width: 0;
-        }
-
-        .kvibe-repost-icon::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: 999px;
-            background: currentColor;
-            opacity: 0;
-            transform: scale(0.7);
-            transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
-            pointer-events: none;
-        }
-
-        .kvibe-repost-icon:hover::after {
-            opacity: 0.06;
-            transform: scale(1);
-        }
-
-        .kvibe-repost-icon:hover .fa-retweet {
-            animation: repostSpin 0.55s cubic-bezier(0.34,1.56,0.64,1);
-            color: #10b981;
-        }
-
-        .kvibe-repost-icon:hover { color: #10b981; }
-
-        .fa-retweet.reposted { color: #10b981; }
-
-        .kvibe-repost-count {
-            font-size: 13.5px;
-            display: none;
-        }
-
-        .kvibe-repost-count.kvibe-show { display: inline; }
-
-        .kvibe-share-count {
-            font-size: 13.5px;
-            display: none;
-        }
-        .kvibe-share-count.kvibe-show { display: inline; }
-
-        /* =====================
-           SHARE BUTTON
-        ===================== */
-        .kvibe-share-btn:hover .kvibe-action-icon { color: var(--kvibe-primary); }
-        .kvibe-share-btn:hover .kvibe-action-icon {
-            animation: jellyPop 0.45s cubic-bezier(0.34,1.56,0.64,1);
-        }
-
-        /* =====================
-           SHARE MODAL
-        ===================== */
-        .kvibe-share-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.6); display: none; justify-content: center; align-items: flex-end;
-            z-index: 6000;
-        }
-        .kvibe-share-modal.active { display: flex; }
-        .kvibe-share-modal-content {
-            background: var(--kvibe-white); width: 100%; border-radius: 20px 20px 0 0;
-            padding: 20px; animation: kvibeShareSlideUp 0.3s ease-out; max-width: 500px;
-        }
-        @keyframes kvibeShareSlideUp {
-            from { transform: translateY(100%); }
-            to   { transform: translateY(0); }
-        }
-        .kvibe-share-header {
-            display: flex; justify-content: space-between; align-items: center;
-            font-weight: bold; font-size: 18px; margin-bottom: 20px; color: var(--kvibe-text);
-        }
-        .kvibe-share-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 10px; text-align: center;
-            max-height: 60vh; overflow-y: auto; padding-bottom: 10px;
-        }
-        .kvibe-share-item {
-            display: flex; flex-direction: column; align-items: center; gap: 8px;
-            text-decoration: none; color: var(--kvibe-text); font-size: 11px; cursor: pointer;
-        }
-        .kvibe-share-icon-wrap {
-            width: 50px; height: 50px; border-radius: 50%; display: flex;
-            align-items: center; justify-content: center; font-size: 24px; color: white;
-            transition: transform 0.2s;
-        }
-        .kvibe-share-icon-wrap:active { transform: scale(0.9); }
-        .si-whatsapp  { background: #25D366; }
-        .si-facebook  { background: #1877F2; }
-        .si-x         { background: #000; }
-        .si-telegram  { background: #0088cc; }
-        .si-snapchat  { background: #FFFC00; color: #000 !important; }
-        .si-sms       { background: #4cd964; }
-        .si-email     { background: var(--kvibe-text-light); }
-        .si-copy      { background: var(--kvibe-text-light); }
-        .si-snapchat .kvibe-share-icon-wrap { color: var(--kvibe-text); }
-
-        /* =====================
-           HTMX
-        ===================== */
-        .htmx-swapping .kvibe-action-icon {
-            opacity: 0.4;
-            transform: scale(0.85);
-        }
-
-        .htmx-settling .kvibe-action-icon {
-            transition: all 0.3s ease;
-        }
-
-        /* HTMX spinner */
-        #kvibe-like-indicator-{{ post.post_id }} {
-            font-size: 12px;
-            color: var(--kvibe-text-light);
-        }
-
-        /* =====================
-           MOBILE
-        ===================== */
-        @media (max-width: 767px) {
-            .kvibe-actions-container { gap: 0; padding: 2px 4px; }
-            .kvibe-action-item       { padding: 8px 10px; font-size: 13px; gap: 6px; }
-            .kvibe-action-icon       { font-size: 18px; }
-            .kvibe-engagement        { gap: 8px; }
-            .kvibe-repost-icon       { padding: 8px 10px; font-size: 13px; }
-        }
-    </style>
-</head>
-<body>
-<!-- Wrapper with metadata for API extraction -->
-<div id="kvibe-post-engagement-{{ post.post_id }}" 
+<!-- ═══════════════════════════════════════════════════════════════════════
+     HTML
+════════════════════════════════════════════════════════════════════════ -->
+<div id="kvibe-post-engagement-{{ post.post_id }}"
      class="kvibe-engagement-wrapper"
-     data-like-count="{{ post.likes.count }}" 
-     data-is-liked="{% if request.user in post.likes.all %}true{% else %}false{% endif %}">
-  
-<!-- Each post engagement block -->
-<div id="kvibe-post-engagement-{{ post.post_id }}">
-  
-  <!-- HORIZONTAL ACTION BUTTONS -->
-  <div class="kvibe-actions-container">
-    
-    <!-- LIKE/UNLIKE BUTTON -->
-    <a href="#"
-       hx-get="{% url 'like_post' post.post_id %}"
-       hx-target="#kvibe-post-engagement-{{ post.post_id }}"
-       hx-swap="outerHTML"
-       hx-trigger="click"
-       hx-indicator="#kvibe-like-indicator-{{ post.post_id }}"
-       class="kvibe-action-item like-btn"
-       id="kvibe-like-btn-{{ post.post_id }}">
-      
-      {% if request.user in post.likes.all %}
-        <i class="fa-solid fa-heart kvibe-action-icon heart-animate" style="color: var(--kvibe-primary);"></i>
-        <span class="kvibe-count count-tick">{{ post.likes.count|intcomma }}</span>
-      {% else %}
-        <i class="fa-regular fa-heart kvibe-action-icon"></i>
-        <span class="kvibe-count">{{ post.likes.count|intcomma }}</span>
-      {% endif %}
-      
-      <!-- Loading indicator -->
-      <div id="kvibe-like-indicator-{{ post.post_id }}" 
-           class="kvibe-htmx-indicator"
-           style="display: none; margin-left: 4px;">
-        <i class="fas fa-spinner fa-spin"></i>
-      </div>
-    </a>
+     data-post-id="{{ post.post_id }}">
 
-    <!-- COMMENT BUTTON -->
-    <button class="kvibe-action-item kvibe-comment-trigger"
+  <!-- ── ACTION BUTTONS BAR ──────────────────────────────────────────── -->
+  <div class="kvibe-actions-container">
+
+    <!-- ── VIBE BUTTON ─────────────────────────────────────────────── -->
+    <div class="kvibe-action-item kv-vibe-btn"
+         id="kv-vibe-btn-{{ post.post_id }}"
+         data-post-id="{{ post.post_id }}"
+         data-user-vibe=""
+         onmouseenter="kvOpenPicker('{{ post.post_id }}')"
+         onmouseleave="kvScheduleClose('{{ post.post_id }}')"
+         onclick="kvTogglePicker('{{ post.post_id }}')">
+
+      <!-- Picker popover -->
+      <div class="kv-picker"
+           id="kv-picker-{{ post.post_id }}"
+           onmouseenter="kvCancelClose('{{ post.post_id }}')"
+           onmouseleave="kvScheduleClose('{{ post.post_id }}')">
+
+        <div class="kv-vibe-opt" data-vibe="fire"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','fire')">
+          <span class="kv-opt-emoji">🔥</span>
+          <span class="kv-opt-label">Fire</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="real"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','real')">
+          <span class="kv-opt-emoji">💯</span>
+          <span class="kv-opt-label">Real</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="vibing"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','vibing')">
+          <span class="kv-opt-emoji">🎵</span>
+          <span class="kv-opt-label">Vibing</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="dead"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','dead')">
+          <span class="kv-opt-emoji">😂</span>
+          <span class="kv-opt-label">Dead</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="cringe"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','cringe')">
+          <span class="kv-opt-emoji">😬</span>
+          <span class="kv-opt-label">Cringe</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="chill"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','chill')">
+          <span class="kv-opt-emoji">🧊</span>
+          <span class="kv-opt-label">Chill</span>
+        </div>
+      </div><!-- /picker -->
+
+      <!-- Button face: smiley until JS hydrates it with the active emoji -->
+      <span id="kv-active-emoji-{{ post.post_id }}" class="kvibe-action-icon">
+        <i class="fa-regular fa-face-smile"></i>
+      </span>
+      <span class="kv-vibe-count" id="kv-vibe-count-{{ post.post_id }}">0</span>
+      <span class="kv-live-dot offline"
+            id="kv-live-dot-{{ post.post_id }}"
+            title="Connecting…"></span>
+
+    </div><!-- /vibe btn -->
+
+    <!-- ── COMMENT BUTTON ──────────────────────────────────────────── -->
+    <button class="kvibe-action-item"
             onclick="kvibeOpenCommentSheet('{{ post.post_id }}')"
-            style="border:none; background:none; font-family:inherit; cursor:pointer;">
+            style="border:none;background:none;font-family:inherit;cursor:pointer;">
       <i class="fa-regular fa-comment kvibe-action-icon"></i>
-      <span class="kvibe-count" id="kvibe-comment-count-{{ post.post_id }}">{{ post.comments.count|intcomma }}</span>
+      <span class="kv-vibe-count"
+            id="kvibe-comment-count-{{ post.post_id }}">
+        {{ post.comments.count|intcomma }}
+      </span>
     </button>
-        
-    <!-- REPOST BUTTON -->
-    <button class="kvibe-repost-icon" 
-            title="Repost" 
+
+    <!-- ── REPOST BUTTON ───────────────────────────────────────────── -->
+    <button class="kvibe-repost-icon"
             onclick="kvibeToggleRepost('{% if post.is_repost and post.original_post %}{{ post.original_post.post_id }}{% else %}{{ post.post_id }}{% endif %}', this)"
             data-reposted="{% if request.user in post.reposts.all %}true{% else %}false{% endif %}">
       <i class="fas fa-retweet {% if request.user in post.reposts.all %}reposted{% endif %}"></i>
-      <span class="kvibe-repost-count {% if post.reposts.count > 0 %}show{% endif %}" id="kvibe-repost-count-{{ post.post_id }}">
+      <span class="kvibe-repost-count {% if post.reposts.count > 0 %}kvibe-show{% endif %}"
+            id="kvibe-repost-count-{{ post.post_id }}">
         {% if post.reposts.count > 0 %}{{ post.reposts.count|intcomma }}{% endif %}
       </span>
     </button>
-                   
-    <!-- SHARE BUTTON -->
-    <button class="kvibe-action-item share-btn"
-            id="kvibe-share-btn-{{ post.post_id }}"
-            onclick="kvibeOpenShareModal('{{ post.post_id }}', '{{ post.message|escapejs|truncatechars:100 }}')"
-            style="border: none; background: none; font-family: inherit; cursor: pointer;">
+
+    <!-- ── SHARE BUTTON ────────────────────────────────────────────── -->
+    <button class="kvibe-action-item"
+            onclick="kvibeOpenShareModal('{{ post.post_id }}','{{ post.content|escapejs|truncatechars:100 }}')"
+            style="border:none;background:none;font-family:inherit;cursor:pointer;">
       <i class="fa-regular fa-paper-plane kvibe-action-icon"></i>
-      <span class="kvibe-count kvibe-share-count {% if post.share > 0 %}kvibe-show{% endif %}" 
+      <span class="kvibe-share-count {% if post.share > 0 %}kvibe-show{% endif %}"
             id="kvibe-share-count-{{ post.post_id }}">
         {% if post.share > 0 %}{{ post.share|intcomma }}{% endif %}
       </span>
     </button>
-  </div>
 
-  <!-- LIKERS AND ENGAGEMENT COUNTS SECTION -->
+  </div><!-- /actions -->
+
+  <!-- ── VIBE SUMMARY + META ─────────────────────────────────────────── -->
   <div class="kvibe-engagement">
-    {% if post.likes.count > 0 %}
-    <div class="kvibe-likers-container">
-      {% for liker in post.likes.all|slice:":3" %}
-      <a href="{% url 'profile' liker.username %}" 
-         class="kvibe-liker-link"
-         aria-label="{{ liker.username }}">
-        <img src="{{ liker.profile.picture.url }}"
-             onerror="this.onerror=null; this.src='https://placehold.co/24x24/cccccc/ffffff?text={{ liker.username|first|upper }}';"
-             alt="{{ liker.username }}" 
-             class="kvibe-liker-pic">
-      </a>
-      {% endfor %}
-    </div>
-    {% endif %}
 
-    <!-- LIKE COUNTING -->
-    <div class="kvibe-engagement-item">
-      <span class="kvibe-like-text">
-        {% if post.likes.count == 0 %}
-          <span class="kvibe-no-likes">Be the first to like this</span>
-        
-        {% elif request.user in post.likes.all %}
-          {% if post.likes.count == 1 %}
-            <span class="kvibe-you-text like-count-animate">Liked by You</span>
-          
-          {% elif post.likes.count == 2 %}
-            <span class="kvibe-you-text like-count-animate">Liked by You</span> and 
-            {% for liker in post.likes.all %}
-              {% if liker != request.user %}
-                <a href="{% url 'profile' liker.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker.username }}</a>
-              {% endif %}
-            {% endfor %}
-          
-          {% else %}
-            {% with non_user_likers_count=post.likes.count|add:"-1" %}
-              <span class="kvibe-you-text like-count-animate">Liked by You</span>
-              {% if non_user_likers_count == 1 %}
-                {% for liker in post.likes.all %}
-                  {% if liker != request.user %}
-                    and <a href="{% url 'profile' liker.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker.username }}</a>
-                  {% endif %}
-                {% endfor %}
-              {% elif non_user_likers_count == 2 %}
-                {% for liker in post.likes.all|slice:":3" %}
-                  {% if liker != request.user %}
-                    {% if forloop.counter == 1 %}, <a href="{% url 'profile' liker.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker.username }}</a>
-                    {% elif forloop.counter == 2 %}and <a href="{% url 'profile' liker.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker.username }}</a>
-                    {% endif %}
-                  {% endif %}
-                {% endfor %}
-              {% else %}
-                {% for liker in post.likes.all|slice:":3" %}
-                  {% if liker != request.user %}
-                    {% if forloop.counter == 1 %}, <a href="{% url 'profile' liker.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker.username }}</a>
-                    {% elif forloop.counter == 2 %}and <a href="#" style="color: var(--kvibe-text); text-decoration: none;">{{ non_user_likers_count|add:"-1" }} others</a>
-                    {% endif %}
-                  {% endif %}
-                {% endfor %}
-              {% endif %}
-            {% endwith %}
-          {% endif %}
-        
-        {% else %}
-          {% if post.likes.count == 1 %}
-            {% with liker=post.likes.first %}
-              Liked by <a href="{% url 'profile' liker.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker.username }}</a>
-            {% endwith %}
-          
-          {% elif post.likes.count == 2 %}
-            {% with liker1=post.likes.all.0 liker2=post.likes.all.1 %}
-              Liked by <a href="{% url 'profile' liker1.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker1.username }}</a> and <a href="{% url 'profile' liker2.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker2.username }}</a>
-            {% endwith %}
-          
-          {% elif post.likes.count == 3 %}
-            {% with liker1=post.likes.all.0 liker2=post.likes.all.1 liker3=post.likes.all.2 %}
-              Liked by <a href="{% url 'profile' liker1.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker1.username }}</a>, <a href="{% url 'profile' liker2.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker2.username }}</a> and <a href="{% url 'profile' liker3.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker3.username }}</a>
-            {% endwith %}
-          
-          {% else %}
-            {% with liker1=post.likes.all.0 liker2=post.likes.all.1 %}
-              Liked by <a href="{% url 'profile' liker1.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker1.username }}</a>, <a href="{% url 'profile' liker2.username %}" style="color: var(--kvibe-text); text-decoration: none;">{{ liker2.username }}</a> and <a href="#" style="color: var(--kvibe-text); text-decoration: none;">{{ post.likes.count|add:"-2" }} others</a>
-            {% endwith %}
-          {% endif %}
-        {% endif %}
-      </span>
+    <!-- Pills — filled by JS after REST/WS hydration -->
+    <div class="kv-vibe-summary" id="kv-vibe-summary-{{ post.post_id }}">
+      <span class="kv-no-vibes">Be the first to vibe this ✨</span>
     </div>
 
-    <!-- VIEW COUNT -->
+    <!-- "You + N others" / "N vibes" -->
+    <span class="kv-total-text"
+          id="kv-vibe-total-{{ post.post_id }}"
+          style="display:none;"></span>
+
+    <!-- View count (static from server) -->
     <span class="kvibe-separator-dot">·</span>
-    
     <div class="kvibe-engagement-item">
       <span class="kvibe-view-text">
-        <i class="fa-regular fa-chart-bar"></i> {{ post.view|intcomma }}
+        <i class="fa-regular fa-chart-bar"></i>&nbsp;{{ post.view|intcomma }}
       </span>
     </div>
-  </div>
-</div>
 
-</div>
+  </div><!-- /engagement -->
 
-<!-- SHARE MODAL -->
-<div class="kvibe-share-modal" id="kvibe-share-modal-{{ post.post_id }}" onclick="kvibeCloseShareModal('{{ post.post_id }}')">
+</div><!-- /wrapper -->
+
+<!-- ── SHARE MODAL ─────────────────────────────────────────────────────── -->
+<div class="kvibe-share-modal"
+     id="kvibe-share-modal-{{ post.post_id }}"
+     onclick="kvibeCloseShareModal('{{ post.post_id }}')">
   <div class="kvibe-share-modal-content" onclick="event.stopPropagation()">
     <div class="kvibe-share-header">
       Share to
-      <i class="fa-solid fa-xmark" style="cursor:pointer" onclick="kvibeCloseShareModal('{{ post.post_id }}')"></i>
+      <i class="fa-solid fa-xmark" style="cursor:pointer"
+         onclick="kvibeCloseShareModal('{{ post.post_id }}')"></i>
     </div>
     <div class="kvibe-share-grid">
-      <div class="kvibe-share-item" onclick="kvibeShareVia('whatsapp', '{{ post.post_id }}')">
+      <div class="kvibe-share-item" onclick="kvibeShareVia('whatsapp','{{ post.post_id }}')">
         <div class="kvibe-share-icon-wrap si-whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
         <span>WhatsApp</span>
       </div>
-      <div class="kvibe-share-item" onclick="kvibeShareVia('facebook', '{{ post.post_id }}')">
+      <div class="kvibe-share-item" onclick="kvibeShareVia('facebook','{{ post.post_id }}')">
         <div class="kvibe-share-icon-wrap si-facebook"><i class="fa-brands fa-facebook-f"></i></div>
         <span>Facebook</span>
       </div>
-      <div class="kvibe-share-item" onclick="kvibeShareVia('telegram', '{{ post.post_id }}')">
+      <div class="kvibe-share-item" onclick="kvibeShareVia('telegram','{{ post.post_id }}')">
         <div class="kvibe-share-icon-wrap si-telegram"><i class="fa-brands fa-telegram"></i></div>
         <span>Telegram</span>
       </div>
-      <div class="kvibe-share-item" onclick="kvibeShareVia('snapchat', '{{ post.post_id }}')">
-        <div class="kvibe-share-icon-wrap si-snapchat" style="color:#000"><i class="fa-brands fa-snapchat"></i></div>
+      <div class="kvibe-share-item" onclick="kvibeShareVia('snapchat','{{ post.post_id }}')">
+        <div class="kvibe-share-icon-wrap si-snapchat" style="color:#000">
+          <i class="fa-brands fa-snapchat"></i>
+        </div>
         <span>Snapchat</span>
       </div>
-      <div class="kvibe-share-item" onclick="kvibeShareVia('sms', '{{ post.post_id }}')">
+      <div class="kvibe-share-item" onclick="kvibeShareVia('sms','{{ post.post_id }}')">
         <div class="kvibe-share-icon-wrap si-sms"><i class="fa-solid fa-comment-sms"></i></div>
         <span>SMS</span>
       </div>
-      <div class="kvibe-share-item" onclick="kvibeShareVia('email', '{{ post.post_id }}')">
+      <div class="kvibe-share-item" onclick="kvibeShareVia('email','{{ post.post_id }}')">
         <div class="kvibe-share-icon-wrap si-email"><i class="fa-solid fa-envelope"></i></div>
         <span>Email</span>
       </div>
-      <div class="kvibe-share-item" onclick="kvibeShareVia('x', '{{ post.post_id }}')">
+      <div class="kvibe-share-item" onclick="kvibeShareVia('x','{{ post.post_id }}')">
         <div class="kvibe-share-icon-wrap si-x"><i class="fa-brands fa-x-twitter"></i></div>
         <span>X</span>
       </div>
-      <div class="kvibe-share-item" onclick="kvibeShareVia('copy', '{{ post.post_id }}')">
+      <div class="kvibe-share-item" onclick="kvibeShareVia('copy','{{ post.post_id }}')">
         <div class="kvibe-share-icon-wrap si-copy"><i class="fa-solid fa-link"></i></div>
         <span>Copy link</span>
       </div>
@@ -666,151 +393,366 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════════════
+     JAVASCRIPT  (one global namespace: window._kv)
+════════════════════════════════════════════════════════════════════════ -->
 <script>
-function getCsrfFromMeta(){
-    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-   }
-  /* ============================================================
-     LIKE BUTTON — PARTICLE BURST + FLOATING LABEL + JELLY ICON
-  ============================================================ */
-  document.addEventListener('htmx:afterSwap', () => initLikeButtons());
-  document.addEventListener('DOMContentLoaded', () => initLikeButtons());
+(function () {
+'use strict';
 
-  function initLikeButtons() {
-    document.querySelectorAll('.kvibe-like-btn').forEach(btn => {
-      if (btn._likeInited) return;
-      btn._likeInited = true;
+/* ── Constants ──────────────────────────────────────────────────────── */
+const EMOJIS = { fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊' };
+const COLORS = {
+  fire:'#ff4500', real:'#ff0080', vibing:'#3b82f6',
+  dead:'#f59e0b', cringe:'#8b5cf6', chill:'#06b6d4'
+};
 
-      btn.addEventListener('click', function(e) {
-        const icon = this.querySelector('.kvibe-action-icon');
-        const isLiked = this.closest('.kvibe-engagement-wrapper')?.dataset.isLiked === 'true';
+/* ── Per-post state ─────────────────────────────────────────────────── */
+window._kv = window._kv || {};
+function st(id) {
+  if (!window._kv[id]) window._kv[id] = { ws:null, userVibe:null, closeTimer:null, pickerOpen:false, hydrated:false };
+  return window._kv[id];
+}
 
-        /* Jelly on the icon */
-        icon.classList.remove('kvibe-heart-animate');
-        void icon.offsetWidth;
-        icon.classList.add('kvibe-heart-animate');
+/* ── Helpers ────────────────────────────────────────────────────────── */
+function csrf() {
+  return document.querySelector('meta[name="csrf-token"]')?.content
+      || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+}
+function myId() {
+  return parseInt(document.querySelector('meta[name="user-id"]')?.content || '-1');
+}
 
-        /* Particle burst */
-        if (!isLiked) spawnParticles(this);
+/* ══════════════════════════════════════════════════════════════════════
+   WebSocket
+══════════════════════════════════════════════════════════════════════ */
+function kvConnect(id) {
+  const s = st(id);
+  if (s.ws && s.ws.readyState < 2) return;
+  const ws  = new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/post_vibes/${id}/`);
+  s.ws      = ws;
+  const dot = document.getElementById('kv-live-dot-' + id);
 
-        /* Floating +1 / -1 label */
-        spawnLabel(this, isLiked ? '-1' : '+1');
-      });
-    });
-  }
+  ws.onopen    = () => { if(dot){dot.classList.remove('offline');dot.title='Live';} };
+  ws.onclose   = () => { if(dot){dot.classList.add('offline');dot.title='Offline';} setTimeout(()=>kvConnect(id),4000); };
+  ws.onerror   = () => { if(dot){dot.classList.add('offline');dot.title='Error';} };
+  ws.onmessage = (e) => {
+    try { const d=JSON.parse(e.data); if(d.type==='vibe_update') kvApply(id,d); } catch(_){}
+  };
+}
 
-  function spawnParticles(btn) {
-    const colors = ['#0095f6', '#f59e0b', '#ec4899', '#10b981', '#8b5cf6'];
-    const count = 8;
+/* ── REST hydration (first load) ────────────────────────────────────── */
+function kvHydrate(id) {
+  const s = st(id);
+  if (s.hydrated) return;
+  s.hydrated = true;
 
-    for (let i = 0; i < count; i++) {
-      const p = document.createElement('span');
-      p.className = 'kvibe-particle';
-
-      const angle = (i / count) * 2 * Math.PI;
-      const dist  = 22 + Math.random() * 16;
-      p.style.setProperty('--tx', `${Math.cos(angle) * dist}px`);
-      p.style.setProperty('--ty', `${Math.sin(angle) * dist}px`);
-      p.style.background = colors[i % colors.length];
-      p.style.left = '50%';
-      p.style.top  = '50%';
-      p.style.marginLeft = '-2.5px';
-      p.style.marginTop  = '-2.5px';
-      p.style.animationDelay = `${i * 0.025}s`;
-
-      let container = btn.querySelector('.kvibe-particle-container');
-      if (!container) {
-        container = document.createElement('div');
-        container.className = 'kvibe-particle-container';
-        btn.appendChild(container);
-      }
-      container.appendChild(p);
-      p.addEventListener('animationend', () => p.remove());
-    }
-  }
-
-  function spawnLabel(btn, text) {
-    const lbl = document.createElement('span');
-    lbl.className = 'kvibe-float-label';
-    lbl.textContent = text;
-    btn.style.position = 'relative';
-    btn.appendChild(lbl);
-    lbl.addEventListener('animationend', () => lbl.remove());
-  }
-
-  /* ============================================================
-     SHARE MODAL
-  ============================================================ */
-  const _kvibeShareData = {};
-
-  function kvibeOpenShareModal(postId, text) {
-    _kvibeShareData[postId] = { text };
-    document.getElementById('kvibe-share-modal-' + postId).classList.add('active');
-  }
-
-  function kvibeCloseShareModal(postId) {
-    document.getElementById('kvibe-share-modal-' + postId).classList.remove('active');
-  }
-
-  function kvibeGetShareUrl(postId) {
-    return window.location.origin + '/comment/' + postId;
-  }
-
-  function kvibeTrackShare(postId) {
-    fetch(`/track_share/${postId}/`, {
-      method: 'POST',
-      headers: { 'X-CSRFToken': getCsrfFromMeta() }
+  fetch(`/vibe/${id}/`, { headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken':csrf()} })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (!d) return;
+      s.userVibe = d.user_vibe || null;
+      kvRender(id, d.summary||{}, s.userVibe, d.total||0);
+      kvFace(id, s.userVibe);
     })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        const countEl = document.getElementById('kvibe-share-count-' + postId);
-        if (countEl) {
-          countEl.textContent = data.new_count;
-          countEl.classList.add('kvibe-show');
-        }
-      }
+    .catch(()=>{});
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Send vibe
+══════════════════════════════════════════════════════════════════════ */
+function kvSendVibe(evt, id, vibe) {
+  evt.stopPropagation();
+  kvOptimistic(id, vibe);  // instant feel
+  kvClosePicker(id);
+  kvParticles(id, vibe);
+
+  const s = st(id);
+  if (s.ws && s.ws.readyState === 1) {
+    s.ws.send(JSON.stringify({ action:'vibe', vibe_type:vibe }));
+  } else {
+    // REST fallback (WS not ready yet)
+    fetch(`/vibe/${id}/`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body: JSON.stringify({ vibe_type:vibe }),
     })
-    .catch(() => {});
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (!d) return;
+      s.userVibe = d.user_vibe || null;
+      kvRender(id, d.summary||{}, s.userVibe, d.total||0);
+      kvFace(id, s.userVibe);
+    })
+    .catch(()=>{});
+  }
+}
+window.kvSendVibe = kvSendVibe;
+
+/* ── Optimistic local update ────────────────────────────────────────── */
+function kvOptimistic(id, vibe) {
+  const s    = st(id);
+  const same = s.userVibe === vibe;
+  s.userVibe = same ? null : vibe;
+  kvFace(id, s.userVibe);
+
+  const c = document.getElementById('kv-vibe-count-' + id);
+  if (c) { c.classList.remove('tick'); void c.offsetWidth; c.classList.add('tick'); }
+
+  document.querySelectorAll(`#kv-picker-${id} .kv-vibe-opt`).forEach(o =>
+    o.classList.toggle('selected', o.dataset.vibe === s.userVibe)
+  );
+}
+
+/* ── Sync button face ───────────────────────────────────────────────── */
+function kvFace(id, vibe) {
+  const btn = document.getElementById('kv-vibe-btn-' + id);
+  const el  = document.getElementById('kv-active-emoji-' + id);
+  if (!btn) return;
+  if (vibe) {
+    btn.classList.add('has-vibe');
+    btn.dataset.userVibe = vibe;
+    if (el) { el.className='kv-active-emoji'; el.innerHTML=EMOJIS[vibe]||'✨'; }
+  } else {
+    btn.classList.remove('has-vibe');
+    btn.dataset.userVibe = '';
+    if (el) { el.className='kvibe-action-icon'; el.innerHTML='<i class="fa-regular fa-face-smile"></i>'; }
+  }
+}
+
+/* ── Apply server broadcast ─────────────────────────────────────────── */
+function kvApply(id, data) {
+  const s = st(id);
+  if (data.actor_id === myId()) {
+    s.userVibe = data.user_vibe || null;
+    kvFace(id, s.userVibe);
+  }
+  const total   = data.total   || 0;
+  const summary = data.summary || {};
+
+  const c = document.getElementById('kv-vibe-count-' + id);
+  if (c) { c.classList.remove('tick'); void c.offsetWidth; c.classList.add('tick'); c.textContent = total>0?total.toLocaleString():'0'; }
+
+  kvRender(id, summary, s.userVibe, total);
+}
+
+/* ── Render summary pills ───────────────────────────────────────────── */
+function kvRender(id, summary, userVibe, total) {
+  const box     = document.getElementById('kv-vibe-summary-' + id);
+  const totalEl = document.getElementById('kv-vibe-total-'   + id);
+  const countEl = document.getElementById('kv-vibe-count-'   + id);
+
+  if (countEl) countEl.textContent = total > 0 ? total.toLocaleString() : '0';
+
+  const entries = Object.entries(summary).filter(([,v])=>v>0);
+  if (!box) return;
+
+  if (!entries.length) {
+    box.innerHTML = '<span class="kv-no-vibes">Be the first to vibe this ✨</span>';
+    if (totalEl) totalEl.style.display='none';
+    return;
   }
 
-  function kvibeShareVia(platform, postId) {
-    const url = kvibeGetShareUrl(postId);
-    const text = (_kvibeShareData[postId] || {}).text || '';
-    const fullMsg = encodeURIComponent(text + ' ' + url);
-    let shareLink = '';
+  box.innerHTML = entries.map(([vt,count]) => {
+    const mine  = userVibe === vt;
+    const color = COLORS[vt] || '#666';
+    const st2   = mine ? `style="--pill-bg:${color}22;--pill-fg:${color};--pill-border:${color}55"` : '';
+    return `<span class="kv-vibe-pill${mine?' mine':''}" ${st2} title="${vt}">
+              <span class="kv-pill-emoji">${EMOJIS[vt]||'✨'}</span>
+              <span class="kv-pill-count">${count.toLocaleString()}</span>
+            </span>`;
+  }).join('');
 
-    switch (platform) {
-      case 'whatsapp':  shareLink = `https://api.whatsapp.com/send?text=${fullMsg}`; break;
-      case 'facebook':  shareLink = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`; break;
-      case 'telegram':  shareLink = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`; break;
-      case 'snapchat':  shareLink = `https://www.snapchat.com/scan?attachmentUrl=${encodeURIComponent(url)}`; break;
-      case 'sms':       shareLink = `sms:?body=${fullMsg}`; break;
-      case 'email':     shareLink = `mailto:?subject=Check this out on Kvibe&body=${fullMsg}`; break;
-      case 'x':         shareLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`; break;
-      case 'copy':
-        navigator.clipboard.writeText(url).then(() => {
-          kvibeTrackShare(postId);
-          kvibeCloseShareModal(postId);
-        });
-        return;
-    }
-
-    if (shareLink) {
-      window.open(shareLink, '_blank');
-      kvibeTrackShare(postId);
-      kvibeCloseShareModal(postId);
+  if (totalEl) {
+    totalEl.style.display = '';
+    if (userVibe) {
+      const o = total-1;
+      totalEl.innerHTML = `<span class="kv-you-text">You</span>${o>0?` + ${o.toLocaleString()} others`:''}`;
+    } else {
+      totalEl.textContent = `${total.toLocaleString()} vibe${total!==1?'s':''}`;
     }
   }
+}
 
-  /* Close share modal on Escape */
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.kvibe-share-modal.active').forEach(el => el.classList.remove('active'));
-      if (typeof kvibeCloseCommentSheet === 'function') kvibeCloseCommentSheet();
-    }
+/* ══════════════════════════════════════════════════════════════════════
+   Picker
+══════════════════════════════════════════════════════════════════════ */
+function kvPositionPicker(id) {
+  const btn = document.getElementById('kv-vibe-btn-' + id);
+  const p   = document.getElementById('kv-picker-' + id);
+  if (!btn || !p) return;
+
+  // Temporarily show off-screen to measure width
+  p.style.visibility = 'hidden';
+  p.style.display    = 'flex';
+  const pw = p.offsetWidth;
+  const ph = p.offsetHeight;
+  p.style.display    = '';
+  p.style.visibility = '';
+
+  const r   = btn.getBoundingClientRect();
+  const vw  = window.innerWidth;
+  const gap = 10; // px gap between button top and picker bottom
+
+  // Horizontally: centre over button, clamped within viewport with 8px margin
+  let left = r.left + r.width / 2 - pw / 2;
+  left = Math.max(8, Math.min(left, vw - pw - 8));
+
+  // Vertically: above the button
+  let top = r.top - ph - gap;
+
+  // If it would go off the top, flip below the button
+  if (top < 8) top = r.bottom + gap;
+
+  p.style.left = left + 'px';
+  p.style.top  = top  + 'px';
+
+  // Reposition the tail arrow to point at the button centre
+  const btnCentreX     = r.left + r.width / 2;
+  const arrowLeft      = Math.max(16, Math.min(btnCentreX - left, pw - 16));
+  p.style.setProperty('--arrow-left', arrowLeft + 'px');
+}
+
+function kvOpenPicker(id) {
+  kvCancelClose(id);
+  const p = document.getElementById('kv-picker-' + id);
+  const s = st(id);
+  if (p && !s.pickerOpen) {
+    kvPositionPicker(id);
+    p.classList.add('open');
+    s.pickerOpen = true;
+  }
+}
+function kvClosePicker(id) {
+  const p = document.getElementById('kv-picker-' + id);
+  const s = st(id);
+  if (p) { p.classList.remove('open'); s.pickerOpen = false; }
+}
+function kvScheduleClose(id) {
+  const s = st(id); s.closeTimer = setTimeout(() => kvClosePicker(id), 350);
+}
+function kvCancelClose(id) {
+  const s = st(id); if (s.closeTimer) { clearTimeout(s.closeTimer); s.closeTimer = null; }
+}
+function kvTogglePicker(id) {
+  st(id).pickerOpen ? kvClosePicker(id) : kvOpenPicker(id);
+}
+window.kvOpenPicker    = kvOpenPicker;
+window.kvScheduleClose = kvScheduleClose;
+window.kvCancelClose   = kvCancelClose;
+window.kvTogglePicker  = kvTogglePicker;
+
+// Reposition any open picker on scroll or resize
+function kvRepositionAll() {
+  Object.keys(window._kv || {}).forEach(id => {
+    if (window._kv[id].pickerOpen) kvPositionPicker(id);
   });
-</script>
+}
+window.addEventListener('scroll', kvRepositionAll, { passive: true, capture: true });
+window.addEventListener('resize', kvRepositionAll, { passive: true });
 
-</body>
-</html>
+/* ── Particles ──────────────────────────────────────────────────────── */
+function kvParticles(id, vibe) {
+  const btn = document.getElementById('kv-vibe-btn-'+id);
+  if (!btn) return;
+  const color = COLORS[vibe] || '#0095f6';
+  let pc = btn.querySelector('.kv-pc');
+  if (!pc){ pc=document.createElement('div'); pc.className='kv-pc'; btn.appendChild(pc); }
+
+  for (let i=0;i<8;i++) {
+    const p=document.createElement('span'); p.className='kv-dot';
+    const a=(i/8)*2*Math.PI, d=24+Math.random()*14;
+    p.style.setProperty('--tx',`${Math.cos(a)*d}px`);
+    p.style.setProperty('--ty',`${Math.sin(a)*d}px`);
+    p.style.background=color; p.style.left='50%'; p.style.top='50%';
+    p.style.marginLeft='-3px'; p.style.marginTop='-3px';
+    p.style.animationDelay=`${i*.025}s`;
+    pc.appendChild(p); p.addEventListener('animationend',()=>p.remove());
+  }
+
+  // Floating emoji burst
+  const lbl=document.createElement('span'); lbl.className='kv-lbl';
+  lbl.textContent=EMOJIS[vibe]||'+1'; btn.style.position='relative';
+  btn.appendChild(lbl); lbl.addEventListener('animationend',()=>lbl.remove());
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Init
+══════════════════════════════════════════════════════════════════════ */
+function kvInit() {
+  document.querySelectorAll('[id^="kv-vibe-btn-"]').forEach(btn => {
+    if (btn._kvi) return;
+    btn._kvi = true;
+    const id = btn.dataset.postId;
+    if (!id) return;
+    kvHydrate(id);
+    kvConnect(id);
+  });
+}
+document.addEventListener('DOMContentLoaded', kvInit);
+document.addEventListener('htmx:afterSwap',   kvInit);
+document.addEventListener('htmx:afterSettle', kvInit);
+
+// Close picker on outside click
+document.addEventListener('click', e => {
+  document.querySelectorAll('[id^="kv-picker-"]').forEach(p => {
+    const id = p.id.replace('kv-picker-','');
+    const b  = document.getElementById('kv-vibe-btn-'+id);
+    if (b && !b.contains(e.target)) kvClosePicker(id);
+  });
+});
+
+// Escape key
+document.addEventListener('keydown', e => {
+  if (e.key!=='Escape') return;
+  document.querySelectorAll('[id^="kv-picker-"]').forEach(p=>kvClosePicker(p.id.replace('kv-picker-','')));
+  document.querySelectorAll('.kvibe-share-modal.active').forEach(m=>m.classList.remove('active'));
+});
+
+kvInit(); // run immediately for posts already in DOM
+
+/* ══════════════════════════════════════════════════════════════════════
+   Share modal
+══════════════════════════════════════════════════════════════════════ */
+window._kvShare = window._kvShare || {};
+
+window.kvibeOpenShareModal = function(id, text) {
+  window._kvShare[id] = { text };
+  document.getElementById('kvibe-share-modal-'+id)?.classList.add('active');
+};
+window.kvibeCloseShareModal = function(id) {
+  document.getElementById('kvibe-share-modal-'+id)?.classList.remove('active');
+};
+window.kvibeShareVia = function(platform, id) {
+  const url  = `${location.origin}/comment/${id}`;
+  const text = (window._kvShare[id]||{}).text || '';
+  const fm   = encodeURIComponent(`${text} ${url}`);
+  const map  = {
+    whatsapp:`https://api.whatsapp.com/send?text=${fm}`,
+    facebook:`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+    telegram:`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
+    snapchat:`https://www.snapchat.com/scan?attachmentUrl=${encodeURIComponent(url)}`,
+    sms:     `sms:?body=${fm}`,
+    email:   `mailto:?subject=Check this out on KVibe&body=${fm}`,
+    x:       `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+  };
+  if (platform==='copy') {
+    navigator.clipboard.writeText(url).then(()=>kvTrackShare(id));
+    window.kvibeCloseShareModal(id); return;
+  }
+  if (map[platform]) { window.open(map[platform],'_blank'); kvTrackShare(id); window.kvibeCloseShareModal(id); }
+};
+
+function kvTrackShare(id) {
+  fetch(`/track_share/${id}/`,{method:'POST',headers:{'X-CSRFToken':csrf()}})
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.success){
+        const el=document.getElementById('kvibe-share-count-'+id);
+        if(el){el.textContent=d.new_count;el.classList.add('kvibe-show');}
+      }
+    }).catch(()=>{});
+}
+
+})();
+</script>
