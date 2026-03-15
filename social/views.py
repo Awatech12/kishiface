@@ -123,16 +123,12 @@ def _safe_next(request, fallback='/home'):
     return fallback
 
 def index(request):
-    # ── Already logged in ──────────────────────────────────────────────────────
+    # ── Already logged in ─────────────────────────────────────────────────────
     if request.user.is_authenticated:
-        next_url = _safe_next(request, '/home')
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'success': True, 'redirect': next_url, 'message': f'Welcome back {request.user.username}!'})
-        return redirect(next_url)
+        return redirect(_safe_next(request, '/home'))
 
-    # ── POST — login attempt ───────────────────────────────────────────────────
+    # ── POST — login attempt ──────────────────────────────────────────────────
     if request.method == 'POST':
-        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
         # ── Brute-force rate limit: max 10 attempts per IP per 15 minutes ────
         from django.core.cache import cache
@@ -142,28 +138,19 @@ def index(request):
         )
         rate_key    = f'login_attempts_{ip}'
         attempts    = cache.get(rate_key, 0)
-        LIMIT       = 10
-        WINDOW_SECS = 900  # 15 minutes
-        if attempts >= LIMIT:
-            err = 'Too many login attempts. Please try again in 15 minutes.'
-            if is_ajax:
-                return JsonResponse({'success': False, 'message': err}, status=429)
-            messages.error(request, err)
+        if attempts >= 10:
+            messages.error(request, 'Too many login attempts. Please try again in 15 minutes.')
             return redirect('/')
-        # Increment attempt counter (set with timeout on first hit)
-        cache.set(rate_key, attempts + 1, timeout=WINDOW_SECS)
+        cache.set(rate_key, attempts + 1, timeout=900)
 
         user_check = (request.POST.get('user_check') or '').strip()
         password   = (request.POST.get('password')   or '').strip()
 
-        # kishivibe: basic empty-field guard (belt-and-suspenders; JS guards first)
         if not user_check or not password:
-            if is_ajax:
-                return JsonResponse({'success': False, 'message': 'Please fill in all fields.'}, status=400)
             messages.error(request, 'Please fill in all fields.')
             return redirect('/')
 
-        # kishivibe: allow login by email OR username
+        # Allow login by email OR username
         try:
             user_obj = User.objects.get(email__iexact=user_check)
             username = user_obj.username
@@ -174,28 +161,15 @@ def index(request):
 
         if user is not None:
             login(request, user)
-            request.session.set_expiry(None)   # session persists until browser close
-            # Clear brute-force counter on successful login
-            cache.delete(rate_key)
-            next_url = _safe_next(request, '/home')
-            if is_ajax:
-                return JsonResponse({
-                    'success':  True,
-                    'message':  f'Welcome back, {user.username}!',
-                    'redirect': next_url,
-                })
-            messages.success(request, f'Welcome back {user.username}')
-            return redirect(next_url)
-
+            request.session.set_expiry(None)
+            cache.delete(rate_key)  # clear rate limit on success
+            return redirect(_safe_next(request, '/home'))
         else:
-            # kishivibe: deliberately vague — don't reveal whether user exists
-            err = 'Invalid username or password. Please try again.'
-            if is_ajax:
-                return JsonResponse({'success': False, 'message': err}, status=401)
-            messages.error(request, err)
+            # Deliberately vague — don't reveal whether the username exists
+            messages.error(request, 'Invalid username or password. Please try again.')
             return redirect('/')
 
-    # ── GET ────────────────────────────────────────────────────────────────────
+    # ── GET ───────────────────────────────────────────────────────────────────
     return render(request, 'index.html')
 
 
