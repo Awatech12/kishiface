@@ -290,6 +290,56 @@ class Profile(models.Model):
     def is_blocked_by(self, profile):
         return profile.blocked_users.filter(pk=self.pk).exists()
 
+    # ── Picture URL helper ───────────────────────────────────────
+    @property
+    def get_picture_url(self):
+        """
+        Always returns a full usable picture URL in both environments.
+
+        Production (USE_CLOUDINARY=True):
+          Builds https://res.cloudinary.com/... from the stored public_id.
+          Falls back to the default avatar if picture is blank.
+
+        Debug (USE_CLOUDINARY=False):
+          Returns the /media/... path via Django storage.
+          Falls back to /static/images/male.png if file is missing.
+        """
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                pic = self.picture
+                # CloudinaryField exposes .public_id; plain string fallback
+                public_id = None
+                if hasattr(pic, 'public_id') and pic.public_id:
+                    public_id = str(pic.public_id).strip()
+                elif pic and str(pic).strip() not in ('', 'None'):
+                    public_id = str(pic).strip()
+
+                if public_id:
+                    return cloudinary.CloudinaryImage(public_id).build_url(secure=True)
+
+                # No picture stored — return the default avatar
+                return cloudinary.CloudinaryImage('logo_iowyea').build_url(secure=True)
+
+            else:
+                # Debug: standard ImageField
+                pic = self.picture
+                if pic:
+                    try:
+                        url = pic.url
+                        if url:
+                            return url
+                    except Exception:
+                        pass
+                # Fallback to a static default image
+                from django.templatetags.static import static
+                return static('images/male.png')
+
+        except Exception:
+            pass
+
+        return 'https://placehold.co/40x40/dbdbdb/8e8e8e?text=U'
+
     # ── Website helpers ──────────────────────────────────────────
     @property
     def safe_website(self):
@@ -558,6 +608,14 @@ class Post(models.Model):
             models.Index(fields=['author', '-created_at']),
             models.Index(fields=['mood']),
             models.Index(fields=['custom_mood']),
+            # ── Feed algorithm indexes ──────────────────────────────────────
+            # Covers the engagement-score query:
+            #   WHERE author_id IN (...) AND created_at >= cutoff
+            #   ORDER BY db_score DESC, created_at DESC
+            models.Index(fields=['author', 'created_at'], name='post_author_created_idx'),
+            # Partial-style workaround: index is_repost + created_at so the
+            # "repost fan-out" branch of the OR filter uses an index seek
+            models.Index(fields=['is_repost', 'created_at'], name='post_repost_created_idx'),
         ]
 
 
@@ -638,6 +696,8 @@ class PostVibe(models.Model):
         ordering = ['created_at']
         indexes = [
             models.Index(fields=['post', 'vibe_type']),
+            # Interest-profile query: WHERE user_id=? AND created_at >= cutoff
+            models.Index(fields=['user', 'created_at'], name='postvibe_user_created_idx'),
         ]
 
     def __str__(self):
@@ -658,7 +718,7 @@ class PostComment(models.Model):
     
     like = models.ManyToManyField(User, related_name='comment_likes', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     def clean(self):
         super().clean()
         self.comment = sanitize_text(self.comment, 'comment')
@@ -668,10 +728,16 @@ class PostComment(models.Model):
         if self.file and hasattr(self.file, 'name'):
             validate_file_extension(self.file)
             validate_file_size(self.file, max_size_mb=20)
-    
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+    class Meta:
+        indexes = [
+            # Feed algorithm: WHERE author_id=? AND created_at >= cutoff
+            models.Index(fields=['author', 'created_at'], name='postcomment_author_created_idx'),
+        ]
 
 
 class CommentReply(models.Model):

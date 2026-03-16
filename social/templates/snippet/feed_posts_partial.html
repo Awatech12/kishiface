@@ -1,0 +1,338 @@
+{% load static %}
+{% load post_tags %}
+{% load humanize %}
+{% load time %}
+{% load text_filters %}
+
+
+{% for item in posts_with_ads %}
+
+  {# ── Regular Post ────────────────────────────────────────────────────── #}
+  {% if item.type == 'post' %}
+  <article class="kvibe-post"
+    data-post-id="{{ item.data.post_id }}"
+    data-mood="{{ item.data.mood|default:'' }}"
+    data-custom-mood="{% if item.data.mood == 'custom' or not item.data.mood %}{{ item.data.custom_mood|default:'' }}{% endif %}"
+    {% if not item.data.is_repost and not item.data.link_preview and not item.data.file and not item.data.video_file and not item.data.images.all %}
+      {% if item.data.content %}data-lp-url="{{ item.data.content|truncatechars:2048 }}"{% endif %}
+    {% elif item.data.is_repost and item.data.original_post and not item.data.original_post.link_preview and not item.data.original_post.file and not item.data.original_post.video_file and not item.data.original_post.images.all %}
+      {% if item.data.original_post.content %}data-lp-url="{{ item.data.original_post.content|truncatechars:2048 }}"{% endif %}
+    {% endif %}
+  >
+
+    {# Repost header #}
+    {% if item.data.is_repost %}
+    <div class="kvibe-repost-header">
+      <i class="fas fa-retweet"></i>
+      <span>
+        <a href="{% url 'profile' item.data.author.username %}">{{ item.data.author.first_name }} {{ item.data.author.last_name }}</a>
+        reposted
+      </span>
+    </div>
+    {% endif %}
+
+    {# Friend-of-Friend banner #}
+    {% if item.is_fof and item.fof_via %}
+    <div class="kvibe-fof-header">
+      <div class="kvibe-fof-label">
+        <i class="fas fa-user-friends"></i>
+        <span>Followed by people you follow</span>
+      </div>
+      <div class="kvibe-fof-avatars">
+        {% for via_user in item.fof_via %}
+          <a href="{% url 'profile' via_user.username %}" title="{{ via_user.first_name }} {{ via_user.last_name }}">
+            <img
+              src="{{ via_user|safe_pic_url }}"
+              class="kvibe-fof-avatar"
+              alt="{{ via_user.username }}"
+              onerror="this.onerror=null;this.src='https://placehold.co/26x26/dbdbdb/8e8e8e?text=U';"
+            >
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Post header #}
+    <div class="kvibe-post-header">
+      <img
+        src="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author|safe_pic_url }}{% else %}{{ item.data.author|safe_pic_url }}{% endif %}"
+        class="kvibe-profile-pic"
+        alt="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}"
+        onerror="this.onerror=null;this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';"
+      >
+      <div style="flex:1;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;">
+          <a href="{% url 'profile' username=item.data.get_original_author.username %}"
+             class="kvibe-username"
+             data-user="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}">
+            {% if item.data.is_repost and item.data.original_post %}
+              {{ item.data.original_post.author.first_name }} {{ item.data.original_post.author.last_name }}
+            {% else %}
+              {{ item.data.author.first_name }} {{ item.data.author.last_name }}
+            {% endif %}
+            {% if item.data.is_repost and item.data.original_post %}
+              {% if item.data.original_post.author.profile.is_verify %}
+                <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;">
+              {% endif %}
+            {% else %}
+              {% if item.data.author.profile.is_verify and item.data.author.first_name %}
+                <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;">
+              {% endif %}
+            {% endif %}
+          </a>
+          {% if item.data.has_mood %}
+            {% with mood_data=item.data.get_mood_data %}
+              <span class="kvibe-mood-badge kvibe-mood-{{ item.data.mood|default:'custom' }}"
+                    style="{% if mood_data.color %}--mood-color:{{ mood_data.color }};{% endif %}">
+                <i class="fa-regular fa-face-smile"></i>
+                {{ mood_data.display }}
+              </span>
+            {% endwith %}
+          {% endif %}
+        </div>
+        <div class="kvibe-post-time">
+          {% if item.data.is_repost %}
+            @{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}
+            · Original post: {{ item.data.original_post.created_at|insta_timesince }}
+            · Reposted: {{ item.data.created_at|insta_timesince }}
+          {% else %}
+            @{{ item.data.author.username }} · {{ item.data.created_at|insta_timesince }}
+          {% endif %}
+        </div>
+      </div>
+      <div class="kvibe-post-actions">
+        {% with post_author=item.data.get_original_author %}
+        {% if request.user != post_author %}
+          {% if post_author.id in following_ids %}
+            <button class="kvibe-follow-btn kvibe-follow-btn--following"
+                    data-user-id="{{ post_author.id }}"
+                    data-username="{{ post_author.username }}"
+                    onclick="kvibeToggleFollow(this)"
+                    title="Unfollow {{ post_author.username }}">
+              <i class="fas fa-user-check"></i><span>Following</span>
+            </button>
+          {% else %}
+            <button class="kvibe-follow-btn"
+                    data-user-id="{{ post_author.id }}"
+                    data-username="{{ post_author.username }}"
+                    onclick="kvibeToggleFollow(this)"
+                    title="Follow {{ post_author.username }}">
+              <i class="fas fa-user-plus"></i><span>Follow</span>
+            </button>
+          {% endif %}
+        {% endif %}
+        {% endwith %}
+        {% if request.user == item.data.author and not item.data.is_repost %}
+          <a href="{% url 'editpost' item.data.post_id %}" title="Edit" class="kvibe-edit-icon">
+            <i class="fas fa-edit"></i>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Repost caption #}
+    {% if item.data.is_repost and item.data.repost_content %}
+    <div class="kvibe-repost-caption-container">
+      <div class="kvibe-repost-caption">
+        <span class="kvibe-repost-caption-author">
+          {{ item.data.author.first_name }} {{ item.data.author.last_name }}
+          {% if item.data.author.profile.is_verify %}
+            <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align:middle;">
+          {% endif %}
+        </span>
+        <div class="kvibe-repost-caption-text">{{ item.data.repost_content|format_post_text|safe }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Post text content #}
+    {% if item.data.content or item.data.is_repost %}
+    <div class="kvibe-post-content">
+      <div class="kvibe-post-text collapsed" id="kvibe-text-{{ item.data.post_id }}">
+        {% if item.data.is_repost and item.data.original_post %}
+          {{ item.data.original_post.content|format_post_text|safe }}
+        {% else %}
+          {{ item.data.content|format_post_text|safe }}
+        {% endif %}
+      </div>
+      {# Link-preview slot — filled by kvibeScanFeedLpCards() in JS #}
+      <div class="kvibe-lp-slot">
+        {% if item.data.link_preview %}
+          <a class="kvibe-post-link-preview" href="{{ item.data.link_preview.url|default:'#' }}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">
+            {% if item.data.link_preview.image %}
+              <img class="kvibe-plp-image" src="{{ item.data.link_preview.image }}" alt="" onerror="this.style.display='none'">
+            {% endif %}
+            <div class="kvibe-plp-body">
+              {% if item.data.link_preview.domain %}<div class="kvibe-plp-domain">{{ item.data.link_preview.domain }}</div>{% endif %}
+              {% if item.data.link_preview.title %}<div class="kvibe-plp-title">{{ item.data.link_preview.title }}</div>{% endif %}
+              {% if item.data.link_preview.description %}<div class="kvibe-plp-desc">{{ item.data.link_preview.description }}</div>{% endif %}
+            </div>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Media (video / audio / images) #}
+    {% with orig=item.data.original_post %}
+    {% if item.data.video_file or item.data.file or item.data.images.all or orig and orig.video_file or orig and orig.file or orig and orig.images.all %}
+    <div class="kvibe-media-container">
+      {% if item.data.is_repost and orig %}
+        {% if orig.video_file %}
+          <div class="kvibe-video-container">
+            <video id="kvibe-post-video-{{ item.data.post_id }}" class="kvibe-video" preload="none"
+                   onclick="kvibeTogglePlay('kvibe-post-video-{{ item.data.post_id }}', 'kvibe-play-icon-{{ item.data.post_id }}')"
+                   onplay="kvibeOnVideoPlay('kvibe-post-video-{{ item.data.post_id }}')"
+                   onpause="document.getElementById('kvibe-play-icon-{{ item.data.post_id }}').className='fa-solid fa-play kvibe-play-pause-icon'">
+              <source src="{{ orig.video_file.url }}" type="video/mp4">
+            </video>
+            <div class="kvibe-video-overlay" onclick="kvibeTogglePlay('kvibe-post-video-{{ item.data.post_id }}','kvibe-play-icon-{{ item.data.post_id }}')">
+              <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
+            </div>
+          </div>
+        {% elif orig.file %}
+          <div style="padding:12px 16px;">
+            <audio controls preload="none" style="width:100%;border-radius:8px;">
+              <source src="{{ orig.file.url }}">
+            </audio>
+          </div>
+        {% elif orig.images.all %}
+          {% if orig.images.all|length > 1 %}
+            <div class="kvibe-image-carousel" id="kvibe-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ orig.images.all|length }}">
+              <div class="kvibe-image-track" id="kvibe-track-{{ item.data.post_id }}">
+                {% for image in orig.images.all %}
+                <div class="kvibe-image-slide">
+                  <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" loading="lazy" onload="this.classList.add('loaded')"/>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="kvibe-carousel-indicators">
+                {% for image in orig.images.all %}
+                <span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>
+                {% endfor %}
+              </div>
+              <span class="kvibe-slide-counter">1 / {{ orig.images.all|length }}</span>
+            </div>
+          {% else %}
+            {% with image=orig.images.first %}
+            <div class="kvibe-image-slide">
+              <img src="{{ image.image.url }}" alt="Post image" loading="lazy" onload="this.classList.add('loaded')"/>
+            </div>
+            {% endwith %}
+          {% endif %}
+        {% endif %}
+      {% else %}
+        {% if item.data.video_file %}
+          <div class="kvibe-video-container">
+            <video id="kvibe-post-video-{{ item.data.post_id }}" class="kvibe-video" preload="none"
+                   onclick="kvibeTogglePlay('kvibe-post-video-{{ item.data.post_id }}','kvibe-play-icon-{{ item.data.post_id }}')"
+                   onplay="kvibeOnVideoPlay('kvibe-post-video-{{ item.data.post_id }}')"
+                   onpause="document.getElementById('kvibe-play-icon-{{ item.data.post_id }}').className='fa-solid fa-play kvibe-play-pause-icon'">
+              <source src="{{ item.data.video_file.url }}" type="video/mp4">
+            </video>
+            <div class="kvibe-video-overlay" onclick="kvibeTogglePlay('kvibe-post-video-{{ item.data.post_id }}','kvibe-play-icon-{{ item.data.post_id }}')">
+              <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
+              <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}',-10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
+              <button class="kvibe-seek-overlay-btn kvibe-forward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}',10)">10s <i class="fa-solid fa-forward-step"></i></button>
+            </div>
+          </div>
+        {% elif item.data.file %}
+          <div style="padding:12px 16px;">
+            <audio controls preload="none" style="width:100%;border-radius:8px;">
+              <source src="{{ item.data.file.url }}">
+            </audio>
+          </div>
+        {% elif item.data.images.all %}
+          {% if item.data.images.all|length > 1 %}
+            <div class="kvibe-image-carousel" id="kvibe-carousel-{{ item.data.post_id }}" data-slide="0" data-total="{{ item.data.images.all|length }}">
+              <div class="kvibe-image-track" id="kvibe-track-{{ item.data.post_id }}">
+                {% for image in item.data.images.all %}
+                <div class="kvibe-image-slide">
+                  <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" loading="lazy" onload="this.classList.add('loaded')"/>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="kvibe-carousel-indicators">
+                {% for image in item.data.images.all %}
+                <span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>
+                {% endfor %}
+              </div>
+              <span class="kvibe-slide-counter">1 / {{ item.data.images.all|length }}</span>
+            </div>
+          {% else %}
+            {% with image=item.data.images.first %}
+            <div class="kvibe-image-slide">
+              <img src="{{ image.image.url }}" alt="Post image" loading="lazy" onload="this.classList.add('loaded')"/>
+            </div>
+            {% endwith %}
+          {% endif %}
+        {% endif %}
+      {% endif %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    
+    {% include 'snippet/post_like.html' with post=item.data %}
+
+  </article>
+
+ 
+  {% elif item.type == 'user_suggestion' %}
+  <div class="kvibe-user-suggestion" data-user-id="{{ item.data.id }}">
+    <div class="kvibe-user-suggestion-header">
+      <div class="kvibe-user-suggestion-badge">
+        <i class="fas fa-user-plus"></i> Suggested for you
+      </div>
+    </div>
+    <div class="kvibe-user-suggestion-content">
+      <div class="kvibe-user-suggestion-profile">
+        <img src="{{ item.data|safe_pic_url }}"
+             alt="{{ item.data.username }}"
+             class="kvibe-user-suggestion-picture">
+        <div class="kvibe-user-suggestion-details">
+          <div class="kvibe-user-suggestion-name">
+            {{ item.data.first_name }} {{ item.data.last_name }}
+            {% if item.data.profile.is_verify %}
+              <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;" loading="lazy">
+            {% endif %}
+          </div>
+          <div class="kvibe-user-suggestion-username">@{{ item.data.username }}</div>
+          {% if item.data.profile.bio %}
+          <div class="kvibe-user-suggestion-bio">{{ item.data.profile.bio|truncatechars:80 }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="kvibe-user-suggestion-actions">
+        <button class="kvibe-user-suggestion-btn-primary"
+                onclick="kvibeFollowUser('{{ item.data.id }}','{{ item.data.username }}')">
+          <i class="fas fa-user-plus"></i> Follow
+        </button>
+        <a href="{% url 'profile' item.data.username %}" class="kvibe-user-suggestion-btn-secondary">
+          <i class="fas fa-user"></i> View Profile
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+{% endfor %}
+
+
+{% if next_cursor %}
+
+<div id="kvibe-feed-sentinel"
+     hx-get="{% url 'feed_load_more' %}?cursor={{ next_cursor }}"
+     hx-trigger="intersect once threshold:0.1"
+     hx-swap="outerHTML"
+     hx-indicator="#kvibe-feed-loader"
+     hx-push-url="false"
+     style="height:20px;width:100%;display:block;">
+</div>
+{% else %}
+<div id="kvibe-feed-end" style="text-align:center;padding:32px 16px 48px;color:var(--kvibe-text-light);font-size:13px;">
+  <i class="fas fa-check-circle" style="font-size:22px;margin-bottom:8px;display:block;opacity:0.4;"></i>
+  You're all caught up ✨
+</div>
+{% endif %}
