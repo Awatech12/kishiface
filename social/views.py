@@ -291,128 +291,222 @@ def _safe_redirect_back(request, fallback='home'):
     return redirect(fallback)
 
 
-@login_required(login_url='/')
-def home(request):
-    profile = Profile.objects.get(user=request.user)
-    following = profile.followings.values_list('user', flat=True)
-    
-    followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
-        last_app_activity=Max('channel_messages__created_at')
-    ).order_by('-last_app_activity', '-created_at')
-    
-    followed_list = []
-    total_unread = 0
-    
-    for channel in followed_channels:
-        unread = channel.unread_count_for_user(request.user)
-        total_unread += unread
-        last_msg = channel.channel_messages.order_by('-created_at').first()
-        msg_type = 'text'
-        if last_msg:
-            if last_msg.file_type == 'audio':
-                msg_type = 'audio'
-            elif last_msg.file_type == 'video':
-                msg_type = 'video'
-            elif last_msg.file_type == 'image':
-                msg_type = 'image'
-        followed_list.append({
-            'channel': channel,
-            'unread_count': unread,
-            'last_message': last_msg.message if last_msg else "No messages yet",
-            'last_time': last_msg.created_at if last_msg else None,
-            'message_type': msg_type
-        })
-    
-    users = list(User.objects.exclude(id__in=following).exclude(id=request.user.id).order_by('?'))
+@login_required(login_url='/')  
+def home(request):  
+    profile = Profile.objects.get(user=request.user)  
+    following = profile.followings.values_list('user', flat=True)  
+      
+    followed_channels = Channel.objects.filter(subscriber=request.user).annotate(  
+        last_app_activity=Max('channel_messages__created_at')  
+    ).order_by('-last_app_activity', '-created_at')  
+      
+    followed_list = []  
+    total_unread = 0  
+      
+    for channel in followed_channels:  
+        unread = channel.unread_count_for_user(request.user)  
+        total_unread += unread  
+        last_msg = channel.channel_messages.order_by('-created_at').first()  
+        msg_type = 'text'  
+        if last_msg:  
+            if last_msg.file_type == 'audio':  
+                msg_type = 'audio'  
+            elif last_msg.file_type == 'video':  
+                msg_type = 'video'  
+            elif last_msg.file_type == 'image':  
+                msg_type = 'image'  
+        followed_list.append({  
+            'channel': channel,  
+            'unread_count': unread,  
+            'last_message': last_msg.message if last_msg else "No messages yet",  
+            'last_time': last_msg.created_at if last_msg else None,  
+            'message_type': msg_type  
+        })  
+      
+    users = list(User.objects.exclude(id__in=following).exclude(id=request.user.id).order_by('?'))  
+  
+    unread_follow_count = FollowNotification.objects.filter(  
+        to_user=request.user,  
+        is_read=False  
+    ).count()  
+  
+    unread_notifications_count = Notification.objects.filter(  
+        recipient=request.user,  
+        is_read=False  
+    ).count()  
+  
+    feed = []  
+  
+    recent_posts = Post.objects.filter(  
+        Q(author__in=following) | Q(author=request.user)  
+    )[:100]  
+  
+    hashtag_counts = {}  
+    for post in recent_posts:  
+        hashtags = extract_hashtags(post.content)  
+        for tag in hashtags:  
+            hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1  
+  
+    trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]  
+  
+    # ── User-Interest / Content Affinity Profiling ───────────────────────────
+    # Analyze the user's last 50 interactions to gauge what media type they prefer.
+    recent_interactions = Post.objects.filter(
+        Q(likes=request.user) |
+        Q(vibes__user=request.user) |            # Fixed: PostVibe uses 'user'
+        Q(comments__author=request.user)         # Fixed: PostComment uses 'author'
+    ).select_related('original_post').prefetch_related('images').distinct().order_by('-created_at')[:50]
 
-    unread_follow_count = FollowNotification.objects.filter(
-        to_user=request.user,
-        is_read=False
-    ).count()
+    interaction_counts = {'video': 0, 'image': 0, 'audio': 0, 'text': 0, 'mood': 0, 'empty': 0}
+    total_interactions = 0
 
-    unread_notifications_count = Notification.objects.filter(
-        recipient=request.user,
-        is_read=False
-    ).count()
+    for p in recent_interactions:
+        total_interactions += 1
+        # Leverage your existing model method!
+        p_type = p.preview_type() 
+        if p_type in interaction_counts:
+            interaction_counts[p_type] += 1
+        else:
+            interaction_counts['text'] += 1
 
-    feed = []
+    # Base multiplier is 1.0 (no boost). We add up to 0.6 (60% boost) based on their interaction ratio.
+    affinity_multipliers = {'video': 1.0, 'image': 1.0, 'audio': 1.0, 'text': 1.0, 'mood': 1.0, 'empty': 1.0}
+    if total_interactions > 0:
+        for ctype, count in interaction_counts.items():
+            ratio = count / total_interactions
+            affinity_multipliers[ctype] += (ratio * 0.6)  
 
-    trending_hashtags = []
-    recent_posts = Post.objects.filter(
-        Q(author__in=following) | Q(author=request.user)
-    )[:100]
-
-    hashtag_counts = {}
-    for post in recent_posts:
-        hashtags = extract_hashtags(post.content)
-        for tag in hashtags:
-            hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
-
-    trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-
-    if not following:
-        posts = Post.objects.all().order_by('?').select_related(
-            'author', 'author__profile',
-            'original_post', 'original_post__author', 'original_post__author__profile'
-        ).prefetch_related('likes', 'reposts', 'images')
-    else:
-        posts = Post.objects.filter(
-            Q(author__in=following) |
-            Q(author=request.user) |
-            Q(is_repost=True, author__in=following)
-        ).order_by('?').select_related(
-            'author', 'author__profile',
-            'original_post', 'original_post__author', 'original_post__author__profile'
-        ).prefetch_related('likes', 'reposts', 'images')
-
-    following_ids = list(following)
-    following_ids_set = set(following)
-
-    fof_ids = set()
-    for followed_user_id in following_ids_set:
-        try:
-            followed_profile = Profile.objects.get(user_id=followed_user_id)
-            their_followings = followed_profile.followings.values_list('user', flat=True)
-            fof_ids.update(
-                uid for uid in their_followings
-                if uid not in following_ids_set and uid != request.user.id
-            )
-        except Profile.DoesNotExist:
-            pass
-
-    fof_via_cache = {}
-    for fof_uid in fof_ids:
-        for followed_user_id in following_ids_set:
-            try:
-                followed_profile = Profile.objects.get(user_id=followed_user_id)
-                if followed_profile.followings.filter(user_id=fof_uid).exists():
-                    fof_via_cache.setdefault(fof_uid, []).append(
-                        User.objects.get(id=followed_user_id)
-                    )
-            except (Profile.DoesNotExist, User.DoesNotExist):
-                pass
-
-    for i, post in enumerate(posts, 1):
-        actual_author_id = post.original_post.author_id if post.is_repost and post.original_post else post.author_id
-        is_fof = actual_author_id in fof_ids
-        fof_via = fof_via_cache.get(actual_author_id, []) if is_fof else []
-        feed.append({'type': 'post', 'data': post, 'is_fof': is_fof, 'fof_via': fof_via})
-        if i % 4 == 2 and users:
-            feed.append({'type': 'user_suggestion', 'data': users.pop(0)})
-
-    sidebar_followings = profile.followings.select_related('user').all()
-    sidebar_followers  = profile.followers.select_related('user').all()
-
-    return render(request, 'home.html', {
-        'posts_with_ads': feed,
-        'followed_list': followed_list[:8],
-        'unread_follow_count': unread_follow_count,
-        'unread_notifications_count': unread_notifications_count,
-        'users': users[:3],
-        'trending_hashtags': trending_hashtags,
-        'following_ids': following_ids,
-        'sidebar_followings': sidebar_followings,
-        'sidebar_followers': sidebar_followers,
+    # ── Engagement-based feed algorithm ──────────────────────────────────────  
+    FEED_WINDOW_DAYS = 14   # look-back window  
+    MAX_POSTS        = 120  # max candidates before in-Python scoring  
+  
+    cutoff = timezone.now() - timedelta(days=FEED_WINDOW_DAYS)  
+  
+    if not following:  
+        candidate_qs = Post.objects.all()  
+    else:  
+        candidate_qs = Post.objects.filter(  
+            Q(author__in=following) |  
+            Q(author=request.user) |  
+            Q(is_repost=True, author__in=following)  
+        )  
+  
+    candidate_qs = (  
+        candidate_qs  
+        .filter(created_at__gte=cutoff)  
+        .select_related(  
+            'author', 'author__profile',  
+            'original_post', 'original_post__author', 'original_post__author__profile'  
+        )  
+        .prefetch_related('likes', 'reposts', 'images')  
+        .annotate(  
+            vibe_count=Count('vibes',    distinct=True),   # PostVibe reactions  
+            comment_count=Count('comments', distinct=True), # PostComment  
+            repost_count=Count('reposts',  distinct=True),  # M2M reposts  
+            like_count=Count('likes',    distinct=True),    # M2M likes  
+        )  
+        .order_by('-created_at')[:MAX_POSTS]  
+    )  
+  
+    now_ts = timezone.now().timestamp()  
+  
+    def _engagement_score(post):  
+        """Weighted score with exponential time-decay, USER-INTEREST, and small random jitter."""  
+        raw = (  
+            getattr(post, 'vibe_count',    0) * 4 +  
+            getattr(post, 'comment_count', 0) * 3 +  
+            getattr(post, 'repost_count',  0) * 2 +  
+            getattr(post, 'like_count',    0) * 1  
+        )  
+        age_hours = max(0, (now_ts - post.created_at.timestamp()) / 3600)  
+        decay  = 2 ** (-age_hours / 72)         # half-life = 72 h (3 days)  
+        jitter = random.uniform(0.90, 1.10)     # ±10 % variety on each load  
+        
+        # Apply the user-interest ranking boost using your model's method
+        p_type = post.preview_type()
+        interest_boost = affinity_multipliers.get(p_type, 1.0)
+        
+        return raw * decay * jitter * interest_boost  
+  
+    posts = sorted(candidate_qs, key=_engagement_score, reverse=True)  
+  
+    # Fallback: if the time window is too sparse, append older posts  
+    if len(posts) < 10:  
+        if not following:  
+            fallback_qs = Post.objects.all()  
+        else:  
+            fallback_qs = Post.objects.filter(  
+                Q(author__in=following) |  
+                Q(author=request.user) |  
+                Q(is_repost=True, author__in=following)  
+            )  
+        extra = list(  
+            fallback_qs  
+            .exclude(post_id__in=[p.post_id for p in posts])  
+            .select_related(  
+                'author', 'author__profile',  
+                'original_post', 'original_post__author', 'original_post__author__profile'  
+            )  
+            .prefetch_related('likes', 'reposts', 'images')  
+            .annotate(  
+                vibe_count=Count('vibes',    distinct=True),  
+                comment_count=Count('comments', distinct=True),  
+                repost_count=Count('reposts',  distinct=True),  
+                like_count=Count('likes',    distinct=True),  
+            )  
+            .order_by('-created_at')[:MAX_POSTS]  
+        )  
+        posts = posts + sorted(extra, key=_engagement_score, reverse=True)  
+  
+    # ── FOF (friend-of-friend) metadata ──────────────────────────────────────  
+    following_ids     = list(following)  
+    following_ids_set = set(following)  
+  
+    fof_ids = set()  
+    for followed_user_id in following_ids_set:  
+        try:  
+            followed_profile = Profile.objects.get(user_id=followed_user_id)  
+            their_followings = followed_profile.followings.values_list('user', flat=True)  
+            fof_ids.update(  
+                uid for uid in their_followings  
+                if uid not in following_ids_set and uid != request.user.id  
+            )  
+        except Profile.DoesNotExist:  
+            pass  
+  
+    fof_via_cache = {}  
+    for fof_uid in fof_ids:  
+        for followed_user_id in following_ids_set:  
+            try:  
+                followed_profile = Profile.objects.get(user_id=followed_user_id)  
+                if followed_profile.followings.filter(user_id=fof_uid).exists():  
+                    fof_via_cache.setdefault(fof_uid, []).append(  
+                        User.objects.get(id=followed_user_id)  
+                    )  
+            except (Profile.DoesNotExist, User.DoesNotExist):  
+                pass  
+  
+    for i, post in enumerate(posts, 1):  
+        actual_author_id = post.original_post.author_id if post.is_repost and post.original_post else post.author_id  
+        is_fof  = actual_author_id in fof_ids  
+        fof_via = fof_via_cache.get(actual_author_id, []) if is_fof else []  
+        feed.append({'type': 'post', 'data': post, 'is_fof': is_fof, 'fof_via': fof_via})  
+        if i % 4 == 2 and users:  
+            feed.append({'type': 'user_suggestion', 'data': users.pop(0)})  
+  
+    sidebar_followings = profile.followings.select_related('user').all()  
+    sidebar_followers  = profile.followers.select_related('user').all()  
+  
+    return render(request, 'home.html', {  
+        'posts_with_ads': feed,  
+        'followed_list': followed_list[:8],  
+        'unread_follow_count': unread_follow_count,  
+        'unread_notifications_count': unread_notifications_count,  
+        'users': users[:3],  
+        'trending_hashtags': trending_hashtags,  
+        'following_ids': following_ids,  
+        'sidebar_followings': sidebar_followings,  
+        'sidebar_followers': sidebar_followers,  
     })
 
 
