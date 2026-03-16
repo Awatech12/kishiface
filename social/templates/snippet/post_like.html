@@ -47,6 +47,7 @@
   padding: 4px 8px;
   background: var(--kvibe-white, #fff);
   border-top: 1px solid var(--kvibe-border, #efefef);
+  position: relative; z-index: 2;
 }
 .kvibe-action-item {
   display: flex; align-items: center; justify-content: center;
@@ -70,7 +71,6 @@
 .kvibe-action-icon { font-size: 19px; transition: color .25s; display: inline-block; position: relative; }
 
 /* ── Vibe button face ────────────────────────────────────────────────── */
-.kv-vibe-btn { position: static; }  /* picker is position:fixed, no longer needs relative parent */
 .kv-vibe-btn.has-vibe .kv-active-emoji {
   font-size: 20px;
   animation: kv-bounce-in .4s cubic-bezier(.34,1.56,.64,1);
@@ -85,10 +85,11 @@
   background: var(--kvibe-white, #fff);
   border: 1px solid var(--kvibe-border, #efefef);
   border-radius: 50px; padding: 8px 12px;
-  display: none; gap: 6px;
+  display: none; gap: 2px; overflow: visible;
   box-shadow: 0 8px 30px rgba(0,0,0,.18), 0 2px 10px rgba(0,0,0,.10);
   z-index: 99999; white-space: nowrap;
   animation: kv-picker-in .25s cubic-bezier(.34,1.56,.64,1);
+  isolation: isolate;
   /* top/left set dynamically by JS */
 }
 .kv-picker.open { display: flex; }
@@ -105,8 +106,10 @@
   display: flex; flex-direction: column; align-items: center;
   gap: 3px; cursor: pointer;
   transition: transform .2s cubic-bezier(.34,1.56,.64,1);
-  padding: 4px 5px; border-radius: 12px;
+  padding: 4px 6px; border-radius: 12px;
   animation: kv-item-pop .3s cubic-bezier(.34,1.56,.64,1) both;
+  position: relative; z-index: 1;
+  transform-origin: center bottom;
 }
 .kv-vibe-opt:nth-child(1){animation-delay:.03s}
 .kv-vibe-opt:nth-child(2){animation-delay:.06s}
@@ -114,7 +117,7 @@
 .kv-vibe-opt:nth-child(4){animation-delay:.12s}
 .kv-vibe-opt:nth-child(5){animation-delay:.15s}
 .kv-vibe-opt:nth-child(6){animation-delay:.18s}
-.kv-vibe-opt:hover        { transform: scale(1.35) translateY(-4px); }
+.kv-vibe-opt:hover        { transform: scale(1.35) translateY(-6px); z-index: 10; }
 .kv-vibe-opt.selected     { background: rgba(0,0,0,.07); }
 .kv-opt-emoji             { font-size: 26px; line-height: 1; }
 .kv-opt-label             { font-size: 9px; font-weight: 600; color: var(--kvibe-text-light,#8e8e8e); text-transform: uppercase; letter-spacing: .04em; }
@@ -125,6 +128,7 @@
   padding: 10px 16px 8px;
   border-top: 1px solid var(--kvibe-border, #efefef);
   gap: 10px; background: var(--kvibe-white, #fff);
+  position: relative; z-index: 1;
 }
 .kv-vibe-summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 24px; }
 .kv-vibe-pill {
@@ -164,16 +168,23 @@
   background: none; border: none; font-family: inherit; flex: 1; min-width: 0;
 }
 .kvibe-repost-icon::after { content:'';position:absolute;inset:0;border-radius:999px;background:currentColor;opacity:0;transform:scale(.7);transition:opacity .25s,transform .25s cubic-bezier(.34,1.56,.64,1);pointer-events:none }
-.kvibe-repost-icon:hover::after { opacity:.06;transform:scale(1) }
-.kvibe-repost-icon:hover .fa-retweet { animation:kv-repost-spin .55s cubic-bezier(.34,1.56,.64,1);color:#10b981 }
-.kvibe-repost-icon:hover    { color: #10b981; }
-.fa-retweet.reposted        { color: #10b981; }
-.kvibe-repost-count         { font-size: 13.5px; display: none; }
-.kvibe-repost-count.kvibe-show { display: inline; }
+.kvibe-repost-icon:hover::after     { opacity:.06; transform:scale(1); }
+.kvibe-repost-icon:hover            { color: #10b981; }
+.kvibe-repost-icon:hover .fa-retweet{ animation:kv-repost-spin .55s cubic-bezier(.34,1.56,.64,1); color:#10b981; }
+.fa-retweet.reposted                { color: #10b981; }
+.kvibe-repost-count                 { font-size: 13.5px; display: none; transition: color .2s; }
+.kvibe-repost-count.kvibe-show      { display: inline; }
+.kvibe-repost-icon:hover .kvibe-repost-count { color: #10b981; }
 
 /* ── Comment / Share hover anim ─────────────────────────────────────── */
-.kvibe-action-item:hover .fa-comment     { animation: kv-comment-bop .5s cubic-bezier(.34,1.56,.64,1); }
-.kvibe-action-item:hover .fa-paper-plane { animation: kv-jelly .45s cubic-bezier(.34,1.56,.64,1); }
+/* Comment — blue */
+.kvibe-action-item:has(.fa-comment):hover        { color: #0095f6; }
+.kvibe-action-item:hover .fa-comment             { animation: kv-comment-bop .5s cubic-bezier(.34,1.56,.64,1); color: #0095f6; }
+.kvibe-action-item:has(.fa-comment):hover .kv-vibe-count { color: #0095f6; }
+/* Share — purple */
+.kvibe-action-item:has(.fa-paper-plane):hover    { color: #a855f7; }
+.kvibe-action-item:hover .fa-paper-plane         { animation: kv-jelly .45s cubic-bezier(.34,1.56,.64,1); color: #a855f7; }
+.kvibe-action-item:has(.fa-paper-plane):hover .kvibe-share-count { color: #a855f7; }
 .kvibe-share-count         { font-size: 13.5px; display: none; }
 .kvibe-share-count.kvibe-show { display: inline; }
 
@@ -208,7 +219,7 @@
   .kvibe-action-item{padding:8px 10px;font-size:13px;gap:6px}
   .kvibe-action-icon{font-size:18px}
   .kvibe-repost-icon{padding:8px 10px;font-size:13px}
-  .kv-picker{padding:6px 8px;gap:4px}
+  .kv-picker{padding:6px 8px;gap:2px}
   .kv-opt-emoji{font-size:23px}
 }
   `;
