@@ -3215,687 +3215,767 @@
     </div>
   </div>
 
+  <!-- Inline script for immediate initialization -->
 <script>
-  // ==========================================
-  // GLOBAL VARIABLES & HELPERS
-  // ==========================================
-  function getCsrfFromMeta() {
+   function getCsrfFromMeta(){
     return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-  }
-  
-  let currentRepostPostId = null;
-  let currentRepostButton = null;
-  let videoObserver = null;
-  let imgObserver = null;
+   }
+    // ==========================================
+    // GLOBAL VARIABLES & HELPERS
+    // ==========================================
+    
+    // Variables for repost modal
+    let currentRepostPostId = null;
+    let currentRepostButton = null;
+        
+    // Helper function to show toast
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = 'kvibe-toast';
+      toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+        <span>${message}</span>
+      `;
+      
+      document.body.appendChild(toast);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        toast.style.animation = 'kvibeSlideOut 0.3s ease';
+        setTimeout(() => {
+          document.body.removeChild(toast);
+        }, 300);
+      }, 3000);
+    }
 
-  function showToast(message, type = 'success') {
-    const toast = document.createElement('div');
-    toast.className = 'kvibe-toast';
-    toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i><span>${message}</span>`;
-    document.body.appendChild(toast);
-    setTimeout(() => {
-      toast.style.animation = 'kvibeSlideOut 0.3s ease';
-      setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 300);
-    }, 3000);
-  }
+    
 
-  // ==========================================
-  // LAZY LOADING OBSERVERS (BULLETPROOF)
-  // ==========================================
-  function initVideoObserver() {
-    if (!videoObserver) {
-      videoObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const video = entry.target;
-            let srcToLoad = null;
-            
-            // Handle both <video data-src> and <source data-src>
-            if (video.hasAttribute('data-src')) {
-              srcToLoad = video.getAttribute('data-src');
-              video.removeAttribute('data-src');
-            }
-            const source = video.querySelector('source[data-src]');
-            if (source) {
-              if (!srcToLoad) srcToLoad = source.getAttribute('data-src');
-              source.removeAttribute('data-src');
-            }
+    // ==========================================
+    // USER ACTIONS (Follow, Repost, Text Toggle)
+    // ==========================================
+    
 
-            if (srcToLoad) {
-              video.src = srcToLoad;
-              video.load();
-            }
-            videoObserver.unobserve(video);
+    // ==========================================
+    // FOLLOW / UNFOLLOW FROM POST HEADER
+    // ==========================================
+    function kvibeToggleFollow(btn) {
+      const userId = btn.dataset.userId;
+      const username = btn.dataset.username;
+      const isFollowing = btn.classList.contains('kvibe-follow-btn--following');
+
+      // Optimistic UI update
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      fetch(`/follow/${userId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfFromMeta(),
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+          if (data.followed) {
+            btn.classList.add('kvibe-follow-btn--following');
+            btn.title = `Unfollow ${username}`;
+            btn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>';
+            showToast(`You are now following @${username}`, 'success');
+          } else {
+            btn.classList.remove('kvibe-follow-btn--following');
+            btn.title = `Follow ${username}`;
+            btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>';
+            showToast(`Unfollowed @${username}`, 'info');
           }
-        });
-      }, { rootMargin: '400px' });
-    }
-
-    // Safely attach to all unobserved videos, regardless of snippet HTML structure
-    document.querySelectorAll('video[data-src]').forEach(v => videoObserver.observe(v));
-    document.querySelectorAll('source[data-src]').forEach(s => {
-      const v = s.closest('video');
-      if (v) videoObserver.observe(v);
-    });
-  }
-
-  function initImageObserver() {
-    if (!imgObserver) {
-      imgObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const img = entry.target;
-            img.style.opacity = '1';
-            img.classList.add('loaded');
-            imgObserver.unobserve(img);
-          }
-        });
-      }, { rootMargin: '300px' });
-    }
-    document.querySelectorAll('img[loading="lazy"]:not(.loaded)').forEach(img => imgObserver.observe(img));
-  }
-
-  // ==========================================
-  // BULLETPROOF VIDEO PLAYER LOGIC
-  // ==========================================
-  window.kvibeTogglePlayPause = function(videoIdOrElement, event) {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    
-    // Accept either a string ID or the video HTML element directly
-    let targetVideo = typeof videoIdOrElement === 'string' ? document.getElementById(videoIdOrElement) : videoIdOrElement;
-    if (!targetVideo) return;
-    
-    const container = targetVideo.closest('.kvibe-video-container') || targetVideo.parentElement;
-    
-    // Fallback: If clicked before observer loaded it
-    let srcToLoad = targetVideo.getAttribute('data-src');
-    const source = targetVideo.querySelector('source[data-src]');
-    if (!srcToLoad && source) {
-      srcToLoad = source.getAttribute('data-src');
-    }
-    
-    if (srcToLoad) {
-      // Strip out hash fragments (like #t=0.5) to prevent iOS playback glitches
-      targetVideo.src = srcToLoad.split('#')[0];
-      targetVideo.removeAttribute('data-src');
-      if (source) source.removeAttribute('data-src');
-      targetVideo.load();
-    }
-
-    if (targetVideo.paused) {
-      const playPromise = targetVideo.play();
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          if (container) container.classList.remove('paused');
-        }).catch(err => console.log('Playback prevented by browser:', err));
-      } else {
-        if (container) container.classList.remove('paused');
-      }
-    } else {
-      targetVideo.pause();
-      if (container) container.classList.add('paused');
-    }
-  };
-
-  // GLOBAL CLICK CATCHER: Fixes missing onclicks/IDs in feed_posts_partial.html
-  document.addEventListener('click', function(e) {
-    // Ignore clicks inside text/links
-    if (e.target.tagName === 'A' || e.target.closest('a')) return;
-
-    const clickedVideo = e.target.closest('video');
-    const clickedIcon = e.target.closest('.fa-play, .kvibe-play-pause-icon');
-    
-    let targetVideo = null;
-    if (clickedVideo) {
-      targetVideo = clickedVideo;
-    } else if (clickedIcon) {
-      const container = clickedIcon.closest('.kvibe-video-container') || clickedIcon.parentElement;
-      targetVideo = container.querySelector('video');
-    }
-
-    if (targetVideo) {
-      // Only trigger manually if the HTML is missing the onclick attribute 
-      // (prevents double-firing if you DO have the onclick attribute)
-      if (!targetVideo.hasAttribute('onclick') && (!clickedIcon || !clickedIcon.hasAttribute('onclick'))) {
-        window.kvibeTogglePlayPause(targetVideo, e);
-      }
-    }
-  });
-
-  // ==========================================
-  // HTMX DYNAMIC CONTENT HANDLER
-  // ==========================================
-  document.addEventListener('htmx:afterSwap', function (evt) {
-    var newSentinel = document.getElementById('kvibe-feed-sentinel');
-    if (newSentinel && typeof htmx !== 'undefined') htmx.process(newSentinel);
-    
-    if (typeof window.kvibeScanFeedLpCards === 'function') {
-      var feedContainer = document.getElementById('kvibe-real-feed');
-      window.kvibeScanFeedLpCards(feedContainer || document);
-    }
-    
-    var activeChip = document.querySelector('.kvibe-mood-filter-chip.active');
-    if (activeChip && typeof window.kvibeFilterMood === 'function') {
-      window.kvibeFilterMood(activeChip.dataset.mood, activeChip);
-    }
-    
-    if (typeof window.kvibeInitCarousels === 'function') window.kvibeInitCarousels();
-
-    // Attach observers to new HTMX content instantly
-    initVideoObserver();
-    initImageObserver();
-  });
-
-  // ==========================================
-  // USER ACTIONS (Follow, Repost, Text Toggle, Moods)
-  // ==========================================
-  function kvibeToggleFollow(btn) {
-    const userId = btn.dataset.userId;
-    const username = btn.dataset.username;
-    const isFollowing = btn.classList.contains('kvibe-follow-btn--following');
-
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-    fetch(`/follow/${userId}/`, {
-      method: 'POST',
-      headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' },
-    }).then(r => r.json()).then(data => {
-      btn.disabled = false;
-      if (data.success) {
-        if (data.followed) {
-          btn.classList.add('kvibe-follow-btn--following');
-          btn.title = `Unfollow ${username}`;
-          btn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>';
-          showToast(`You are now following @${username}`, 'success');
         } else {
-          btn.classList.remove('kvibe-follow-btn--following');
-          btn.title = `Follow ${username}`;
-          btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>';
-          showToast(`Unfollowed @${username}`, 'info');
+          // Restore old state on error
+          btn.innerHTML = isFollowing
+            ? '<i class="fas fa-user-check"></i><span>Following</span>'
+            : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+          showToast('Something went wrong. Please try again.', 'error');
         }
-      } else {
-        btn.innerHTML = isFollowing ? '<i class="fas fa-user-check"></i><span>Following</span>' : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+      })
+      .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = isFollowing
+          ? '<i class="fas fa-user-check"></i><span>Following</span>'
+          : '<i class="fas fa-user-plus"></i><span>Follow</span>';
         showToast('Something went wrong. Please try again.', 'error');
-      }
-    }).catch(() => {
-      btn.disabled = false;
-      btn.innerHTML = isFollowing ? '<i class="fas fa-user-check"></i><span>Following</span>' : '<i class="fas fa-user-plus"></i><span>Follow</span>';
-      showToast('Something went wrong. Please try again.', 'error');
-    });
-  }
+      });
+    }
 
-  function kvibeFollowUser(userId, username) {
-    const button = event.target.closest('button');
-    const originalText = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    button.disabled = true;
-    
-    fetch(`/follow/${userId}/`, {
-      method: 'POST',
-      headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' },
-    }).then(r => r.json()).then(data => {
-      if (data.success) {
-        if (data.followed) {
-          showToast(`You are now following @${username}`, 'success');
-          button.innerHTML = '<i class="fas fa-check"></i> Following';
-          button.classList.remove('kvibe-user-suggestion-btn-primary');
-          button.classList.add('kvibe-user-suggestion-btn-secondary');
-          setTimeout(() => {
-            const suggestionDiv = button.closest('.kvibe-user-suggestion');
-            if (suggestionDiv) {
-              suggestionDiv.style.opacity = '0';
-              suggestionDiv.style.transition = 'opacity 0.3s';
-              setTimeout(() => { suggestionDiv.remove(); }, 300);
-            }
-          }, 1500);
-        } else {
-          showToast(`Unfollowed @${username}`, 'info');
-          button.innerHTML = '<i class="fas fa-user-plus"></i> Follow';
-          button.classList.remove('kvibe-user-suggestion-btn-secondary');
-          button.classList.add('kvibe-user-suggestion-btn-primary');
-        }
-      } else {
-        showToast('Error: ' + data.error, 'error');
-        button.innerHTML = originalText;
-      }
-      button.disabled = false;
-    }).catch(error => {
-      showToast('Something went wrong. Please try again.', 'error');
-      button.innerHTML = originalText;
-      button.disabled = false;
-    });
-  }
-  
-  function kvibeToggleRepost(postId, button) {
-    currentRepostPostId = postId;
-    currentRepostButton = button;
-    const isReposted = button.getAttribute('data-reposted') === 'true';
-    if (isReposted) kvibePerformRepost(postId, '', true);
-    else kvibeOpenRepostModal();
-  }
-  
-  function kvibeOpenRepostModal() {
-    const modal = document.getElementById('kvibe-repost-modal');
-    const textarea = document.getElementById('kvibe-repost-caption');
-    const charCount = document.getElementById('kvibe-repost-char-count');
-    textarea.value = '';
-    charCount.textContent = '0';
-    modal.classList.add('show');
-    textarea.focus();
-    textarea.addEventListener('input', function() { charCount.textContent = this.value.length; });
-    document.getElementById('kvibe-repost-confirm-btn').onclick = function() {
-      kvibePerformRepost(currentRepostPostId, textarea.value, false);
-      kvibeCloseRepostModal();
-    };
-  }
-  
-  function kvibeFilterMood(mood, btn) {
-    document.querySelectorAll('.kvibe-mood-filter-chip').forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
-      if (mood === 'all') {
-        post.classList.remove('kvibe-mood-hidden');
-        return;
-      }
-      if (mood.startsWith('__custom__')) {
-        const label = mood.replace('__custom__', '');
-        const postCustom = (post.getAttribute('data-custom-mood') || '').toLowerCase().trim();
-        post.classList.toggle('kvibe-mood-hidden', postCustom !== label);
-      } else {
-        const postMood = post.getAttribute('data-mood') || '';
-        post.classList.toggle('kvibe-mood-hidden', postMood !== mood);
-      }
-    });
-  }
-
-  (function kvibeInjectCustomMoodChips() {
-    const seen = new Set();
-    const container = document.getElementById('kvibeCustomMoodChips');
-    if (!container) return;
-    document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
-      const mood = post.getAttribute('data-mood') || '';
-      const custom = (post.getAttribute('data-custom-mood') || '').trim();
-      if ((mood === 'custom' || mood === '') && custom && !seen.has(custom.toLowerCase())) {
-        seen.add(custom.toLowerCase());
-        const btn = document.createElement('button');
-        btn.className = 'kvibe-mood-filter-chip';
-        btn.style.setProperty('--kvibe-chip-color', '#0095f6');
-        btn.setAttribute('data-mood', '__custom__' + custom.toLowerCase());
-        btn.innerHTML = `<span class="kvibe-chip-dot"></span> ✨ ${custom}`;
-        btn.onclick = function() { kvibeFilterMood('__custom__' + custom.toLowerCase(), btn); };
-        container.appendChild(btn);
-      }
-    });
-    if (seen.size === 0) container.style.display = 'none';
-  })();
-
-  function kvibeCloseRepostModal() {
-    const modal = document.getElementById('kvibe-repost-modal');
-    if (modal) modal.classList.remove('show');
-    currentRepostPostId = null;
-    currentRepostButton = null;
-  }
-  
-  function kvibePerformRepost(postId, caption, undo = false) {
-    const button = currentRepostButton;
-    const icon = button.querySelector('i');
-    const countSpan = button.querySelector('.kvibe-repost-count');
-    const originalText = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    button.disabled = true;
-    
-    fetch(`/repost/${postId}/`, {
-      method: 'POST',
-      headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ caption: caption, undo: undo })
-    }).then(r => r.json()).then(data => {
-      if (data.success) {
-        if (data.reposted) {
-          showToast(data.message || 'Post reposted successfully!', 'success');
-          button.setAttribute('data-reposted', 'true');
-          icon.classList.add('reposted');
-          if (data.repost_count > 0) {
-            countSpan.textContent = data.repost_count;
-            countSpan.classList.add('show');
+    // Follow user function
+    function kvibeFollowUser(userId, username) {
+      const button = event.target.closest('button');
+      const originalText = button.innerHTML;
+      
+      // Show loading state
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      button.disabled = true;
+      
+      fetch(`/follow/${userId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfFromMeta(),
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          if (data.followed) {
+            showToast(`You are now following @${username}`, 'success');
+            button.innerHTML = '<i class="fas fa-check"></i> Following';
+            button.classList.remove('kvibe-user-suggestion-btn-primary');
+            button.classList.add('kvibe-user-suggestion-btn-secondary');
+            
+            setTimeout(() => {
+              const suggestionDiv = button.closest('.kvibe-user-suggestion');
+              if (suggestionDiv) {
+                suggestionDiv.style.opacity = '0';
+                suggestionDiv.style.transition = 'opacity 0.3s';
+                setTimeout(() => {
+                  suggestionDiv.remove();
+                }, 300);
+              }
+            }, 1500);
+          } else {
+            showToast(`Unfollowed @${username}`, 'info');
+            button.innerHTML = '<i class="fas fa-user-plus"></i> Follow';
+            button.classList.remove('kvibe-user-suggestion-btn-secondary');
+            button.classList.add('kvibe-user-suggestion-btn-primary');
           }
         } else {
-          showToast(data.message || 'Repost removed', 'info');
-          button.setAttribute('data-reposted', 'false');
-          icon.classList.remove('reposted');
-          if (data.repost_count > 0) countSpan.textContent = data.repost_count;
-          else countSpan.classList.remove('show');
+          showToast('Error: ' + data.error, 'error');
+          button.innerHTML = originalText;
         }
-        setTimeout(() => { location.reload(); }, 800);
-      } else {
-        showToast('Error: ' + data.error, 'error');
+        button.disabled = false;
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        showToast('Something went wrong. Please try again.', 'error');
         button.innerHTML = originalText;
         button.disabled = false;
-      }
-    }).catch(error => {
-      showToast('Something went wrong. Please try again.', 'error');
-      button.innerHTML = originalText;
-      button.disabled = false;
-    });
-  }
-  
-  function kvibeToggleText(postId) {
-    const textElement = document.getElementById(`kvibe-text-${postId}`);
-    const button = textElement.nextElementSibling;
-    if (!button || !button.classList.contains('kvibe-text-toggle')) return;
-    const span = button.querySelector('span');
-    const icon = button.querySelector('i');
-    
-    if (textElement.classList.contains('collapsed')) {
-      textElement.classList.remove('collapsed');
-      textElement.classList.add('expanded');
-      span.textContent = 'less';
-      icon.classList.remove('fa-chevron-down');
-      icon.classList.add('fa-chevron-up');
-    } else {
-      textElement.classList.remove('expanded');
-      textElement.classList.add('collapsed');
-      span.textContent = 'more';
-      icon.classList.remove('fa-chevron-up');
-      icon.classList.add('fa-chevron-down');
+      });
     }
-  }
-  
-  // ==========================================
-  // CAROUSEL & MEDIA UTILS
-  // ==========================================
-  function kvibeSlideMixedCarousel(postId, direction) {
-    const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
-    const track = document.getElementById(`kvibe-mixed-track-${postId}`);
-    const totalSlides = parseInt(carousel.getAttribute('data-total'));
-    let currentSlide = parseInt(carousel.getAttribute('data-slide')) + direction;
-    if (currentSlide < 0) currentSlide = totalSlides - 1;
-    if (currentSlide >= totalSlides) currentSlide = 0;
     
-    track.style.transform = `translateX(-${currentSlide * 100}%)`;
-    carousel.setAttribute('data-slide', currentSlide);
-    carousel.querySelectorAll('.kvibe-mixed-indicator').forEach((ind, index) => {
-      ind.classList.toggle('active', index === currentSlide);
-    });
-  }
+    // Repost functionality
+    function kvibeToggleRepost(postId, button) {
+      currentRepostPostId = postId;
+      currentRepostButton = button;
+      
+      const isReposted = button.getAttribute('data-reposted') === 'true';
+      
+      if (isReposted) {
+        kvibePerformRepost(postId, '', true);
+      } else {
+        kvibeOpenRepostModal();
+      }
+    }
+    
+    function kvibeOpenRepostModal() {
+      const modal = document.getElementById('kvibe-repost-modal');
+      const textarea = document.getElementById('kvibe-repost-caption');
+      const charCount = document.getElementById('kvibe-repost-char-count');
+      
+      textarea.value = '';
+      charCount.textContent = '0';
+      
+      modal.classList.add('show');
+      textarea.focus();
+      
+      textarea.addEventListener('input', function() {
+        charCount.textContent = this.value.length;
+      });
+      
+      const confirmBtn = document.getElementById('kvibe-repost-confirm-btn');
+      confirmBtn.onclick = function() {
+        kvibePerformRepost(currentRepostPostId, textarea.value, false);
+        kvibeCloseRepostModal();
+      };
+    }
+    
+    // ===== MOOD FILTER =====
+    function kvibeFilterMood(mood, btn) {
+      document.querySelectorAll('.kvibe-mood-filter-chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
 
-  function kvibeGoToMixedSlide(postId, slideIndex) {
-    const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
-    const track = document.getElementById(`kvibe-mixed-track-${postId}`);
-    const totalSlides = parseInt(carousel.getAttribute('data-total'));
-    
-    if (slideIndex < 0 || slideIndex >= totalSlides) return;
-    
-    track.style.transform = `translateX(-${slideIndex * 100}%)`;
-    carousel.setAttribute('data-slide', slideIndex);
-    
-    carousel.querySelectorAll('.kvibe-mixed-indicator').forEach((ind, index) => {
-      ind.classList.toggle('active', index === slideIndex);
-    });
-  }
-  
-  function kvibeSlideCarousel(postId, direction) {
-    const carousel = document.getElementById(`kvibe-carousel-${postId}`);
-    const track = document.getElementById(`kvibe-track-${postId}`);
-    const totalSlides = parseInt(carousel.getAttribute('data-total'));
-    let currentSlide = parseInt(carousel.getAttribute('data-slide')) + direction;
-    if (currentSlide < 0) currentSlide = totalSlides - 1;
-    if (currentSlide >= totalSlides) currentSlide = 0;
-    
-    track.style.transform = `translateX(-${currentSlide * 100}%)`;
-    carousel.setAttribute('data-slide', currentSlide);
-    carousel.querySelectorAll('.kvibe-indicator').forEach((ind, index) => {
-      ind.classList.toggle('active', index === currentSlide);
-    });
-  }
-
-  function kvibeDownloadImage(postId, url, filename) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `kvibe_post_${postId}_${filename}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-  
-  function kvibeDownloadVideo(postId, url) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `kvibe_post_${postId}_video.mp4`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
-  // ==========================================
-  // INITIALIZATION (DOMContentLoaded)
-  // ==========================================
-  document.addEventListener('DOMContentLoaded', function() {
-    
-    // Setup Logout Modals
-    const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
-    if (desktopLogoutIcon) {
-      desktopLogoutIcon.addEventListener('click', function(e) {
-        e.preventDefault(); e.stopPropagation();
-        const logoutModal = document.getElementById('kvibeLogoutModal');
-        if (logoutModal) {
-          logoutModal.classList.add('active');
-          document.getElementById('kvibeCancelLogout').onclick = () => logoutModal.classList.remove('active');
-          document.getElementById('kvibeConfirmLogout').onclick = () => window.location.href = "{% url 'logout' %}";
+      document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
+        if (mood === 'all') {
+          post.classList.remove('kvibe-mood-hidden');
+          return;
+        }
+        // custom mood: match by data-custom-mood value
+        if (mood.startsWith('__custom__')) {
+          const label = mood.replace('__custom__', '');
+          const postCustom = (post.getAttribute('data-custom-mood') || '').toLowerCase().trim();
+          post.classList.toggle('kvibe-mood-hidden', postCustom !== label);
+        } else {
+          const postMood = post.getAttribute('data-mood') || '';
+          post.classList.toggle('kvibe-mood-hidden', postMood !== mood);
         }
       });
     }
 
+    // Auto-inject custom mood chips from posts in the feed
+    (function kvibeInjectCustomMoodChips() {
+      const seen = new Set();
+      const container = document.getElementById('kvibeCustomMoodChips');
+      if (!container) return;
+
+      document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
+        const mood = post.getAttribute('data-mood') || '';
+        const custom = (post.getAttribute('data-custom-mood') || '').trim();
+        if ((mood === 'custom' || mood === '') && custom && !seen.has(custom.toLowerCase())) {
+          seen.add(custom.toLowerCase());
+          const btn = document.createElement('button');
+          btn.className = 'kvibe-mood-filter-chip';
+          btn.style.setProperty('--kvibe-chip-color', '#0095f6');
+          btn.setAttribute('data-mood', '__custom__' + custom.toLowerCase());
+          btn.innerHTML = `<span class="kvibe-chip-dot"></span> ✨ ${custom}`;
+          btn.onclick = function() { kvibeFilterMood('__custom__' + custom.toLowerCase(), btn); };
+          container.appendChild(btn);
+        }
+      });
+
+      // Only show "custom" chips if there are any
+      if (seen.size === 0) container.style.display = 'none';
+    })();
+
+    function kvibeCloseRepostModal() {
+      const modal = document.getElementById('kvibe-repost-modal');
+      modal.classList.remove('show');
+      currentRepostPostId = null;
+      currentRepostButton = null;
+    }
+    
+    function kvibePerformRepost(postId, caption, undo = false) {
+      const button = currentRepostButton;
+      const icon = button.querySelector('i');
+      const countSpan = button.querySelector('.kvibe-repost-count');
+      const originalText = button.innerHTML;
+      
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      button.disabled = true;
+      
+      fetch(`/repost/${postId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfFromMeta(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          caption: caption,
+          undo: undo
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          if (data.reposted) {
+            showToast(data.message || 'Post reposted successfully!', 'success');
+            button.setAttribute('data-reposted', 'true');
+            icon.classList.add('reposted');
+            
+            if (data.repost_count > 0) {
+              countSpan.textContent = data.repost_count;
+              countSpan.classList.add('show');
+            }
+            setTimeout(() => { location.reload(); }, 800);
+          } else {
+            showToast(data.message || 'Repost removed', 'info');
+            button.setAttribute('data-reposted', 'false');
+            icon.classList.remove('reposted');
+            
+            if (data.repost_count > 0) {
+              countSpan.textContent = data.repost_count;
+            } else {
+              countSpan.classList.remove('show');
+            }
+            setTimeout(() => { location.reload(); }, 800);
+          }
+        } else {
+          showToast('Error: ' + data.error, 'error');
+          button.innerHTML = originalText;
+          button.disabled = false;
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        showToast('Something went wrong. Please try again.', 'error');
+        button.innerHTML = originalText;
+        button.disabled = false;
+      });
+    }
+    
+    // Text Toggle Function
+    function kvibeToggleText(postId) {
+      const textElement = document.getElementById(`kvibe-text-${postId}`);
+      const button = textElement.nextElementSibling;
+      if (!button || !button.classList.contains('kvibe-text-toggle')) return;
+      
+      const span = button.querySelector('span');
+      const icon = button.querySelector('i');
+      
+      if (textElement.classList.contains('collapsed')) {
+        textElement.classList.remove('collapsed');
+        textElement.classList.add('expanded');
+        span.textContent = 'less';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+      } else {
+        textElement.classList.remove('expanded');
+        textElement.classList.add('collapsed');
+        span.textContent = 'more';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+      }
+    }
+    
+    // ==========================================
+    // MEDIA & CAROUSEL FUNCTIONS
+    // ==========================================
+
+    function kvibeSlideMixedCarousel(postId, direction) {
+      const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
+      const track = document.getElementById(`kvibe-mixed-track-${postId}`);
+      const totalSlides = parseInt(carousel.getAttribute('data-total'));
+      let currentSlide = parseInt(carousel.getAttribute('data-slide'));
+      
+      currentSlide += direction;
+      
+      if (currentSlide < 0) currentSlide = totalSlides - 1;
+      if (currentSlide >= totalSlides) currentSlide = 0;
+      
+      track.style.transform = `translateX(-${currentSlide * 100}%)`;
+      carousel.setAttribute('data-slide', currentSlide);
+      
+      const indicators = carousel.querySelectorAll('.kvibe-mixed-indicator');
+      indicators.forEach((indicator, index) => {
+        if (index === currentSlide) {
+          indicator.classList.add('active');
+        } else {
+          indicator.classList.remove('active');
+        }
+      });
+    }
+    
+    function kvibeGoToMixedSlide(postId, slideIndex) {
+      const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
+      const track = document.getElementById(`kvibe-mixed-track-${postId}`);
+      const totalSlides = parseInt(carousel.getAttribute('data-total'));
+      
+      if (slideIndex < 0 || slideIndex >= totalSlides) return;
+      
+      track.style.transform = `translateX(-${slideIndex * 100}%)`;
+      carousel.setAttribute('data-slide', slideIndex);
+      
+      const indicators = carousel.querySelectorAll('.kvibe-mixed-indicator');
+      indicators.forEach((indicator, index) => {
+        if (index === slideIndex) {
+          indicator.classList.add('active');
+        } else {
+          indicator.classList.remove('active');
+        }
+      });
+    }
+    
+    function kvibeSlideCarousel(postId, direction) {
+      const carousel = document.getElementById(`kvibe-carousel-${postId}`);
+      const track = document.getElementById(`kvibe-track-${postId}`);
+      const totalSlides = parseInt(carousel.getAttribute('data-total'));
+      let currentSlide = parseInt(carousel.getAttribute('data-slide'));
+      
+      currentSlide += direction;
+      
+      if (currentSlide < 0) currentSlide = totalSlides - 1;
+      if (currentSlide >= totalSlides) currentSlide = 0;
+      
+      track.style.transform = `translateX(-${currentSlide * 100}%)`;
+      carousel.setAttribute('data-slide', currentSlide);
+      
+      const indicators = carousel.querySelectorAll('.kvibe-indicator');
+      indicators.forEach((indicator, index) => {
+        if (index === currentSlide) {
+          indicator.classList.add('active');
+        } else {
+          indicator.classList.remove('active');
+        }
+      });
+    }
+    
+    function kvibeDownloadImage(postId, url, filename) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `kvibe_post_${postId}_${filename}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    function kvibeDownloadVideo(postId, url) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `kvibe_post_${postId}_video.mp4`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    function kvibeTogglePlayPause(videoId, event) {
+      event.stopPropagation();
+      const video = document.getElementById(videoId);
+      
+      if (video.hasAttribute('data-src') && !video.src) {
+        const source = video.querySelector('source[data-src]');
+        if (source) {
+          source.src = source.dataset.src;
+          video.load();
+          video.removeAttribute('data-src');
+          
+          video.addEventListener('loadeddata', function playWhenLoaded() {
+            video.play();
+            video.parentElement.classList.remove('paused');
+            video.removeEventListener('loadeddata', playWhenLoaded);
+          });
+          return;
+        }
+      }
+      
+      if (video.paused) {
+        video.play();
+        video.parentElement.classList.remove('paused');
+      } else {
+        video.pause();
+        video.parentElement.classList.add('paused');
+      }
+    }
+    
+    // Close modals when clicking outside
     document.addEventListener('click', function(e) {
       const repostModal = document.getElementById('kvibe-repost-modal');
-      if (repostModal && e.target === repostModal) kvibeCloseRepostModal();
+      if (repostModal && e.target === repostModal) {
+        kvibeCloseRepostModal();
+      }
       
       const logoutModal = document.getElementById('kvibeLogoutModal');
       if (logoutModal && logoutModal.classList.contains('active') && e.target === logoutModal) {
         logoutModal.classList.remove('active');
       }
     });
-    
-    // WebSocket
-    if ("{{ request.user.is_authenticated }}" === "True") {
-      const userId = "{{ request.user.id }}";
-      const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-      const ws = new WebSocket(`${protocol}${window.location.host}/ws/user/${userId}/`);
-      ws.onmessage = function(event) {
-        const data = JSON.parse(event.data);
-        if (data.type === 'unread_update') {
-          const channelId = data.channel_id;
-          const unreadCount = data.unread_count || 0;
-          const channelItem = document.getElementById(`channel-item-${channelId}`);
-          const listContainer = document.getElementById('following-list-container');
+
+    // ==========================================
+    // INITIALIZATION (DOMContentLoaded)
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', function() {
+      // Desktop logout functionality
+      const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
+      if (desktopLogoutIcon) {
+        desktopLogoutIcon.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
           
-          if (channelItem) {
-            const badgeSpan = channelItem.querySelector('.kvibe-channel-unread');
-            if (unreadCount > 0) {
-              if (badgeSpan) badgeSpan.textContent = unreadCount;
-              else {
-                const newBadge = document.createElement('span');
-                newBadge.className = 'kvibe-channel-unread';
-                newBadge.id = `channel-badge-${channelId}`;
-                newBadge.textContent = unreadCount;
-                channelItem.appendChild(newBadge);
-              }
-              channelItem.classList.add('kvibe-new-update-flash');
-              setTimeout(() => channelItem.classList.remove('kvibe-new-update-flash'), 1500);
-              
-              if (listContainer) {
-                const firstChannelItem = listContainer.querySelector('.kvibe-channel-nav-item');
-                if (firstChannelItem && firstChannelItem !== channelItem) {
-                  listContainer.insertBefore(channelItem, firstChannelItem);
-                }
-              }
-            } else {
-              if (badgeSpan) badgeSpan.remove();
+          const logoutModal = document.getElementById('kvibeLogoutModal');
+          if (logoutModal) {
+            logoutModal.classList.add('active');
+            
+            const cancelLogout = document.getElementById('kvibeCancelLogout');
+            const confirmLogout = document.getElementById('kvibeConfirmLogout');
+            
+            if (cancelLogout) {
+              cancelLogout.onclick = function() {
+                logoutModal.classList.remove('active');
+              };
             }
-          }
-        }
-      };
-    }
-    
-    // Skeleton Reveal & Setup Observers
-    function kvibeRevealContent() {
-      const skelFeed = document.getElementById('kvibe-skeleton-feed');
-      const realFeed = document.getElementById('kvibe-real-feed');
-      if (skelFeed) skelFeed.style.display = 'none';
-      if (realFeed) realFeed.style.display = 'block';
-
-      const skelSidebar = document.getElementById('kvibe-skeleton-sidebar');
-      const realSidebar = document.getElementById('kvibe-real-sidebar');
-      if (skelSidebar) skelSidebar.style.display = 'none';
-      if (realSidebar) realSidebar.style.display = 'block';
-
-      if (typeof kvibeInitAllCarouselSwipe === 'function') kvibeInitAllCarouselSwipe();
-      if (typeof htmx !== 'undefined' && realFeed) htmx.process(realFeed);
-
-      // Initialize lazy loaders once content is revealed
-      initVideoObserver();
-      initImageObserver();
-    }
-
-    if (document.readyState === 'complete') {
-      setTimeout(kvibeRevealContent, 600);
-    } else {
-      window.addEventListener('load', function() { setTimeout(kvibeRevealContent, 400); });
-    }
-
-    // Text Expanders Setup
-    document.querySelectorAll('.kvibe-post-text').forEach(textElement => {
-      const hasHTML = /<\/?[a-z][\s\S]*>/i.test(textElement.innerHTML);
-      if (hasHTML && (textElement.textContent || textElement.innerText).length > 150) {
-        textElement.classList.add('collapsed');
-        if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kvibe-text-toggle')) {
-          const toggleBtn = document.createElement('button');
-          toggleBtn.className = 'kvibe-text-toggle';
-          toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
-          toggleBtn.onclick = function() { kvibeToggleText(textElement.id.replace('kvibe-text-', '')); };
-          textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
-        }
-      }
-    });
-    
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        kvibeCloseRepostModal();
-        const logoutModal = document.getElementById('kvibeLogoutModal');
-        if (logoutModal && logoutModal.classList.contains('active')) logoutModal.classList.remove('active');
-        if (typeof kvibeCloseCommentSheet === 'function') kvibeCloseCommentSheet();
-      }
-    });
-    
-    // Sidebar Scroll Memory
-    const leftSidebar = document.querySelector('.kvibe-left-sidebar');
-    const rightSidebar = document.querySelector('.kvibe-right-sidebar');
-    if (leftSidebar) {
-      leftSidebar.addEventListener('scroll', () => localStorage.setItem('kf_left_sidebar_scroll', leftSidebar.scrollTop));
-      const savedScroll = localStorage.getItem('kf_left_sidebar_scroll');
-      if (savedScroll) leftSidebar.scrollTop = parseInt(savedScroll);
-    }
-    if (rightSidebar) {
-      rightSidebar.addEventListener('scroll', () => localStorage.setItem('kf_right_sidebar_scroll', rightSidebar.scrollTop));
-      const savedScroll = localStorage.getItem('kf_right_sidebar_scroll');
-      if (savedScroll) rightSidebar.scrollTop = parseInt(savedScroll);
-    }
-    
-    // Channel List Animation Observer
-    const listContainer = document.getElementById('following-list-container');
-    if (listContainer) {
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-            const addedNode = mutation.addedNodes[0];
-            if (addedNode.classList && addedNode.classList.contains('kvibe-channel-nav-item')) {
-              addedNode.classList.add('kvibe-new-update-flash');
-              setTimeout(() => addedNode.classList.remove('kvibe-new-update-flash'), 1500);
+            
+            if (confirmLogout) {
+              confirmLogout.onclick = function() {
+                window.location.href = "{% url 'logout' %}";
+              };
             }
           }
         });
+      }
+      
+      // WebSocket connection
+      if ("{{ request.user.is_authenticated }}" === "True") {
+        const userId = "{{ request.user.id }}";
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const ws = new WebSocket(`${protocol}${window.location.host}/ws/user/${userId}/`);
+        
+        ws.onmessage = function(event) {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'unread_update') {
+            const channelId = data.channel_id;
+            const unreadCount = data.unread_count || 0;
+            const channelItem = document.getElementById(`channel-item-${channelId}`);
+            const listContainer = document.getElementById('following-list-container');
+            
+            if (channelItem) {
+              const badgeSpan = channelItem.querySelector('.kvibe-channel-unread');
+              
+              if (unreadCount > 0) {
+                if (badgeSpan) {
+                  badgeSpan.textContent = unreadCount;
+                } else {
+                  const newBadge = document.createElement('span');
+                  newBadge.className = 'kvibe-channel-unread';
+                  newBadge.id = `channel-badge-${channelId}`;
+                  newBadge.textContent = unreadCount;
+                  channelItem.appendChild(newBadge);
+                }
+                
+                channelItem.classList.add('kvibe-new-update-flash');
+                setTimeout(() => channelItem.classList.remove('kvibe-new-update-flash'), 1500);
+                
+                if (listContainer) {
+                  const firstChannelItem = listContainer.querySelector('.kvibe-channel-nav-item');
+                  if (firstChannelItem && firstChannelItem !== channelItem) {
+                    listContainer.insertBefore(channelItem, firstChannelItem);
+                  }
+                }
+              } else {
+                if (badgeSpan) {
+                  badgeSpan.remove();
+                }
+              }
+            }
+          }
+        };
+      }
+      
+      // ===== SKELETON LOADING: Reveal real content after page load =====
+      function kvibeRevealContent() {
+        // Feed
+        const skelFeed = document.getElementById('kvibe-skeleton-feed');
+        const realFeed = document.getElementById('kvibe-real-feed');
+        if (skelFeed) skelFeed.style.display = 'none';
+        if (realFeed) realFeed.style.display = 'block';
+
+        // Sidebar
+        const skelSidebar = document.getElementById('kvibe-skeleton-sidebar');
+        const realSidebar = document.getElementById('kvibe-real-sidebar');
+        if (skelSidebar) skelSidebar.style.display = 'none';
+        if (realSidebar) realSidebar.style.display = 'block';
+
+
+        // Attach swipe/drag handlers to all server-rendered carousels now that feed is visible
+        if (typeof kvibeInitAllCarouselSwipe === 'function') kvibeInitAllCarouselSwipe();
+
+        // Re-process HTMX on the now-visible feed so sentinel intersect observer registers
+        if (typeof htmx !== 'undefined' && realFeed) htmx.process(realFeed);
+      }
+
+      // Reveal after a short delay to show kvibe-skeleton effect, or on load if already ready
+      if (document.readyState === 'complete') {
+        setTimeout(kvibeRevealContent, 600);
+      } else {
+        window.addEventListener('load', function() {
+          setTimeout(kvibeRevealContent, 400);
+        });
+      }
+
+
+      const lazyVideos = document.querySelectorAll('video[data-src]');
+      const videoObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const video = entry.target;
+            const source = video.querySelector('source[data-src]');
+            
+            if (source) {
+              source.src = source.dataset.src;
+              video.load();
+              video.removeAttribute('data-src');
+            }
+            videoObserver.unobserve(video);
+          }
+        });
+      }, { rootMargin: '300px' });
+      
+      lazyVideos.forEach(video => videoObserver.observe(video));
+      
+      // Lazy load images
+      const lazyImages = document.querySelectorAll('img[loading="lazy"]');
+      const imgObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            img.style.opacity = '1';
+            imgObserver.unobserve(img);
+          }
+        });
       });
-      observer.observe(listContainer, { childList: true });
-    }
-  });
+      
+      lazyImages.forEach(img => imgObserver.observe(img));
+      
+      // Text expansion logic
+      document.querySelectorAll('.kvibe-post-text').forEach(textElement => {
+        const hasHTML = /<\/?[a-z][\s\S]*>/i.test(textElement.innerHTML);
+        
+        if (hasHTML) {
+          const textContent = textElement.textContent || textElement.innerText;
+          const charCount = textContent.length;
+          
+          if (charCount > 150) {
+            textElement.classList.add('collapsed');
+            if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kvibe-text-toggle')) {
+              const toggleBtn = document.createElement('button');
+              toggleBtn.className = 'kvibe-text-toggle';
+              toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
+              toggleBtn.onclick = function() {
+                const postId = textElement.id.replace('kvibe-text-', '');
+                kvibeToggleText(postId);
+              };
+              textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
+            }
+          }
+        }
+      });
+      
+      // Global keydown listeners (Escape key)
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          kvibeCloseRepostModal();
+          const logoutModal = document.getElementById('kvibeLogoutModal');
+          if (logoutModal && logoutModal.classList.contains('active')) {
+            logoutModal.classList.remove('active');
+          }
+        }
+      });
+      
+      // Sidebar scroll persistence
+      const leftSidebar = document.querySelector('.kvibe-left-sidebar');
+      const rightSidebar = document.querySelector('.kvibe-right-sidebar');
+      
+      if (leftSidebar) {
+        leftSidebar.addEventListener('scroll', function() {
+          localStorage.setItem('kf_left_sidebar_scroll', leftSidebar.scrollTop);
+        });
+        const savedScroll = localStorage.getItem('kf_left_sidebar_scroll');
+        if (savedScroll) leftSidebar.scrollTop = parseInt(savedScroll);
+      }
+      
+      if (rightSidebar) {
+        rightSidebar.addEventListener('scroll', function() {
+          localStorage.setItem('kf_right_sidebar_scroll', rightSidebar.scrollTop);
+        });
+        const savedScroll = localStorage.getItem('kf_right_sidebar_scroll');
+        if (savedScroll) rightSidebar.scrollTop = parseInt(savedScroll);
+      }
+      
+      // Channel List Animation Observer
+      const listContainer = document.getElementById('following-list-container');
+      if (listContainer) {
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+              const addedNode = mutation.addedNodes[0];
+              if (addedNode.classList && addedNode.classList.contains('kvibe-channel-nav-item')) {
+                addedNode.classList.add('kvibe-new-update-flash');
+                setTimeout(() => addedNode.classList.remove('kvibe-new-update-flash'), 1500);
+              }
+            }
+          });
+        });
+        observer.observe(listContainer, { childList: true });
+      }
+      
+      // Fix link clicks in posts
+      document.addEventListener('click', function(e) {
+        if (e.target.tagName === 'A' && e.target.closest('.kvibe-post-text')) {
+          return;
+        }
+      });
+    });
 
-  // ==========================================
-  // SIDEBAR TABS
-  // ==========================================
-  function kvibeSwitchTab(tab, btn) {
-    const container = btn.closest('.kvibe-sidebar-social');
-    if (!container) return;
-    container.querySelectorAll('.kvibe-sidebar-tab').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active');
-    container.querySelectorAll('.kvibe-sidebar-tab-panel').forEach(p => p.classList.remove('active'));
-    const panel = document.getElementById('kvibe-tab-' + tab);
-    if (panel) panel.classList.add('active');
-  }
+      // ==========================================
+      // VIBE REACTIONS — handled by snippet/post_like.html
+      // The PostVibeConsumer WebSocket + kvSendVibe() / kvHydrate()
+      // functions in the snippet manage all post reactions.
+      // kvibeLikeLoadedPost is no longer used.
+      // ==========================================
 
-  // ==========================================
-  // MOBILE SIDEBAR
-  // ==========================================
-  function kvibeOpenMobileSidebar() {
-    document.getElementById('kvibe-mobile-right-sidebar').classList.add('open');
-    document.getElementById('kvibe-mobile-sidebar-overlay').classList.add('active');
-    document.body.style.overflow = 'hidden';
-  }
-  function kvibeCloseMobileSidebar() {
-    document.getElementById('kvibe-mobile-right-sidebar').classList.remove('open');
-    document.getElementById('kvibe-mobile-sidebar-overlay').classList.remove('active');
-    document.body.style.overflow = '';
-  }
-  (function() {
-    const sidebar = document.getElementById('kvibe-mobile-right-sidebar');
-    if (sidebar) {
-        let startX = 0;
-        sidebar.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; }, { passive: true });
-        sidebar.addEventListener('touchend', function(e) {
-          if (e.changedTouches[0].clientX - startX > 60) kvibeCloseMobileSidebar();
-        }, { passive: true });
-    }
-  })();
+      // ==========================================
+      // SIDEBAR FOLLOWING / FOLLOWERS TABS
+      // ==========================================
+      function kvibeSwitchTab(tab, btn) {
+        // Only toggle tabs within the same parent container
+        const container = btn.closest('.kvibe-sidebar-social');
+        if (!container) return;
+        container.querySelectorAll('.kvibe-sidebar-tab').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        container.querySelectorAll('.kvibe-sidebar-tab-panel').forEach(p => p.classList.remove('active'));
+        const panel = document.getElementById('kvibe-tab-' + tab);
+        if (panel) panel.classList.add('active');
+      }
 
-  // ==========================================
-  // COMMENT BOTTOM SHEET
-  // ==========================================
+
+  /* ═══════════════════════════════════════════════════════
+     COMMENT BOTTOM SHEET — spotlight method
+     ═══════════════════════════════════════════════════════ */
+
   var _kvcsMediaRecorder = null;
   var _kvcsAudioChunks   = [];
   var _kvcsCurrentPostId = null;
-  var _kvcsQuickReplies = ['This is amazing!','Great post!','Love the vibe!','Facts only.','Well said!','Totally agree.','Big mood.','We move!','So inspiring!'];
+
+  var _kvcsQuickReplies = [
+    'This is amazing!','Great post!','Love the vibe!',
+    'Facts only.','Well said!','Totally agree.',
+    'Big mood.','We move!','So inspiring!'
+  ];
 
   function kvibeOpenCommentSheet(postId) {
     _kvcsCurrentPostId = postId;
     var sheet  = document.getElementById('commentSheet');
     var form   = document.getElementById('modalPostForm');
     var listEl = document.getElementById('modal_comment_list');
+
     kvibeCSResetInputUI();
     sheet.classList.add('active');
     document.body.style.overflow = 'hidden';
+
+    // Wire the HTMX form to this specific post
     form.setAttribute('hx-post', '/comments/' + postId );
     htmx.process(form);
+
+    // Load existing comments via HTMX (same as spotlight)
     listEl.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#8e8e8e;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Loading...</div>';
-    htmx.ajax('GET', '/comment/' + postId, { target: '#modal_comment_list', select: '#comment_list', swap: 'innerHTML' });
-    setTimeout(function() { var ta = document.getElementById('modalTextInput'); if (ta) ta.focus(); }, 300);
+    htmx.ajax('GET', '/comment/' + postId, {
+      target: '#modal_comment_list',
+      select: '#comment_list',
+      swap: 'innerHTML'
+    });
+
+    setTimeout(function() {
+      var ta = document.getElementById('modalTextInput');
+      if (ta) ta.focus();
+    }, 300);
   }
 
   function kvibeCloseCommentSheet() {
     var sheet = document.getElementById('commentSheet');
-    if (sheet) sheet.classList.remove('active');
+    sheet.classList.remove('active');
     document.body.style.overflow = '';
-    if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') _kvcsMediaRecorder.stop();
+    if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') {
+      _kvcsMediaRecorder.stop();
+    }
     kvibeCSResetInputUI();
     _kvcsCurrentPostId = null;
   }
 
+  // Update comment count badge after HTMX form submits successfully
   document.addEventListener('htmx:afterRequest', function(evt) {
     if (evt.target && evt.target.id === 'modalPostForm' && evt.detail.successful) {
       if (_kvcsCurrentPostId) {
         var el = document.getElementById('kvibe-comment-count-' + _kvcsCurrentPostId);
-        if (el) el.textContent = ((parseInt(el.textContent.replace(/,/g, '')) || 0) + 1).toLocaleString();
+        if (el) {
+          var n = parseInt(el.textContent.replace(/,/g, '')) || 0;
+          el.textContent = (n + 1).toLocaleString();
+        }
       }
     }
   });
@@ -3908,36 +3988,52 @@
   }
 
   function kvibeCSUpdateSendBtn() {
-    var ta = document.getElementById('modalTextInput'), send = document.getElementById('modalSendBtn');
-    var mic = document.getElementById('modalMicBtn'), imgIn = document.getElementById('modal_image_input');
+    var ta    = document.getElementById('modalTextInput');
+    var send  = document.getElementById('modalSendBtn');
+    var mic   = document.getElementById('modalMicBtn');
+    var imgIn = document.getElementById('modal_image_input');
     var audIn = document.getElementById('modal_audio_file');
-    var has = (ta && ta.value.trim().length > 0) || (imgIn && imgIn.files && imgIn.files.length > 0) || (audIn && audIn.files && audIn.files.length > 0);
+    var has = (ta    && ta.value.trim().length > 0)
+           || (imgIn && imgIn.files && imgIn.files.length > 0)
+           || (audIn && audIn.files && audIn.files.length > 0);
     if (send) send.style.display = has ? 'flex' : 'none';
-    if (mic) { if (has) mic.classList.add('record-mode-hidden'); else mic.classList.remove('record-mode-hidden'); }
+    if (mic)  { if (has) mic.classList.add('record-mode-hidden');
+                else     mic.classList.remove('record-mode-hidden'); }
   }
 
   function kvibeCSResetInputUI() {
-    var ta = document.getElementById('modalTextInput'), send = document.getElementById('modalSendBtn'), mic = document.getElementById('modalMicBtn');
-    var audPrev = document.getElementById('modalAudioPreview'), audIn = document.getElementById('modal_audio_file'), imgIn = document.getElementById('modal_image_input');
-    var aiBox = document.getElementById('kvibe-cs-ai-box'), stopBtn = document.getElementById('modalStopBtn');
-    var status = document.getElementById('modalRecordingStatus'), preview = document.getElementById('modalPreviewAudio');
-    if (ta) { ta.value = ''; ta.style.height = 'auto'; ta.classList.remove('record-mode-hidden'); }
-    if (send) send.style.display = 'none';
-    if (mic) { mic.style.display = ''; mic.classList.remove('record-mode-hidden'); }
+    var ta      = document.getElementById('modalTextInput');
+    var send    = document.getElementById('modalSendBtn');
+    var mic     = document.getElementById('modalMicBtn');
+    var audPrev = document.getElementById('modalAudioPreview');
+    var audIn   = document.getElementById('modal_audio_file');
+    var imgIn   = document.getElementById('modal_image_input');
+    var aiBox   = document.getElementById('kvibe-cs-ai-box');
+    var stopBtn = document.getElementById('modalStopBtn');
+    var status  = document.getElementById('modalRecordingStatus');
+    var preview = document.getElementById('modalPreviewAudio');
+    if (ta)      { ta.value = ''; ta.style.height = 'auto'; ta.classList.remove('record-mode-hidden'); }
+    if (send)    send.style.display = 'none';
+    if (mic)     { mic.style.display = ''; mic.classList.remove('record-mode-hidden'); }
     if (audPrev) audPrev.classList.add('record-mode-hidden');
-    if (audIn) audIn.value = '';
-    if (imgIn) imgIn.value = '';
-    if (aiBox) { aiBox.style.display = 'none'; aiBox.innerHTML = ''; }
+    if (audIn)   audIn.value = '';
+    if (imgIn)   imgIn.value = '';
+    if (aiBox)   { aiBox.style.display = 'none'; aiBox.innerHTML = ''; }
     if (stopBtn) stopBtn.style.display = 'none';
-    if (status) status.innerHTML = '';
+    if (status)  status.innerHTML = '';
     if (preview) { preview.src = ''; preview.controls = false; preview.load(); }
   }
 
+  // Mic recording — mirrors spotlight.html approach
   document.addEventListener('DOMContentLoaded', function() {
-    var micBtn = document.getElementById('modalMicBtn'), stopBtn = document.getElementById('modalStopBtn'), deleteBtn = document.getElementById('modalDeleteAudioBtn');
-    var textInput = document.getElementById('modalTextInput'), audioInput = document.getElementById('modal_audio_file');
-    var audPrev = document.getElementById('modalAudioPreview'), previewAud = document.getElementById('modalPreviewAudio');
-    var statusEl = document.getElementById('modalRecordingStatus');
+    var micBtn     = document.getElementById('modalMicBtn');
+    var stopBtn    = document.getElementById('modalStopBtn');
+    var deleteBtn  = document.getElementById('modalDeleteAudioBtn');
+    var textInput  = document.getElementById('modalTextInput');
+    var audioInput = document.getElementById('modal_audio_file');
+    var audPrev    = document.getElementById('modalAudioPreview');
+    var previewAud = document.getElementById('modalPreviewAudio');
+    var statusEl   = document.getElementById('modalRecordingStatus');
     if (!micBtn) return;
 
     micBtn.addEventListener('click', async function() {
@@ -3948,25 +4044,44 @@
         _kvcsAudioChunks = [];
         _kvcsMediaRecorder.ondataavailable = function(e) { _kvcsAudioChunks.push(e.data); };
         _kvcsMediaRecorder.onstop = function() {
-          stream.getTracks().forEach(t => t.stop());
+          stream.getTracks().forEach(function(t) { t.stop(); });
           var blob = new Blob(_kvcsAudioChunks, { type: 'audio/webm' });
-          var dt = new DataTransfer(); dt.items.add(new File([blob], 'recording.webm', { type: 'audio/webm' }));
+          var file = new File([blob], 'recording.webm', { type: 'audio/webm' });
+          var dt = new DataTransfer();
+          dt.items.add(file);
           audioInput.files = dt.files;
-          previewAud.src = URL.createObjectURL(blob); previewAud.controls = true;
-          stopBtn.style.display = 'none'; statusEl.innerHTML = ''; kvibeCSUpdateSendBtn();
+          previewAud.src = URL.createObjectURL(blob);
+          previewAud.controls = true;
+          stopBtn.style.display = 'none';
+          statusEl.innerHTML = '';
+          kvibeCSUpdateSendBtn();
         };
         _kvcsMediaRecorder.start();
-        textInput.classList.add('record-mode-hidden'); audPrev.classList.remove('record-mode-hidden');
-        micBtn.classList.add('record-mode-hidden'); stopBtn.style.display = 'flex';
+        textInput.classList.add('record-mode-hidden');
+        audPrev.classList.remove('record-mode-hidden');
+        micBtn.classList.add('record-mode-hidden');
+        stopBtn.style.display = 'flex';
         statusEl.innerHTML = '<i class="fa-solid fa-circle recording"></i> Recording...';
-      } catch(e) { alert('Microphone access was denied. Please allow it in your browser settings.'); }
+      } catch(e) {
+        alert('Microphone access was denied. Please allow it in your browser settings.');
+      }
     });
 
-    stopBtn.addEventListener('click', function() { if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') _kvcsMediaRecorder.stop(); });
+    stopBtn.addEventListener('click', function() {
+      if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') {
+        _kvcsMediaRecorder.stop();
+      }
+    });
+
     deleteBtn.addEventListener('click', function() { kvibeCSResetInputUI(); });
 
+    // Close on backdrop click
     var sheet = document.getElementById('commentSheet');
-    if (sheet) sheet.addEventListener('click', function(e) { if (e.target === sheet) kvibeCloseCommentSheet(); });
+    if (sheet) {
+      sheet.addEventListener('click', function(e) {
+        if (e.target === sheet) kvibeCloseCommentSheet();
+      });
+    }
   });
 
   function kvibeCSToggleAI() {
@@ -3974,70 +4089,125 @@
     var hidden = !box.style.display || box.style.display === 'none';
     if (!hidden) { box.style.display = 'none'; return; }
     box.innerHTML = '';
-    _kvcsQuickReplies.slice().sort(() => 0.5 - Math.random()).slice(0, 6).forEach(function(text) {
-      var chip = document.createElement('button');
-      chip.type = 'button';
-      chip.style.cssText = 'display:inline-block;background:#f5f5f5;border:1px solid #dbdbdb;border-radius:16px;padding:6px 12px;font-size:13px;color:#262626;cursor:pointer;font-family:inherit;margin-right:6px;white-space:nowrap;';
-      chip.textContent = text;
-      chip.onclick = function() { var ta = document.getElementById('modalTextInput'); ta.value = text; kvibeCSOnInput(); ta.focus(); };
-      box.appendChild(chip);
-    });
+    _kvcsQuickReplies.slice().sort(function() { return 0.5 - Math.random(); }).slice(0, 6)
+      .forEach(function(text) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.style.cssText = 'display:inline-block;background:#f5f5f5;border:1px solid #dbdbdb;border-radius:16px;padding:6px 12px;font-size:13px;color:#262626;cursor:pointer;font-family:inherit;margin-right:6px;white-space:nowrap;';
+        chip.textContent = text;
+        chip.onclick = function() {
+          var ta = document.getElementById('modalTextInput');
+          ta.value = text;
+          kvibeCSOnInput();
+          ta.focus();
+        };
+        box.appendChild(chip);
+      });
     box.style.display = 'flex';
   }
 
-  // ==========================================
-  // LINK PREVIEW LOADER
-  // ==========================================
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') kvibeCloseCommentSheet(); });
+
+  // ── Client-side link preview loader ──────────────────────────────────────
+  // Fires after DOMContentLoaded. Scans every post card that has a
+  // data-lp-url attribute (set by the template when link_preview is null).
+  // Extracts the first URL from the raw content, fetches /fetch_link_preview/,
+  // and injects the card into the card's .kvibe-lp-slot div.
+
   (function kvibeFeedLpInit() {
     const URL_RE = /(https?:\/\/[^\s"'<>]{4,})/;
 
     function kvibeBuildFeedLpCard(lp) {
       if (!lp || (!lp.title && !lp.image)) return null;
       const a = document.createElement('a');
-      a.className = 'kvibe-post-link-preview';
-      a.href = lp.url || '#'; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.className   = 'kvibe-post-link-preview';
+      a.href        = lp.url || '#';
+      a.target      = '_blank';
+      a.rel         = 'noopener noreferrer';
       a.addEventListener('click', e => e.stopPropagation());
 
       if (lp.image) {
-        const img = document.createElement('img');
-        img.className = 'kvibe-plp-image'; img.src = lp.image; img.alt = '';
+        const img   = document.createElement('img');
+        img.className = 'kvibe-plp-image';
+        img.src     = lp.image;
+        img.alt     = '';
         img.onerror = () => { img.style.display = 'none'; };
         a.appendChild(img);
       }
 
-      const body = document.createElement('div'); body.className = 'kvibe-plp-body';
-      if (lp.domain) { const d = document.createElement('div'); d.className = 'kvibe-plp-domain'; d.textContent = lp.domain; body.appendChild(d); }
-      if (lp.title) { const t = document.createElement('div'); t.className = 'kvibe-plp-title'; t.textContent = lp.title; body.appendChild(t); }
-      if (lp.description) { const desc = document.createElement('div'); desc.className = 'kvibe-plp-desc'; desc.textContent = lp.description; body.appendChild(desc); }
+      const body  = document.createElement('div');
+      body.className = 'kvibe-plp-body';
+
+      if (lp.domain) {
+        const d = document.createElement('div');
+        d.className   = 'kvibe-plp-domain';
+        d.textContent = lp.domain;
+        body.appendChild(d);
+      }
+      if (lp.title) {
+        const t = document.createElement('div');
+        t.className   = 'kvibe-plp-title';
+        t.textContent = lp.title;
+        body.appendChild(t);
+      }
+      if (lp.description) {
+        const desc = document.createElement('div');
+        desc.className   = 'kvibe-plp-desc';
+        desc.textContent = lp.description;
+        body.appendChild(desc);
+      }
+
       a.appendChild(body);
       return a;
     }
 
     async function kvibeFetchAndInjectLp(article) {
-      const match = (article.dataset.lpUrl || '').match(URL_RE);
+      const rawContent = article.dataset.lpUrl || '';
+      const match      = rawContent.match(URL_RE);
       if (!match) return;
-      const url = match[1], slot = article.querySelector('.kvibe-lp-slot');
-      if (!slot || article.querySelector('.kvibe-post-link-preview') || article.dataset.lpFetching) return;
+
+      const url  = match[1];
+      const slot = article.querySelector('.kvibe-lp-slot');
+      if (!slot) return;
+
+      // Already has a rendered card — skip
+      if (article.querySelector('.kvibe-post-link-preview')) return;
+      // Already fetching (race-condition guard) — skip
+      if (article.dataset.lpFetching) return;
       article.dataset.lpFetching = '1';
 
       try {
-        const res = await fetch(`/fetch_link_preview/?url=${encodeURIComponent(url)}`);
+        const res  = await fetch(`/fetch_link_preview/?url=${encodeURIComponent(url)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!data.title && !data.image) return;
+        // Double-check nothing was injected while we were fetching
         if (!slot.querySelector('.kvibe-post-link-preview')) {
           const card = kvibeBuildFeedLpCard({ ...data, url });
           if (card) slot.appendChild(card);
         }
-      } catch (_) { }
+      } catch (_) { /* silent — preview is best-effort */ }
     }
 
-    function kvibeScanCards(root) { (root || document).querySelectorAll('.kvibe-post[data-lp-url]').forEach(kvibeFetchAndInjectLp); }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => kvibeScanCards());
-    else kvibeScanCards();
+    // Run on all cards already in the DOM
+    function kvibeScanCards(root) {
+      (root || document).querySelectorAll('.kvibe-post[data-lp-url]').forEach(article => {
+        kvibeFetchAndInjectLp(article);
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => kvibeScanCards());
+    } else {
+      kvibeScanCards();
+    }
+
+    // Expose so infinite-scroll / dynamically added cards can call it
     window.kvibeScanFeedLpCards = kvibeScanCards;
   })();
+  // ─────────────────────────────────────────────────────────────────────────
 </script>
+</body>
 </html>
 
 
