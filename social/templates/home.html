@@ -2823,10 +2823,14 @@
       if (newSentinel && typeof htmx !== 'undefined') {
         htmx.process(newSentinel);
       }
-      // Pass evt.detail.elt (the swapped-in fragment) as root so we only
-      // scan NEW cards — not the whole document (which causes duplicate previews)
+      // Scan the real feed container for new LP cards.
+      // We cannot use evt.detail.elt here because with hx-swap="outerHTML"
+      // that element is the detached OLD sentinel (already removed from DOM).
+      // The kvibeFetchAndInjectLp function has a data-lp-fetching guard so
+      // already-processed cards are safely skipped.
       if (typeof window.kvibeScanFeedLpCards === 'function') {
-        window.kvibeScanFeedLpCards(evt.detail.elt);
+        var feedContainer = document.getElementById('kvibe-real-feed');
+        window.kvibeScanFeedLpCards(feedContainer || document);
       }
       var activeChip = document.querySelector('.kvibe-mood-filter-chip.active');
       if (activeChip && typeof window.kvibeFilterMood === 'function') window.kvibeFilterMood(activeChip.dataset.mood, activeChip);
