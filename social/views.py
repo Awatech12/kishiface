@@ -2760,3 +2760,4 @@ def change_password(request):
     cache.delete(rate_key)
 
     return JsonResponse({'success': True, 'message': 'Password updated successfully!'})
+
