@@ -5517,8 +5517,8 @@
             <div style="margin-bottom:16px;">
                 <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Quality</div>
                 <div style="display:flex;gap:8px;" id="ssQualityRow">
-                    <button onclick="setSsQuality('720')" id="ssQ720" class="ss-quality-btn active-q">720p</button>
-                    <button onclick="setSsQuality('1080')" id="ssQ1080" class="ss-quality-btn">1080p</button>
+                    <button onclick="setSsQuality('1080')" id="ssQ1080" class="ss-quality-btn active-q">1080p</button>
+                    <button onclick="setSsQuality('720')" id="ssQ720" class="ss-quality-btn">720p</button>
                     <button onclick="setSsQuality('480')" id="ssQ480" class="ss-quality-btn">480p</button>
                 </div>
             </div>
@@ -6092,20 +6092,24 @@
         let videoTrimEnd = 100;
         let videoDuration = 0;
         
-        // Video settings
+        // Video settings — standard 9:16 portrait (1080 × 1920)
         const VIDEO_SETTINGS = {
-            quality: 0.7,
-            bitrate: 1000000,
-            width: 640,
-            height: 360
+            quality: 0.85,
+            bitrate: 4000000,   // 4 Mbps — good quality at 1080p portrait
+            width:  1080,
+            height: 1920
         };
         
-        // Smart quality settings: JPEG for tiny files, sharp at 1920px cap
+        // Standard resolution: 1080 × 1920 (9:16 portrait — same as TikTok/Stories)
+        const STANDARD_W = 1080;
+        const STANDARD_H = 1920;
+
+        // Smart quality settings: JPEG for tiny files, sharp at 1080×1920
         const IMAGE_QUALITY = {
             quality: 0.92,          // JPEG 0.92 = visually lossless, 5-10x smaller than PNG
             format: 'image/jpeg',   // JPEG: far smaller than PNG for photos
-            maxWidth: 1080,         // 9:16 portrait standard width
-            maxHeight: 1920
+            maxWidth:  STANDARD_W,  // 9:16 portrait — 1080px wide
+            maxHeight: STANDARD_H   // 9:16 portrait — 1920px tall
         };
         
         // Gen Z messages
@@ -7274,8 +7278,8 @@
                 cameraStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: isFrontCameraCamera ? 'user' : 'environment',
-                        width:  { ideal: 1920, max: 3840 },
-                        height: { ideal: 1080, max: 2160 }
+                        width:  { ideal: 1080 },
+                        height: { ideal: 1920 }
                     }
                 });
                 cameraLive.srcObject = cameraStream;
@@ -7331,12 +7335,11 @@
             // Screen flash (software) if in screen flash mode
             if (camFlashMode === 2) { await triggerScreenFlash(); }
 
-            // ── Compute smart output size (cap at 1920px, keep aspect) ───
-            const vW = cameraLive.videoWidth  || 1280;
-            const vH = cameraLive.videoHeight || 720;
-            const scale = Math.min(1, IMAGE_QUALITY.maxWidth / vW, IMAGE_QUALITY.maxHeight / vH);
-            const W = Math.round(vW * scale);
-            const H = Math.round(vH * scale);
+            // ── Force standard 9:16 output: 1080 × 1920 with cover-crop ─
+            const vW = cameraLive.videoWidth  || 1080;
+            const vH = cameraLive.videoHeight || 1920;
+            const W = STANDARD_W;   // 1080
+            const H = STANDARD_H;   // 1920
 
             // ── Draw to output canvas ────────────────────────────────────
             const off = document.createElement('canvas');
@@ -7347,11 +7350,17 @@
 
             const shouldMirror = isFrontCameraCamera !== cameraMirrorForce;
 
-            // Helper: draw video (mirrored if needed) scaled to output size
+            // Helper: draw video (mirrored if needed) cover-fitted to 1080×1920
             const drawVideo = (targetCtx, tw, th) => {
+                // Recompute cover scale for this target size
+                const sx = tw / vW, sy = th / vH;
+                const cs = Math.max(sx, sy);
+                const dw = vW * cs, dh = vH * cs;
+                const dx = (tw - dw) / 2, dy = (th - dh) / 2;
                 targetCtx.save();
                 if (shouldMirror) { targetCtx.translate(tw, 0); targetCtx.scale(-1, 1); }
-                targetCtx.drawImage(cameraLive, 0, 0, vW, vH, 0, 0, tw, th);
+                // After mirror transform the x-axis is flipped — dx stays the same in the new space
+                targetCtx.drawImage(cameraLive, dx, dy, dw, dh);
                 targetCtx.restore();
             };
 
@@ -7481,15 +7490,54 @@
             }
         }
 
+        // =================== 9:16 Image Normaliser ===================
+        // Converts any uploaded image to exactly 1080 × 1920 (9:16) via
+        // centre-crop cover-fit, matching the camera / video standard.
+        function resizeImageTo916(file) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                const url = URL.createObjectURL(file);
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const W = STANDARD_W;   // 1080
+                    const H = STANDARD_H;   // 1920
+
+                    // Cover-fit: scale so the image fills 1080×1920, then centre-crop
+                    const scaleX = W / img.naturalWidth;
+                    const scaleY = H / img.naturalHeight;
+                    const scale  = Math.max(scaleX, scaleY);
+                    const drawW  = img.naturalWidth  * scale;
+                    const drawH  = img.naturalHeight * scale;
+                    const drawX  = (W - drawW) / 2;
+                    const drawY  = (H - drawH) / 2;
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width  = W;
+                    canvas.height = H;
+                    const ctx = canvas.getContext('2d', { alpha: false });
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+                    canvas.toBlob(blob => {
+                        const ext  = IMAGE_QUALITY.format === 'image/png' ? 'png' : 'jpg';
+                        const name = file.name.replace(/\.[^.]+$/, '') + `_916.${ext}`;
+                        resolve(new File([blob], name, { type: IMAGE_QUALITY.format }));
+                    }, IMAGE_QUALITY.format, IMAGE_QUALITY.quality);
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); resolve(file); }; // fallback: keep original
+                img.src = url;
+            });
+        }
+
         // =================== Image Functions ===================
-        function handleImageSelect(input) {
+        async function handleImageSelect(input) {
             const files = Array.from(input.files);
             const imageFiles = [];
             let galleryVideoFile = null;
 
             files.forEach(file => {
                 if (file.type && file.type.startsWith('video/')) {
-                    // Route gallery video to video_file input, same as recorded video
                     galleryVideoFile = file;
                 } else {
                     imageFiles.push(file);
@@ -7503,15 +7551,19 @@
                 dt.items.add(galleryVideoFile);
                 if (videoFileInput) videoFileInput.files = dt.files;
 
-                // Show in the video player UI
                 const videoUrl = URL.createObjectURL(galleryVideoFile);
                 if (videoElement) { videoElement.src = videoUrl; videoElement.load(); }
                 if (videoPlayer) videoPlayer.classList.add('active');
             }
 
-            // Handle image files normally
+            // Resize every image to 1080 × 1920 (9:16) before adding
             if (imageFiles.length > 0) {
-                selectedImages = [...selectedImages, ...imageFiles];
+                const resized = await Promise.all(imageFiles.map(f => resizeImageTo916(f)));
+                selectedImages = [...selectedImages, ...resized];
+                // Sync file input
+                const dt2 = new DataTransfer();
+                selectedImages.forEach(f => dt2.items.add(f));
+                imageInput.files = dt2.files;
             }
 
             renderImagePreviews();
@@ -7821,10 +7873,13 @@
         // ============================================================
         // GALLERY SHORTCUT FROM CAMERA / VIDEO RECORDER MODALS
         // ============================================================
-        function handleGalleryFromCamera(input) {
+        async function handleGalleryFromCamera(input) {
             const files = Array.from(input.files);
             if (!files.length) return;
-            selectedImages = [...selectedImages, ...files];
+            const resized = await Promise.all(files.map(f =>
+                f.type && f.type.startsWith('video/') ? Promise.resolve(f) : resizeImageTo916(f)
+            ));
+            selectedImages = [...selectedImages, ...resized.filter(f => !f.type.startsWith('video/'))];
             const dt = new DataTransfer();
             selectedImages.forEach(f => dt.items.add(f));
             imageInput.files = dt.files;
@@ -7836,7 +7891,7 @@
             input.value = '';
         }
 
-        function handleGalleryFromVideoRecorder(input) {
+        async function handleGalleryFromVideoRecorder(input) {
             const files = Array.from(input.files);
             if (!files.length) return;
 
@@ -7852,7 +7907,6 @@
             });
 
             if (galleryVideoFile) {
-                // Route video to video_file input, same as recorded video
                 currentVideoBlob = galleryVideoFile;
                 const dt = new DataTransfer();
                 dt.items.add(galleryVideoFile);
@@ -7864,7 +7918,8 @@
             }
 
             if (imageFiles.length > 0) {
-                selectedImages = [...selectedImages, ...imageFiles];
+                const resized = await Promise.all(imageFiles.map(f => resizeImageTo916(f)));
+                selectedImages = [...selectedImages, ...resized];
                 const dt2 = new DataTransfer();
                 selectedImages.forEach(f => dt2.items.add(f));
                 imageInput.files = dt2.files;
@@ -8028,8 +8083,8 @@
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: isFrontCameraVideo ? 'user' : 'environment',
-                        width:  { ideal: VIDEO_SETTINGS.width },
-                        height: { ideal: VIDEO_SETTINGS.height }
+                        width:  { ideal: STANDARD_W },
+                        height: { ideal: STANDARD_H }
                     },
                     audio: {
                         echoCancellation: true,
@@ -8114,10 +8169,9 @@
                 const videoTrack = videoStream.getVideoTracks()[0];
                 const mixedAudioTrack = destinationNode.stream.getAudioTracks()[0];
 
-                // Set up off-screen canvas composite (camera + watermark)
-                const vidSettings = videoTrack.getSettings();
-                const compW = vidSettings.width  || VIDEO_SETTINGS.width  || 1080;
-                const compH = vidSettings.height || VIDEO_SETTINGS.height || 1920;
+                // Set up off-screen canvas composite — always 1080 × 1920 (9:16)
+                const compW = STANDARD_W;   // 1080
+                const compH = STANDARD_H;   // 1920
                 const compCanvas = document.createElement('canvas');
                 compCanvas.width = compW; compCanvas.height = compH;
                 const compCtx = compCanvas.getContext('2d');
@@ -10437,7 +10491,7 @@
         let ssWatermarkOn = true;
         let ssWatermarkUsername = '{{request.user.username}}'; // Set from Django template
         let ssTextOverlays = []; // Array of {text, font, color, size, x, y, bold, italic, shadow}
-        let ssQuality = '720';
+        let ssQuality = '1080';  // default to full 1080p — matches 1080×1920 standard
         let ssPlaying = false;
         let ssPlayRAF = null;
         let ssPlayStartTime = null;
@@ -13143,7 +13197,7 @@
             <!-- Meta chips -->
             <div class="ss-export-preview-meta">
                 <span class="ss-export-preview-chip" id="ssExportChipOrient">Portrait</span>
-                <span class="ss-export-preview-chip" id="ssExportChipQuality">720p</span>
+                <span class="ss-export-preview-chip" id="ssExportChipQuality">1080p</span>
                 <span class="ss-export-preview-chip" id="ssExportChipSize">—</span>
             </div>
 

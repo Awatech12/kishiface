@@ -325,13 +325,15 @@ def _build_fof(following_ids_set, current_user_id):
 
 def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     """
-    Fetch one page of scored posts — ALL posts, no time cutoff.
+    Fetch one page of posts — newest first, ALL posts visible.
 
     Returns (feed_items list, next_cursor float|None).
 
-    Scoring:  vibes×4 + comments×3 + reposts×2 + likes×1
-              × time-decay (half-life 3 days)  × ±10 % jitter
-    Pagination: cursor_dt filters posts older than the last seen created_at.
+    Primary order: created_at DESC — guarantees every post appears exactly once.
+    Engagement score (vibes×4 + comments×3 + reposts×2 + likes×1) is used to
+    lightly reorder posts WITHIN the page only, so highly engaged posts bubble
+    up a little — but no post is ever excluded because of low engagement.
+
     next_cursor is None when fewer than page_size posts returned (last page).
     """
     if page_size is None:
@@ -352,7 +354,9 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     if cursor_dt:
         base_qs = base_qs.filter(created_at__lt=cursor_dt)
 
-    posts_qs = (
+    # Fetch exactly page_size posts, newest first.
+    # No oversampling — every post in the DB will appear on some page.
+    posts = list(
         base_qs
         .select_related(
             'author', 'author__profile',
@@ -365,22 +369,20 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
             repost_count  = Count('reposts',  distinct=True),
             like_count    = Count('likes',    distinct=True),
         )
-        .order_by('-created_at')[:page_size * 3]   # oversample → score → trim
+        .order_by('-created_at')[:page_size]
     )
 
-    now_ts = timezone.now().timestamp()
+    # Light engagement reorder within the page only (no decay — avoids hiding old posts)
+    def _engagement(post):
+        return (
+            getattr(post, 'vibe_count',    0) * 4 +
+            getattr(post, 'comment_count', 0) * 3 +
+            getattr(post, 'repost_count',  0) * 2 +
+            getattr(post, 'like_count',    0) * 1 +
+            random.uniform(0, 0.5)   # tiny jitter so feed varies slightly each load
+        )
 
-    def _score(post):
-        raw   = (getattr(post, 'vibe_count',    0) * 4 +
-                 getattr(post, 'comment_count', 0) * 3 +
-                 getattr(post, 'repost_count',  0) * 2 +
-                 getattr(post, 'like_count',    0) * 1)
-        age_h = max(0, (now_ts - post.created_at.timestamp()) / 3600)
-        decay = 2 ** (-age_h / 72)
-        jitter = random.uniform(0.90, 1.10)
-        return raw * decay * jitter
-
-    posts = sorted(posts_qs, key=_score, reverse=True)[:page_size]
+    posts.sort(key=_engagement, reverse=True)
 
     fof_ids, fof_via_map = _build_fof(following_ids_set, user.id)
 
