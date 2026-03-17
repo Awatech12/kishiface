@@ -4206,6 +4206,116 @@
     window.kvibeScanFeedLpCards = kvibeScanCards;
   })();
   // ─────────────────────────────────────────────────────────────────────────
+
+
 </script>
+<script>
+/**
+ * KVIBE HOME PAGE UNIFIED SCRIPTS
+ * Handles: URL Previews, Auto-Pause on Scroll, and Media Sync
+ */
+(function() {
+  // --- 1. LINK PREVIEW LOGIC ---
+  function kvibeBuildFeedLpCard(data) {
+    if (!data.title && !data.image) return null;
+    const card = document.createElement('a');
+    card.className = 'kvibe-post-link-preview';
+    card.href = data.url;
+    card.target = '_blank';
+    card.rel = 'noopener noreferrer';
+    card.innerHTML = `
+      ${data.image ? `<img class="kvibe-plp-image" src="${data.image}" alt="">` : ''}
+      <div class="kvibe-plp-body">
+        <div class="kvibe-plp-domain">${data.domain || ''}</div>
+        <div class="kvibe-plp-title">${data.title || ''}</div>
+        <div class="kvibe-plp-desc">${data.description || ''}</div>
+      </div>
+    `;
+    return card;
+  }
+
+  async function kvibeFetchAndInjectLp(article) {
+    const url = article.dataset.lpUrl;
+    if (!url) return;
+    const slot = article.querySelector('.kvibe-lp-slot');
+    if (!slot || article.querySelector('.kvibe-post-link-preview') || article.dataset.lpFetching) return;
+
+    article.dataset.lpFetching = '1';
+    try {
+      const res = await fetch(`/fetch_link_preview/?url=${encodeURIComponent(url)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.title && !data.image) return;
+      const card = kvibeBuildFeedLpCard({ ...data, url });
+      if (card) {
+        slot.innerHTML = ''; 
+        slot.appendChild(card);
+      }
+    } catch (e) { console.error("Link preview error", e); }
+  }
+
+  function kvibeScanFeedLpCards(root) {
+    (root || document).querySelectorAll('.kvibe-post[data-lp-url]').forEach(article => {
+      kvibeFetchAndInjectLp(article);
+    });
+  }
+
+  // --- 2. MEDIA CONTROL (Scroll & Sync) ---
+  let mediaObserver;
+
+  function initMediaController() {
+    mediaObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const video = entry.target;
+        if (!entry.isIntersecting && !video.paused) {
+          video.pause(); 
+        }
+      });
+    }, { threshold: 0.2 });
+
+    // Sync: Pause all other media when one starts playing
+    document.addEventListener('play', function(e) {
+      if (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO') {
+        document.querySelectorAll('video, audio').forEach(m => {
+          if (m !== e.target && !m.paused) m.pause();
+        });
+      }
+    }, true);
+
+    refreshMediaObservers();
+  }
+
+  function refreshMediaObservers() {
+    document.querySelectorAll('video').forEach(v => {
+      v.removeAttribute('controls');
+      mediaObserver.observe(v);
+      const container = v.closest('.kvibe-video-container');
+      if (container && v.paused) container.classList.add('paused');
+    });
+  }
+
+  // --- 3. STARTUP & HTMX ---
+  function initAll() {
+    kvibeScanFeedLpCards();
+    initMediaController();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAll);
+  } else {
+    initAll();
+  }
+
+  document.addEventListener('htmx:afterOnLoad', function(evt) {
+    kvibeScanFeedLpCards(evt.detail.target);
+    if (mediaObserver) refreshMediaObservers();
+  });
+
+  window.kvibeScanFeedLpCards = kvibeScanFeedLpCards;
+})();
+</script>
+
+</body>
+
 </body>
 </html>
