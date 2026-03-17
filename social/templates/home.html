@@ -2667,6 +2667,78 @@
       <!-- Main Feed -->
       <div class="kvibe-main-feed">
 
+    <!-- New Posts Banner — appears when posts created after page load exist -->
+    <div id="kvibe-new-posts-banner" style="
+        display:none;
+        position:sticky;
+        top:102px;
+        z-index:60;
+        text-align:center;
+        padding:6px 0;
+        pointer-events:none;
+    ">
+      <button onclick="kvibeRefreshFeed()" style="
+          background:var(--kvibe-text);
+          color:#fff;
+          border:none;
+          border-radius:20px;
+          padding:8px 18px;
+          font-size:13px;
+          font-weight:600;
+          cursor:pointer;
+          pointer-events:all;
+          box-shadow:0 2px 12px rgba(0,0,0,0.18);
+          display:inline-flex;
+          align-items:center;
+          gap:6px;
+          animation:kvibeBannerIn 0.3s ease;
+      ">
+        <i class="fas fa-arrow-up"></i> New posts
+      </button>
+    </div>
+
+    <style>
+      @keyframes kvibeBannerIn {
+        from { opacity:0; transform:translateY(-8px); }
+        to   { opacity:1; transform:translateY(0); }
+      }
+    </style>
+
+    <script>
+    // Poll for new posts every 30 seconds using the feed_anchor timestamp.
+    // When new posts exist, show the banner. Tapping it does a full page reload
+    // so the session anchor resets and the new posts appear at the top.
+    (function kvibeNewPostsPoller() {
+      var anchor = {{ feed_anchor|default:"0" }};
+      if (!anchor) return;
+
+      function checkNewPosts() {
+        fetch('/feed/more/?cursor=' + anchor + '&check_new=1', {
+          headers: { 'HX-Request': 'true' }
+        })
+        .then(function(r) {
+          // 204 = no new posts, 200 = new posts exist
+          if (r.status === 200) {
+            var banner = document.getElementById('kvibe-new-posts-banner');
+            if (banner) banner.style.display = 'block';
+          }
+        })
+        .catch(function() {});
+      }
+
+      // Start polling 30 seconds after load
+      setTimeout(function poll() {
+        checkNewPosts();
+        setTimeout(poll, 30000);
+      }, 30000);
+    })();
+
+    function kvibeRefreshFeed() {
+      // Clear session anchor so fresh posts load from now
+      window.location.href = '/home';
+    }
+    </script>
+
     <!-- Mood Filter Bar -->
     <div class="kvibe-mood-filter-bar" id="moodFilterBar">
       <button class="kvibe-mood-filter-chip chip-all active" data-mood="all" onclick="kvibeFilterMood('all', this)">
@@ -2751,7 +2823,11 @@
       if (newSentinel && typeof htmx !== 'undefined') {
         htmx.process(newSentinel);
       }
-      if (typeof window.kvibeScanFeedLpCards === 'function') window.kvibeScanFeedLpCards();
+      // Pass evt.detail.elt (the swapped-in fragment) as root so we only
+      // scan NEW cards — not the whole document (which causes duplicate previews)
+      if (typeof window.kvibeScanFeedLpCards === 'function') {
+        window.kvibeScanFeedLpCards(evt.detail.elt);
+      }
       var activeChip = document.querySelector('.kvibe-mood-filter-chip.active');
       if (activeChip && typeof window.kvibeFilterMood === 'function') window.kvibeFilterMood(activeChip.dataset.mood, activeChip);
       if (typeof window.kvibeInitCarousels === 'function') window.kvibeInitCarousels();
@@ -4090,16 +4166,22 @@
       const slot = article.querySelector('.kvibe-lp-slot');
       if (!slot) return;
 
-      // Already has a rendered card from the template — skip
+      // Already has a rendered card — skip
       if (article.querySelector('.kvibe-post-link-preview')) return;
+      // Already fetching (race-condition guard) — skip
+      if (article.dataset.lpFetching) return;
+      article.dataset.lpFetching = '1';
 
       try {
         const res  = await fetch(`/fetch_link_preview/?url=${encodeURIComponent(url)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!data.title && !data.image) return;
-        const card = kvibeBuildFeedLpCard({ ...data, url });
-        if (card) slot.appendChild(card);
+        // Double-check nothing was injected while we were fetching
+        if (!slot.querySelector('.kvibe-post-link-preview')) {
+          const card = kvibeBuildFeedLpCard({ ...data, url });
+          if (card) slot.appendChild(card);
+        }
       } catch (_) { /* silent — preview is best-effort */ }
     }
 

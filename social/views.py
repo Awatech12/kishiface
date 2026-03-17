@@ -295,8 +295,7 @@ def _safe_redirect_back(request, fallback='home'):
 # Feed helpers — shared between home() and feed_load_more()
 # ─────────────────────────────────────────────────────────────────────────────
 
-FEED_PAGE_SIZE    = 10   # posts rendered per page
-FEED_WINDOW_DAYS  = 14   # ignore posts older than this
+FEED_PAGE_SIZE = 10   # posts per page
 
 
 def _build_fof(following_ids_set, current_user_id):
@@ -326,19 +325,19 @@ def _build_fof(following_ids_set, current_user_id):
 
 def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     """
-    Fetch one page of scored posts.
+    Fetch one page of scored posts — ALL posts, no time cutoff.
 
     Returns (feed_items list, next_cursor float|None).
 
     Scoring:  vibes×4 + comments×3 + reposts×2 + likes×1
               × time-decay (half-life 3 days)  × ±10 % jitter
     Pagination: cursor_dt filters posts older than the last seen created_at.
+    next_cursor is None when fewer than page_size posts returned (last page).
     """
     if page_size is None:
         page_size = FEED_PAGE_SIZE
 
     following_ids_set = set(following_ids)
-    feed_cutoff = timezone.now() - timedelta(days=FEED_WINDOW_DAYS)
 
     if not following_ids:
         base_qs = Post.objects.all()
@@ -349,7 +348,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
             Q(is_repost=True, author__in=following_ids)
         )
 
-    base_qs = base_qs.filter(created_at__gte=feed_cutoff)
+    # Cursor pagination — only fetch posts older than the last seen one
     if cursor_dt:
         base_qs = base_qs.filter(created_at__lt=cursor_dt)
 
@@ -405,7 +404,8 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         if i % 4 == 2 and suggestion_users:
             feed_items.append({'type': 'user_suggestion', 'data': suggestion_users.pop(0)})
 
-    next_cursor = posts[-1].created_at.timestamp() if posts else None
+    # Only return a cursor if we got a full page — None means no more pages
+    next_cursor = posts[-1].created_at.timestamp() if len(posts) >= page_size else None
     return feed_items, next_cursor
 
 
@@ -463,6 +463,11 @@ def home(request):
     # First page of the feed
     feed, next_cursor = _get_feed_page(request.user, following_ids)
 
+    # Store page-load timestamp in session — used by "New posts" banner polling
+    import datetime as _dt
+    feed_anchor_ts = _dt.datetime.now(_dt.timezone.utc).timestamp()
+    request.session['feed_anchor'] = feed_anchor_ts
+
     sidebar_followings = profile.followings.select_related('user').all()
     sidebar_followers  = profile.followers.select_related('user').all()
 
@@ -475,6 +480,7 @@ def home(request):
     return render(request, 'home.html', {
         'posts_with_ads':             feed,
         'next_cursor':                next_cursor,
+        'feed_anchor':                feed_anchor_ts,
         'followed_list':              followed_list[:8],
         'unread_follow_count':        unread_follow_count,
         'unread_notifications_count': unread_notifications_count,
@@ -498,13 +504,42 @@ def feed_load_more(request):
     if not request.headers.get('HX-Request'):
         return JsonResponse({'error': 'HTMX only'}, status=400)
 
+    import datetime as _dt
+
+    # ── New-posts banner check ────────────────────────────────────────────────
+    # The banner JS calls ?cursor=<anchor_ts>&check_new=1
+    # We just check if any posts exist newer than the anchor.
+    if request.GET.get('check_new') == '1':
+        try:
+            anchor_ts = float(request.GET.get('cursor', 0))
+            anchor_dt = _dt.datetime.fromtimestamp(anchor_ts, tz=_dt.timezone.utc)
+        except (ValueError, TypeError):
+            return HttpResponse(status=204)
+
+        profile       = Profile.objects.get(user=request.user)
+        following_ids = list(profile.followings.values_list('user', flat=True))
+
+        if not following_ids:
+            new_qs = Post.objects.all()
+        else:
+            new_qs = Post.objects.filter(
+                Q(author__in=following_ids) |
+                Q(author=request.user) |
+                Q(is_repost=True, author__in=following_ids)
+            )
+
+        if new_qs.filter(created_at__gt=anchor_dt).exists():
+            return HttpResponse(status=200)   # new posts exist → show banner
+        return HttpResponse(status=204)        # nothing new
+
+    # ── Normal infinite scroll ────────────────────────────────────────────────
     try:
         cursor_ts = float(request.GET.get('cursor', 0))
     except (ValueError, TypeError):
         cursor_ts = 0
 
     cursor_dt = (
-        timezone.make_aware(datetime.fromtimestamp(cursor_ts))
+        _dt.datetime.fromtimestamp(cursor_ts, tz=_dt.timezone.utc)
         if cursor_ts else None
     )
 
@@ -523,17 +558,21 @@ def feed_load_more(request):
     })
 
 
-
 def _safe_pic_url(user_obj):
     """
-    Return picture URL safely. Delegates to Profile.get_picture_url
-    which handles both Cloudinary (production) and ImageField (debug).
+    Return picture URL safely. Works in both debug (ImageField) and
+    production (CloudinaryField). Always returns a full https URL.
     """
     try:
-        if hasattr(user_obj, 'profile'):
-            return user_obj.profile.get_picture_url
-        if hasattr(user_obj, 'get_picture_url'):
-            return user_obj.get_picture_url
+        if hasattr(user_obj, 'profile') and user_obj.profile.picture:
+            pic = user_obj.profile.picture
+            if hasattr(pic, 'public_id') and pic.public_id:
+                return cloudinary.CloudinaryImage(pic.public_id).build_url(secure=True)
+            if hasattr(pic, 'url') and pic.url:
+                url = pic.url
+                if url.startswith('http://'):
+                    url = 'https://' + url[7:]
+                return url
     except Exception:
         pass
     return ''
@@ -1130,7 +1169,7 @@ def update_profile(request, username):
                         'phone':         profile.phone,
                         'address':       profile.address,
                         'location':      profile.location,
-                        'picture_url':   profile.get_picture_url,
+                        'picture_url':   profile.picture.url,
                         'website':       profile.website,
                         'privacy_level': profile.privacy_level,
                     },
@@ -1617,7 +1656,7 @@ def send_message(request, username):
                 'file_type': reply_to.file_type
             }
 
-        sender_avatar = request.user.profile.get_picture_url
+        sender_avatar = request.user.profile.picture.url if request.user.profile.picture else ''
 
         async_to_sync(channel_layer.group_send)(
             room_group_name,
