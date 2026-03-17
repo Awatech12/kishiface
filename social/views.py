@@ -323,18 +323,15 @@ def _build_fof(following_ids_set, current_user_id):
     return fof_ids, fof_via_resolved
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Feed helpers — shared between home() and feed_load_more()
+# ─────────────────────────────────────────────────────────────────────────────
+
 def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     """
     Fetch one page of posts — newest first, ALL posts visible.
 
     Returns (feed_items list, next_cursor float|None).
-
-    Primary order: created_at DESC — guarantees every post appears exactly once.
-    Engagement score (vibes×4 + comments×3 + reposts×2 + likes×1) is used to
-    lightly reorder posts WITHIN the page only, so highly engaged posts bubble
-    up a little — but no post is ever excluded because of low engagement.
-
-    next_cursor is None when fewer than page_size posts returned (last page).
     """
     if page_size is None:
         page_size = FEED_PAGE_SIZE
@@ -372,6 +369,10 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         .order_by('-created_at')[:page_size]
     )
 
+    # ✅ FIX: Calculate next_cursor BEFORE we shuffle the posts by engagement!
+    # This guarantees the cursor is exactly the timestamp of the oldest post on this page.
+    next_cursor = posts[-1].created_at.timestamp() if len(posts) >= page_size else None
+
     # Light engagement reorder within the page only (no decay — avoids hiding old posts)
     def _engagement(post):
         return (
@@ -382,6 +383,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
             random.uniform(0, 0.5)   # tiny jitter so feed varies slightly each load
         )
 
+    # Now it is safe to sort by engagement for the UI
     posts.sort(key=_engagement, reverse=True)
 
     fof_ids, fof_via_map = _build_fof(following_ids_set, user.id)
@@ -406,8 +408,6 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         if i % 4 == 2 and suggestion_users:
             feed_items.append({'type': 'user_suggestion', 'data': suggestion_users.pop(0)})
 
-    # Only return a cursor if we got a full page — None means no more pages
-    next_cursor = posts[-1].created_at.timestamp() if len(posts) >= page_size else None
     return feed_items, next_cursor
 
 
@@ -492,7 +492,6 @@ def home(request):
         'sidebar_followings':         sidebar_followings,
         'sidebar_followers':          sidebar_followers,
     })
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HTMX infinite-scroll endpoint
@@ -2756,3 +2755,4 @@ def change_password(request):
     cache.delete(rate_key)
 
     return JsonResponse({'success': True, 'message': 'Password updated successfully!'})
+
