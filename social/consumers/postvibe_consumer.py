@@ -122,7 +122,8 @@ class PostVibeConsumer(AsyncWebsocketConsumer):
         """
         from social.models import PostVibe, Post, Notification
 
-        VALID_VIBES = {'fire', 'real', 'vibing', 'dead', 'cringe', 'chill'}
+        # UPDATED: Added 'love' to valid vibes
+        VALID_VIBES = {'fire', 'real', 'vibing', 'dead', 'cringe', 'chill', 'love'}
 
         if vibe_type not in VALID_VIBES:
             return {'summary': {}, 'total': 0, 'user_vibe': None, 'action': 'error'}

@@ -12,6 +12,7 @@ _VIBE_EMOJIS = {
     'dead':   '😂',
     'cringe': '😬',
     'chill':  '🧊',
+    'love':   '❤️',  # NEW: Love reaction
 }
 
 _VIBE_LABELS = {
@@ -21,6 +22,7 @@ _VIBE_LABELS = {
     'dead':   'Dead',
     'cringe': 'Cringe',
     'chill':  'Chill',
+    'love':   'Love',  # NEW
 }
 
 

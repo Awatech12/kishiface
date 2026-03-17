@@ -4,7 +4,6 @@
 {% load time %}
 {% load text_filters %}
 
-
 {% for item in posts_with_ads %}
 
   {# ── Regular Post ────────────────────────────────────────────────────── #}
@@ -156,7 +155,6 @@
           {{ item.data.content|format_post_text|safe }}
         {% endif %}
       </div>
-      {# Link-preview slot — filled by kvibeScanFeedLpCards() in JS #}
       <div class="kvibe-lp-slot">
         {% if item.data.link_preview %}
           <a class="kvibe-post-link-preview" href="{{ item.data.link_preview.url|default:'#' }}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">
@@ -180,15 +178,20 @@
     <div class="kvibe-media-container">
       {% if item.data.is_repost and orig %}
         {% if orig.video_file %}
-          <div class="kvibe-video-container">
-            <video id="kvibe-post-video-{{ item.data.post_id }}" class="kvibe-video" preload="none"
-                   onclick="kvibeTogglePlay('kvibe-post-video-{{ item.data.post_id }}', 'kvibe-play-icon-{{ item.data.post_id }}')"
-                   onplay="kvibeOnVideoPlay('kvibe-post-video-{{ item.data.post_id }}')"
-                   onpause="document.getElementById('kvibe-play-icon-{{ item.data.post_id }}').className='fa-solid fa-play kvibe-play-pause-icon'">
+          <div class="kvibe-video-container paused"> {# 'paused' class ensures play icon shows initially #}
+            <video id="kvibe-post-video-{{ item.data.post_id }}" class="kvibe-video" preload="metadata" playsinline
+                   onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)"
+                   onplay="this.closest('.kvibe-video-container').classList.remove('paused')"
+                   onpause="this.closest('.kvibe-video-container').classList.add('paused')"
+                   onended="this.closest('.kvibe-video-container').classList.add('paused')"
+                   poster="">
               <source src="{{ orig.video_file.url }}" type="video/mp4">
+              Your browser does not support the video tag.
             </video>
-            <div class="kvibe-video-overlay" onclick="kvibeTogglePlay('kvibe-post-video-{{ item.data.post_id }}','kvibe-play-icon-{{ item.data.post_id }}')">
+            <div class="kvibe-video-overlay" onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)">
               <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
+              <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', -10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
+              <button class="kvibe-seek-overlay-btn kvibe-forward-btn" onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', 10)">10s <i class="fa-solid fa-forward-step"></i></button>
             </div>
           </div>
         {% elif orig.file %}
@@ -224,17 +227,20 @@
         {% endif %}
       {% else %}
         {% if item.data.video_file %}
-          <div class="kvibe-video-container">
-            <video id="kvibe-post-video-{{ item.data.post_id }}" class="kvibe-video" preload="none"
-                   onclick="kvibeTogglePlay('kvibe-post-video-{{ item.data.post_id }}','kvibe-play-icon-{{ item.data.post_id }}')"
-                   onplay="kvibeOnVideoPlay('kvibe-post-video-{{ item.data.post_id }}')"
-                   onpause="document.getElementById('kvibe-play-icon-{{ item.data.post_id }}').className='fa-solid fa-play kvibe-play-pause-icon'">
+          <div class="kvibe-video-container paused"> {# 'paused' class ensures play icon shows initially #}
+            <video id="kvibe-post-video-{{ item.data.post_id }}" class="kvibe-video" preload="metadata" playsinline
+                   onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)"
+                   onplay="this.closest('.kvibe-video-container').classList.remove('paused')"
+                   onpause="this.closest('.kvibe-video-container').classList.add('paused')"
+                   onended="this.closest('.kvibe-video-container').classList.add('paused')"
+                   poster="">
               <source src="{{ item.data.video_file.url }}" type="video/mp4">
+              Your browser does not support the video tag.
             </video>
-            <div class="kvibe-video-overlay" onclick="kvibeTogglePlay('kvibe-post-video-{{ item.data.post_id }}','kvibe-play-icon-{{ item.data.post_id }}')">
+            <div class="kvibe-video-overlay" onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)">
               <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
-              <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}',-10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
-              <button class="kvibe-seek-overlay-btn kvibe-forward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}',10)">10s <i class="fa-solid fa-forward-step"></i></button>
+              <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', -10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
+              <button class="kvibe-seek-overlay-btn kvibe-forward-btn" onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', 10)">10s <i class="fa-solid fa-forward-step"></i></button>
             </div>
           </div>
         {% elif item.data.file %}
@@ -273,12 +279,10 @@
     {% endif %}
     {% endwith %}
 
-    
     {% include 'snippet/post_like.html' with post=item.data %}
 
   </article>
 
- 
   {% elif item.type == 'user_suggestion' %}
   <div class="kvibe-user-suggestion" data-user-id="{{ item.data.id }}">
     <div class="kvibe-user-suggestion-header">
@@ -319,9 +323,7 @@
 
 {% endfor %}
 
-
 {% if next_cursor %}
-
 <div id="kvibe-feed-sentinel"
      hx-get="{% url 'feed_load_more' %}?cursor={{ next_cursor }}"
      hx-trigger="intersect once threshold:0.1"
@@ -336,3 +338,4 @@
   You're all caught up ✨
 </div>
 {% endif %}
+

@@ -596,10 +596,45 @@ class Post(models.Model):
         return 0
     
     def get_vibe_score(self):
-        base_score = self.likes.count() * 1 + self.reposts.count() * 2
+        """
+        Calculate an engagement score based on all vibe types with different weights.
+        Higher weight for more intense/positive reactions.
+        """
+        # Get all vibes for this post
+        vibes = self.vibes.all()
+        
+        if not vibes.exists():
+            return 0
+        
+        # Weight mapping for different vibe types
+        vibe_weights = {
+            'fire':   4,  # 🔥 Most intense positive
+            'love':   4,  # ❤️ Strong positive (NEW)
+            'real':   3,  # 💯 Strong approval
+            'vibing': 2,  # 🎵 Moderate engagement
+            'chill':  1,  # 🧊 Light positive
+            'dead':   1,  # 😂 Laughter (can be positive)
+            'cringe': 1,  # 😬 Negative reaction (still engagement)
+        }
+        
+        # Calculate weighted score
+        total_score = 0
+        vibe_counts = {}
+        
+        for vibe in vibes:
+            weight = vibe_weights.get(vibe.vibe_type, 1)
+            total_score += weight
+            vibe_counts[vibe.vibe_type] = vibe_counts.get(vibe.vibe_type, 0) + 1
+        
+        # Apply mood boost if post has mood
         if self.has_mood():
-            base_score *= 1.2
-        return round(base_score, 1)
+            total_score = int(total_score * 1.2)
+        
+        # Add bonus for variety (posts with multiple different vibe types get extra points)
+        variety_bonus = len(vibe_counts) * 0.5
+        total_score = round(total_score + variety_bonus, 1)
+        
+        return total_score
     
     class Meta:
         ordering = ['-created_at']
@@ -635,7 +670,7 @@ class PostImage(models.Model):
 
 
 # =============================================================================
-# PostVibe — replaces simple Like with 6 mood-based reactions
+# PostVibe — replaces simple Like with 7 mood-based reactions (added LOVE)
 # Real-time updates via PostVibeConsumer (WebSocket)
 # =============================================================================
 
@@ -648,6 +683,7 @@ class PostVibe(models.Model):
     DEAD    = 'dead'
     CRINGE  = 'cringe'
     CHILL   = 'chill'
+    LOVE    = 'love'  # NEW: Love reaction
 
     VIBE_CHOICES = [
         (FIRE,   '🔥 Fire'),
@@ -656,6 +692,7 @@ class PostVibe(models.Model):
         (DEAD,   '😂 Dead'),
         (CRINGE, '😬 Cringe'),
         (CHILL,  '🧊 Chill'),
+        (LOVE,   '❤️ Love'),  # NEW: Love option
     ]
 
     # Lookup maps used by the consumer and views
@@ -666,6 +703,7 @@ class PostVibe(models.Model):
         DEAD:   '😂',
         CRINGE: '😬',
         CHILL:  '🧊',
+        LOVE:   '❤️',  # NEW
     }
 
     VIBE_LABELS = {
@@ -675,6 +713,7 @@ class PostVibe(models.Model):
         DEAD:   'Dead',
         CRINGE: 'Cringe',
         CHILL:  'Chill',
+        LOVE:   'Love',  # NEW
     }
 
     VIBE_COLORS = {
@@ -684,6 +723,7 @@ class PostVibe(models.Model):
         DEAD:   '#f59e0b',
         CRINGE: '#8b5cf6',
         CHILL:  '#06b6d4',
+        LOVE:   '#e11d48',  # NEW: Deep pink/red for love
     }
 
     post       = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='vibes')

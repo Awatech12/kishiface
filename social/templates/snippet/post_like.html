@@ -1,7 +1,7 @@
 {% comment %}
   snippet/post_like.html
   ──────────────────────────────────────────────────────────────────────────
-  KVibe Post Engagement — Vibe Reactions (🔥 💯 🎵 😂 😬 🧊)
+  KVibe Post Engagement — Vibe Reactions (🔥 💯 🎵 😂 😬 🧊 ❤️)
   ──────────────────────────────────────────────────────────────────────────
   USAGE (simple — home.html style):
     {% include 'snippet/post_like.html' with post=item.data %}
@@ -117,6 +117,7 @@
 .kv-vibe-opt:nth-child(4){animation-delay:.12s}
 .kv-vibe-opt:nth-child(5){animation-delay:.15s}
 .kv-vibe-opt:nth-child(6){animation-delay:.18s}
+.kv-vibe-opt:nth-child(7){animation-delay:.21s}
 .kv-vibe-opt:hover        { transform: scale(1.35) translateY(-6px); z-index: 10; }
 .kv-vibe-opt.selected     { background: rgba(0,0,0,.07); }
 .kv-opt-emoji             { font-size: 26px; line-height: 1; }
@@ -282,6 +283,12 @@
           <span class="kv-opt-emoji">🧊</span>
           <span class="kv-opt-label">Chill</span>
         </div>
+        <!-- NEW: Love option -->
+        <div class="kv-vibe-opt" data-vibe="love"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','love')">
+          <span class="kv-opt-emoji">❤️</span>
+          <span class="kv-opt-label">Love</span>
+        </div>
       </div><!-- /picker -->
 
       <!-- Button face: smiley until JS hydrates it with the active emoji -->
@@ -412,10 +419,19 @@
 'use strict';
 
 /* ── Constants ──────────────────────────────────────────────────────── */
-const EMOJIS = { fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊' };
+const EMOJIS = { 
+  fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊',
+  love:'❤️'  // NEW: Love emoji
+};
 const COLORS = {
   fire:'#ff4500', real:'#ff0080', vibing:'#3b82f6',
-  dead:'#f59e0b', cringe:'#8b5cf6', chill:'#06b6d4'
+  dead:'#f59e0b', cringe:'#8b5cf6', chill:'#06b6d4',
+  love:'#e11d48'  // NEW: Love color (deep pink/red)
+};
+const LABELS = {
+  fire:'Fire', real:'Real', vibing:'Vibing', 
+  dead:'Dead', cringe:'Cringe', chill:'Chill',
+  love:'Love'  // NEW: Love label
 };
 
 /* ── Per-post state ─────────────────────────────────────────────────── */
@@ -507,12 +523,61 @@ function kvOptimistic(id, vibe) {
   s.userVibe = same ? null : vibe;
   kvFace(id, s.userVibe);
 
-  const c = document.getElementById('kv-vibe-count-' + id);
-  if (c) { c.classList.remove('tick'); void c.offsetWidth; c.classList.add('tick'); }
+  // Update count optimistically
+  const countEl = document.getElementById('kv-vibe-count-' + id);
+  if (countEl) {
+    let current = parseInt(countEl.textContent.replace(/,/g, '')) || 0;
+    if (same) {
+      current = Math.max(0, current - 1);
+    } else {
+      current = current + 1;
+    }
+    countEl.textContent = current > 0 ? current.toLocaleString() : '0';
+    countEl.classList.remove('tick'); 
+    void countEl.offsetWidth; 
+    countEl.classList.add('tick');
+  }
 
   document.querySelectorAll(`#kv-picker-${id} .kv-vibe-opt`).forEach(o =>
     o.classList.toggle('selected', o.dataset.vibe === s.userVibe)
   );
+
+  // Update summary pills optimistically
+  const summaryEl = document.getElementById('kv-vibe-summary-' + id);
+  const totalEl = document.getElementById('kv-vibe-total-' + id);
+  
+  if (summaryEl) {
+    // Get current summary from DOM
+    const pills = summaryEl.querySelectorAll('.kv-vibe-pill');
+    const summary = {};
+    pills.forEach(pill => {
+      const emoji = pill.querySelector('.kv-pill-emoji')?.textContent || '';
+      const count = parseInt(pill.querySelector('.kv-pill-count')?.textContent.replace(/,/g, '')) || 0;
+      // Find vibe type from emoji
+      for (let [vt, em] of Object.entries(EMOJIS)) {
+        if (em === emoji) {
+          summary[vt] = count;
+          break;
+        }
+      }
+    });
+
+    // Update summary with optimistic change
+    if (same) {
+      // Removing vibe
+      if (summary[vibe]) {
+        summary[vibe]--;
+        if (summary[vibe] <= 0) delete summary[vibe];
+      }
+    } else {
+      // Adding new vibe
+      if (s.userVibe) {
+        summary[s.userVibe] = (summary[s.userVibe] || 0) + 1;
+      }
+    }
+
+    kvRender(id, summary, s.userVibe, Object.values(summary).reduce((a,b)=>a+b,0));
+  }
 }
 
 /* ── Sync button face ───────────────────────────────────────────────── */
@@ -523,11 +588,17 @@ function kvFace(id, vibe) {
   if (vibe) {
     btn.classList.add('has-vibe');
     btn.dataset.userVibe = vibe;
-    if (el) { el.className='kv-active-emoji'; el.innerHTML=EMOJIS[vibe]||'✨'; }
+    if (el) { 
+      el.className = 'kv-active-emoji'; 
+      el.innerHTML = EMOJIS[vibe] || '✨'; 
+    }
   } else {
     btn.classList.remove('has-vibe');
     btn.dataset.userVibe = '';
-    if (el) { el.className='kvibe-action-icon'; el.innerHTML='<i class="fa-regular fa-face-smile"></i>'; }
+    if (el) { 
+      el.className = 'kvibe-action-icon'; 
+      el.innerHTML = '<i class="fa-regular fa-face-smile"></i>'; 
+    }
   }
 }
 
@@ -542,7 +613,12 @@ function kvApply(id, data) {
   const summary = data.summary || {};
 
   const c = document.getElementById('kv-vibe-count-' + id);
-  if (c) { c.classList.remove('tick'); void c.offsetWidth; c.classList.add('tick'); c.textContent = total>0?total.toLocaleString():'0'; }
+  if (c) { 
+    c.textContent = total > 0 ? total.toLocaleString() : '0';
+    c.classList.remove('tick'); 
+    void c.offsetWidth; 
+    c.classList.add('tick'); 
+  }
 
   kvRender(id, summary, s.userVibe, total);
 }
@@ -560,16 +636,23 @@ function kvRender(id, summary, userVibe, total) {
 
   if (!entries.length) {
     box.innerHTML = '<span class="kv-no-vibes">Be the first to vibe this ✨</span>';
-    if (totalEl) totalEl.style.display='none';
+    if (totalEl) totalEl.style.display = 'none';
     return;
   }
 
-  box.innerHTML = entries.map(([vt,count]) => {
+  // Sort entries by count descending, then by vibe type
+  entries.sort((a, b) => {
+    if (a[1] !== b[1]) return b[1] - a[1];
+    return (a[0] || '').localeCompare(b[0] || '');
+  });
+
+  box.innerHTML = entries.map(([vt, count]) => {
     const mine  = userVibe === vt;
     const color = COLORS[vt] || '#666';
-    const st2   = mine ? `style="--pill-bg:${color}22;--pill-fg:${color};--pill-border:${color}55"` : '';
-    return `<span class="kv-vibe-pill${mine?' mine':''}" ${st2} title="${vt}">
-              <span class="kv-pill-emoji">${EMOJIS[vt]||'✨'}</span>
+    const bgColor = mine ? `${color}22` : 'rgba(0,0,0,.05)';
+    const style = mine ? `style="--pill-bg:${color}22;--pill-fg:${color};--pill-border:${color}55"` : '';
+    return `<span class="kv-vibe-pill${mine ? ' mine' : ''}" ${style} data-vibe="${vt}">
+              <span class="kv-pill-emoji">${EMOJIS[vt] || '✨'}</span>
               <span class="kv-pill-count">${count.toLocaleString()}</span>
             </span>`;
   }).join('');
@@ -577,10 +660,14 @@ function kvRender(id, summary, userVibe, total) {
   if (totalEl) {
     totalEl.style.display = '';
     if (userVibe) {
-      const o = total-1;
-      totalEl.innerHTML = `<span class="kv-you-text">You</span>${o>0?` + ${o.toLocaleString()} others`:''}`;
+      const o = total - 1;
+      if (o > 0) {
+        totalEl.innerHTML = `<span class="kv-you-text">You</span> and ${o.toLocaleString()} other${o !== 1 ? 's' : ''} vibed this`;
+      } else {
+        totalEl.innerHTML = `<span class="kv-you-text">You</span> vibed this`;
+      }
     } else {
-      totalEl.textContent = `${total.toLocaleString()} vibe${total!==1?'s':''}`;
+      totalEl.textContent = `${total.toLocaleString()} vibe${total !== 1 ? 's' : ''}`;
     }
   }
 }
@@ -683,8 +770,10 @@ function kvParticles(id, vibe) {
 
   // Floating emoji burst
   const lbl=document.createElement('span'); lbl.className='kv-lbl';
-  lbl.textContent=EMOJIS[vibe]||'+1'; btn.style.position='relative';
-  btn.appendChild(lbl); lbl.addEventListener('animationend',()=>lbl.remove());
+  lbl.textContent=EMOJIS[vibe]||'+1'; 
+  btn.style.position='relative';
+  btn.appendChild(lbl); 
+  lbl.addEventListener('animationend',()=>lbl.remove());
 }
 
 /* ══════════════════════════════════════════════════════════════════════
