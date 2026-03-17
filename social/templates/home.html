@@ -3224,39 +3224,148 @@
     return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
   }
   
-  // Variables for repost modal & lazy loading observers
   let currentRepostPostId = null;
   let currentRepostButton = null;
-  let videoObserver;
-  let imgObserver;
-      
-  // Helper function to show toast
+  let videoObserver = null;
+  let imgObserver = null;
+
   function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = 'kvibe-toast';
-    toast.innerHTML = `
-      <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
-      <span>${message}</span>
-    `;
-    
+    toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i><span>${message}</span>`;
     document.body.appendChild(toast);
-    
     setTimeout(() => {
       toast.style.animation = 'kvibeSlideOut 0.3s ease';
-      setTimeout(() => {
-        if (document.body.contains(toast)) document.body.removeChild(toast);
-      }, 300);
+      setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 300);
     }, 3000);
   }
+
+  // ==========================================
+  // LAZY LOADING OBSERVERS (BULLETPROOF)
+  // ==========================================
+  function initVideoObserver() {
+    if (!videoObserver) {
+      videoObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const video = entry.target;
+            let srcToLoad = null;
+            
+            // Handle both <video data-src> and <source data-src>
+            if (video.hasAttribute('data-src')) {
+              srcToLoad = video.getAttribute('data-src');
+              video.removeAttribute('data-src');
+            }
+            const source = video.querySelector('source[data-src]');
+            if (source) {
+              if (!srcToLoad) srcToLoad = source.getAttribute('data-src');
+              source.removeAttribute('data-src');
+            }
+
+            if (srcToLoad) {
+              video.src = srcToLoad;
+              video.load();
+            }
+            videoObserver.unobserve(video);
+          }
+        });
+      }, { rootMargin: '400px' });
+    }
+
+    // Safely attach to all unobserved videos, regardless of snippet HTML structure
+    document.querySelectorAll('video[data-src]').forEach(v => videoObserver.observe(v));
+    document.querySelectorAll('source[data-src]').forEach(s => {
+      const v = s.closest('video');
+      if (v) videoObserver.observe(v);
+    });
+  }
+
+  function initImageObserver() {
+    if (!imgObserver) {
+      imgObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            img.style.opacity = '1';
+            img.classList.add('loaded');
+            imgObserver.unobserve(img);
+          }
+        });
+      }, { rootMargin: '300px' });
+    }
+    document.querySelectorAll('img[loading="lazy"]:not(.loaded)').forEach(img => imgObserver.observe(img));
+  }
+
+  // ==========================================
+  // BULLETPROOF VIDEO PLAYER LOGIC
+  // ==========================================
+  window.kvibeTogglePlayPause = function(videoId, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
+    const video = document.getElementById(videoId);
+    if (!video) return;
+    
+    const container = video.closest('.kvibe-video-container');
+    
+    // Fallback: If clicked before observer loaded it
+    let srcToLoad = null;
+    if (video.hasAttribute('data-src')) {
+      srcToLoad = video.getAttribute('data-src');
+      video.removeAttribute('data-src');
+    }
+    const source = video.querySelector('source[data-src]');
+    if (source) {
+      if (!srcToLoad) srcToLoad = source.getAttribute('data-src');
+      source.removeAttribute('data-src');
+    }
+    
+    if (srcToLoad) {
+      // Strip out hash fragments (like #t=0.5) to prevent iOS playback glitches
+      video.src = srcToLoad.split('#')[0]; 
+      video.load();
+    }
+
+    if (video.paused) {
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          if (container) container.classList.remove('paused');
+        }).catch(err => console.log('Playback prevented by browser:', err));
+      } else {
+        if (container) container.classList.remove('paused');
+      }
+    } else {
+      video.pause();
+      if (container) container.classList.add('paused');
+    }
+  };
+
+  // GLOBAL CLICK CATCHER: Fixes missing onclicks in feed_posts_partial.html
+  document.addEventListener('click', function(e) {
+    const videoEl = e.target.closest('.kvibe-video');
+    const iconEl = e.target.closest('.kvibe-play-pause-icon');
+    
+    if (videoEl || iconEl) {
+      const targetVideo = videoEl || (iconEl ? iconEl.closest('.kvibe-video-container').querySelector('video') : null);
+      if (targetVideo && targetVideo.id) {
+        // Only trigger manually if the HTML is missing the onclick attribute
+        if (!targetVideo.hasAttribute('onclick')) {
+          window.kvibeTogglePlayPause(targetVideo.id, e);
+        }
+      }
+    }
+    if (e.target.tagName === 'A' && e.target.closest('.kvibe-post-text')) return;
+  });
 
   // ==========================================
   // HTMX DYNAMIC CONTENT HANDLER
   // ==========================================
   document.addEventListener('htmx:afterSwap', function (evt) {
     var newSentinel = document.getElementById('kvibe-feed-sentinel');
-    if (newSentinel && typeof htmx !== 'undefined') {
-      htmx.process(newSentinel);
-    }
+    if (newSentinel && typeof htmx !== 'undefined') htmx.process(newSentinel);
     
     if (typeof window.kvibeScanFeedLpCards === 'function') {
       var feedContainer = document.getElementById('kvibe-real-feed');
@@ -3268,22 +3377,11 @@
       window.kvibeFilterMood(activeChip.dataset.mood, activeChip);
     }
     
-    if (typeof window.kvibeInitCarousels === 'function') {
-      window.kvibeInitCarousels();
-    }
+    if (typeof window.kvibeInitCarousels === 'function') window.kvibeInitCarousels();
 
-    // 🔴 FIX: Observe new videos and images injected by HTMX
-    if (videoObserver) {
-      // Only targets videos that haven't been loaded yet (still have data-src)
-      document.querySelectorAll('video[data-src]').forEach(video => {
-        videoObserver.observe(video);
-      });
-    }
-    if (imgObserver) {
-      document.querySelectorAll('img[loading="lazy"]:not(.loaded)').forEach(img => {
-        imgObserver.observe(img);
-      });
-    }
+    // Attach observers to new HTMX content
+    initVideoObserver();
+    initImageObserver();
   });
 
   // ==========================================
@@ -3299,13 +3397,8 @@
 
     fetch(`/follow/${userId}/`, {
       method: 'POST',
-      headers: {
-        'X-CSRFToken': getCsrfFromMeta(),
-        'Content-Type': 'application/json',
-      },
-    })
-    .then(r => r.json())
-    .then(data => {
+      headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' },
+    }).then(r => r.json()).then(data => {
       btn.disabled = false;
       if (data.success) {
         if (data.followed) {
@@ -3320,17 +3413,12 @@
           showToast(`Unfollowed @${username}`, 'info');
         }
       } else {
-        btn.innerHTML = isFollowing
-          ? '<i class="fas fa-user-check"></i><span>Following</span>'
-          : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+        btn.innerHTML = isFollowing ? '<i class="fas fa-user-check"></i><span>Following</span>' : '<i class="fas fa-user-plus"></i><span>Follow</span>';
         showToast('Something went wrong. Please try again.', 'error');
       }
-    })
-    .catch(() => {
+    }).catch(() => {
       btn.disabled = false;
-      btn.innerHTML = isFollowing
-        ? '<i class="fas fa-user-check"></i><span>Following</span>'
-        : '<i class="fas fa-user-plus"></i><span>Follow</span>';
+      btn.innerHTML = isFollowing ? '<i class="fas fa-user-check"></i><span>Following</span>' : '<i class="fas fa-user-plus"></i><span>Follow</span>';
       showToast('Something went wrong. Please try again.', 'error');
     });
   }
@@ -3338,26 +3426,19 @@
   function kvibeFollowUser(userId, username) {
     const button = event.target.closest('button');
     const originalText = button.innerHTML;
-    
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     button.disabled = true;
     
     fetch(`/follow/${userId}/`, {
       method: 'POST',
-      headers: {
-        'X-CSRFToken': getCsrfFromMeta(),
-        'Content-Type': 'application/json',
-      },
-    })
-    .then(response => response.json())
-    .then(data => {
+      headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' },
+    }).then(r => r.json()).then(data => {
       if (data.success) {
         if (data.followed) {
           showToast(`You are now following @${username}`, 'success');
           button.innerHTML = '<i class="fas fa-check"></i> Following';
           button.classList.remove('kvibe-user-suggestion-btn-primary');
           button.classList.add('kvibe-user-suggestion-btn-secondary');
-          
           setTimeout(() => {
             const suggestionDiv = button.closest('.kvibe-user-suggestion');
             if (suggestionDiv) {
@@ -3377,9 +3458,7 @@
         button.innerHTML = originalText;
       }
       button.disabled = false;
-    })
-    .catch(error => {
-      console.error('Error:', error);
+    }).catch(error => {
       showToast('Something went wrong. Please try again.', 'error');
       button.innerHTML = originalText;
       button.disabled = false;
@@ -3390,27 +3469,19 @@
     currentRepostPostId = postId;
     currentRepostButton = button;
     const isReposted = button.getAttribute('data-reposted') === 'true';
-    if (isReposted) {
-      kvibePerformRepost(postId, '', true);
-    } else {
-      kvibeOpenRepostModal();
-    }
+    if (isReposted) kvibePerformRepost(postId, '', true);
+    else kvibeOpenRepostModal();
   }
   
   function kvibeOpenRepostModal() {
     const modal = document.getElementById('kvibe-repost-modal');
     const textarea = document.getElementById('kvibe-repost-caption');
     const charCount = document.getElementById('kvibe-repost-char-count');
-    
     textarea.value = '';
     charCount.textContent = '0';
     modal.classList.add('show');
     textarea.focus();
-    
-    textarea.addEventListener('input', function() {
-      charCount.textContent = this.value.length;
-    });
-    
+    textarea.addEventListener('input', function() { charCount.textContent = this.value.length; });
     document.getElementById('kvibe-repost-confirm-btn').onclick = function() {
       kvibePerformRepost(currentRepostPostId, textarea.value, false);
       kvibeCloseRepostModal();
@@ -3420,7 +3491,6 @@
   function kvibeFilterMood(mood, btn) {
     document.querySelectorAll('.kvibe-mood-filter-chip').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
-
     document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
       if (mood === 'all') {
         post.classList.remove('kvibe-mood-hidden');
@@ -3441,7 +3511,6 @@
     const seen = new Set();
     const container = document.getElementById('kvibeCustomMoodChips');
     if (!container) return;
-
     document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
       const mood = post.getAttribute('data-mood') || '';
       const custom = (post.getAttribute('data-custom-mood') || '').trim();
@@ -3456,13 +3525,11 @@
         container.appendChild(btn);
       }
     });
-
     if (seen.size === 0) container.style.display = 'none';
   })();
 
   function kvibeCloseRepostModal() {
-    const modal = document.getElementById('kvibe-repost-modal');
-    modal.classList.remove('show');
+    document.getElementById('kvibe-repost-modal').classList.remove('show');
     currentRepostPostId = null;
     currentRepostButton = null;
   }
@@ -3472,20 +3539,14 @@
     const icon = button.querySelector('i');
     const countSpan = button.querySelector('.kvibe-repost-count');
     const originalText = button.innerHTML;
-    
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     button.disabled = true;
     
     fetch(`/repost/${postId}/`, {
       method: 'POST',
-      headers: {
-        'X-CSRFToken': getCsrfFromMeta(),
-        'Content-Type': 'application/json',
-      },
+      headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ caption: caption, undo: undo })
-    })
-    .then(response => response.json())
-    .then(data => {
+    }).then(r => r.json()).then(data => {
       if (data.success) {
         if (data.reposted) {
           showToast(data.message || 'Post reposted successfully!', 'success');
@@ -3495,26 +3556,20 @@
             countSpan.textContent = data.repost_count;
             countSpan.classList.add('show');
           }
-          setTimeout(() => { location.reload(); }, 800);
         } else {
           showToast(data.message || 'Repost removed', 'info');
           button.setAttribute('data-reposted', 'false');
           icon.classList.remove('reposted');
-          if (data.repost_count > 0) {
-            countSpan.textContent = data.repost_count;
-          } else {
-            countSpan.classList.remove('show');
-          }
-          setTimeout(() => { location.reload(); }, 800);
+          if (data.repost_count > 0) countSpan.textContent = data.repost_count;
+          else countSpan.classList.remove('show');
         }
+        setTimeout(() => { location.reload(); }, 800);
       } else {
         showToast('Error: ' + data.error, 'error');
         button.innerHTML = originalText;
         button.disabled = false;
       }
-    })
-    .catch(error => {
-      console.error('Error:', error);
+    }).catch(error => {
       showToast('Something went wrong. Please try again.', 'error');
       button.innerHTML = originalText;
       button.disabled = false;
@@ -3525,7 +3580,6 @@
     const textElement = document.getElementById(`kvibe-text-${postId}`);
     const button = textElement.nextElementSibling;
     if (!button || !button.classList.contains('kvibe-text-toggle')) return;
-    
     const span = button.querySelector('span');
     const icon = button.querySelector('i');
     
@@ -3545,40 +3599,20 @@
   }
   
   // ==========================================
-  // MEDIA & CAROUSEL FUNCTIONS
+  // CAROUSEL & MEDIA UTILS
   // ==========================================
   function kvibeSlideMixedCarousel(postId, direction) {
     const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
     const track = document.getElementById(`kvibe-mixed-track-${postId}`);
     const totalSlides = parseInt(carousel.getAttribute('data-total'));
-    let currentSlide = parseInt(carousel.getAttribute('data-slide'));
-    
-    currentSlide += direction;
+    let currentSlide = parseInt(carousel.getAttribute('data-slide')) + direction;
     if (currentSlide < 0) currentSlide = totalSlides - 1;
     if (currentSlide >= totalSlides) currentSlide = 0;
     
     track.style.transform = `translateX(-${currentSlide * 100}%)`;
     carousel.setAttribute('data-slide', currentSlide);
-    
-    const indicators = carousel.querySelectorAll('.kvibe-mixed-indicator');
-    indicators.forEach((indicator, index) => {
-      indicator.classList.toggle('active', index === currentSlide);
-    });
-  }
-  
-  function kvibeGoToMixedSlide(postId, slideIndex) {
-    const carousel = document.getElementById(`kvibe-mixed-carousel-${postId}`);
-    const track = document.getElementById(`kvibe-mixed-track-${postId}`);
-    const totalSlides = parseInt(carousel.getAttribute('data-total'));
-    
-    if (slideIndex < 0 || slideIndex >= totalSlides) return;
-    
-    track.style.transform = `translateX(-${slideIndex * 100}%)`;
-    carousel.setAttribute('data-slide', slideIndex);
-    
-    const indicators = carousel.querySelectorAll('.kvibe-mixed-indicator');
-    indicators.forEach((indicator, index) => {
-      indicator.classList.toggle('active', index === slideIndex);
+    carousel.querySelectorAll('.kvibe-mixed-indicator').forEach((ind, index) => {
+      ind.classList.toggle('active', index === currentSlide);
     });
   }
   
@@ -3586,72 +3620,15 @@
     const carousel = document.getElementById(`kvibe-carousel-${postId}`);
     const track = document.getElementById(`kvibe-track-${postId}`);
     const totalSlides = parseInt(carousel.getAttribute('data-total'));
-    let currentSlide = parseInt(carousel.getAttribute('data-slide'));
-    
-    currentSlide += direction;
+    let currentSlide = parseInt(carousel.getAttribute('data-slide')) + direction;
     if (currentSlide < 0) currentSlide = totalSlides - 1;
     if (currentSlide >= totalSlides) currentSlide = 0;
     
     track.style.transform = `translateX(-${currentSlide * 100}%)`;
     carousel.setAttribute('data-slide', currentSlide);
-    
-    const indicators = carousel.querySelectorAll('.kvibe-indicator');
-    indicators.forEach((indicator, index) => {
-      indicator.classList.toggle('active', index === currentSlide);
+    carousel.querySelectorAll('.kvibe-indicator').forEach((ind, index) => {
+      ind.classList.toggle('active', index === currentSlide);
     });
-  }
-  
-  function kvibeDownloadImage(postId, url, filename) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `kvibe_post_${postId}_${filename}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-  
-  function kvibeDownloadVideo(postId, url) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `kvibe_post_${postId}_video.mp4`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-  
-  // 🔴 FIX: Synchronous playback logic to bypass browser restrictions
-  function kvibeTogglePlayPause(videoId, event) {
-    event.stopPropagation();
-    const video = document.getElementById(videoId);
-    
-    if (video.hasAttribute('data-src')) {
-      const source = video.querySelector('source[data-src]');
-      if (source) {
-        // Set src directly on video element for better iOS compatibility
-        video.src = source.dataset.src; 
-        video.load();
-        video.removeAttribute('data-src');
-        
-        // Play synchronously (browsers allow this right after a click event)
-        let playPromise = video.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            console.log("Playback prevented by browser:", error);
-          });
-        }
-        
-        video.parentElement.classList.remove('paused');
-        return;
-      }
-    }
-    
-    if (video.paused) {
-      video.play();
-      video.parentElement.classList.remove('paused');
-    } else {
-      video.pause();
-      video.parentElement.classList.add('paused');
-    }
   }
 
   // ==========================================
@@ -3659,7 +3636,7 @@
   // ==========================================
   document.addEventListener('DOMContentLoaded', function() {
     
-    // Setup Modals
+    // Setup Logout Modals
     const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
     if (desktopLogoutIcon) {
       desktopLogoutIcon.addEventListener('click', function(e) {
@@ -3683,12 +3660,11 @@
       }
     });
     
-    // WebSocket connection
+    // WebSocket
     if ("{{ request.user.is_authenticated }}" === "True") {
       const userId = "{{ request.user.id }}";
       const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
       const ws = new WebSocket(`${protocol}${window.location.host}/ws/user/${userId}/`);
-      
       ws.onmessage = function(event) {
         const data = JSON.parse(event.data);
         if (data.type === 'unread_update') {
@@ -3700,9 +3676,8 @@
           if (channelItem) {
             const badgeSpan = channelItem.querySelector('.kvibe-channel-unread');
             if (unreadCount > 0) {
-              if (badgeSpan) {
-                badgeSpan.textContent = unreadCount;
-              } else {
+              if (badgeSpan) badgeSpan.textContent = unreadCount;
+              else {
                 const newBadge = document.createElement('span');
                 newBadge.className = 'kvibe-channel-unread';
                 newBadge.id = `channel-badge-${channelId}`;
@@ -3726,7 +3701,7 @@
       };
     }
     
-    // Skeleton Loader Reveal
+    // Skeleton Reveal & Setup Observers
     function kvibeRevealContent() {
       const skelFeed = document.getElementById('kvibe-skeleton-feed');
       const realFeed = document.getElementById('kvibe-real-feed');
@@ -3740,6 +3715,10 @@
 
       if (typeof kvibeInitAllCarouselSwipe === 'function') kvibeInitAllCarouselSwipe();
       if (typeof htmx !== 'undefined' && realFeed) htmx.process(realFeed);
+
+      // Initialize lazy loaders once content is revealed
+      initVideoObserver();
+      initImageObserver();
     }
 
     if (document.readyState === 'complete') {
@@ -3748,53 +3727,17 @@
       window.addEventListener('load', function() { setTimeout(kvibeRevealContent, 400); });
     }
 
-    // 🔴 FIX: Define Observers globally so HTMX dynamically loaded elements can use them
-    videoObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const video = entry.target;
-          const source = video.querySelector('source[data-src]');
-          
-          if (source && video.hasAttribute('data-src')) {
-            video.src = source.dataset.src; // iOS compatibility
-            video.load();
-            video.removeAttribute('data-src');
-          }
-          videoObserver.unobserve(video);
-        }
-      });
-    }, { rootMargin: '300px' });
-    
-    document.querySelectorAll('video[data-src]').forEach(video => videoObserver.observe(video));
-    
-    imgObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const img = entry.target;
-          img.style.opacity = '1';
-          imgObserver.unobserve(img);
-        }
-      });
-    });
-    document.querySelectorAll('img[loading="lazy"]').forEach(img => imgObserver.observe(img));
-    
-    // Text expansion logic
+    // Text Expanders Setup
     document.querySelectorAll('.kvibe-post-text').forEach(textElement => {
       const hasHTML = /<\/?[a-z][\s\S]*>/i.test(textElement.innerHTML);
-      if (hasHTML) {
-        const textContent = textElement.textContent || textElement.innerText;
-        if (textContent.length > 150) {
-          textElement.classList.add('collapsed');
-          if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kvibe-text-toggle')) {
-            const toggleBtn = document.createElement('button');
-            toggleBtn.className = 'kvibe-text-toggle';
-            toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
-            toggleBtn.onclick = function() {
-              const postId = textElement.id.replace('kvibe-text-', '');
-              kvibeToggleText(postId);
-            };
-            textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
-          }
+      if (hasHTML && (textElement.textContent || textElement.innerText).length > 150) {
+        textElement.classList.add('collapsed');
+        if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kvibe-text-toggle')) {
+          const toggleBtn = document.createElement('button');
+          toggleBtn.className = 'kvibe-text-toggle';
+          toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
+          toggleBtn.onclick = function() { kvibeToggleText(textElement.id.replace('kvibe-text-', '')); };
+          textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
         }
       }
     });
@@ -3808,7 +3751,7 @@
       }
     });
     
-    // Sidebar scroll persistence
+    // Sidebar Scroll Memory
     const leftSidebar = document.querySelector('.kvibe-left-sidebar');
     const rightSidebar = document.querySelector('.kvibe-right-sidebar');
     if (leftSidebar) {
@@ -3821,31 +3764,10 @@
       const savedScroll = localStorage.getItem('kf_right_sidebar_scroll');
       if (savedScroll) rightSidebar.scrollTop = parseInt(savedScroll);
     }
-    
-    // Channel List Animation Observer
-    const listContainer = document.getElementById('following-list-container');
-    if (listContainer) {
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-            const addedNode = mutation.addedNodes[0];
-            if (addedNode.classList && addedNode.classList.contains('kvibe-channel-nav-item')) {
-              addedNode.classList.add('kvibe-new-update-flash');
-              setTimeout(() => addedNode.classList.remove('kvibe-new-update-flash'), 1500);
-            }
-          }
-        });
-      });
-      observer.observe(listContainer, { childList: true });
-    }
-    
-    document.addEventListener('click', function(e) {
-      if (e.target.tagName === 'A' && e.target.closest('.kvibe-post-text')) return;
-    });
   });
 
   // ==========================================
-  // SIDEBAR FOLLOWING / FOLLOWERS TABS
+  // SIDEBAR TABS
   // ==========================================
   function kvibeSwitchTab(tab, btn) {
     const container = btn.closest('.kvibe-sidebar-social');
@@ -3865,21 +3787,18 @@
     document.getElementById('kvibe-mobile-sidebar-overlay').classList.add('active');
     document.body.style.overflow = 'hidden';
   }
-
   function kvibeCloseMobileSidebar() {
     document.getElementById('kvibe-mobile-right-sidebar').classList.remove('open');
     document.getElementById('kvibe-mobile-sidebar-overlay').classList.remove('active');
     document.body.style.overflow = '';
   }
-
   (function() {
     const sidebar = document.getElementById('kvibe-mobile-right-sidebar');
     if (sidebar) {
         let startX = 0;
         sidebar.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; }, { passive: true });
         sidebar.addEventListener('touchend', function(e) {
-          const diff = e.changedTouches[0].clientX - startX;
-          if (diff > 60) kvibeCloseMobileSidebar();
+          if (e.changedTouches[0].clientX - startX > 60) kvibeCloseMobileSidebar();
         }, { passive: true });
     }
   })();
@@ -3890,45 +3809,28 @@
   var _kvcsMediaRecorder = null;
   var _kvcsAudioChunks   = [];
   var _kvcsCurrentPostId = null;
-  var _kvcsQuickReplies = [
-    'This is amazing!','Great post!','Love the vibe!',
-    'Facts only.','Well said!','Totally agree.',
-    'Big mood.','We move!','So inspiring!'
-  ];
+  var _kvcsQuickReplies = ['This is amazing!','Great post!','Love the vibe!','Facts only.','Well said!','Totally agree.','Big mood.','We move!','So inspiring!'];
 
   function kvibeOpenCommentSheet(postId) {
     _kvcsCurrentPostId = postId;
     var sheet  = document.getElementById('commentSheet');
     var form   = document.getElementById('modalPostForm');
     var listEl = document.getElementById('modal_comment_list');
-
     kvibeCSResetInputUI();
     sheet.classList.add('active');
     document.body.style.overflow = 'hidden';
-
     form.setAttribute('hx-post', '/comments/' + postId );
     htmx.process(form);
-
     listEl.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#8e8e8e;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Loading...</div>';
-    htmx.ajax('GET', '/comment/' + postId, {
-      target: '#modal_comment_list',
-      select: '#comment_list',
-      swap: 'innerHTML'
-    });
-
-    setTimeout(function() {
-      var ta = document.getElementById('modalTextInput');
-      if (ta) ta.focus();
-    }, 300);
+    htmx.ajax('GET', '/comment/' + postId, { target: '#modal_comment_list', select: '#comment_list', swap: 'innerHTML' });
+    setTimeout(function() { var ta = document.getElementById('modalTextInput'); if (ta) ta.focus(); }, 300);
   }
 
   function kvibeCloseCommentSheet() {
     var sheet = document.getElementById('commentSheet');
     sheet.classList.remove('active');
     document.body.style.overflow = '';
-    if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') {
-      _kvcsMediaRecorder.stop();
-    }
+    if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') _kvcsMediaRecorder.stop();
     kvibeCSResetInputUI();
     _kvcsCurrentPostId = null;
   }
@@ -3937,10 +3839,7 @@
     if (evt.target && evt.target.id === 'modalPostForm' && evt.detail.successful) {
       if (_kvcsCurrentPostId) {
         var el = document.getElementById('kvibe-comment-count-' + _kvcsCurrentPostId);
-        if (el) {
-          var n = parseInt(el.textContent.replace(/,/g, '')) || 0;
-          el.textContent = (n + 1).toLocaleString();
-        }
+        if (el) el.textContent = ((parseInt(el.textContent.replace(/,/g, '')) || 0) + 1).toLocaleString();
       }
     }
   });
@@ -3953,50 +3852,36 @@
   }
 
   function kvibeCSUpdateSendBtn() {
-    var ta    = document.getElementById('modalTextInput');
-    var send  = document.getElementById('modalSendBtn');
-    var mic   = document.getElementById('modalMicBtn');
-    var imgIn = document.getElementById('modal_image_input');
+    var ta = document.getElementById('modalTextInput'), send = document.getElementById('modalSendBtn');
+    var mic = document.getElementById('modalMicBtn'), imgIn = document.getElementById('modal_image_input');
     var audIn = document.getElementById('modal_audio_file');
-    var has = (ta && ta.value.trim().length > 0)
-           || (imgIn && imgIn.files && imgIn.files.length > 0)
-           || (audIn && audIn.files && audIn.files.length > 0);
+    var has = (ta && ta.value.trim().length > 0) || (imgIn && imgIn.files && imgIn.files.length > 0) || (audIn && audIn.files && audIn.files.length > 0);
     if (send) send.style.display = has ? 'flex' : 'none';
-    if (mic)  { if (has) mic.classList.add('record-mode-hidden'); else mic.classList.remove('record-mode-hidden'); }
+    if (mic) { if (has) mic.classList.add('record-mode-hidden'); else mic.classList.remove('record-mode-hidden'); }
   }
 
   function kvibeCSResetInputUI() {
-    var ta      = document.getElementById('modalTextInput');
-    var send    = document.getElementById('modalSendBtn');
-    var mic     = document.getElementById('modalMicBtn');
-    var audPrev = document.getElementById('modalAudioPreview');
-    var audIn   = document.getElementById('modal_audio_file');
-    var imgIn   = document.getElementById('modal_image_input');
-    var aiBox   = document.getElementById('kvibe-cs-ai-box');
-    var stopBtn = document.getElementById('modalStopBtn');
-    var status  = document.getElementById('modalRecordingStatus');
-    var preview = document.getElementById('modalPreviewAudio');
-    if (ta)      { ta.value = ''; ta.style.height = 'auto'; ta.classList.remove('record-mode-hidden'); }
-    if (send)    send.style.display = 'none';
-    if (mic)     { mic.style.display = ''; mic.classList.remove('record-mode-hidden'); }
+    var ta = document.getElementById('modalTextInput'), send = document.getElementById('modalSendBtn'), mic = document.getElementById('modalMicBtn');
+    var audPrev = document.getElementById('modalAudioPreview'), audIn = document.getElementById('modal_audio_file'), imgIn = document.getElementById('modal_image_input');
+    var aiBox = document.getElementById('kvibe-cs-ai-box'), stopBtn = document.getElementById('modalStopBtn');
+    var status = document.getElementById('modalRecordingStatus'), preview = document.getElementById('modalPreviewAudio');
+    if (ta) { ta.value = ''; ta.style.height = 'auto'; ta.classList.remove('record-mode-hidden'); }
+    if (send) send.style.display = 'none';
+    if (mic) { mic.style.display = ''; mic.classList.remove('record-mode-hidden'); }
     if (audPrev) audPrev.classList.add('record-mode-hidden');
-    if (audIn)   audIn.value = '';
-    if (imgIn)   imgIn.value = '';
-    if (aiBox)   { aiBox.style.display = 'none'; aiBox.innerHTML = ''; }
+    if (audIn) audIn.value = '';
+    if (imgIn) imgIn.value = '';
+    if (aiBox) { aiBox.style.display = 'none'; aiBox.innerHTML = ''; }
     if (stopBtn) stopBtn.style.display = 'none';
-    if (status)  status.innerHTML = '';
+    if (status) status.innerHTML = '';
     if (preview) { preview.src = ''; preview.controls = false; preview.load(); }
   }
 
   document.addEventListener('DOMContentLoaded', function() {
-    var micBtn     = document.getElementById('modalMicBtn');
-    var stopBtn    = document.getElementById('modalStopBtn');
-    var deleteBtn  = document.getElementById('modalDeleteAudioBtn');
-    var textInput  = document.getElementById('modalTextInput');
-    var audioInput = document.getElementById('modal_audio_file');
-    var audPrev    = document.getElementById('modalAudioPreview');
-    var previewAud = document.getElementById('modalPreviewAudio');
-    var statusEl   = document.getElementById('modalRecordingStatus');
+    var micBtn = document.getElementById('modalMicBtn'), stopBtn = document.getElementById('modalStopBtn'), deleteBtn = document.getElementById('modalDeleteAudioBtn');
+    var textInput = document.getElementById('modalTextInput'), audioInput = document.getElementById('modal_audio_file');
+    var audPrev = document.getElementById('modalAudioPreview'), previewAud = document.getElementById('modalPreviewAudio');
+    var statusEl = document.getElementById('modalRecordingStatus');
     if (!micBtn) return;
 
     micBtn.addEventListener('click', async function() {
@@ -4007,41 +3892,25 @@
         _kvcsAudioChunks = [];
         _kvcsMediaRecorder.ondataavailable = function(e) { _kvcsAudioChunks.push(e.data); };
         _kvcsMediaRecorder.onstop = function() {
-          stream.getTracks().forEach(function(t) { t.stop(); });
+          stream.getTracks().forEach(t => t.stop());
           var blob = new Blob(_kvcsAudioChunks, { type: 'audio/webm' });
-          var file = new File([blob], 'recording.webm', { type: 'audio/webm' });
-          var dt = new DataTransfer();
-          dt.items.add(file);
+          var dt = new DataTransfer(); dt.items.add(new File([blob], 'recording.webm', { type: 'audio/webm' }));
           audioInput.files = dt.files;
-          previewAud.src = URL.createObjectURL(blob);
-          previewAud.controls = true;
-          stopBtn.style.display = 'none';
-          statusEl.innerHTML = '';
-          kvibeCSUpdateSendBtn();
+          previewAud.src = URL.createObjectURL(blob); previewAud.controls = true;
+          stopBtn.style.display = 'none'; statusEl.innerHTML = ''; kvibeCSUpdateSendBtn();
         };
         _kvcsMediaRecorder.start();
-        textInput.classList.add('record-mode-hidden');
-        audPrev.classList.remove('record-mode-hidden');
-        micBtn.classList.add('record-mode-hidden');
-        stopBtn.style.display = 'flex';
+        textInput.classList.add('record-mode-hidden'); audPrev.classList.remove('record-mode-hidden');
+        micBtn.classList.add('record-mode-hidden'); stopBtn.style.display = 'flex';
         statusEl.innerHTML = '<i class="fa-solid fa-circle recording"></i> Recording...';
-      } catch(e) {
-        alert('Microphone access was denied. Please allow it in your browser settings.');
-      }
+      } catch(e) { alert('Microphone access was denied. Please allow it in your browser settings.'); }
     });
 
-    stopBtn.addEventListener('click', function() {
-      if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') _kvcsMediaRecorder.stop();
-    });
-
+    stopBtn.addEventListener('click', function() { if (_kvcsMediaRecorder && _kvcsMediaRecorder.state === 'recording') _kvcsMediaRecorder.stop(); });
     deleteBtn.addEventListener('click', function() { kvibeCSResetInputUI(); });
 
     var sheet = document.getElementById('commentSheet');
-    if (sheet) {
-      sheet.addEventListener('click', function(e) {
-        if (e.target === sheet) kvibeCloseCommentSheet();
-      });
-    }
+    if (sheet) sheet.addEventListener('click', function(e) { if (e.target === sheet) kvibeCloseCommentSheet(); });
   });
 
   function kvibeCSToggleAI() {
@@ -4049,20 +3918,14 @@
     var hidden = !box.style.display || box.style.display === 'none';
     if (!hidden) { box.style.display = 'none'; return; }
     box.innerHTML = '';
-    _kvcsQuickReplies.slice().sort(function() { return 0.5 - Math.random(); }).slice(0, 6)
-      .forEach(function(text) {
-        var chip = document.createElement('button');
-        chip.type = 'button';
-        chip.style.cssText = 'display:inline-block;background:#f5f5f5;border:1px solid #dbdbdb;border-radius:16px;padding:6px 12px;font-size:13px;color:#262626;cursor:pointer;font-family:inherit;margin-right:6px;white-space:nowrap;';
-        chip.textContent = text;
-        chip.onclick = function() {
-          var ta = document.getElementById('modalTextInput');
-          ta.value = text;
-          kvibeCSOnInput();
-          ta.focus();
-        };
-        box.appendChild(chip);
-      });
+    _kvcsQuickReplies.slice().sort(() => 0.5 - Math.random()).slice(0, 6).forEach(function(text) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.style.cssText = 'display:inline-block;background:#f5f5f5;border:1px solid #dbdbdb;border-radius:16px;padding:6px 12px;font-size:13px;color:#262626;cursor:pointer;font-family:inherit;margin-right:6px;white-space:nowrap;';
+      chip.textContent = text;
+      chip.onclick = function() { var ta = document.getElementById('modalTextInput'); ta.value = text; kvibeCSOnInput(); ta.focus(); };
+      box.appendChild(chip);
+    });
     box.style.display = 'flex';
   }
 
@@ -4076,57 +3939,29 @@
       if (!lp || (!lp.title && !lp.image)) return null;
       const a = document.createElement('a');
       a.className = 'kvibe-post-link-preview';
-      a.href = lp.url || '#';
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
+      a.href = lp.url || '#'; a.target = '_blank'; a.rel = 'noopener noreferrer';
       a.addEventListener('click', e => e.stopPropagation());
 
       if (lp.image) {
         const img = document.createElement('img');
-        img.className = 'kvibe-plp-image';
-        img.src = lp.image;
-        img.alt = '';
+        img.className = 'kvibe-plp-image'; img.src = lp.image; img.alt = '';
         img.onerror = () => { img.style.display = 'none'; };
         a.appendChild(img);
       }
 
-      const body = document.createElement('div');
-      body.className = 'kvibe-plp-body';
-
-      if (lp.domain) {
-        const d = document.createElement('div');
-        d.className = 'kvibe-plp-domain';
-        d.textContent = lp.domain;
-        body.appendChild(d);
-      }
-      if (lp.title) {
-        const t = document.createElement('div');
-        t.className = 'kvibe-plp-title';
-        t.textContent = lp.title;
-        body.appendChild(t);
-      }
-      if (lp.description) {
-        const desc = document.createElement('div');
-        desc.className = 'kvibe-plp-desc';
-        desc.textContent = lp.description;
-        body.appendChild(desc);
-      }
-
+      const body = document.createElement('div'); body.className = 'kvibe-plp-body';
+      if (lp.domain) { const d = document.createElement('div'); d.className = 'kvibe-plp-domain'; d.textContent = lp.domain; body.appendChild(d); }
+      if (lp.title) { const t = document.createElement('div'); t.className = 'kvibe-plp-title'; t.textContent = lp.title; body.appendChild(t); }
+      if (lp.description) { const desc = document.createElement('div'); desc.className = 'kvibe-plp-desc'; desc.textContent = lp.description; body.appendChild(desc); }
       a.appendChild(body);
       return a;
     }
 
     async function kvibeFetchAndInjectLp(article) {
-      const rawContent = article.dataset.lpUrl || '';
-      const match = rawContent.match(URL_RE);
+      const match = (article.dataset.lpUrl || '').match(URL_RE);
       if (!match) return;
-
-      const url = match[1];
-      const slot = article.querySelector('.kvibe-lp-slot');
-      if (!slot) return;
-      if (article.querySelector('.kvibe-post-link-preview')) return;
-      if (article.dataset.lpFetching) return;
-      
+      const url = match[1], slot = article.querySelector('.kvibe-lp-slot');
+      if (!slot || article.querySelector('.kvibe-post-link-preview') || article.dataset.lpFetching) return;
       article.dataset.lpFetching = '1';
 
       try {
@@ -4138,23 +3973,15 @@
           const card = kvibeBuildFeedLpCard({ ...data, url });
           if (card) slot.appendChild(card);
         }
-      } catch (_) { /* silent fallback */ }
+      } catch (_) { }
     }
 
-    function kvibeScanCards(root) {
-      (root || document).querySelectorAll('.kvibe-post[data-lp-url]').forEach(article => {
-        kvibeFetchAndInjectLp(article);
-      });
-    }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => kvibeScanCards());
-    } else {
-      kvibeScanCards();
-    }
+    function kvibeScanCards(root) { (root || document).querySelectorAll('.kvibe-post[data-lp-url]').forEach(kvibeFetchAndInjectLp); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => kvibeScanCards());
+    else kvibeScanCards();
     window.kvibeScanFeedLpCards = kvibeScanCards;
   })();
-</script>
-</body>
+</script></body>
 </html>
+
 
