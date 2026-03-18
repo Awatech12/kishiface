@@ -470,7 +470,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     if cursor_dt:
         base_qs = base_qs.filter(created_at__lt=cursor_dt)
     
-    # Fetch more than needed for scoring - with COMPLETE prefetching
+    # Fetch more than needed for scoring - with CORRECTED prefetching
     raw_posts = list(
         base_qs
         .select_related(
@@ -478,12 +478,11 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
             'original_post', 'original_post__author', 'original_post__author__profile',
         )
         .prefetch_related(
-            'vibes',                # CRITICAL: Prefetch vibes to avoid N+1 queries
+            'vibes',                # Prefetch vibes to avoid N+1 queries
             'vibes__user',           # Prefetch vibe users if needed
             'comments',              # Prefetch comments
             'comments__author',      # Prefetch comment authors
-            'reposts',               # Prefetch reposts
-            'reposts__user',         # Prefetch repost users
+            'reposts',               # FIXED: Just prefetch the ManyToManyField without __user
             'images',                # Prefetch images
             'likes',                 # Prefetch likes for backward compatibility
         )
@@ -510,7 +509,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         if hasattr(post, 'comments') and post.comments.filter(author=user).exists():
             engaged_authors.add(post.author_id)
         # Check reposts (already prefetched ✅)
-        if hasattr(post, 'reposts') and post.reposts.filter(user=user).exists():
+        if hasattr(post, 'reposts') and post.reposts.filter(id=user.id).exists():  # FIXED: Use filter(id=user.id) instead of filter(user=user)
             engaged_authors.add(post.author_id)
         # Check likes (already prefetched ✅)
         if hasattr(post, 'likes') and post.likes.filter(id=user.id).exists():
@@ -555,7 +554,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         # You've already interacted with this specific post - reduce to avoid repetition
         user_has_vibe = hasattr(post, 'vibes') and post.vibes.filter(user=user).exists()
         user_has_comment = hasattr(post, 'comments') and post.comments.filter(author=user).exists()
-        user_has_repost = hasattr(post, 'reposts') and post.reposts.filter(user=user).exists()
+        user_has_repost = hasattr(post, 'reposts') and post.reposts.filter(id=user.id).exists()  # FIXED: Use filter(id=user.id)
         user_has_like = hasattr(post, 'likes') and post.likes.filter(id=user.id).exists()
         
         if user_has_vibe or user_has_comment or user_has_repost or user_has_like:
@@ -692,7 +691,6 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
             })
     
     return feed_items, next_cursor
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 
