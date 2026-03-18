@@ -458,33 +458,44 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     # ========== BUILD CANDIDATE POSTS FROM MULTIPLE SOURCES ==========
     
     # 1. Base feed: posts from followed users and yourself
+    # Include both original posts and reposts from followed users
     base_qs = Post.objects.all()
     if following_ids:
         base_qs = Post.objects.filter(
-            Q(author__in=following_ids) |
-            Q(author=user) |
-            Q(is_repost=True, author__in=following_ids)
+            Q(author__in=following_ids) |  # Original posts from followed users
+            Q(author=user) |                 # Your own posts
+            Q(is_repost=True, author__in=following_ids)  # Reposts by followed users
+        )
+    else:
+        # If not following anyone, show some public posts
+        base_qs = Post.objects.filter(
+            Q(author=user) |  # Your own posts
+            Q(is_repost=True, author=user)  # Your reposts
         )
     
     # Apply cursor if provided
     if cursor_dt:
         base_qs = base_qs.filter(created_at__lt=cursor_dt)
     
-    # Fetch more than needed for scoring - with CORRECTED prefetching
+    # IMPORTANT: Include reposts in the queryset
+    # We need to select related fields for both the repost AND the original post
     raw_posts = list(
         base_qs
         .select_related(
-            'author', 'author__profile',
-            'original_post', 'original_post__author', 'original_post__author__profile',
+            'author', 
+            'author__profile',
+            'original_post', 
+            'original_post__author', 
+            'original_post__author__profile',
         )
         .prefetch_related(
-            'vibes',                # Prefetch vibes to avoid N+1 queries
-            'vibes__user',           # Prefetch vibe users if needed
-            'comments',              # Prefetch comments
-            'comments__author',      # Prefetch comment authors
-            'reposts',               # FIXED: Just prefetch the ManyToManyField without __user
-            'images',                # Prefetch images
-            'likes',                 # Prefetch likes for backward compatibility
+            'vibes',
+            'vibes__user',
+            'comments',
+            'comments__author',
+            'reposts',  # Just prefetch the ManyToManyField
+            'images',
+            'likes',
         )
         .annotate(
             vibe_count    = Count('vibes',    distinct=True),
@@ -501,17 +512,17 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     
     # Get authors whose posts you've engaged with recently
     engaged_authors = set()
-    for post in raw_posts[:20]:  # Check recent posts
-        # Check vibes (already prefetched ✅)
+    for post in raw_posts[:20]:
+        # Check vibes
         if hasattr(post, 'vibes') and post.vibes.filter(user=user).exists():
             engaged_authors.add(post.author_id)
-        # Check comments (already prefetched ✅)
+        # Check comments
         if hasattr(post, 'comments') and post.comments.filter(author=user).exists():
             engaged_authors.add(post.author_id)
-        # Check reposts (already prefetched ✅)
-        if hasattr(post, 'reposts') and post.reposts.filter(id=user.id).exists():  # FIXED: Use filter(id=user.id) instead of filter(user=user)
+        # Check reposts
+        if hasattr(post, 'reposts') and post.reposts.filter(id=user.id).exists():
             engaged_authors.add(post.author_id)
-        # Check likes (already prefetched ✅)
+        # Check likes
         if hasattr(post, 'likes') and post.likes.filter(id=user.id).exists():
             engaged_authors.add(post.author_id)
     
@@ -520,18 +531,24 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     scored_posts = []
     
     for post in raw_posts:
-        # Base engagement score (using prefetched data)
+        # For reposts, we might want to consider the original post's engagement
+        # But we'll score the repost itself based on its own engagement
         vibe_count = post.vibes.count() if hasattr(post, 'vibes') else 0
         comment_count = post.comments.count() if hasattr(post, 'comments') else 0
         repost_count = post.reposts.count() if hasattr(post, 'reposts') else 0
         like_count = post.likes.count() if hasattr(post, 'likes') else 0
         
+        # Calculate engagement score (weighted)
         engagement = (
             vibe_count * 4 +
             comment_count * 3 +
             repost_count * 2 +
             like_count * 1
         )
+        
+        # Boost reposts slightly to encourage sharing
+        if post.is_repost:
+            engagement = engagement * 1.2  # 20% boost for reposts
         
         # Recency score (0-1), newer = higher
         hours_old = max(1, (now - post.created_at).total_seconds() / 3600)
@@ -543,18 +560,25 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         # ===== 2. BEHAVIOR-BASED =====
         behavior_score = 1.0
         
+        # Determine the actual author (original author for reposts)
+        actual_author_id = (
+            post.original_post.author_id
+            if post.is_repost and post.original_post
+            else post.author_id
+        )
+        
         # Author you like (but don't follow) - boost
-        if post.author_id in liked_authors:
+        if actual_author_id in liked_authors:
             behavior_score *= 2.0
         
         # Author you've engaged with before - boost
-        if post.author_id in engaged_authors:
+        if actual_author_id in engaged_authors:
             behavior_score *= 1.5
         
         # You've already interacted with this specific post - reduce to avoid repetition
         user_has_vibe = hasattr(post, 'vibes') and post.vibes.filter(user=user).exists()
         user_has_comment = hasattr(post, 'comments') and post.comments.filter(author=user).exists()
-        user_has_repost = hasattr(post, 'reposts') and post.reposts.filter(id=user.id).exists()  # FIXED: Use filter(id=user.id)
+        user_has_repost = hasattr(post, 'reposts') and post.reposts.filter(id=user.id).exists()
         user_has_like = hasattr(post, 'likes') and post.likes.filter(id=user.id).exists()
         
         if user_has_vibe or user_has_comment or user_has_repost or user_has_like:
@@ -563,10 +587,9 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         # ===== 3. VIBE-BASED =====
         vibe_score = 1.0
         
-        # Get vibes on this post to see if they match user's taste (already prefetched ✅)
+        # Get vibes on this post
         post_vibes = post.vibes.all() if hasattr(post, 'vibes') else []
         if post_vibes:
-            # Calculate how well post's vibes match user's preference
             vibe_match = 0
             vibe_count = 0
             for vibe in post_vibes:
@@ -575,31 +598,24 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
                     vibe_count += 1
             
             if vibe_count > 0:
-                vibe_match = vibe_match / vibe_count  # Average
+                vibe_match = vibe_match / vibe_count
                 vibe_score = vibe_match
         
         # Posts from users with similar vibe taste - boost
-        if post.author_id in vibe_similar_users:
+        if actual_author_id in vibe_similar_users:
             vibe_score *= 1.3
         
         # ===== 4. NETWORK-BASED =====
         network_score = 1.0
         
-        # Friend-of-friend discovery
-        actual_author_id = (
-            post.original_post.author_id
-            if post.is_repost and post.original_post
-            else post.author_id
-        )
-        
-        # Store scores
+        # Store scores with actual author ID
         scored_posts.append({
             'post': post,
             'scores': {
                 'rule': rule_score,
                 'behavior': behavior_score,
                 'vibe': vibe_score,
-                'network': network_score,  # Will be updated
+                'network': network_score,
             },
             'author_id': actual_author_id,
         })
@@ -610,37 +626,30 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     # Update network scores for FoF posts
     for item in scored_posts:
         if item['author_id'] in fof_ids:
-            # Boost FoF posts
             via_count = len(fof_via_map.get(item['author_id'], []))
-            # More mutual friends = higher boost
             item['scores']['network'] = 1.0 + (via_count * 0.3)
     
     # ========== COMBINE SCORES WITH EXPLORATION ==========
     for item in scored_posts:
-        # Add random exploration factor
         exploration_factor = 1.0 + random.uniform(-0.2, 0.3)
         
-        # Weighted combination
         final_score = (
-            item['scores']['rule'] * 2.5 +           # Engagement + recency
-            item['scores']['behavior'] * 1.5 +       # Your behavior patterns
-            item['scores']['vibe'] * 2.0 +           # Vibe taste matching
-            item['scores']['network'] * 1.2 +        # Network discovery
-            exploration_factor                         # Random exploration
+            item['scores']['rule'] * 2.5 +
+            item['scores']['behavior'] * 1.5 +
+            item['scores']['vibe'] * 2.0 +
+            item['scores']['network'] * 1.2 +
+            exploration_factor
         )
         item['final_score'] = final_score
     
     # ========== SORT AND SELECT ==========
-    # Sort by final score
     scored_posts.sort(key=lambda x: x['final_score'], reverse=True)
-    
-    # Take top page_size posts
     selected_posts = [item['post'] for item in scored_posts[:page_size]]
     
-    # Calculate next cursor from the *oldest* post in the original batch
+    # Calculate next cursor
     next_cursor = raw_posts[-1].created_at.timestamp() if len(raw_posts) >= page_size * 3 else None
     
-    # ========== BUILD FEED ITEMS WITH FoF DATA ==========
+    # ========== BUILD FEED ITEMS ==========
     feed_items = []
     suggestion_users = list(
         User.objects.exclude(id__in=following_ids)
@@ -650,6 +659,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     )
     
     for i, post in enumerate(selected_posts, 1):
+        # For reposts, use original author for FoF detection
         actual_author_id = (
             post.original_post.author_id
             if post.is_repost and post.original_post
@@ -658,22 +668,23 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         is_fof  = actual_author_id in fof_ids
         fof_via = fof_via_map.get(actual_author_id, []) if is_fof else []
         
-        # Add vibe match score to context for UI (optional)
+        # Get vibe match score
         post_match_score = None
         for item in scored_posts:
             if item['post'].post_id == post.post_id:
                 post_match_score = round(item['scores']['vibe'], 1)
                 break
         
+        # Add post to feed
         feed_items.append({
             'type': 'post',
             'data': post,
             'is_fof': is_fof,
             'fof_via': fof_via,
-            'vibe_match': post_match_score,  # Optional: show how well post matches user's taste
+            'vibe_match': post_match_score,
         })
         
-        # Insert user suggestion every 4th post (for discovery)
+        # Insert user suggestion every 4th post
         if i % 4 == 2 and suggestion_users:
             suggestion_user = suggestion_users.pop(0)
             # Determine suggestion reason
@@ -691,7 +702,6 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
             })
     
     return feed_items, next_cursor
-
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required(login_url='/')
