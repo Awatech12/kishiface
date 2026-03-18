@@ -324,79 +324,333 @@ def _build_fof(following_ids_set, current_user_id):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Feed helpers — shared between home() and feed_load_more()
+# Enhanced Feed Algorithm — combines rule-based, behavior-based, vibe-based,
+# network-based, and exploration elements.
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _get_user_vibe_profile(user):
+    """
+    Analyze user's vibe preferences based on their past interactions.
+    Returns a dict with weights for each vibe type.
+    """
+    from social.models import PostVibe
+    
+    # Get user's vibe history (posts they've vibed on) - with select_related for post
+    user_vibes = PostVibe.objects.filter(user=user).select_related('post')[:500]  # Limit to recent 500 for performance
+    
+    if not user_vibes.exists():
+        # Default weights for new users
+        return {
+            'fire': 1.0, 'love': 1.0, 'real': 1.0, 'vibing': 1.0,
+            'chill': 1.0, 'dead': 0.5, 'cringe': 0.3
+        }
+    
+    # Count vibes by type
+    vibe_counts = {}
+    for vibe in user_vibes:
+        vibe_counts[vibe.vibe_type] = vibe_counts.get(vibe.vibe_type, 0) + 1
+    
+    # Normalize to weights (0.5 to 2.0 range)
+    total = sum(vibe_counts.values())
+    weights = {}
+    
+    # Base weights
+    base_weights = {
+        'fire': 1.0, 'love': 1.0, 'real': 1.0, 'vibing': 1.0,
+        'chill': 1.0, 'dead': 0.5, 'cringe': 0.3
+    }
+    
+    for vibe_type, count in vibe_counts.items():
+        # Higher frequency = higher weight, but cap at 2.0
+        weight = base_weights.get(vibe_type, 1.0) * (1.0 + (count / total))
+        weights[vibe_type] = min(weight, 2.0)
+    
+    return weights
+
+
+def _get_authors_you_like(user, following_ids, limit=30):
+    """
+    Identify authors the user frequently interacts with (likes, comments, reposts)
+    that they don't already follow.
+    """
+    from social.models import PostVibe, PostComment
+    
+    # Users whose posts you've vibed on - use values_list for efficiency
+    vibed_authors = set(
+        PostVibe.objects.filter(user=user)
+        .select_related('post')
+        .values_list('post__author_id', flat=True)[:200]  # Limit for performance
+    )
+    
+    # Users whose posts you've commented on
+    commented_authors = set(
+        PostComment.objects.filter(author=user)
+        .select_related('post')
+        .values_list('post__author_id', flat=True)[:200]
+    )
+    
+    # Users whose posts you've reposted
+    reposted_authors = set(
+        Post.objects.filter(
+            author=user, is_repost=True, original_post__isnull=False
+        ).values_list('original_post__author_id', flat=True)[:200]
+    )
+    
+    # Combine and exclude already following and self
+    liked_authors = (vibed_authors | commented_authors | reposted_authors)
+    liked_authors = liked_authors - set(following_ids) - {user.id}
+    
+    return list(liked_authors)[:limit]
+
+
+def _get_vibe_similar_users(user, limit=10):
+    """
+    Find users with similar vibe patterns to the current user.
+    Returns user IDs that the current user might like based on vibe taste.
+    """
+    from social.models import PostVibe
+    from django.db.models import Count, Q
+    
+    # Get user's vibe types they use most
+    user_vibe_types = list(
+        PostVibe.objects.filter(user=user)
+        .values('vibe_type')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:3]
+        .values_list('vibe_type', flat=True)
+    )
+    
+    if not user_vibe_types:
+        return []
+    
+    # Find users who use similar vibe types on posts
+    similar_users = (
+        PostVibe.objects.filter(
+            vibe_type__in=user_vibe_types
+        )
+        .exclude(user=user)
+        .values('user')
+        .annotate(
+            match_count=Count('id'),
+            vibe_diversity=Count('vibe_type', distinct=True)
+        )
+        .order_by('-match_count', '-vibe_diversity')[:limit]
+        .values_list('user', flat=True)
+    )
+    
+    return list(similar_users)
+
 
 def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     """
-    Fetch one page of posts — newest first, ALL posts visible.
-
-    Returns (feed_items list, next_cursor float|None).
+    Enhanced feed algorithm that combines:
+    1. Rule-based: engagement + recency
+    2. Behavior-based: posts you interacted with, authors you like
+    3. Vibe-based: matches user vibe taste
+    4. Network: friend-of-friend discovery
+    5. Exploration: randomness to prevent boredom
     """
     if page_size is None:
         page_size = FEED_PAGE_SIZE
 
     following_ids_set = set(following_ids)
-
-    if not following_ids:
-        base_qs = Post.objects.all()
-    else:
+    
+    # ========== BUILD CANDIDATE POSTS FROM MULTIPLE SOURCES ==========
+    
+    # 1. Base feed: posts from followed users and yourself
+    base_qs = Post.objects.all()
+    if following_ids:
         base_qs = Post.objects.filter(
             Q(author__in=following_ids) |
             Q(author=user) |
             Q(is_repost=True, author__in=following_ids)
         )
-
-    # Cursor pagination — only fetch posts older than the last seen one
+    
+    # Apply cursor if provided
     if cursor_dt:
         base_qs = base_qs.filter(created_at__lt=cursor_dt)
-
-    # Fetch exactly page_size posts, newest first.
-    # No oversampling — every post in the DB will appear on some page.
-    posts = list(
+    
+    # Fetch more than needed for scoring - with COMPLETE prefetching
+    raw_posts = list(
         base_qs
         .select_related(
             'author', 'author__profile',
             'original_post', 'original_post__author', 'original_post__author__profile',
         )
-        .prefetch_related('likes', 'reposts', 'images')
+        .prefetch_related(
+            'vibes',                # CRITICAL: Prefetch vibes to avoid N+1 queries
+            'vibes__user',           # Prefetch vibe users if needed
+            'comments',              # Prefetch comments
+            'comments__author',      # Prefetch comment authors
+            'reposts',               # Prefetch reposts
+            'reposts__user',         # Prefetch repost users
+            'images',                # Prefetch images
+            'likes',                 # Prefetch likes for backward compatibility
+        )
         .annotate(
             vibe_count    = Count('vibes',    distinct=True),
             comment_count = Count('comments', distinct=True),
             repost_count  = Count('reposts',  distinct=True),
-            like_count    = Count('likes',    distinct=True),
         )
-        .order_by('-created_at')[:page_size]
+        .order_by('-created_at')[:page_size * 3]  # Over-sample for scoring
     )
-
-    # ✅ FIX: Calculate next_cursor BEFORE we shuffle the posts by engagement!
-    # This guarantees the cursor is exactly the timestamp of the oldest post on this page.
-    next_cursor = posts[-1].created_at.timestamp() if len(posts) >= page_size else None
-
-    # Light engagement reorder within the page only (no decay — avoids hiding old posts)
-    def _engagement(post):
-        return (
-            getattr(post, 'vibe_count',    0) * 4 +
-            getattr(post, 'comment_count', 0) * 3 +
-            getattr(post, 'repost_count',  0) * 2 +
-            getattr(post, 'like_count',    0) * 1 +
-            random.uniform(0, 0.5)   # tiny jitter so feed varies slightly each load
+    
+    # ========== GET USER PREFERENCES ==========
+    vibe_profile = _get_user_vibe_profile(user)
+    liked_authors = _get_authors_you_like(user, following_ids)
+    vibe_similar_users = _get_vibe_similar_users(user)
+    
+    # Get authors whose posts you've engaged with recently
+    engaged_authors = set()
+    for post in raw_posts[:20]:  # Check recent posts
+        # Check vibes (already prefetched ✅)
+        if hasattr(post, 'vibes') and post.vibes.filter(user=user).exists():
+            engaged_authors.add(post.author_id)
+        # Check comments (already prefetched ✅)
+        if hasattr(post, 'comments') and post.comments.filter(author=user).exists():
+            engaged_authors.add(post.author_id)
+        # Check reposts (already prefetched ✅)
+        if hasattr(post, 'reposts') and post.reposts.filter(user=user).exists():
+            engaged_authors.add(post.author_id)
+        # Check likes (already prefetched ✅)
+        if hasattr(post, 'likes') and post.likes.filter(id=user.id).exists():
+            engaged_authors.add(post.author_id)
+    
+    # ========== SCORE EACH POST ==========
+    now = timezone.now()
+    scored_posts = []
+    
+    for post in raw_posts:
+        # Base engagement score (using prefetched data)
+        vibe_count = post.vibes.count() if hasattr(post, 'vibes') else 0
+        comment_count = post.comments.count() if hasattr(post, 'comments') else 0
+        repost_count = post.reposts.count() if hasattr(post, 'reposts') else 0
+        like_count = post.likes.count() if hasattr(post, 'likes') else 0
+        
+        engagement = (
+            vibe_count * 4 +
+            comment_count * 3 +
+            repost_count * 2 +
+            like_count * 1
         )
-
-    # Now it is safe to sort by engagement for the UI
-    posts.sort(key=_engagement, reverse=True)
-
+        
+        # Recency score (0-1), newer = higher
+        hours_old = max(1, (now - post.created_at).total_seconds() / 3600)
+        recency_score = 1.0 / (1 + (hours_old / 24))  # 50% decay after 24h
+        
+        # ===== 1. RULE-BASED =====
+        rule_score = engagement * recency_score
+        
+        # ===== 2. BEHAVIOR-BASED =====
+        behavior_score = 1.0
+        
+        # Author you like (but don't follow) - boost
+        if post.author_id in liked_authors:
+            behavior_score *= 2.0
+        
+        # Author you've engaged with before - boost
+        if post.author_id in engaged_authors:
+            behavior_score *= 1.5
+        
+        # You've already interacted with this specific post - reduce to avoid repetition
+        user_has_vibe = hasattr(post, 'vibes') and post.vibes.filter(user=user).exists()
+        user_has_comment = hasattr(post, 'comments') and post.comments.filter(author=user).exists()
+        user_has_repost = hasattr(post, 'reposts') and post.reposts.filter(user=user).exists()
+        user_has_like = hasattr(post, 'likes') and post.likes.filter(id=user.id).exists()
+        
+        if user_has_vibe or user_has_comment or user_has_repost or user_has_like:
+            behavior_score *= 0.5
+        
+        # ===== 3. VIBE-BASED =====
+        vibe_score = 1.0
+        
+        # Get vibes on this post to see if they match user's taste (already prefetched ✅)
+        post_vibes = post.vibes.all() if hasattr(post, 'vibes') else []
+        if post_vibes:
+            # Calculate how well post's vibes match user's preference
+            vibe_match = 0
+            vibe_count = 0
+            for vibe in post_vibes:
+                if hasattr(vibe, 'vibe_type'):
+                    vibe_match += vibe_profile.get(vibe.vibe_type, 1.0)
+                    vibe_count += 1
+            
+            if vibe_count > 0:
+                vibe_match = vibe_match / vibe_count  # Average
+                vibe_score = vibe_match
+        
+        # Posts from users with similar vibe taste - boost
+        if post.author_id in vibe_similar_users:
+            vibe_score *= 1.3
+        
+        # ===== 4. NETWORK-BASED =====
+        network_score = 1.0
+        
+        # Friend-of-friend discovery
+        actual_author_id = (
+            post.original_post.author_id
+            if post.is_repost and post.original_post
+            else post.author_id
+        )
+        
+        # Store scores
+        scored_posts.append({
+            'post': post,
+            'scores': {
+                'rule': rule_score,
+                'behavior': behavior_score,
+                'vibe': vibe_score,
+                'network': network_score,  # Will be updated
+            },
+            'author_id': actual_author_id,
+        })
+    
+    # ========== BUILD FRIEND-OF-FRIEND NETWORK ==========
     fof_ids, fof_via_map = _build_fof(following_ids_set, user.id)
-
+    
+    # Update network scores for FoF posts
+    for item in scored_posts:
+        if item['author_id'] in fof_ids:
+            # Boost FoF posts
+            via_count = len(fof_via_map.get(item['author_id'], []))
+            # More mutual friends = higher boost
+            item['scores']['network'] = 1.0 + (via_count * 0.3)
+    
+    # ========== COMBINE SCORES WITH EXPLORATION ==========
+    for item in scored_posts:
+        # Add random exploration factor
+        exploration_factor = 1.0 + random.uniform(-0.2, 0.3)
+        
+        # Weighted combination
+        final_score = (
+            item['scores']['rule'] * 2.5 +           # Engagement + recency
+            item['scores']['behavior'] * 1.5 +       # Your behavior patterns
+            item['scores']['vibe'] * 2.0 +           # Vibe taste matching
+            item['scores']['network'] * 1.2 +        # Network discovery
+            exploration_factor                         # Random exploration
+        )
+        item['final_score'] = final_score
+    
+    # ========== SORT AND SELECT ==========
+    # Sort by final score
+    scored_posts.sort(key=lambda x: x['final_score'], reverse=True)
+    
+    # Take top page_size posts
+    selected_posts = [item['post'] for item in scored_posts[:page_size]]
+    
+    # Calculate next cursor from the *oldest* post in the original batch
+    next_cursor = raw_posts[-1].created_at.timestamp() if len(raw_posts) >= page_size * 3 else None
+    
+    # ========== BUILD FEED ITEMS WITH FoF DATA ==========
+    feed_items = []
     suggestion_users = list(
         User.objects.exclude(id__in=following_ids)
                .exclude(id=user.id)
                .select_related('profile')
                .order_by('?')[:5]
     )
-
-    feed_items = []
-    for i, post in enumerate(posts, 1):
+    
+    for i, post in enumerate(selected_posts, 1):
         actual_author_id = (
             post.original_post.author_id
             if post.is_repost and post.original_post
@@ -404,10 +658,39 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         )
         is_fof  = actual_author_id in fof_ids
         fof_via = fof_via_map.get(actual_author_id, []) if is_fof else []
-        feed_items.append({'type': 'post', 'data': post, 'is_fof': is_fof, 'fof_via': fof_via})
+        
+        # Add vibe match score to context for UI (optional)
+        post_match_score = None
+        for item in scored_posts:
+            if item['post'].post_id == post.post_id:
+                post_match_score = round(item['scores']['vibe'], 1)
+                break
+        
+        feed_items.append({
+            'type': 'post',
+            'data': post,
+            'is_fof': is_fof,
+            'fof_via': fof_via,
+            'vibe_match': post_match_score,  # Optional: show how well post matches user's taste
+        })
+        
+        # Insert user suggestion every 4th post (for discovery)
         if i % 4 == 2 and suggestion_users:
-            feed_items.append({'type': 'user_suggestion', 'data': suggestion_users.pop(0)})
-
+            suggestion_user = suggestion_users.pop(0)
+            # Determine suggestion reason
+            if suggestion_user.id in vibe_similar_users:
+                reason = 'similar_vibe'
+            elif suggestion_user.id in liked_authors:
+                reason = 'you_like_their_posts'
+            else:
+                reason = 'popular'
+            
+            feed_items.append({
+                'type': 'user_suggestion',
+                'data': suggestion_user,
+                'reason': reason
+            })
+    
     return feed_items, next_cursor
 
 
@@ -462,7 +745,7 @@ def home(request):
                 hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
     trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 
-    # First page of the feed
+    # First page of the enhanced feed
     feed, next_cursor = _get_feed_page(request.user, following_ids)
 
     # Store page-load timestamp in session — used by "New posts" banner polling
@@ -578,10 +861,6 @@ def _safe_pic_url(user_obj):
         pass
     return ''
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Vibe helpers — shared by like_post and get_post_vibes
-# ─────────────────────────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Vibe helpers — shared by like_post and get_post_vibes
@@ -1980,7 +2259,6 @@ def open_notification(request, post_id, notification_type):
 
 
 @login_required(login_url='/')
-@login_required(login_url='/')
 def notification_list(request):
     """
     Renders the notification page.
@@ -2632,7 +2910,6 @@ def comments_poll(request, post_id):
 
 
 @login_required(login_url='/')
-@login_required(login_url='login')
 def hashtag_view(request, tag_name):
     from django.db.models import Q
 
@@ -2760,4 +3037,3 @@ def change_password(request):
     cache.delete(rate_key)
 
     return JsonResponse({'success': True, 'message': 'Password updated successfully!'})
-
