@@ -2777,13 +2777,14 @@
         htmx.process(newSentinel);
       }
       // Scan the real feed container for new LP cards.
-      // We cannot use evt.detail.elt here because with hx-swap="outerHTML"
-      // that element is the detached OLD sentinel (already removed from DOM).
-      // The kvibeFetchAndInjectLp function has a data-lp-fetching guard so
-      // already-processed cards are safely skipped.
       if (typeof window.kvibeScanFeedLpCards === 'function') {
         var feedContainer = document.getElementById('kvibe-real-feed');
         window.kvibeScanFeedLpCards(feedContainer || document);
+      }
+      // Re-scan for new custom mood chips added by newly loaded posts.
+      // Uses window._kvibeMoodSeen dedup so no duplicate chips are created.
+      if (typeof window.kvibeInjectCustomMoodChips === 'function') {
+        window.kvibeInjectCustomMoodChips();
       }
       var activeChip = document.querySelector('.kvibe-mood-filter-chip.active');
       if (activeChip && typeof window.kvibeFilterMood === 'function') window.kvibeFilterMood(activeChip.dataset.mood, activeChip);
@@ -3372,30 +3373,40 @@
       });
     }
 
-    // Auto-inject custom mood chips from posts in the feed
-    (function kvibeInjectCustomMoodChips() {
-      const seen = new Set();
+    // Auto-inject custom mood chips from posts in the feed.
+    // Exposed on window so it can be called after HTMX load-more adds new posts.
+    // Uses window._kvibeMoodSeen as a persistent Set so re-calls never create
+    // duplicate chips for moods already in the filter bar.
+    window._kvibeMoodSeen = window._kvibeMoodSeen || new Set();
+
+    window.kvibeInjectCustomMoodChips = function() {
       const container = document.getElementById('kvibeCustomMoodChips');
       if (!container) return;
 
       document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
-        const mood = post.getAttribute('data-mood') || '';
+        const mood   = post.getAttribute('data-mood') || '';
         const custom = (post.getAttribute('data-custom-mood') || '').trim();
-        if ((mood === 'custom' || mood === '') && custom && !seen.has(custom.toLowerCase())) {
-          seen.add(custom.toLowerCase());
-          const btn = document.createElement('button');
-          btn.className = 'kvibe-mood-filter-chip';
-          btn.style.setProperty('--kvibe-chip-color', '#0095f6');
-          btn.setAttribute('data-mood', '__custom__' + custom.toLowerCase());
-          btn.innerHTML = `<span class="kvibe-chip-dot"></span> ✨ ${custom}`;
-          btn.onclick = function() { kvibeFilterMood('__custom__' + custom.toLowerCase(), btn); };
-          container.appendChild(btn);
-        }
+        if (!custom) return;                                    // no custom mood on this post
+        if (mood !== '' && mood !== 'custom') return;          // predefined mood — skip
+        const key = custom.toLowerCase();
+        if (window._kvibeMoodSeen.has(key)) return;            // chip already in bar — skip
+        window._kvibeMoodSeen.add(key);
+
+        const btn = document.createElement('button');
+        btn.className = 'kvibe-mood-filter-chip';
+        btn.style.setProperty('--kvibe-chip-color', '#0095f6');
+        btn.setAttribute('data-mood', '__custom__' + key);
+        btn.innerHTML = `<span class="kvibe-chip-dot"></span> ✨ ${custom}`;
+        btn.onclick = function() { kvibeFilterMood('__custom__' + key, btn); };
+        container.appendChild(btn);
       });
 
-      // Only show "custom" chips if there are any
-      if (seen.size === 0) container.style.display = 'none';
-    })();
+      // Show container only if it has chips
+      container.style.display = container.children.length > 0 ? 'contents' : 'none';
+    };
+
+    // Run once on initial page load
+    window.kvibeInjectCustomMoodChips();
 
     function kvibeCloseRepostModal() {
       const modal = document.getElementById('kvibe-repost-modal');
@@ -3720,6 +3731,10 @@
 
         // Re-process HTMX on the now-visible feed so sentinel intersect observer registers
         if (typeof htmx !== 'undefined' && realFeed) htmx.process(realFeed);
+        // Inject custom mood chips now that posts are visible in the DOM
+        if (typeof window.kvibeInjectCustomMoodChips === 'function') {
+          window.kvibeInjectCustomMoodChips();
+        }
       }
 
       // Reveal after a short delay to show kvibe-skeleton effect, or on load if already ready
@@ -4225,3 +4240,4 @@
 </script>
 </body>
 </html>
+
