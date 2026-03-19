@@ -298,8 +298,16 @@ def _safe_redirect_back(request, fallback='home'):
 # ─────────────────────────────────────────────────────────────────────────────
 
 FEED_PAGE_SIZE = 10          # posts returned per page
-_FEED_SAMPLE   = 40          # candidate pool pulled from DB before scoring
 _EXPLORE_RATIO = 0.15        # 15 % of each page is random exploration
+
+# _FEED_SAMPLE is now computed dynamically inside _get_feed_page().
+# Formula: clamp(following_count * 4, min=40, max=400)
+# - 0–10 followings  → 40   (new/small accounts)
+# - 50  followings   → 200  (healthy mid-size account)
+# - 100+ followings  → 400  (power users / viral scale)
+_FEED_SAMPLE_MIN = 40
+_FEED_SAMPLE_MAX = 400
+_FEED_SAMPLE_MULTIPLIER = 4   # posts per followed account in the candidate pool
 
 
 def _build_fof(following_ids_set, current_user_id):
@@ -335,64 +343,81 @@ def _get_or_create_feed_profile(user):
 
 def _build_user_interest_profile(user):
     """
-    Behavior-Based — derive interacted post_ids & author_ids from the last
-    30 days of likes, vibes, and comments.
+    Behavior-Based — derive interacted post_ids & author affinity scores from
+    the last 30 days of likes, vibes, and comments.
 
-    Query count: 3 (one per model, each fetching both fields in one pass).
+    AUTHOR AFFINITY DECAY: interactions are time-weighted so a like from
+    5 minutes ago carries far more signal than one from 29 days ago.
+    Each interaction's weight is: base_weight * exp(-age_days * ln(2) / 7)
+    giving a 7-day half-life.  The resulting per-author score is stored in
+    `author_affinity` (dict[author_id → float]) and used by _score_post()
+    instead of the old flat +4.0 bump for any author touched in 30 days.
+
+    Query count: 3 (one per model, each fetching timestamp + author in one pass).
     Results are cached in Django's cache backend for 5 minutes so rapid
     load-more scrolling doesn't re-run these on every page.
 
-    Returns (interacted_post_ids: set[str], interacted_author_ids: set[int]).
+    Returns:
+        interacted_post_ids : set[str]
+        author_affinity     : dict[int, float]   ← NEW (replaces flat set)
     """
     from django.core.cache import cache
 
-    cache_key = f'kvibe_interest_{user.id}'
+    cache_key = f'kvibe_interest_v2_{user.id}'
     cached    = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    cutoff = timezone.now() - timedelta(days=30)
+    now    = timezone.now()
+    cutoff = now - timedelta(days=30)
 
-    # ── 1 query per model — fetch both fields in one pass ────────────────────
+    # Affinity decay: half-life 7 days.
+    # weight(age_days) = base * exp(-age_days * ln2 / 7)
+    _AFFINITY_HALF_LIFE = 7.0   # days
+    _AFFINITY_DECAY     = math.log(2) / _AFFINITY_HALF_LIFE
+
+    def _affinity_weight(base, interacted_at):
+        age_days = max(0.0, (now - interacted_at).total_seconds() / 86400)
+        return base * math.exp(-_AFFINITY_DECAY * age_days)
+
+    interacted_post_ids = set()
+    author_affinity: dict = {}   # author_id → cumulative decayed score
+
+    def _accum(aid, weight):
+        if aid:
+            author_affinity[aid] = author_affinity.get(aid, 0.0) + weight
+
+    # ── Likes (base weight 4.0, same as the old flat bonus) ──────────────────
     liked_rows = Post.objects.filter(
         likes=user, created_at__gte=cutoff
-    ).values_list('post_id', 'author_id')
-    liked_post_ids   = set()
-    liked_author_ids = set()
-    for pid, aid in liked_rows:
-        liked_post_ids.add(str(pid))
-        liked_author_ids.add(aid)
+    ).values_list('post_id', 'author_id', 'created_at')
+    for pid, aid, created_at in liked_rows:
+        interacted_post_ids.add(str(pid))
+        _accum(aid, _affinity_weight(4.0, created_at))
 
+    # ── Vibes (base weight 4.0) ───────────────────────────────────────────────
     vibed_rows = PostVibe.objects.filter(
         user=user, created_at__gte=cutoff
-    ).select_related('post').values_list('post_id', 'post__author_id')
-    vibed_post_ids   = set()
-    vibed_author_ids = set()
-    for pid, aid in vibed_rows:
-        vibed_post_ids.add(str(pid))
-        if aid:
-            vibed_author_ids.add(aid)
+    ).select_related('post').values_list('post_id', 'post__author_id', 'created_at')
+    for pid, aid, created_at in vibed_rows:
+        interacted_post_ids.add(str(pid))
+        _accum(aid, _affinity_weight(4.0, created_at))
 
+    # ── Comments (base weight 4.0) ────────────────────────────────────────────
     cmt_rows = PostComment.objects.filter(
         author=user, created_at__gte=cutoff
-    ).select_related('post').values_list('post_id', 'post__author_id')
-    cmt_post_ids   = set()
-    cmt_author_ids = set()
-    for pid, aid in cmt_rows:
-        cmt_post_ids.add(str(pid))
-        if aid:
-            cmt_author_ids.add(aid)
+    ).select_related('post').values_list('post_id', 'post__author_id', 'created_at')
+    for pid, aid, created_at in cmt_rows:
+        interacted_post_ids.add(str(pid))
+        _accum(aid, _affinity_weight(4.0, created_at))
 
-    result = (
-        liked_post_ids | vibed_post_ids | cmt_post_ids,
-        liked_author_ids | vibed_author_ids | cmt_author_ids,
-    )
+    result = (interacted_post_ids, author_affinity)
     cache.set(cache_key, result, timeout=300)   # 5-minute TTL
     return result
 
 
 def _score_post(post, now, vibe_weights, interacted_post_ids,
-                interacted_author_ids, fof_ids, adaptive_author_ids):
+                author_affinity, fof_ids, adaptive_author_ids):
     """
     Master scoring — returns float.  Higher score = shown earlier.
 
@@ -403,12 +428,13 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     │                log2(1 + weighted_sum) — diminishing returns     │
     │    recency:    age of THIS post object (repost row = fresh);   │
     │                half-life 24 h + hard ceiling at 72 h           │
-    │    newness bonus: +2.0 for posts < 2 h old so brand-new posts  │
-    │                   surface immediately even with zero engagement │
+    │    newness bonus: smooth exponential decay (half-life 1.5 h)   │
+    │                   so fresh posts surface without a cliff       │
     │ 2. Behavior-Based                                               │
-    │    +3  already interacted with this post / its original        │
-    │    +4  interacted with this author in last 30 days              │
-    │    +2  author in long-term UserFeedProfile history              │
+    │    +3   already interacted with this post / its original       │
+    │    affinity score from author_affinity dict (time-decayed,     │
+    │         7-day half-life — recent interactions worth far more)   │
+    │    +2   author in long-term UserFeedProfile history            │
     │ 3. Vibe-Based 🔥                                                │
     │    vibes pulled from original post for reposts;                │
     │    weighted by viewer's personal vibe_weights                   │
@@ -460,15 +486,23 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     # ── 1c. Newness bonus — guarantee fresh posts always surface ─────────────
     # A brand-new post with zero engagement scores log2(1)*1.0 = 0.0, which
     # means it gets buried under everything with even 1 interaction.
-    # The newness bonus gives it a fighting chance for its first 2 hours,
-    # then fades linearly so it doesn't unfairly outrank engaged recent posts.
-    #   < 1 h → +2.0   (full bonus — just posted)
-    #   1–2 h → +1.0   (half bonus — still very fresh)
-    #   > 2 h → +0.0   (no bonus — let engagement take over)
-    if age_hours < 1.0:
-        score += 2.0
-    elif age_hours < 2.0:
-        score += 1.0
+    # The newness bonus gives it a fighting chance in its early hours.
+    #
+    # OLD design: stepped (+2.0 → +1.0 → +0.0) caused a hard "ranking cliff"
+    # exactly at the 2-hour mark — a post could suddenly vanish from the feed.
+    #
+    # NEW design: smooth exponential decay with half-life of 1.5 hours.
+    #   bonus = 2.0 * exp(-age_hours * ln(2) / 1.5)
+    #   age 0 h  → +2.00   (just posted)
+    #   age 1 h  → +1.26   (still very fresh)
+    #   age 2 h  → +0.79   (fading naturally)
+    #   age 4 h  → +0.31   (fading further)
+    #   age 6 h  → +0.13   (nearly gone)
+    #   age 8 h+ → <0.06   (negligible — engagement drives ranking)
+    _NEWNESS_PEAK      = 2.0
+    _NEWNESS_HALF_LIFE = 1.5   # hours
+    _NEWNESS_DECAY     = math.log(2) / _NEWNESS_HALF_LIFE
+    score += _NEWNESS_PEAK * math.exp(-_NEWNESS_DECAY * age_hours)
 
     # ── 2. Behavior-Based ────────────────────────────────────────────────────
     actual_author_id = (
@@ -483,8 +517,11 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
 
     if post_ids_to_check & interacted_post_ids:
         score += 3.0
-    if actual_author_id in interacted_author_ids:
-        score += 4.0
+    # Author affinity: time-decayed cumulative score (7-day half-life).
+    # A like from 1 day ago (~3.7) outweighs one from 20 days ago (~0.9).
+    # Capped at 6.0 so a single hyper-active author can't dominate the feed.
+    if actual_author_id in author_affinity:
+        score += min(author_affinity[actual_author_id], 6.0)
     if actual_author_id in adaptive_author_ids:
         score += 2.0
 
@@ -609,12 +646,21 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     following_ids_set = set(following_ids)
     now               = timezone.now()
 
+    # ── Dynamic candidate pool size ───────────────────────────────────────────
+    # Scale the candidate pool with the number of accounts the user follows so
+    # that power users and large networks always get enough variety to find the
+    # best top-10. Formula: clamp(len(following) * multiplier, min, max).
+    _feed_sample = max(
+        _FEED_SAMPLE_MIN,
+        min(_FEED_SAMPLE_MAX, len(following_ids_set) * _FEED_SAMPLE_MULTIPLIER),
+    )
+
     # ── Signals setup ─────────────────────────────────────────────────────────
     feed_prof           = _get_or_create_feed_profile(user)
     vibe_weights        = feed_prof.get_weights()
     adaptive_author_ids = set(feed_prof.interacted_authors or [])
 
-    interacted_post_ids, interacted_author_ids = _build_user_interest_profile(user)
+    interacted_post_ids, author_affinity = _build_user_interest_profile(user)
     fof_ids, fof_via_map = _build_fof(following_ids_set, user.id)
 
     # ── 1. Candidate pool ─────────────────────────────────────────────────────
@@ -649,7 +695,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
             comment_count = Count('comments', distinct=True),
             repost_count  = Count('reposts',  distinct=True),
         )
-        .order_by('-created_at')[:_FEED_SAMPLE]
+        .order_by('-created_at')[:_feed_sample]
     )
 
     # next_cursor is computed AFTER slicing to final_posts (step 6 below)
@@ -667,7 +713,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         if not hasattr(p, '_feed_score'):
             p._feed_score = _score_post(
                 p, now, vibe_weights, interacted_post_ids,
-                interacted_author_ids, fof_ids, adaptive_author_ids,
+                author_affinity, fof_ids, adaptive_author_ids,
             )
         return p._feed_score
 
@@ -762,7 +808,7 @@ def _feed_record_vibe(user, vibe_type, post_author_id):
     try:
         from django.core.cache import cache
         _get_or_create_feed_profile(user).record_vibe(vibe_type, post_author_id)
-        cache.delete(f'kvibe_interest_{user.id}')
+        cache.delete(f'kvibe_interest_v2_{user.id}')
     except Exception:
         pass
 
@@ -772,7 +818,7 @@ def _feed_record_like(user, post_author_id):
     try:
         from django.core.cache import cache
         _get_or_create_feed_profile(user).record_like(post_author_id)
-        cache.delete(f'kvibe_interest_{user.id}')
+        cache.delete(f'kvibe_interest_v2_{user.id}')
     except Exception:
         pass
 
@@ -782,7 +828,7 @@ def _feed_record_comment(user, post_author_id):
     try:
         from django.core.cache import cache
         _get_or_create_feed_profile(user).record_comment(post_author_id)
-        cache.delete(f'kvibe_interest_{user.id}')
+        cache.delete(f'kvibe_interest_v2_{user.id}')
     except Exception:
         pass
 
