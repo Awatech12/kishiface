@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt
+from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt, UserFeedProfile
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -19,7 +19,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
-import time, json, logging, re, requests, ipaddress
+import time, json, logging, re, requests, ipaddress, math
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, quote as url_quote
 from django.http import JsonResponse, Http404
@@ -293,14 +293,18 @@ def _safe_redirect_back(request, fallback='home'):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Feed helpers — shared between home() and feed_load_more()
+# KVIBE FEED ALGORITHM v2.0
+# Signals: Rule-Based · Behavior-Based · Vibe-Based · Network · Exploration
 # ─────────────────────────────────────────────────────────────────────────────
 
-FEED_PAGE_SIZE = 10   # posts per page
+FEED_PAGE_SIZE = 12          # posts returned per page
+_FEED_SAMPLE   = 40          # candidate pool pulled from DB before scoring
+_EXPLORE_RATIO = 0.15        # 15 % of each page is random exploration
 
 
 def _build_fof(following_ids_set, current_user_id):
     """
-    Resolve friend-of-friend data in 2 bulk DB queries (no per-user loops).
+    Resolve friend-of-friend data in 2 bulk DB queries.
     Returns (fof_ids: set, fof_via_map: dict {uid: [User, ...]}).
     """
     fof_pairs = list(
@@ -323,13 +327,279 @@ def _build_fof(following_ids_set, current_user_id):
     return fof_ids, fof_via_resolved
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Feed helpers — shared between home() and feed_load_more()
-# ─────────────────────────────────────────────────────────────────────────────
+def _get_or_create_feed_profile(user):
+    """Lazily fetch/create the UserFeedProfile for this user."""
+    profile, _ = UserFeedProfile.objects.get_or_create(user=user)
+    return profile
+
+
+def _build_user_interest_profile(user):
+    """
+    Behavior-Based — derive interacted post_ids & author_ids from the last
+    30 days of likes, vibes, and comments.
+
+    Query count: 3 (one per model, each fetching both fields in one pass).
+    Results are cached in Django's cache backend for 5 minutes so rapid
+    load-more scrolling doesn't re-run these on every page.
+
+    Returns (interacted_post_ids: set[str], interacted_author_ids: set[int]).
+    """
+    from django.core.cache import cache
+
+    cache_key = f'kvibe_interest_{user.id}'
+    cached    = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    cutoff = timezone.now() - timedelta(days=30)
+
+    # ── 1 query per model — fetch both fields in one pass ────────────────────
+    liked_rows = Post.objects.filter(
+        likes=user, created_at__gte=cutoff
+    ).values_list('post_id', 'author_id')
+    liked_post_ids   = set()
+    liked_author_ids = set()
+    for pid, aid in liked_rows:
+        liked_post_ids.add(str(pid))
+        liked_author_ids.add(aid)
+
+    vibed_rows = PostVibe.objects.filter(
+        user=user, created_at__gte=cutoff
+    ).select_related('post').values_list('post_id', 'post__author_id')
+    vibed_post_ids   = set()
+    vibed_author_ids = set()
+    for pid, aid in vibed_rows:
+        vibed_post_ids.add(str(pid))
+        if aid:
+            vibed_author_ids.add(aid)
+
+    cmt_rows = PostComment.objects.filter(
+        author=user, created_at__gte=cutoff
+    ).select_related('post').values_list('post_id', 'post__author_id')
+    cmt_post_ids   = set()
+    cmt_author_ids = set()
+    for pid, aid in cmt_rows:
+        cmt_post_ids.add(str(pid))
+        if aid:
+            cmt_author_ids.add(aid)
+
+    result = (
+        liked_post_ids | vibed_post_ids | cmt_post_ids,
+        liked_author_ids | vibed_author_ids | cmt_author_ids,
+    )
+    cache.set(cache_key, result, timeout=300)   # 5-minute TTL
+    return result
+
+
+def _score_post(post, now, vibe_weights, interacted_post_ids,
+                interacted_author_ids, fof_ids, adaptive_author_ids):
+    """
+    Master scoring — returns float.  Higher score = shown earlier.
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ 1. Rule-Based                                                   │
+    │    engagement: pulled from the ORIGINAL post for reposts so    │
+    │                the full social proof of the original counts;    │
+    │                log2(1 + weighted_sum) — diminishing returns     │
+    │    recency:    age of THIS post object (repost row = fresh);   │
+    │                half-life 24 h + hard ceiling at 72 h           │
+    │    newness bonus: +2.0 for posts < 2 h old so brand-new posts  │
+    │                   surface immediately even with zero engagement │
+    │ 2. Behavior-Based                                               │
+    │    +3  already interacted with this post / its original        │
+    │    +4  interacted with this author in last 30 days              │
+    │    +2  author in long-term UserFeedProfile history              │
+    │ 3. Vibe-Based 🔥                                                │
+    │    vibes pulled from original post for reposts;                │
+    │    weighted by viewer's personal vibe_weights                   │
+    │ 4. Network                                                      │
+    │    +2.5  original author is a friend-of-friend                 │
+    │ 5. Exploration jitter (applied in _get_feed_page, not here)     │
+    └─────────────────────────────────────────────────────────────────┘
+    """
+    # ── Resolve the "real" post for engagement/vibe signals ──────────────────
+    # For a repost we count the ORIGINAL post's engagement (its full social
+    # proof) but use THIS post row's created_at for recency (the repost is a
+    # fresh share event and should be treated as new content in the feed).
+    signal_post = (
+        post.original_post
+        if post.is_repost and post.original_post
+        else post
+    )
+
+    # ── 1a. Raw weighted engagement ───────────────────────────────────────────
+    # Always read annotations from `post` (the feed row) — it carries the DB
+    # annotations (vibe_count, comment_count, repost_count). For reposts, the
+    # vibe breakdown of the original is already merged into _vb_<type> attrs
+    # by _annotate_vibe_breakdown(), so signal_post is only used for share count
+    # (a plain IntegerField, not an annotation).
+    raw_engagement = (
+        getattr(post, 'vibe_count',    0) * 4 +
+        getattr(post, 'comment_count', 0) * 3 +
+        getattr(post, 'repost_count',  0) * 2 +
+        (getattr(signal_post, 'share', None) or getattr(post, 'share', 0) or 0) * 1
+    )
+    # Log-compress: viral posts face diminishing returns.
+    # log2(1+x): 0→0  10→3.46  100→6.66  1000→9.97
+    engagement = math.log2(1 + raw_engagement)
+
+    # ── 1b. Recency (always from THIS post row) ──────────────────────────────
+    #   Phase 1 (0–72 h): exponential decay, half-life = 24 h
+    #   Phase 2 (72 h+):  hard ceiling — old viral posts can never lock the feed
+    _HALF_LIFE_HOURS    = 24
+    _AGE_HARD_CAP_HOURS = 72
+    _RECENCY_FLOOR      = 2 ** (-_AGE_HARD_CAP_HOURS / _HALF_LIFE_HOURS)  # 0.125
+
+    age_hours = max(0.0, (now - post.created_at).total_seconds() / 3600)
+    recency   = 2 ** (-age_hours / _HALF_LIFE_HOURS)
+    if age_hours >= _AGE_HARD_CAP_HOURS:
+        recency = _RECENCY_FLOOR
+
+    score = engagement * recency
+
+    # ── 1c. Newness bonus — guarantee fresh posts always surface ─────────────
+    # A brand-new post with zero engagement scores log2(1)*1.0 = 0.0, which
+    # means it gets buried under everything with even 1 interaction.
+    # The newness bonus gives it a fighting chance for its first 2 hours,
+    # then fades linearly so it doesn't unfairly outrank engaged recent posts.
+    #   < 1 h → +2.0   (full bonus — just posted)
+    #   1–2 h → +1.0   (half bonus — still very fresh)
+    #   > 2 h → +0.0   (no bonus — let engagement take over)
+    if age_hours < 1.0:
+        score += 2.0
+    elif age_hours < 2.0:
+        score += 1.0
+
+    # ── 2. Behavior-Based ────────────────────────────────────────────────────
+    actual_author_id = (
+        post.original_post.author_id
+        if post.is_repost and post.original_post
+        else post.author_id
+    )
+    # Check interaction against both the repost row and its original
+    post_ids_to_check = {str(post.post_id)}
+    if post.is_repost and post.original_post:
+        post_ids_to_check.add(str(post.original_post.post_id))
+
+    if post_ids_to_check & interacted_post_ids:
+        score += 3.0
+    if actual_author_id in interacted_author_ids:
+        score += 4.0
+    if actual_author_id in adaptive_author_ids:
+        score += 2.0
+
+    # ── 3. Vibe-Based taste match ─────────────────────────────────────────────
+    # For reposts use the vibe breakdown of the original post (attached as
+    # _vb_<type> attributes — the pipeline sets these on signal_post via
+    # the same post_id used when building vb_lookup).
+    vibe_score = sum(
+        getattr(post, f'_vb_{vt}', 0) * w
+        for vt, w in vibe_weights.items()
+    )
+    score += vibe_score * 0.5
+
+    # ── 4. Network — friend-of-friend ─────────────────────────────────────────
+    if actual_author_id in fof_ids:
+        score += 2.5
+
+    return score
+
+
+def _random_posts_sample(exclude_ids, cursor_dt, n):
+    """
+    Return n random Post rows WITHOUT ORDER BY RANDOM().
+
+    Strategy: pick a random offset within the recent-post window
+    (last 7 days) so Postgres never has to score the full table.
+    Falls back to a small offset scan if the window is thin.
+
+    This replaces .order_by('?') which does a full-table random sort
+    and is catastrophically slow on large datasets in PostgreSQL.
+    """
+    from django.db.models import Max, Min
+    import random as _random
+
+    base_qs = Post.objects.exclude(post_id__in=exclude_ids)
+    if cursor_dt:
+        base_qs = base_qs.filter(created_at__lt=cursor_dt)
+
+    # Restrict to a 7-day window to keep the offset range small.
+    # We avoid COUNT() entirely — instead we try a random offset and fall back
+    # to a smaller offset if the slice returns nothing (empty window).
+    window_start = timezone.now() - timedelta(days=7)
+    window_qs    = base_qs.filter(created_at__gte=window_start)
+
+    def _fetch(qs, max_offset_hint=500):
+        offset = _random.randint(0, max_offset_hint)
+        rows = list(
+            qs
+            .select_related('author', 'author__profile',
+                            'original_post', 'original_post__author',
+                            'original_post__author__profile')
+            .prefetch_related('likes', 'reposts', 'images')
+            .annotate(
+                vibe_count    = Count('vibes',    distinct=True),
+                comment_count = Count('comments', distinct=True),
+                repost_count  = Count('reposts',  distinct=True),
+            )
+            .order_by('created_at')[offset: offset + n]
+        )
+        return rows
+
+    # Try 7-day window first; if empty fall back to all posts
+    rows = _fetch(window_qs, max_offset_hint=500)
+    if not rows:
+        rows = _fetch(base_qs, max_offset_hint=200)
+    return rows
+
+
+def _annotate_vibe_breakdown(posts):
+    """
+    Attach _vb_<vibe_type> integer attributes to each post in-place.
+    For reposts the breakdown is pulled from the original post's vibes.
+    Single bulk query regardless of list size — no N+1.
+    """
+    if not posts:
+        return
+
+    all_ids      = set()
+    orig_id_map  = {}
+    for p in posts:
+        all_ids.add(p.post_id)
+        if p.is_repost and p.original_post:
+            all_ids.add(p.original_post.post_id)
+            orig_id_map[p.post_id] = p.original_post.post_id
+
+    rows = (
+        PostVibe.objects
+        .filter(post_id__in=all_ids)
+        .values('post_id', 'vibe_type')
+        .annotate(cnt=Count('id'))
+    )
+    vb_lookup: dict = {}
+    for row in rows:
+        vb_lookup.setdefault(row['post_id'], {})[row['vibe_type']] = row['cnt']
+
+    _VIBE_TYPES = ['fire', 'real', 'vibing', 'dead', 'cringe', 'chill', 'love']
+    for post in posts:
+        lookup_id = orig_id_map.get(post.post_id, post.post_id)
+        bd = vb_lookup.get(lookup_id, {})
+        for vt in _VIBE_TYPES:
+            setattr(post, f'_vb_{vt}', bd.get(vt, 0))
+
 
 def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     """
-    Fetch one page of posts — newest first, ALL posts visible.
+    Full scored/ranked feed page.
+
+    Pipeline:
+      1. Candidate pool  — _FEED_SAMPLE posts newest-first (cursor-aware)
+      2. Per-vibe annotate — attach _vb_<type> count to each post object
+      3. Score & rank    — _score_post() with all 5 signal families
+      4. Exploration     — inject ~15 % random posts to prevent boredom
+      5. Re-sort + jitter— merge explore posts with a random nudge
+      6. Slice           — take page_size items
+      7. FoF metadata + suggestion cards → feed_items list
 
     Returns (feed_items list, next_cursor float|None).
     """
@@ -337,22 +607,36 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         page_size = FEED_PAGE_SIZE
 
     following_ids_set = set(following_ids)
+    now               = timezone.now()
+
+    # ── Signals setup ─────────────────────────────────────────────────────────
+    feed_prof           = _get_or_create_feed_profile(user)
+    vibe_weights        = feed_prof.get_weights()
+    adaptive_author_ids = set(feed_prof.interacted_authors or [])
+
+    interacted_post_ids, interacted_author_ids = _build_user_interest_profile(user)
+    fof_ids, fof_via_map = _build_fof(following_ids_set, user.id)
+
+    # ── 1. Candidate pool ─────────────────────────────────────────────────────
+    # New-post visibility guarantee: always include ALL posts from the last
+    # 2 h regardless of author, so a brand-new post from anyone can collect
+    # its first engagement and not be invisible to the algorithm.
+    _NEW_POST_WINDOW = timezone.now() - timedelta(hours=2)
 
     if not following_ids:
         base_qs = Post.objects.all()
     else:
         base_qs = Post.objects.filter(
-            Q(author__in=following_ids) |
-            Q(author=user) |
-            Q(is_repost=True, author__in=following_ids)
+            Q(author__in=following_ids) |          # people you follow
+            Q(author=user) |                        # your own posts
+            Q(is_repost=True, author__in=following_ids) |  # reposts by followings
+            Q(author__in=fof_ids) |                # friend-of-friend posts
+            Q(created_at__gte=_NEW_POST_WINDOW)    # ANY brand-new post (< 2 h)
         )
 
-    # Cursor pagination — only fetch posts older than the last seen one
     if cursor_dt:
         base_qs = base_qs.filter(created_at__lt=cursor_dt)
 
-    # Fetch exactly page_size posts, newest first.
-    # No oversampling — every post in the DB will appear on some page.
     posts = list(
         base_qs
         .select_related(
@@ -364,39 +648,70 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
             vibe_count    = Count('vibes',    distinct=True),
             comment_count = Count('comments', distinct=True),
             repost_count  = Count('reposts',  distinct=True),
-            like_count    = Count('likes',    distinct=True),
         )
-        .order_by('-created_at')[:page_size]
+        .order_by('-created_at')[:_FEED_SAMPLE]
     )
 
-    # ✅ FIX: Calculate next_cursor BEFORE we shuffle the posts by engagement!
-    # This guarantees the cursor is exactly the timestamp of the oldest post on this page.
+    # Cursor = oldest post in raw pool (must be calculated before reordering)
     next_cursor = posts[-1].created_at.timestamp() if len(posts) >= page_size else None
 
-    # Light engagement reorder within the page only (no decay — avoids hiding old posts)
-    def _engagement(post):
-        return (
-            getattr(post, 'vibe_count',    0) * 4 +
-            getattr(post, 'comment_count', 0) * 3 +
-            getattr(post, 'repost_count',  0) * 2 +
-            getattr(post, 'like_count',    0) * 1 +
-            random.uniform(0, 0.5)   # tiny jitter so feed varies slightly each load
-        )
+    # ── 2. Per-vibe breakdown annotation ──────────────────────────────────────
+    # Single bulk query via shared helper — handles repost → original resolution.
+    _annotate_vibe_breakdown(posts)
 
-    # Now it is safe to sort by engagement for the UI
-    posts.sort(key=_engagement, reverse=True)
+    # ── 3. Score & rank — compute once, cache on object ───────────────────────
+    # _score_post is called only once per post here; the cached value is reused
+    # in the merge sort below so we never compute it twice.
+    def _cached_score(p):
+        if not hasattr(p, '_feed_score'):
+            p._feed_score = _score_post(
+                p, now, vibe_weights, interacted_post_ids,
+                interacted_author_ids, fof_ids, adaptive_author_ids,
+            )
+        return p._feed_score
 
-    fof_ids, fof_via_map = _build_fof(following_ids_set, user.id)
+    scored = sorted(posts, key=_cached_score, reverse=True)
 
-    suggestion_users = list(
-        User.objects.exclude(id__in=following_ids)
-               .exclude(id=user.id)
-               .select_related('profile')
-               .order_by('?')[:5]
+    # ── 4. Exploration injection (~15 %) ──────────────────────────────────────
+    # Uses _random_posts_sample() — random offset scan instead of ORDER BY
+    # RANDOM(), so PostgreSQL never has to score the full posts table.
+    n_explore  = max(1, int(page_size * _EXPLORE_RATIO))
+    scored_ids = {p.post_id for p in scored}
+
+    explore_posts = _random_posts_sample(scored_ids, cursor_dt, n_explore)
+    _annotate_vibe_breakdown(explore_posts)   # same helper, no duplicate code
+
+    # ── 5. Merge, jitter, re-sort (scores already cached on objects) ──────────
+    merged = scored[: page_size - n_explore] + explore_posts
+    merged.sort(
+        key=lambda p: _cached_score(p) + random.uniform(0, 1.5),
+        reverse=True,
     )
 
+    # ── 6. Slice ──────────────────────────────────────────────────────────────
+    final_posts = merged[:page_size]
+
+    # ── 7. Build feed_items ───────────────────────────────────────────────────
+    # Suggestion users: random offset instead of ORDER BY RANDOM()
+    user_pool_count = (
+        User.objects
+        .exclude(id__in=following_ids)
+        .exclude(id=user.id)
+        .count()
+    )
+    suggestion_users = []
+    if user_pool_count > 0:
+        su_offset = random.randint(0, max(0, user_pool_count - 5))
+        suggestion_users = list(
+            User.objects
+            .exclude(id__in=following_ids)
+            .exclude(id=user.id)
+            .select_related('profile')
+            .order_by('id')[su_offset: su_offset + 5]
+        )
+
     feed_items = []
-    for i, post in enumerate(posts, 1):
+    for i, post in enumerate(final_posts, 1):
         actual_author_id = (
             post.original_post.author_id
             if post.is_repost and post.original_post
@@ -409,6 +724,48 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
             feed_items.append({'type': 'user_suggestion', 'data': suggestion_users.pop(0)})
 
     return feed_items, next_cursor
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Feed profile update helpers
+# Call these from your like_post / vibe_post / comment views so the
+# algorithm adapts over time to each user's actual behaviour.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _feed_record_vibe(user, vibe_type, post_author_id):
+    """
+    Call when a user ADDS or SWITCHES a vibe reaction.
+    Bumps the vibe taste weight for `vibe_type` in the user's UserFeedProfile,
+    records author affinity, and busts the interest cache so the next feed load
+    reflects this interaction immediately.
+    Already wired into PostVibeConsumer.toggle_vibe().
+    """
+    try:
+        from django.core.cache import cache
+        _get_or_create_feed_profile(user).record_vibe(vibe_type, post_author_id)
+        cache.delete(f'kvibe_interest_{user.id}')
+    except Exception:
+        pass
+
+
+def _feed_record_like(user, post_author_id):
+    """Call when a user LIKES a post.  Updates author affinity + busts interest cache."""
+    try:
+        from django.core.cache import cache
+        _get_or_create_feed_profile(user).record_like(post_author_id)
+        cache.delete(f'kvibe_interest_{user.id}')
+    except Exception:
+        pass
+
+
+def _feed_record_comment(user, post_author_id):
+    """Call when a user submits a COMMENT.  Updates author affinity + busts interest cache."""
+    try:
+        from django.core.cache import cache
+        _get_or_create_feed_profile(user).record_comment(post_author_id)
+        cache.delete(f'kvibe_interest_{user.id}')
+    except Exception:
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -902,6 +1259,8 @@ def like_post(request, post_id):
         post_obj.likes.remove(request.user)
     else:
         post_obj.likes.add(request.user)
+        # ── Feed profile: record author affinity signal ───────────────────
+        _feed_record_like(request.user, post_obj.author_id)
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         likers      = list(post_obj.likes.all()[:3])
@@ -973,6 +1332,8 @@ def postcomment(request, post_id):
             image=image,
             file=audio,
         )
+        # ── Feed profile: record author affinity signal ───────────────────
+        _feed_record_comment(request.user, post_obj.author_id)
 
         # ── Comment notification ──────────────────────────────────────────
         if post_obj.author != request.user:

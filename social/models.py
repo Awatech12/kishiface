@@ -1268,3 +1268,106 @@ class LoginAttempt(models.Model):
     def clear(cls, username):
         """Clear all failed attempts for a username on successful login."""
         cls.objects.filter(username=username.lower(), succeeded=False).delete()
+
+# =============================================================================
+# UserFeedProfile — adaptive vibe-taste profile for the Kvibe feed algorithm.
+#
+# After adding this class run:
+#   python manage.py makemigrations
+#   python manage.py migrate
+# =============================================================================
+
+class UserFeedProfile(models.Model):
+    """
+    One row per user.  Stores the evolving taste signals used by the feed
+    ranking algorithm (_get_feed_page in views.py).
+
+    vibe_weights
+        JSON dict mapping each vibe type to a float weight (default 0.5).
+        Incremented +0.1 each time the user reacts with that vibe (cap 3.0).
+        Gives heavier ranking weight to posts whose vibe distribution matches
+        what the user actually reacts to.  Example after a week of use:
+            {"fire": 1.8, "love": 1.2, "real": 0.7, "chill": 0.5, ...}
+
+    interacted_authors
+        Ordered list (newest first) of up to 50 author user-ids this user
+        has liked, vibed, or commented on.  Used for long-term author affinity
+        scoring that survives beyond the 30-day rolling DB query window.
+
+    last_updated
+        Auto-timestamp of the last weight mutation — available for future
+        periodic decay jobs if you want to slowly return unused weights to 0.5.
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='feed_profile',
+    )
+    vibe_weights       = models.JSONField(default=dict,  blank=True)
+    interacted_authors = models.JSONField(default=list,  blank=True)
+    last_updated       = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'UserFeedProfile_Table'
+
+    def __str__(self):
+        return f'FeedProfile({self.user.username})'
+
+    # ── Constants ────────────────────────────────────────────────────────────
+    _DEFAULT_WEIGHT = 0.5
+    _MAX_WEIGHT     = 3.0
+    _BUMP           = 0.1
+    _MAX_AUTHORS    = 50
+    _VIBE_TYPES     = ['fire', 'real', 'vibing', 'dead', 'cringe', 'chill', 'love']
+
+    # ── Read helpers ─────────────────────────────────────────────────────────
+
+    def get_weights(self) -> dict:
+        """Return full weight dict with defaults filled in for any missing type."""
+        base = {v: self._DEFAULT_WEIGHT for v in self._VIBE_TYPES}
+        base.update(self.vibe_weights or {})
+        return base
+
+    # ── Write helpers (called from views._feed_record_* and consumer) ────────
+
+    def record_vibe(self, vibe_type: str, author_id: int):
+        """
+        Bump the weight for `vibe_type` by _BUMP (capped at _MAX_WEIGHT) and
+        prepend `author_id` to interacted_authors (capped at _MAX_AUTHORS).
+        Called every time the user toggles a vibe ON or switches vibe types.
+        """
+        weights = self.get_weights()
+        weights[vibe_type] = min(
+            self._MAX_WEIGHT,
+            weights.get(vibe_type, self._DEFAULT_WEIGHT) + self._BUMP,
+        )
+        self.vibe_weights = weights
+        self._prepend_author(author_id)
+        self.save(update_fields=['vibe_weights', 'interacted_authors', 'last_updated'])
+
+    def record_like(self, author_id: int):
+        """
+        Record that the user liked a post by `author_id`.
+        Only updates author affinity — no vibe weight change.
+        """
+        self._prepend_author(author_id)
+        self.save(update_fields=['interacted_authors', 'last_updated'])
+
+    def record_comment(self, author_id: int):
+        """
+        Record that the user commented on a post by `author_id`.
+        Only updates author affinity — no vibe weight change.
+        """
+        self._prepend_author(author_id)
+        self.save(update_fields=['interacted_authors', 'last_updated'])
+
+    # ── Internal ─────────────────────────────────────────────────────────────
+
+    def _prepend_author(self, author_id: int):
+        """Insert author_id at position 0, deduplicate, cap at _MAX_AUTHORS."""
+        authors = list(self.interacted_authors or [])
+        if author_id in authors:
+            authors.remove(author_id)
+        authors.insert(0, author_id)
+        self.interacted_authors = authors[: self._MAX_AUTHORS]

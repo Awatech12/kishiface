@@ -497,53 +497,6 @@
       background: linear-gradient(90deg, rgba(var(--kvibe-primary-rgb, 130,80,255), 0.05), transparent);
       border-bottom: 1px solid rgba(var(--kvibe-primary-rgb, 130,80,255), 0.08);
     }
-
-    .kvibe-fof-label {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 11.5px;
-      color: var(--kvibe-text-light);
-      font-style: italic;
-      margin-bottom: 6px;
-    }
-
-    .kvibe-fof-label i {
-      color: var(--kvibe-primary);
-      font-size: 11px;
-      font-style: normal;
-    }
-
-    .kvibe-fof-avatars {
-      display: flex;
-      align-items: center;
-    }
-
-    .kvibe-fof-avatar {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      border: 2px solid var(--kvibe-white);
-      object-fit: cover;
-      margin-right: -8px;
-      transition: transform 0.15s ease;
-    }
-
-    .kvibe-fof-avatar:hover {
-      transform: scale(1.15);
-      z-index: 2;
-    }
-
-    .kvibe-fof-avatar:last-child {
-      margin-right: 0;
-    }
-
-    /* ===== FRIEND-OF-FRIEND BANNER ===== */
-    .kvibe-fof-header {
-      padding: 8px 16px 10px;
-      background: linear-gradient(90deg, rgba(var(--kvibe-primary-rgb, 130,80,255), 0.05), transparent);
-      border-bottom: 1px solid rgba(var(--kvibe-primary-rgb, 130,80,255), 0.08);
-    }
     .kvibe-fof-label {
       display: flex;
       align-items: center;
@@ -4206,119 +4159,69 @@
     window.kvibeScanFeedLpCards = kvibeScanCards;
   })();
   // ─────────────────────────────────────────────────────────────────────────
-
-
-</script>
-<script>
-/**
- * KVIBE HOME PAGE UNIFIED SCRIPTS
- * Handles: URL Previews, Auto-Pause on Scroll, and Media Sync
- */
 (function() {
-  // --- 1. LINK PREVIEW LOGIC ---
-  function kvibeBuildFeedLpCard(data) {
-    if (!data.title && !data.image) return null;
-    const card = document.createElement('a');
-    card.className = 'kvibe-post-link-preview';
-    card.href = data.url;
-    card.target = '_blank';
-    card.rel = 'noopener noreferrer';
-    card.innerHTML = `
-      ${data.image ? `<img class="kvibe-plp-image" src="${data.image}" alt="">` : ''}
-      <div class="kvibe-plp-body">
-        <div class="kvibe-plp-domain">${data.domain || ''}</div>
-        <div class="kvibe-plp-title">${data.title || ''}</div>
-        <div class="kvibe-plp-desc">${data.description || ''}</div>
-      </div>
-    `;
-    return card;
-  }
-
-  async function kvibeFetchAndInjectLp(article) {
-    const url = article.dataset.lpUrl;
-    if (!url) return;
-    const slot = article.querySelector('.kvibe-lp-slot');
-    if (!slot || article.querySelector('.kvibe-post-link-preview') || article.dataset.lpFetching) return;
-
-    article.dataset.lpFetching = '1';
-    try {
-      const res = await fetch(`/fetch_link_preview/?url=${encodeURIComponent(url)}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data.title && !data.image) return;
-      const card = kvibeBuildFeedLpCard({ ...data, url });
-      if (card) {
-        slot.innerHTML = ''; 
-        slot.appendChild(card);
-      }
-    } catch (e) { console.error("Link preview error", e); }
-  }
-
-  function kvibeScanFeedLpCards(root) {
-    (root || document).querySelectorAll('.kvibe-post[data-lp-url]').forEach(article => {
-      kvibeFetchAndInjectLp(article);
-    });
-  }
-
-  // --- 2. MEDIA CONTROL (Scroll & Sync) ---
   let mediaObserver;
 
   function initMediaController() {
+    // 1. Observer: Pause video when it is scrolled out of view
+    const observerOptions = { root: null, threshold: 0.1 };
     mediaObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        const video = entry.target;
-        if (!entry.isIntersecting && !video.paused) {
-          video.pause(); 
+        if (!entry.isIntersecting) {
+          const video = entry.target;
+          if (!video.paused) video.pause();
         }
       });
-    }, { threshold: 0.2 });
+    }, observerOptions);
 
-    // Sync: Pause all other media when one starts playing
+    // 2. Global Listener: Stop all other media when one starts playing
     document.addEventListener('play', function(e) {
       if (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO') {
-        document.querySelectorAll('video, audio').forEach(m => {
-          if (m !== e.target && !m.paused) m.pause();
+        const allMedia = document.querySelectorAll('video, audio');
+        allMedia.forEach(m => {
+          if (m !== e.target && !m.paused) {
+            m.pause();
+          }
         });
       }
     }, true);
 
+    // Initial attachment to videos currently on page
     refreshMediaObservers();
   }
 
   function refreshMediaObservers() {
-    document.querySelectorAll('video').forEach(v => {
+    const videos = document.querySelectorAll('video');
+    videos.forEach(v => {
+      // Ensure browser defaults are off
       v.removeAttribute('controls');
+      
+      // Start watching scroll position
       mediaObserver.observe(v);
+      
+      // Force UI to show play icon if video is currently paused
       const container = v.closest('.kvibe-video-container');
-      if (container && v.paused) container.classList.add('paused');
+      if (container && v.paused) {
+        container.classList.add('paused');
+      }
     });
   }
 
-  // --- 3. STARTUP & HTMX ---
-  function initAll() {
-    kvibeScanFeedLpCards();
+  // Run on initial load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMediaController);
+  } else {
     initMediaController();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAll);
-  } else {
-    initAll();
-  }
-
-  document.addEventListener('htmx:afterOnLoad', function(evt) {
-    kvibeScanFeedLpCards(evt.detail.target);
-    if (mediaObserver) refreshMediaObservers();
+  // HTMX Support: Re-scan for new videos after infinite scroll loads
+  document.addEventListener('htmx:afterOnLoad', function() {
+    if (mediaObserver) {
+      refreshMediaObservers();
+    }
   });
-
-  window.kvibeScanFeedLpCards = kvibeScanFeedLpCards;
 })();
+
 </script>
-
-</body>
-
 </body>
 </html>
-
-
-

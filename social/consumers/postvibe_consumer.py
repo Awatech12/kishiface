@@ -121,6 +121,7 @@ class PostVibeConsumer(AsyncWebsocketConsumer):
         Returns a result dict consumed by receive() above.
         """
         from social.models import PostVibe, Post, Notification
+        from social.views import _feed_record_vibe
 
         # UPDATED: Added 'love' to valid vibes
         VALID_VIBES = {'fire', 'real', 'vibing', 'dead', 'cringe', 'chill', 'love'}
@@ -138,12 +139,23 @@ class PostVibeConsumer(AsyncWebsocketConsumer):
         action_taken = 'added'
         user_vibe    = vibe_type
 
+        # Resolve the content creator: for a repost we want to record affinity
+        # toward the ORIGINAL author (the person who made the content), not the
+        # reposter.  This keeps _feed_record_vibe consistent with how _score_post
+        # resolves actual_author_id when ranking posts.
+        content_author_id = (
+            post.original_post.author_id
+            if post.is_repost and post.original_post
+            else post.author_id
+        )
+
         if existing:
             if existing.vibe_type == vibe_type:
                 # ── Toggle OFF — same vibe tapped again ──────────────────
                 existing.delete()
                 user_vibe    = None
                 action_taken = 'removed'
+                # No feed profile update on removal — we don't un-learn taste
 
                 # Remove the like notification that was created when vibe was added
                 Notification.objects.filter(
@@ -158,12 +170,15 @@ class PostVibeConsumer(AsyncWebsocketConsumer):
                 existing.vibe_type = vibe_type
                 existing.save(update_fields=['vibe_type'])
                 action_taken = 'changed'
-                # No notification change needed — user already notified on first vibe
+                # Update taste weight for the new vibe type + original author affinity
+                _feed_record_vibe(user, vibe_type, content_author_id)
 
         else:
             # ── Brand new vibe ────────────────────────────────────────────
             PostVibe.objects.create(post=post, user=user, vibe_type=vibe_type)
             action_taken = 'added'
+            # Record vibe taste weight + original author affinity
+            _feed_record_vibe(user, vibe_type, content_author_id)
 
             # Notify the post author (skip self-vibes)
             if post.author != user:
