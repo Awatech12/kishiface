@@ -673,32 +673,42 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
 
     scored = sorted(posts, key=_cached_score, reverse=True)
 
-    # ── 4. Exploration injection (~15 %) ──────────────────────────────────────
-    # Uses _random_posts_sample() — random offset scan instead of ORDER BY
-    # RANDOM(), so PostgreSQL never has to score the full posts table.
+    # ── 4. Cursor — derived from the SCORED pool before any explore mixing ────
+    # We take the Nth post in the scored list (where N = page_size) as the
+    # cursor anchor. This guarantees:
+    #   a) The cursor always advances exactly page_size posts per scroll.
+    #   b) Explore posts (which may be random-offset older posts) never drag
+    #      the cursor backwards and cause duplicate posts on the next load.
+    #   c) next_cursor is None only when the scored pool itself has fewer
+    #      than page_size posts — meaning genuine exhaustion.
+    if len(scored) >= page_size:
+        # Use the page_size-th scored post's timestamp as the cursor boundary.
+        # On the next call, base_qs will filter created_at < this timestamp.
+        next_cursor = scored[page_size - 1].created_at.timestamp()
+    else:
+        next_cursor = None
+
+    # ── 5. Exploration injection (~15 %) ──────────────────────────────────────
+    # Explore posts add novelty but are EXCLUDED from cursor calculation above.
+    # Uses _random_posts_sample() — random offset scan, no ORDER BY RANDOM().
     n_explore  = max(1, int(page_size * _EXPLORE_RATIO))
     scored_ids = {p.post_id for p in scored}
 
     explore_posts = _random_posts_sample(scored_ids, cursor_dt, n_explore)
-    _annotate_vibe_breakdown(explore_posts)   # same helper, no duplicate code
+    _annotate_vibe_breakdown(explore_posts)
 
-    # ── 5. Merge, jitter, re-sort (scores already cached on objects) ──────────
-    merged = scored[: page_size - n_explore] + explore_posts
+    # ── 6. Merge, jitter, re-sort, slice ──────────────────────────────────────
+    # Take top (page_size - n_explore) scored posts + explore posts, then
+    # re-sort with jitter so explore posts land naturally in the feed.
+    # If explore returned 0 posts (thin window), fall back to full page_size
+    # from scored so the user always sees a complete page.
+    n_from_scored = page_size - len(explore_posts)
+    merged = scored[:n_from_scored] + explore_posts
     merged.sort(
         key=lambda p: _cached_score(p) + random.uniform(0, 1.5),
         reverse=True,
     )
-
-    # ── 6. Slice + cursor ────────────────────────────────────────────────────
-    # next_cursor = timestamp of the OLDEST post in final_posts so the next
-    # load-more call fetches posts strictly older than what was just rendered.
-    # None means no more pages (fewer than page_size posts were available).
     final_posts = merged[:page_size]
-    if len(final_posts) >= page_size:
-        oldest_ts = min(p.created_at for p in final_posts)
-        next_cursor = oldest_ts.timestamp()
-    else:
-        next_cursor = None
 
     # ── 7. Build feed_items ───────────────────────────────────────────────────
     # Suggestion users: random offset instead of ORDER BY RANDOM()
