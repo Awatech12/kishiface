@@ -297,7 +297,7 @@ def _safe_redirect_back(request, fallback='home'):
 # Signals: Rule-Based · Behavior-Based · Vibe-Based · Network · Exploration
 # ─────────────────────────────────────────────────────────────────────────────
 
-FEED_PAGE_SIZE = 12          # posts returned per page
+FEED_PAGE_SIZE = 10          # posts returned per page
 _FEED_SAMPLE   = 40          # candidate pool pulled from DB before scoring
 _EXPLORE_RATIO = 0.15        # 15 % of each page is random exploration
 
@@ -652,8 +652,9 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         .order_by('-created_at')[:_FEED_SAMPLE]
     )
 
-    # Cursor = oldest post in raw pool (must be calculated before reordering)
-    next_cursor = posts[-1].created_at.timestamp() if len(posts) >= page_size else None
+    # next_cursor is computed AFTER slicing to final_posts (step 6 below)
+    # so it always points to the oldest post that was actually rendered.
+    # Do NOT calculate it here from the raw 40-post pool — that skips posts.
 
     # ── 2. Per-vibe breakdown annotation ──────────────────────────────────────
     # Single bulk query via shared helper — handles repost → original resolution.
@@ -688,8 +689,16 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         reverse=True,
     )
 
-    # ── 6. Slice ──────────────────────────────────────────────────────────────
+    # ── 6. Slice + cursor ────────────────────────────────────────────────────
+    # next_cursor = timestamp of the OLDEST post in final_posts so the next
+    # load-more call fetches posts strictly older than what was just rendered.
+    # None means no more pages (fewer than page_size posts were available).
     final_posts = merged[:page_size]
+    if len(final_posts) >= page_size:
+        oldest_ts = min(p.created_at for p in final_posts)
+        next_cursor = oldest_ts.timestamp()
+    else:
+        next_cursor = None
 
     # ── 7. Build feed_items ───────────────────────────────────────────────────
     # Suggestion users: random offset instead of ORDER BY RANDOM()
@@ -906,7 +915,10 @@ def feed_load_more(request):
 
     feed, next_cursor = _get_feed_page(request.user, following_ids, cursor_dt=cursor_dt)
 
-    if not feed:
+    # Only return 204 when there are genuinely no post items in the feed.
+    # Suggestion cards count as items too — check specifically for post type.
+    post_items = [item for item in feed if item.get('type') == 'post']
+    if not post_items:
         return HttpResponse(status=204)
 
     return render(request, 'snippet/feed_posts_partial.html', {
