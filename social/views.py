@@ -542,7 +542,8 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     return score
 
 
-def _random_posts_sample(exclude_ids, cursor_dt, n):
+def _random_posts_sample(exclude_ids, cursor_dt, n,
+                          blocked_ids=None, seen_post_ids=None):
     """
     Return n random Post rows WITHOUT ORDER BY RANDOM().
 
@@ -552,11 +553,22 @@ def _random_posts_sample(exclude_ids, cursor_dt, n):
 
     This replaces .order_by('?') which does a full-table random sort
     and is catastrophically slow on large datasets in PostgreSQL.
+
+    blocked_ids   : set of user IDs — posts from blocked/blocking users
+                    are excluded so they never surface through explore.
+    seen_post_ids : set of post_ids already rendered in earlier pages —
+                    prevents the same post re-appearing via explore on
+                    subsequent scroll loads.
     """
-    from django.db.models import Max, Min
     import random as _random
 
-    base_qs = Post.objects.exclude(post_id__in=exclude_ids)
+    all_exclude = set(exclude_ids or [])
+    if seen_post_ids:
+        all_exclude |= set(seen_post_ids)
+
+    base_qs = Post.objects.exclude(post_id__in=all_exclude)
+    if blocked_ids:
+        base_qs = base_qs.exclude(author__in=blocked_ids)
     if cursor_dt:
         base_qs = base_qs.filter(created_at__lt=cursor_dt)
 
@@ -625,18 +637,28 @@ def _annotate_vibe_breakdown(posts):
             setattr(post, f'_vb_{vt}', bd.get(vt, 0))
 
 
-def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
+def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
+                   seen_post_ids=None):
     """
     Full scored/ranked feed page.
 
     Pipeline:
       1. Candidate pool  — _FEED_SAMPLE posts newest-first (cursor-aware)
+         + unseen posts from followed accounts since last visit
       2. Per-vibe annotate — attach _vb_<type> count to each post object
       3. Score & rank    — _score_post() with all 5 signal families
-      4. Exploration     — inject ~15 % random posts to prevent boredom
-      5. Re-sort + jitter— merge explore posts with a random nudge
+      4. Exploration     — inject dynamic % random posts to prevent boredom
+         (30 % for new users, 15 % for established users)
+      5. Re-sort + jitter— per-user seeded RNG so different users see
+         different orderings of the same scored pool
       6. Slice           — take page_size items
+      6b. Own-post pinning — first page only
       7. FoF metadata + suggestion cards → feed_items list
+
+    Args:
+        seen_post_ids : set/list of post_ids already shown to this user
+                        in earlier scroll pages — excluded from explore
+                        slot so the same post never re-surfaces via explore.
 
     Returns (feed_items list, next_cursor float|None).
     """
@@ -645,6 +667,24 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
 
     following_ids_set = set(following_ids)
     now               = timezone.now()
+    seen_post_ids     = set(seen_post_ids or [])
+
+    # ── Blocked users — fetch once, apply everywhere ──────────────────────────
+    # Posts from blocked/blocking users must be invisible in BOTH the main
+    # candidate pool AND the explore slot.
+    _blocked_ids = set(
+        BlockedUser.objects
+        .filter(Q(blocker=user) | Q(blocked=user))
+        .values_list('blocked_id', 'blocker_id')
+        .__iter__().__class__  # trick: use values_list flat below
+    )
+    # Correct flat query:
+    _blocked_qs   = BlockedUser.objects.filter(Q(blocker=user) | Q(blocked=user))
+    _blocked_ids  = set(
+        list(_blocked_qs.values_list('blocked_id', flat=True)) +
+        list(_blocked_qs.values_list('blocker_id', flat=True))
+    )
+    _blocked_ids.discard(user.id)   # never exclude the viewer themselves
 
     # ── Dynamic candidate pool size ───────────────────────────────────────────
     # Scale the candidate pool with the number of accounts the user follows so
@@ -669,16 +709,27 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     # its first engagement and not be invisible to the algorithm.
     _NEW_POST_WINDOW = timezone.now() - timedelta(hours=2)
 
+    # FIX 1 — Last-visit unseen posts: always pull ALL posts from followed
+    # accounts posted since the user's last feed visit, regardless of the
+    # _FEED_SAMPLE cap.  This prevents posts from being permanently buried
+    # when the user hasn't opened the app for a day or two.
+    _last_visit = getattr(feed_prof, 'last_feed_visit', None)
+    _unseen_since = _last_visit if _last_visit else (now - timedelta(hours=48))
+
     if not following_ids:
         base_qs = Post.objects.all()
     else:
         base_qs = Post.objects.filter(
-            Q(author__in=following_ids) |          # people you follow
-            Q(author=user) |                        # your own posts
-            Q(is_repost=True, author__in=following_ids) |  # reposts by followings
-            Q(author__in=fof_ids) |                # friend-of-friend posts
-            Q(created_at__gte=_NEW_POST_WINDOW)    # ANY brand-new post (< 2 h)
+            Q(author__in=following_ids) |                    # people you follow
+            Q(author=user) |                                  # your own posts
+            Q(is_repost=True, author__in=following_ids) |    # reposts by followings
+            Q(author__in=fof_ids) |                           # friend-of-friend posts
+            Q(created_at__gte=_NEW_POST_WINDOW)               # ANY brand-new post (< 2 h)
         )
+
+    # Exclude blocked users from the main pool
+    if _blocked_ids:
+        base_qs = base_qs.exclude(author__in=_blocked_ids)
 
     if cursor_dt:
         base_qs = base_qs.filter(created_at__lt=cursor_dt)
@@ -697,6 +748,65 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         )
         .order_by('-created_at')[:_feed_sample]
     )
+
+    # ── FIX 1b: Unseen posts from followings since last visit ────────────────
+    # Fetch posts from followed accounts created after _unseen_since that are
+    # NOT already in the main pool (i.e. fell outside the _feed_sample cap).
+    # This runs only on the first page (no cursor) to avoid duplication.
+    if cursor_dt is None and following_ids:
+        _existing_pool_ids = {p.post_id for p in posts}
+        _unseen_extras = list(
+            Post.objects
+            .filter(
+                Q(author__in=following_ids) | Q(author=user),
+                created_at__gt=_unseen_since,
+            )
+            .exclude(post_id__in=_existing_pool_ids)
+            .exclude(author__in=_blocked_ids)
+            .select_related(
+                'author', 'author__profile',
+                'original_post', 'original_post__author', 'original_post__author__profile',
+            )
+            .prefetch_related('likes', 'reposts', 'images')
+            .annotate(
+                vibe_count    = Count('vibes',    distinct=True),
+                comment_count = Count('comments', distinct=True),
+                repost_count  = Count('reposts',  distinct=True),
+            )
+            .order_by('-created_at')[:50]   # cap at 50 to avoid memory blowout
+        )
+        if _unseen_extras:
+            posts = posts + _unseen_extras
+
+    # ── FIX 4: Inject original posts of reposts as independent candidates ──────
+    # When a followed user reposts a 3-day-old post, that original post never
+    # enters the candidate pool on its own and stays invisible.  We collect the
+    # original_post ids from all repost rows already fetched, then bulk-fetch
+    # any originals not already present — they compete on their own score.
+    _repost_orig_ids = {
+        p.original_post.post_id
+        for p in posts
+        if p.is_repost and p.original_post
+    }
+    _existing_ids = {p.post_id for p in posts}
+    _missing_orig_ids = _repost_orig_ids - _existing_ids
+    if _missing_orig_ids:
+        _orig_extras = list(
+            Post.objects
+            .filter(post_id__in=_missing_orig_ids)
+            .exclude(author__in=_blocked_ids)
+            .select_related(
+                'author', 'author__profile',
+                'original_post', 'original_post__author', 'original_post__author__profile',
+            )
+            .prefetch_related('likes', 'reposts', 'images')
+            .annotate(
+                vibe_count    = Count('vibes',    distinct=True),
+                comment_count = Count('comments', distinct=True),
+                repost_count  = Count('reposts',  distinct=True),
+            )
+        )
+        posts = posts + _orig_extras
 
     # next_cursor is computed AFTER slicing to final_posts (step 6 below)
     # so it always points to the oldest post that was actually rendered.
@@ -734,13 +844,20 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     else:
         next_cursor = None
 
-    # ── 5. Exploration injection (~15 %) ──────────────────────────────────────
+    # ── 5. Exploration injection ─────────────────────────────────────────────
     # Explore posts add novelty but are EXCLUDED from cursor calculation above.
     # Uses _random_posts_sample() — random offset scan, no ORDER BY RANDOM().
-    n_explore  = max(1, int(page_size * _EXPLORE_RATIO))
+    #
+    # Dynamic explore ratio: users with few followings get a larger explore
+    # slice (30 %) so new/unseen content from outside their network still
+    # reaches them.  Power users keep the default 15 %.
+    _effective_explore_ratio = 0.30 if len(following_ids_set) < 10 else _EXPLORE_RATIO
+    n_explore  = max(1, int(page_size * _effective_explore_ratio))
     scored_ids = {p.post_id for p in scored}
 
-    explore_posts = _random_posts_sample(scored_ids, cursor_dt, n_explore)
+    explore_posts = _random_posts_sample(scored_ids, cursor_dt, n_explore,
+                                         blocked_ids=_blocked_ids,
+                                         seen_post_ids=seen_post_ids)
     _annotate_vibe_breakdown(explore_posts)
 
     # ── 6. Merge, jitter, re-sort, slice ──────────────────────────────────────
@@ -748,13 +865,51 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
     # re-sort with jitter so explore posts land naturally in the feed.
     # If explore returned 0 posts (thin window), fall back to full page_size
     # from scored so the user always sees a complete page.
+    #
+    # Per-user jitter seed: combining user.id with the current hour means:
+    #   - Two different users always get a different ordering for the same posts.
+    #   - The same user gets a fresh shuffle each hour (not on every reload),
+    #     so the feed feels stable within a session but evolves over time.
+    _rng = random.Random(user.id ^ hash(now.strftime('%Y%m%d%H')))
+
     n_from_scored = page_size - len(explore_posts)
     merged = scored[:n_from_scored] + explore_posts
     merged.sort(
-        key=lambda p: _cached_score(p) + random.uniform(0, 1.5),
+        key=lambda p: _cached_score(p) + _rng.uniform(0, 1.5),
         reverse=True,
     )
     final_posts = merged[:page_size]
+
+    # ── 6b. Own-post pinning — only on the FIRST page load (no cursor) ─────────
+    # After jitter and explore injection the user's own brand-new posts can be
+    # displaced from the visible page.  We guarantee visibility on first load by:
+    #   • Only activating when cursor_dt is None (i.e. fresh feed, not scroll).
+    #   • Separating own posts (author == user) posted in the last 2 h.
+    #   • Sorting own posts newest-first so the most recent appears at the top.
+    #   • Prepending them to final_posts and trimming back to page_size.
+    # Skipping on subsequent pages prevents the same post from re-appearing
+    # at the top on every scroll load.
+    # Zero extra DB queries — purely a reorder of the already-fetched pool.
+    if cursor_dt is None:
+        _OWN_PIN_WINDOW = timezone.now() - timedelta(hours=2)
+        own_posts   = [p for p in final_posts
+                       if p.author_id == user.id and p.created_at >= _OWN_PIN_WINDOW]
+        other_posts = [p for p in final_posts if p not in own_posts]
+
+        if own_posts:
+            own_posts.sort(key=lambda p: p.created_at, reverse=True)
+            final_posts = own_posts + other_posts
+            final_posts = final_posts[:page_size]
+
+    # ── FIX 1c: Stamp last_feed_visit so next load knows where to resume ────────
+    # Only update on the first page (cursor_dt is None) so mid-scroll loads
+    # don't advance the cursor prematurely.
+    if cursor_dt is None:
+        try:
+            feed_prof.last_feed_visit = now
+            feed_prof.save(update_fields=['last_feed_visit'])
+        except Exception:
+            pass
 
     # ── 7. Build feed_items ───────────────────────────────────────────────────
     # Suggestion users: random offset instead of ORDER BY RANDOM()
@@ -776,6 +931,12 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         )
 
     feed_items = []
+    _suggestion_injected = 0
+    # FIX 7: Only inject suggestion cards for users with < 20 followings
+    # (genuinely new / small accounts who benefit from discovery).
+    # Cap at 1 card per page so post density is never starved.
+    _max_suggestions_this_page = 1 if len(following_ids_set) < 20 else 0
+
     for i, post in enumerate(final_posts, 1):
         actual_author_id = (
             post.original_post.author_id
@@ -785,8 +946,11 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None):
         is_fof  = actual_author_id in fof_ids
         fof_via = fof_via_map.get(actual_author_id, []) if is_fof else []
         feed_items.append({'type': 'post', 'data': post, 'is_fof': is_fof, 'fof_via': fof_via})
-        if i % 4 == 2 and suggestion_users:
+        if (i % 4 == 2
+                and suggestion_users
+                and _suggestion_injected < _max_suggestions_this_page):
             feed_items.append({'type': 'user_suggestion', 'data': suggestion_users.pop(0)})
+            _suggestion_injected += 1
 
     return feed_items, next_cursor
 
@@ -969,7 +1133,17 @@ def feed_load_more(request):
     profile       = Profile.objects.get(user=request.user)
     following_ids = list(profile.followings.values_list('user', flat=True))
 
-    feed, next_cursor = _get_feed_page(request.user, following_ids, cursor_dt=cursor_dt)
+    # FIX 6: Pass seen post IDs so explore slot never resurfaces a post the
+    # user already scrolled past.  The client sends them as a comma-separated
+    # query param ?seen=<id1>,<id2>,...
+    seen_raw      = request.GET.get('seen', '')
+    seen_post_ids = set(seen_raw.split(',')) if seen_raw else set()
+
+    feed, next_cursor = _get_feed_page(
+        request.user, following_ids,
+        cursor_dt=cursor_dt,
+        seen_post_ids=seen_post_ids,
+    )
 
     # Only return 204 when there are genuinely no post items in the feed.
     # Suggestion cards count as items too — check specifically for post type.
@@ -1274,6 +1448,13 @@ def post(request):
                 daemon=True,
             ).start()
         
+        # ── Feed: bust interest cache so the new post surfaces immediately ──
+        try:
+            from django.core.cache import cache
+            cache.delete(f'kvibe_interest_v2_{request.user.id}')
+        except Exception:
+            pass
+
         messages.success(request, 'Post dropped successfully! ✨')
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':

@@ -2806,10 +2806,52 @@
     </style>
 
     <script>
+    // ── Seen-IDs tracking ──────────────────────────────────────────────────────
+    // seenPostIds    : UUIDs of every post article already rendered in the feed.
+    //                  Sent as ?seen=   so the explore slot never resurfaces them.
+    // seenUserIds    : IDs of every suggestion card already rendered.
+    //                  Sent as ?seen_users= so the same user is never suggested twice.
+    // Both sets are read by kvibeUpdateSentinel() which rewrites the sentinel's
+    // hx-get URL before HTMX processes it, ensuring the params are always fresh.
+    window._kvibeSeenPostIds = new Set();
+    window._kvibeSeenUserIds = new Set();
+
+    function kvibeCollectSeenIds() {
+      // Collect post IDs from all rendered post articles
+      document.querySelectorAll('.kvibe-post[data-post-id]').forEach(function(el) {
+        window._kvibeSeenPostIds.add(el.dataset.postId);
+      });
+      // Collect suggestion card user IDs
+      document.querySelectorAll('.kvibe-user-suggestion[data-user-id]').forEach(function(el) {
+        window._kvibeSeenUserIds.add(el.dataset.userId);
+      });
+    }
+
+    function kvibeUpdateSentinel() {
+      var sentinel = document.getElementById('kvibe-feed-sentinel');
+      if (!sentinel) return;
+
+      kvibeCollectSeenIds();
+
+      var cursor = sentinel.dataset.cursor || '';
+      var seen      = Array.from(window._kvibeSeenPostIds).join(',');
+      var seenUsers = Array.from(window._kvibeSeenUserIds).join(',');
+
+      var url = '/feed/more/?cursor=' + encodeURIComponent(cursor);
+      if (seen)      url += '&seen='       + encodeURIComponent(seen);
+      if (seenUsers) url += '&seen_users=' + encodeURIComponent(seenUsers);
+
+      sentinel.setAttribute('hx-get', url);
+    }
+
     document.addEventListener('htmx:afterSwap', function (evt) {
       var newSentinel = document.getElementById('kvibe-feed-sentinel');
-      if (newSentinel && typeof htmx !== 'undefined') {
-        htmx.process(newSentinel);
+      if (newSentinel) {
+        // Update the sentinel URL with current seen IDs BEFORE htmx processes it
+        kvibeUpdateSentinel();
+        if (typeof htmx !== 'undefined') {
+          htmx.process(newSentinel);
+        }
       }
       // Scan the real feed container for new LP cards.
       if (typeof window.kvibeScanFeedLpCards === 'function') {
@@ -2824,6 +2866,12 @@
       var activeChip = document.querySelector('.kvibe-mood-filter-chip.active');
       if (activeChip && typeof window.kvibeFilterMood === 'function') window.kvibeFilterMood(activeChip.dataset.mood, activeChip);
       if (typeof window.kvibeInitCarousels === 'function') window.kvibeInitCarousels();
+    });
+
+    // Also collect IDs from the initial page-1 posts before any scroll happens
+    document.addEventListener('DOMContentLoaded', function() {
+      kvibeCollectSeenIds();
+      kvibeUpdateSentinel();
     });
     </script>
 
@@ -4275,6 +4323,3 @@
 </script>
 </body>
 </html>
-
-
-

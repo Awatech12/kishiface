@@ -397,12 +397,18 @@ class UserReport(models.Model):
         return f"{self.reporter.username} reported {self.reported.username} for {self.reason}"  
 
 class BlockedUser(models.Model):
-    blocker  = models.ForeignKey(User, related_name='blocking',  on_delete=models.CASCADE)
-    blocked  = models.ForeignKey(User, related_name='blocked_by', on_delete=models.CASCADE)
+    blocker  = models.ForeignKey(User, related_name='blocking',  on_delete=models.CASCADE, db_index=True)
+    blocked  = models.ForeignKey(User, related_name='blocked_by', on_delete=models.CASCADE, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('blocker', 'blocked')    
+        unique_together = ('blocker', 'blocked')
+        indexes = [
+            # Speeds up the bidirectional blocked-user lookup in _get_feed_page:
+            # BlockedUser.objects.filter(Q(blocker=user) | Q(blocked=user))
+            models.Index(fields=['blocker'], name='blockeduser_blocker_idx'),
+            models.Index(fields=['blocked'], name='blockeduser_blocked_idx'),
+        ]
 
 class Post(models.Model):
     post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
@@ -1297,6 +1303,12 @@ class UserFeedProfile(models.Model):
     last_updated
         Auto-timestamp of the last weight mutation — available for future
         periodic decay jobs if you want to slowly return unused weights to 0.5.
+
+    last_feed_visit
+        Datetime of the last home feed page-1 load for this user.
+        Written by _get_feed_page() in views.py.  Used on the next visit
+        to inject all posts from followed accounts since that timestamp,
+        ensuring no post is invisible due to the _FEED_SAMPLE pool cap.
     """
 
     user = models.OneToOneField(
@@ -1307,6 +1319,18 @@ class UserFeedProfile(models.Model):
     vibe_weights       = models.JSONField(default=dict,  blank=True)
     interacted_authors = models.JSONField(default=list,  blank=True)
     last_updated       = models.DateTimeField(auto_now=True)
+
+    # ── Fix 1: last_feed_visit ────────────────────────────────────────────────
+    # Stamped by _get_feed_page() on every first-page load (cursor_dt=None).
+    # The feed algorithm reads this to inject unseen posts from followed
+    # accounts posted since the user's last visit, preventing posts from
+    # being permanently buried by the _FEED_SAMPLE cap when the user has
+    # been away for a day or more.
+    last_feed_visit = models.DateTimeField(
+        null=True, blank=True,
+        help_text='Timestamp of the last time this user loaded the home feed. '
+                  'Used by the feed algorithm to surface missed posts.',
+    )
 
     class Meta:
         db_table = 'UserFeedProfile_Table'
