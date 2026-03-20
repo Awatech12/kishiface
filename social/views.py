@@ -638,7 +638,7 @@ def _annotate_vibe_breakdown(posts):
 
 
 def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
-                   seen_post_ids=None):
+                   seen_post_ids=None, seen_suggestion_ids=None):
     """
     Full scored/ranked feed page.
 
@@ -672,15 +672,8 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # ── Blocked users — fetch once, apply everywhere ──────────────────────────
     # Posts from blocked/blocking users must be invisible in BOTH the main
     # candidate pool AND the explore slot.
+    _blocked_qs  = BlockedUser.objects.filter(Q(blocker=user) | Q(blocked=user))
     _blocked_ids = set(
-        BlockedUser.objects
-        .filter(Q(blocker=user) | Q(blocked=user))
-        .values_list('blocked_id', 'blocker_id')
-        .__iter__().__class__  # trick: use values_list flat below
-    )
-    # Correct flat query:
-    _blocked_qs   = BlockedUser.objects.filter(Q(blocker=user) | Q(blocked=user))
-    _blocked_ids  = set(
         list(_blocked_qs.values_list('blocked_id', flat=True)) +
         list(_blocked_qs.values_list('blocker_id', flat=True))
     )
@@ -912,11 +905,17 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             pass
 
     # ── 7. Build feed_items ───────────────────────────────────────────────────
-    # Suggestion users: random offset instead of ORDER BY RANDOM()
+    # Suggestion users: random offset instead of ORDER BY RANDOM().
+    # seen_suggestion_ids — user IDs already shown as suggestion cards on
+    # earlier scroll pages — are excluded so the same person is never
+    # recommended twice across a session.
+    _seen_sugg_ids = set(int(i) for i in (seen_suggestion_ids or []) if str(i).isdigit())
+
     user_pool_count = (
         User.objects
         .exclude(id__in=following_ids)
         .exclude(id=user.id)
+        .exclude(id__in=_seen_sugg_ids)
         .count()
     )
     suggestion_users = []
@@ -926,6 +925,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             User.objects
             .exclude(id__in=following_ids)
             .exclude(id=user.id)
+            .exclude(id__in=_seen_sugg_ids)
             .select_related('profile')
             .order_by('id')[su_offset: su_offset + 5]
         )
@@ -1139,10 +1139,16 @@ def feed_load_more(request):
     seen_raw      = request.GET.get('seen', '')
     seen_post_ids = set(seen_raw.split(',')) if seen_raw else set()
 
+    # Pass seen suggestion user IDs so the same user is never recommended
+    # twice across scroll pages.  Client sends ?seen_users=<id1>,<id2>,...
+    seen_users_raw      = request.GET.get('seen_users', '')
+    seen_suggestion_ids = set(seen_users_raw.split(',')) if seen_users_raw else set()
+
     feed, next_cursor = _get_feed_page(
         request.user, following_ids,
         cursor_dt=cursor_dt,
         seen_post_ids=seen_post_ids,
+        seen_suggestion_ids=seen_suggestion_ids,
     )
 
     # Only return 204 when there are genuinely no post items in the feed.
@@ -3370,4 +3376,5 @@ def change_password(request):
     cache.delete(rate_key)
 
     return JsonResponse({'success': True, 'message': 'Password updated successfully!'})
+
 
