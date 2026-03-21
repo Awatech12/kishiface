@@ -3384,3 +3384,4 @@ def change_password(request):
 
     return JsonResponse({'success': True, 'message': 'Password updated successfully!'})
 
+
