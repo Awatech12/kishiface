@@ -1,0 +1,45 @@
+{% load static %}
+{% for user in users %}
+<a href="{% url 'profile' user.username %}" class="ks-user-row">
+  <img
+    src="{{ user.profile.get_picture_url }}"
+    alt="{{ user.username }}"
+    class="ks-user-avatar"
+    loading="lazy"
+    onerror="this.src='https://placehold.co/48x48/dbdbdb/8e8e8e?text={{ user.username|first|upper }}'"
+  >
+  <div class="ks-user-info">
+    <div class="ks-user-name">
+      {{ user.username }}
+      {% if user.profile.is_verify %}
+        <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:11px;margin-left:2px;"></i>
+      {% endif %}
+    </div>
+    {% if user.get_full_name %}<div class="ks-user-handle">{{ user.get_full_name }}</div>{% endif %}
+    {% if user.profile.bio %}<div class="ks-user-bio">{{ user.profile.bio|truncatechars:70 }}</div>{% endif %}
+  </div>
+  <div class="ks-user-meta-right">
+    <span class="ks-follow-count">
+      <i class="fa-solid fa-user-group"></i> {{ user.follower_count }}
+    </span>
+  </div>
+</a>
+{% empty %}
+<div class="ks-empty" style="padding:30px 20px;">
+  <i class="fa-solid fa-user-slash"></i>
+  <p>No people found</p>
+</div>
+{% endfor %}
+
+{% if has_more %}
+<div
+  id="users-sentinel"
+  hx-get="{% url 'search_users_partial' %}?q={{ query|urlencode }}&page={{ page }}"
+  hx-trigger="intersect once"
+  hx-target="#users-sentinel"
+  hx-swap="outerHTML"
+  class="ks-load-sentinel"
+>
+  <span class="ks-spinner"></span>
+</div>
+{% endif %}

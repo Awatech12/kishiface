@@ -1,960 +1,1032 @@
+{% load pwa %}
+{% load humanize %}
 {% load static %}
+{% load time %}
+{% load text_filters %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
   <title>{% if query %}{{ query }} · Search{% else %}Explore · Kvibe{% endif %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
   <style>
-    /* ─── KVIBE CSS VARIABLES ─────────────────────────────────────── */
+    /* ─── ROOT TOKENS (matches home.html) ──────────────────────────────── */
     :root {
-      --kvibe-bg: #fafafa;
-      --kvibe-white: #ffffff;
-      --kvibe-text: #262626;
+      --kvibe-bg:         #fafafa;
+      --kvibe-white:      #ffffff;
+      --kvibe-text:       #262626;
       --kvibe-text-light: #8e8e8e;
-      --kvibe-primary: #0095f6;
-      --kvibe-border: #dbdbdb;
-      --kvibe-hover: #f0f0f0;
-      --kvibe-card-radius: 12px;
-      --header-h: 60px;
-      --tab-bar-h: 46px;
+      --kvibe-muted:      #8e8e8e;
+      --kvibe-primary:    #0095f6;
+      --kvibe-border:     #dbdbdb;
+      --kvibe-hover:      #f5f5f5;
+      --hdr:              60px;
+      --tabs:             48px;
+      --vibe-fire:        #ff4500;
     }
 
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       background: var(--kvibe-bg);
       color: var(--kvibe-text);
       -webkit-font-smoothing: antialiased;
-      min-height: 100vh;
     }
 
-    /* ─── HEADER ──────────────────────────────────────────────────── */
-    .ks-header {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      height: var(--header-h);
-      background: var(--kvibe-white);
-      border-bottom: 1px solid var(--kvibe-border);
+    /* ════════════════════════════════════════════════════════════════
+       HOME-STYLE DESKTOP 3-COLUMN LAYOUT (no radius, no shadows)
+    ════════════════════════════════════════════════════════════════ */
+    .kvibe-desktop-layout {
       display: flex;
-      align-items: center;
-      padding: 0 16px;
-      gap: 10px;
-      z-index: 200;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px 20px 0 20px;
+      gap: 20px;
     }
 
-    .ks-back-btn {
-      display: none;
-      background: none;
-      border: none;
-      color: var(--kvibe-text);
-      font-size: 20px;
-      cursor: pointer;
-      padding: 4px 8px 4px 0;
+    .kvibe-left-sidebar {
+      width: 245px;
       flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-right: 10px;
     }
 
-    .ks-search-wrap {
+    .kvibe-main-feed {
       flex: 1;
+      max-width: 600px;
+      margin: 0 auto;
+      min-width: 0;
+    }
+
+    .kvibe-right-sidebar {
+      width: 380px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-left: 10px;
+    }
+
+    .kvibe-desktop-only { display: none; }
+
+    /* ── Left Sidebar Nav (matches home.html) ── */
+    .kvibe-desktop-nav {
+      width: 100%;
       display: flex;
-      align-items: center;
-      background: #f2f2f2;
-      border-radius: 10px;
-      padding: 0 14px;
-      height: 40px;
-      transition: background 0.15s;
-    }
-    .ks-search-wrap:focus-within { background: #ebebeb; }
-
-    .ks-search-icon { color: #8e8e8e; font-size: 14px; margin-right: 8px; flex-shrink: 0; }
-
-    .ks-search-input {
-      flex: 1;
-      border: none;
-      background: none;
-      outline: none;
-      font-size: 16px;
-      color: var(--kvibe-text);
-    }
-    .ks-search-input::placeholder { color: #8e8e8e; }
-
-    .ks-clear-btn {
-      background: none;
-      border: none;
-      color: #aaa;
-      font-size: 15px;
-      cursor: pointer;
-      padding: 2px;
-      display: none;
-    }
-    .ks-clear-btn.visible { display: block; }
-
-    .ks-cancel-btn {
-      background: none;
-      border: none;
-      color: var(--kvibe-primary);
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-      display: none;
-    }
-
-    /* ─── TAB BAR ─────────────────────────────────────────────────── */
-    .ks-tabs {
-      position: fixed;
-      top: var(--header-h);
-      left: 0; right: 0;
-      height: var(--tab-bar-h);
+      flex-direction: column;
+      gap: 8px;
+      padding: 20px 0;
       background: var(--kvibe-white);
-      border-bottom: 1px solid var(--kvibe-border);
-      display: none;            /* shown only when query is active */
-      align-items: center;
-      overflow-x: auto;
-      scrollbar-width: none;
-      z-index: 190;
-      padding: 0 8px;
-      gap: 4px;
     }
-    .ks-tabs::-webkit-scrollbar { display: none; }
-    .ks-tabs.active { display: flex; }
+    .kvibe-desktop-nav-item {
+      display: flex; align-items: center;
+      text-decoration: none; width: 100%;
+      padding: 12px; position: relative;
+      transition: all 0.2s ease; cursor: pointer; border-radius: 8px;
+    }
+    .kvibe-desktop-nav-item:hover  { background: var(--kvibe-bg); }
+    .kvibe-desktop-nav-item.active { background: var(--kvibe-bg); }
+    .kvibe-desktop-nav-icon { width:24px; height:24px; margin-right:12px; position:relative; flex-shrink:0; }
+    .kvibe-desktop-nav-icon svg { width:100%; height:100%; stroke:var(--kvibe-text-light); transition:all 0.2s ease; }
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-icon svg,
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-icon svg { stroke: var(--kvibe-primary); }
+    .kvibe-desktop-nav-label { font-size:14px; color:var(--kvibe-text-light); font-weight:400; transition:all 0.2s ease; white-space:nowrap; }
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-label { color: var(--kvibe-text); }
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-label { color: var(--kvibe-text); font-weight:600; }
+    .kvibe-desktop-notification-badge {
+      position:absolute; top:8px; left:20px;
+      background:#0095f6; color:white;
+      font-size:10px; font-weight:600;
+      width:20px; height:20px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      padding:0 3px; border:2px solid var(--kvibe-white);
+    }
+    .kvibe-desktop-nav-item.logout .kvibe-desktop-nav-icon svg { stroke: #0095f6; }
 
-    .ks-tab {
-      flex-shrink: 0;
-      padding: 6px 18px;
-      border-radius: 20px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      background: none;
-      color: var(--kvibe-text-light);
-      transition: all 0.15s;
-      white-space: nowrap;
+    /* ── Channels section (no radius) ── */
+    .kvibe-channel-nav-item {
+      display:flex; align-items:center; width:100%;
+      padding:8px 12px; cursor:pointer; transition:background 0.2s ease;
+      text-decoration:none; position:relative; overflow:hidden;
     }
-    .ks-tab.active {
-      background: var(--kvibe-text);
-      color: var(--kvibe-white);
-    }
+    .kvibe-channel-nav-item:hover { background: var(--kvibe-bg); }
+    .kvibe-channel-icon { width:24px; height:24px; border-radius:50%; object-fit:cover; margin-right:12px; flex-shrink:0; }
+    .kvibe-channel-name { font-size:14px; color:var(--kvibe-text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kvibe-channel-unread { font-size:11px; font-weight:600; background:var(--kvibe-primary); color:white; min-width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 5px; margin-left:8px; }
+    .kvibe-channels-header { padding:16px 12px 8px 12px; margin-top:20px; }
+    .kvibe-channels-title { font-size:14px; font-weight:600; color:var(--kvibe-text); display:flex; align-items:center; gap:8px; }
+    .kvibe-channels-count { background:var(--kvibe-border); color:var(--kvibe-text); font-size:11px; font-weight:600; padding:2px 6px; border-radius:10px; }
+    .kvibe-channels-list { padding:0 12px; max-height:300px; overflow-y:auto; }
+    .kvibe-channels-empty { text-align:center; padding:20px 12px; color:var(--kvibe-text-light); }
+    .kvibe-channels-empty i { font-size:20px; margin-bottom:8px; opacity:0.5; }
+    .kvibe-channels-empty p { font-size:12px; }
+    .kvibe-btn-primary { background:var(--kvibe-primary); color:white; padding:6px 12px; font-size:12px; font-weight:600; text-decoration:none; display:inline-block; }
 
-    /* ─── MAIN LAYOUT ─────────────────────────────────────────────── */
-    .ks-body {
-      padding-top: calc(var(--header-h) + 8px);
-      min-height: 100vh;
+    /* ── Right Sidebar social tabs (no radius, no shadow) ── */
+    .kvibe-sidebar-social { background:var(--kvibe-white); overflow:hidden; }
+    .kvibe-sidebar-tabs { display:flex; border-bottom:1px solid var(--kvibe-border); }
+    .kvibe-sidebar-tab {
+      flex:1; padding:12px 8px; background:none; border:none;
+      font-size:13px; font-weight:600; color:var(--kvibe-text-light);
+      cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;
+      transition:all 0.2s ease; border-bottom:2px solid transparent; margin-bottom:-1px; font-family:inherit;
     }
-    .ks-body.has-tabs {
-      padding-top: calc(var(--header-h) + var(--tab-bar-h) + 8px);
-    }
+    .kvibe-sidebar-tab:hover { color:var(--kvibe-text); background:var(--kvibe-bg); }
+    .kvibe-sidebar-tab.active { color:var(--kvibe-primary); border-bottom-color:var(--kvibe-primary); background:none; }
+    .kvibe-sidebar-tab-count { background:var(--kvibe-border); color:var(--kvibe-text); font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:18px; text-align:center; transition:background 0.2s,color 0.2s; }
+    .kvibe-sidebar-tab.active .kvibe-sidebar-tab-count { background:rgba(0,149,246,.12); color:var(--kvibe-primary); }
+    .kvibe-sidebar-tab-panel { display:none; max-height:340px; overflow-y:auto; padding:8px 0; scrollbar-width:thin; scrollbar-color:var(--kvibe-border) transparent; }
+    .kvibe-sidebar-tab-panel::-webkit-scrollbar { width:4px; }
+    .kvibe-sidebar-tab-panel::-webkit-scrollbar-thumb { background:var(--kvibe-border); border-radius:2px; }
+    .kvibe-sidebar-tab-panel.active { display:block; }
+    .kvibe-sidebar-user-row { display:flex; align-items:center; gap:10px; padding:8px 14px; text-decoration:none; transition:background 0.15s ease; }
+    .kvibe-sidebar-user-row:hover { background:var(--kvibe-bg); }
+    .kvibe-sidebar-avatar { width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0; border:1px solid var(--kvibe-border); }
+    .kvibe-sidebar-user-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+    .kvibe-sidebar-user-name { font-size:13px; font-weight:600; color:var(--kvibe-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kvibe-sidebar-user-handle { font-size:11px; color:var(--kvibe-text-light); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kvibe-sidebar-empty { text-align:center; padding:24px 16px; color:var(--kvibe-text-light); }
+    .kvibe-sidebar-empty i { font-size:22px; margin-bottom:8px; opacity:0.4; display:block; }
+    .kvibe-sidebar-empty p { font-size:12px; }
 
-    /* ─── DESKTOP LAYOUT ──────────────────────────────────────────── */
-    @media (min-width: 900px) {
-      .ks-body {
-        display: flex;
-        max-width: 1100px;
-        margin: 0 auto;
-        padding-left: 20px;
-        padding-right: 20px;
-        gap: 24px;
-      }
-      .ks-main-col { flex: 1; min-width: 0; }
-      .ks-side-col { width: 320px; flex-shrink: 0; }
-    }
-    @media (max-width: 899px) {
-      .ks-side-col { display: none; }
-      .ks-main-col { width: 100%; }
-    }
-
-    /* ─── PANEL VISIBILITY ────────────────────────────────────────── */
-    .ks-panel { display: none; }
-    .ks-panel.active { display: block; }
-
-    /* ─── EXPLORE GRID (no query) ─────────────────────────────────── */
-    .ks-explore-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 2px;
-    }
-
-    .ks-grid-item {
-      position: relative;
-      aspect-ratio: 1;
-      overflow: hidden;
-      background: #e0e0e0;
-      cursor: pointer;
-    }
-    .ks-grid-item:nth-child(7n+1) {
-      grid-column: span 2;
-      grid-row: span 2;
-    }
-
-    .ks-grid-item img,
-    .ks-grid-item video {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      display: block;
-      transition: transform 0.25s ease;
-    }
-    .ks-grid-item:hover img,
-    .ks-grid-item:hover video { transform: scale(1.04); }
-
-    .ks-grid-item-overlay {
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      background: linear-gradient(transparent, rgba(0,0,0,0.55));
-      padding: 20px 8px 8px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .ks-grid-item:hover .ks-grid-item-overlay,
-    .ks-grid-item:focus .ks-grid-item-overlay { opacity: 1; }
-
-    .ks-grid-item-overlay i { color: #fff; font-size: 13px; }
-    .ks-grid-item-overlay span { color: #fff; font-size: 12px; font-weight: 600; }
-
-    .ks-media-type-badge {
-      position: absolute;
-      top: 6px; right: 6px;
-      color: #fff;
-      font-size: 12px;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-    }
-
-    .ks-grid-placeholder {
-      width: 100%; height: 100%;
-      background: linear-gradient(135deg, #e8e8e8, #d0d0d0);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      color: #bbb;
-    }
-
-    /* ─── SECTION HEADER ──────────────────────────────────────────── */
-    .ks-section-header {
-      padding: 16px 16px 10px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--kvibe-text-light);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-    }
-
-    /* ─── USER ROW ────────────────────────────────────────────────── */
-    .ks-user-row {
-      display: flex;
-      align-items: center;
-      padding: 10px 16px;
-      text-decoration: none;
-      color: inherit;
-      transition: background 0.12s;
-    }
-    .ks-user-row:hover { background: var(--kvibe-hover); }
-
-    .ks-user-avatar {
-      width: 48px; height: 48px;
-      border-radius: 50%;
-      object-fit: cover;
-      flex-shrink: 0;
-      margin-right: 12px;
-      background: #e0e0e0;
-    }
-    .ks-user-info { flex: 1; min-width: 0; }
-    .ks-user-name {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--kvibe-text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .ks-user-handle {
-      font-size: 13px;
-      color: var(--kvibe-text-light);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-top: 1px;
-    }
-    .ks-user-bio {
-      font-size: 12px;
-      color: var(--kvibe-text-light);
-      margin-top: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .ks-user-meta {
-      font-size: 12px;
-      color: var(--kvibe-text-light);
-      flex-shrink: 0;
-      margin-left: 8px;
-    }
-
-    /* ─── POST CARD (list mode) ───────────────────────────────────── */
-    .ks-post-card {
-      display: flex;
-      gap: 12px;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--kvibe-border);
-      text-decoration: none;
-      color: inherit;
-      transition: background 0.12s;
-    }
-    .ks-post-card:hover { background: var(--kvibe-hover); }
-
-    .ks-post-thumb {
-      width: 72px; height: 72px;
-      border-radius: 8px;
-      object-fit: cover;
-      flex-shrink: 0;
-      background: #e0e0e0;
-    }
-    .ks-post-thumb-placeholder {
-      width: 72px; height: 72px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #f0f0f0, #e0e0e0);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      flex-shrink: 0;
-    }
-    .ks-post-body { flex: 1; min-width: 0; }
-    .ks-post-author {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--kvibe-text);
-      margin-bottom: 3px;
-    }
-    .ks-post-text {
-      font-size: 14px;
-      color: var(--kvibe-text);
-      line-height: 1.4;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .ks-post-stats {
-      display: flex;
-      gap: 12px;
-      margin-top: 6px;
-    }
-    .ks-post-stat {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 12px;
-      color: var(--kvibe-text-light);
-    }
-
-    /* ─── HASHTAG ROW ─────────────────────────────────────────────── */
-    .ks-hashtag-row {
-      display: flex;
-      align-items: center;
-      padding: 10px 16px;
-      text-decoration: none;
-      color: inherit;
-      gap: 14px;
-      transition: background 0.12s;
-    }
-    .ks-hashtag-row:hover { background: var(--kvibe-hover); }
-
-    .ks-hashtag-icon {
-      width: 44px; height: 44px;
-      border-radius: 12px;
-      background: var(--kvibe-primary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      font-weight: 800;
-      color: #fff;
-      flex-shrink: 0;
-    }
-    .ks-hashtag-name {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--kvibe-text);
-    }
-    .ks-hashtag-count {
-      font-size: 13px;
-      color: var(--kvibe-text-light);
-      margin-top: 1px;
-    }
-
-    /* ─── HISTORY ITEM ────────────────────────────────────────────── */
-    .ks-history-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      text-decoration: none;
-      color: inherit;
-      transition: background 0.12s;
-    }
-    .ks-history-item:hover { background: var(--kvibe-hover); }
-
-    .ks-history-icon {
-      width: 36px; height: 36px;
-      border-radius: 50%;
-      background: var(--kvibe-hover);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--kvibe-text-light);
-      font-size: 14px;
-      flex-shrink: 0;
-    }
-    .ks-history-query {
-      flex: 1;
-      font-size: 14px;
-      color: var(--kvibe-text);
-    }
-    .ks-history-delete {
-      background: none;
-      border: none;
-      color: #bbb;
-      cursor: pointer;
-      padding: 4px;
-      font-size: 14px;
-      opacity: 0;
-      transition: opacity 0.15s;
-    }
-    .ks-history-item:hover .ks-history-delete { opacity: 1; }
-
-    /* ─── TRENDING SIDEBAR CHIP ───────────────────────────────────── */
-    .ks-trend-chip {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 9px 12px;
-      border-radius: 10px;
-      text-decoration: none;
-      color: inherit;
-      transition: background 0.12s;
-      margin-bottom: 2px;
-    }
-    .ks-trend-chip:hover { background: var(--kvibe-hover); }
-
-    .ks-trend-rank {
-      width: 22px;
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--kvibe-text-light);
-      text-align: center;
-      flex-shrink: 0;
-    }
-    .ks-trend-name {
-      flex: 1;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--kvibe-text);
-    }
-    .ks-trend-count {
-      font-size: 12px;
-      color: var(--kvibe-text-light);
-      white-space: nowrap;
-    }
-
-    /* ─── SUGGESTED USER CARD (horizontal scroll) ─────────────────── */
-    .ks-sugg-scroll {
-      display: flex;
-      overflow-x: auto;
-      gap: 10px;
-      padding: 0 16px 14px;
-      scrollbar-width: none;
-    }
-    .ks-sugg-scroll::-webkit-scrollbar { display: none; }
-
-    .ks-sugg-card {
-      flex-shrink: 0;
-      width: 120px;
-      background: var(--kvibe-white);
-      border: 1px solid var(--kvibe-border);
-      border-radius: var(--kvibe-card-radius);
-      padding: 14px 10px;
-      text-align: center;
-      text-decoration: none;
-      color: inherit;
-      transition: box-shadow 0.15s;
-    }
-    .ks-sugg-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
-    .ks-sugg-card img {
-      width: 56px; height: 56px;
-      border-radius: 50%;
-      object-fit: cover;
-      margin-bottom: 8px;
-    }
-    .ks-sugg-card-name {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--kvibe-text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .ks-sugg-card-followers {
-      font-size: 11px;
-      color: var(--kvibe-text-light);
-      margin-top: 2px;
-    }
-
-    /* ─── SIDEBAR CARD ────────────────────────────────────────────── */
-    .ks-sidebar-card {
-      background: var(--kvibe-white);
-      border: 1px solid var(--kvibe-border);
-      border-radius: var(--kvibe-card-radius);
-      overflow: hidden;
-      margin-bottom: 16px;
-    }
-    .ks-sidebar-title {
-      padding: 14px 16px 8px;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--kvibe-text);
-      border-bottom: 1px solid var(--kvibe-border);
-    }
-
-    /* ─── EMPTY / NO-RESULTS ──────────────────────────────────────── */
-    .ks-empty {
-      text-align: center;
-      padding: 50px 20px;
-    }
-    .ks-empty i { font-size: 40px; color: var(--kvibe-border); margin-bottom: 14px; }
-    .ks-empty h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-    .ks-empty p { font-size: 14px; color: var(--kvibe-text-light); }
-
-    /* ─── MODALS ──────────────────────────────────────────────────── */
-    .ks-modal-overlay {
+    /* ===== MOBILE RIGHT SIDEBAR ===== */
+    .kvibe-mobile-sidebar-overlay {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.45);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 1100;
+      opacity: 0;
+      transition: opacity 0.3s ease;
     }
-    .ks-modal-overlay.open { display: flex; }
-
-    .ks-modal {
+    .kvibe-mobile-sidebar-overlay.active {
+      display: block;
+      opacity: 1;
+    }
+    .kvibe-mobile-right-sidebar {
+      position: fixed;
+      top: 0;
+      right: -100%;
+      width: 82vw;
+      max-width: 320px;
+      height: 100dvh;
       background: var(--kvibe-white);
-      border-radius: 14px;
-      width: 90%; max-width: 320px;
-      overflow: hidden;
-      animation: ksModalIn 0.22s ease;
+      z-index: 1101;
+      overflow-y: auto;
+      transition: right 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+      padding-bottom: 80px;
     }
-    @keyframes ksModalIn {
-      from { opacity: 0; transform: scale(0.93); }
-      to   { opacity: 1; transform: scale(1); }
+    .kvibe-mobile-right-sidebar.open {
+      right: 0;
     }
-    .ks-modal-title {
-      padding: 18px 20px 12px;
-      font-size: 16px;
-      font-weight: 600;
-      text-align: center;
-      border-bottom: 1px solid var(--kvibe-border);
-    }
-    .ks-modal-msg {
-      padding: 14px 20px;
-      font-size: 14px;
-      color: var(--kvibe-text-light);
-      text-align: center;
-      line-height: 1.5;
-      border-bottom: 1px solid var(--kvibe-border);
-    }
-    .ks-modal-actions { display: flex; }
-    .ks-modal-btn {
-      flex: 1;
-      padding: 14px;
-      border: none;
-      background: none;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.12s;
-    }
-    .ks-modal-btn:hover { background: var(--kvibe-hover); }
-    .ks-modal-btn.cancel { color: var(--kvibe-text); border-right: 1px solid var(--kvibe-border); }
-    .ks-modal-btn.danger  { color: #ed4956; }
-
-    /* ─── SECTION HEADER ROW ──────────────────────────────────────── */
-    .ks-section-row {
+    .kvibe-mobile-sidebar-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 16px 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--kvibe-border);
+      position: sticky;
+      top: 0;
+      background: var(--kvibe-white);
+      z-index: 2;
     }
-    .ks-section-row-title {
-      font-size: 16px;
+    .kvibe-mobile-sidebar-title {
+      font-size: 15px;
       font-weight: 700;
       color: var(--kvibe-text);
     }
-    .ks-section-row-action {
-      background: none;
+    .kvibe-mobile-sidebar-close {
+      width: 32px;
+      height: 32px;
       border: none;
-      color: var(--kvibe-primary);
-      font-size: 14px;
-      font-weight: 600;
+      background: var(--kvibe-bg);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
+      color: var(--kvibe-text);
+      font-size: 16px;
+    }
+    .kvibe-mobile-sidebar-body {
+      padding: 16px;
+    }
+    .kvibe-mobile-sidebar-toggle {
+      display: none;
+    }
+    @media (max-width: 767px) {
+      .kvibe-mobile-sidebar-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: 50%;
+        right: 0;
+        transform: translateY(-50%);
+        z-index: 1050;
+        background: var(--kvibe-primary);
+        color: white;
+        border: none;
+        border-radius: 8px 0 0 8px;
+        width: 28px;
+        height: 64px;
+        cursor: pointer;
+        box-shadow: -2px 2px 10px rgba(0,0,0,0.18);
+        flex-direction: column;
+        gap: 4px;
+        padding: 0;
+      }
+      .kvibe-mobile-sidebar-toggle i {
+        font-size: 13px;
+      }
+      .kvibe-mobile-sidebar-toggle span {
+        font-size: 9px;
+        font-weight: 700;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        letter-spacing: 0.5px;
+      }
     }
 
-    /* ─── DESKTOP SIDEBAR SPECIFIC ───────────────────────────────── */
+    /* ════════════════════════════════════════════════════════════════
+       FIXED HEADER (no radius)
+    ════════════════════════════════════════════════════════════════ */
+    .ks-header {
+      position:fixed; top:0; left:0; right:0; height:var(--hdr);
+      background:var(--kvibe-white); border-bottom:1px solid var(--kvibe-border);
+      display:flex; align-items:center; padding:0 16px; gap:10px; z-index:300;
+    }
+    .ks-back-btn { display:none; background:none; border:none; color:var(--kvibe-text); font-size:20px; cursor:pointer; padding:4px 8px 4px 0; flex-shrink:0; }
+    .ks-search-wrap { flex:1; display:flex; align-items:center; background:#f2f2f2; padding:0 14px; height:40px; transition:background .15s; }
+    .ks-search-wrap:focus-within { background:#ebebeb; }
+    .ks-search-icon { color:var(--kvibe-muted); font-size:14px; margin-right:8px; flex-shrink:0; }
+    .ks-search-input { flex:1; border:none; background:none; outline:none; font-size:16px; color:var(--kvibe-text); }
+    .ks-search-input::placeholder { color:var(--kvibe-muted); }
+    .ks-clear-btn { display:none; background:none; border:none; color:#bbb; font-size:16px; cursor:pointer; padding:2px; }
+    .ks-clear-btn.show { display:block; }
+    .ks-cancel-btn { display:none; background:none; border:none; color:var(--kvibe-primary); font-size:15px; font-weight:600; cursor:pointer; white-space:nowrap; }
+
+    /* TAB BAR (no radius) */
+    .ks-tabs { position:fixed; top:var(--hdr); left:0; right:0; height:var(--tabs); background:var(--kvibe-white); border-bottom:1px solid var(--kvibe-border); display:none; align-items:center; overflow-x:auto; scrollbar-width:none; padding:0 12px; gap:6px; z-index:290; }
+    .ks-tabs::-webkit-scrollbar { display:none; }
+    .ks-tabs.show { display:flex; }
+    .ks-tab { flex-shrink:0; padding:6px 18px; font-size:14px; font-weight:500; cursor:pointer; border:none; background:none; color:var(--kvibe-muted); transition:all .15s; white-space:nowrap; }
+    .ks-tab.active { background:var(--kvibe-text); color:var(--kvibe-white); }
+    .ks-tab-count { display:inline-flex; align-items:center; justify-content:center; background:rgba(255,255,255,.25); color:inherit; font-size:11px; font-weight:700; min-width:18px; height:18px; border-radius:9px; padding:0 4px; margin-left:4px; }
+    .ks-tab:not(.active) .ks-tab-count { background:var(--kvibe-border); color:var(--kvibe-muted); }
+
+    /* BODY */
+    .ks-body { padding-top:calc(var(--hdr) + 8px); min-height:100vh; }
+    .ks-body.has-tabs { padding-top:calc(var(--hdr) + var(--tabs) + 8px); }
+
+    /* PANELS */
+    .ks-panel { display:none; }
+    .ks-panel.active { display:block; }
+
+    /* USER ROW (no border radius, flat) */
+    .ks-user-row { display:flex; align-items:center; padding:10px 16px; text-decoration:none; color:inherit; border-bottom:1px solid var(--kvibe-border); transition:background .12s; }
+    .ks-user-row:hover { background:var(--kvibe-hover); }
+    .ks-user-avatar { width:48px; height:48px; border-radius:50%; object-fit:cover; flex-shrink:0; margin-right:12px; background:var(--kvibe-border); }
+    .ks-user-info { flex:1; min-width:0; }
+    .ks-user-name { font-size:14px; font-weight:600; color:var(--kvibe-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ks-user-handle { font-size:13px; color:var(--kvibe-muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ks-user-bio { font-size:12px; color:var(--kvibe-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ks-user-meta-right { flex-shrink:0; margin-left:10px; }
+    .ks-follow-count { font-size:12px; color:var(--kvibe-muted); display:flex; align-items:center; gap:4px; }
+
+    /* POST CARD (flat, no shadow, no radius) */
+    .ks-post-card { display:flex; gap:12px; padding:12px 16px; border-bottom:1px solid var(--kvibe-border); text-decoration:none; color:inherit; transition:background .12s; }
+    .ks-post-card:hover { background:var(--kvibe-hover); }
+    .ks-post-thumb-wrap { position:relative; flex-shrink:0; }
+    .ks-post-thumb { width:80px; height:80px; object-fit:cover; display:block; background:var(--kvibe-border); }
+    .ks-thumb-media { width:80px; height:80px; background:linear-gradient(135deg,#e8e8e8,#d4d4d4); display:flex; align-items:center; justify-content:center; font-size:24px; color:var(--kvibe-muted); }
+    .ks-thumb-text { width:80px; height:80px; background:linear-gradient(135deg, #0095f6, #4fb3f7); display:flex; align-items:center; justify-content:center; flex-direction:column; font-size:10px; line-height:1.35; padding:6px; color:white; text-align:center; overflow:hidden; }
+    .ks-thumb-text i { font-size:24px; margin-bottom:4px; }
+    .ks-thumb-badge { position:absolute; top:4px; right:4px; background:rgba(0,0,0,.55); color:#fff; font-size:10px; padding:2px 4px; }
+    .ks-post-body { flex:1; min-width:0; }
+    .ks-post-author-row { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+    .ks-post-avatar { width:22px; height:22px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+    .ks-post-author-name { font-size:13px; font-weight:600; color:var(--kvibe-text); }
+    .ks-repost-tag { font-size:11px; color:var(--kvibe-primary); background:rgba(0,149,246,.08); padding:1px 6px; }
+    .ks-post-text { font-size:14px; color:var(--kvibe-text); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:6px; }
+    .ks-reaction-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .ks-react-chip { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:var(--kvibe-muted); }
+    .ks-react-chip i { font-size:12px; }
+    .ks-react-active { font-size:14px; }
+    .ks-chip-muted { opacity:.7; }
+    .ks-mood-tag { display:inline-block; font-size:11px; font-weight:600; margin-top:4px; padding:2px 8px; background:rgba(0,0,0,.05); }
+
+    /* Link Preview Styles */
+    .kvibe-post-link-preview {
+      display: block;
+      margin: 8px 0 4px 0;
+      text-decoration: none;
+      border: 1px solid var(--kvibe-border);
+      background: var(--kvibe-white);
+      overflow: hidden;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    .kvibe-post-link-preview:hover {
+      opacity: 0.88;
+      background: var(--kvibe-hover);
+    }
+    .kvibe-plp-image {
+      width: 100%;
+      max-height: 140px;
+      object-fit: cover;
+      display: block;
+    }
+    .kvibe-plp-body {
+      padding: 10px 12px;
+    }
+    .kvibe-plp-domain {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--kvibe-primary);
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    .kvibe-plp-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--kvibe-text);
+      line-height: 1.35;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .kvibe-plp-desc {
+      font-size: 11px;
+      color: var(--kvibe-text-light);
+      margin-top: 4px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      line-height: 1.4;
+    }
+
+    /* HASHTAG ROW */
+    .ks-hashtag-row { display:flex; align-items:center; gap:14px; padding:10px 16px; text-decoration:none; color:inherit; border-bottom:1px solid var(--kvibe-border); transition:background .12s; }
+    .ks-hashtag-row:hover { background:var(--kvibe-hover); }
+    .ks-hashtag-icon { width:44px; height:44px; background:var(--kvibe-primary); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:900; color:#fff; flex-shrink:0; }
+    .ks-hashtag-info { flex:1; }
+    .ks-hashtag-name { font-size:15px; font-weight:600; color:var(--kvibe-text); }
+    .ks-hashtag-count { font-size:13px; color:var(--kvibe-muted); margin-top:1px; }
+
+    /* EXPLORE GRID (flat) */
+    .ks-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:2px; }
+    .ks-grid-cell { position:relative; aspect-ratio:1; overflow:hidden; background:#e8e8e8; cursor:pointer; }
+    .ks-grid-cell:nth-child(7n+1) { grid-column:span 2; grid-row:span 2; }
+    .ks-grid-cell img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .3s ease; }
+    .ks-grid-cell:hover img { transform:scale(1.04); }
+    .ks-grid-text { width:100%; height:100%; background:linear-gradient(135deg,#e8f4fd,#cce8fb); display:flex; align-items:center; justify-content:center; padding:8px; font-size:11px; line-height:1.4; color:#444; text-align:center; }
+    .ks-grid-overlay { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent,rgba(0,0,0,.55)); padding:18px 8px 7px; display:flex; align-items:center; gap:4px; opacity:0; transition:opacity .2s; }
+    .ks-grid-cell:hover .ks-grid-overlay { opacity:1; }
+    .ks-grid-overlay i { color:#fff; font-size:12px; }
+    .ks-grid-overlay span { color:#fff; font-size:12px; font-weight:600; }
+    .ks-grid-type-badge { position:absolute; top:5px; right:5px; color:#fff; font-size:12px; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+
+    /* SUGGESTED SCROLL */
+    .ks-sugg-scroll { display:flex; overflow-x:auto; gap:10px; padding:0 16px 14px; scrollbar-width:none; }
+    .ks-sugg-scroll::-webkit-scrollbar { display:none; }
+    .ks-sugg-card { flex-shrink:0; width:116px; background:var(--kvibe-white); border:1px solid var(--kvibe-border); padding:14px 10px; text-align:center; text-decoration:none; color:inherit; transition:background .15s; }
+    .ks-sugg-card:hover { background:var(--kvibe-hover); }
+    .ks-sugg-card img { width:54px; height:54px; border-radius:50%; object-fit:cover; margin-bottom:8px; }
+    .ks-sugg-name { font-size:13px; font-weight:600; color:var(--kvibe-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ks-sugg-count { font-size:11px; color:var(--kvibe-muted); margin-top:2px; }
+
+    /* HISTORY */
+    .ks-history-item { display:flex; align-items:center; gap:12px; padding:10px 16px; text-decoration:none; color:inherit; transition:background .12s; cursor:pointer; }
+    .ks-history-item:hover { background:var(--kvibe-hover); }
+    .ks-history-icon { width:36px; height:36px; background:var(--kvibe-hover); display:flex; align-items:center; justify-content:center; color:var(--kvibe-muted); font-size:13px; flex-shrink:0; }
+    .ks-history-query { flex:1; font-size:14px; color:var(--kvibe-text); text-decoration:none; color:inherit; }
+    .ks-history-del { background:none; border:none; color:#bbb; cursor:pointer; padding:4px; font-size:13px; opacity:0; transition:opacity .15s; }
+    .ks-history-item:hover .ks-history-del { opacity:1; }
+
+    /* TRENDING */
+    .ks-trend-chip { display:flex; align-items:center; gap:10px; padding:9px 12px; text-decoration:none; color:inherit; transition:background .12s; margin-bottom:2px; }
+    .ks-trend-chip:hover { background:var(--kvibe-hover); }
+    .ks-trend-rank { width:22px; font-size:13px; font-weight:700; color:var(--kvibe-muted); text-align:center; flex-shrink:0; }
+    .ks-trend-name { flex:1; font-size:14px; font-weight:600; color:var(--kvibe-text); }
+    .ks-trend-count { font-size:12px; color:var(--kvibe-muted); white-space:nowrap; }
+
+    /* SIDEBAR CARDS (flat) */
+    .ks-scard { background:var(--kvibe-white); border:1px solid var(--kvibe-border); overflow:hidden; margin-bottom:16px; }
+    .ks-scard-title { padding:14px 16px 10px; font-size:15px; font-weight:700; color:var(--kvibe-text); border-bottom:1px solid var(--kvibe-border); }
+
+    /* SECTION HEADERS */
+    .ks-section-row { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 8px; }
+    .ks-section-title { font-size:16px; font-weight:700; color:var(--kvibe-text); }
+    .ks-section-action { background:none; border:none; color:var(--kvibe-primary); font-size:14px; font-weight:600; cursor:pointer; }
+    .ks-section-label { padding:14px 16px 6px; font-size:12px; font-weight:600; color:var(--kvibe-muted); text-transform:uppercase; letter-spacing:.6px; }
+
+    /* LOAD SENTINEL */
+    .ks-load-sentinel { display:flex; align-items:center; justify-content:center; padding:20px; color:var(--kvibe-muted); font-size:13px; }
+    .ks-spinner { display:inline-block; width:22px; height:22px; border:3px solid var(--kvibe-border); border-top-color:var(--kvibe-primary); border-radius:50%; animation:ks-spin .7s linear infinite; }
+    @keyframes ks-spin { to { transform:rotate(360deg); } }
+
+    /* EMPTY STATE */
+    .ks-empty { text-align:center; padding:48px 20px; }
+    .ks-empty i { font-size:38px; color:var(--kvibe-border); margin-bottom:12px; display:block; }
+    .ks-empty h3 { font-size:16px; font-weight:600; margin-bottom:6px; }
+    .ks-empty p { font-size:14px; color:var(--kvibe-muted); }
+
+    /* MODALS */
+    .ks-modal-wrap { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:500; align-items:center; justify-content:center; }
+    .ks-modal-wrap.open { display:flex; }
+    .ks-modal { background:var(--kvibe-white); width:90%; max-width:320px; overflow:hidden; animation:ks-pop .2s ease; }
+    @keyframes ks-pop { from{opacity:0;transform:scale(.93);} to{opacity:1;transform:scale(1);} }
+    .ks-modal-title { padding:18px 20px 12px; font-size:16px; font-weight:600; text-align:center; border-bottom:1px solid var(--kvibe-border); }
+    .ks-modal-msg { padding:14px 20px; font-size:14px; color:var(--kvibe-muted); text-align:center; line-height:1.5; border-bottom:1px solid var(--kvibe-border); }
+    .ks-modal-btns { display:flex; }
+    .ks-modal-btn { flex:1; padding:14px; border:none; background:none; font-size:14px; font-weight:600; cursor:pointer; transition:background .12s; }
+    .ks-modal-btn:hover { background:var(--kvibe-hover); }
+    .ks-modal-btn.cancel { color:var(--kvibe-text); border-right:1px solid var(--kvibe-border); }
+    .ks-modal-btn.danger { color:#ed4956; }
+
+    /* PREVIEW GRID */
+    .ks-preview-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:2px; }
+    .ks-preview-cell { position:relative; aspect-ratio:1; overflow:hidden; background:var(--kvibe-border); cursor:pointer; }
+    .ks-preview-cell img { width:100%; height:100%; object-fit:cover; display:block; }
+    .ks-preview-overlay { position:absolute; inset:0; background:rgba(0,0,0,0); display:flex; align-items:center; justify-content:center; transition:background .2s; }
+    .ks-preview-cell:hover .ks-preview-overlay { background:rgba(0,0,0,.35); }
+    .ks-preview-overlay i { color:#fff; font-size:22px; opacity:0; transition:opacity .2s; }
+    .ks-preview-cell:hover .ks-preview-overlay i { opacity:1; }
+
+    .ks-divider { height:1px; background:var(--kvibe-border); margin:6px 0; }
+    .ks-footer-pad { height:80px; }
+
+    /* Mobile footer only (matches home.html behavior) */
+    .kvibe-mobile-footer-only {
+      display: none;
+    }
+
+    @media (max-width: 767px) {
+      .kvibe-mobile-footer-only {
+        display: block;
+      }
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       RESPONSIVE
+    ════════════════════════════════════════════════════════════════ */
+    @media (min-width: 768px) {
+      .kvibe-desktop-only { display: block; }
+      .ks-back-btn { display: none !important; }
+    }
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .kvibe-desktop-layout { padding: 4px 15px 0 15px; }
+      .kvibe-left-sidebar  { width: 245px; }
+      .kvibe-right-sidebar { width: 200px; }
+    }
+    @media (min-width: 1024px) {
+      .kvibe-desktop-layout { padding: 44px 20px 0 20px; }
+      .kvibe-left-sidebar  { width: 245px; }
+      .kvibe-right-sidebar { width: 330px; }
+      .kvibe-left-sidebar::-webkit-scrollbar,
+      .kvibe-right-sidebar::-webkit-scrollbar { width: 6px; }
+      .kvibe-left-sidebar::-webkit-scrollbar-track,
+      .kvibe-right-sidebar::-webkit-scrollbar-track { background: var(--kvibe-bg); }
+      .kvibe-left-sidebar::-webkit-scrollbar-thumb,
+      .kvibe-right-sidebar::-webkit-scrollbar-thumb { background: var(--kvibe-border); border-radius: 3px; }
+    }
+    @media (max-width: 767px) {
+      .kvibe-desktop-layout { display: block; padding: 2px 0 0 0; }
+      .kvibe-left-sidebar, .kvibe-right-sidebar { display: none; }
+      .kvibe-main-feed { max-width: 100%; padding: 0; }
+      .kvibe-desktop-only { display: none; }
+      .ks-back-btn { display: block; }
+    }
     @media (min-width: 900px) {
       .ks-header { padding: 0 24px; }
       .ks-tabs   { padding: 0 24px; }
-      .ks-back-btn { display: none !important; }
-      .ks-cancel-btn { display: none !important; }
     }
 
-    /* ─── MOBILE ONLY ─────────────────────────────────────────────── */
-    @media (max-width: 899px) {
-      .ks-back-btn { display: block; }
+    /* ════════════════════════════════════════════════════════════════
+       NOTIFICATION PANEL (desktop)
+    ════════════════════════════════════════════════════════════════ */
+    #kvibe-notif-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1199;
+      background: rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
     }
-
-    /* ─── DIVIDER ─────────────────────────────────────────────────── */
-    .ks-divider { height: 1px; background: var(--kvibe-border); margin: 6px 0; }
-
-    /* ─── FOOTER PADDING ──────────────────────────────────────────── */
-    .ks-footer-pad { height: 80px; }
+    #kvibe-notif-panel {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 400px;
+      max-width: 94vw;
+      height: 100vh;
+      background: #fff;
+      z-index: 1200;
+      box-shadow: 4px 0 32px rgba(0,0,0,0.15);
+      flex-direction: column;
+      transform: translateX(-100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      will-change: transform;
+    }
+    #kvibe-notif-panel .kv-panel-section-title {
+      padding: 14px 16px 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #262626;
+      background: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    #kvibe-notif-panel .kishiface-notification-wrapper {
+      position: relative;
+      transition: opacity 0.25s, transform 0.25s;
+    }
+    #kvibe-notif-panel .kishiface-notification-wrapper:hover {
+      background: #fafafa;
+    }
+    #kvibe-notif-panel .kishiface-notif-item {
+      padding-right: 50px !important;
+    }
+    #kvibe-notif-panel .kishiface-remove-btn {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.9);
+      border: 1px solid #efefef;
+      color: #8e8e8e;
+      cursor: pointer;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity 0.2s, background 0.15s, color 0.15s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      z-index: 10;
+      font-size: 11px;
+    }
+    #kvibe-notif-panel .kishiface-notification-wrapper:hover .kishiface-remove-btn {
+      opacity: 1;
+    }
+    #kvibe-notif-panel .kishiface-remove-btn:hover {
+      background: #ffe5e5;
+      color: #ed4956;
+      border-color: #ed4956;
+    }
+    #kvibe-notif-panel .kishiface-empty-notifications {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 24px 40px;
+      text-align: center;
+    }
+    @media (max-width: 767px) {
+      #kvibe-notif-panel,
+      #kvibe-notif-backdrop {
+        display: none !important;
+      }
+    }
   </style>
 </head>
 <body>
 
-  <!-- ─── HEADER ──────────────────────────────────────────────────────── -->
-  <header class="ks-header">
-    <button class="ks-back-btn" id="ksBackBtn" onclick="history.back()" title="Back">
-      <i class="fa-solid fa-arrow-left"></i>
+<!-- ─── FIXED HEADER ───────────────────────────────────────────────── -->
+<header class="ks-header">
+  <button class="ks-back-btn" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i></button>
+  <form action="{% url 'search' %}" method="GET" class="ks-search-wrap" id="ksForm">
+    <i class="fa-solid fa-magnifying-glass ks-search-icon"></i>
+    <input type="text" name="q" id="ksQ" class="ks-search-input"
+      placeholder="Search users, posts, hashtags…"
+      value="{{ query|default:'' }}"
+      autocomplete="off" autocapitalize="none" spellcheck="false">
+    <button type="button" class="ks-clear-btn {% if query %}show{% endif %}" id="ksClear">
+      <i class="fa-solid fa-circle-xmark"></i>
     </button>
+  </form>
+  <button class="ks-cancel-btn" id="ksCancel" onclick="window.location='/home'">Cancel</button>
+</header>
 
-    <form action="{% url 'search' %}" method="GET" class="ks-search-wrap" id="ksSearchForm">
-      <i class="fa-solid fa-magnifying-glass ks-search-icon"></i>
-      <input
-        type="text"
-        name="q"
-        id="ksInput"
-        class="ks-search-input"
-        placeholder="Search users, posts, hashtags…"
-        value="{{ query|default:'' }}"
-        autocomplete="off"
-        autocapitalize="none"
-        spellcheck="false"
-      >
-      <button type="button" class="ks-clear-btn {% if query %}visible{% endif %}" id="ksClearBtn">
-        <i class="fa-solid fa-circle-xmark"></i>
-      </button>
-    </form>
+<!-- ─── TAB BAR ──────────────────────────────────────────────────────── -->
+{% if query %}
+<nav class="ks-tabs show" id="ksTabs">
+  <button class="ks-tab active" data-panel="all"      onclick="ksTab('all',this)">All</button>
+  <button class="ks-tab" data-panel="people"   onclick="ksTab('people',this)">People <span class="ks-tab-count">{{ users_total }}</span></button>
+  <button class="ks-tab" data-panel="posts"    onclick="ksTab('posts',this)">Posts <span class="ks-tab-count">{{ posts_total }}</span></button>
+  <button class="ks-tab" data-panel="hashtags" onclick="ksTab('hashtags',this)">Tags <span class="ks-tab-count">{{ hashtags_total }}</span></button>
+</nav>
+{% endif %}
 
-    <button class="ks-cancel-btn" id="ksCancelBtn" onclick="window.location='/home'">Cancel</button>
-  </header>
-
-  <!-- ─── TAB BAR ─────────────────────────────────────────────────────── -->
-  {% if query %}
-  <nav class="ks-tabs active" id="ksTabs">
-    <button class="ks-tab active" data-tab="all"      onclick="switchTab('all',this)">All</button>
-    <button class="ks-tab"        data-tab="users"    onclick="switchTab('users',this)">People</button>
-    <button class="ks-tab"        data-tab="posts"    onclick="switchTab('posts',this)">Posts</button>
-    <button class="ks-tab"        data-tab="hashtags" onclick="switchTab('hashtags',this)">Tags</button>
-  </nav>
-  {% endif %}
-
-  <!-- ─── MODALS ──────────────────────────────────────────────────────── -->
-  <div class="ks-modal-overlay" id="ksClearAllModal">
-    <div class="ks-modal">
-      <div class="ks-modal-title">Clear All History?</div>
-      <div class="ks-modal-msg">This will remove all items from your search history.</div>
-      <div class="ks-modal-actions">
-        <button class="ks-modal-btn cancel" onclick="closeModal('ksClearAllModal')">Cancel</button>
-        <button class="ks-modal-btn danger" onclick="window.location='/search/clear/'">Clear All</button>
-      </div>
+<!-- MODALS -->
+<div class="ks-modal-wrap" id="mClearAll">
+  <div class="ks-modal">
+    <div class="ks-modal-title">Clear All History?</div>
+    <div class="ks-modal-msg">This removes all recent searches.</div>
+    <div class="ks-modal-btns">
+      <button class="ks-modal-btn cancel" onclick="ksMClose('mClearAll')">Cancel</button>
+      <button class="ks-modal-btn danger" onclick="location.href='/search/clear/'">Clear All</button>
     </div>
   </div>
-
-  <div class="ks-modal-overlay" id="ksDeleteModal">
-    <div class="ks-modal">
-      <div class="ks-modal-title">Remove Search?</div>
-      <div class="ks-modal-msg">Remove "<span id="ksDeleteQueryText"></span>" from your history?</div>
-      <div class="ks-modal-actions">
-        <button class="ks-modal-btn cancel" onclick="closeModal('ksDeleteModal')">Cancel</button>
-        <button class="ks-modal-btn danger" id="ksDeleteConfirmBtn">Remove</button>
-      </div>
+</div>
+<div class="ks-modal-wrap" id="mDeleteOne">
+  <div class="ks-modal">
+    <div class="ks-modal-title">Remove Search?</div>
+    <div class="ks-modal-msg">Remove "<span id="mDelQuery"></span>" from history?</div>
+    <div class="ks-modal-btns">
+      <button class="ks-modal-btn cancel" onclick="ksMClose('mDeleteOne')">Cancel</button>
+      <button class="ks-modal-btn danger" id="mDelConfirm">Remove</button>
     </div>
   </div>
+</div>
 
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!-- MAIN BODY                                                            -->
-  <!-- ════════════════════════════════════════════════════════════════════ -->
-  <div class="ks-body {% if query %}has-tabs{% endif %}" id="ksBody">
+<!-- ════════════════════════════════════════════════════════════════════
+     BODY
+════════════════════════════════════════════════════════════════════ -->
+<div class="ks-body {% if query %}has-tabs{% endif %}" id="ksBody">
+  <div class="kvibe-desktop-layout">
 
-    <!-- ── LEFT / MAIN COLUMN ─────────────────────────────────────────── -->
-    <div class="ks-main-col">
+    <!-- ══════════════════════════════════════════
+         LEFT SIDEBAR (desktop only)
+    ══════════════════════════════════════════ -->
+    <aside class="kvibe-left-sidebar kvibe-desktop-only">
+
+      <div class="kvibe-desktop-nav">
+        <a href="{% url 'home' %}" class="kvibe-desktop-nav-item" title="Home">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span class="kvibe-desktop-nav-label">Home</span>
+        </a>
+
+        <a href="{% url 'explore' %}" class="kvibe-desktop-nav-item" title="Explore">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z"/>
+              <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8.25 15.75l1.5-1.5 2.25 2.25 4.5-4.5 1.5 1.5-6 6z"/>
+              <circle cx="18" cy="6" r="1.5" stroke-width="2"/>
+            </svg>
+            {% if unread_follow_count and unread_follow_count > 0 %}
+            <span class="kvibe-desktop-notification-badge">{{ unread_follow_count }}</span>
+            {% endif %}
+          </div>
+          <span class="kvibe-desktop-nav-label">Explore</span>
+        </a>
+
+        <a href="{% url 'search' %}" class="kvibe-desktop-nav-item active" title="Search">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="kvibe-desktop-nav-label">Search</span>
+        </a>
+
+        <a href="{% url 'post' %}" class="kvibe-desktop-nav-item" title="Create Post">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" stroke-width="2"/>
+              <line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/>
+              <line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/>
+            </svg>
+          </div>
+          <span class="kvibe-desktop-nav-label">Create</span>
+        </a>
+
+        <button class="kvibe-desktop-nav-item kvibe-notif-panel-trigger"
+                id="kvibe-desktop-notif-btn" title="Notifications"
+                style="background:none;border:none;cursor:pointer;width:100%;text-align:left;">
+          <div class="kvibe-desktop-nav-icon">
+            <i class="fa-regular fa-bell" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+            {% if unread_notifications_count and unread_notifications_count > 0 %}
+            <span class="kvibe-desktop-notification-badge">{{ unread_notifications_count }}</span>
+            {% endif %}
+          </div>
+          <span class="kvibe-desktop-nav-label">Alerts</span>
+        </button>
+
+        <a href="{% url 'profile' request.user.username %}" class="kvibe-desktop-nav-item" title="Profile">
+          <div class="kvibe-desktop-nav-icon">
+            <i class="fa-regular fa-user" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+          </div>
+          <span class="kvibe-desktop-nav-label">Profile</span>
+        </a>
+
+        <a href="{% url 'channel_create' %}" class="kvibe-desktop-nav-item" title="Channels">
+          <div class="kvibe-desktop-nav-icon">
+            <i class="fa-regular fa-newspaper" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+          </div>
+          <span class="kvibe-desktop-nav-label">Channels</span>
+        </a>
+
+        <a href="#" class="kvibe-desktop-nav-item logout" title="Log Out" id="desktopLogoutIcon">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+          </div>
+          <span class="kvibe-desktop-nav-label">Logout</span>
+        </a>
+      </div>
+
+      {% if followed_list %}
+      <div class="kvibe-channels-header">
+        <h3 class="kvibe-channels-title">
+          <i class="fas fa-newspaper"></i> Your Subscriptions
+          <span class="kvibe-channels-count">{{ followed_list|length }}</span>
+        </h3>
+      </div>
+      <div class="kvibe-channels-list">
+        {% for data in followed_list|slice:":8" %}
+          <a href="{% url 'channel' data.channel.channel_id %}" class="kvibe-channel-nav-item" data-id="{{ data.channel.channel_id }}">
+            <img src="{{ data.channel.image.url }}" class="kvibe-channel-icon" loading="lazy" alt="{{ data.channel.channel_name }}">
+            <span class="kvibe-channel-name">{{ data.channel.channel_name }}</span>
+            {% if data.unread_count > 0 %}<span class="kvibe-channel-unread">{{ data.unread_count }}</span>{% endif %}
+          </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="kvibe-channels-header">
+        <h3 class="kvibe-channels-title"><i class="fas fa-newspaper"></i> Your Subscriptions</h3>
+      </div>
+      <div class="kvibe-channels-empty">
+        <i class="fas fa-wind"></i>
+        <p>No active subscriptions.</p>
+        <a href="{% url 'channel_create' %}" class="kvibe-btn-primary" style="display:inline-block;margin-top:10px;">
+          <i class="fas fa-plus-circle"></i> Discover Channels
+        </a>
+      </div>
+      {% endif %}
+
+    </aside><!-- /left sidebar -->
+
+    <!-- ══════════════════════════════════════════
+         MAIN CONTENT
+    ══════════════════════════════════════════ -->
+    <div class="kvibe-main-feed">
 
       {% if query %}
-      <!-- ════════ SEARCH RESULTS ════════ -->
-
       <!-- ALL TAB -->
       <div class="ks-panel active" id="panel-all">
-
-        <!-- Users preview -->
         {% if users %}
-        <div class="ks-section-header">People</div>
+        <div class="ks-section-label">People</div>
         {% for user in users|slice:":4" %}
           <a href="{% url 'profile' user.username %}" class="ks-user-row">
-            <img
-              src="{{ user.profile.get_picture_url }}"
-              alt="{{ user.username }}"
-              class="ks-user-avatar"
-              loading="lazy"
-              onerror="this.src='https://placehold.co/48x48/dbdbdb/8e8e8e?text={{ user.username|first|upper }}'"
-            >
+            <img src="{{ user.profile.get_picture_url }}" alt="{{ user.username }}" class="ks-user-avatar" loading="lazy"
+              onerror="this.src='https://placehold.co/48x48/dbdbdb/8e8e8e?text={{ user.username|first|upper }}'">
             <div class="ks-user-info">
-              <div class="ks-user-name">{{ user.username }}{% if user.profile.is_verify %} <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:12px;"></i>{% endif %}</div>
+              <div class="ks-user-name">{{ user.username }}{% if user.profile.is_verify %} <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:11px;"></i>{% endif %}</div>
               {% if user.get_full_name %}<div class="ks-user-handle">{{ user.get_full_name }}</div>{% endif %}
               {% if user.profile.bio %}<div class="ks-user-bio">{{ user.profile.bio|truncatechars:60 }}</div>{% endif %}
             </div>
-            <span class="ks-user-meta">
-              <i class="fa-solid fa-user-group" style="font-size:11px;"></i>
-              {{ user.profile.followers.count }}
-            </span>
+            <div class="ks-user-meta-right"><span class="ks-follow-count"><i class="fa-solid fa-user-group"></i> {{ user.follower_count }}</span></div>
           </a>
         {% endfor %}
-        {% if users|length > 4 %}
-          <div style="padding:0 16px 10px;">
-            <button class="ks-section-row-action" style="font-size:14px;" onclick="switchTab('users',document.querySelector('[data-tab=users]'))">
-              See all {{ users|length }} people →
-            </button>
+        {% if users_has_more %}
+          <div style="padding:6px 16px 14px;">
+            <button class="ks-section-action" onclick="ksTab('people',document.querySelector('[data-panel=people]'))">See all {{ users_total }} people →</button>
           </div>
         {% endif %}
         {% endif %}
 
-        <!-- Posts grid preview -->
         {% if posts %}
-        <div class="ks-section-header" style="margin-top:8px;">Posts</div>
-        <div class="ks-explore-grid" id="allPostsGrid">
-          {% for post in posts|slice:":9" %}
-            {% with resolved_post=post.original_post|default:post %}
-            <a href="{% url 'postcomment' post.post_id %}" class="ks-grid-item" title="{{ resolved_post.content|truncatechars:60|default:'View post' }}">
-              {% if resolved_post.images.exists %}
-                <img src="{{ resolved_post.images.first.image.url }}" alt="post" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\'ks-grid-placeholder\'>📷</div>'">
-                {% if resolved_post.images.count > 1 %}<span class="ks-media-type-badge"><i class="fa-solid fa-clone"></i></span>{% endif %}
-              {% elif resolved_post.video_file %}
-                <div class="ks-grid-placeholder">▶</div>
-                <span class="ks-media-type-badge"><i class="fa-solid fa-play"></i></span>
-              {% elif resolved_post.file %}
-                <div class="ks-grid-placeholder">🎵</div>
-              {% elif resolved_post.content %}
-                <div class="ks-grid-placeholder" style="background:linear-gradient(135deg,#e8f4fd,#cce8fb);font-size:13px;color:#555;padding:10px;text-align:center;font-size:11px;line-height:1.4;">
-                  {{ resolved_post.content|truncatechars:80 }}
-                </div>
-              {% else %}
-                <div class="ks-grid-placeholder">📝</div>
-              {% endif %}
-              <div class="ks-grid-item-overlay">
-                <i class="fa-solid fa-heart"></i>
-                <span>{{ post.likes.count }}</span>
-              </div>
-            </a>
-            {% endwith %}
-          {% endfor %}
+        <div class="ks-section-label" style="margin-top:4px;">Posts</div>
+        <div class="ks-preview-grid">
+          {% for post in posts|slice:":9" %}{% with rp=post.original_post|default:post %}
+          <a href="{% url 'postcomment' post.post_id %}" class="ks-preview-cell">
+            {% if rp.images.exists %}<img src="{{ rp.images.first.image.url }}" loading="lazy" alt="post">
+            {% elif rp.video_file %}<div class="ks-thumb-media" style="width:100%;height:100%;border-radius:0;"><i class="fa-solid fa-play"></i></div>
+            {% elif rp.file %}<div class="ks-thumb-media" style="width:100%;height:100%;border-radius:0;"><i class="fa-solid fa-music"></i></div>
+            {% elif rp.content %}<div class="ks-thumb-text" style="width:100%;height:100%;border-radius:0;"><i class="fa-regular fa-file-lines"></i><span style="font-size:9px; margin-top:4px;">Text</span></div>
+            {% else %}<div class="ks-thumb-media" style="width:100%;height:100%;border-radius:0;"><i class="fa-solid fa-file"></i></div>{% endif %}
+            <div class="ks-preview-overlay"><i class="fa-solid fa-heart"></i></div>
+          </a>
+          {% endwith %}{% endfor %}
         </div>
-        {% if posts|length > 9 %}
-          <div style="padding:10px 16px;">
-            <button class="ks-section-row-action" onclick="switchTab('posts',document.querySelector('[data-tab=posts]'))">
-              See all {{ posts|length }} posts →
-            </button>
+        {% if posts_has_more %}
+          <div style="padding:8px 16px 12px;">
+            <button class="ks-section-action" onclick="ksTab('posts',document.querySelector('[data-panel=posts]'))">See all {{ posts_total }} posts →</button>
           </div>
         {% endif %}
         {% endif %}
 
-        <!-- Hashtags -->
-        {% if matching_hashtags %}
-        <div class="ks-section-header" style="margin-top:8px;">Hashtags</div>
-        {% for tag, count in matching_hashtags|slice:":5" %}
+        {% if hashtags_page %}
+        <div class="ks-section-label" style="margin-top:4px;">Hashtags</div>
+        {% for tag, count in hashtags_page|slice:":5" %}
           <a href="{% url 'hashtag_view' tag %}" class="ks-hashtag-row">
             <div class="ks-hashtag-icon">#</div>
-            <div>
-              <div class="ks-hashtag-name">#{{ tag }}</div>
-              <div class="ks-hashtag-count">{{ count }} post{{ count|pluralize }}</div>
-            </div>
+            <div class="ks-hashtag-info"><div class="ks-hashtag-name">#{{ tag }}</div><div class="ks-hashtag-count">{{ count }} post{{ count|pluralize }}</div></div>
+            <i class="fa-solid fa-chevron-right ks-hashtag-arrow"></i>
           </a>
         {% endfor %}
+        {% if hashtags_has_more %}
+          <div style="padding:6px 16px 14px;">
+            <button class="ks-section-action" onclick="ksTab('hashtags',document.querySelector('[data-panel=hashtags]'))">See all {{ hashtags_total }} tags →</button>
+          </div>
+        {% endif %}
         {% endif %}
 
-        <!-- No results at all -->
-        {% if not users and not posts and not matching_hashtags %}
-        <div class="ks-empty">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <h3>No results for "{{ query }}"</h3>
-          <p>Try different keywords or check spelling.</p>
-        </div>
+        {% if not users and not posts and not hashtags_page %}
+          <div class="ks-empty"><i class="fa-solid fa-magnifying-glass"></i><h3>No results for "{{ query }}"</h3><p>Try different keywords or check spelling.</p></div>
         {% endif %}
-
-      </div><!-- /panel-all -->
+      </div>
 
       <!-- PEOPLE TAB -->
-      <div class="ks-panel" id="panel-users">
-        {% if users %}
-          {% for user in users %}
-            <a href="{% url 'profile' user.username %}" class="ks-user-row">
-              <img
-                src="{{ user.profile.get_picture_url }}"
-                alt="{{ user.username }}"
-                class="ks-user-avatar"
-                loading="lazy"
-                onerror="this.src='https://placehold.co/48x48/dbdbdb/8e8e8e?text={{ user.username|first|upper }}'"
-              >
-              <div class="ks-user-info">
-                <div class="ks-user-name">{{ user.username }}{% if user.profile.is_verify %} <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:12px;"></i>{% endif %}</div>
-                {% if user.get_full_name %}<div class="ks-user-handle">{{ user.get_full_name }}</div>{% endif %}
-                {% if user.profile.bio %}<div class="ks-user-bio">{{ user.profile.bio|truncatechars:80 }}</div>{% endif %}
-              </div>
-              <span class="ks-user-meta">
-                <i class="fa-solid fa-user-group" style="font-size:11px;"></i>
-                {{ user.profile.followers.count }}
-              </span>
-            </a>
-          {% endfor %}
-        {% else %}
-          <div class="ks-empty">
-            <i class="fa-solid fa-user-slash"></i>
-            <h3>No people found</h3>
-            <p>No accounts match "{{ query }}"</p>
-          </div>
+      <div class="ks-panel" id="panel-people">
+        {% for user in users %}
+          <a href="{% url 'profile' user.username %}" class="ks-user-row">
+            <img src="{{ user.profile.get_picture_url }}" alt="{{ user.username }}" class="ks-user-avatar" loading="lazy"
+              onerror="this.src='https://placehold.co/48x48/dbdbdb/8e8e8e?text={{ user.username|first|upper }}'">
+            <div class="ks-user-info">
+              <div class="ks-user-name">{{ user.username }}{% if user.profile.is_verify %} <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:11px;"></i>{% endif %}</div>
+              {% if user.get_full_name %}<div class="ks-user-handle">{{ user.get_full_name }}</div>{% endif %}
+              {% if user.profile.bio %}<div class="ks-user-bio">{{ user.profile.bio|truncatechars:80 }}</div>{% endif %}
+            </div>
+            <div class="ks-user-meta-right"><span class="ks-follow-count"><i class="fa-solid fa-user-group"></i> {{ user.follower_count }}</span></div>
+          </a>
+        {% empty %}<div class="ks-empty"><i class="fa-solid fa-user-slash"></i><h3>No people found</h3></div>{% endfor %}
+        {% if users_has_more %}
+        <div id="users-sentinel" hx-get="{% url 'search_users_partial' %}?q={{ query|urlencode }}&page=2"
+          hx-trigger="intersect once" hx-target="#users-sentinel" hx-swap="outerHTML"
+          class="ks-load-sentinel"><span class="ks-spinner"></span></div>
         {% endif %}
       </div>
 
       <!-- POSTS TAB -->
       <div class="ks-panel" id="panel-posts">
-        {% if posts %}
-          {% for post in posts %}
-            {% with resolved_post=post.original_post|default:post %}
-            <a href="{% url 'postcomment' post.post_id %}" class="ks-post-card">
-              <!-- Thumbnail -->
-              {% if resolved_post.images.exists %}
-                <img src="{{ resolved_post.images.first.image.url }}" alt="post" class="ks-post-thumb" loading="lazy">
-              {% elif resolved_post.video_file %}
-                <div class="ks-post-thumb-placeholder">▶</div>
-              {% elif resolved_post.file %}
-                <div class="ks-post-thumb-placeholder">🎵</div>
+        {% for post in posts %}
+          {% with rp=post.original_post|default:post %}
+          <a href="{% url 'postcomment' post.post_id %}" class="ks-post-card" data-post-id="{{ post.post_id }}">
+            <div class="ks-post-thumb-wrap">
+              {% if rp.images.exists %}
+                <img src="{{ rp.images.first.image.url }}" class="ks-post-thumb" loading="lazy">
+                {% if rp.images.count > 1 %}<span class="ks-thumb-badge"><i class="fa-solid fa-clone"></i></span>{% endif %}
+              {% elif rp.video_file %}
+                <div class="ks-thumb-media"><i class="fa-solid fa-play"></i></div>
+              {% elif rp.file %}
+                <div class="ks-thumb-media"><i class="fa-solid fa-music"></i></div>
+              {% elif rp.content %}
+                <div class="ks-thumb-text">
+                  <i class="fa-regular fa-file-lines" style="font-size: 28px; margin-bottom: 6px;"></i>
+                  <span style="font-size: 9px; font-weight: 500;">Text post</span>
+                </div>
               {% else %}
-                <div class="ks-post-thumb-placeholder">📝</div>
+                <div class="ks-thumb-media"><i class="fa-solid fa-file"></i></div>
               {% endif %}
-              <!-- Content -->
-              <div class="ks-post-body">
-                <div class="ks-post-author">
-                  {{ resolved_post.author.username }}
-                  {% if post.is_repost %}<span style="font-size:11px;color:var(--kvibe-text-light);font-weight:400;"> · reposted</span>{% endif %}
-                </div>
-                {% if resolved_post.content %}
-                  <div class="ks-post-text">{{ resolved_post.content|truncatechars:120 }}</div>
-                {% endif %}
-                <div class="ks-post-stats">
-                  <span class="ks-post-stat"><i class="fa-solid fa-heart"></i> {{ post.likes.count }}</span>
-                  <span class="ks-post-stat"><i class="fa-regular fa-comment"></i></span>
-                  <span class="ks-post-stat" style="margin-left:auto;color:#aaa;">{{ post.created_at|timesince }} ago</span>
-                </div>
+            </div>
+            <div class="ks-post-body">
+              <div class="ks-post-author-row">
+                <img src="{{ rp.author.profile.get_picture_url }}" class="ks-post-avatar" loading="lazy"
+                  onerror="this.src='https://placehold.co/22x22/dbdbdb/8e8e8e?text={{ rp.author.username|first|upper }}'">
+                <span class="ks-post-author-name">{{ rp.author.username }}</span>
+                {% if rp.author.profile.is_verify %}<i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:10px;"></i>{% endif %}
+                {% if post.is_repost %}<span class="ks-repost-tag"><i class="fa-solid fa-retweet"></i> repost</span>{% endif %}
               </div>
-            </a>
-            {% endwith %}
-          {% endfor %}
-        {% else %}
-          <div class="ks-empty">
-            <i class="fa-regular fa-newspaper"></i>
-            <h3>No posts found</h3>
-            <p>No posts match "{{ query }}"</p>
-          </div>
+              {% if rp.content %}
+                <div class="ks-post-text">{{ rp.content|truncatechars:100|safe|linebreaksbr }}</div>
+              {% endif %}
+
+              {# ── Link Preview (if available) ── #}
+              {% if rp.link_preview and rp.link_preview.title %}
+                <div class="kvibe-post-link-preview">
+                  {% if rp.link_preview.image %}
+                    <img src="{{ rp.link_preview.image }}" class="kvibe-plp-image" alt="" onerror="this.style.display='none'">
+                  {% endif %}
+                  <div class="kvibe-plp-body">
+                    {% if rp.link_preview.domain %}
+                      <div class="kvibe-plp-domain">{{ rp.link_preview.domain }}</div>
+                    {% endif %}
+                    {% if rp.link_preview.title %}
+                      <div class="kvibe-plp-title">{{ rp.link_preview.title }}</div>
+                    {% endif %}
+                    {% if rp.link_preview.description %}
+                      <div class="kvibe-plp-desc">{{ rp.link_preview.description }}</div>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endif %}
+
+              <div class="ks-reaction-bar">
+                <span class="ks-react-chip">
+                  {% if post.user_vibe %}<span class="ks-react-active">{{ post.user_vibe_emoji }}</span>{% else %}<i class="fa-regular fa-face-smile"></i>{% endif %}
+                  {{ post.vibe_count }}
+                </span>
+                <span class="ks-react-chip"><i class="fa-regular fa-comment"></i> {{ post.comment_count }}</span>
+                <span class="ks-react-chip"><i class="fa-solid fa-retweet"></i> {{ post.repost_count }}</span>
+                {% if rp.share %}<span class="ks-react-chip"><i class="fa-solid fa-share-nodes"></i> {{ rp.share }}</span>{% endif %}
+                {% if rp.view %}<span class="ks-react-chip ks-chip-muted"><i class="fa-regular fa-eye"></i> {{ rp.view }}</span>{% endif %}
+                <span class="ks-react-chip ks-chip-muted" style="margin-left:auto;">{{ post.created_at|timesince }} ago</span>
+              </div>
+              {% if rp.has_mood %}<span class="ks-mood-tag" style="color:{{ rp.get_mood_color }};">{{ rp.get_mood_display }}</span>{% endif %}
+            </div>
+          </a>
+          {% endwith %}
+        {% empty %}
+          <div class="ks-empty"><i class="fa-regular fa-newspaper"></i><h3>No posts found</h3></div>
+        {% endfor %}
+        {% if posts_has_more %}
+        <div id="posts-sentinel" hx-get="{% url 'search_posts_partial' %}?q={{ query|urlencode }}&page=2"
+          hx-trigger="intersect once" hx-target="#posts-sentinel" hx-swap="outerHTML"
+          class="ks-load-sentinel"><span class="ks-spinner"></span></div>
         {% endif %}
       </div>
 
       <!-- HASHTAGS TAB -->
       <div class="ks-panel" id="panel-hashtags">
-        {% if matching_hashtags %}
-          {% for tag, count in matching_hashtags %}
-            <a href="{% url 'hashtag_view' tag %}" class="ks-hashtag-row">
-              <div class="ks-hashtag-icon">#</div>
-              <div>
-                <div class="ks-hashtag-name">#{{ tag }}</div>
-                <div class="ks-hashtag-count">{{ count }} post{{ count|pluralize }}</div>
-              </div>
-            </a>
-          {% endfor %}
-        {% else %}
-          <div class="ks-empty">
-            <i class="fa-solid fa-hashtag"></i>
-            <h3>No hashtags found</h3>
-            <p>No tags match "{{ query }}"</p>
-          </div>
+        {% for tag, count in hashtags_page %}
+          <a href="{% url 'hashtag_view' tag %}" class="ks-hashtag-row">
+            <div class="ks-hashtag-icon">#</div>
+            <div class="ks-hashtag-info"><div class="ks-hashtag-name">#{{ tag }}</div><div class="ks-hashtag-count">{{ count }} post{{ count|pluralize }}</div></div>
+            <i class="fa-solid fa-chevron-right ks-hashtag-arrow"></i>
+          </a>
+        {% empty %}<div class="ks-empty"><i class="fa-solid fa-hashtag"></i><h3>No tags found</h3></div>{% endfor %}
+        {% if hashtags_has_more %}
+        <div id="tags-sentinel" hx-get="{% url 'search_hashtags_partial' %}?q={{ query|urlencode }}&page=2"
+          hx-trigger="intersect once" hx-target="#tags-sentinel" hx-swap="outerHTML"
+          class="ks-load-sentinel"><span class="ks-spinner"></span></div>
         {% endif %}
       </div>
 
       {% else %}
-      <!-- ════════ EXPLORE (no query) ════════ -->
+      <!-- ══ EXPLORE (no query) ══ -->
 
-      <!-- Search history -->
       {% if search_history %}
       <div class="ks-section-row">
-        <span class="ks-section-row-title">Recent</span>
-        <button class="ks-section-row-action" onclick="openModal('ksClearAllModal')">Clear all</button>
+        <span class="ks-section-title">Recent</span>
+        <button class="ks-section-action" onclick="ksMOpen('mClearAll')">Clear all</button>
       </div>
-      {% for history in search_history %}
-        <div class="ks-history-item" data-href="{% url 'search' %}?q={{ history.query|urlencode }}">
-          <div class="ks-history-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
-          <a href="{% url 'search' %}?q={{ history.query|urlencode }}" class="ks-history-query" style="text-decoration:none;color:inherit;">{{ history.query }}</a>
-          <button
-            class="ks-history-delete"
-            title="Remove"
-            onclick="showDeleteModal(event,'{{ history.id }}','{{ history.query|escapejs }}')"
-          ><i class="fa-solid fa-xmark"></i></button>
-        </div>
+      {% for h in search_history %}
+      <div class="ks-history-item" data-href="{% url 'search' %}?q={{ h.query|urlencode }}">
+        <div class="ks-history-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+        <a href="{% url 'search' %}?q={{ h.query|urlencode }}" class="ks-history-query">{{ h.query }}</a>
+        <button class="ks-history-del" onclick="ksShowDel(event,'{{ h.id }}','{{ h.query|escapejs }}')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
       {% endfor %}
       <div class="ks-divider"></div>
       {% endif %}
 
-      <!-- Suggested users (horizontal scroll) -->
       {% if suggested_users %}
-      <div class="ks-section-row" style="padding-bottom:8px;">
-        <span class="ks-section-row-title">People you may know</span>
-      </div>
+      <div class="ks-section-row" style="padding-bottom:6px;"><span class="ks-section-title">People you may know</span></div>
       <div class="ks-sugg-scroll">
-        {% for profile in suggested_users %}
-          <a href="{% url 'profile' profile.user.username %}" class="ks-sugg-card">
-            <img
-              src="{{ profile.get_picture_url }}"
-              alt="{{ profile.user.username }}"
-              loading="lazy"
-              onerror="this.src='https://placehold.co/56x56/dbdbdb/8e8e8e?text={{ profile.user.username|first|upper }}'"
-            >
-            <div class="ks-sugg-card-name">{{ profile.user.username }}</div>
-            <div class="ks-sugg-card-followers">{{ profile.follower_count }} follower{{ profile.follower_count|pluralize }}</div>
-          </a>
+        {% for sp in suggested_users %}
+        <a href="{% url 'profile' sp.user.username %}" class="ks-sugg-card">
+          <img src="{{ sp.get_picture_url }}" alt="{{ sp.user.username }}" loading="lazy"
+            onerror="this.src='https://placehold.co/54x54/dbdbdb/8e8e8e?text={{ sp.user.username|first|upper }}'">
+          <div class="ks-sugg-name">{{ sp.user.username }}</div>
+          <div class="ks-sugg-count">{{ sp.follower_count }} follower{{ sp.follower_count|pluralize }}</div>
+        </a>
         {% endfor %}
       </div>
       <div class="ks-divider"></div>
       {% endif %}
 
-      <!-- Trending hashtags -->
       {% if trending_hashtags %}
-      <div class="ks-section-row" style="padding-bottom:4px;">
-        <span class="ks-section-row-title">Trending</span>
-      </div>
-      {% for tag, count in trending_hashtags %}
-        <a href="{% url 'hashtag_view' tag %}" class="ks-trend-chip">
-          <span class="ks-trend-rank">{{ forloop.counter }}</span>
-          <div>
-            <div class="ks-trend-name">#{{ tag }}</div>
-            <div class="ks-trend-count">{{ count }} post{{ count|pluralize }}</div>
-          </div>
-        </a>
+      <div class="ks-section-row" style="padding-bottom:4px;"><span class="ks-section-title">Trending</span></div>
+      {% for tag, count in trending_hashtags|slice:":10" %}
+      <a href="{% url 'hashtag_view' tag %}" class="ks-trend-chip">
+        <span class="ks-trend-rank">{{ forloop.counter }}</span>
+        <div><div class="ks-trend-name">#{{ tag }}</div><div class="ks-trend-count">{{ count }} post{{ count|pluralize }}</div></div>
+      </a>
       {% endfor %}
+      <div class="ks-divider"></div>
       {% endif %}
 
-      {% if not search_history and not suggested_users and not trending_hashtags %}
+      {% if explore_posts %}
+      <div class="ks-section-row" style="padding-bottom:4px;"><span class="ks-section-title">Explore</span></div>
+      <div class="ks-grid">
+        {% for ep in explore_posts %}{% with rp=ep.original_post|default:ep %}
+          <a href="{% url 'postcomment' ep.post_id %}" class="ks-grid-cell">
+            {% if rp.images.exists %}<img src="{{ rp.images.first.image.url }}" loading="lazy" alt="post">{% if rp.images.count > 1 %}<span class="ks-grid-type-badge"><i class="fa-solid fa-clone"></i></span>{% endif %}
+            {% elif rp.video_file %}<div class="ks-grid-text"><i class="fa-solid fa-play" style="font-size:28px;opacity:.6;"></i></div><span class="ks-grid-type-badge"><i class="fa-solid fa-play"></i></span>
+            {% elif rp.file %}<div class="ks-grid-text"><i class="fa-solid fa-music" style="font-size:28px;opacity:.6;"></i></div>
+            {% elif rp.content %}<div class="ks-grid-text">{{ rp.content|truncatechars:80 }}</div>
+            {% else %}<div class="ks-grid-text"><i class="fa-solid fa-image" style="font-size:28px;opacity:.3;"></i></div>{% endif %}
+            <div class="ks-grid-overlay"><i class="fa-solid fa-fire" style="color:var(--vibe-fire);"></i><span>{{ ep.vibe_count }}</span></div>
+          </a>
+        {% endwith %}{% endfor %}
+      </div>
+      {% endif %}
+
+      {% if not search_history and not suggested_users and not trending_hashtags and not explore_posts %}
       <div class="ks-empty" style="margin-top:40px;">
         <i class="fa-solid fa-magnifying-glass"></i>
         <h3>Search Kvibe</h3>
@@ -962,145 +1034,406 @@
       </div>
       {% endif %}
 
-      {% endif %}
+      {% endif %}{# /query #}
 
       <div class="ks-footer-pad"></div>
-    </div><!-- /ks-main-col -->
+    </div><!-- /kvibe-main-feed -->
 
-    <!-- ── SIDEBAR (desktop only) ──────────────────────────────────────── -->
-    <aside class="ks-side-col">
+    <!-- ══════════════════════════════════════════
+         RIGHT SIDEBAR (desktop only)
+    ══════════════════════════════════════════ -->
+    <aside class="kvibe-right-sidebar kvibe-desktop-only">
 
-      <!-- Trending tags -->
+      <!-- Following / Followers tabs -->
+      <div class="kvibe-sidebar-social">
+        <div class="kvibe-sidebar-tabs">
+          <button class="kvibe-sidebar-tab active" data-tab="following" onclick="kvibeSwitchTab('following',this)">
+            Following <span class="kvibe-sidebar-tab-count">{{ sidebar_followings.count }}</span>
+          </button>
+          <button class="kvibe-sidebar-tab" data-tab="followers" onclick="kvibeSwitchTab('followers',this)">
+            Followers <span class="kvibe-sidebar-tab-count">{{ sidebar_followers.count }}</span>
+          </button>
+        </div>
+
+        <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-following">
+          {% for p in sidebar_followings %}{% if p.user != request.user %}
+          <a href="{% url 'profile' p.user.username %}" class="kvibe-sidebar-user-row">
+            <img src="{{ p.user.profile.get_picture_url }}" alt="{{ p.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
+            <div class="kvibe-sidebar-user-info">
+              <span class="kvibe-sidebar-user-name">{{ p.user.first_name }} {{ p.user.last_name }}{% if p.user.profile.is_verify %} <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align:middle;">{% endif %}</span>
+              <span class="kvibe-sidebar-user-handle">@{{ p.user.username }}</span>
+            </div>
+          </a>
+          {% endif %}{% empty %}
+          <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>Not following anyone yet</p></div>
+          {% endfor %}
+        </div>
+
+        <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-followers">
+          {% for p in sidebar_followers %}{% if p.user != request.user %}
+          <a href="{% url 'profile' p.user.username %}" class="kvibe-sidebar-user-row">
+            <img src="{{ p.user.profile.get_picture_url }}" alt="{{ p.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
+            <div class="kvibe-sidebar-user-info">
+              <span class="kvibe-sidebar-user-name">{{ p.user.first_name }} {{ p.user.last_name }}{% if p.user.profile.is_verify %} <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align:middle;">{% endif %}</span>
+              <span class="kvibe-sidebar-user-handle">@{{ p.user.username }}</span>
+            </div>
+          </a>
+          {% endif %}{% empty %}
+          <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>No followers yet</p></div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Trending card -->
       {% if trending_hashtags %}
-      <div class="ks-sidebar-card">
-        <div class="ks-sidebar-title">Trending on Kvibe</div>
-        {% for tag, count in trending_hashtags %}
-          <a href="{% url 'hashtag_view' tag %}" class="ks-trend-chip" style="padding:10px 16px;">
-            <span class="ks-trend-rank">{{ forloop.counter }}</span>
-            <div style="flex:1;">
-              <div class="ks-trend-name">#{{ tag }}</div>
-              <div class="ks-trend-count">{{ count }} post{{ count|pluralize }}</div>
-            </div>
-          </a>
+      <div class="ks-scard" style="margin-top:16px;">
+        <div class="ks-scard-title">Trending on Kvibe</div>
+        {% for tag, count in trending_hashtags|slice:":10" %}
+        <a href="{% url 'hashtag_view' tag %}" class="ks-trend-chip" style="padding:10px 16px;">
+          <span class="ks-trend-rank">{{ forloop.counter }}</span>
+          <div style="flex:1;"><div class="ks-trend-name">#{{ tag }}</div><div class="ks-trend-count">{{ count }} post{{ count|pluralize }}</div></div>
+        </a>
         {% endfor %}
       </div>
       {% endif %}
 
-      <!-- Suggested users (if no query) -->
+      <!-- Suggested users (explore mode) -->
       {% if not query and suggested_users %}
-      <div class="ks-sidebar-card">
-        <div class="ks-sidebar-title">Suggested for You</div>
-        {% for profile in suggested_users|slice:":6" %}
-          <a href="{% url 'profile' profile.user.username %}" class="ks-user-row" style="padding:10px 16px;">
-            <img
-              src="{{ profile.get_picture_url }}"
-              alt="{{ profile.user.username }}"
-              class="ks-user-avatar"
-              style="width:40px;height:40px;"
-              loading="lazy"
-              onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text={{ profile.user.username|first|upper }}'"
-            >
-            <div class="ks-user-info">
-              <div class="ks-user-name">{{ profile.user.username }}</div>
-              <div class="ks-user-handle">{{ profile.follower_count }} follower{{ profile.follower_count|pluralize }}</div>
-            </div>
-          </a>
+      <div class="ks-scard">
+        <div class="ks-scard-title">Suggested for You</div>
+        {% for sp in suggested_users|slice:":6" %}
+        <a href="{% url 'profile' sp.user.username %}" class="ks-user-row" style="padding:10px 14px;">
+          <img src="{{ sp.get_picture_url }}" alt="{{ sp.user.username }}" class="ks-user-avatar" style="width:40px;height:40px;" loading="lazy"
+            onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text={{ sp.user.username|first|upper }}'">
+          <div class="ks-user-info">
+            <div class="ks-user-name">{{ sp.user.username }}</div>
+            <div class="ks-user-handle">{{ sp.follower_count }} follower{{ sp.follower_count|pluralize }}</div>
+          </div>
+        </a>
         {% endfor %}
       </div>
       {% endif %}
 
-    </aside>
+      <!-- Top people in results -->
+      {% if query and users %}
+      <div class="ks-scard">
+        <div class="ks-scard-title">Top People</div>
+        {% for u in users|slice:":5" %}
+        <a href="{% url 'profile' u.username %}" class="ks-user-row" style="padding:10px 14px;">
+          <img src="{{ u.profile.get_picture_url }}" alt="{{ u.username }}" class="ks-user-avatar" style="width:40px;height:40px;" loading="lazy"
+            onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text={{ u.username|first|upper }}'">
+          <div class="ks-user-info">
+            <div class="ks-user-name">{{ u.username }}{% if u.profile.is_verify %} <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:10px;"></i>{% endif %}</div>
+            {% if u.profile.bio %}<div class="ks-user-bio">{{ u.profile.bio|truncatechars:50 }}</div>{% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
 
-  </div><!-- /ks-body -->
+    </aside><!-- /right sidebar -->
 
+  </div><!-- /kvibe-desktop-layout -->
+</div><!-- /ks-body -->
+
+<!-- ===== MOBILE RIGHT SIDEBAR TOGGLE BUTTON ===== -->
+<button class="kvibe-mobile-sidebar-toggle" id="kvibe-mobile-sidebar-toggle" onclick="kvibeOpenMobileSidebar()" aria-label="Open sidebar">
+  <i class="fas fa-chevron-left"></i>
+  <span>MORE</span>
+</button>
+
+<!-- ===== MOBILE RIGHT SIDEBAR OVERLAY ===== -->
+<div class="kvibe-mobile-sidebar-overlay" id="kvibe-mobile-sidebar-overlay" onclick="kvibeCloseMobileSidebar()"></div>
+
+<!-- ===== MOBILE RIGHT SIDEBAR ===== -->
+<aside class="kvibe-mobile-right-sidebar" id="kvibe-mobile-right-sidebar">
+  <div class="kvibe-mobile-sidebar-header">
+    <span class="kvibe-mobile-sidebar-title">Discover</span>
+    <button class="kvibe-mobile-sidebar-close" onclick="kvibeCloseMobileSidebar()" aria-label="Close sidebar">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <div class="kvibe-mobile-sidebar-body">
+
+    <div class="kvibe-sidebar-social" style="margin-bottom: 16px;">
+      <div class="kvibe-sidebar-tabs">
+        <button class="kvibe-sidebar-tab active" data-tab="mob-following" onclick="kvibeSwitchTab('mob-following', this)">
+          Following
+          <span class="kvibe-sidebar-tab-count">{{ sidebar_followings.count }}</span>
+        </button>
+        <button class="kvibe-sidebar-tab" data-tab="mob-followers" onclick="kvibeSwitchTab('mob-followers', this)">
+          Followers
+          <span class="kvibe-sidebar-tab-count">{{ sidebar_followers.count }}</span>
+        </button>
+      </div>
+
+      <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-mob-following">
+        {% for p in sidebar_followings %}{% if p.user != request.user %}
+        <a href="{% url 'profile' p.user.username %}" class="kvibe-sidebar-user-row">
+          <img src="{{ p.user.profile.get_picture_url }}" alt="{{ p.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
+          <div class="kvibe-sidebar-user-info">
+            <span class="kvibe-sidebar-user-name">{{ p.user.first_name }} {{ p.user.last_name }}{% if p.user.profile.is_verify %} <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align:middle;">{% endif %}</span>
+            <span class="kvibe-sidebar-user-handle">@{{ p.user.username }}</span>
+          </div>
+        </a>
+        {% endif %}{% empty %}
+        <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>Not following anyone yet</p></div>
+        {% endfor %}
+      </div>
+
+      <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-mob-followers">
+        {% for p in sidebar_followers %}{% if p.user != request.user %}
+        <a href="{% url 'profile' p.user.username %}" class="kvibe-sidebar-user-row">
+          <img src="{{ p.user.profile.get_picture_url }}" alt="{{ p.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
+          <div class="kvibe-sidebar-user-info">
+            <span class="kvibe-sidebar-user-name">{{ p.user.first_name }} {{ p.user.last_name }}{% if p.user.profile.is_verify %} <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align:middle;">{% endif %}</span>
+            <span class="kvibe-sidebar-user-handle">@{{ p.user.username }}</span>
+          </div>
+        </a>
+        {% endif %}{% empty %}
+        <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>No followers yet</p></div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if trending_hashtags %}
+    <div class="ks-scard" style="margin-bottom: 20px;">
+      <div class="ks-scard-title">Trending on Kvibe</div>
+      {% for tag, count in trending_hashtags|slice:":10" %}
+      <a href="{% url 'hashtag_view' tag %}" class="ks-trend-chip" style="padding:10px 16px;">
+        <span class="ks-trend-rank">{{ forloop.counter }}</span>
+        <div style="flex:1;"><div class="ks-trend-name">#{{ tag }}</div><div class="ks-trend-count">{{ count }} post{{ count|pluralize }}</div></div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+</aside>
+
+<!-- Mobile-only footer (matches home.html behavior) -->
+<div class="kvibe-mobile-footer-only">
   {% include 'footer.html' %}
+</div>
 
-  <script>
-    // ─── Tab switching ──────────────────────────────────────────────────
-    function switchTab(name, btn) {
-      document.querySelectorAll('.ks-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.ks-panel').forEach(p => p.classList.remove('active'));
-      if (btn) btn.classList.add('active');
-      const panel = document.getElementById('panel-' + name);
-      if (panel) panel.classList.add('active');
-    }
+<!-- ═══════════════════════════════════════════════════════════════════
+     DESKTOP NOTIFICATION PANEL MODAL
+═══════════════════════════════════════════════════════════════════ -->
 
-    // ─── Search input events ────────────────────────────────────────────
-    const ksInput   = document.getElementById('ksInput');
-    const ksClear   = document.getElementById('ksClearBtn');
-    const ksCancel  = document.getElementById('ksCancelBtn');
+<!-- Backdrop -->
+<div id="kvibe-notif-backdrop" style="display:none;" aria-hidden="true"></div>
 
-    ksInput.addEventListener('input', function() {
-      ksClear.classList.toggle('visible', this.value.length > 0);
-      if (window.innerWidth < 900) {
-        ksCancel.style.display = this.value.length > 0 ? 'block' : 'none';
-      }
+<!-- Slide-in Panel -->
+<aside id="kvibe-notif-panel" role="dialog" aria-modal="true" aria-label="Notifications">
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 18px 14px; border-bottom:1px solid #efefef; background:rgba(255,255,255,.97); backdrop-filter:blur(8px); position:sticky; top:0; z-index:10; flex-shrink:0;">
+    <span style="font-size:20px;font-weight:700;letter-spacing:-.3px;color:#262626;">Notifications</span>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button id="kvibe-panel-mark-all" style="background:none;border:none;color:#0095f6;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0;transition:opacity .15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'" onclick="kvibePanelMarkAllRead()">Mark all read</button>
+      <button id="kvibe-panel-close" aria-label="Close notifications" style="background:none;border:none;color:#8e8e8e;font-size:20px;cursor:pointer; width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background .15s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+  <div id="kvibe-notif-panel-body" style="flex:1;overflow-y:auto;overscroll-behavior:contain;">
+    <div id="kvibe-panel-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:12px;">
+      <i class="fas fa-circle-notch fa-spin" style="font-size:28px;color:#0095f6;"></i>
+      <span style="font-size:13px;color:#8e8e8e;">Loading notifications…</span>
+    </div>
+  </div>
+  <div style="padding:12px 18px; border-top:1px solid #efefef; text-align:center; flex-shrink:0;">
+    <a href="{% url 'notification_list' %}" style="font-size:13px;font-weight:600;color:#0095f6;text-decoration:none;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">See all notifications</a>
+  </div>
+</aside>
+
+<script>
+/* ── Sidebar tab switch (right sidebar) ───────────────────────── */
+function kvibeSwitchTab(tabName, btn) {
+  const container = btn.closest('.kvibe-sidebar-social');
+  if (!container) return;
+  container.querySelectorAll('.kvibe-sidebar-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  container.querySelectorAll('.kvibe-sidebar-tab-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('kvibe-tab-' + tabName);
+  if (panel) panel.classList.add('active');
+}
+
+/* ── Search result tab switching ─────────────────────────────── */
+function ksTab(name, btn) {
+  document.querySelectorAll('.ks-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.ks-panel').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const p = document.getElementById('panel-' + name);
+  if (p) p.classList.add('active');
+}
+
+/* ── Search input ─────────────────────────────────────────────── */
+const ksQ      = document.getElementById('ksQ');
+const ksClear  = document.getElementById('ksClear');
+const ksCancel = document.getElementById('ksCancel');
+
+ksQ.addEventListener('input', () => {
+  ksClear.classList.toggle('show', ksQ.value.length > 0);
+  if (window.innerWidth < 768) ksCancel.style.display = ksQ.value.length ? 'block' : 'none';
+});
+ksClear.addEventListener('click', () => {
+  ksQ.value = ''; ksClear.classList.remove('show');
+  window.location.href = '{% url "search" %}';
+});
+if (window.innerWidth < 768) {
+  ksQ.addEventListener('focus', () => { ksCancel.style.display = 'block'; });
+}
+
+/* ── Modals ───────────────────────────────────────────────────── */
+function ksMOpen(id)  { document.getElementById(id).classList.add('open'); }
+function ksMClose(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.ks-modal-wrap').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.ks-modal-wrap').forEach(el => el.classList.remove('open'));
+});
+
+/* ── Delete single history item ──────────────────────────────── */
+let _delId = null;
+function ksShowDel(e, id, q) {
+  e.preventDefault(); e.stopPropagation();
+  _delId = id;
+  document.getElementById('mDelQuery').textContent = q;
+  ksMOpen('mDeleteOne');
+}
+document.getElementById('mDelConfirm').addEventListener('click', () => {
+  if (_delId) window.location.href = '/search/delete/' + _delId + '/';
+});
+
+/* ── History row click ────────────────────────────────────────── */
+document.querySelectorAll('.ks-history-item[data-href]').forEach(row => {
+  row.addEventListener('click', e => {
+    if (e.target.closest('.ks-history-del')) return;
+    window.location.href = row.dataset.href;
+  });
+});
+
+/* ── HTMX CSRF ────────────────────────────────────────────────── */
+document.addEventListener('htmx:configRequest', e => {
+  e.detail.headers['X-CSRFToken'] = document.querySelector('meta[name="csrf-token"]').content;
+  e.detail.headers['HX-Request'] = 'true';
+});
+
+/* ── Logout ───────────────────────────────────────────────────── */
+const logoutIcon = document.getElementById('desktopLogoutIcon');
+if (logoutIcon) {
+  logoutIcon.addEventListener('click', e => {
+    e.preventDefault();
+    window.location.href = '{% url "logout" %}';
+  });
+}
+
+/* ── Mobile sidebar functions ─────────────────────────────────── */
+function kvibeOpenMobileSidebar() {
+  document.getElementById('kvibe-mobile-right-sidebar').classList.add('open');
+  document.getElementById('kvibe-mobile-sidebar-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function kvibeCloseMobileSidebar() {
+  document.getElementById('kvibe-mobile-right-sidebar').classList.remove('open');
+  document.getElementById('kvibe-mobile-sidebar-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+/* ── Notification Panel (desktop) ─────────────────────────────── */
+(function() {
+  if (window.innerWidth < 768) return;
+  const trigger   = document.getElementById('kvibe-desktop-notif-btn');
+  const panel     = document.getElementById('kvibe-notif-panel');
+  const backdrop  = document.getElementById('kvibe-notif-backdrop');
+  const closeBtn  = document.getElementById('kvibe-panel-close');
+  const body      = document.getElementById('kvibe-notif-panel-body');
+  const loading   = document.getElementById('kvibe-panel-loading');
+  const badge     = document.querySelector('#kvibe-desktop-notif-btn .kvibe-desktop-notification-badge');
+  if (!trigger || !panel) return;
+
+  panel.style.display = 'flex';
+  backdrop.style.display = 'block';
+  panel.style.visibility = 'hidden';
+  backdrop.style.opacity = '0';
+  backdrop.style.pointerEvents = 'none';
+
+  let isOpen = false;
+  let loaded = false;
+
+  function getCsrf() {
+    const el = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (el) return el.value;
+    const m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function openPanel() {
+    if (isOpen) return;
+    isOpen = true;
+    backdrop.style.visibility = 'visible';
+    backdrop.style.pointerEvents = 'auto';
+    backdrop.style.opacity = '0';
+    backdrop.style.transition = 'opacity .3s';
+    setTimeout(() => { backdrop.style.opacity = '1'; }, 10);
+    panel.style.visibility = 'visible';
+    panel.style.pointerEvents = 'auto';
+    panel.style.transform = 'translateX(-100%)';
+    setTimeout(() => { panel.style.transform = 'translateX(0)'; }, 10);
+    trigger.setAttribute('aria-expanded', 'true');
+    if (badge) badge.style.display = 'none';
+    if (!loaded) fetchNotifications();
+  }
+
+  function closePanel() {
+    if (!isOpen) return;
+    isOpen = false;
+    backdrop.style.opacity = '0';
+    backdrop.style.pointerEvents = 'none';
+    panel.style.transform = 'translateX(-100%)';
+    setTimeout(() => {
+      backdrop.style.visibility = 'hidden';
+      panel.style.visibility = 'hidden';
+      panel.style.pointerEvents = 'none';
+    }, 300);
+    trigger.setAttribute('aria-expanded', 'false');
+  }
+
+  trigger.addEventListener('click', (e) => { e.stopPropagation(); isOpen ? closePanel() : openPanel(); });
+  if (closeBtn) closeBtn.addEventListener('click', closePanel);
+  backdrop.addEventListener('click', closePanel);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isOpen) closePanel(); });
+
+  function fetchNotifications() {
+    if (loading) loading.style.display = 'flex';
+    fetch('{% url "notification_list" %}?panel=1', {
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrf() }
+    })
+    .then(r => { if (!r.ok) throw new Error(); return r.text(); })
+    .then(html => {
+      loaded = true;
+      if (loading) loading.style.display = 'none';
+      body.insertAdjacentHTML('beforeend', html);
+    })
+    .catch(() => {
+      if (loading) loading.innerHTML = '<div style="text-align:center;padding:40px 24px;color:#8e8e8e;font-size:13px;"><i class="fas fa-exclamation-circle" style="font-size:24px;color:#ed4956;margin-bottom:8px;display:block;"></i>Could not load notifications.<br><a href="{% url "notification_list" %}" style="color:#0095f6;font-weight:600;">View all</a></div>';
     });
+  }
 
-    ksClear.addEventListener('click', function() {
-      ksInput.value = '';
-      ksClear.classList.remove('visible');
-      ksInput.focus();
-      // Go back to explore
-      window.location.href = '{% url "search" %}';
+  window.kvibePanelMarkAllRead = function() {
+    fetch('/notifications/mark-all-read/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify({})
+    }).then(() => {
+      body.querySelectorAll('.kishiface-unread').forEach(el => el.classList.remove('kishiface-unread'));
+      body.querySelectorAll('.kishiface-unread-dot').forEach(d => d.remove());
     });
+  };
 
-    // Auto-submit on Enter (already handled by form, but ensure)
-    ksInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { e.preventDefault(); this.closest('form').submit(); }
-    });
-
-    // Mobile: show cancel when focused
-    if (window.innerWidth < 900) {
-      ksInput.addEventListener('focus', function() {
-        ksCancel.style.display = 'block';
-      });
-    }
-
-    // ─── Modal helpers ──────────────────────────────────────────────────
-    function openModal(id) {
-      document.getElementById(id).classList.add('open');
-    }
-    function closeModal(id) {
-      document.getElementById(id).classList.remove('open');
-    }
-
-    let _deleteHistId = null;
-    function showDeleteModal(e, id, query) {
-      e.preventDefault();
-      e.stopPropagation();
-      _deleteHistId = id;
-      document.getElementById('ksDeleteQueryText').textContent = query;
-      openModal('ksDeleteModal');
-    }
-
-    document.getElementById('ksDeleteConfirmBtn').addEventListener('click', function() {
-      if (_deleteHistId) {
-        window.location.href = '/search/delete/' + _deleteHistId + '/';
-      }
-    });
-
-    // Close modals on backdrop click
-    document.querySelectorAll('.ks-modal-overlay').forEach(el => {
-      el.addEventListener('click', function(e) {
-        if (e.target === this) this.classList.remove('open');
-      });
-    });
-
-    // Escape key
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        document.querySelectorAll('.ks-modal-overlay').forEach(el => el.classList.remove('open'));
-      }
-    });
-
-    // ─── History row click (whole row navigates) ────────────────────────
-    document.querySelectorAll('.ks-history-item[data-href]').forEach(row => {
-      row.addEventListener('click', function(e) {
-        if (e.target.closest('.ks-history-delete')) return;
-        window.location.href = this.dataset.href;
-      });
-    });
-  </script>
+  window.addEventListener('resize', () => { if (window.innerWidth < 768 && isOpen) closePanel(); });
+})();
+</script>
 </body>
 </html>

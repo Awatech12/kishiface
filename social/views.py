@@ -2182,21 +2182,24 @@ def following_list(request, username):
 @login_required(login_url='/')
 def search(request):
     """
-    Unified search — users, posts, and hashtags — with explore mode when no query.
+    Unified search with HTMX infinite-scroll pagination.
 
-    Results page (query present):
-      · Users  — username, first/last name, bio match
-      · Posts  — content and author username match, with image/video thumbnails
-      · Hashtags — extracted from all recent posts, filtered by query
+    Main view — renders the shell + first page of results.
+    Paginated partials are served by the three helpers below:
+        search_users_partial   GET /search/users/
+        search_posts_partial   GET /search/posts/
+        search_hashtags_partial GET /search/tags/
 
-    Explore page (no query):
-      · Recent search history (per-user)
-      · Suggested users not yet followed (ordered by follower count)
-      · Trending hashtags (global, last 300 posts)
+    Explore mode (no query):
+        · Recent search history
+        · Suggested users (not yet followed, by follower count)
+        · Trending hashtags (last 300 posts, global)
     """
-    query = request.GET.get('q', '').strip()[:100]  # hard-cap at 100 chars
+    _PAGE = 10   # items per HTMX page
 
-    # ── Trending hashtags — always computed, used on explore + sidebar ─────────
+    query = request.GET.get('q', '').strip()[:100]
+
+    # ── Trending hashtags — always needed ──────────────────────────────────────
     hashtag_counts: dict = {}
     for _p in Post.objects.filter(content__isnull=False).order_by('-created_at')[:300]:
         if _p.content:
@@ -2205,11 +2208,10 @@ def search(request):
     trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
 
     if query:
-        # Save history entry for this search
         SearchHistory.objects.create(user=request.user, query=query)
 
-        # ── Users ──────────────────────────────────────────────────────────────
-        users = (
+        # ── First page of users ────────────────────────────────────────────────
+        users_qs = (
             User.objects.filter(
                 Q(username__icontains=query) |
                 Q(first_name__icontains=query) |
@@ -2217,11 +2219,14 @@ def search(request):
                 Q(profile__bio__icontains=query)
             )
             .select_related('profile')
-            .distinct()[:20]
+            .annotate(follower_count=Count('profile__followers', distinct=True))
+            .distinct()
         )
+        users_total = users_qs.count()
+        users = users_qs[:_PAGE]
 
-        # ── Posts ──────────────────────────────────────────────────────────────
-        posts = (
+        # ── First page of posts ────────────────────────────────────────────────
+        posts_qs = (
             Post.objects.filter(
                 Q(content__icontains=query) |
                 Q(author__username__icontains=query)
@@ -2231,38 +2236,91 @@ def search(request):
                 'original_post', 'original_post__author',
                 'original_post__author__profile',
             )
-            .prefetch_related('images', 'likes')
-            .order_by('-created_at')[:30]
+            .prefetch_related('images', 'likes', 'vibes', 'reposts')
+            .annotate(
+                vibe_count=Count('vibes', distinct=True),
+                comment_count=Count('comments', distinct=True),
+                repost_count=Count('reposts', distinct=True),
+            )
+            .order_by('-created_at')
         )
+        posts_total = posts_qs.count()
+        posts = posts_qs[:_PAGE]
 
-        # ── Hashtags matching the query ────────────────────────────────────────
+        # Attach per-user vibe on each post
+        _VIBE_EMOJIS = {
+            'fire': '🔥', 'real': '💯', 'vibing': '🎵',
+            'dead': '😂', 'cringe': '😬', 'chill': '🧊', 'love': '❤️',
+        }
+        _user_vibes = {
+            v.post_id: v.vibe_type
+            for v in PostVibe.objects.filter(user=request.user, post__in=posts)
+        }
+        for p in posts:
+            p.user_vibe = _user_vibes.get(p.post_id)
+            p.user_vibe_emoji = _VIBE_EMOJIS.get(p.user_vibe, '') if p.user_vibe else ''
+
+        # ── Matching hashtags ──────────────────────────────────────────────────
         clean_query = query.lstrip('#').lower()
         matching_hashtags = sorted(
-            [(tag, count) for tag, count in hashtag_counts.items()
-             if clean_query in tag.lower()],
-            key=lambda x: x[1],
-            reverse=True,
-        )[:15]
+            [(tag, cnt) for tag, cnt in hashtag_counts.items() if clean_query in tag.lower()],
+            key=lambda x: x[1], reverse=True,
+        )[:30]
+        hashtags_total = len(matching_hashtags)
+        hashtags_page = matching_hashtags[:_PAGE]
 
         recent_searches = (
             SearchHistory.objects.filter(user=request.user)
-            .exclude(query=query)
-            .order_by('-created_at')[:8]
+            .exclude(query=query).order_by('-created_at')[:8]
         )
 
+        from social.models import PostVibe as _PV
+        vibe_emojis = _PV.VIBE_EMOJIS
+
+        # ── Sidebar context (mirrors home view) ───────────────────────────────
+        _profile = request.user.profile
+        _followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
+            last_app_activity=Max('channel_messages__created_at')
+        ).order_by('-last_app_activity', '-created_at')
+        _followed_list = []
+        for _ch in _followed_channels:
+            _unread = _ch.unread_count_for_user(request.user)
+            _last_msg = _ch.channel_messages.order_by('-created_at').first()
+            _followed_list.append({
+                'channel':      _ch,
+                'unread_count': _unread,
+                'last_message': _last_msg.message if _last_msg else 'No messages yet',
+                'last_time':    _last_msg.created_at if _last_msg else None,
+            })
+        _unread_follow_count = FollowNotification.objects.filter(to_user=request.user, is_read=False).count()
+        _unread_notif_count  = Notification.objects.filter(recipient=request.user, is_read=False).count()
+
         return render(request, 'search.html', {
-            'query': query,
-            'users': users,
-            'posts': posts,
+            'query':             query,
+            'users':             users,
+            'users_total':       users_total,
+            'users_has_more':    users_total > _PAGE,
+            'posts':             posts,
+            'posts_total':       posts_total,
+            'posts_has_more':    posts_total > _PAGE,
+            'hashtags_page':     hashtags_page,
+            'hashtags_total':    hashtags_total,
+            'hashtags_has_more': hashtags_total > _PAGE,
             'matching_hashtags': matching_hashtags,
-            'recent_searches': recent_searches,
+            'recent_searches':   recent_searches,
             'trending_hashtags': trending_hashtags,
+            'page_size':         _PAGE,
+            # sidebar
+            'followed_list':              _followed_list[:8],
+            'unread_follow_count':        _unread_follow_count,
+            'unread_notifications_count': _unread_notif_count,
+            'sidebar_followings':         _profile.followings.select_related('user').all(),
+            'sidebar_followers':          _profile.followers.select_related('user').all(),
         })
 
-    # ── Explore mode (no query) ────────────────────────────────────────────────
+    # ── Explore (no query) ─────────────────────────────────────────────────────
     search_history = (
-        SearchHistory.objects.filter(user=request.user)
-        .order_by('-created_at')[:20]
+        SearchHistory.objects.filter(user=request.user).order_by('-created_at')[:20]
     )
 
     current_profile = request.user.profile
@@ -2275,10 +2333,174 @@ def search(request):
         .order_by('-follower_count')[:12]
     )
 
+    # Explore grid: recent posts with images/video for masonry grid
+    explore_posts = (
+        Post.objects
+        .filter(Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False))
+        .select_related('author', 'author__profile', 'original_post', 'original_post__author')
+        .prefetch_related('images', 'likes', 'vibes')
+        .annotate(vibe_count=Count('vibes', distinct=True))
+        .order_by('-created_at')
+        .distinct()[:60]
+    )
+
+    # ── Sidebar context ────────────────────────────────────────────────────────
+    _profile = request.user.profile
+    _followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
+        last_app_activity=Max('channel_messages__created_at')
+    ).order_by('-last_app_activity', '-created_at')
+    _followed_list = []
+    for _ch in _followed_channels:
+        _unread = _ch.unread_count_for_user(request.user)
+        _last_msg = _ch.channel_messages.order_by('-created_at').first()
+        _followed_list.append({
+            'channel':      _ch,
+            'unread_count': _unread,
+            'last_message': _last_msg.message if _last_msg else 'No messages yet',
+            'last_time':    _last_msg.created_at if _last_msg else None,
+        })
+    _unread_follow_count = FollowNotification.objects.filter(to_user=request.user, is_read=False).count()
+    _unread_notif_count  = Notification.objects.filter(recipient=request.user, is_read=False).count()
+
     return render(request, 'search.html', {
-        'search_history': search_history,
+        'search_history':    search_history,
         'trending_hashtags': trending_hashtags,
-        'suggested_users': suggested_users,
+        'suggested_users':   suggested_users,
+        'explore_posts':     explore_posts,
+        # sidebar
+        'followed_list':              _followed_list[:8],
+        'unread_follow_count':        _unread_follow_count,
+        'unread_notifications_count': _unread_notif_count,
+        'sidebar_followings':         _profile.followings.select_related('user').all(),
+        'sidebar_followers':          _profile.followers.select_related('user').all(),
+    })
+
+
+# ── HTMX search pagination partials ───────────────────────────────────────────
+
+@login_required(login_url='/')
+@require_GET
+def search_users_partial(request):
+    """GET /search/users/?q=…&page=N  — HTMX paginated user rows."""
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    _PAGE = 10
+    query = request.GET.get('q', '').strip()[:100]
+    page  = max(1, int(request.GET.get('page', 1) or 1))
+    offset = (page - 1) * _PAGE
+
+    users_qs = (
+        User.objects.filter(
+            Q(username__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(profile__bio__icontains=query)
+        )
+        .select_related('profile')
+        .annotate(follower_count=Count('profile__followers', distinct=True))
+        .distinct()
+    )
+    total = users_qs.count()
+    users = users_qs[offset: offset + _PAGE]
+    has_more = (offset + _PAGE) < total
+
+    return render(request, 'snippet/search_users_partial.html', {
+        'users':    users,
+        'query':    query,
+        'page':     page + 1,
+        'has_more': has_more,
+    })
+
+
+@login_required(login_url='/')
+@require_GET
+def search_posts_partial(request):
+    """GET /search/posts/?q=…&page=N  — HTMX paginated post cards."""
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    _PAGE = 10
+    query = request.GET.get('q', '').strip()[:100]
+    page  = max(1, int(request.GET.get('page', 1) or 1))
+    offset = (page - 1) * _PAGE
+
+    from social.models import PostVibe as _PV
+
+    posts_qs = (
+        Post.objects.filter(
+            Q(content__icontains=query) |
+            Q(author__username__icontains=query)
+        )
+        .select_related(
+            'author', 'author__profile',
+            'original_post', 'original_post__author',
+            'original_post__author__profile',
+        )
+        .prefetch_related('images', 'likes', 'vibes', 'reposts')
+        .annotate(
+            vibe_count=Count('vibes', distinct=True),
+            comment_count=Count('comments', distinct=True),
+            repost_count=Count('reposts', distinct=True),
+        )
+        .order_by('-created_at')
+    )
+    total = posts_qs.count()
+    posts = list(posts_qs[offset: offset + _PAGE])
+    has_more = (offset + _PAGE) < total
+
+    _VIBE_EMOJIS = {
+        'fire': '🔥', 'real': '💯', 'vibing': '🎵',
+        'dead': '😂', 'cringe': '😬', 'chill': '🧊', 'love': '❤️',
+    }
+    _user_vibes = {
+        v.post_id: v.vibe_type
+        for v in _PV.objects.filter(user=request.user, post__in=posts)
+    }
+    for p in posts:
+        p.user_vibe = _user_vibes.get(p.post_id)
+        p.user_vibe_emoji = _VIBE_EMOJIS.get(p.user_vibe, '') if p.user_vibe else ''
+
+    return render(request, 'snippet/search_posts_partial.html', {
+        'posts':    posts,
+        'query':    query,
+        'page':     page + 1,
+        'has_more': has_more,
+    })
+
+
+@login_required(login_url='/')
+@require_GET
+def search_hashtags_partial(request):
+    """GET /search/tags/?q=…&page=N  — HTMX paginated hashtag rows."""
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    _PAGE = 10
+    query = request.GET.get('q', '').strip()[:100]
+    page  = max(1, int(request.GET.get('page', 1) or 1))
+    offset = (page - 1) * _PAGE
+
+    hashtag_counts: dict = {}
+    for _p in Post.objects.filter(content__isnull=False).order_by('-created_at')[:300]:
+        if _p.content:
+            for _tag in extract_hashtags(_p.content):
+                hashtag_counts[_tag] = hashtag_counts.get(_tag, 0) + 1
+
+    clean_query = query.lstrip('#').lower()
+    all_matches = sorted(
+        [(tag, cnt) for tag, cnt in hashtag_counts.items() if clean_query in tag.lower()],
+        key=lambda x: x[1], reverse=True,
+    )
+    total = len(all_matches)
+    hashtags_page = all_matches[offset: offset + _PAGE]
+    has_more = (offset + _PAGE) < total
+
+    return render(request, 'snippet/search_hashtags_partial.html', {
+        'hashtags_page': hashtags_page,
+        'query':         query,
+        'page':          page + 1,
+        'has_more':      has_more,
     })
 
 
