@@ -3930,12 +3930,22 @@
                 <span class="kvibe-desktop-nav-label">Create</span>
             </a>
 
-            <a href="{% url 'notification_list' %}" class="kvibe-desktop-nav-item" title="Alerts">
+            <!-- Notifications (desktop → modal panel) -->
+            <button class="kvibe-desktop-nav-item kvibe-notif-panel-trigger"
+                    id="kvibe-desktop-notif-btn"
+                    title="Alerts"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="kvibe-notif-panel"
+                    style="background:none;border:none;cursor:pointer;width:100%;text-align:left;">
                 <div class="kvibe-desktop-nav-icon">
-                    <i class="fa-regular fa-bell"></i>
+                    <i class="fa-regular fa-bell" id="kvibe-desktop-bell-icon"></i>
+                    {% if unread_notifications_count and unread_notifications_count > 0 %}
+                    <span class="kvibe-desktop-notification-badge" id="kvibe-desktop-notif-badge">{{ unread_notifications_count }}</span>
+                    {% endif %}
                 </div>
                 <span class="kvibe-desktop-nav-label">Alerts</span>
-            </a>
+            </button>
             
             <a href="{% url 'profile' request.user.username %}" class="kvibe-desktop-nav-item active" title="Profile">
                 <div class="kvibe-desktop-nav-icon">
@@ -6023,8 +6033,20 @@ function kvibeGetCsrf() {
 (function () {
 'use strict';
 
-const KV_EMOJIS = { fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊' };
-const KV_COLORS = { fire:'#ff4500', real:'#ff0080', vibing:'#3b82f6', dead:'#f59e0b', cringe:'#8b5cf6', chill:'#06b6d4' };
+const KV_EMOJIS = { 
+  fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊',
+  love:'❤️'  // NEW: Love emoji
+};
+const KV_COLORS = { 
+  fire:'#ff4500', real:'#ff0080', vibing:'#3b82f6', dead:'#f59e0b', 
+  cringe:'#8b5cf6', chill:'#06b6d4',
+  love:'#e11d48'  // NEW: Love color (deep pink/red)
+};
+const KV_LABELS = {
+  fire:'Fire', real:'Real', vibing:'Vibing', 
+  dead:'Dead', cringe:'Cringe', chill:'Chill',
+  love:'Love'  // NEW: Love label
+};
 
 window._kv = window._kv || {};
 function st(id) {
@@ -6097,8 +6119,22 @@ function kvOptimistic(id, vibe) {
     const same = s.userVibe === vibe;
     s.userVibe = same ? null : vibe;
     kvFace(id, s.userVibe);
-    const c = document.getElementById('kv-vibe-count-' + id);
-    if (c) { c.classList.remove('tick'); void c.offsetWidth; c.classList.add('tick'); }
+    
+    // Update count optimistically
+    const countEl = document.getElementById('kv-vibe-count-' + id);
+    if (countEl) {
+        let current = parseInt(countEl.textContent.replace(/,/g, '')) || 0;
+        if (same) {
+            current = Math.max(0, current - 1);
+        } else {
+            current = current + 1;
+        }
+        countEl.textContent = current > 0 ? current.toLocaleString() : '0';
+        countEl.classList.remove('tick'); 
+        void countEl.offsetWidth; 
+        countEl.classList.add('tick');
+    }
+    
     document.querySelectorAll(`#kv-picker-${id} .kv-vibe-opt`).forEach(o =>
         o.classList.toggle('selected', o.dataset.vibe === s.userVibe)
     );
@@ -6147,20 +6183,32 @@ function kvRender(id, summary, userVibe, total) {
         if (totalEl) totalEl.style.display = 'none';
         return;
     }
+    
+    // Sort entries by count descending, then by vibe type
+    entries.sort((a, b) => {
+        if (a[1] !== b[1]) return b[1] - a[1];
+        return (a[0] || '').localeCompare(b[0] || '');
+    });
+    
     box.innerHTML = entries.map(([vt, count]) => {
         const mine  = userVibe === vt;
         const color = KV_COLORS[vt] || '#666';
         const style = mine ? `style="--pill-bg:${color}22;--pill-fg:${color};--pill-border:${color}55"` : '';
-        return `<span class="kv-vibe-pill${mine ? ' mine' : ''}" ${style} title="${vt}">
+        return `<span class="kv-vibe-pill${mine ? ' mine' : ''}" ${style} data-vibe="${vt}" title="${vt}">
                   <span class="kv-pill-emoji">${KV_EMOJIS[vt] || '✨'}</span>
                   <span class="kv-pill-count">${count.toLocaleString()}</span>
                 </span>`;
     }).join('');
+    
     if (totalEl) {
         totalEl.style.display = '';
         if (userVibe) {
             const o = total - 1;
-            totalEl.innerHTML = `<span class="kv-you-text">You</span>${o > 0 ? ` + ${o.toLocaleString()} others` : ''}`;
+            if (o > 0) {
+                totalEl.innerHTML = `<span class="kv-you-text">You</span> and ${o.toLocaleString()} other${o !== 1 ? 's' : ''} vibed this`;
+            } else {
+                totalEl.innerHTML = `<span class="kv-you-text">You</span> vibed this`;
+            }
         } else {
             totalEl.textContent = `${total.toLocaleString()} vibe${total !== 1 ? 's' : ''}`;
         }
@@ -7153,6 +7201,194 @@ function kvSelectPrivacy(value) {
   });
 
 })();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     DESKTOP NOTIFICATION PANEL — desktop only (≥768px)
+     Mobile footer link navigates to the full page as normal.
+     ═══════════════════════════════════════════════════════════ -->
+<div id="kvibe-notif-backdrop"
+     style="display:none;position:fixed;inset:0;z-index:1199;background:rgba(0,0,0,.35);
+            backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);"
+     aria-hidden="true"></div>
+
+<aside id="kvibe-notif-panel"
+       role="dialog" aria-modal="true" aria-label="Notifications"
+       style="display:none;position:fixed;top:0;left:0;
+              width:400px;max-width:94vw;height:100vh;
+              background:#fff;z-index:1200;
+              box-shadow:4px 0 32px rgba(0,0,0,.15);
+              flex-direction:column;
+              transform:translateX(-100%);
+              transition:transform .3s cubic-bezier(.4,0,.2,1);
+              will-change:transform;">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              padding:16px 18px 14px;border-bottom:1px solid #efefef;
+              background:rgba(255,255,255,.97);backdrop-filter:blur(8px);
+              position:sticky;top:0;z-index:10;flex-shrink:0;">
+    <span style="font-size:20px;font-weight:700;letter-spacing:-.3px;color:#262626;">Notifications</span>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button id="kvibe-panel-mark-all"
+              style="background:none;border:none;color:#0095f6;font-size:13px;font-weight:600;
+                     cursor:pointer;padding:4px 0;transition:opacity .15s;"
+              onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"
+              onclick="kvibePanelMarkAllRead()">Mark all read</button>
+      <button id="kvibe-panel-close" aria-label="Close notifications"
+              style="background:none;border:none;color:#8e8e8e;font-size:20px;cursor:pointer;
+                     width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+                     border-radius:50%;transition:background .15s;"
+              onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <div id="kvibe-notif-panel-body" style="flex:1;overflow-y:auto;overscroll-behavior:contain;">
+    <div id="kvibe-panel-loading"
+         style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                padding:60px 24px;gap:12px;">
+      <i class="fas fa-circle-notch fa-spin" style="font-size:28px;color:#0095f6;"></i>
+      <span style="font-size:13px;color:#8e8e8e;">Loading notifications…</span>
+    </div>
+  </div>
+
+  <div style="padding:12px 18px;border-top:1px solid #efefef;text-align:center;flex-shrink:0;">
+    <a href="{% url 'notification_list' %}"
+       style="font-size:13px;font-weight:600;color:#0095f6;text-decoration:none;"
+       onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
+      See all notifications
+    </a>
+  </div>
+</aside>
+
+<style>
+  #kvibe-notif-panel .kishiface-notification-wrapper { position:relative; transition:opacity .25s,transform .25s; }
+  #kvibe-notif-panel .kishiface-notification-wrapper:hover { background:#fafafa; }
+  #kvibe-notif-panel .kishiface-remove-btn {
+    position:absolute;right:16px;top:50%;transform:translateY(-50%);
+    background:rgba(255,255,255,.9);border:1px solid #efefef;color:#8e8e8e;
+    cursor:pointer;width:28px;height:28px;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:50%;opacity:0;
+    transition:opacity .2s,background .15s,color .15s;
+    box-shadow:0 1px 4px rgba(0,0,0,.08);z-index:10;font-size:11px;
+  }
+  #kvibe-notif-panel .kishiface-notification-wrapper:hover .kishiface-remove-btn { opacity:1; }
+  #kvibe-notif-panel .kishiface-remove-btn:hover { background:#ffe5e5;color:#ed4956;border-color:#ed4956; }
+  #kvibe-notif-panel .kishiface-notification-wrapper .kishiface-notif-item { padding-right:50px !important; }
+  #kvibe-notif-panel .kv-panel-section-title {
+    padding:14px 16px 6px;font-size:13px;font-weight:600;color:#262626;
+    background:#fff;position:sticky;top:0;z-index:5;
+  }
+  #kvibe-notif-panel .kishiface-empty-notifications {
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:60px 24px 40px;text-align:center;
+  }
+  #kvibe-notif-panel .kishiface-empty-icon { font-size:56px;color:#dbdbdb;margin-bottom:16px; }
+  #kvibe-notif-panel .kishiface-empty-title { font-size:20px;font-weight:600;margin-bottom:8px; }
+  #kvibe-notif-panel .kishiface-empty-text { font-size:13px;color:#8e8e8e;max-width:260px;line-height:1.4; }
+  @keyframes kv-panel-slideout { to { opacity:0;transform:translateX(30px);max-height:0; } }
+  #kvibe-notif-panel .kishiface-removing { animation:kv-panel-slideout .25s ease forwards;overflow:hidden; }
+  #kvibe-desktop-notif-btn.kvibe-notif-panel-open .kvibe-desktop-nav-icon i,
+  #kvibe-desktop-notif-btn.kvibe-notif-panel-open .kvibe-desktop-nav-label { color:var(--kvibe-primary,#0095f6) !important; }
+  @media (max-width:767px) { #kvibe-notif-panel, #kvibe-notif-backdrop { display:none !important; } }
+</style>
+
+<script>
+(function () {
+  'use strict';
+  if (window.innerWidth < 768) return;
+
+  var trigger  = document.getElementById('kvibe-desktop-notif-btn');
+  var panel    = document.getElementById('kvibe-notif-panel');
+  var backdrop = document.getElementById('kvibe-notif-backdrop');
+  var closeBtn = document.getElementById('kvibe-panel-close');
+  var body     = document.getElementById('kvibe-notif-panel-body');
+  var loading  = document.getElementById('kvibe-panel-loading');
+  var badge    = document.getElementById('kvibe-desktop-notif-badge');
+  if (!trigger || !panel) return;
+
+  panel.style.display    = 'flex';
+  backdrop.style.display = 'block';
+  panel.style.visibility    = 'hidden';
+  backdrop.style.opacity    = '0';
+  backdrop.style.pointerEvents = 'none';
+
+  var isOpen = false, loaded = false;
+
+  function getCsrf() {
+    var el = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (el) return el.value;
+    var m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function openPanel() {
+    if (isOpen) return; isOpen = true;
+    backdrop.style.visibility = 'visible'; backdrop.style.pointerEvents = 'auto';
+    backdrop.style.transition = 'opacity .3s';
+    setTimeout(function () { backdrop.style.opacity = '1'; }, 10);
+    panel.style.visibility = 'visible'; panel.style.pointerEvents = 'auto';
+    panel.style.transform = 'translateX(-100%)';
+    setTimeout(function () { panel.style.transform = 'translateX(0)'; }, 10);
+    trigger.setAttribute('aria-expanded', 'true');
+    trigger.classList.add('kvibe-notif-panel-open');
+    if (badge) badge.style.display = 'none';
+    if (!loaded) fetchNotifications();
+  }
+
+  function closePanel() {
+    if (!isOpen) return; isOpen = false;
+    backdrop.style.opacity = '0'; backdrop.style.pointerEvents = 'none';
+    panel.style.transform = 'translateX(-100%)';
+    setTimeout(function () {
+      backdrop.style.visibility = 'hidden';
+      panel.style.visibility = 'hidden'; panel.style.pointerEvents = 'none';
+    }, 300);
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.classList.remove('kvibe-notif-panel-open');
+  }
+
+  trigger.addEventListener('click', function (e) { e.stopPropagation(); isOpen ? closePanel() : openPanel(); });
+  closeBtn.addEventListener('click', closePanel);
+  backdrop.addEventListener('click', closePanel);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && isOpen) closePanel(); });
+
+  function fetchNotifications() {
+    if (loading) loading.style.display = 'flex';
+    fetch('{% url "notification_list" %}?panel=1', {
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrf() }
+    })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(function (html) {
+      loaded = true;
+      if (loading) loading.style.display = 'none';
+      body.insertAdjacentHTML('beforeend', html);
+    })
+    .catch(function () {
+      if (loading) loading.innerHTML =
+        '<div style="text-align:center;padding:40px 24px;color:#8e8e8e;font-size:13px;">' +
+        '<i class="fas fa-exclamation-circle" style="font-size:24px;color:#ed4956;margin-bottom:8px;display:block;"></i>' +
+        'Could not load notifications.<br>' +
+        '<a href="{% url "notification_list" %}" style="color:#0095f6;font-weight:600;">View all</a></div>';
+    });
+  }
+
+  window.kvibePanelMarkAllRead = function () {
+    fetch('/notifications/mark-all-read/', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify({})
+    }).then(function () {
+      body.querySelectorAll('.kishiface-unread').forEach(function (el) { el.classList.remove('kishiface-unread'); });
+      body.querySelectorAll('.kishiface-unread-dot').forEach(function (d) { d.remove(); });
+    });
+  };
+
+  window.addEventListener('resize', function () { if (window.innerWidth < 768 && isOpen) closePanel(); });
+}());
 </script>
 </body>
 </html>
