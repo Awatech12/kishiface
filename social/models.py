@@ -1276,6 +1276,56 @@ class LoginAttempt(models.Model):
         cls.objects.filter(username=username.lower(), succeeded=False).delete()
 
 # =============================================================================
+# SecretQuestion — stores user's chosen security question & hashed answer
+# for the "Forgot Password" flow.
+# =============================================================================
+
+_SECRET_QUESTIONS = [
+    ('pet',      "What was the name of your first pet?"),
+    ('school',   "What primary school did you attend?"),
+    ('city',     "In what city were you born?"),
+    ('mother',   "What is your mother's maiden name?"),
+    ('friend',   "What is the name of your childhood best friend?"),
+    ('car',      "What was the make of your first car?"),
+    ('street',   "What street did you grow up on?"),
+    ('nickname', "What nickname did your family call you as a child?"),
+]
+
+class SecretQuestion(models.Model):
+    """
+    One row per user.  Stores the security question chosen at registration
+    and the bcrypt-style hash of the answer (via Django's make_password).
+    Used only for the no-email "Forgot Password" reset flow.
+    """
+    QUESTION_CHOICES = _SECRET_QUESTIONS
+
+    user     = models.OneToOneField(User, on_delete=models.CASCADE, related_name='secret_question')
+    question = models.CharField(max_length=20, choices=QUESTION_CHOICES)
+    answer_hash = models.CharField(max_length=255)   # Django make_password hash
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'SecretQuestion_Table'
+
+    def __str__(self):
+        return f'SecretQuestion({self.user.username})'
+
+    def set_answer(self, raw_answer: str):
+        from django.contrib.auth.hashers import make_password
+        # Normalise: strip, lowercase so casing doesn't matter
+        self.answer_hash = make_password(raw_answer.strip().lower())
+
+    def check_answer(self, raw_answer: str) -> bool:
+        from django.contrib.auth.hashers import check_password
+        return check_password(raw_answer.strip().lower(), self.answer_hash)
+
+    @classmethod
+    def question_label(cls, key: str) -> str:
+        return dict(cls.QUESTION_CHOICES).get(key, key)
+
+
+# =============================================================================
 # UserFeedProfile — adaptive vibe-taste profile for the Kvibe feed algorithm.
 #
 # After adding this class run:

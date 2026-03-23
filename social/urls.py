@@ -14,6 +14,10 @@ urlpatterns = [
     # ── Account ────────────────────────────────────────────────────────────────
     path('change-password/', views.change_password, name='change_password'),
 
+    # ── Forgot Password (secret-question flow) ─────────────────────────────────
+    path('forgot-password/lookup/', views.forgot_password_lookup, name='forgot_password_lookup'),
+    path('forgot-password/reset/',  views.forgot_password_reset,  name='forgot_password_reset'),
+
     # ── Home feed ──────────────────────────────────────────────────────────────
     path('home',              views.home,            name='home'),
     path('feed/more/',        views.feed_load_more,  name='feed_load_more'),

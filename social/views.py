@@ -196,12 +196,134 @@ def register(request):
                 messages.error(request, err)
             return redirect('register')
 
+        secret_question = html_escape(request.POST.get('secret_question', '').strip())
+        secret_answer   = request.POST.get('secret_answer', '').strip()
+
+        from .models import SecretQuestion
+        valid_keys = [k for k, _ in SecretQuestion.QUESTION_CHOICES]
+        if not secret_question or secret_question not in valid_keys:
+            messages.error(request, 'Please choose a valid security question.')
+            return redirect('register')
+        if not secret_answer or len(secret_answer) < 2:
+            messages.error(request, 'Security answer must be at least 2 characters.')
+            return redirect('register')
+
         user = User.objects.create_user(username=username, email=email, password=password)
         Profile.objects.create(user=user)
+
+        sq = SecretQuestion(user=user, question=secret_question)
+        sq.set_answer(secret_answer)
+        sq.save()
+
         messages.success(request, f'Welcome {username}! You can now log in.')
         return redirect('/')
 
     return render(request, 'register.html')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Forgot Password — secret-question flow (AJAX JSON endpoint)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@csrf_protect
+@require_POST
+def forgot_password_lookup(request):
+    """
+    Step 1 — receives {username_or_email} and returns the user's
+    secret question label so the modal can display it.
+    """
+    from django.core.cache import cache
+    ip  = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
+    key = f'fpw_lookup_{ip}'
+    if cache.get(key, 0) >= 10:
+        return JsonResponse({'error': 'Too many attempts. Please try again later.'}, status=429)
+    cache.set(key, cache.get(key, 0) + 1, timeout=900)
+
+    from .models import SecretQuestion
+    user_check = (request.POST.get('user_check') or '').strip()
+    if not user_check:
+        return JsonResponse({'error': 'Please enter your username or email.'}, status=400)
+
+    try:
+        user_obj = User.objects.get(email__iexact=user_check)
+    except User.DoesNotExist:
+        try:
+            user_obj = User.objects.get(username__iexact=user_check)
+        except User.DoesNotExist:
+            # Vague on purpose — don't confirm existence
+            return JsonResponse({'error': 'No account found with that username or email.'}, status=404)
+
+    try:
+        sq = user_obj.secret_question
+    except SecretQuestion.DoesNotExist:
+        return JsonResponse({'error': 'This account has no security question set up.'}, status=400)
+
+    return JsonResponse({
+        'ok': True,
+        'question': SecretQuestion.question_label(sq.question),
+        'username': user_obj.username,
+    })
+
+
+@csrf_protect
+@require_POST
+def forgot_password_reset(request):
+    """
+    Step 2 — receives {username, secret_answer, new_password, confirm_password}.
+    Verifies the answer then resets the password.
+    """
+    from django.core.cache import cache
+    from django.contrib.auth import update_session_auth_hash
+    from .models import SecretQuestion
+
+    ip  = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
+    key = f'fpw_reset_{ip}'
+    if cache.get(key, 0) >= 5:
+        return JsonResponse({'error': 'Too many reset attempts. Please wait before trying again.'}, status=429)
+    cache.set(key, cache.get(key, 0) + 1, timeout=900)
+
+    username       = (request.POST.get('username') or '').strip()
+    secret_answer  = (request.POST.get('secret_answer') or '').strip()
+    new_password   = request.POST.get('new_password', '')
+    confirm_pw     = request.POST.get('confirm_password', '')
+
+    if not all([username, secret_answer, new_password, confirm_pw]):
+        return JsonResponse({'error': 'All fields are required.'}, status=400)
+
+    try:
+        user_obj = User.objects.get(username__iexact=username)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Something went wrong. Please start over.'}, status=400)
+
+    try:
+        sq = user_obj.secret_question
+    except SecretQuestion.DoesNotExist:
+        return JsonResponse({'error': 'No security question found for this account.'}, status=400)
+
+    if not sq.check_answer(secret_answer):
+        return JsonResponse({'error': 'Incorrect answer. Please try again.'}, status=400)
+
+    # Validate new password
+    if len(new_password) < 8:
+        return JsonResponse({'error': 'Password must be at least 8 characters.'}, status=400)
+
+    _COMMON_PW = {
+        'password', 'password1', '12345678', '123456789', 'qwerty123',
+        'iloveyou', 'admin123', 'letmein1', 'welcome1', 'monkey123',
+    }
+    if new_password.lower() in _COMMON_PW:
+        return JsonResponse({'error': 'That password is too common — choose a stronger one.'}, status=400)
+    if new_password != confirm_pw:
+        return JsonResponse({'error': 'Passwords do not match.'}, status=400)
+
+    user_obj.set_password(new_password)
+    user_obj.save()
+
+    # Clear any brute-force locks for this user
+    LoginAttempt.clear(username)
+    cache.delete(key)
+
+    return JsonResponse({'ok': True, 'message': 'Password reset successfully! You can now log in.'})
 
 
 # ── AJAX real-time validation endpoints ──────────────────────────────────────
@@ -3383,5 +3505,4 @@ def change_password(request):
     cache.delete(rate_key)
 
     return JsonResponse({'success': True, 'message': 'Password updated successfully!'})
-
 

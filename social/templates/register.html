@@ -231,6 +231,17 @@
     }
     .kv-sign-in-btn:hover { background: rgba(0,149,246,.06); }
 
+    /* ---- Select input ---- */
+    .kv-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238e8e8e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 36px !important;
+    }
+    .kv-select option { color: var(--kv-text); background: var(--kv-white); }
+
     /* ---- Responsive ---- */
     @media (max-width: 360px) {
       body { padding: 12px; }
@@ -383,6 +394,42 @@
           </button>
         </div>
         <div class="kv-feedback" id="kv-confirm-fb"></div>
+      </div>
+
+      <!-- ── Secret Question ─────────────────────────────────── -->
+      <div class="kv-group">
+        <div class="kv-field">
+          <i class="fas fa-shield-alt kv-icon" aria-hidden="true"></i>
+          <select id="kv-secret-q" name="secret_question" class="kv-input kv-select" required style="padding-left:38px;cursor:pointer;">
+            <option value="" disabled selected>Choose a security question</option>
+            <option value="pet">What was the name of your first pet?</option>
+            <option value="school">What primary school did you attend?</option>
+            <option value="city">In what city were you born?</option>
+            <option value="mother">What is your mother's maiden name?</option>
+            <option value="friend">What is the name of your childhood best friend?</option>
+            <option value="car">What was the make of your first car?</option>
+            <option value="street">What street did you grow up on?</option>
+            <option value="nickname">What nickname did your family call you as a child?</option>
+          </select>
+          <span class="kv-status-icon" id="kv-sq-si"></span>
+        </div>
+        <div class="kv-hint"><i class="fas fa-info-circle" aria-hidden="true"></i> Used to recover your account if you forget your password</div>
+        <div class="kv-feedback" id="kv-sq-fb"></div>
+      </div>
+
+      <div class="kv-group" id="kv-sq-answer-group" style="display:none;">
+        <div class="kv-field">
+          <i class="fas fa-key kv-icon" aria-hidden="true"></i>
+          <input
+            type="text" id="kv-secret-a" name="secret_answer"
+            class="kv-input" placeholder="Your answer"
+            autocomplete="off" autocorrect="off" spellcheck="false"
+            minlength="2" maxlength="100"
+          />
+          <span class="kv-status-icon" id="kv-sa-si"></span>
+        </div>
+        <div class="kv-hint"><i class="fas fa-eye-slash" aria-hidden="true"></i> Answer is case-insensitive and stored securely</div>
+        <div class="kv-feedback" id="kv-sa-fb"></div>
       </div>
 
       <!-- Submit -->
@@ -713,6 +760,45 @@
   cInp.addEventListener('input', reCheckConfirm);
 
   /* ============================================================
+     SECRET QUESTION — show answer field once a question is picked
+  ============================================================ */
+  var sqSel   = document.getElementById('kv-secret-q');
+  var sqSi    = document.getElementById('kv-sq-si');
+  var sqFb    = document.getElementById('kv-sq-fb');
+  var saGroup = document.getElementById('kv-sq-answer-group');
+  var saInp   = document.getElementById('kv-secret-a');
+  var saSi    = document.getElementById('kv-sa-si');
+  var saFb    = document.getElementById('kv-sa-fb');
+  var secretOk = false;
+
+  sqSel.addEventListener('change', function () {
+    if (sqSel.value) {
+      saGroup.style.display = 'block';
+      setState(sqSel, sqSi, sqFb, 'ok', '');
+      saInp.focus();
+      secretOk = saInp.value.trim().length >= 2;
+    } else {
+      saGroup.style.display = 'none';
+      setState(sqSel, sqSi, sqFb, 'idle');
+      secretOk = false;
+    }
+  });
+
+  saInp.addEventListener('input', function () {
+    var val = saInp.value.trim();
+    if (!val) {
+      setState(saInp, saSi, saFb, 'idle');
+      secretOk = false;
+    } else if (val.length < 2) {
+      setState(saInp, saSi, saFb, 'err', 'Answer must be at least 2 characters');
+      secretOk = false;
+    } else {
+      setState(saInp, saSi, saFb, 'ok', 'Answer saved');
+      secretOk = true;
+    }
+  });
+
+  /* ============================================================
      FORM SUBMIT — final guard before POST
   ============================================================ */
   var form   = document.getElementById('kv-form');
@@ -749,6 +835,16 @@
       if (!cFb.classList.contains('kv-err')) {
         setState(cInp, cSi, cFb, 'err', 'Passwords do not match');
       }
+      valid = false;
+    }
+    if (!sqSel.value) {
+      shake(sqSel);
+      setState(sqSel, sqSi, sqFb, 'err', 'Please choose a security question');
+      valid = false;
+    }
+    if (sqSel.value && !secretOk) {
+      shake(saInp);
+      setState(saInp, saSi, saFb, 'err', 'Please provide your security answer');
       valid = false;
     }
 
