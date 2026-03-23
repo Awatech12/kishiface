@@ -2181,26 +2181,105 @@ def following_list(request, username):
 
 @login_required(login_url='/')
 def search(request):
-    query = request.GET.get('q', '').strip()
-    
+    """
+    Unified search — users, posts, and hashtags — with explore mode when no query.
+
+    Results page (query present):
+      · Users  — username, first/last name, bio match
+      · Posts  — content and author username match, with image/video thumbnails
+      · Hashtags — extracted from all recent posts, filtered by query
+
+    Explore page (no query):
+      · Recent search history (per-user)
+      · Suggested users not yet followed (ordered by follower count)
+      · Trending hashtags (global, last 300 posts)
+    """
+    query = request.GET.get('q', '').strip()[:100]  # hard-cap at 100 chars
+
+    # ── Trending hashtags — always computed, used on explore + sidebar ─────────
+    hashtag_counts: dict = {}
+    for _p in Post.objects.filter(content__isnull=False).order_by('-created_at')[:300]:
+        if _p.content:
+            for _tag in extract_hashtags(_p.content):
+                hashtag_counts[_tag] = hashtag_counts.get(_tag, 0) + 1
+    trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+
     if query:
+        # Save history entry for this search
         SearchHistory.objects.create(user=request.user, query=query)
-        users = User.objects.filter(
-            Q(username__icontains=query) |
-            Q(first_name__icontains=query) |
-            Q(last_name__icontains=query)
+
+        # ── Users ──────────────────────────────────────────────────────────────
+        users = (
+            User.objects.filter(
+                Q(username__icontains=query) |
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query) |
+                Q(profile__bio__icontains=query)
+            )
+            .select_related('profile')
+            .distinct()[:20]
         )
-        recent_searches = SearchHistory.objects.filter(
-            user=request.user
-        ).exclude(query=query).order_by('-created_at')[:5]
+
+        # ── Posts ──────────────────────────────────────────────────────────────
+        posts = (
+            Post.objects.filter(
+                Q(content__icontains=query) |
+                Q(author__username__icontains=query)
+            )
+            .select_related(
+                'author', 'author__profile',
+                'original_post', 'original_post__author',
+                'original_post__author__profile',
+            )
+            .prefetch_related('images', 'likes')
+            .order_by('-created_at')[:30]
+        )
+
+        # ── Hashtags matching the query ────────────────────────────────────────
+        clean_query = query.lstrip('#').lower()
+        matching_hashtags = sorted(
+            [(tag, count) for tag, count in hashtag_counts.items()
+             if clean_query in tag.lower()],
+            key=lambda x: x[1],
+            reverse=True,
+        )[:15]
+
+        recent_searches = (
+            SearchHistory.objects.filter(user=request.user)
+            .exclude(query=query)
+            .order_by('-created_at')[:8]
+        )
+
         return render(request, 'search.html', {
-            'query': query, 'users': users, 'recent_searches': recent_searches
+            'query': query,
+            'users': users,
+            'posts': posts,
+            'matching_hashtags': matching_hashtags,
+            'recent_searches': recent_searches,
+            'trending_hashtags': trending_hashtags,
         })
-    
-    search_history = SearchHistory.objects.filter(
-        user=request.user
-    ).order_by('-created_at')[:20]
-    return render(request, 'search.html', {'search_history': search_history})
+
+    # ── Explore mode (no query) ────────────────────────────────────────────────
+    search_history = (
+        SearchHistory.objects.filter(user=request.user)
+        .order_by('-created_at')[:20]
+    )
+
+    current_profile = request.user.profile
+    following_profile_ids = current_profile.followings.values_list('id', flat=True)
+    suggested_users = (
+        Profile.objects
+        .exclude(user=request.user)
+        .exclude(id__in=following_profile_ids)
+        .annotate(follower_count=Count('followers'))
+        .order_by('-follower_count')[:12]
+    )
+
+    return render(request, 'search.html', {
+        'search_history': search_history,
+        'trending_hashtags': trending_hashtags,
+        'suggested_users': suggested_users,
+    })
 
 
 @login_required
