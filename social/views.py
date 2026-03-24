@@ -2119,31 +2119,6 @@ def mark_follow_notifications_read(request):
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
 
-@login_required
-def explore_users(request):
-    current_profile = get_object_or_404(Profile, user=request.user)
-
-    unread_follow_count = FollowNotification.objects.filter(
-        to_user=request.user, is_read=False
-    ).count()
-
-    recent_follows = FollowNotification.objects.filter(
-        to_user=request.user
-    ).select_related('from_user', 'from_user__profile').order_by('-created_at')[:10]
-
-    following_profile_ids = current_profile.followings.values_list('id', flat=True)
-
-    profiles = Profile.objects.exclude(user=request.user).exclude(id__in=following_profile_ids)
-    profiles = profiles.annotate(follower_count=Count('followers')).order_by('-follower_count', '-created_at')
-    profiles = profiles[:30]
-
-    return render(request, 'explore_users.html', {
-        'profiles': profiles,
-        'title': 'Explore Users',
-        'unread_follow_count': unread_follow_count,
-        'recent_follows': recent_follows,
-    })
-
 
 @login_required(login_url='/')
 def follow(request, username):
@@ -2343,7 +2318,7 @@ def search(request):
     #   4. Skip posts the user already clicked (stored in session)
     #   5. Return top 60 after scoring
 
-    # -- session-based seen set (populated by the record_explore_view endpoint)
+    # -- session-based seen set (persisted in session)
     _seen_ids = set(request.session.get('explore_seen_ids', []))
 
     # -- candidate pool: last 7 days, must have something to show
@@ -2451,32 +2426,6 @@ def search(request):
         'sidebar_followers':          _profile.followers.select_related('user').all(),
     })
 
-
-@login_required(login_url='/')
-@require_POST
-def record_explore_view(request):
-    """
-    POST /search/explore-view/
-    Called by JS when a user clicks a grid cell.
-    Stores the post_id in the session's seen-set so the explore algorithm
-    can deprioritise it on the next visit.
-    Body (JSON or form): { "post_id": "<uuid>" }
-    """
-    try:
-        body = json.loads(request.body)
-        post_id = str(body.get('post_id', '')).strip()
-    except (json.JSONDecodeError, AttributeError):
-        post_id = request.POST.get('post_id', '').strip()
-
-    if post_id:
-        seen = request.session.get('explore_seen_ids', [])
-        if post_id not in seen:
-            seen.append(post_id)
-            # cap the seen list at 300 to avoid bloating the session
-            request.session['explore_seen_ids'] = seen[-300:]
-            request.session.modified = True
-
-    return JsonResponse({'ok': True})
 
 
 # ── HTMX search pagination partials ───────────────────────────────────────────

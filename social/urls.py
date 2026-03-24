@@ -40,7 +40,6 @@ urlpatterns = [
     path('search/tags/',                     views.search_hashtags_partial,  name='search_hashtags_partial'),
     path('search/delete/<int:history_id>/',  views.delete_history,           name='delete_history'),
     path('search/clear/',                    views.clear_history,            name='clear_history'),
-    path('search/explore-view/',             views.record_explore_view,      name='record_explore_view'),
 
     # ── Inbox / Messages ───────────────────────────────────────────────────────
     path('inbox',                               views.inbox,          name='inbox'),
@@ -70,9 +69,6 @@ urlpatterns = [
     path('reply/<uuid:reply_id>/edit/',           views.edit_reply,        name='edit_reply'),
     path('reply/<uuid:reply_id>/delete/',         views.delete_reply,      name='delete_reply'),
 
-    # ── Explore / Follow ───────────────────────────────────────────────────────
-    path('explore/',                   views.explore_users,  name='explore'),
-    path('explore-users/',             views.explore_users,  name='explore_users'),
     path('follow/<int:user_id>/',      views.follow_user,    name='follow_user'),
     path('follow/<str:username>',      views.follow,         name='follow'),
     path('followers/<str:username>',   views.follower_list,  name='followers'),
