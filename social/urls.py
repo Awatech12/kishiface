@@ -40,6 +40,7 @@ urlpatterns = [
     path('search/tags/',                     views.search_hashtags_partial,  name='search_hashtags_partial'),
     path('search/delete/<int:history_id>/',  views.delete_history,           name='delete_history'),
     path('search/clear/',                    views.clear_history,            name='clear_history'),
+    path('search/explore-view/',             views.record_explore_view,      name='record_explore_view'),
 
     # ── Inbox / Messages ───────────────────────────────────────────────────────
     path('inbox',                               views.inbox,          name='inbox'),

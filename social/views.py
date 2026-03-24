@@ -2333,16 +2333,92 @@ def search(request):
         .order_by('-follower_count')[:12]
     )
 
-    # Explore grid: recent posts with images/video for masonry grid
-    explore_posts = (
+    # ── Personalised Explore grid ──────────────────────────────────────────────
+    # Strategy:
+    #   1. Pull a large candidate pool (last 7 days, has media or content)
+    #   2. Score each post using the user's interest profile (author affinity,
+    #      liked hashtags, vibe taste) + a small engagement bonus
+    #   3. Apply a per-user daily seed shuffle so every user and every day
+    #      yields a different ordering even for equal-scored posts
+    #   4. Skip posts the user already clicked (stored in session)
+    #   5. Return top 60 after scoring
+
+    # -- session-based seen set (populated by the record_explore_view endpoint)
+    _seen_ids = set(request.session.get('explore_seen_ids', []))
+
+    # -- candidate pool: last 7 days, must have something to show
+    _pool = (
         Post.objects
-        .filter(Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False))
+        .filter(
+            Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False),
+            created_at__gte=timezone.now() - timedelta(days=7),
+        )
         .select_related('author', 'author__profile', 'original_post', 'original_post__author')
         .prefetch_related('images', 'likes', 'vibes')
-        .annotate(vibe_count=Count('vibes', distinct=True))
-        .order_by('-created_at')
-        .distinct()[:60]
+        .annotate(
+            vibe_count=Count('vibes', distinct=True),
+            like_count=Count('likes', distinct=True),
+        )
+        .distinct()
     )
+    # Fallback: if fewer than 30 posts in 7 days widen to 30 days
+    if _pool.count() < 30:
+        _pool = (
+            Post.objects
+            .filter(Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False))
+            .select_related('author', 'author__profile', 'original_post', 'original_post__author')
+            .prefetch_related('images', 'likes', 'vibes')
+            .annotate(
+                vibe_count=Count('vibes', distinct=True),
+                like_count=Count('likes', distinct=True),
+            )
+            .distinct()
+        )
+
+    _pool_list = list(_pool[:200])  # cap DB work
+
+    # -- interest profile for scoring
+    try:
+        _interest = _build_user_interest_profile(request.user)
+        _author_affinity = _interest.get('author_affinity', {}) if _interest else {}
+        _liked_tags = set(_interest.get('liked_hashtags', [])) if _interest else set()
+    except Exception:
+        _author_affinity = {}
+        _liked_tags = set()
+
+    # -- per-user daily seed: same user sees the same shuffle today but
+    #    different from yesterday and different from every other user
+    _today_str = timezone.now().strftime('%Y%m%d')
+    _seed = hash(f"{request.user.id}_{_today_str}") & 0xFFFFFFFF
+    _rng = random.Random(_seed)
+
+    def _score_explore_post(p):
+        score = 0.0
+        rp = p.original_post if p.original_post else p
+        # engagement signal
+        score += min(p.vibe_count * 0.4, 6.0)
+        score += min(p.like_count * 0.2, 4.0)
+        # author affinity
+        score += float(_author_affinity.get(p.author_id, 0)) * 2.0
+        # hashtag interest
+        if rp.content and _liked_tags:
+            post_tags = set(extract_hashtags(rp.content))
+            score += len(post_tags & _liked_tags) * 1.5
+        # freshness bonus: posts from the last 24 h get a +2 boost
+        age_hours = (timezone.now() - p.created_at).total_seconds() / 3600
+        if age_hours < 24:
+            score += 2.0
+        elif age_hours < 72:
+            score += 0.5
+        # seen penalty: push already-viewed posts to the bottom
+        if p.post_id in _seen_ids:
+            score -= 20.0
+        # small random jitter so equal-scored posts shuffle differently per user/day
+        score += _rng.uniform(0, 1.5)
+        return score
+
+    _pool_list.sort(key=_score_explore_post, reverse=True)
+    explore_posts = _pool_list[:60]
 
     # ── Sidebar context ────────────────────────────────────────────────────────
     _profile = request.user.profile
@@ -2374,6 +2450,33 @@ def search(request):
         'sidebar_followings':         _profile.followings.select_related('user').all(),
         'sidebar_followers':          _profile.followers.select_related('user').all(),
     })
+
+
+@login_required(login_url='/')
+@require_POST
+def record_explore_view(request):
+    """
+    POST /search/explore-view/
+    Called by JS when a user clicks a grid cell.
+    Stores the post_id in the session's seen-set so the explore algorithm
+    can deprioritise it on the next visit.
+    Body (JSON or form): { "post_id": "<uuid>" }
+    """
+    try:
+        body = json.loads(request.body)
+        post_id = str(body.get('post_id', '')).strip()
+    except (json.JSONDecodeError, AttributeError):
+        post_id = request.POST.get('post_id', '').strip()
+
+    if post_id:
+        seen = request.session.get('explore_seen_ids', [])
+        if post_id not in seen:
+            seen.append(post_id)
+            # cap the seen list at 300 to avoid bloating the session
+            request.session['explore_seen_ids'] = seen[-300:]
+            request.session.modified = True
+
+    return JsonResponse({'ok': True})
 
 
 # ── HTMX search pagination partials ───────────────────────────────────────────
