@@ -1059,6 +1059,23 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # Cap at 1 card per page so post density is never starved.
     _max_suggestions_this_page = 1 if len(following_ids_set) < 20 else 0
 
+    # ── Market product injection ───────────────────────────────────────────────
+    # Fetch a small pool of random products to sprinkle into the feed.
+    # We use a random offset scan (no ORDER BY RANDOM()) to stay fast.
+    _market_pool = []
+    _market_count = Market.objects.count()
+    if _market_count > 0:
+        _market_offset = random.randint(0, max(0, _market_count - 6))
+        _market_pool = list(
+            Market.objects
+            .select_related('product_owner', 'product_owner__profile')
+            .prefetch_related('images')
+            [_market_offset: _market_offset + 6]
+        )
+        random.shuffle(_market_pool)
+    _market_injected = 0
+    _MAX_MARKET_PER_PAGE = 2   # at most 2 product cards per feed page
+
     for i, post in enumerate(final_posts, 1):
         actual_author_id = (
             post.original_post.author_id
@@ -1072,6 +1089,14 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
                 and suggestion_users
                 and _suggestion_injected < _max_suggestions_this_page):
             feed_items.append({'type': 'user_suggestion', 'data': suggestion_users.pop(0)})
+            _suggestion_injected += 1
+        # Inject a market card every 5 posts (offset by 3 so it never overlaps
+        # the suggestion card at position 6).
+        if (i % 5 == 3
+                and _market_pool
+                and _market_injected < _MAX_MARKET_PER_PAGE):
+            feed_items.append({'type': 'market', 'data': _market_pool.pop(0)})
+            _market_injected += 1
             _suggestion_injected += 1
 
     return feed_items, next_cursor
