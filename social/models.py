@@ -1137,6 +1137,10 @@ class Market(models.Model):
     is_promoted = models.BooleanField(default=False)
     product_category = models.CharField(max_length=100)
     whatsapp_number = models.CharField(max_length=15, blank=True, null=True)
+    ad_url          = models.URLField(max_length=500, blank=True, null=True)
+    email           = models.EmailField(max_length=254, blank=True, null=True)
+    instagram_handle= models.CharField(max_length=50, blank=True, null=True)
+    twitter_handle  = models.CharField(max_length=50, blank=True, null=True)
     posted_on = models.DateTimeField(auto_now_add=True)
     
     def clean(self):
@@ -1157,6 +1161,23 @@ class Market(models.Model):
                 self.whatsapp_number = validate_phone_number(self.whatsapp_number)
             except ValidationError as e:
                 raise ValidationError({'whatsapp_number': str(e)})
+        # FIX 8: Enforce safe URL schemes — block javascript:, data:, vbscript: etc.
+        if self.ad_url:
+            from urllib.parse import urlparse as _urlparse
+            _parsed = _urlparse(self.ad_url)
+            if _parsed.scheme not in ('http', 'https'):
+                raise ValidationError({'ad_url': 'Only http:// and https:// URLs are allowed.'})
+        # FIX 7: Sanitize email (remove XSS chars) — keep as plain text value
+        if self.email:
+            import re as _re
+            self.email = _re.sub(r'[<>\'";\x60]', '', self.email).strip()[:254]
+        # FIX 9: Strip XSS chars and @ from handles, not just @
+        if self.instagram_handle:
+            import re as _re2
+            self.instagram_handle = _re2.sub(r'[^a-zA-Z0-9._]', '', self.instagram_handle.lstrip('@').strip())[:50]
+        if self.twitter_handle:
+            import re as _re3
+            self.twitter_handle = _re3.sub(r'[^a-zA-Z0-9._]', '', self.twitter_handle.lstrip('@').strip())[:50]
     
     def save(self, *args, **kwargs):
         self.full_clean()

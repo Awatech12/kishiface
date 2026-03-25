@@ -6,56 +6,68 @@
     {% load humanize %}
     {% load static %}
 
-    <!-- Font Awesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
-    <!-- Leaflet Maps CSS -->
+    <title>{{ product.product_name }} – KVibe Ads</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <!-- Leaflet Maps JavaScript -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
         :root {
-            --kf-primary: #0095f6;
-            --kf-bg: #ffffff;
+            --kf-primary:      #0095f6;
+            --kf-bg:           #ffffff;
             --kf-secondary-bg: #fafafa;
-            --kf-border: #dbdbdb;
-            --kf-text-main: #262626;
-            --kf-text-muted: #8e8e8e;
-            --kf-success: #2ecc71;
-            --kf-modal-bg: rgba(0, 0, 0, 0.65);
+            --kf-border:       #dbdbdb;
+            --kf-text:         #262626;
+            --kf-muted:        #8e8e8e;
+            --kf-success:      #25d366;
+            --kf-modal-bg:     rgba(0,0,0,0.65);
         }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
         body {
-            background-color: var(--kf-bg);
-            color: var(--kf-text-main);
+            background: var(--kf-bg);
+            color: var(--kf-text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            padding: 0;
+            -webkit-font-smoothing: antialiased;
         }
 
+        /* ── Container ── */
         .kf-container {
-            max-width: 935px;
+            max-width: 960px;
             margin: 20px auto;
-            padding: 0 10px 100px;
+            padding: 0 12px 120px;
         }
 
-        /* Layout Grid */
+        .kf-back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            color: var(--kf-text);
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        /* ── Main card ── */
         .kf-product-card {
             display: flex;
             flex-direction: row;
             border: 1px solid var(--kf-border);
-            border-radius: 3px;
+            border-radius: 12px;
             background: #fff;
+            overflow: hidden;
             min-height: 500px;
         }
 
-        /* Left: Media Area */
+        /* Left: image side */
         .kf-media-side {
             flex: 1.2;
-            background: #000;
+            background: #111;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             position: relative;
@@ -63,75 +75,222 @@
         }
 
         .kf-main-img {
-            max-width: 100%;
-            max-height: 600px;
+            width: 100%;
+            max-height: 520px;
             object-fit: contain;
+            display: block;
         }
 
-        /* Right: Info Area */
+        /* Thumbnails strip */
+        .kf-thumbs-strip {
+            display: flex;
+            gap: 6px;
+            padding: 10px 12px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            background: #000;
+            width: 100%;
+        }
+        .kf-thumbs-strip::-webkit-scrollbar { display: none; }
+
+        .kf-thumb {
+            width: 56px;
+            height: 56px;
+            flex-shrink: 0;
+            border-radius: 6px;
+            object-fit: cover;
+            border: 2px solid transparent;
+            cursor: pointer;
+            opacity: 0.65;
+            transition: opacity 0.2s, border-color 0.2s;
+        }
+        .kf-thumb.active, .kf-thumb:hover { opacity: 1; border-color: var(--kf-primary); }
+
+        /* Right: info side */
         .kf-info-side {
-            flex: 0.8;
+            flex: 0.85;
             display: flex;
             flex-direction: column;
             background: #fff;
+            overflow: hidden;
         }
 
-        /* Seller Header */
+        /* Seller header */
         .kf-seller-header {
             padding: 14px 16px;
             display: flex;
             align-items: center;
+            gap: 10px;
             border-bottom: 1px solid var(--kf-border);
         }
 
         .kf-avatar {
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            margin-right: 12px;
             object-fit: cover;
             border: 1px solid var(--kf-border);
+            flex-shrink: 0;
         }
+
+        .kf-seller-info { flex: 1; min-width: 0; }
 
         .kf-username {
             font-weight: 600;
             font-size: 14px;
-            color: var(--kf-text-main);
+            color: var(--kf-text);
             text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
-        /* Content Area */
+        .kf-online-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--kf-success);
+            display: inline-block;
+        }
+
+        .kf-seller-sub {
+            font-size: 12px;
+            color: var(--kf-muted);
+            margin-top: 2px;
+        }
+
+        /* Scrollable content */
         .kf-scroll-content {
             flex: 1;
             overflow-y: auto;
             padding: 16px;
         }
 
-        .kf-product-title {
-            font-size: 18px;
+        /* Badges row */
+        .kf-badges-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .kf-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
             font-weight: 600;
-            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .kf-badge-sponsored { background: #fff0f0; color: #ff4757; border: 1px solid #ff4757; }
+        .kf-badge-new       { background: #ecfdf5; color: #059669; border: 1px solid #6ee7b7; }
+        .kf-badge-used      { background: #fffbeb; color: #d97706; border: 1px solid #fcd34d; }
+        .kf-badge-fair      { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+        .kf-badge-category  { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+        .kf-badge-avail     { background: var(--kf-secondary-bg); color: var(--kf-muted); border: 1px solid var(--kf-border); }
+
+        /* Title & price */
+        .kf-product-title {
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1.3;
+            margin-bottom: 6px;
         }
 
         .kf-price-tag {
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 800;
             color: var(--kf-primary);
-            margin-bottom: 15px;
+            margin-bottom: 14px;
         }
 
-        /* --- MAP STYLING --- */
-        #kf-live-map {
-            height: 250px;
+        /* Description */
+        .kf-description {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--kf-text);
+            white-space: pre-wrap;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--kf-border);
+        }
+
+        /* Info rows */
+        .kf-info-section {
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--kf-border);
+        }
+
+        .kf-info-section-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--kf-muted);
+            margin-bottom: 10px;
+        }
+
+        .kf-meta-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .kf-meta-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 13px;
+            color: var(--kf-text);
+        }
+
+        .kf-meta-list li i {
+            width: 16px;
+            color: var(--kf-muted);
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .kf-meta-list a {
+            color: var(--kf-primary);
+            text-decoration: none;
+            word-break: break-all;
+        }
+        .kf-meta-list a:hover { text-decoration: underline; }
+
+        /* Contact section */
+        .kf-contact-section { margin-bottom: 16px; }
+
+        .kf-contact-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
             width: 100%;
-            border-radius: 8px;
-            border: 1px solid var(--kf-border);
-            margin: 15px 0;
-            z-index: 1;
-            background: #f8f9fa;
+            padding: 11px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 8px;
+            text-decoration: none;
+            border: none;
+            transition: opacity 0.15s, transform 0.1s;
         }
+        .kf-contact-btn:active { transform: scale(0.98); }
+        .kf-contact-btn-wa      { background: #25d366; color: #fff; }
+        .kf-contact-btn-msg     { background: var(--kf-primary); color: #fff; }
+        .kf-contact-btn-outline { background: #fff; color: var(--kf-text); border: 1px solid var(--kf-border); }
+        .kf-contact-btn-ig      { background: linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); color: #fff; }
+        .kf-contact-btn-tw      { background: #000; color: #fff; }
+        .kf-contact-btn-email   { background: #6366f1; color: #fff; }
 
-        .live-status {
+        /* Map */
+        .kf-map-label {
             display: flex;
             align-items: center;
             gap: 6px;
@@ -139,396 +298,566 @@
             font-weight: 700;
             color: var(--kf-primary);
             text-transform: uppercase;
-            margin-top: 15px;
+            letter-spacing: 0.4px;
+            margin-bottom: 8px;
         }
-
-        .pulse-dot {
-            width: 8px;
-            height: 8px;
+        .kf-pulse-dot {
+            width: 8px; height: 8px;
             background: var(--kf-primary);
             border-radius: 50%;
-            animation: pulse-blue 2s infinite;
+            animation: kf-pulse 2s infinite;
+        }
+        @keyframes kf-pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(0,149,246,0.7); }
+            70%  { box-shadow: 0 0 0 10px rgba(0,149,246,0); }
+            100% { box-shadow: 0 0 0 0 rgba(0,149,246,0); }
         }
 
-        @keyframes pulse-blue {
-            0% { box-shadow: 0 0 0 0 rgba(0, 149, 246, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(0, 149, 246, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 149, 246, 0); }
-        }
-
-        .kf-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-        }
-        .kf-badge-promoted { background: #fff0f0; color: #ff4757; border: 1px solid #ff4757; }
-        .kf-badge-condition { background: #f0f0f0; color: #555; }
-
-        .kf-description {
-            font-size: 14px;
-            line-height: 1.5;
-            margin: 15px 0;
-            white-space: pre-wrap;
-        }
-
-        .kf-meta-list {
-            list-style: none;
-            padding: 0;
-            margin: 20px 0;
-            font-size: 13px;
-            color: var(--kf-text-muted);
-        }
-
-        .kf-meta-list li {
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        /* Thumbnails */
-        .kf-thumbs-wrapper {
-            padding: 10px 0;
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            scrollbar-width: none;
-        }
-
-        .kf-thumb-img {
-            width: 60px;
-            height: 60px;
-            flex-shrink: 0;
-            object-fit: cover;
-            cursor: pointer;
-            border-radius: 4px;
+        #kf-live-map {
+            height: 180px;
+            width: 100%;
+            border-radius: 8px;
             border: 1px solid var(--kf-border);
+            z-index: 1;
+            background: #f0f4f8;
+            margin-bottom: 16px;
         }
 
-        /* Desktop Actions */
-        .kf-actions {
-            padding: 16px;
+        /* Desktop action buttons */
+        .kf-desktop-actions {
+            padding: 14px 16px;
             border-top: 1px solid var(--kf-border);
         }
 
-        .kf-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            width: 100%;
-            padding: 10px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            margin-bottom: 8px;
-            text-decoration: none;
-            border: none;
-            transition: opacity 0.2s;
+        /* ── More from seller grid ── */
+        .kf-more-section {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--kf-border);
         }
 
-        .kf-btn-primary { background: var(--kf-primary); color: white; }
-        .kf-btn-whatsapp { background: var(--kf-success); color: white; }
-        .kf-btn-outline { background: white; color: var(--kf-text-main); border: 1px solid var(--kf-border); }
+        .kf-more-title {
+            font-size: 13px;
+            color: var(--kf-muted);
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
 
-        /* More Products Grid */
         .kf-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 4px;
-            margin-top: 15px;
         }
 
         .kf-grid-item {
             aspect-ratio: 1/1;
             overflow: hidden;
             background: #eee;
-            position: relative;
+            border-radius: 4px;
         }
 
         .kf-grid-item img {
-            width: 100%;
-            height: 100%;
+            width: 100%; height: 100%;
             object-fit: cover;
+            transition: transform 0.3s ease;
         }
+        .kf-grid-item:hover img { transform: scale(1.05); }
 
-        /* Instagram Modal Styles */
+        /* ── Share modal ── */
         #kfShareModal {
             display: none;
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
+            inset: 0;
             background: var(--kf-modal-bg);
-            z-index: 2000;
+            z-index: 3000;
             align-items: center;
             justify-content: center;
-            animation: fadeIn 0.2s ease-out;
         }
 
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
         .kf-share-box {
-            background: white;
-            border-radius: 12px;
+            background: #fff;
+            border-radius: 14px;
             width: 90%;
             max-width: 400px;
             overflow: hidden;
             text-align: center;
+            animation: kfSlideUp 0.25s ease;
+        }
+
+        @keyframes kfSlideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
 
         .kf-share-header {
-            padding: 15px;
+            padding: 14px;
             font-weight: 600;
+            font-size: 15px;
             border-bottom: 1px solid var(--kf-border);
         }
 
         .kf-share-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            padding: 20px;
+            gap: 12px;
+            padding: 18px;
         }
 
         .kf-share-icon-btn {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             text-decoration: none;
-            color: var(--kf-text-main);
+            color: var(--kf-text);
             font-size: 11px;
         }
 
         .kf-share-icon-btn i {
-            width: 45px;
-            height: 45px;
+            width: 46px; height: 46px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 20px;
-            color: white;
+            color: #fff;
         }
 
-        .bg-whatsapp { background-color: #25D366; }
-        .bg-facebook { background-color: #1877F2; }
-        .bg-telegram { background-color: #0088cc; }
-        .bg-twitter  { background-color: #000000; }
-        .bg-sms      { background-color: #34C759; }
-        .bg-email    { background-color: #8e8e8e; }
+        .bg-whatsapp { background: #25D366; }
+        .bg-telegram  { background: #0088cc; }
+        .bg-facebook  { background: #1877F2; }
+        .bg-twitter   { background: #000; }
+        .bg-sms       { background: #34C759; }
+        .bg-email     { background: #8e8e8e; }
 
-        .kf-modal-action-item {
+        .kf-modal-action-btn {
+            display: block;
+            width: 100%;
             padding: 14px;
             border-top: 1px solid var(--kf-border);
             font-size: 14px;
             background: none;
-            width: 100%;
-            border-left: none; border-right: none;
+            border-left: none; border-right: none; border-bottom: none;
             cursor: pointer;
-            color: var(--kf-text-main);
+            color: var(--kf-text);
+        }
+        .kf-modal-action-btn.primary { font-weight: 700; color: var(--kf-primary); }
+
+        /* ── Mobile sticky bar ── */
+        .kf-mobile-bar {
+            display: none;
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: #fff;
+            padding: 10px 14px;
+            gap: 8px;
+            box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
+            z-index: 1000;
+            align-items: center;
         }
 
-        .kf-modal-action-item.bold { font-weight: 700; }
-
-        /* Mobile Bar */
+        /* ── Responsive ── */
         @media (max-width: 768px) {
-            .kf-product-card { flex-direction: column; border: none; }
-            .kf-media-side { border-right: none; }
+            .kf-product-card  { flex-direction: column; border: none; border-radius: 0; }
+            .kf-media-side    { border-right: none; }
             .kf-desktop-actions { display: none; }
-            .kf-mobile-bar {
-                position: fixed;
-                bottom: 0; left: 0; right: 0;
-                background: white;
-                padding: 12px;
-                display: flex;
-                gap: 8px;
-                box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-                z-index: 1000;
-            }
-            .kf-container { padding-bottom: 120px; }
+            .kf-mobile-bar    { display: flex; }
+            .kf-container     { padding-bottom: 110px; }
+            .kf-main-img      { max-height: 360px; }
+        }
+
+        @media (min-width: 769px) {
+            .kf-mobile-bar { display: none; }
         }
     </style>
 </head>
 <body>
 
+{% include 'header.html' %}
+
 <div class="kf-container">
-    <div style="margin-bottom: 15px; padding: 0 10px;">
-        <a href="{% url 'market' %}" style="text-decoration: none; color: var(--kf-text-main); font-weight: 600; font-size: 14px;">
-            <i class="fas fa-chevron-left"></i> Market
-        </a>
-    </div>
+    <a href="{% url 'market' %}" class="kf-back-link">
+        <i class="fas fa-chevron-left"></i> Back to Ads
+    </a>
 
     <div class="kf-product-card">
-        <!-- Left Side -->
+
+        <!-- ══ LEFT: Images ══ -->
         <div class="kf-media-side">
-            <img src="{{ product.images.first.product_image.url }}" id="kfMainDisplay" class="kf-main-img" alt="Product">
+            {% with first=product.images.first %}
+                <img src="{% if first %}{{ first.product_image.url }}{% else %}https://placehold.co/600x400?text=No+Image{% endif %}"
+                     id="kfMainDisplay"
+                     class="kf-main-img"
+                     alt="{{ product.product_name }}">
+            {% endwith %}
+
+            {% if product.images.count > 1 %}
+            <div class="kf-thumbs-strip">
+                {% for img in product.images.all %}
+                    <img src="{{ img.product_image.url }}"
+                         class="kf-thumb {% if forloop.first %}active{% endif %}"
+                         onclick="setKfImage('{{ img.product_image.url }}', this)"
+                         alt="Image {{ forloop.counter }}">
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
 
-        <!-- Right Side -->
+        <!-- ══ RIGHT: Info ══ -->
         <div class="kf-info-side">
+
+            <!-- Seller header -->
             <div class="kf-seller-header">
                 <a href="{% url 'profile' product.product_owner.username %}">
-                    <img src="{{ seller.picture.url }}" class="kf-avatar">
+                    <img src="{{ seller.picture.url }}" class="kf-avatar" alt="{{ product.product_owner.username }}">
                 </a>
-                <a href="{% url 'profile' product.product_owner.username %}" class="kf-username">
-                    {{ product.product_owner.username }}
-                </a>
-                {% if seller.is_verify %}
-                    <i class="fas fa-check-circle" style="color: #0095f6; font-size: 12px; margin-left: 4px;"></i>
+                <div class="kf-seller-info">
+                    <a href="{% url 'profile' product.product_owner.username %}" class="kf-username">
+                        {{ product.product_owner.username }}
+                        {% if seller.is_verify %}
+                            <i class="fas fa-circle-check" style="color: var(--kf-primary); font-size: 13px;"></i>
+                        {% endif %}
+                        {% if seller.online %}
+                            <span class="kf-online-dot" title="Online"></span>
+                        {% endif %}
+                    </a>
+                    {% if seller.location %}
+                        <div class="kf-seller-sub"><i class="fas fa-map-marker-alt" style="font-size:10px;"></i> {{ seller.location }}</div>
+                    {% endif %}
+                </div>
+                {% if request.user == product.product_owner %}
+                    <a href="#" style="font-size:13px; color:var(--kf-primary); font-weight:600; text-decoration:none; flex-shrink:0;">
+                        <i class="fas fa-ellipsis-h"></i>
+                    </a>
                 {% endif %}
             </div>
 
+            <!-- Scrollable details -->
             <div class="kf-scroll-content">
-                {% if product.is_promoted %}<span class="kf-badge kf-badge-promoted">Sponsored</span>{% endif %}
-                <span class="kf-badge kf-badge-condition">{{ product.product_condition }}</span>
-                
-                <h1 class="kf-product-title">{{ product.product_name }}</h1>
-                <div class="kf-price-tag">₦{{ product.product_price|intcomma }}</div>
-                <div class="kf-description">{{ product.product_description }}</div>
 
-                <div class="kf-thumbs-wrapper">
-                    {% for img in product.images.all %}
-                    <img src="{{ img.product_image.url }}" class="kf-thumb-img" onclick="setKfImage('{{ img.product_image.url }}')">
-                    {% endfor %}
+                <!-- Badges -->
+                <div class="kf-badges-row">
+                    {% if product.is_promoted %}
+                        <span class="kf-badge kf-badge-sponsored"><i class="fas fa-bolt"></i> Sponsored</span>
+                    {% endif %}
+
+                    {% if product.product_condition == 'New' %}
+                        <span class="kf-badge kf-badge-new"><i class="fas fa-star"></i> Brand New</span>
+                    {% elif product.product_condition == 'Used' %}
+                        <span class="kf-badge kf-badge-used"><i class="fas fa-recycle"></i> Used – Like New</span>
+                    {% elif product.product_condition == 'Used-Fair' or product.product_condition == 'Fair' %}
+                        <span class="kf-badge kf-badge-fair"><i class="fas fa-exclamation-circle"></i> Used – Fair</span>
+                    {% endif %}
+
+                    {% if product.product_category %}
+                        <span class="kf-badge kf-badge-category"><i class="fas fa-tag"></i> {{ product.product_category }}</span>
+                    {% endif %}
+
+                    {% if product.product_availability %}
+                        <span class="kf-badge kf-badge-avail"><i class="fas fa-boxes"></i> {{ product.product_availability }}</span>
+                    {% endif %}
                 </div>
 
-                <!-- LIVE MAP -->
-                <div class="live-status">
-                    <div class="pulse-dot"></div> Seller's Live Location
+                <!-- Title & Price -->
+                <h1 class="kf-product-title">{{ product.product_name }}</h1>
+                <div class="kf-price-tag">₦{{ product.product_price|intcomma }}</div>
+
+                <!-- Description -->
+                {% if product.product_description %}
+                    <div class="kf-description">{{ product.product_description }}</div>
+                {% endif %}
+
+                <!-- Ad Details -->
+                <div class="kf-info-section">
+                    <div class="kf-info-section-title">Ad Details</div>
+                    <ul class="kf-meta-list">
+                        <li>
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>{{ product.product_location }}</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-eye"></i>
+                            <span>{{ product.views_count }} view{{ product.views_count|pluralize }}</span>
+                        </li>
+                        <li>
+                            <i class="fas fa-clock"></i>
+                            <span>Posted {{ product.posted_on|naturaltime }}</span>
+                        </li>
+                        {% if product.product_availability %}
+                        <li>
+                            <i class="fas fa-boxes"></i>
+                            <span>{{ product.product_availability }}</span>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+
+                <!-- Contact Methods -->
+                <div class="kf-info-section">
+                    <div class="kf-info-section-title">Contact Seller</div>
+
+                    {% if request.user != product.product_owner %}
+
+                        {% if product.whatsapp_number %}
+                            <a href="https://wa.me/{{ product.whatsapp_number }}?text=Hi%2C%20I%20saw%20your%20ad%20for%20%22{{ product.product_name|urlencode }}%22%20on%20KVibe%20and%20I%27m%20interested!"
+                               target="_blank" rel="noopener noreferrer"
+                               class="kf-contact-btn kf-contact-btn-wa">
+                                <i class="fab fa-whatsapp"></i> Chat on WhatsApp
+                            </a>
+                        {% endif %}
+
+                        <a href="{% url 'message' product.product_owner.username %}"
+                           class="kf-contact-btn kf-contact-btn-msg">
+                            <i class="fas fa-paper-plane"></i> Send Message on KVibe
+                        </a>
+
+                        {% if product.email %}
+                            <a href="mailto:{{ product.email }}?subject=Enquiry: {{ product.product_name }}"
+                               class="kf-contact-btn kf-contact-btn-email">
+                                <i class="fas fa-envelope"></i> Email Seller
+                            </a>
+                        {% endif %}
+
+                        {% if product.instagram_handle %}
+                            <a href="https://instagram.com/{{ product.instagram_handle }}"
+                               target="_blank" rel="noopener noreferrer"
+                               class="kf-contact-btn kf-contact-btn-ig">
+                                <i class="fab fa-instagram"></i> @{{ product.instagram_handle }}
+                            </a>
+                        {% endif %}
+
+                        {% if product.twitter_handle %}
+                            <a href="https://x.com/{{ product.twitter_handle }}"
+                               target="_blank" rel="noopener noreferrer"
+                               class="kf-contact-btn kf-contact-btn-tw">
+                                <i class="fab fa-x-twitter"></i> @{{ product.twitter_handle }}
+                            </a>
+                        {% endif %}
+
+                        {% if product.ad_url %}
+                            <a href="{{ product.ad_url }}"
+                               target="_blank" rel="noopener noreferrer"
+                               class="kf-contact-btn kf-contact-btn-outline">
+                                <i class="fas fa-external-link-alt"></i> Visit Ad Link
+                            </a>
+                        {% endif %}
+
+                    {% else %}
+                        <!-- Owner sees edit / delete options -->
+                        <a href="#" class="kf-contact-btn kf-contact-btn-outline">
+                            <i class="fas fa-edit"></i> Edit Listing
+                        </a>
+                    {% endif %}
+                </div>
+
+                <!-- Live Map -->
+                <div class="kf-map-label">
+                    <span class="kf-pulse-dot"></span> Seller Area
                 </div>
                 <div id="kf-live-map"></div>
 
-                <ul class="kf-meta-list">
-                    <li><i class="fas fa-tag"></i> Category: {{ product.product_category }}</li>
-                    <li><i class="fas fa-map-marker-alt"></i> Area: {{ product.product_location }}</li>
-                    <li><i class="fas fa-eye"></i> {{ product.views_count }} views</li>
-                    <li><i class="fas fa-clock"></i> Posted {{ product.posted_on|naturaltime }}</li>
-                </ul>
+            </div><!-- /kf-scroll-content -->
+
+            <!-- Desktop share button -->
+            <div class="kf-desktop-actions">
+                <button onclick="toggleShare()" class="kf-contact-btn kf-contact-btn-outline" style="margin-bottom:0;">
+                    <i class="fas fa-share-alt"></i> Share This Ad
+                </button>
             </div>
 
-            <!-- Desktop Buttons -->
-            <div class="kf-actions kf-desktop-actions">
-                {% if request.user != product.product_owner %}
-                    <a href="{% url 'message' product.product_owner.username %}" class="kf-btn kf-btn-primary">
-                        <i class="fas fa-paper-plane"></i> Send Message
-                    </a>
-                    <a href="https://wa.me/{{ seller.phone }}?text=Hi, I am interested in {{ product.product_name }}" target="_blank" class="kf-btn kf-btn-whatsapp">
-                        <i class="fab fa-whatsapp"></i> WhatsApp
-                    </a>
-                {% else %}
-                    <a href="#" class="kf-btn kf-btn-outline"><i class="fas fa-edit"></i> Edit Listing</a>
-                {% endif %}
-                <button onclick="toggleShare()" class="kf-btn kf-btn-outline"><i class="fas fa-share-alt"></i> Share Product</button>
-            </div>
-        </div>
-    </div>
+        </div><!-- /kf-info-side -->
+    </div><!-- /kf-product-card -->
 
-    <!-- More from Seller Grid -->
-    <div style="margin-top: 40px; border-top: 1px solid var(--kf-border); padding-top: 20px;">
-        <h3 style="font-size: 14px; color: var(--kf-text-muted); font-weight: 600; margin-bottom: 20px;">
-            More products from <span style="color: var(--kf-text-main);">{{ product.product_owner.username }}</span>
-        </h3>
+    <!-- More from Seller -->
+    <div class="kf-more-section">
+        <p class="kf-more-title">
+            More from <strong style="color:var(--kf-text);">{{ product.product_owner.username }}</strong>
+        </p>
         <div class="kf-grid">
-            {% for item in product.product_owner.products.all|slice:":6" %}
+            {% for item in product.product_owner.products.all|slice:":7" %}
                 {% if item.product_id != product.product_id %}
-                <a href="{% url 'product_detail' item.product_id %}" class="kf-grid-item">
-                    <img src="{{ item.images.first.product_image.url }}" loading="lazy">
-                </a>
+                    <a href="{% url 'product_detail' item.product_id %}" class="kf-grid-item">
+                        {% with img=item.images.first %}
+                            {% if img %}
+                                <img src="{{ img.product_image.url }}" loading="lazy" alt="{{ item.product_name }}">
+                            {% else %}
+                                <img src="https://placehold.co/300x300?text=No+Image" loading="lazy" alt="No image">
+                            {% endif %}
+                        {% endwith %}
+                    </a>
                 {% endif %}
             {% empty %}
-                <div style="grid-column: 1 / -1; text-align: center; padding: 40px 0;">
-                    <i class="fas fa-box-open" style="font-size: 30px; color: #dbdbdb; margin-bottom: 10px;"></i>
-                    <p style="font-size: 13px; color: var(--kf-text-muted);">This seller has no other items yet.</p>
+                <div style="grid-column:1/-1; text-align:center; padding:40px 0;">
+                    <i class="fas fa-box-open" style="font-size:28px; color:var(--kf-border); margin-bottom:10px; display:block;"></i>
+                    <p style="font-size:13px; color:var(--kf-muted);">This seller has no other listings yet.</p>
                 </div>
             {% endfor %}
         </div>
     </div>
-</div>
 
-<!-- Mobile Bar -->
+</div><!-- /kf-container -->
+
+<!-- ══ Mobile Sticky Bar ══ -->
 <div class="kf-mobile-bar">
     {% if request.user != product.product_owner %}
-        <a href="{% url 'message' product.product_owner.username %}" class="kf-btn kf-btn-primary" style="flex: 1; margin-bottom: 0;">Message</a>
-        <a href="https://wa.me/{{ seller.phone }}" class="kf-btn kf-btn-whatsapp" style="flex: 1; margin-bottom: 0;">WhatsApp</a>
+        {% if product.whatsapp_number %}
+            <a href="https://wa.me/{{ product.whatsapp_number }}?text=Hi%2C%20I%27m%20interested%20in%20%22{{ product.product_name|urlencode }}%22%20on%20KVibe!"
+               target="_blank" rel="noopener noreferrer"
+               class="kf-contact-btn kf-contact-btn-wa" style="flex:1; margin-bottom:0;">
+                <i class="fab fa-whatsapp"></i> WhatsApp
+            </a>
+        {% endif %}
+        <a href="{% url 'message' product.product_owner.username %}"
+           class="kf-contact-btn kf-contact-btn-msg" style="flex:1; margin-bottom:0;">
+            <i class="fas fa-paper-plane"></i> Message
+        </a>
+    {% else %}
+        <a href="#" class="kf-contact-btn kf-contact-btn-outline" style="flex:1; margin-bottom:0;">
+            <i class="fas fa-edit"></i> Edit Listing
+        </a>
     {% endif %}
-    <button onclick="toggleShare()" class="kf-btn kf-btn-outline" style="width: 50px; margin-bottom: 0;"><i class="fas fa-share-alt"></i></button>
+    <button onclick="toggleShare()" class="kf-contact-btn kf-contact-btn-outline"
+            style="width:48px; flex-shrink:0; margin-bottom:0;">
+        <i class="fas fa-share-alt"></i>
+    </button>
 </div>
 
-<!-- Instagram Style Share Modal -->
+<!-- ══ Share Modal ══ -->
 <div id="kfShareModal" onclick="toggleShare()">
     <div class="kf-share-box" onclick="event.stopPropagation()">
-        <div class="kf-share-header">Share</div>
+        <div class="kf-share-header">Share This Ad</div>
         <div class="kf-share-grid">
-            <a href="https://wa.me/?text={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn"><i class="fab fa-whatsapp bg-whatsapp"></i><span>WhatsApp</span></a>
-            <a href="https://t.me/share/url?url={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn"><i class="fab fa-telegram-plane bg-telegram"></i><span>Telegram</span></a>
-            <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn"><i class="fab fa-facebook-f bg-facebook"></i><span>Facebook</span></a>
-            <a href="https://twitter.com/intent/tweet?url={{ request.build_absolute_uri }}" target="_blank" class="kf-share-icon-btn"><i class="fab fa-twitter bg-twitter"></i><span>Twitter</span></a>
-            <a href="sms:?body=Check this: {{ request.build_absolute_uri }}" class="kf-share-icon-btn"><i class="fas fa-comment bg-sms"></i><span>SMS</span></a>
-            <a href="mailto:?body={{ request.build_absolute_uri }}" class="kf-share-icon-btn"><i class="fas fa-envelope bg-email"></i><span>Email</span></a>
+            <a href="https://wa.me/?text=Check%20this%20ad%20on%20KVibe%3A%20{{ request.build_absolute_uri }}"
+               target="_blank" class="kf-share-icon-btn">
+                <i class="fab fa-whatsapp bg-whatsapp"></i><span>WhatsApp</span>
+            </a>
+            <a href="https://t.me/share/url?url={{ request.build_absolute_uri }}&text={{ product.product_name|urlencode }}"
+               target="_blank" class="kf-share-icon-btn">
+                <i class="fab fa-telegram-plane bg-telegram"></i><span>Telegram</span>
+            </a>
+            <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri }}"
+               target="_blank" class="kf-share-icon-btn">
+                <i class="fab fa-facebook-f bg-facebook"></i><span>Facebook</span>
+            </a>
+            <a href="https://twitter.com/intent/tweet?url={{ request.build_absolute_uri }}&text={{ product.product_name|urlencode }}"
+               target="_blank" class="kf-share-icon-btn">
+                <i class="fab fa-x-twitter bg-twitter"></i><span>X/Twitter</span>
+            </a>
+            <a href="sms:?body=Check%20this%20ad%3A%20{{ request.build_absolute_uri }}"
+               class="kf-share-icon-btn">
+                <i class="fas fa-comment bg-sms"></i><span>SMS</span>
+            </a>
+            <a href="mailto:?subject={{ product.product_name|urlencode }}&body=Check%20this%20ad%20on%20KVibe%3A%20{{ request.build_absolute_uri }}"
+               class="kf-share-icon-btn">
+                <i class="fas fa-envelope bg-email"></i><span>Email</span>
+            </a>
         </div>
-        <button class="kf-modal-action-item bold" onclick="copyLink()" style="color:var(--kf-primary)">Copy Link</button>
-        <button class="kf-modal-action-item" onclick="toggleShare()">Cancel</button>
+        <button class="kf-modal-action-btn primary" onclick="copyLink()">
+            <i class="fas fa-copy"></i> Copy Link
+        </button>
+        <button class="kf-modal-action-btn" onclick="toggleShare()">Cancel</button>
     </div>
 </div>
 
 <script>
-    function setKfImage(url) { document.getElementById('kfMainDisplay').src = url; }
+    // ── Image switcher ──
+    function setKfImage(url, thumbEl) {
+        document.getElementById('kfMainDisplay').src = url;
+        document.querySelectorAll('.kf-thumb').forEach(t => t.classList.remove('active'));
+        if (thumbEl) thumbEl.classList.add('active');
+    }
 
+    // ── Share modal ──
     function toggleShare() {
         const modal = document.getElementById('kfShareModal');
-        modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
-        document.body.style.overflow = (modal.style.display === 'flex') ? 'hidden' : 'auto';
+        const isOpen = modal.style.display === 'flex';
+        modal.style.display = isOpen ? 'none' : 'flex';
+        document.body.style.overflow = isOpen ? '' : 'hidden';
     }
 
     async function copyLink() {
         const url = window.location.href;
         try {
             await navigator.clipboard.writeText(url);
-            alert('Link copied!');
-        } catch (err) {
+        } catch (_) {
             const el = document.createElement('textarea');
-            el.value = url; document.body.appendChild(el);
-            el.select(); document.execCommand('copy');
+            el.value = url;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
             document.body.removeChild(el);
-            alert('Link copied!');
         }
         toggleShare();
+        // Quick toast feedback
+        const toast = document.createElement('div');
+        toast.textContent = '🔗 Link copied!';
+        Object.assign(toast.style, {
+            position:'fixed', bottom:'90px', left:'50%', transform:'translateX(-50%)',
+            background:'#262626', color:'#fff', padding:'10px 20px',
+            borderRadius:'8px', fontSize:'13px', fontWeight:'600',
+            zIndex:'9999', whiteSpace:'nowrap', boxShadow:'0 4px 12px rgba(0,0,0,0.3)'
+        });
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2200);
     }
 
-    // --- MAP LOGIC ---
-    let map; let sellerMarker;
-    const sellerUsername = "{{ product.product_owner.username }}";
+    // ── Leaflet Map ──
+    (function initMap() {
+        const rawLat = "{{ seller.latitude|default:'' }}";
+        const rawLng = "{{ seller.longitude|default:'' }}";
+        const lat = (rawLat && !isNaN(parseFloat(rawLat))) ? parseFloat(rawLat) : null;
+        const lng = (rawLng && !isNaN(parseFloat(rawLng))) ? parseFloat(rawLng) : null;
+        const mapEl = document.getElementById('kf-live-map');
 
-    function initMap() {
-        const lat = parseFloat("{{ seller.latitude }}") || 6.5244;
-        const lng = parseFloat("{{ seller.longitude }}") || 3.3792;
-        
-        map = L.map('kf-live-map').setView([lat, lng], 14);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        if (!lat || !lng) {
+            // No coords — use location text geocode fallback or just hide map
+            mapEl.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#8e8e8e;font-size:13px;gap:8px;"><i class="fas fa-map-marker-alt"></i> {{ product.product_location|escapejs }}</div>';
+            return;
+        }
 
-        sellerMarker = L.marker([lat, lng]).addTo(map).bindPopup("Seller is here");
-        
+        const map = L.map('kf-live-map', { zoomControl: true, scrollWheelZoom: false })
+                     .setView([lat, lng], 14);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        const icon = L.divIcon({
+            html: '<div style="background:var(--kf-primary);width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
+            className: '',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8],
+        });
+
+        L.marker([lat, lng], { icon })
+         .addTo(map)
+         .bindPopup('<strong>{{ product.product_owner.username|escapejs }}</strong><br>{{ product.product_location|escapejs }}');
+
         setTimeout(() => map.invalidateSize(), 400);
-        setInterval(updatePos, 10000); // Polling every 10s
-    }
 
-    function updatePos() {
-        if (!sellerUsername) return;
-        fetch(`/get-location/${sellerUsername}/`)
-            .then(res => res.json())
-            .then(data => {
-                if(data.lat && data.lng) {
-                    const newPos = [parseFloat(data.lat), parseFloat(data.lng)];
-                    sellerMarker.setLatLng(newPos);
-                }
-            }).catch(e => console.log("Map sync error"));
-    }
+        // Live location polling every 15s
+        const sellerUsername = "{{ product.product_owner.username|escapejs }}";
+        let sellerMarker = null;
 
-    window.onload = initMap;
+        function updatePos() {
+            fetch(`/get-location/${sellerUsername}/`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.lat && data.lng) {
+                        const newPos = [parseFloat(data.lat), parseFloat(data.lng)];
+                        if (sellerMarker) {
+                            sellerMarker.setLatLng(newPos);
+                        } else {
+                            sellerMarker = L.marker(newPos, { icon }).addTo(map);
+                        }
+                        map.panTo(newPos);
+                    }
+                })
+                .catch(() => {}); // Silently fail — not critical
+        }
+
+        setInterval(updatePos, 15000);
+    })();
 </script>
 </body>
 </html>

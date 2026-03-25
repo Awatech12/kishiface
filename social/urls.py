@@ -87,7 +87,7 @@ urlpatterns = [
     path('channel/toggle-admin/<uuid:channel_id>/<int:user_id>/',       views.toggle_admin,      name='toggle_admin'),
     path('followChannel/<uuid:channel_id>',                             views.follow_channel,    name='follow_channel'),
 
-    # ── Marketplace ────────────────────────────────────────────────────────────
+    # ── Ads ────────────────────────────────────────────────────────────
     path('market',                   views.market,         name='market'),
     path('product/<uuid:product_id>/',views.product_detail,name='product_detail'),
 
