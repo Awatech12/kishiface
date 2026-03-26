@@ -10322,9 +10322,9 @@
 
         async function exportImageSoundToVideo(imageCanvas, soundFile) {
             try {
-                // Determine output dimensions (max 1080p, keep aspect)
+                // Determine output dimensions (max 720p — keeps file small for a still image)
                 let outW = imageCanvas.width, outH = imageCanvas.height;
-                const maxDim = 1080;
+                const maxDim = 720;
                 if (outW > maxDim || outH > maxDim) {
                     if (outW > outH) { outH = Math.round(outH * maxDim / outW); outW = maxDim; }
                     else { outW = Math.round(outW * maxDim / outH); outH = maxDim; }
@@ -10351,8 +10351,8 @@
                 renderCanvas.width = outW; renderCanvas.height = outH;
                 const rctx = renderCanvas.getContext('2d');
 
-                // Draw image with Ken Burns zoom effect over time
-                const FPS = 24;
+                // 15 fps is plenty for a still image with slow Ken Burns motion
+                const FPS = 15;
                 const totalFrames = Math.ceil(duration * FPS);
                 let frameIdx = 0;
 
@@ -10372,7 +10372,7 @@
 
                 // MediaRecorder
                 const mimeType = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || '';
-                vidExportRecorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 4_000_000 });
+                vidExportRecorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 800_000, audioBitsPerSecond: 96_000 });
                 const chunks = [];
                 vidExportRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
