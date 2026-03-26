@@ -1085,7 +1085,8 @@ class ChannelMessage(models.Model):
         file = models.FileField(upload_to='message_file', blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
-    
+    link_preview = models.JSONField(null=True, blank=True)
+
     def clean(self):
         super().clean()
         self.message = sanitize_text(self.message, 'content')
@@ -1096,7 +1097,7 @@ class ChannelMessage(models.Model):
             self.file_type = sanitize_text(self.file_type)
             if self.file_type not in ['image', 'video', 'audio', 'document']:
                 self.file_type = None
-    
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
@@ -1122,6 +1123,32 @@ class ChannelMessage(models.Model):
     
     def __str__(self):
         return f"{self.author.username}: {self.message[:50]}"
+
+
+class ChannelMessageReaction(models.Model):
+    """Stores emoji reactions on channel messages. One reaction per user per message (toggle/switch)."""
+    REACTION_CHOICES = [
+        ('❤️',  'Heart'),
+        ('😂',  'Laugh'),
+        ('😮',  'Wow'),
+        ('😢',  'Sad'),
+        ('😡',  'Angry'),
+        ('👍',  'Thumbs Up'),
+        ('🔥',  'Fire'),
+        ('🎉',  'Party'),
+    ]
+
+    message    = models.ForeignKey(ChannelMessage, on_delete=models.CASCADE, related_name='reactions')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='channel_message_reactions')
+    emoji      = models.CharField(max_length=10, choices=REACTION_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('message', 'user')
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.user.username} reacted {self.emoji} to channel message {self.message_id}"
 
 
 class Market(models.Model):

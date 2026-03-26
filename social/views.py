@@ -3317,7 +3317,7 @@ def follow_channel(request, channel_id):
 @login_required
 def channel(request, channel_id):
     channel_obj = get_object_or_404(Channel, channel_id=channel_id)
-    
+
     if request.user in channel_obj.blocked_users.all():
         return redirect('home')
 
@@ -3325,20 +3325,31 @@ def channel(request, channel_id):
         channel=channel_obj, user=request.user,
         defaults={'last_seen_at': timezone.now()}
     )
-    
-    channel_messages_qs = ChannelMessage.objects.filter(channel=channel_obj).order_by('created_at')
+
+    from social.models import ChannelMessageReaction
+    from django.db.models import Count as _Count
+
+    channel_messages_qs = ChannelMessage.objects.filter(
+        channel=channel_obj
+    ).select_related('author', 'author__profile', 'reply_to', 'reply_to__author').order_by('created_at')
+
     grouped_messages = {}
     for msg in channel_messages_qs:
         date_label = msg.chat_date_label
         if date_label not in grouped_messages:
             grouped_messages[date_label] = []
+        # Attach reaction summary and current user's reaction
+        reactions_qs = ChannelMessageReaction.objects.filter(message=msg).values('emoji').annotate(count=_Count('id'))
+        msg.reactions_summary = {row['emoji']: row['count'] for row in reactions_qs}
+        user_rxn = ChannelMessageReaction.objects.filter(message=msg, user=request.user).first()
+        msg.my_reaction = user_rxn.emoji if user_rxn else None
         grouped_messages[date_label].append(msg)
-    
+
     subscribed_channels = Channel.objects.filter(subscriber=request.user)
     total_unread = sum(ch.unread_count_for_user(request.user) for ch in subscribed_channels)
-    
+
     notifications = request.user.notifications.filter(is_read=False)
-    
+
     context = {
         'channel': channel_obj,
         'grouped_messages': grouped_messages,
@@ -3354,8 +3365,8 @@ def channel(request, channel_id):
 @login_required
 def channel_message(request, channel_id):
     channel_obj = get_object_or_404(Channel, channel_id=channel_id)
-    
-    if channel_obj.is_broadcast_only and request.user != channel_obj.channel_owner:
+
+    if channel_obj.is_broadcast_only and not channel_obj.is_user_admin(request.user):
         return JsonResponse({'status': 'error', 'message': 'Only admins can post in this channel.'}, status=403)
 
     if request.method == 'POST':
@@ -3363,9 +3374,17 @@ def channel_message(request, channel_id):
         file_upload  = request.FILES.get('file_upload')
         reply_to_id  = request.POST.get('reply_to')
 
+        if message_text and len(message_text) > 5000:
+            return JsonResponse({'status': 'error', 'message': 'Message too long.'}, status=400)
+
         file_type = None
+        file_name = None
         if file_upload:
-            _ext = os.path.splitext(file_upload.name or '')[1].lower()
+            raw_name = file_upload.name or 'file'
+            raw_name = os.path.basename(raw_name.replace('\\', '/'))
+            raw_name = re.sub(r'[^\w\s\-\.]', '', raw_name).strip()[:100] or 'file'
+            file_name = raw_name
+            _ext = os.path.splitext(file_name)[1].lower()
             _ALLOWED = {
                 'image':    {'.jpg', '.jpeg', '.png', '.gif'},
                 'video':    {'.mp4', '.webm', '.mov', '.avi'},
@@ -3378,24 +3397,75 @@ def channel_message(request, channel_id):
             if file_upload.size > 50 * 1024 * 1024:
                 return JsonResponse({'status': 'error', 'message': 'File too large. Maximum size is 50MB.'}, status=400)
 
+        # Link preview — only for text messages containing a URL
+        link_preview = None
+        if message_text:
+            url_match = re.search(r'https?://[^\s]+', message_text)
+            if url_match:
+                preview_url = url_match.group(0)
+                if _is_safe_url_for_preview(preview_url):
+                    try:
+                        _headers = {
+                            'User-Agent': 'Mozilla/5.0 (compatible; KvibeBot/1.0)',
+                            'Accept': 'text/html,application/xhtml+xml',
+                        }
+                        _resp = requests.get(preview_url, headers=_headers, timeout=4,
+                                             allow_redirects=True, stream=True)
+                        _content = b''
+                        for _chunk in _resp.iter_content(chunk_size=8192):
+                            _content += _chunk
+                            if len(_content) > 500_000:
+                                break
+                        _soup = BeautifulSoup(_content, 'html.parser')
+
+                        def _og(prop):
+                            tag = (
+                                _soup.find('meta', property=f'og:{prop}')
+                                or _soup.find('meta', attrs={'name': f'twitter:{prop}'})
+                            )
+                            return tag['content'].strip() if tag and tag.get('content') else ''
+
+                        _image = _og('image')
+                        if _image and not _image.startswith(('http://', 'https://')):
+                            _image = ''
+
+                        link_preview = {
+                            'title':       html_escape((_og('title') or (_soup.title.string.strip() if _soup.title else ''))[:200]),
+                            'description': html_escape(_og('description')[:400]),
+                            'image':       _image[:500],
+                            'domain':      html_escape(urlparse(_resp.url).netloc.replace('www.', '')[:100]),
+                            'url':         preview_url,
+                        }
+                    except Exception:
+                        link_preview = None
+
         channel_msg = ChannelMessage.objects.create(
             channel=channel_obj,
             author=request.user,
             message=message_text if message_text else '',
             file_type=file_type,
             file=file_upload,
-            reply_to_id=reply_to_id if reply_to_id else None
+            reply_to_id=reply_to_id if reply_to_id else None,
+            link_preview=link_preview,
         )
 
         layer = get_channel_layer()
         group_name = f'channel_{channel_id}'
         file_url = channel_msg.file.url if channel_msg.file else None
-        
+
+        # Author avatar
+        try:
+            author_avatar = request.user.profile.picture.url if request.user.profile.picture else ''
+        except Exception:
+            author_avatar = ''
+
         reply_data = None
         if channel_msg.reply_to:
             reply_data = {
                 'author': channel_msg.reply_to.author.username,
-                'message': channel_msg.reply_to.message[:50] if channel_msg.reply_to.message else "Media file"
+                'message': channel_msg.reply_to.message[:50] if channel_msg.reply_to.message else "Media file",
+                'file_type': channel_msg.reply_to.file_type,
+                'message_id': str(channel_msg.reply_to.channelmessage_id),
             }
 
         async_to_sync(layer.group_send)(
@@ -3403,15 +3473,19 @@ def channel_message(request, channel_id):
             {
                 'type': 'channel_message',
                 'author': channel_msg.author.username,
+                'author_avatar': author_avatar,
                 'message': channel_msg.message,
                 'file_type': file_type,
                 'file_url': file_url,
+                'file_name': file_name or '',
                 'time': channel_msg.created_at.isoformat(),
                 'message_id': str(channel_msg.channelmessage_id),
                 'reply_to': reply_data,
+                'link_preview': link_preview,
             }
         )
-        
+
+        # Notify subscribers with unread counts
         subscribers = channel_obj.subscriber.exclude(id=request.user.id)
         for subscriber in subscribers:
             unread_count = channel_obj.unread_count_for_user(subscriber)
@@ -3426,9 +3500,13 @@ def channel_message(request, channel_id):
                     'message_preview': message_text[:30] if message_text else "New media message",
                 }
             )
-        
-        return JsonResponse({'status': 'success', 'message_id': str(channel_msg.channelmessage_id)})
-    
+
+        return JsonResponse({
+            'status': 'success',
+            'message_id': str(channel_msg.channelmessage_id),
+            'file_url': file_url,
+        })
+
     return JsonResponse({'status': 'error', 'message': 'Invalid request'})
 
 
@@ -3511,6 +3589,102 @@ def channelmessage_like(request, channelmessage_id):
         channelmessage.like.remove(request.user)
         liked = False
     return JsonResponse({'liked': liked, 'like_count': channelmessage.like.count()})
+
+
+@login_required
+def delete_channel_message(request, channel_id, message_id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
+    try:
+        channel_obj = get_object_or_404(Channel, channel_id=channel_id)
+        msg_obj = get_object_or_404(ChannelMessage, channelmessage_id=message_id, channel=channel_obj)
+
+        # Only the message author OR channel admin can delete
+        if msg_obj.author != request.user and not channel_obj.is_user_admin(request.user):
+            return JsonResponse({'status': 'error', 'message': 'Unauthorized'}, status=403)
+
+        layer = get_channel_layer()
+        async_to_sync(layer.group_send)(
+            f'channel_{channel_id}',
+            {
+                'type': 'message_deleted',
+                'message_id': str(message_id),
+            }
+        )
+        msg_obj.delete()
+        return JsonResponse({'status': 'success'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+def react_to_channel_message(request, message_id):
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Invalid method'}, status=405)
+
+    from social.models import ChannelMessageReaction
+
+    try:
+        msg_obj = ChannelMessage.objects.select_related('channel').get(channelmessage_id=message_id)
+    except ChannelMessage.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Message not found'}, status=404)
+
+    # Only channel subscribers can react
+    if not msg_obj.channel.subscriber.filter(id=request.user.id).exists():
+        return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
+
+    try:
+        body  = json.loads(request.body)
+        emoji = body.get('emoji', '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+
+    ALLOWED_EMOJIS = {'❤️', '😂', '😮', '😢', '😡', '👍', '🔥', '🎉'}
+    if emoji not in ALLOWED_EMOJIS:
+        return JsonResponse({'status': 'error', 'message': 'Invalid emoji'}, status=400)
+
+    existing = ChannelMessageReaction.objects.filter(message=msg_obj, user=request.user).first()
+
+    if existing:
+        if existing.emoji == emoji:
+            existing.delete()
+            user_reaction = None
+        else:
+            existing.emoji = emoji
+            existing.save()
+            user_reaction = emoji
+    else:
+        ChannelMessageReaction.objects.create(message=msg_obj, user=request.user, emoji=emoji)
+        user_reaction = emoji
+
+    from django.db.models import Count as _Count
+    summary = (
+        ChannelMessageReaction.objects.filter(message=msg_obj)
+        .values('emoji').annotate(count=_Count('id')).order_by('emoji')
+    )
+    reaction_summary = {row['emoji']: row['count'] for row in summary}
+
+    try:
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'channel_{msg_obj.channel.channel_id}',
+            {
+                'type': 'message_reaction',
+                'message_id': str(msg_obj.channelmessage_id),
+                'reactions': reaction_summary,
+                'actor': request.user.username,
+                'user_reaction': user_reaction,
+            }
+        )
+    except Exception:
+        pass
+
+    return JsonResponse({
+        'status': 'success',
+        'message_id': str(msg_obj.channelmessage_id),
+        'reactions': reaction_summary,
+        'user_reaction': user_reaction,
+    })
 
 
 # ======= Ads =======

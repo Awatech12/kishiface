@@ -78,14 +78,16 @@ urlpatterns = [
     path('hashtag/<str:tag_name>/', views.hashtag_view, name='hashtag_view'),
 
     # ── Channels ───────────────────────────────────────────────────────────────
-    path('create_channel',                                              views.channel_create,    name='channel_create'),
-    path('channel/<uuid:channel_id>/',                                  views.channel,           name='channel'),
-    path('channel_message/<uuid:channel_id>/',                          views.channel_message,   name='channel_message'),
-    path('channelmessage_like/<uuid:channelmessage_id>/',               views.channelmessage_like,name='channelmessage_like'),
-    path('update_channel/<uuid:channel_id>/',                           views.update_channel,    name='update_channel'),
-    path('channel/manage-member/<uuid:channel_id>/<int:user_id>/',      views.manage_member,     name='manage_member'),
-    path('channel/toggle-admin/<uuid:channel_id>/<int:user_id>/',       views.toggle_admin,      name='toggle_admin'),
-    path('followChannel/<uuid:channel_id>',                             views.follow_channel,    name='follow_channel'),
+    path('create_channel',                                              views.channel_create,              name='channel_create'),
+    path('channel/<uuid:channel_id>/',                                  views.channel,                     name='channel'),
+    path('channel_message/<uuid:channel_id>/',                          views.channel_message,             name='channel_message'),
+    path('channelmessage_like/<uuid:channelmessage_id>/',               views.channelmessage_like,         name='channelmessage_like'),
+    path('update_channel/<uuid:channel_id>/',                           views.update_channel,              name='update_channel'),
+    path('channel/manage-member/<uuid:channel_id>/<int:user_id>/',      views.manage_member,               name='manage_member'),
+    path('channel/toggle-admin/<uuid:channel_id>/<int:user_id>/',       views.toggle_admin,                name='toggle_admin'),
+    path('followChannel/<uuid:channel_id>',                             views.follow_channel,              name='follow_channel'),
+    path('channel/delete-message/<uuid:channel_id>/<uuid:message_id>/', views.delete_channel_message,      name='delete_channel_message'),
+    path('channel/react/<uuid:message_id>/',                            views.react_to_channel_message,    name='react_to_channel_message'),
 
     # ── Ads ────────────────────────────────────────────────────────────
     path('market',                   views.market,         name='market'),
