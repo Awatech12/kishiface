@@ -2692,8 +2692,8 @@ def send_message(request, username):
             ext = os.path.splitext(file_name)[1].lower()
             ALLOWED_EXTENSIONS = {
                 'image':    {'.jpg', '.jpeg', '.png', '.gif'},
-                'video':    {'.mp4', '.webm', '.mov', '.avi'},
-                'audio':    {'.mp3', '.wav'},
+                'video':    {'.mp4', '.mov', '.avi'},
+                'audio':    {'.mp3', '.wav', '.webm', '.ogg', '.m4a'},
                 'document': {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'},
             }
             file_type = next((t for t, exts in ALLOWED_EXTENSIONS.items() if ext in exts), None)
@@ -3387,8 +3387,8 @@ def channel_message(request, channel_id):
             _ext = os.path.splitext(file_name)[1].lower()
             _ALLOWED = {
                 'image':    {'.jpg', '.jpeg', '.png', '.gif'},
-                'video':    {'.mp4', '.webm', '.mov', '.avi'},
-                'audio':    {'.mp3', '.wav'},
+                'video':    {'.mp4', '.mov', '.avi'},
+                'audio':    {'.mp3', '.wav', '.webm', '.ogg', '.m4a'},
                 'document': {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'},
             }
             file_type = next((t for t, exts in _ALLOWED.items() if _ext in exts), None)

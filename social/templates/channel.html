@@ -52,7 +52,7 @@
         .kv-action-bar-btn.danger { color:var(--kv-danger); }
 
         /* ── Messages ── */
-        .kv-messages { flex:1; padding:16px 16px 80px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; -webkit-overflow-scrolling:touch; }
+        .kv-messages { flex:1; padding:16px 16px 8px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; -webkit-overflow-scrolling:touch; }
         .kv-messages::-webkit-scrollbar { width:6px; }
         .kv-messages::-webkit-scrollbar-thumb { background:rgba(0,0,0,.2); border-radius:3px; }
         .kv-date-sep { text-align:center; margin:16px 0 8px; }
@@ -67,12 +67,14 @@
         .kv-sender-name { font-size:11px; color:var(--kv-text-light); margin-bottom:2px; margin-left:2px; font-weight:600; text-decoration:none; }
 
         /* ── Bubble ── */
-        .kv-bubble { max-width:65%; padding:9px 14px; border-radius:22px; position:relative; animation:kvMsgIn .25s ease; word-wrap:break-word; cursor:pointer; }
+        .kv-bubble { max-width:65%; min-width: 100px; padding:9px 14px; border-radius:22px; position:relative; animation:kvMsgIn .25s ease; word-wrap:break-word; cursor:pointer; transition:filter .15s; }
         .kv-incoming-wrap .kv-bubble { max-width:100%; }
         @keyframes kvMsgIn { from{opacity:0;transform:scale(.8)} to{opacity:1;transform:scale(1)} }
         .kv-bubble.outgoing { background:var(--kv-sent-bg); color:#fff; }
         .kv-bubble.incoming { background:var(--kv-received-bg); color:var(--kv-text); }
-        .kv-bubble.has-media { padding:0!important; background:transparent!important; border:none!important; box-shadow:none!important; max-width:70%; }
+        .kv-bubble.has-media,
+        .kv-bubble.outgoing.has-media,
+        .kv-bubble.incoming.has-media { padding:0!important; max-width:70%; background:transparent!important; background-color:transparent!important; box-shadow:none!important; border:none!important; position:relative; }
         .kv-bubble:hover { filter:brightness(.96); }
         .kv-bubble.kv-lp-highlight { filter:brightness(.88); transition:filter .1s; }
 
@@ -107,9 +109,9 @@
         /* ── Audio player ── */
         .kv-audio-player { border-radius:22px; max-width:250px; cursor:pointer; }
         .kv-audio-content { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:22px; }
-        .kv-msg-row.outgoing .kv-audio-content { background:var(--kv-sent-bg); }
-        .kv-msg-row.incoming .kv-audio-content { background:var(--kv-received-bg); }
-        .kv-audio-play-btn { border:none; width:32px; height:32px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
+        .kv-msg-row.outgoing .kv-audio-content { background:var(--kv-sent-bg); margin-left:auto; margin-right:0; }
+        .kv-msg-row.incoming .kv-audio-content { background:var(--kv-received-bg); margin-right:auto; margin-left:0; }
+        .kv-audio-play-btn { border:none; width:32px; height:32px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; z-index:2; }
         .kv-msg-row.outgoing .kv-audio-play-btn { background:rgba(255,255,255,.3); color:#fff; }
         .kv-msg-row.incoming .kv-audio-play-btn { background:rgba(0,0,0,.1); color:var(--kv-text); }
         .kv-audio-info { flex:1; min-width:0; display:flex; align-items:center; gap:8px; }
@@ -182,7 +184,7 @@
         .kv-reply-preview-text { font-size:12px; color:var(--kv-text-light); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:280px; }
 
         /* ── Input area ── */
-        .kv-input-container { padding:8px 12px 16px; background:var(--kv-bg); flex-shrink:0; display:flex; flex-direction:column; }
+        .kv-input-container { padding:8px 12px calc(env(safe-area-inset-bottom,0px) + 10px); background:var(--kv-bg); flex-shrink:0; display:flex; flex-direction:column; border-top:1px solid #f0f0f0; position:sticky; bottom:0; z-index:100; }
         .kv-quick-replies { display:flex; align-items:center; gap:8px; padding:4px 4px 8px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; flex-shrink:0; }
         .kv-quick-replies.hidden { display:none; }
         .kv-quick-replies::-webkit-scrollbar { display:none; }
@@ -215,7 +217,7 @@
         @keyframes kvPulse { 0%{opacity:1} 50%{opacity:.5} 100%{opacity:1} }
 
         /* ── Emoji picker ── */
-        .kv-emoji-picker { position:absolute; bottom:70px; left:0; right:0; z-index:1001; display:none; border-radius:20px 20px 0 0; background:#fff; box-shadow:0 -4px 20px rgba(0,0,0,.1); flex-direction:column; height:280px; }
+        .kv-emoji-picker { position:fixed; bottom:0; left:0; right:0; z-index:1001; display:none; border-radius:20px 20px 0 0; background:#fff; box-shadow:0 -4px 20px rgba(0,0,0,.1); flex-direction:column; height:300px; }
         .kv-emoji-tabs { display:flex; overflow-x:auto; scrollbar-width:none; padding:8px 8px 4px; gap:2px; flex-shrink:0; border-bottom:1px solid #f0f0f0; }
         .kv-emoji-tabs::-webkit-scrollbar { display:none; }
         .kv-emoji-tab { width:34px; height:34px; border-radius:8px; border:none; background:transparent; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
@@ -419,19 +421,8 @@
 
                     <!-- Bubble -->
                     {% if message.file %}
-                    <div class="kv-bubble {% if message.author == request.user %}outgoing{% else %}incoming{% endif %} has-media">
-                        {% if message.file_type == 'image' %}
-                        <div class="kv-img-wrap" onclick="kvOpenMediaModal('{{ message.file.url }}','image','{{ message.created_at.isoformat }}','{{ message.message|default:'' }}','{{ message.author.username }}','{% if message.author.profile.picture %}{{ message.author.profile.picture.url }}{% endif %}')">
-                            <img src="{{ message.file.url }}" alt="" loading="lazy">
-                            {% if message.message %}<div class="kv-msg-text">{{ message.message }}</div>{% endif %}
-                        </div>
-                        {% elif message.file_type == 'video' %}
-                        <div class="kv-video-wrap" onclick="kvOpenMediaModal('{{ message.file.url }}','video','{{ message.created_at.isoformat }}','{{ message.message|default:'' }}','{{ message.author.username }}','{% if message.author.profile.picture %}{{ message.author.profile.picture.url }}{% endif %}')">
-                            <video preload="metadata" id="video-{{ message.channelmessage_id }}"><source src="{{ message.file.url }}"></video>
-                            <div class="kv-video-overlay"><div class="kv-video-play-icon"><i class="fas fa-play"></i></div></div>
-                            {% if message.message %}<div class="kv-msg-text">{{ message.message }}</div>{% endif %}
-                        </div>
-                        {% elif message.file_type == 'audio' %}
+                        {% if message.file_type == 'audio' %}
+                        <!-- Audio: rendered outside has-media bubble so row-level CSS applies correctly -->
                         <div class="kv-audio-player" data-utc="{{ message.created_at.isoformat }}" onclick="kvOpenMediaModal('{{ message.file.url }}','audio','{{ message.created_at.isoformat }}','{{ message.message|default:'' }}','{{ message.author.username }}','{% if message.author.profile.picture %}{{ message.author.profile.picture.url }}{% endif %}')">
                             <div class="kv-audio-content">
                                 <button class="kv-audio-play-btn" onclick="event.stopPropagation(); kvToggleAudio(this,'{{ message.channelmessage_id }}')"><i class="fas fa-play"></i></button>
@@ -445,23 +436,37 @@
                             <audio src="{{ message.file.url }}" preload="metadata" id="audio-{{ message.channelmessage_id }}"></audio>
                         </div>
                         {% if message.message %}<div class="kv-audio-caption">{{ message.message }}</div>{% endif %}
-                        {% elif message.file_type == 'document' %}
-                        <div class="kv-bubble {% if message.author == request.user %}outgoing{% else %}incoming{% endif %}"
-                             style="max-width:65%">
-                            {% if message.message %}<div class="kv-msg-text">{{ message.message }}</div>{% endif %}
-                            <div class="kv-doc-card" data-url="{{ message.file.url }}" data-filename="{{ message.file.name|default:'' }}" data-utc="{{ message.created_at.isoformat }}"
-                                 onclick="kvOpenDocModal('{{ message.file.url }}','{{ message.file.name|default:'' }}')">
-                                <div class="kv-doc-icon"><i class="fas fa-file"></i></div>
-                                <div class="kv-doc-info">
-                                    <div class="kv-doc-name">{{ message.file.name|default:"Document" }}</div>
-                                    <div class="kv-doc-type">FILE</div>
-                                </div>
-                                <button class="kv-doc-dl" onclick="event.stopPropagation(); kvDownloadFile('{{ message.file.url }}','{{ message.file.name|default: "document" }')"><i class="fas fa-download"></i></button>
+                        {% else %}
+                        <!-- Image / Video / Document: use has-media bubble wrapper -->
+                        <div class="kv-bubble {% if message.author == request.user %}outgoing{% else %}incoming{% endif %} has-media">
+                            {% if message.file_type == 'image' %}
+                            <div class="kv-img-wrap" onclick="kvOpenMediaModal('{{ message.file.url }}','image','{{ message.created_at.isoformat }}','{{ message.message|default:'' }}','{{ message.author.username }}','{% if message.author.profile.picture %}{{ message.author.profile.picture.url }}{% endif %}')">
+                                <img src="{{ message.file.url }}" alt="" loading="lazy">
+                                {% if message.message %}<div class="kv-msg-text">{{ message.message }}</div>{% endif %}
                             </div>
-                            <div class="kv-msg-meta"><span class="kv-msg-time" data-utc="{{ message.created_at.isoformat }}"></span></div>
+                            {% elif message.file_type == 'video' %}
+                            <div class="kv-video-wrap" onclick="kvOpenMediaModal('{{ message.file.url }}','video','{{ message.created_at.isoformat }}','{{ message.message|default:'' }}','{{ message.author.username }}','{% if message.author.profile.picture %}{{ message.author.profile.picture.url }}{% endif %}')">
+                                <video preload="metadata" id="video-{{ message.channelmessage_id }}"><source src="{{ message.file.url }}"></video>
+                                <div class="kv-video-overlay"><div class="kv-video-play-icon"><i class="fas fa-play"></i></div></div>
+                                {% if message.message %}<div class="kv-msg-text">{{ message.message }}</div>{% endif %}
+                            </div>
+                            {% elif message.file_type == 'document' %}
+                            <div class="kv-bubble {% if message.author == request.user %}outgoing{% else %}incoming{% endif %}" style="max-width:65%">
+                                {% if message.message %}<div class="kv-msg-text">{{ message.message }}</div>{% endif %}
+                                <div class="kv-doc-card" data-url="{{ message.file.url }}" data-filename="{{ message.file.name|default:'' }}" data-utc="{{ message.created_at.isoformat }}"
+                                     onclick="kvOpenDocModal('{{ message.file.url }}','{{ message.file.name|default:'' }}')">
+                                    <div class="kv-doc-icon"><i class="fas fa-file"></i></div>
+                                    <div class="kv-doc-info">
+                                        <div class="kv-doc-name">{{ message.file.name|default:"Document" }}</div>
+                                        <div class="kv-doc-type">FILE</div>
+                                    </div>
+                                    <button class="kv-doc-dl" onclick="event.stopPropagation(); kvDownloadFile('{{ message.file.url }}','{{ message.file.name|default:''}}')"><i class="fas fa-download"></i></button>
+                                </div>
+                                <div class="kv-msg-meta"><span class="kv-msg-time" data-utc="{{ message.created_at.isoformat }}"></span></div>
+                            </div>
+                            {% endif %}
                         </div>
                         {% endif %}
-                    </div>
                     {% else %}
                     <!-- Text bubble -->
                     <div class="kv-bubble {% if message.author == request.user %}outgoing{% else %}incoming{% endif %}">
@@ -1014,6 +1019,8 @@
                 bubble.appendChild(wrap); contentTarget.appendChild(bubble);
 
             } else if (safeFileType === 'audio') {
+                // Audio must NOT go inside the has-media bubble (it forces background:transparent)
+                // Append directly to contentTarget so row-level CSS (.kv-msg-row.outgoing) applies
                 const audioWrap = document.createElement('div');
                 audioWrap.className = 'kv-audio-player';
                 audioWrap.dataset.utc = safeTime;
@@ -1033,12 +1040,11 @@
                 content.appendChild(playBtn); content.appendChild(info);
                 audioWrap.appendChild(content); audioWrap.appendChild(audioEl);
                 if (hasText) { const cap=document.createElement('div'); cap.className='kv-audio-caption'; cap.textContent=safeMsg; audioWrap.appendChild(cap); }
-                bubble.appendChild(audioWrap); contentTarget.appendChild(bubble);
+                contentTarget.appendChild(audioWrap); // <-- directly to contentTarget, not bubble
                 setTimeout(()=>kvGenerateWaveform(mid), 80);
-                const audioElem = document.getElementById(`audio-${mid}`);
-                if (audioElem) audioElem.addEventListener('loadedmetadata', () => {
+                audioEl.addEventListener('loadedmetadata', () => {
                     const d = document.getElementById(`duration-${mid}`);
-                    if (d) d.textContent = formatTime(audioElem.duration);
+                    if (d) d.textContent = formatTime(audioEl.duration);
                 });
 
             } else if (safeFileType === 'document') {
