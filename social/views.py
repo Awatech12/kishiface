@@ -2644,7 +2644,36 @@ def message(request, username):
         label = msg.chat_date_label
         grouped_messages.setdefault(label, []).append(msg)
     
-    context = {'grouped_messages': grouped_messages, 'receiver': receiver}
+    # ── Product enquiry context ───────────────────────────────────────────────
+    # If ?product=<uuid> is in the URL, preload the listing so the template can
+    # pre-fill the composer with a product card prompt.
+    product_context = None
+    product_uuid = request.GET.get('product')
+    if product_uuid:
+        try:
+            import uuid as _uuid_mod
+            _pid = _uuid_mod.UUID(str(product_uuid))
+            _product = Market.objects.prefetch_related('images').get(product_id=_pid)
+            if _product.product_owner != request.user:
+                _first_img = _product.images.first()
+                product_context = {
+                    'product_id':   str(_product.product_id),
+                    'name':         _product.product_name,
+                    'price':        _product.product_price,
+                    'condition':    _product.product_condition,
+                    'category':     _product.product_category,
+                    'location':     _product.product_location,
+                    'image_url':    _first_img.product_image.url if _first_img else '',
+                    'detail_url':   f"/product/{_product.product_id}/",
+                }
+        except Exception:
+            product_context = None
+
+    context = {
+        'grouped_messages': grouped_messages,
+        'receiver': receiver,
+        'product_context': product_context,
+    }
     return render(request, 'message.html', context)
 
 
@@ -2670,9 +2699,11 @@ def send_message(request, username):
                 return JsonResponse({'status': 'error', 'message': 'Invalid JSON.'}, status=400)
             message_text = str(data.get('message', ''))
             reply_to_id = data.get('reply_to')
+            product_id_raw = data.get('product_id')
         else:
             message_text = request.POST.get('message', '')
             reply_to_id = request.POST.get('reply_to')
+            product_id_raw = request.POST.get('product_id')
         
         file_upload = request.FILES.get('file_upload')
 
@@ -2752,6 +2783,32 @@ def send_message(request, username):
                     except Exception:
                         link_preview = None
 
+        # ── Resolve linked product (buyer → seller enquiry) ───────────────────
+        linked_product_obj = None
+        linked_product_snapshot = None
+        if product_id_raw:
+            try:
+                import uuid as _uuid_mod
+                _pid = _uuid_mod.UUID(str(product_id_raw))
+                _prod = Market.objects.prefetch_related('images').get(product_id=_pid)
+                # Only attach if the receiver is the actual seller
+                if _prod.product_owner == receiver:
+                    linked_product_obj = _prod
+                    _first_img = _prod.images.first()
+                    linked_product_snapshot = {
+                        'product_id':  str(_prod.product_id),
+                        'name':        _prod.product_name,
+                        'price':       _prod.product_price,
+                        'condition':   _prod.product_condition,
+                        'category':    _prod.product_category,
+                        'location':    _prod.product_location,
+                        'image_url':   _first_img.product_image.url if _first_img else '',
+                        'detail_url':  f"/product/{_prod.product_id}/",
+                    }
+            except Exception:
+                linked_product_obj = None
+                linked_product_snapshot = None
+
         msg_obj = Message.objects.create(
             sender=request.user, receiver=receiver,
             conversation=message_text if message_text else '',
@@ -2759,6 +2816,8 @@ def send_message(request, username):
             file=file_upload if file_upload else None,
             reply_to=reply_to,
             link_preview=link_preview,
+            linked_product=linked_product_obj,
+            linked_product_snapshot=linked_product_snapshot,
         )
         
         Message.objects.filter(sender=receiver, receiver=request.user, is_read=False).update(is_read=True)
@@ -2796,6 +2855,7 @@ def send_message(request, username):
                 'time': msg_obj.created_at.isoformat(),
                 'reply_to': reply_data,
                 'link_preview': link_preview,
+                'linked_product_snapshot': linked_product_snapshot,
             }
         )
         
@@ -3866,6 +3926,40 @@ def product_detail(request, product_id):
         'related_products': related_products, 'seller': seller_profile,
     }
     return render(request, 'product_details.html', context)
+
+
+@login_required(login_url='/')
+def contact_seller(request, product_id):
+    """
+    Redirect buyer to the private message thread with the seller,
+    carrying ?product=<uuid> so the message view can pre-populate
+    a product enquiry card in the composer.
+    """
+    import uuid as _uuid_mod
+    try:
+        _pid = _uuid_mod.UUID(str(product_id))
+        product = get_object_or_404(Market, product_id=_pid)
+    except Exception:
+        return redirect('market')
+
+    seller = product.product_owner
+
+    # Buyer cannot message themselves
+    if seller == request.user:
+        return redirect('product_detail', product_id=product_id)
+
+    # Block check
+    try:
+        if request.user.profile.has_blocked(seller.profile) or seller.profile.has_blocked(request.user.profile):
+            from django.contrib import messages as _msgs
+            _msgs.error(request, 'You cannot message this seller.')
+            return redirect('product_detail', product_id=product_id)
+    except Exception:
+        pass
+
+    from django.urls import reverse
+    base_url = reverse('message', kwargs={'username': seller.username})
+    return redirect(f"{base_url}?product={product_id}")
 
 
 def spotlight_view(request):

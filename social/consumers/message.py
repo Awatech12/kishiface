@@ -81,6 +81,7 @@ class DirectMessageConsumer(AsyncWebsocketConsumer):
             'time': event.get('time'),
             'reply_to': event.get('reply_to'),
             'link_preview': event.get('link_preview'),
+            'linked_product_snapshot': event.get('linked_product_snapshot'),
         }))
 
         # Broadcast inbox update to both users' personal inbox channels

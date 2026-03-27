@@ -934,7 +934,20 @@ class Message(models.Model):
     is_read = models.BooleanField(default=False)
     like = models.ManyToManyField(User, related_name='liked_messages', blank=True)
     link_preview = models.JSONField(null=True, blank=True)
-    
+    # ── Product enquiry context ───────────────────────────────────────────────
+    # Set when a buyer messages a seller directly from a marketplace listing.
+    # Stores a snapshot of the product so the card stays visible even if the
+    # listing is later deleted.
+    linked_product = models.ForeignKey(
+        'Market',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='enquiry_messages',
+    )
+    linked_product_snapshot = models.JSONField(null=True, blank=True)
+    # snapshot keys: name, price, condition, category, location, image_url, product_id
+
     def __str__(self):
         return f"{self.sender} to {self.receiver}: {self.conversation[:50]}"
     

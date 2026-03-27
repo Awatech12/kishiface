@@ -1,4 +1,7 @@
-
+{% load post_tags %}
+{% load humanize %}
+{% load static %}
+{% load time %}
 {% load text_filters %}
 <!DOCTYPE html>
 <html lang="en">
@@ -1905,6 +1908,154 @@
         .kishiface-message-text em     { font-style: italic; }
         .kishiface-message-text u      { text-decoration: underline; }
         /* ── Link Preview Card (in bubble) ──────────────────────────────── */
+        /* ── Product Enquiry Card ─────────────────────────────────────── */
+        .kvibe-product-enquiry-card {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            background: rgba(0,0,0,0.18);
+            border: 1.5px solid rgba(255,255,255,0.18);
+            border-radius: 12px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            text-decoration: none;
+            color: inherit;
+            transition: background 0.15s;
+        }
+        .kvibe-product-enquiry-card:hover {
+            background: rgba(0,0,0,0.28);
+        }
+        .kishiface-message-bubble.received .kvibe-product-enquiry-card {
+            background: #f4f4f8;
+            border-color: #e0e0e0;
+            color: #111;
+        }
+        .kishiface-message-bubble.received .kvibe-product-enquiry-card:hover {
+            background: #ececf2;
+        }
+        .kvibe-peq-img {
+            width: 62px;
+            height: 62px;
+            object-fit: cover;
+            border-radius: 8px;
+            flex-shrink: 0;
+            background: #ccc;
+        }
+        .kvibe-peq-img-placeholder {
+            width: 62px;
+            height: 62px;
+            border-radius: 8px;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, #2d2d3a, #1a1a2e);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+        }
+        .kvibe-peq-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .kvibe-peq-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            opacity: 0.55;
+            margin-bottom: 3px;
+        }
+        .kvibe-peq-name {
+            font-weight: 700;
+            font-size: 13.5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+        }
+        .kvibe-peq-price {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--kvibe-primary, #6c47ff);
+        }
+        .kishiface-message-bubble.received .kvibe-peq-price {
+            color: var(--kvibe-primary, #6c47ff);
+        }
+        .kvibe-peq-meta {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .kvibe-peq-tap-hint {
+            font-size: 10px;
+            opacity: 0.5;
+            margin-top: 5px;
+        }
+
+        /* ── Product Enquiry Composer Banner ──────────────────────────── */
+        #kvibe-product-composer-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: linear-gradient(90deg, rgba(108,71,255,0.13), rgba(108,71,255,0.06));
+            border-top: 2px solid var(--kvibe-primary, #6c47ff);
+            border-bottom: 1px solid rgba(108,71,255,0.15);
+            position: relative;
+        }
+        #kvibe-product-composer-banner img {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+        .kvibe-pcb-placeholder {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, #2d2d3a, #1a1a2e);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        .kvibe-pcb-body { flex: 1; min-width: 0; }
+        .kvibe-pcb-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--kvibe-primary, #6c47ff);
+            margin-bottom: 2px;
+        }
+        .kvibe-pcb-name {
+            font-weight: 700;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .kvibe-pcb-price {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--kvibe-primary, #6c47ff);
+        }
+        .kvibe-pcb-dismiss {
+            background: none;
+            border: none;
+            cursor: pointer;
+            opacity: 0.55;
+            font-size: 16px;
+            padding: 4px 6px;
+            color: inherit;
+            flex-shrink: 0;
+        }
+        .kvibe-pcb-dismiss:hover { opacity: 1; }
+
         .kvibe-link-preview {
             border-radius: 10px;
             overflow: hidden;
@@ -2777,6 +2928,34 @@
                                 {% endif %}
                             {% elif message.conversation %}
                                 <div class="kishiface-message-bubble {% if message.sender.username == request.user.username %}sent{% else %}received{% endif %}">
+                                    {# ── Product enquiry card (shown when message was sent about a listing) #}
+                                    {% if message.linked_product_snapshot %}
+                                    {% with snap=message.linked_product_snapshot %}
+                                    <a class="kvibe-product-enquiry-card"
+                                       href="{{ snap.detail_url }}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       onclick="event.stopPropagation();">
+                                        {% if snap.image_url %}
+                                        <img class="kvibe-peq-img"
+                                             src="{{ snap.image_url }}"
+                                             alt="{{ snap.name }}"
+                                             onerror="this.style.display='none'">
+                                        {% else %}
+                                        <div class="kvibe-peq-img-placeholder">🛒</div>
+                                        {% endif %}
+                                        <div class="kvibe-peq-body">
+                                            <div class="kvibe-peq-label">🛍️ KishiVibe Listing</div>
+                                            <div class="kvibe-peq-name">{{ snap.name }}</div>
+                                            <div class="kvibe-peq-price">₦{{ snap.price|floatformat:"0"|intcomma }}</div>
+                                            <div class="kvibe-peq-meta">
+                                                {{ snap.condition }}{% if snap.location %} · {{ snap.location }}{% endif %}
+                                            </div>
+                                            <div class="kvibe-peq-tap-hint">Tap to view listing ↗</div>
+                                        </div>
+                                    </a>
+                                    {% endwith %}
+                                    {% endif %}
                                     <div class="kishiface-message-text" data-full-text="{{ message.conversation }}">{{ message.conversation|format_message_text }}</div>
                                     <div class="kishiface-message-meta">
                                         <span class="kishiface-message-time" data-utc="{{ message.created_at.isoformat }}"></span>
@@ -2874,6 +3053,24 @@
                 </div>
                 <button class="kvibe-input-lp-dismiss" onclick="kvibeInputLpDismiss()" title="Remove preview">×</button>
             </div>
+            <!-- Product enquiry banner (shown when opened via "Message Seller" from a listing) -->
+            {% if product_context %}
+            <div id="kvibe-product-composer-banner" data-product-id="{{ product_context.product_id }}">
+                {% if product_context.image_url %}
+                <img src="{{ product_context.image_url }}"
+                     alt="{{ product_context.name }}"
+                     onerror="this.style.display='none'">
+                {% else %}
+                <div class="kvibe-pcb-placeholder">🛒</div>
+                {% endif %}
+                <div class="kvibe-pcb-body">
+                    <div class="kvibe-pcb-label">🛍️ Enquiring about</div>
+                    <div class="kvibe-pcb-name">{{ product_context.name }}</div>
+                    <div class="kvibe-pcb-price">₦{{ product_context.price|floatformat:"0"|intcomma }}</div>
+                </div>
+                <button class="kvibe-pcb-dismiss" onclick="kvibeDismissProductBanner()" title="Remove">✕</button>
+            </div>
+            {% endif %}
             <div class="kishiface-input-wrapper">
                 <div class="kishiface-input-actions">
                     <button type="button" class="kishiface-emoji-btn" id="kishifaceEmojiBtn" onclick="toggleKishifaceEmojiPicker()" title="Emoji">
@@ -4326,6 +4523,30 @@
             } else if (hasText) {
                 const bubble = document.createElement('div');
                 bubble.className = `kishiface-message-bubble ${isSender ? 'sent' : 'received'}`;
+                // Product enquiry card (if message was sent about a listing)
+                if (data.linked_product_snapshot) {
+                    const snap = data.linked_product_snapshot;
+                    const peqCard = document.createElement('a');
+                    peqCard.className = 'kvibe-product-enquiry-card';
+                    peqCard.href = snap.detail_url || '#';
+                    peqCard.target = '_blank';
+                    peqCard.rel = 'noopener noreferrer';
+                    peqCard.addEventListener('click', e => e.stopPropagation());
+                    let imgHtml = snap.image_url
+                        ? `<img class="kvibe-peq-img" src="${snap.image_url}" alt="${snap.name}" onerror="this.style.display='none'">`
+                        : `<div class="kvibe-peq-img-placeholder">🛒</div>`;
+                    const price = snap.price ? `₦${Number(snap.price).toLocaleString()}` : '';
+                    const meta = [snap.condition, snap.location].filter(Boolean).join(' · ');
+                    peqCard.innerHTML = `${imgHtml}
+                        <div class="kvibe-peq-body">
+                            <div class="kvibe-peq-label">🛍️ KishiVibe Listing</div>
+                            <div class="kvibe-peq-name">${snap.name || ''}</div>
+                            <div class="kvibe-peq-price">${price}</div>
+                            ${meta ? `<div class="kvibe-peq-meta">${meta}</div>` : ''}
+                            <div class="kvibe-peq-tap-hint">Tap to view listing ↗</div>
+                        </div>`;
+                    bubble.appendChild(peqCard);
+                }
                 const textDiv = document.createElement('div');
                 textDiv.className = 'kishiface-message-text';
                 textDiv.dataset.fullText = safeMessage;
@@ -4523,6 +4744,11 @@
                 try {
                     const messageData = { receiver, message };
                     if (replyToMessageId) messageData.reply_to = replyToMessageId;
+                    // Attach product_id if an enquiry banner is visible
+                    const _banner = document.getElementById('kvibe-product-composer-banner');
+                    if (_banner && _banner.dataset.productId) {
+                        messageData.product_id = _banner.dataset.productId;
+                    }
                     const response = await fetch(`/send_message/${receiver}/`, {
                         method: 'POST',
                         headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/json' },
@@ -4534,6 +4760,8 @@
                         autoResizeKishifaceTextarea();
                         updateKishifaceSendButton();
                         cancelKishifaceReply();
+                        // Auto-dismiss banner after first message is sent
+                        kvibeDismissProductBanner();
                     }
                 } catch (error) {
                     console.error('Error sending message:', error);
@@ -4548,6 +4776,11 @@
             formData.append('receiver', receiver);
             if (message) formData.append('message', message);
             if (replyToMessageId) formData.append('reply_to', replyToMessageId);
+            // Attach product_id if enquiry banner is visible
+            const _bannerUp = document.getElementById('kvibe-product-composer-banner');
+            if (_bannerUp && _bannerUp.dataset.productId) {
+                formData.append('product_id', _bannerUp.dataset.productId);
+            }
             formData.append('file_upload', fileToUpload);
             try {
                 updateKishifaceProgressBar(30);
@@ -5188,6 +5421,14 @@
         kvibeInputLpData      = null;
         kvibeInputLpDismissed = true;
         document.getElementById('kvibeInputLinkPreview').style.display = 'none';
+    }
+
+    function kvibeDismissProductBanner() {
+        const banner = document.getElementById('kvibe-product-composer-banner');
+        if (banner) {
+            banner.style.display = 'none';
+            banner.dataset.productId = '';
+        }
     }
 
     function kvibeShowInputLp(data) {
