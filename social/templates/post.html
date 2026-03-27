@@ -2918,55 +2918,108 @@
         }
 
         /* Loading Overlay */
+        /* ── Upload-redirect overlay (replaces old blocking loading overlay) ── */
         .kvibe-loading-overlay {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #0095f6 0%, #0077cc 100%);
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #fafafa;
             z-index: 3000;
             justify-content: center;
             align-items: center;
             flex-direction: column;
+            gap: 0;
         }
 
         .kvibe-loading-overlay.active {
             display: flex;
-            animation: fadeIn 0.3s ease;
+            animation: kvUplFadeIn 0.25s ease;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+        @keyframes kvUplFadeIn {
+            from { opacity: 0; transform: scale(0.97); }
+            to   { opacity: 1; transform: scale(1); }
         }
 
-        .kvibe-loading-spinner {
-            width: 48px;
-            height: 48px;
-            border: 3px solid rgba(255,255,255,0.2);
-            border-top: 3px solid white;
+        /* Icon circle */
+        .kvibe-upl-icon {
+            width: 72px; height: 72px;
+            background: linear-gradient(135deg, #0095f6 0%, #0077cc 100%);
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-bottom: 16px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 32px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,149,246,0.35);
+            animation: kvUplPulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes kvUplPulse {
+            0%, 100% { transform: scale(1);    box-shadow: 0 4px 20px rgba(0,149,246,0.35); }
+            50%       { transform: scale(1.07); box-shadow: 0 6px 28px rgba(0,149,246,0.55); }
         }
 
         .kvibe-loading-text {
-            font-size: 16px;
-            font-weight: 600;
-            color: white;
-            margin-bottom: 4px;
+            font-size: 17px;
+            font-weight: 700;
+            color: #262626;
+            margin-bottom: 6px;
+            text-align: center;
         }
 
         .kvibe-loading-subtext {
             font-size: 13px;
-            color: rgba(255,255,255,0.9);
+            color: #8e8e8e;
+            margin-bottom: 28px;
+            text-align: center;
         }
+
+        /* Progress track */
+        .kvibe-upl-track {
+            width: 220px;
+            height: 4px;
+            background: #efefef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .kvibe-upl-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #0095f6, #00c6ff);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .kvibe-upl-pct {
+            font-size: 12px;
+            color: #8e8e8e;
+            margin-bottom: 28px;
+        }
+
+        /* "Taking you home" chip */
+        .kvibe-upl-home-chip {
+            display: flex; align-items: center; gap: 8px;
+            background: #f0f7ff;
+            border: 1px solid #d0e8ff;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 13px;
+            color: #0077cc;
+            font-weight: 600;
+        }
+
+        .kvibe-upl-home-chip i { font-size: 14px; }
 
         @keyframes spin {
             from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+            to   { transform: rotate(360deg); }
+        }
+
+        /* spinner (still used elsewhere) */
+        .kvibe-loading-spinner {
+            display: none; /* hidden — replaced by icon */
         }
 
         /* Custom Alert Modal */
@@ -4409,11 +4462,18 @@
     </style>
 </head>
 <body>
-    <!-- Loading Overlay -->
+    <!-- Upload-Redirect Overlay -->
     <div class="kvibe-loading-overlay" id="loadingOverlay">
-        <div class="kvibe-loading-spinner"></div>
-        <div class="kvibe-loading-text" id="loadingText">slaying your post... ✨</div>
-        <div class="kvibe-loading-subtext" id="loadingSubtext">making it aesthetic</div>
+        <div class="kvibe-upl-icon" id="kvUplIcon">🚀</div>
+        <div class="kvibe-loading-text" id="loadingText">posting your vibe...</div>
+        <div class="kvibe-loading-subtext" id="loadingSubtext">uploading in the background ✨</div>
+        <div class="kvibe-upl-track">
+            <div class="kvibe-upl-bar" id="kvUplBar"></div>
+        </div>
+        <div class="kvibe-upl-pct" id="kvUplPct">0%</div>
+        <div class="kvibe-upl-home-chip">
+            <i class="fas fa-home"></i> taking you home...
+        </div>
     </div>
 
     <!-- Custom Alert Modal -->
@@ -10097,67 +10157,42 @@
                 return;
             }
 
+            // ── Show upload overlay immediately ───────────────────────────
             const randomMessage = genZLoadingMessages[Math.floor(Math.random() * genZLoadingMessages.length)];
-            const randomSubtext = genZLoadingSubtexts[Math.floor(Math.random() * genZLoadingSubtexts.length)];
             loadingText.textContent = randomMessage;
-            loadingSubtext.textContent = randomSubtext;
-
+            loadingSubtext.textContent = 'uploading in the background ✨';
             loadingOverlay.classList.add('active');
             sharePostBtn.disabled = true;
             sharePostBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> posting...';
 
-            for (let i = 0; i < 5; i++) {
-                setTimeout(() => {
-                    const emojis = ['✨', '🔥', '💅', '⭐', '🎵', '🚀'];
-                    createFloatingEmoji(emojis[Math.floor(Math.random() * emojis.length)],
-                        window.innerWidth/2, window.innerHeight/2);
-                }, i * 200);
-            }
-
-            // Build FormData manually so gallery videos always go to 'video_file',
-            // never accidentally to 'images'. This is more reliable than DataTransfer
-            // on mobile browsers (Android Chrome especially).
+            // ── Build FormData ────────────────────────────────────────────
             const fd = new FormData();
-
-            // CSRF token
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
             if (csrfToken) fd.append('csrfmiddlewaretoken', csrfToken.value);
-
-            // Text content
             fd.append('content', textarea.value || '');
-
-            // Mood fields
             const moodInput = document.querySelector('[name=mood]');
             const customMoodInput = document.querySelector('[name=custom_mood]');
-            if (moodInput) fd.append('mood', moodInput.value || '');
+            if (moodInput)       fd.append('mood',        moodInput.value || '');
             if (customMoodInput) fd.append('custom_mood', customMoodInput.value || '');
-
-            // Video: use currentVideoBlob (covers both recorded AND gallery video)
             if (currentVideoBlob) {
                 const ext = currentVideoBlob.type && currentVideoBlob.type.includes('webm') ? 'webm' : 'mp4';
                 fd.append('video_file', currentVideoBlob, `video.${ext}`);
             }
-
-            // Images: only add files that are NOT videos
             selectedImages.forEach((file, i) => {
                 if (!file.type || !file.type.startsWith('video/')) {
                     fd.append('images', file, file.name || `image_${i}`);
                 }
             });
-
-            // Audio file
             const audioInput = document.querySelector('[name=audio_file]');
             if (audioInput && audioInput.files && audioInput.files[0]) {
                 fd.append('audio_file', audioInput.files[0]);
             }
 
-            // ── MESSAGE MODE: send as DM via /send_message/<username>/ ────────
+            // ── MESSAGE MODE ──────────────────────────────────────────────
             if (kvibeMessageMode) {
-                // send_message view accepts a single 'file_upload' + optional 'message' text
                 const dmFd = new FormData();
                 const csrfVal = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
                 if (textarea.value.trim()) dmFd.append('message', textarea.value.trim());
-                // Attach first image, or video blob, whichever is present
                 if (currentVideoBlob) {
                     const ext = currentVideoBlob.type.includes('webm') ? 'webm' : 'mp4';
                     dmFd.append('file_upload', currentVideoBlob, 'vibe.' + ext);
@@ -10168,63 +10203,86 @@
                     dmFd.append('file_upload', textImageBlob, 'vibe_text.png');
                 }
                 fetch('/send_message/' + kvibeSendToUser + '/', {
-                    method: 'POST',
-                    body: dmFd,
-                    headers: { 'X-CSRFToken': csrfVal }
+                    method: 'POST', body: dmFd, headers: { 'X-CSRFToken': csrfVal }
                 })
                 .then(res => {
                     if (res.ok || res.redirected) {
                         window.location.href = '/private/' + kvibeSendToUser;
-                    } else {
-                        throw new Error('send failed');
-                    }
+                    } else { throw new Error('send failed'); }
                 })
                 .catch(err => {
                     loadingOverlay.classList.remove('active');
                     sharePostBtn.disabled = false;
                     sharePostBtn.innerHTML = '<i class="fas fa-paper-plane"></i> send';
-                    console.error('Send vibe failed:', err);
                     showAlert('oops!', 'could not send vibe 😅', '❌', [{text: 'ok', type: 'primary'}]);
                 });
                 return;
             }
-            // ────────────────────────────────────────────────────────────────
+            // ─────────────────────────────────────────────────────────────
 
-            fetch(this.action, {
-                method: 'POST',
-                body: fd,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            })
-            .then(res => {
-                if (res.redirected) {
-                    window.location.href = res.url;
-                    return;
+            // ── XHR with upload progress ──────────────────────────────────
+            // Signal home page to show the uploading banner as soon as we land
+            try { sessionStorage.setItem('kvibe_uploading', '1'); } catch(e) {}
+
+            const uplBar = document.getElementById('kvUplBar');
+            const uplPct = document.getElementById('kvUplPct');
+            const uplIcon = document.getElementById('kvUplIcon');
+
+            const xhr = new XMLHttpRequest();
+
+            // ── Progress tracking ─────────────────────────────────────────
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    if (uplBar) uplBar.style.width = pct + '%';
+                    if (uplPct) uplPct.textContent = pct + '%';
+                    // Once upload bytes are sent, redirect immediately
+                    if (pct >= 100) {
+                        if (uplPct) uplPct.textContent = 'processing...';
+                        loadingSubtext.textContent = 'finishing up on the server 🔧';
+                    }
                 }
-                const contentType = res.headers.get('content-type') || '';
-                if (contentType.includes('application/json')) {
-                    return res.json().then(data => {
-                        if (data.success && data.redirect) {
-                            window.location.href = data.redirect;
-                        } else if (!data.success) {
-                            throw new Error(data.error || 'Post failed');
-                        } else {
-                            window.location.href = '/home';
-                        }
-                    });
-                }
-                if (res.ok) {
-                    window.location.href = '/home';
-                } else {
-                    return res.text().then(text => { throw new Error(text); });
-                }
-            })
-            .catch(err => {
-                loadingOverlay.classList.remove('active');
-                sharePostBtn.disabled = false;
-                sharePostBtn.innerHTML = 'Share ✨';
-                console.error('Post failed:', err);
-                showAlert('oops!', 'post failed, try again 😅', '❌', [{text: 'ok', type: 'primary'}]);
             });
+
+            // ── On upload bytes fully sent → navigate to home instantly ──
+            // The server will continue processing; sessionStorage flag tells
+            // home.html to show the "uploading..." banner.
+            xhr.upload.addEventListener('load', function() {
+                // Navigate immediately — server still processing, that's fine
+                try { sessionStorage.setItem('kvibe_uploading', '1'); } catch(e) {}
+                window.location.href = '/home';
+            });
+
+            // ── On full response received (fallback if upload.load fired late) ──
+            xhr.addEventListener('load', function() {
+                try { sessionStorage.removeItem('kvibe_uploading'); } catch(e) {}
+                try { sessionStorage.setItem('kvibe_just_posted', '1'); } catch(e) {}
+                // Broadcast to home tab (if already open in same browser)
+                try { new BroadcastChannel('kvibe_upload_status').postMessage('success'); } catch(e) {}
+                // Only redirect if still on this page
+                if (window.location.pathname !== '/home') {
+                    window.location.href = '/home';
+                }
+            });
+
+            xhr.addEventListener('error', function() {
+                try { sessionStorage.removeItem('kvibe_uploading'); } catch(e) {}
+                try { sessionStorage.setItem('kvibe_post_failed', '1'); } catch(e) {}
+                // Broadcast failure
+                try { new BroadcastChannel('kvibe_upload_status').postMessage('error'); } catch(e) {}
+                if (window.location.pathname !== '/home') {
+                    loadingOverlay.classList.remove('active');
+                    sharePostBtn.disabled = false;
+                    sharePostBtn.innerHTML = 'Share ✨';
+                    showAlert('oops!', 'post failed, try again 😅', '❌', [{text: 'ok', type: 'primary'}]);
+                } else {
+                    window.location.href = '/home';
+                }
+            });
+
+            xhr.open('POST', this.action);
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.send(fd);
         });
 
         // Initialize
