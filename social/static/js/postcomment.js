@@ -240,503 +240,136 @@
     });
   }
 
-  // Comment input functionality
-  const textInput = document.getElementById('textInput');
-  const sendBtn = document.getElementById('sendBtn');
-  const startBtn = document.getElementById('startBtn');
-  const audioPreviewContainer = document.getElementById('audioPreviewContainer');
-  const previewAudio = document.getElementById('previewAudio');
-  const recordingStatus = document.getElementById('recordingStatus');
-  const deleteAudioBtn = document.getElementById('deleteAudioBtn');
-  const stopRecordingBtn = document.getElementById('stopRecordingBtn');
-  const audio_file_input = document.getElementById('audio_file');
-  const postForm = document.getElementById('postForm');
-  
-  let mediaRecorder;
-  let audioChunks = [];
-  let mediaStream;
-  
-  function switchToRecordingUI() {
-    textInput.classList.add('record-mode-hidden');
-    audioPreviewContainer.classList.remove('record-mode-hidden');
-    startBtn.classList.add('record-mode-hidden');
-    sendBtn.style.display = 'none';
-    deleteAudioBtn.style.display = 'none';
-    stopRecordingBtn.style.display = 'flex';
-    deleteAudio(false);
-    recordingStatus.innerHTML = `<i class="fa-solid fa-circle recording"></i> Recording...`;
-  }
-  
-  function switchToPlaybackUI(audioURL) {
-    startBtn.classList.add('record-mode-hidden');
-    sendBtn.style.display = 'flex';
-    deleteAudioBtn.style.display = 'flex';
-    stopRecordingBtn.style.display = 'none';
-    previewAudio.src = audioURL;
-    previewAudio.load();
-    previewAudio.controls = true; 
-    recordingStatus.innerHTML = ``; 
-  }
+  // Comment input functionality — grabbed inside DOMContentLoaded (see initInputUI)
 
-  function switchToTextInputUI() {
-    textInput.classList.remove('record-mode-hidden');
-    audioPreviewContainer.classList.add('record-mode-hidden');
-    startBtn.classList.remove('record-mode-hidden');
-    deleteAudioBtn.style.display = 'flex';
-    stopRecordingBtn.style.display = 'none';
-    updateSendButton();
-  }
+  document.addEventListener('DOMContentLoaded', function () {
+    /* ── DOM refs ── */
+    const textInput        = document.getElementById('textInput');
+    const sendBtn          = document.getElementById('sendBtn');
+    const audio_file_input = document.getElementById('audio_file');
+    const postForm         = document.getElementById('postForm');
 
-  function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop();
-      
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(track => track.stop());
+    /* ── Send button / mic visibility ── */
+    function updateSendButton() {
+      const hasText  = textInput && textInput.value.trim().length > 0;
+      const imgEl    = document.getElementById('image');
+      const hasImage = imgEl && imgEl.files && imgEl.files.length > 0;
+      const micBtn   = document.getElementById('kvibeCommentMicBtn');
+      if (hasText || hasImage) {
+        if (sendBtn) sendBtn.style.display = 'flex';
+        if (micBtn)  micBtn.style.display  = 'none';
+      } else {
+        if (sendBtn) sendBtn.style.display = 'none';
+        if (micBtn)  micBtn.style.display  = 'flex';
       }
     }
-  }
 
-  function deleteAudio(resetUI = true) {
-      audio_file_input.files = null;
-      previewAudio.src = '';
-      previewAudio.controls = false; 
-      previewAudio.load();
-      if (resetUI) {
-          switchToTextInputUI();
-      }
-  }
-
-  function resetInputUI() {
-    textInput.value = '';
-    autoResizeTextarea();
-    updateSendButton();
-    deleteAudio(true);
-  }
-
-  function updateSendButton() {
-    const hasText = textInput.value.trim().length > 0;
-    const hasAudio = audio_file_input.files && audio_file_input.files.length > 0;
-    const hasImage = document.getElementById('image').files && document.getElementById('image').files.length > 0;
-    
-    if (hasText || hasAudio || hasImage) {
-      sendBtn.style.display = 'flex';
-      startBtn.classList.add('record-mode-hidden');
-    } else {
-      sendBtn.style.display = 'none';
-      startBtn.classList.remove('record-mode-hidden');
+    /* ── Auto-resize textarea ── */
+    function autoResizeTextarea() {
+      if (!textInput) return;
+      textInput.style.height = 'auto';
+      textInput.style.height = Math.min(textInput.scrollHeight, 100) + 'px';
+      const wrapper = textInput.closest('.kvibe-comment-input-wrapper');
+      if (wrapper) wrapper.style.minHeight = (42 + Math.max(0, Math.min(textInput.scrollHeight, 100) - 24)) + 'px';
     }
-  }
 
-  function autoResizeTextarea() {
-    const textarea = textInput;
-    textarea.style.height = 'auto';
-    const maxHeight = 100;
-    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-    textarea.style.height = newHeight + 'px';
-    
-    const wrapper = textarea.closest('.kvibe-comment-input-wrapper');
-    if (wrapper) {
-      wrapper.style.minHeight = (42 + Math.max(0, newHeight - 24)) + 'px';
+    /* ── Reset after submit ── */
+    function resetInputUI() {
+      if (textInput) { textInput.value = ''; autoResizeTextarea(); }
+      if (audio_file_input) audio_file_input.value = '';
+      updateSendButton();
     }
-  }
+    window.resetInputUI = resetInputUI;
 
-  startBtn.addEventListener('click', async function(){
-    if(textInput.value.trim() !== '') {
-        alert('Please clear your text caption or send it before recording a voice note.');
-        return;
+    /* ── Wire up textarea ── */
+    if (textInput) {
+      textInput.addEventListener('input', function () { updateSendButton(); autoResizeTextarea(); });
+      textInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (sendBtn && sendBtn.style.display !== 'none')
+            postForm.dispatchEvent(new Event('submit', { bubbles: true }));
+        }
+      });
     }
-    
-    try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(mediaStream);
-      audioChunks = [];
-      
-      mediaRecorder.ondataavailable = event => {
-        audioChunks.push(event.data);
-      };
-      
-      mediaRecorder.onstop = () => {
-        mediaStream.getTracks().forEach(track => track.stop());
-        
-        const blob = new Blob(audioChunks, {
-          type: 'audio/webm'
-        });
-        const file = new File([blob], 'recorded_audio.webm', {
-          type: 'audio/webm'
-        });
-        
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(file);
-        audio_file_input.files = dataTransfer.files;
+    const imageInput = document.getElementById('image');
+    if (imageInput) imageInput.addEventListener('change', updateSendButton);
 
-        const audioURL = URL.createObjectURL(blob);
-        switchToPlaybackUI(audioURL);
-        updateSendButton();
-      };
-      
-      mediaRecorder.start();
-      switchToRecordingUI();
-      
-    } catch(err) {
-      console.error('Microphone access denied:', err);
-      alert('Microphone access was denied. Please allow access in your browser settings to record voice notes.');
-      switchToTextInputUI();
-    }
-  });
+    document.body.addEventListener('htmx:afterRequest', function (event) {
+      if (event.target.id === 'postForm' && event.detail.successful) resetInputUI();
+    });
 
-  stopRecordingBtn.addEventListener('click', function() {
-    stopRecording();
-  });
-
-  deleteAudioBtn.onclick = () => deleteAudio(true); 
-
-  function initInputUI() {
     updateSendButton();
     autoResizeTextarea();
-    
-    textInput.addEventListener('input', function() {
-      updateSendButton();
-      autoResizeTextarea();
-    });
-    
-    textInput.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (sendBtn.style.display !== 'none') {
-          postForm.submit();
-        }
-      }
-    });
-    
-    textInput.addEventListener('input', autoResizeTextarea);
-    
-    document.getElementById('image').addEventListener('change', function() {
-      updateSendButton();
-    });
-    
-    postForm.addEventListener('submit', function() {
-      setTimeout(() => {}, 100);
-    });
-    
-    document.body.addEventListener('htmx:afterRequest', function(event) {
-      if (event.target.id === 'postForm' && event.detail.successful) {
-        resetInputUI();
-      }
-    });
-  }
 
-  document.addEventListener('DOMContentLoaded', initInputUI);
+    /* ── Emoji picker init ── */
+    if (typeof initKvibeCommentEmojiPicker === 'function') initKvibeCommentEmojiPicker();
 
-  function initAudioWave(container, audioId) {
-    const wave = container.querySelector('.kvibe-audio-wave');
-    if (!wave) return;
-    
-    const bars = wave.querySelectorAll('.kvibe-wave-bar');
-    const audio = container.querySelector('.kvibe-hidden-audio');
-    
-    if (audio && bars.length > 0) {
-      const baseHeights = [4, 7, 10, 7, 4];
-      bars.forEach((bar, index) => {
-        bar.style.height = (baseHeights[index] || 4) + 'px';
-      });
-      
-      let waveInterval;
+    /* ── Waveform player init ── */
+    if (typeof kvibeInitAudioPlayers === 'function') kvibeInitAudioPlayers();
 
-      audio.addEventListener('play', function() {
-        container.classList.add('playing');
-        waveInterval = setInterval(() => {
-          bars.forEach((bar, index) => {
-            bar.style.height = (baseHeights[index] + Math.random() * 5) + 'px';
-          });
-        }, 150);
-      });
-      
-      audio.addEventListener('pause', function() {
-        container.classList.remove('playing');
-        clearInterval(waveInterval);
-        bars.forEach((bar, index) => {
-          bar.style.height = (baseHeights[index] || 4) + 'px';
-        });
-      });
-      
-      audio.addEventListener('ended', function() {
-        container.classList.remove('playing');
-        clearInterval(waveInterval);
-        bars.forEach((bar, index) => {
-          bar.style.height = (baseHeights[index] || 4) + 'px';
-        });
-      });
-    }
-  }
-
-  function kvibeDownloadCommentAudio(id, url) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `voice_message_${id}.webm`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const audioContainers = document.querySelectorAll('.kvibe-audio-container');
-    const allAudioElements = document.querySelectorAll('.kvibe-hidden-audio');
-
-    const formatTime = (seconds) => {
-        if (isNaN(seconds)) return '0:00';
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = Math.floor(seconds % 60);
-        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    };
-
-    const pauseOthers = (currentAudio) => {
-        allAudioElements.forEach(audio => {
-            if (audio !== currentAudio && !audio.paused) {
-                audio.pause();
-                const container = audio.closest('.kvibe-audio-container');
-                if (container) {
-                    container.classList.remove('playing');
-                    const btn = container.querySelector('.kvibe-play-pause-btn');
-                    if (btn) {
-                        const icon = btn.querySelector('i');
-                        if (icon) icon.className = 'fas fa-play';
-                        btn.setAttribute('data-state', 'paused');
-                    }
-                }
-            }
-        });
-    };
-
-    audioContainers.forEach(container => {
-        const audio = container.querySelector('.kvibe-hidden-audio');
-        const playPauseBtn = container.querySelector('.kvibe-play-pause-btn');
-        if (!audio || !playPauseBtn) return;
-
-        const icon = playPauseBtn.querySelector('i');
-        const progressBar = container.querySelector('.kvibe-progress-bar');
-        const progressFilled = container.querySelector('.kvibe-progress-filled');
-        const timeDisplay = container.querySelector('.kvibe-time-display');
-        const audioId = container.dataset.src ? container.dataset.src.split('/').pop().split('.')[0] : '';
-
-        if (audioId) initAudioWave(container, audioId);
-
-        audio.onloadedmetadata = () => {
-            if (audio.duration && !isNaN(audio.duration) && timeDisplay) {
-                timeDisplay.textContent = formatTime(audio.duration);
-            }
-        };
-
-        playPauseBtn.addEventListener('click', () => {
-            if (audio.paused || audio.ended) {
-                pauseOthers(audio);
-                audio.play();
-                container.classList.add('playing');
-                if (icon) icon.className = 'fas fa-pause';
-                playPauseBtn.setAttribute('data-state', 'playing');
-            } else {
-                audio.pause();
-                container.classList.remove('playing');
-                if (icon) icon.className = 'fas fa-play';
-                playPauseBtn.setAttribute('data-state', 'paused');
-            }
-        });
-
-        audio.addEventListener('timeupdate', () => {
-            if (!audio.duration) return;
-            const progress = (audio.currentTime / audio.duration) * 100;
-            if (progressFilled) progressFilled.style.width = `${progress}%`;
-            if (timeDisplay) timeDisplay.textContent = formatTime(audio.currentTime);
-        });
-
-        audio.addEventListener('ended', () => {
-            audio.currentTime = 0;
-            container.classList.remove('playing');
-            if (icon) icon.className = 'fas fa-play';
-            playPauseBtn.setAttribute('data-state', 'paused');
-            if (progressFilled) progressFilled.style.width = '0%';
-            if (audio.duration && !isNaN(audio.duration) && timeDisplay) {
-                timeDisplay.textContent = formatTime(audio.duration);
-            }
-        });
-
-        if (progressBar) {
-            progressBar.addEventListener('click', (e) => {
-                const rect = progressBar.getBoundingClientRect();
-                const percentage = (e.clientX - rect.left) / rect.width;
-                audio.currentTime = audio.duration * percentage;
-                if (audio.paused) {
-                    pauseOthers(audio);
-                    container.classList.add('playing');
-                    audio.play();
-                    if (icon) icon.className = 'fas fa-pause';
-                    playPauseBtn.setAttribute('data-state', 'playing');
-                }
-            });
-        }
-    });
-    
-    // Re-init audio players when HTMX injects new comments
-    if (typeof htmx !== 'undefined') {
-      htmx.onLoad(function(el) {
-        const newContainers = el.querySelectorAll ? el.querySelectorAll('.kvibe-audio-container') : [];
-        const allAudios = document.querySelectorAll('.kvibe-hidden-audio');
-
-        const fmt = (s) => {
-          if (isNaN(s)) return '0:00';
-          return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-        };
-
-        newContainers.forEach(container => {
-          if (container._kvibeAudioInited) return;
-          container._kvibeAudioInited = true;
-
-          const audio = container.querySelector('.kvibe-hidden-audio');
-          const playPauseBtn = container.querySelector('.kvibe-play-pause-btn');
-          if (!audio || !playPauseBtn) return;
-
-          const icon = playPauseBtn.querySelector('i');
-          const progressBar = container.querySelector('.kvibe-progress-bar');
-          const progressFilled = container.querySelector('.kvibe-progress-filled');
-          const timeDisplay = container.querySelector('.kvibe-time-display');
-          const audioId = container.dataset.src ? container.dataset.src.split('/').pop().split('.')[0] : '';
-          if (audioId) initAudioWave(container, audioId);
-
-          audio.onloadedmetadata = () => {
-            if (!isNaN(audio.duration) && timeDisplay) timeDisplay.textContent = fmt(audio.duration);
-          };
-
-          playPauseBtn.addEventListener('click', () => {
-            if (audio.paused || audio.ended) {
-              allAudios.forEach(a => {
-                if (a !== audio && !a.paused) {
-                  a.pause();
-                  const c = a.closest('.kvibe-audio-container');
-                  if (c) {
-                    c.classList.remove('playing');
-                    const b = c.querySelector('.kvibe-play-pause-btn i');
-                    if (b) b.className = 'fas fa-play';
-                  }
-                }
-              });
-              audio.play();
-              container.classList.add('playing');
-              if (icon) icon.className = 'fas fa-pause';
-            } else {
-              audio.pause();
-              container.classList.remove('playing');
-              if (icon) icon.className = 'fas fa-play';
-            }
-          });
-
-          audio.addEventListener('timeupdate', () => {
-            if (!audio.duration) return;
-            if (progressFilled) progressFilled.style.width = `${(audio.currentTime/audio.duration)*100}%`;
-            if (timeDisplay) timeDisplay.textContent = fmt(audio.currentTime);
-          });
-
-          audio.addEventListener('ended', () => {
-            container.classList.remove('playing');
-            if (icon) icon.className = 'fas fa-play';
-            if (progressFilled) progressFilled.style.width = '0%';
-            if (!isNaN(audio.duration) && timeDisplay) timeDisplay.textContent = fmt(audio.duration);
-          });
-
-          if (progressBar) {
-            progressBar.addEventListener('click', (e) => {
-              const pct = (e.clientX - progressBar.getBoundingClientRect().left) / progressBar.offsetWidth;
-              audio.currentTime = audio.duration * pct;
-              if (audio.paused) { audio.play(); container.classList.add('playing'); if (icon) icon.className = 'fas fa-pause'; }
-            });
-          }
-        });
-      });
-    }
-    document.querySelectorAll('.kvibe-post-text').forEach(textElement => {
+    /* ── Post text collapse ── */
+    document.querySelectorAll('.kvibe-post-text').forEach(function (textElement) {
       const textContent = textElement.textContent.trim();
-      const lineCount = (textContent.match(/\n/g) || []).length + 1;
-      const charCount = textContent.length;
-      
+      const lineCount   = (textContent.match(/\n/g) || []).length + 1;
+      const charCount   = textContent.length;
       if (charCount > 150 || lineCount > 3) {
         textElement.classList.add('collapsed');
         if (!textElement.nextElementSibling || !textElement.nextElementSibling.classList.contains('kvibe-text-toggle')) {
           const toggleBtn = document.createElement('button');
           toggleBtn.className = 'kvibe-text-toggle';
           toggleBtn.innerHTML = '<span>more</span><i class="fas fa-chevron-down"></i>';
-          toggleBtn.onclick = function() {
-            kvibeToggleText(textElement.id.replace('kvibe-text-', ''));
-          };
+          toggleBtn.onclick = function () { kvibeToggleText(textElement.id.replace('kvibe-text-', '')); };
           textElement.parentNode.insertBefore(toggleBtn, textElement.nextSibling);
         }
       }
     });
-    
-    // Desktop logout functionality
+
+    /* ── Desktop logout ── */
     const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
     if (desktopLogoutIcon) {
-      desktopLogoutIcon.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
+      desktopLogoutIcon.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
         const logoutModal = document.getElementById('kvibeLogoutModal');
         if (logoutModal) {
           logoutModal.classList.add('active');
-          
-          const cancelLogout = document.getElementById('kvibeCancelLogout');
-          const confirmLogout = document.getElementById('kvibeConfirmLogout');
-          
-          if (cancelLogout) {
-            cancelLogout.onclick = function() {
-              logoutModal.classList.remove('active');
-            };
-          }
-          
-          if (confirmLogout) {
-            confirmLogout.onclick = function() {
-              window.location.href = "{% url 'logout' %}";
-            };
-          }
-          
-          logoutModal.addEventListener('click', function(e) {
-            if (e.target === logoutModal) {
-              logoutModal.classList.remove('active');
-            }
+          const cancelBtn  = document.getElementById('kvibeCancelLogout');
+          const confirmBtn = document.getElementById('kvibeConfirmLogout');
+          if (cancelBtn)  cancelBtn.onclick  = function () { logoutModal.classList.remove('active'); };
+          if (confirmBtn) confirmBtn.onclick = function () { window.location.href = '/logout/'; };
+          logoutModal.addEventListener('click', function (e) {
+            if (e.target === logoutModal) logoutModal.classList.remove('active');
           });
         }
       });
     }
-    
-    document.getElementById('kvibe-repost-modal').addEventListener('click', function(e) {
-      if (e.target === this) {
-        kvibeCloseRepostModal();
-      }
-    });
-    
-    document.addEventListener('keydown', function(e) {
+
+    /* ── Repost modal outside-click / ESC ── */
+    const repostModal = document.getElementById('kvibe-repost-modal');
+    if (repostModal) {
+      repostModal.addEventListener('click', function (e) {
+        if (e.target === this) kvibeCloseRepostModal();
+      });
+    }
+
+    document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         kvibeCloseRepostModal();
         const logoutModal = document.getElementById('kvibeLogoutModal');
-        if (logoutModal && logoutModal.classList.contains('active')) {
-          logoutModal.classList.remove('active');
-        }
+        if (logoutModal && logoutModal.classList.contains('active')) logoutModal.classList.remove('active');
       }
     });
-    
-    window.addEventListener('resize', function() {
+
+    window.addEventListener('resize', function () {
       const modal = document.getElementById('kvibe-repost-modal');
-      if (modal.classList.contains('show')) {
-        const modalContent = modal.querySelector('.kvibe-repost-modal-content');
-        const viewportHeight = window.innerHeight;
-        const modalHeight = modalContent.offsetHeight;
-        
-        if (modalHeight > viewportHeight * 0.9) {
-          modalContent.style.maxHeight = (viewportHeight * 0.9) + 'px';
-        } else {
-          modalContent.style.maxHeight = '';
-        }
+      if (modal && modal.classList.contains('show')) {
+        const mc = modal.querySelector('.kvibe-repost-modal-content');
+        const vh = window.innerHeight;
+        mc.style.maxHeight = mc.offsetHeight > vh * 0.9 ? (vh * 0.9) + 'px' : '';
       }
     });
-});
+  }); // end DOMContentLoaded
+
 
 function kvibeLazyLoad() {
   const lazyImages = document.querySelectorAll('img[loading="lazy"]');
@@ -936,3 +569,371 @@ if (document.readyState === 'loading') {
     setTimeout(poll, 3000);
   });
 })();
+
+
+/* ═══════════════════════════════════════════════════════
+   EMOJI PICKER  (message.html style)
+   ═══════════════════════════════════════════════════════ */
+const kvibeCommentEmojiCategories = [
+  { icon:'😀', label:'Smileys', emojis:['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','☺️','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'] },
+  { icon:'👋', label:'People',  emojis:['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦾','🦵','🦶','👂','🦻','👃','🧠','👀','👁️','👅','👄','💋','👶','🧒','👦','👧','🧑','👱','👨','🧔','👩','🧓','👴','👵','🙍','🙎','🙅','🙆','💁','🙋','🧏','🙇','🤦','🤷','👮','🕵️','💂','🥷','👷','🤴','👸','👳','👲','🧕','🤵','👰','🤰','🤱','👼','🎅','🤶','🦸','🦹','🧙','🧝','🧛','🧟','🧞','🧜','🧚','👫','👬','👭','💏','💑','👪'] },
+  { icon:'🐶', label:'Animals', emojis:['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🐙','🦑','🦐','🦀','🐡','🐠','🐟','🐬','🐳','🦈','🐊','🐅','🐆','🦓','🦍','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦤','🦚','🦜','🦢','🕊️','🐇','🦝','🦨','🦡','🦦','🦥','🐁','🐀','🐿️','🦔'] },
+  { icon:'🍕', label:'Food',    emojis:['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🥪','🥙','🌮','🌯','🥗','🥘','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🍤','🍙','🍚','🍘','🍥','🥮','🍢','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🧃','🥤','🧋','🍵','☕','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾'] },
+  { icon:'⚽', label:'Sports',  emojis:['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🥍','🏏','🥅','⛳','🎣','🤿','🎽','🎿','🛷','🥌','🎯','🏹','🛹','🛼','🪂','🏋️','🤼','🤸','⛹️','🤺','🏇','⛷️','🏂','🏄','🚣','🧗','🚵','🚴','🏆','🥇','🥈','🥉','🏅','🎖️','🏵️','🎗️','🎫','🎟️','🎪','🤹','🎭','🩰','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🪘','🎷','🎺','🎸','🪕','🎻','🎲','♟️','🎯','🎳','🎮','🎰','🧩'] },
+  { icon:'🚀', label:'Travel',  emojis:['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🛵','🏍️','🚲','🛴','🚁','🛸','✈️','🚀','🛩️','🪂','⛵','🚤','🛥️','🛳️','🚢','🚂','🚃','🚄','🚅','🚆','🚇','🚈','🚉','🚊','🚝','🚞','🚋','🌍','🌎','🌏','🗺️','🧭','🏔️','⛰️','🌋','🗻','🏕️','🏖️','🏜️','🏝️','🏞️','🏟️','🏛️','🏗️','🏘️','🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏩','🏪','🏫','🏬','🏭','🏯','🏰','💒','🗼','🗽','⛪','🕌','🛕','🕍','⛩️','🕋'] },
+  { icon:'❤️', label:'Symbols', emojis:['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','❤️‍🔥','❤️‍🩹','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉️','☸️','✡️','🔯','🕎','☯️','☦️','🛐','♻️','⚜️','🔱','📛','🔰','⭕','✅','☑️','✔️','❎','🔲','🔳','▪️','▫️','◾','◽','◼️','◻️','🟥','🟧','🟨','🟩','🟦','🟪','⬛','⬜','🟤','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🔺','🔻','💠','🔷','🔹','🔶','🔸'] },
+  { icon:'🎮', label:'Objects', emojis:['💌','📦','📫','📪','📬','📭','📮','📯','📜','📃','📄','📑','🧾','📊','📈','📉','📓','📔','📒','📕','📗','📘','📙','📚','📖','🔖','🏷️','💰','🪙','💵','💶','💷','💸','💳','💹','✉️','📧','📨','📩','📤','📥','📦','📫','📪','📬','📭','📮','🗳️','✏️','✒️','🖋️','🖊️','📝','🔍','🔎','🔏','🔐','🔒','🔓','🔑','🗝️','🔨','🪓','⛏️','⚒️','🛠️','⚔️','🔧','🔩','⚙️','🗜️','⚖️','🔗','⛓️','🪝','🧲','⚗️','🧪','🧫','🧬','🔬','🔭','📡','💡','🔦','🕯️','🪔','🧯','💊','💉','🩸','🩹','🩺','🩻','🪒','🚿','🛁','🧴','🧷','🧹','🧺','🧻','🧼','🫧','🪣','🧽','🪤','🧰'] }
+];
+let kvibeCommentCurrentCat = 0;
+let kvibeCommentAllEmojis  = [];
+
+function initKvibeCommentEmojiPicker() {
+  kvibeCommentAllEmojis = kvibeCommentEmojiCategories.flatMap(function(c) { return c.emojis.map(function(e) { return { emoji: e, cat: c.label }; }); });
+  const tabs = document.getElementById('kvibeCommentEmojiTabs');
+  if (!tabs) return;
+  tabs.innerHTML = '';
+  kvibeCommentEmojiCategories.forEach(function(cat, i) {
+    const t = document.createElement('div');
+    t.className = 'kvibe-comment-emoji-tab' + (i === 0 ? ' active' : '');
+    t.textContent = cat.icon;
+    t.title = cat.label;
+    t.onclick = function() { kvibeCommentSelectCat(i); };
+    tabs.appendChild(t);
+  });
+  kvibeCommentRenderCat(0);
+}
+
+function kvibeCommentSelectCat(index) {
+  kvibeCommentCurrentCat = index;
+  const searchEl = document.getElementById('kvibeCommentEmojiSearch');
+  if (searchEl) searchEl.value = '';
+  document.querySelectorAll('.kvibe-comment-emoji-tab').forEach(function(t, i) { t.classList.toggle('active', i === index); });
+  kvibeCommentRenderCat(index);
+}
+
+function kvibeCommentRenderCat(index) {
+  const grid = document.getElementById('kvibeCommentEmojiGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  kvibeCommentEmojiCategories[index].emojis.forEach(function(emoji) {
+    const el = document.createElement('div');
+    el.className = 'kvibe-comment-emoji-item';
+    el.textContent = emoji;
+    el.onclick = function() { kvibeInsertCommentEmoji(emoji); };
+    grid.appendChild(el);
+  });
+}
+
+function kvibeCommentSearchEmoji(query) {
+  const grid = document.getElementById('kvibeCommentEmojiGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const q = query.trim().toLowerCase();
+  const results = q
+    ? kvibeCommentAllEmojis.filter(function(e) { return e.cat.toLowerCase().includes(q) || e.emoji.includes(q); }).map(function(e) { return e.emoji; })
+    : kvibeCommentEmojiCategories[kvibeCommentCurrentCat].emojis;
+  document.querySelectorAll('.kvibe-comment-emoji-tab').forEach(function(t) { t.classList.toggle('active', !q); });
+  results.forEach(function(emoji) {
+    const el = document.createElement('div');
+    el.className = 'kvibe-comment-emoji-item';
+    el.textContent = emoji;
+    el.onclick = function() { kvibeInsertCommentEmoji(emoji); };
+    grid.appendChild(el);
+  });
+}
+
+function toggleKvibeCommentEmojiPicker(event) {
+  event.stopPropagation();
+  const picker   = document.getElementById('kvibeCommentEmojiPicker');
+  const btn      = document.getElementById('kvibeCommentEmojiBtn');
+  const inputArea = document.getElementById('myForm');
+  if (!picker || !btn) return;
+
+  const isOpen = picker.classList.contains('open');
+
+  if (isOpen) {
+    picker.classList.remove('open');
+    btn.classList.remove('active');
+    return;
+  }
+
+  // Position picker just above the input bar using fixed coords
+  const ref = (inputArea || btn).getBoundingClientRect();
+  picker.style.bottom = (window.innerHeight - ref.top) + 'px';
+
+  picker.classList.add('open');
+  btn.classList.add('active');
+
+  const searchEl = document.getElementById('kvibeCommentEmojiSearch');
+  if (searchEl) searchEl.value = '';
+  kvibeCommentRenderCat(kvibeCommentCurrentCat);
+}
+
+function kvibeInsertCommentEmoji(emoji) {
+  const ta = document.getElementById('textInput');
+  if (!ta) return;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.slice(0, start) + emoji + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + emoji.length;
+  ta.focus();
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+document.addEventListener('click', function(e) {
+  const picker = document.getElementById('kvibeCommentEmojiPicker');
+  const btn    = document.getElementById('kvibeCommentEmojiBtn');
+  if (!picker || !btn) return;
+  if (!picker.contains(e.target) && !btn.contains(e.target)) {
+    picker.classList.remove('open');
+    btn.classList.remove('active');
+  }
+});
+
+// Reposition picker on resize/scroll so it stays above the input bar
+function _kvcmtRepositionPicker() {
+  const picker    = document.getElementById('kvibeCommentEmojiPicker');
+  const inputArea = document.getElementById('myForm');
+  if (!picker || !picker.classList.contains('open') || !inputArea) return;
+  const ref = inputArea.getBoundingClientRect();
+  picker.style.bottom = (window.innerHeight - ref.top) + 'px';
+}
+window.addEventListener('resize', _kvcmtRepositionPicker);
+window.addEventListener('scroll', _kvcmtRepositionPicker, true);
+
+
+/* ═══════════════════════════════════════════════════════
+   AUDIO RECORDING  (message.html hold-to-record style)
+   ═══════════════════════════════════════════════════════ */
+var _kvCmtStream    = null, _kvCmtRecorder  = null, _kvCmtChunks   = [];
+var _kvCmtRecording = false, _kvCmtTimer    = null, _kvCmtStartTime = 0;
+var _kvCmtAudioCtx  = null, _kvCmtAnalyser  = null;
+
+async function kvibeCommentStartRecording(event) {
+  event.preventDefault();
+  const micBtn = document.getElementById('kvibeCommentMicBtn');
+  if (micBtn) micBtn.classList.add('kvibe-comment-mic-pulse');
+  try {
+    _kvCmtStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 } });
+    const opts = { mimeType: 'audio/webm' };
+    if (!MediaRecorder.isTypeSupported('audio/webm')) opts.mimeType = 'audio/mp4';
+    if (!MediaRecorder.isTypeSupported(opts.mimeType)) delete opts.mimeType;
+    _kvCmtRecorder = new MediaRecorder(_kvCmtStream, opts);
+    _kvCmtChunks   = [];
+    _kvCmtRecorder.ondataavailable = function(e) { if (e.data.size > 0) _kvCmtChunks.push(e.data); };
+    _kvCmtRecorder.onstop = async function() {
+      if (_kvCmtChunks.length === 0) { _kvCmtCleanup(); return; }
+      const mimeType = _kvCmtRecorder.mimeType || 'audio/webm';
+      const blob = new Blob(_kvCmtChunks, { type: mimeType });
+      const ext  = mimeType.includes('webm') ? 'webm' : 'mp4';
+      const file = new File([blob], 'voice_comment_' + Date.now() + '.' + ext, { type: mimeType });
+      const dt   = new DataTransfer();
+      dt.items.add(file);
+      const audioInput = document.getElementById('audio_file');
+      if (audioInput) audioInput.files = dt.files;
+      const form = document.getElementById('postForm');
+      if (form) {
+        if (typeof htmx !== 'undefined') htmx.trigger(form, 'submit');
+        else form.submit();
+      }
+      _kvCmtCleanup();
+    };
+    _kvCmtRecorder.onerror = function() { _kvCmtCleanup(); };
+    _kvCmtRecorder.start(100);
+    _kvCmtStartTime = Date.now();
+    _kvCmtRecording = true;
+    const overlay = document.getElementById('kvibeCommentRecordingOverlay');
+    if (overlay) overlay.classList.add('active');
+    _kvCmtStartTimer();
+    _kvCmtStartVisualizer(_kvCmtStream);
+  } catch (err) {
+    console.error('Mic error:', err);
+    alert('Unable to access microphone. Please check permissions.');
+    if (micBtn) micBtn.classList.remove('kvibe-comment-mic-pulse');
+  }
+}
+
+function kvibeCommentStopRecording() {
+  if (_kvCmtRecorder && _kvCmtRecording) {
+    try { _kvCmtRecorder.requestData(); } catch(e) {}
+    _kvCmtRecorder.stop();
+  }
+}
+
+function kvibeCommentTouchStart(e) { e.preventDefault(); kvibeCommentStartRecording(e); }
+function kvibeCommentTouchEnd(e)   { e.preventDefault(); kvibeCommentStopRecording(); }
+
+function _kvCmtCleanup() {
+  if (_kvCmtStream) { _kvCmtStream.getTracks().forEach(function(t) { t.stop(); t.enabled = false; }); _kvCmtStream = null; }
+  if (_kvCmtTimer)  { clearInterval(_kvCmtTimer); _kvCmtTimer = null; }
+  if (_kvCmtAudioCtx && _kvCmtAudioCtx.state !== 'closed') { _kvCmtAudioCtx.close(); _kvCmtAudioCtx = null; }
+  _kvCmtChunks = []; _kvCmtRecording = false; _kvCmtRecorder = null;
+  const overlay = document.getElementById('kvibeCommentRecordingOverlay');
+  if (overlay) overlay.classList.remove('active');
+  const timerEl = document.getElementById('kvibeCommentRecordingTimer');
+  if (timerEl) timerEl.textContent = '0:00';
+  const micBtn = document.getElementById('kvibeCommentMicBtn');
+  if (micBtn) micBtn.classList.remove('kvibe-comment-mic-pulse');
+}
+
+function _kvCmtStartTimer() {
+  _kvCmtTimer = setInterval(function() {
+    var elapsed = Math.floor((Date.now() - _kvCmtStartTime) / 1000);
+    var m = Math.floor(elapsed / 60), s = elapsed % 60;
+    var el = document.getElementById('kvibeCommentRecordingTimer');
+    if (el) el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  }, 1000);
+}
+
+function _kvCmtStartVisualizer(stream) {
+  try {
+    _kvCmtAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    _kvCmtAnalyser = _kvCmtAudioCtx.createAnalyser();
+    var src = _kvCmtAudioCtx.createMediaStreamSource(stream);
+    src.connect(_kvCmtAnalyser);
+    _kvCmtAnalyser.fftSize = 256;
+    var bufLen = _kvCmtAnalyser.frequencyBinCount;
+    var dataArr = new Uint8Array(bufLen);
+    var canvas  = document.getElementById('kvibeCommentRecordingWave');
+    if (!canvas) return;
+    var ctx2d = canvas.getContext('2d');
+    function draw() {
+      if (!_kvCmtRecording || !_kvCmtAnalyser) return;
+      requestAnimationFrame(draw);
+      _kvCmtAnalyser.getByteFrequencyData(dataArr);
+      ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+      var barW = (canvas.width / bufLen) * 2.5, x = 0;
+      for (var i = 0; i < bufLen; i++) {
+        var barH = dataArr[i] / 2;
+        var grad = ctx2d.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, '#0095f6'); grad.addColorStop(1, '#1877f2');
+        ctx2d.fillStyle = grad;
+        ctx2d.fillRect(x, canvas.height - barH, barW, barH);
+        x += barW + 1;
+      }
+    }
+    draw();
+  } catch(e) { console.error('Visualizer error:', e); }
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   WAVEFORM AUDIO PLAYER  (message.html style)
+   ═══════════════════════════════════════════════════════ */
+var _kvCmtCurrentAudio = null;
+var _kvCmtWaveRAF      = {};
+
+function kvCmtGenerateWaveform(audioId) {
+  var wc = document.getElementById('kvibe-wave-container-' + audioId);
+  if (!wc) return;
+  wc.innerHTML = '';
+  var BAR_COUNT = 40;
+  for (var i = 0; i < BAR_COUNT; i++) {
+    var bar  = document.createElement('div');
+    bar.className = 'kvibe-wave-bar';
+    var dist = Math.abs(i - BAR_COUNT / 2) / (BAR_COUNT / 2);
+    var h    = Math.max(3, (1 - dist * 0.6) * 18 + (Math.random() * 10 - 5));
+    bar.style.height = h + 'px';
+    wc.appendChild(bar);
+  }
+}
+
+function kvCmtUpdateWaveform(audioId, isPlaying) {
+  if (_kvCmtWaveRAF[audioId]) { cancelAnimationFrame(_kvCmtWaveRAF[audioId]); delete _kvCmtWaveRAF[audioId]; }
+  var wc = document.getElementById('kvibe-wave-container-' + audioId);
+  if (!wc) return;
+  var bars = wc.querySelectorAll('.kvibe-wave-bar');
+  if (!isPlaying) { bars.forEach(function(b) { b.classList.remove('played', 'current'); }); return; }
+  var audio = document.getElementById('audio-' + audioId);
+  if (!audio) return;
+  function tick() {
+    if (audio.paused || audio.ended) return;
+    var progress = audio.duration ? audio.currentTime / audio.duration : 0;
+    var playedCount = Math.floor(progress * bars.length);
+    bars.forEach(function(b, i) {
+      if      (i < playedCount)  { b.classList.add('played'); b.classList.remove('current'); }
+      else if (i === playedCount){ b.classList.remove('played'); b.classList.add('current'); }
+      else                       { b.classList.remove('played', 'current'); }
+    });
+    _kvCmtWaveRAF[audioId] = requestAnimationFrame(tick);
+  }
+  _kvCmtWaveRAF[audioId] = requestAnimationFrame(tick);
+}
+
+function kvCmtToggleAudio(button, audioId) {
+  var audio = document.getElementById('audio-' + audioId);
+  if (!audio) return;
+  var wc = document.getElementById('kvibe-wave-container-' + audioId);
+  if (wc && !wc.querySelector('.kvibe-wave-bar')) kvCmtGenerateWaveform(audioId);
+  var durEl = document.getElementById('kvibe-cmt-duration-' + audioId);
+  var fmt = function(s) { return isNaN(s) ? '0:00' : Math.floor(s/60) + ':' + (Math.floor(s%60) < 10 ? '0' : '') + Math.floor(s%60); };
+  if (audio.paused) {
+    if (_kvCmtCurrentAudio && _kvCmtCurrentAudio !== audio) {
+      _kvCmtCurrentAudio.pause();
+      var otherId  = _kvCmtCurrentAudio.id.replace('audio-', '');
+      kvCmtUpdateWaveform(otherId, false);
+      var otherBtn = document.querySelector('[onclick*="kvCmtToggleAudio"][onclick*="\'' + otherId + '\'"]');
+      if (otherBtn) otherBtn.innerHTML = '<i class="fas fa-play"></i>';
+      var otherDur = document.getElementById('kvibe-cmt-duration-' + otherId);
+      if (otherDur && _kvCmtCurrentAudio.duration) otherDur.textContent = fmt(_kvCmtCurrentAudio.duration);
+    }
+    audio.play().then(function() {
+      _kvCmtCurrentAudio = audio;
+      button.innerHTML   = '<i class="fas fa-pause"></i>';
+      kvCmtUpdateWaveform(audioId, true);
+      var setDur = function() { if (durEl && audio.duration) durEl.textContent = fmt(audio.duration); };
+      if (audio.duration) setDur(); else audio.addEventListener('loadedmetadata', setDur, { once: true });
+      function timeTick() {
+        if (audio.paused || audio.ended) return;
+        if (durEl) durEl.textContent = fmt(audio.currentTime);
+        requestAnimationFrame(timeTick);
+      }
+      requestAnimationFrame(timeTick);
+      function onStop() {
+        button.innerHTML = '<i class="fas fa-play"></i>';
+        kvCmtUpdateWaveform(audioId, false);
+        if (durEl && audio.duration) durEl.textContent = fmt(audio.duration);
+        if (_kvCmtCurrentAudio === audio) _kvCmtCurrentAudio = null;
+      }
+      audio.addEventListener('pause', onStop, { once: true });
+      audio.addEventListener('ended', onStop, { once: true });
+    }).catch(function(e) { console.error('Audio play error:', e); });
+  } else {
+    audio.pause();
+    button.innerHTML = '<i class="fas fa-play"></i>';
+    kvCmtUpdateWaveform(audioId, false);
+    if (durEl && audio.duration) durEl.textContent = fmt(audio.duration);
+    if (_kvCmtCurrentAudio === audio) _kvCmtCurrentAudio = null;
+  }
+}
+
+function kvCmtWaveformClick(e, audioId) {
+  e.stopPropagation();
+  var audio = document.getElementById('audio-' + audioId);
+  var wc    = document.getElementById('kvibe-wave-container-' + audioId);
+  if (!audio || !wc || !audio.duration) return;
+  var rect  = wc.getBoundingClientRect();
+  audio.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * audio.duration;
+}
+
+function kvibeInitAudioPlayers(root) {
+  (root || document).querySelectorAll('.kvibe-audio-container[data-audio-id]').forEach(function(container) {
+    if (container._kvWaveInited) return;
+    container._kvWaveInited = true;
+    var audioId = container.dataset.audioId;
+    kvCmtGenerateWaveform(audioId);
+    var audio = document.getElementById('audio-' + audioId);
+    if (audio) {
+      audio.addEventListener('loadedmetadata', function() {
+        var el = document.getElementById('kvibe-cmt-duration-' + audioId);
+        if (el && !isNaN(audio.duration)) {
+          var m = Math.floor(audio.duration / 60), s = Math.floor(audio.duration % 60);
+          el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+        }
+      });
+    }
+  });
+}
+
+if (typeof htmx !== 'undefined') {
+  htmx.onLoad(function(el) { kvibeInitAudioPlayers(el); });
+}

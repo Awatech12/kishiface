@@ -41,33 +41,26 @@
             <img src="{{ comment.image.url }}" alt="Comment Image" class="kvibe-cmt-image">
         {% endif %}
 
-        <!-- Audio message -->
+        <!-- Audio message (message.html waveform style) -->
         {% if comment.file %}
-        <div class="kvibe-audio-container" data-src="{{ comment.file.url }}">
-            <button class="kvibe-play-pause-btn" data-state="paused">
-                <i class="fas fa-play"></i>
-            </button>
-            <div class="kvibe-progress-wrapper">
-                <div class="kvibe-progress-bar">
-                    <div class="kvibe-progress-filled"></div>
+        <div class="kvibe-audio-container" data-audio-id="{{ comment.comment_id }}">
+            <div class="kvibe-audio-content">
+                <button class="kvibe-play-pause-btn"
+                        onclick="kvCmtToggleAudio(this, '{{ comment.comment_id }}')"
+                        title="Play / Pause">
+                    <i class="fas fa-play"></i>
+                </button>
+                <div class="kvibe-audio-info">
+                    <div class="kvibe-audio-waveform"
+                         onclick="kvCmtWaveformClick(event, '{{ comment.comment_id }}')">
+                        <div class="kvibe-wave-container" id="kvibe-wave-container-{{ comment.comment_id }}"></div>
+                    </div>
+                    <div class="kvibe-audio-duration" id="kvibe-cmt-duration-{{ comment.comment_id }}">0:00</div>
                 </div>
-                <span class="kvibe-time-display">0:00</span>
             </div>
-            <div class="kvibe-audio-wave" id="wave-{{ comment.comment_id }}">
-                <div class="kvibe-wave-bar" style="height:4px"></div>
-                <div class="kvibe-wave-bar" style="height:7px"></div>
-                <div class="kvibe-wave-bar" style="height:10px"></div>
-                <div class="kvibe-wave-bar" style="height:7px"></div>
-                <div class="kvibe-wave-bar" style="height:4px"></div>
-            </div>
-            <audio class="kvibe-hidden-audio" preload="metadata" id="audio-{{ comment.comment_id }}">
-                <source src="{{ comment.file.url }}" type="audio/webm">
+            <audio preload="metadata" id="audio-{{ comment.comment_id }}" style="display:none!important;">
+                <source src="{{ comment.file.url }}">
             </audio>
-            <button class="kvibe-audio-download-btn"
-                    onclick="kvibeDownloadCommentAudio('{{ comment.comment_id }}','{{ comment.file.url }}')"
-                    title="Download audio">
-                <i class="fas fa-download"></i>
-            </button>
         </div>
         {% endif %}
 
@@ -133,12 +126,8 @@ function toggleReplyForm(commentId, authorUsername) {
     if (!isOpen) {
         const input = document.getElementById(`reply-input-${commentId}`);
         if (input) {
-            // Pre-fill with @username if provided and input is empty
-            if (authorUsername && !input.value.trim()) {
-                input.value = `@${authorUsername} `;
-            }
+            if (authorUsername && !input.value.trim()) input.value = `@${authorUsername} `;
             input.focus();
-            // Place cursor at end
             const len = input.value.length;
             input.setSelectionRange(len, len);
         }
@@ -151,16 +140,13 @@ function hideReplyForm(commentId) {
 }
 
 function toggleReplies(commentId) {
-    const container = document.getElementById(`replies-${commentId}`);
-    const btn       = document.getElementById(`view-replies-${commentId}`);
+    const container  = document.getElementById(`replies-${commentId}`);
+    const btn        = document.getElementById(`view-replies-${commentId}`);
     const threadLine = document.getElementById(`thread-line-${commentId}`);
     if (!container || !btn) return;
-
     const isHidden = container.style.display === 'none' || container.style.display === '';
     container.style.display = isHidden ? 'block' : 'none';
-
     if (threadLine) threadLine.classList.toggle('visible', isHidden);
-
     if (isHidden) {
         btn.innerHTML = `<span class="kvibe-cmt-line-dash"></span> Hide replies`;
     } else {
@@ -169,105 +155,13 @@ function toggleReplies(commentId) {
     }
 }
 
-function kvibeDownloadCommentAudio(id, url) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `voice_message_${id}.webm`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
-
-/* Audio player — initialised here for comments injected via HTMX.
-   postcomment.js handles the DOMContentLoaded pass for existing comments. */
-function kvibeInitAudioPlayers(root) {
-    (root || document).querySelectorAll('.kvibe-audio-container').forEach(container => {
-        if (container._kvibeInited) return;
-        container._kvibeInited = true;
-
-        const audio   = container.querySelector('.kvibe-hidden-audio');
-        const playBtn = container.querySelector('.kvibe-play-pause-btn');
-        if (!audio || !playBtn) return;
-
-        const icon     = playBtn.querySelector('i');
-        const timeDsp  = container.querySelector('.kvibe-time-display');
-        const filled   = container.querySelector('.kvibe-progress-filled');
-        const progBar  = container.querySelector('.kvibe-progress-bar');
-        const bars     = container.querySelectorAll('.kvibe-wave-bar');
-        const baseH    = [4, 7, 10, 7, 4];
-
-        const fmt = s => {
-            if (isNaN(s)) return '0:00';
-            return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-        };
-
-        audio.addEventListener('loadedmetadata', () => {
-            if (!isNaN(audio.duration) && timeDsp) timeDsp.textContent = fmt(audio.duration);
-        });
-
-        audio.addEventListener('timeupdate', () => {
-            if (!audio.duration) return;
-            if (filled) filled.style.width = `${(audio.currentTime / audio.duration) * 100}%`;
-            if (timeDsp) timeDsp.textContent = fmt(audio.currentTime);
-        });
-
-        let waveInterval;
-        audio.addEventListener('play', () => {
-            container.classList.add('playing');
-            waveInterval = setInterval(() => {
-                bars.forEach((b, i) => { b.style.height = (baseH[i] + Math.random() * 5) + 'px'; });
-            }, 150);
-        });
-        audio.addEventListener('pause', () => {
-            container.classList.remove('playing');
-            clearInterval(waveInterval);
-            bars.forEach((b, i) => { b.style.height = baseH[i] + 'px'; });
-        });
-        audio.addEventListener('ended', () => {
-            container.classList.remove('playing');
-            clearInterval(waveInterval);
-            bars.forEach((b, i) => { b.style.height = baseH[i] + 'px'; });
-            if (icon) icon.className = 'fas fa-play';
-            if (filled) filled.style.width = '0%';
-            if (!isNaN(audio.duration) && timeDsp) timeDsp.textContent = fmt(audio.duration);
-        });
-
-        playBtn.addEventListener('click', () => {
-            if (audio.paused || audio.ended) {
-                document.querySelectorAll('.kvibe-hidden-audio').forEach(a => {
-                    if (a !== audio && !a.paused) {
-                        a.pause();
-                        const c = a.closest('.kvibe-audio-container');
-                        if (c) {
-                            c.classList.remove('playing');
-                            const bi = c.querySelector('.kvibe-play-pause-btn i');
-                            if (bi) bi.className = 'fas fa-play';
-                        }
-                    }
-                });
-                audio.play();
-                if (icon) icon.className = 'fas fa-pause';
-            } else {
-                audio.pause();
-                if (icon) icon.className = 'fas fa-play';
-            }
-        });
-
-        if (progBar) {
-            progBar.addEventListener('click', e => {
-                if (!audio.duration) return;
-                audio.currentTime = audio.duration * ((e.clientX - progBar.getBoundingClientRect().left) / progBar.offsetWidth);
-                if (audio.paused) {
-                    audio.play();
-                    if (icon) icon.className = 'fas fa-pause';
-                }
-            });
-        }
+/* Init waveform for this comment's audio (called by postcomment.js kvibeInitAudioPlayers too) */
+(function() {
+    document.querySelectorAll('.kvibe-audio-container[data-audio-id]').forEach(container => {
+        if (container._kvWaveInited) return;
+        container._kvWaveInited = true;
+        const audioId = container.dataset.audioId;
+        if (typeof kvCmtGenerateWaveform === 'function') kvCmtGenerateWaveform(audioId);
     });
-}
-
-document.addEventListener('DOMContentLoaded', () => kvibeInitAudioPlayers());
-if (typeof htmx !== 'undefined') {
-    htmx.onLoad(el => kvibeInitAudioPlayers(el));
-}
+})();
 </script>
