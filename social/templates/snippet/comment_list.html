@@ -73,7 +73,7 @@
 
         <!-- Actions: Reply · View replies -->
         <div class="kvibe-cmt-actions-row">
-            <button class="kvibe-cmt-action-link" onclick="toggleReplyForm('{{ comment.comment_id }}')">Reply</button>
+            <button class="kvibe-cmt-action-link" onclick="toggleReplyForm('{{ comment.comment_id }}', '{{ comment.author.username }}')">Reply</button>
 
             {% if comment.replies.exists %}
             <button class="kvibe-cmt-view-replies" id="view-replies-{{ comment.comment_id }}"
@@ -90,7 +90,7 @@
                   hx-post="{% url 'add_comment_reply' comment.comment_id %}"
                   hx-target="#replies-{{ comment.comment_id }}"
                   hx-swap="afterbegin"
-                  hx-on::after-request="if(event.detail.successful){ this.reset(); document.getElementById('reply-input-{{ comment.comment_id }}').value=''; hideReplyForm('{{ comment.comment_id }}'); }">
+                  hx-on::after-request="if(event.detail.successful){ this.reset(); const inp = document.getElementById('reply-input-{{ comment.comment_id }}'); if(inp) inp.value=''; hideReplyForm('{{ comment.comment_id }}'); }">
                 {% csrf_token %}
                 <div class="kvibe-reply-input-row">
                     <img src="{{ user.profile.picture.url }}" alt="" class="kvibe-reply-mini-avatar">
@@ -125,14 +125,23 @@
 
 
 <script>
-function toggleReplyForm(commentId) {
+function toggleReplyForm(commentId, authorUsername) {
     const form = document.getElementById(`kvibe-reply-form-${commentId}`);
     if (!form) return;
     const isOpen = form.style.display !== 'none' && form.style.display !== '';
     form.style.display = isOpen ? 'none' : 'block';
     if (!isOpen) {
         const input = document.getElementById(`reply-input-${commentId}`);
-        if (input) input.focus();
+        if (input) {
+            // Pre-fill with @username if provided and input is empty
+            if (authorUsername && !input.value.trim()) {
+                input.value = `@${authorUsername} `;
+            }
+            input.focus();
+            // Place cursor at end
+            const len = input.value.length;
+            input.setSelectionRange(len, len);
+        }
     }
 }
 

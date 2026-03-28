@@ -4194,13 +4194,57 @@ def set_offline(request):
 def add_comment_reply(request, comment_id):
     comment = get_object_or_404(PostComment, comment_id=comment_id)
     reply_text = request.POST.get('reply_text', '').strip()
-    
+
     if reply_text:
         reply = CommentReply.objects.create(
             comment=comment, author=request.user, reply_text=reply_text
         )
+
+        post_obj = comment.post
+
+        # ── Notify the comment author that someone replied ────────────────
+        if comment.author != request.user:
+            Notification.objects.create(
+                recipient=comment.author,
+                actor=request.user,
+                post=post_obj,
+                comment=comment,
+                notification_type=Notification.COMMENT,
+            )
+
+        # ── Notify any @mentioned users in the reply text ─────────────────
+        mentioned_usernames = set(re.findall(r"@(\w+)", reply_text))
+        for username in mentioned_usernames:
+            try:
+                mentioned_user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                continue
+
+            # Skip self-mentions and the comment author (already notified above)
+            if mentioned_user == request.user:
+                continue
+            if mentioned_user == comment.author:
+                continue
+
+            already_exists = Notification.objects.filter(
+                recipient=mentioned_user,
+                actor=request.user,
+                post=post_obj,
+                comment=comment,
+                notification_type=Notification.MENTION,
+            ).exists()
+
+            if not already_exists:
+                Notification.objects.create(
+                    recipient=mentioned_user,
+                    actor=request.user,
+                    post=post_obj,
+                    comment=comment,
+                    notification_type=Notification.MENTION,
+                )
+
         return render(request, 'snippet/comment_replies.html', {'replies': [reply]})
-    
+
     return JsonResponse({'error': 'Reply text is required'}, status=400)
 
 
