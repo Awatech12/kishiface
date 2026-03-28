@@ -4106,7 +4106,16 @@
     function kvibeTogglePlayPause(videoId, event) {
       event.stopPropagation();
       const video = document.getElementById(videoId);
-      
+
+      // Extract post_id from the element id: "kvibe-post-video-<uuid>"
+      const postId = videoId.replace('kvibe-post-video-', '');
+
+      // Track view only on the very first play of this post in this session
+      if (!video.dataset.viewTracked) {
+        video.dataset.viewTracked = '1';
+        kvRecordPostView(postId);
+      }
+
       if (video.hasAttribute('data-src') && !video.src) {
         const source = video.querySelector('source[data-src]');
         if (source) {
@@ -4132,6 +4141,26 @@
       }
     }
     
+    // ── View tracking helper ──────────────────────────────────────────────────
+    // Called on first video/audio play and when the comment sheet opens.
+    // Updates the view counter displayed below the post in place.
+    function kvRecordPostView(postId) {
+      fetch('/record-view/' + postId + '/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' },
+      })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(data){
+        if (!data || !data.success) return;
+        // Update the inline view count span if it exists on this page
+        var el = document.getElementById('kvibe-view-count-' + postId);
+        if (el) {
+          el.textContent = Number(data.new_count).toLocaleString();
+        }
+      })
+      .catch(function(){});
+    }
+
     // Close modals when clicking outside
     document.addEventListener('click', function(e) {
       const repostModal = document.getElementById('kvibe-repost-modal');
@@ -4420,6 +4449,13 @@
     kvibeCSResetInputUI();
     sheet.classList.add('active');
     document.body.style.overflow = 'hidden';
+
+    // Record a view when the comment sheet opens (once per post per page load)
+    if (!window._kvViewTracked) window._kvViewTracked = new Set();
+    if (!window._kvViewTracked.has(postId)) {
+      window._kvViewTracked.add(postId);
+      kvRecordPostView(postId);
+    }
 
     // Wire the HTMX form to this specific post
     form.setAttribute('hx-post', '/comments/' + postId );

@@ -98,9 +98,10 @@ urlpatterns = [
     path('spotlight/', views.spotlight_view, name='spotlight'),
 
     # ── Utilities ──────────────────────────────────────────────────────────────
-    path('track_share/<uuid:post_id>/',    views.track_share,      name='track_share'),
-    path('fetch_link_preview/',            views.fetch_link_preview,name='fetch_link_preview'),
-    path('get-location/<str:username>/',   views.get_location,      name='get_location'),
+    path('track_share/<uuid:post_id>/',    views.track_share,           name='track_share'),
+    path('record-view/<uuid:post_id>/',    views.increment_post_view,   name='increment_post_view'),
+    path('fetch_link_preview/',            views.fetch_link_preview,    name='fetch_link_preview'),
+    path('get-location/<str:username>/',   views.get_location,          name='get_location'),
 
     # ── Online Status ──────────────────────────────────────────────────────────
     path('api/online-status/<int:user_id>/', views.online_status_api, name='online_status_api'),

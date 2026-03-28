@@ -432,6 +432,27 @@ _FEED_SAMPLE_MIN = 40
 _FEED_SAMPLE_MAX = 400
 _FEED_SAMPLE_MULTIPLIER = 4   # posts per followed account in the candidate pool
 
+# ── View-signal tuning knobs ──────────────────────────────────────────────────
+# These three constants control exactly how much influence view data has on
+# the final score.  Keep them well below the engagement/recency floor so that
+# pure view-farming never outcompetes genuine interaction.
+#
+#   _VIEW_VELOCITY_CAP   — log2-compressed velocity ceiling (views/hour).
+#                          log2(1 + 200) ≈ 7.65, so a post doing 200 views/h
+#                          earns the full cap.  Beyond that: diminishing returns.
+#   _VIEW_VELOCITY_WEIGHT — how many score points a maximally-fast post earns.
+#                           Kept at 1.5 so velocity never dominates recency (max ~2).
+#   _VER_QUALITY_CAP     — view-to-engagement ratio cap before quality multiplier
+#                           is clamped.  5 % VER → multiplier ≈ 1.10 (10 % boost).
+#                           This rewards content that actually makes people react.
+#   _VIEW_VOLUME_WEIGHT  — compressed raw-view bonus (diminishing returns).
+#                           log2(1 + 10000) ≈ 13.3 → 0.5-pt bonus at viral scale.
+#                           Intentionally tiny — this is a tiebreaker, not a driver.
+_VIEW_VELOCITY_CAP    = 200.0   # views / hour ceiling before log compression
+_VIEW_VELOCITY_WEIGHT = 1.5     # max score contribution from velocity
+_VER_QUALITY_CAP      = 0.10    # 10 % VER → maximum quality multiplier
+_VIEW_VOLUME_WEIGHT   = 0.5     # weight on log2-compressed raw view count
+
 
 def _build_fof(following_ids_set, current_user_id):
     """
@@ -534,6 +555,33 @@ def _build_user_interest_profile(user):
         interacted_post_ids.add(str(pid))
         _accum(aid, _affinity_weight(4.0, created_at))
 
+    # ── Views (base weight 1.0) ───────────────────────────────────────────────
+    # Views are a passive signal — lower base weight than likes/vibes/comments
+    # so that merely scrolling past a post doesn't create the same affinity as
+    # actively engaging with it.  We still include it because repeated views of
+    # a creator's work (e.g. watching a video twice) is a meaningful intent
+    # signal that the other three actions won't capture.
+    # We proxy "viewed posts" via the Post.view field increment: any post the
+    # user explicitly played or opened the comment sheet for will have had its
+    # view count bumped via /record-view/, and the post appears in the pool if
+    # the author is followed or the post surfaced via explore.  Rather than a
+    # separate ViewLog table, we read the recent Post pool filtered by author
+    # and infer passive affinity from the author set — a conservative but
+    # zero-migration approach that stays consistent with the existing system.
+    viewed_rows = Post.objects.filter(
+        author__in=list(interacted_post_ids) or [user.id],  # fallback avoids empty IN
+        created_at__gte=cutoff,
+        view__gt=0,
+    ).exclude(
+        post_id__in=[pid for pid in interacted_post_ids]  # already counted above
+    ).values_list('post_id', 'author_id', 'created_at', 'view')
+
+    # We weight by view count (log-compressed) so a post with 100 views earns
+    # slightly more affinity than one with 1 view, but with diminishing returns.
+    for pid, aid, created_at, view_count in viewed_rows:
+        view_weight = 1.0 * math.log2(1 + (view_count or 0))
+        _accum(aid, _affinity_weight(min(view_weight, 2.0), created_at))
+
     result = (interacted_post_ids, author_affinity)
     cache.set(cache_key, result, timeout=300)   # 5-minute TTL
     return result
@@ -553,17 +601,26 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     │                half-life 24 h + hard ceiling at 72 h           │
     │    newness bonus: smooth exponential decay (half-life 1.5 h)   │
     │                   so fresh posts surface without a cliff       │
-    │ 2. Behavior-Based                                               │
+    │ 2. View Signals (3 sub-signals, all log-compressed)             │
+    │    velocity:   views/hour — surface fast-climbing content       │
+    │                before the crowd catches on (weight 1.5 max)     │
+    │    quality:    view-to-engagement ratio used as a multiplier    │
+    │                on the engagement score — rewards content that   │
+    │                converts passive viewers into active reactors    │
+    │                (capped at +10 % boost, min neutral 1.0×)       │
+    │    volume:     log-compressed raw view count — tiny tiebreaker  │
+    │                for proven-popular content (weight 0.5 max)      │
+    │ 3. Behavior-Based                                               │
     │    +3   already interacted with this post / its original       │
     │    affinity score from author_affinity dict (time-decayed,     │
     │         7-day half-life — recent interactions worth far more)   │
     │    +2   author in long-term UserFeedProfile history            │
-    │ 3. Vibe-Based 🔥                                                │
+    │ 4. Vibe-Based 🔥                                                │
     │    vibes pulled from original post for reposts;                │
     │    weighted by viewer's personal vibe_weights                   │
-    │ 4. Network                                                      │
+    │ 5. Network                                                      │
     │    +2.5  original author is a friend-of-friend                 │
-    │ 5. Exploration jitter (applied in _get_feed_page, not here)     │
+    │ 6. Exploration jitter (applied in _get_feed_page, not here)     │
     └─────────────────────────────────────────────────────────────────┘
     """
     # ── Resolve the "real" post for engagement/vibe signals ──────────────────
@@ -582,11 +639,16 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     # vibe breakdown of the original is already merged into _vb_<type> attrs
     # by _annotate_vibe_breakdown(), so signal_post is only used for share count
     # (a plain IntegerField, not an annotation).
+    raw_vibe_count    = getattr(post, 'vibe_count',    0)
+    raw_comment_count = getattr(post, 'comment_count', 0)
+    raw_repost_count  = getattr(post, 'repost_count',  0)
+    raw_share_count   = (getattr(signal_post, 'share', None) or getattr(post, 'share', 0) or 0)
+
     raw_engagement = (
-        getattr(post, 'vibe_count',    0) * 4 +
-        getattr(post, 'comment_count', 0) * 3 +
-        getattr(post, 'repost_count',  0) * 2 +
-        (getattr(signal_post, 'share', None) or getattr(post, 'share', 0) or 0) * 1
+        raw_vibe_count    * 4 +
+        raw_comment_count * 3 +
+        raw_repost_count  * 2 +
+        raw_share_count   * 1
     )
     # Log-compress: viral posts face diminishing returns.
     # log2(1+x): 0→0  10→3.46  100→6.66  1000→9.97
@@ -627,7 +689,64 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     _NEWNESS_DECAY     = math.log(2) / _NEWNESS_HALF_LIFE
     score += _NEWNESS_PEAK * math.exp(-_NEWNESS_DECAY * age_hours)
 
-    # ── 2. Behavior-Based ────────────────────────────────────────────────────
+    # ── 2. View Signals ───────────────────────────────────────────────────────
+    # Read view count from the signal post (original for reposts) so we
+    # always reflect the true accumulated audience of the content.
+    raw_views = max(0, getattr(signal_post, 'view', None) or 0)
+
+    # ── 2a. View velocity — surface fast-rising content ──────────────────────
+    # views/hour gives a momentum signal independent of age.  A post with
+    # 500 views in 2 hours outranks a week-old post with 2,000 views because
+    # the audience is still actively discovering it RIGHT NOW.
+    # We use max(age, 0.5) so a brand-new post (age < 30 min) doesn't get an
+    # artificially infinite velocity that floods the feed with zero-engagement posts.
+    #
+    # Velocity curve (with _VIEW_VELOCITY_WEIGHT = 1.5):
+    #   10  views/h → log2(11)  / log2(201) * 1.5 ≈ 0.55
+    #   50  views/h → log2(51)  / log2(201) * 1.5 ≈ 1.06
+    #   200 views/h → log2(201) / log2(201) * 1.5 = 1.50  (cap)
+    views_per_hour   = raw_views / max(age_hours, 0.5)
+    capped_velocity  = min(views_per_hour, _VIEW_VELOCITY_CAP)
+    velocity_score   = (math.log2(1 + capped_velocity) /
+                        math.log2(1 + _VIEW_VELOCITY_CAP)) * _VIEW_VELOCITY_WEIGHT
+    score += velocity_score
+
+    # ── 2b. View-to-engagement ratio (VER) — quality multiplier ─────────────
+    # VER = (vibes + comments + reposts + shares) / views
+    # A high VER means viewers are not just watching — they're reacting.
+    # We apply this as a multiplier on the already-computed engagement score
+    # so that high-quality viral content is amplified, while passive/skip-heavy
+    # content (high views, almost no reactions) gets no boost at all.
+    #
+    # Multiplier design: 1.0 (neutral) at VER=0, rising linearly to 1.10 at VER=_VER_QUALITY_CAP.
+    # So at most 10 % amplification — keeps VER as a tiebreaker, not a primary driver.
+    #   VER 0 %  → ×1.00  (no boost — people scrolled past without reacting)
+    #   VER 2 %  → ×1.02  (slightly above average)
+    #   VER 5 %  → ×1.05  (good conversion rate)
+    #   VER 10%+ → ×1.10  (excellent — almost every viewer reacted)
+    if raw_views > 0:
+        total_engagements = raw_vibe_count + raw_comment_count + raw_repost_count + raw_share_count
+        ver               = min(total_engagements / raw_views, _VER_QUALITY_CAP)
+        quality_mult      = 1.0 + (ver / _VER_QUALITY_CAP) * 0.10   # maps [0, cap] → [1.0, 1.10]
+        score *= quality_mult
+
+    # ── 2c. View volume — tiny popularity tiebreaker ─────────────────────────
+    # Pure view count with strong log compression so a post with 10,000 views
+    # earns only 0.5 extra points vs a post with 1,000 views earning 0.33.
+    # This intentionally tiny bonus stops view farms from gaming the ranking
+    # while still letting genuinely popular content hold a marginal edge over
+    # equally-engaging but less-seen posts.
+    #
+    # Volume curve (with _VIEW_VOLUME_WEIGHT = 0.5):
+    #   100   views → log2(101)  / log2(10001) * 0.5 ≈ 0.24
+    #   1,000 views → log2(1001) / log2(10001) * 0.5 ≈ 0.37
+    #  10,000 views → log2(10001)/ log2(10001) * 0.5 = 0.50  (cap)
+    _VIEW_VOLUME_CAP = 10_000
+    volume_score = (math.log2(1 + min(raw_views, _VIEW_VOLUME_CAP)) /
+                    math.log2(1 + _VIEW_VOLUME_CAP)) * _VIEW_VOLUME_WEIGHT
+    score += volume_score
+
+    # ── 3. Behavior-Based ────────────────────────────────────────────────────
     actual_author_id = (
         post.original_post.author_id
         if post.is_repost and post.original_post
@@ -648,7 +767,7 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     if actual_author_id in adaptive_author_ids:
         score += 2.0
 
-    # ── 3. Vibe-Based taste match ─────────────────────────────────────────────
+    # ── 4. Vibe-Based taste match ─────────────────────────────────────────────
     # For reposts use the vibe breakdown of the original post (attached as
     # _vb_<type> attributes — the pipeline sets these on signal_post via
     # the same post_id used when building vb_lookup).
@@ -658,7 +777,7 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     )
     score += vibe_score * 0.5
 
-    # ── 4. Network — friend-of-friend ─────────────────────────────────────────
+    # ── 5. Network — friend-of-friend ─────────────────────────────────────────
     if actual_author_id in fof_ids:
         score += 2.5
 
@@ -1707,8 +1826,9 @@ def get_post_vibes(request, post_id):
 @login_required(login_url='/')
 def post_comment(request, post_id):
     post_obj = get_object_or_404(Post, post_id=post_id)
-    post_obj.view += 1
-    post_obj.save()
+    # View increment is now handled client-side via /record-view/<post_id>/
+    # (fired when the comment sheet opens or play is clicked), so we no
+    # longer double-count here.
     comments = PostComment.objects.filter(post=post_obj).order_by('-created_at')
     following_ids = []
     if request.user.is_authenticated:
@@ -3979,6 +4099,38 @@ def track_share(request, post_id):
     post_obj.share += 1
     post_obj.save()
     return JsonResponse({'success': True, 'new_count': post_obj.share})
+
+
+@require_POST
+@login_required(login_url='/')
+def increment_post_view(request, post_id):
+    """
+    Lightweight endpoint called from the frontend when:
+      - A user clicks the play icon on a video/audio post (first play only)
+      - A user opens the comment sheet for a post
+    Uses F() expression to avoid race conditions on concurrent increments.
+    Returns the new view count so the UI can update in place.
+    Also updates the viewer's UserFeedProfile author-affinity so the feed
+    algorithm learns that this viewer has passive interest in this creator.
+    """
+    from django.db.models import F
+    post_obj = get_object_or_404(Post, post_id=post_id)
+    # Atomic increment — no read-modify-write race
+    Post.objects.filter(pk=post_obj.pk).update(view=F('view') + 1)
+    post_obj.refresh_from_db(fields=['view'])
+
+    # ── Feed signal: record passive view affinity ─────────────────────────────
+    # Weight is intentionally low (base 1.0 in _build_user_interest_profile)
+    # so passive scrolling/watching doesn't dilute active engagement signals.
+    # We bust the interest cache so the next feed load reflects this view.
+    try:
+        from django.core.cache import cache
+        _get_or_create_feed_profile(request.user).record_view(post_obj.author_id)
+        cache.delete(f'kvibe_interest_v2_{request.user.id}')
+    except Exception:
+        pass
+
+    return JsonResponse({'success': True, 'new_count': post_obj.view})
 
 
 def get_location(request, username):

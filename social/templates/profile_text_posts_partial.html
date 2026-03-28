@@ -135,7 +135,7 @@
 
       <!-- COMMENT -->
       <button class="kvibe-action-item"
-              onclick="kvibeOpenCommentSheet('{{ post.post_id }}')"
+              onclick="kvRecordPostView('{{ post.post_id }}'); kvibeOpenCommentSheet('{{ post.post_id }}')"
               style="border:none;font-family:inherit;cursor:pointer;">
         <i class="fa-regular fa-comment kvibe-action-icon"></i>
         <span class="kv-vibe-count" id="kvibe-comment-count-{{ post.post_id }}">{{ post.comments.count|intcomma }}</span>
@@ -175,7 +175,8 @@
       <span class="kv-total-text" id="kv-vibe-total-{{ post.post_id }}" style="display:none;"></span>
       <span class="kvibe-separator-dot">·</span>
       <span class="kvibe-view-text">
-        <i class="fa-regular fa-chart-bar"></i> {{ post.view|intcomma }}
+        <i class="fa-regular fa-chart-bar"></i>
+        <span id="kvibe-view-count-{{ post.post_id }}">{{ post.view|intcomma }}</span>
       </span>
     </div>
 
@@ -258,4 +259,32 @@
   <p style="font-size:14px;margin:0;">Text posts will appear here.</p>
 </div>
 {% endif %}
+
+<script>
+// kvRecordPostView — fire once per post per page load, update view span in place.
+// Safe to re-declare: profile.html may also define this; the last definition wins
+// and both are identical, so there is no conflict.
+if (typeof window.kvRecordPostView !== 'function') {
+  window.kvRecordPostView = function (postId) {
+    if (!window._kvViewTracked) window._kvViewTracked = new Set();
+    if (window._kvViewTracked.has(postId)) return;
+    window._kvViewTracked.add(postId);
+
+    var csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content
+            || (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+
+    fetch('/record-view/' + postId + '/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrf }
+    })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      if (!data || !data.success) return;
+      var el = document.getElementById('kvibe-view-count-' + postId);
+      if (el) el.textContent = Number(data.new_count).toLocaleString();
+    })
+    .catch(function () {});
+  };
+}
+</script>
 

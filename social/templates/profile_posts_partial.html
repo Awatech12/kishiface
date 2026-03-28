@@ -2,10 +2,11 @@
 {% load humanize %}
 
 {% if posts %}
-<div class="kvibe-grid-posts">
+<div class="kvibe-grid-posts" id="kvibe-posts-grid">
   {% for post in posts %}
     <a href="{% url 'post_comment' post.post_id %}"
-       class="kvibe-grid-item kvibe-post-item"
+       class="kvibe-grid-item kvibe-post-item kvibe-track-view"
+       data-post-id="{{ post.post_id }}"
        data-mood="{{ post.mood|default:'' }}"
        data-custom-mood="{{ post.custom_mood|default:'' }}">
 
@@ -29,12 +30,58 @@
       <div class="kvibe-grid-overlay">
         <span><i class="fas fa-heart"></i> {{ post.likes.count }}</span>
         <span><i class="fas fa-comment"></i> {{ post.comments.count }}</span>
-        <span><i class="far fa-eye"></i> {{ post.view|intcomma }}</span>
+        <span><i class="far fa-eye"></i>
+          <span class="kv-view-num" data-post-id="{{ post.post_id }}">{{ post.view|intcomma }}</span>
+        </span>
       </div>
 
     </a>
   {% endfor %}
 </div>
+
+<script>
+(function () {
+  var grid = document.getElementById('kvibe-posts-grid');
+  if (!grid) return;
+
+  function getCsrf() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) return meta.content;
+    var m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? m[1] : '';
+  }
+
+  grid.addEventListener('click', function (e) {
+    var link = e.target.closest('a.kvibe-track-view');
+    if (!link) return;
+
+    var postId = link.dataset.postId;
+    var dest   = link.href;
+    if (!postId || !dest) return;
+
+    // Prevent default navigation — fire view first, then navigate
+    e.preventDefault();
+
+    fetch('/record-view/' + postId + '/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrf() }
+    })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      if (data && data.success) {
+        var span = grid.querySelector('.kv-view-num[data-post-id="' + postId + '"]');
+        if (span) span.textContent = Number(data.new_count).toLocaleString();
+      }
+    })
+    .catch(function () {})
+    .finally(function () {
+      // Always navigate regardless of fetch outcome
+      window.location.href = dest;
+    });
+  });
+})();
+</script>
+
 {% else %}
 <div class="kvibe-grid-empty">
   <span class="kvibe-grid-empty-icon">🖼️</span>

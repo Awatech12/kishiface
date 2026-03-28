@@ -1497,6 +1497,33 @@ class UserFeedProfile(models.Model):
         self._prepend_author(author_id)
         self.save(update_fields=['interacted_authors', 'last_updated'])
 
+    def record_view(self, author_id: int):
+        """
+        Record that the user viewed (played or opened) a post by `author_id`.
+
+        Views are a PASSIVE signal — lighter than likes/vibes/comments — so we
+        only prepend the author when they are NOT already near the top of the
+        interacted_authors list (within the first 10 positions).  This prevents
+        a single creator whose videos auto-play from monopolising the affinity
+        list and crowding out creators the user actually engages with actively.
+
+        No vibe weight change — viewing has no bearing on content-type taste.
+        No direct DB save for every view (high-volume endpoint).  Instead we
+        only write when the author genuinely moves in the list, keeping the
+        write amplification low even during heavy scrolling sessions.
+        """
+        authors = list(self.interacted_authors or [])
+        # If already in the top-10 "recent" window, skip the write entirely.
+        top_slice = authors[:10]
+        if author_id in top_slice:
+            return
+        # Otherwise nudge them into the list (deduplicate + cap as usual).
+        if author_id in authors:
+            authors.remove(author_id)
+        authors.insert(0, author_id)
+        self.interacted_authors = authors[: self._MAX_AUTHORS]
+        self.save(update_fields=['interacted_authors', 'last_updated'])
+
     # ── Internal ─────────────────────────────────────────────────────────────
 
     def _prepend_author(self, author_id: int):
