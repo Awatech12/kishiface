@@ -4209,7 +4209,7 @@ def add_comment_reply(request, comment_id):
                 actor=request.user,
                 post=post_obj,
                 comment=comment,
-                notification_type=Notification.COMMENT,
+                notification_type=Notification.REPLY,
             )
 
         # ── Notify any @mentioned users in the reply text ─────────────────

@@ -833,12 +833,14 @@ class Notification(models.Model):
     COMMENT = 'comment'
     REPOST  = 'repost'
     MENTION = 'mention'
+    REPLY   = 'reply'
 
     TYPES = (
         (LIKE,    'Like'),
         (COMMENT, 'Comment'),
         (REPOST,  'Repost'),
         (MENTION, 'Mention'),
+        (REPLY,   'Reply'),
     )
 
     recipient = models.ForeignKey(

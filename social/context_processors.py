@@ -58,10 +58,11 @@ def user_notifications(request):
 
     # ── 1a. Post-based notifications (like / comment / repost) ─────────────────
     # Grouped by post + type so "X and 3 others liked your post" works.
+    # Excludes 'mention' and 'reply' which are handled separately below.
     grouped_qs = (
         Notification.objects
         .filter(recipient=request.user)
-        .exclude(notification_type='mention')
+        .exclude(notification_type__in=['mention', 'reply'])
         .values('post', 'notification_type')
         .annotate(
             total=Count('id'),
@@ -109,6 +110,50 @@ def user_notifications(request):
             'group_id':     f"post-{g['post']}-{g['notification_type']}",
             'vibe_type':    vibe_type,
             'vibe_emoji':   vibe_emoji,
+        })
+
+    # ── 1c. Reply notifications — grouped by comment + actor ─────────────────
+    # Each actor who replies to your comment appears as one row (most recent).
+    reply_qs = (
+        Notification.objects
+        .filter(recipient=request.user, notification_type='reply')
+        .values('comment', 'actor')
+        .annotate(
+            total=Count('id'),
+            latest_time=Max('created_at'),
+            unread_count=Count('id', filter=Q(is_read=False)),
+        )
+        .order_by('-latest_time')
+    )
+
+    for g in reply_qs:
+        latest = (
+            Notification.objects
+            .filter(
+                recipient=request.user,
+                comment_id=g['comment'],
+                actor_id=g['actor'],
+                notification_type='reply',
+            )
+            .select_related('actor', 'actor__profile', 'post', 'comment')
+            .order_by('-created_at')
+            .first()
+        )
+        if not latest:
+            continue
+
+        all_items.append({
+            'kind':         'post',
+            'latest_actor': latest.actor,
+            'post':         latest.post,
+            'comment':      latest.comment,
+            'type':         'reply',
+            'others_count': g['total'] - 1,
+            'created_at':   latest.created_at,
+            'is_read':      g['unread_count'] == 0,
+            'group_id':     f"comment-{g['comment']}-reply-{g['actor']}",
+            'vibe_type':    None,
+            'vibe_emoji':   None,
         })
 
     # ── 1b. Mention notifications — grouped by post + actor ──────────────────
