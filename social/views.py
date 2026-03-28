@@ -569,7 +569,7 @@ def _build_user_interest_profile(user):
     # and infer passive affinity from the author set — a conservative but
     # zero-migration approach that stays consistent with the existing system.
     viewed_rows = Post.objects.filter(
-        author__in=list(interacted_post_ids) or [user.id],  # fallback avoids empty IN
+        author__in=list(author_affinity.keys()) or [user.id],  # use author IDs not post IDs
         created_at__gte=cutoff,
         view__gt=0,
     ).exclude(
