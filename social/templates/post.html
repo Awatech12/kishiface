@@ -1989,9 +1989,11 @@
 
         .kvibe-video-element {
             width: 100%;
+            max-height: 70vh;
             border-radius: 8px;
             background-color: #000;
-            aspect-ratio: 16/9;
+            object-fit: contain;
+            display: block;
         }
 
         .kvibe-video-actions, .kvibe-audio-actions {
@@ -5892,7 +5894,7 @@
                             </div>
                         </div>
                         
-                        <video class="kvibe-video-element" id="videoElement" controls></video>
+                        <video class="kvibe-video-element" id="videoElement" controls preload="metadata"></video>
                         
                         <div class="kvibe-video-actions">
                             <button type="button" onclick="keepVideo()" class="kvibe-video-action-btn kvibe-video-keep">keep</button>
@@ -6152,24 +6154,20 @@
         let videoTrimEnd = 100;
         let videoDuration = 0;
         
-        // Video settings — standard 9:16 portrait (1080 × 1920)
+        // Video settings — native camera resolution
         const VIDEO_SETTINGS = {
-            quality: 0.85,
-            bitrate: 4000000,   // 4 Mbps — good quality at 1080p portrait
-            width:  1080,
-            height: 1920
+            quality: 1.0,
+            bitrate: 8000000,   // 8 Mbps — preserves full native resolution quality
         };
         
         // Standard resolution: 1080 × 1920 (9:16 portrait — same as TikTok/Stories)
         const STANDARD_W = 1080;
         const STANDARD_H = 1920;
 
-        // Smart quality settings: JPEG for tiny files, sharp at 1080×1920
+        // Full-resolution image quality — lossless PNG preserves every pixel
         const IMAGE_QUALITY = {
-            quality: 0.92,          // JPEG 0.92 = visually lossless, 5-10x smaller than PNG
-            format: 'image/jpeg',   // JPEG: far smaller than PNG for photos
-            maxWidth:  STANDARD_W,  // 9:16 portrait — 1080px wide
-            maxHeight: STANDARD_H   // 9:16 portrait — 1920px tall
+            quality: 1.0,           // Maximum quality — no compression loss
+            format: 'image/png',    // PNG: lossless, preserves full native resolution
         };
         
         // Gen Z messages
@@ -6261,6 +6259,16 @@
         
         const videoPlayer = document.getElementById('videoPlayer');
         const videoElement = document.getElementById('videoElement');
+
+        // Auto-size the video player to match the actual video's aspect ratio
+        if (videoElement) {
+            videoElement.addEventListener('loadedmetadata', () => {
+                const vw = videoElement.videoWidth, vh = videoElement.videoHeight;
+                if (vw && vh) {
+                    videoElement.style.aspectRatio = `${vw} / ${vh}`;
+                }
+            });
+        }
         
         const videoRecordingStatus = document.getElementById('videoRecordingStatus');
         const videoRecordingTimeEl = document.getElementById('videoRecordingTime');
@@ -6712,7 +6720,7 @@
                 ctx.clearRect(0, 0, cw, ch);
                 ctx.filter = getFullCameraFilter();
 
-                // Cover-fit the video
+                // Cover-fit the preview — fills the screen without zoom (video element is native res)
                 const vAspect = vw/vh, cAspect = cw/ch;
                 let dw, dh, dx, dy;
                 if (vAspect > cAspect) { dh=ch; dw=ch*vAspect; } else { dw=cw; dh=cw/vAspect; }
@@ -7337,9 +7345,7 @@
 
                 cameraStream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        facingMode: isFrontCameraCamera ? 'user' : 'environment',
-                        width:  { ideal: 1080 },
-                        height: { ideal: 1920 }
+                        facingMode: isFrontCameraCamera ? 'user' : 'environment'
                     }
                 });
                 cameraLive.srcObject = cameraStream;
@@ -7395,11 +7401,11 @@
             // Screen flash (software) if in screen flash mode
             if (camFlashMode === 2) { await triggerScreenFlash(); }
 
-            // ── Force standard 9:16 output: 1080 × 1920 with cover-crop ─
+            // ── Use native camera resolution (no forced resize) ──────────
             const vW = cameraLive.videoWidth  || 1080;
             const vH = cameraLive.videoHeight || 1920;
-            const W = STANDARD_W;   // 1080
-            const H = STANDARD_H;   // 1920
+            const W = vW;   // native camera width
+            const H = vH;   // native camera height
 
             // ── Draw to output canvas ────────────────────────────────────
             const off = document.createElement('canvas');
@@ -7410,16 +7416,15 @@
 
             const shouldMirror = isFrontCameraCamera !== cameraMirrorForce;
 
-            // Helper: draw video (mirrored if needed) cover-fitted to 1080×1920
+            // Helper: draw video (mirrored if needed) cover-fitted to fill the output canvas
             const drawVideo = (targetCtx, tw, th) => {
-                // Recompute cover scale for this target size
+                // Cover scale — matches the screen-filling preview
                 const sx = tw / vW, sy = th / vH;
                 const cs = Math.max(sx, sy);
                 const dw = vW * cs, dh = vH * cs;
                 const dx = (tw - dw) / 2, dy = (th - dh) / 2;
                 targetCtx.save();
                 if (shouldMirror) { targetCtx.translate(tw, 0); targetCtx.scale(-1, 1); }
-                // After mirror transform the x-axis is flipped — dx stays the same in the new space
                 targetCtx.drawImage(cameraLive, dx, dy, dw, dh);
                 targetCtx.restore();
             };
@@ -7550,44 +7555,12 @@
             }
         }
 
-        // =================== 9:16 Image Normaliser ===================
-        // Converts any uploaded image to exactly 1080 × 1920 (9:16) via
-        // centre-crop cover-fit, matching the camera / video standard.
+        // =================== Image Passthrough ===================
+        // Preserves the original resolution of any uploaded image.
+        // No forced 9:16 crop — files are used as-is.
         function resizeImageTo916(file) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                const url = URL.createObjectURL(file);
-                img.onload = () => {
-                    URL.revokeObjectURL(url);
-                    const W = STANDARD_W;   // 1080
-                    const H = STANDARD_H;   // 1920
-
-                    // Cover-fit: scale so the image fills 1080×1920, then centre-crop
-                    const scaleX = W / img.naturalWidth;
-                    const scaleY = H / img.naturalHeight;
-                    const scale  = Math.max(scaleX, scaleY);
-                    const drawW  = img.naturalWidth  * scale;
-                    const drawH  = img.naturalHeight * scale;
-                    const drawX  = (W - drawW) / 2;
-                    const drawY  = (H - drawH) / 2;
-
-                    const canvas = document.createElement('canvas');
-                    canvas.width  = W;
-                    canvas.height = H;
-                    const ctx = canvas.getContext('2d', { alpha: false });
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
-                    ctx.drawImage(img, drawX, drawY, drawW, drawH);
-
-                    canvas.toBlob(blob => {
-                        const ext  = IMAGE_QUALITY.format === 'image/png' ? 'png' : 'jpg';
-                        const name = file.name.replace(/\.[^.]+$/, '') + `_916.${ext}`;
-                        resolve(new File([blob], name, { type: IMAGE_QUALITY.format }));
-                    }, IMAGE_QUALITY.format, IMAGE_QUALITY.quality);
-                };
-                img.onerror = () => { URL.revokeObjectURL(url); resolve(file); }; // fallback: keep original
-                img.src = url;
-            });
+            // Return the original file unchanged — no forced resolution
+            return Promise.resolve(file);
         }
 
         // =================== Image Functions ===================
@@ -7612,11 +7585,11 @@
                 if (videoFileInput) videoFileInput.files = dt.files;
 
                 const videoUrl = URL.createObjectURL(galleryVideoFile);
-                if (videoElement) { videoElement.src = videoUrl; videoElement.load(); }
+                if (videoElement) { videoElement.src = videoUrl; videoElement.load(); videoElement.pause(); }
                 if (videoPlayer) videoPlayer.classList.add('active');
             }
 
-            // Resize every image to 1080 × 1920 (9:16) before adding
+            // Add images at their original resolution
             if (imageFiles.length > 0) {
                 const resized = await Promise.all(imageFiles.map(f => resizeImageTo916(f)));
                 selectedImages = [...selectedImages, ...resized];
@@ -7973,7 +7946,7 @@
                 if (videoFileInput) videoFileInput.files = dt.files;
 
                 const videoUrl = URL.createObjectURL(galleryVideoFile);
-                if (videoElement) { videoElement.src = videoUrl; videoElement.load(); }
+                if (videoElement) { videoElement.src = videoUrl; videoElement.load(); videoElement.pause(); }
                 if (videoPlayer) videoPlayer.classList.add('active');
             }
 
@@ -8142,9 +8115,8 @@
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        facingMode: isFrontCameraVideo ? 'user' : 'environment',
-                        width:  { ideal: STANDARD_W },
-                        height: { ideal: STANDARD_H }
+                        facingMode: isFrontCameraVideo ? 'user' : 'environment'
+                        // No forced resolution — use device native camera resolution
                     },
                     audio: {
                         echoCancellation: true,
@@ -8229,28 +8201,47 @@
                 const videoTrack = videoStream.getVideoTracks()[0];
                 const mixedAudioTrack = destinationNode.stream.getAudioTracks()[0];
 
-                // Set up off-screen canvas composite — always 1080 × 1920 (9:16)
-                const compW = STANDARD_W;   // 1080
-                const compH = STANDARD_H;   // 1920
+                // Set up off-screen canvas composite — use native video resolution
                 const compCanvas = document.createElement('canvas');
-                compCanvas.width = compW; compCanvas.height = compH;
                 const compCtx = compCanvas.getContext('2d');
                 const FPS_REC = 30;
+
+                // Wait until video has dimensions before setting canvas size
+                const setCanvasSize = () => {
+                    const vw = videoLive.videoWidth  || STANDARD_W;
+                    const vh = videoLive.videoHeight || STANDARD_H;
+                    compCanvas.width  = vw;
+                    compCanvas.height = vh;
+                };
+                setCanvasSize();
+                videoLive.addEventListener('loadedmetadata', setCanvasSize, { once: true });
 
                 // Get username from Django template
                 const recWmUsername = '{{request.user.username}}' || 'kishivibe';
 
                 let compRAF = null;
                 const drawCompFrame = () => {
+                    const compW = compCanvas.width  || videoLive.videoWidth  || STANDARD_W;
+                    const compH = compCanvas.height || videoLive.videoHeight || STANDARD_H;
+                    const vw = videoLive.videoWidth  || compW;
+                    const vh = videoLive.videoHeight || compH;
+
+                    compCtx.clearRect(0, 0, compW, compH);
+
+                    // Cover-fit: fills the frame, matching the screen preview
+                    const scale = Math.max(compW / vw, compH / vh);
+                    const dw = vw * scale, dh = vh * scale;
+                    const dx = (compW - dw) / 2, dy = (compH - dh) / 2;
+
                     const shouldMirror = vidMirrorOn || isFrontCameraVideo;
                     if (shouldMirror) {
                         compCtx.save();
                         compCtx.translate(compW, 0);
                         compCtx.scale(-1, 1);
-                        compCtx.drawImage(videoLive, 0, 0, compW, compH);
+                        compCtx.drawImage(videoLive, compW - dx - dw, dy, dw, dh);
                         compCtx.restore();
                     } else {
-                        compCtx.drawImage(videoLive, 0, 0, compW, compH);
+                        compCtx.drawImage(videoLive, dx, dy, dw, dh);
                     }
                     // Bake watermark
                     const fs = Math.max(28, compW * 0.038);
@@ -8352,7 +8343,7 @@
                     currentVideoBlob = videoBlob;
                     
                     const videoUrl = URL.createObjectURL(videoBlob);
-                    if (videoElement) { videoElement.src = videoUrl; videoElement.load(); }
+                    if (videoElement) { videoElement.src = videoUrl; videoElement.load(); videoElement.pause(); }
                     if (videoPlayer) videoPlayer.classList.add('active');
                     videoRecorderModal.classList.remove('active');
                     
@@ -9956,7 +9947,7 @@
         }
 
         // =================== SAVE EDITED MEDIA ===================
-        function saveEditedMedia() {
+        async function saveEditedMedia() {
             if (currentEditingType === 'image') {
                 const W = hiResCanvas.width, H = hiResCanvas.height;
                 const exportCanvas = document.createElement('canvas');
@@ -10011,63 +10002,183 @@
                 }, IMAGE_QUALITY.format, IMAGE_QUALITY.quality);
 
             } else if (currentEditingType === 'video') {
-                // Save video edit metadata (filter, speed, trim, volume, aspect)
-                const videoEditMeta = {
-                    filter: kvibeVideoFilter,
-                    filterCss: KV_VIDEO_FILTERS.find(f => f.id === kvibeVideoFilter)?.css || '',
-                    speed: kvibeVideoSpeed,
-                    volume: kvibeVideoVolume,
-                    muted: kvibeVideoMuted,
-                    trimStart: kvibeTrimStartPct,
-                    trimEnd: kvibeTrimEndPct,
-                    aspect: kvibeVideoAspect,
-                    adjustments: { ...kvibeVideoAdjust },
+                // ── Re-encode video with overlays baked in ─────────────────
+                const vid = videoEditorElement;
+                if (!vid || !vid.src) {
+                    showAlert('No video', 'No video loaded to export.', '❌', [{text:'OK',type:'primary'}]);
+                    return;
+                }
+
+                // Show progress toast
+                const progressToast = document.createElement('div');
+                progressToast.id = 'kvVidRenderToast';
+                progressToast.style.cssText = `position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.9);color:white;padding:12px 20px;border-radius:20px;font-size:13px;font-weight:700;z-index:99999;backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.15);min-width:220px;text-align:center;`;
+                progressToast.textContent = '🎬 Baking video…  0%';
+                document.body.appendChild(progressToast);
+
+                // Gather overlay elements positioned over the video wrapper
+                const videoWrapper = document.getElementById('kvibeVideoWrapper');
+                const overlayLayer = document.getElementById('kvibeVideoOverlayLayer');
+                const overlaySnap = overlayLayer ? Array.from(overlayLayer.children) : [];
+
+                // Video dimensions
+                const vW = vid.videoWidth  || 1280;
+                const vH = vid.videoHeight || 720;
+
+                // Trim bounds
+                const trimStart = (kvibeTrimStartPct / 100) * (vid.duration || 0);
+                const trimEnd   = (kvibeTrimEndPct   / 100) * (vid.duration || 0);
+                const duration  = Math.max(0.1, trimEnd - trimStart);
+
+                // Off-screen render canvas at native resolution
+                const renderCanvas = document.createElement('canvas');
+                renderCanvas.width  = vW;
+                renderCanvas.height = vH;
+                const rctx = renderCanvas.getContext('2d');
+
+                // Build CSS filter string from editor settings
+                const filterCss = KV_VIDEO_FILTERS.find(f => f.id === kvibeVideoFilter)?.css || '';
+                const adj = kvibeVideoAdjust || {};
+                const adjCss = [
+                    adj.brightness != null && adj.brightness !== 0 ? `brightness(${1 + adj.brightness/100})` : '',
+                    adj.contrast   != null && adj.contrast   !== 0 ? `contrast(${1 + adj.contrast/100})`     : '',
+                    adj.saturation != null && adj.saturation !== 0 ? `saturate(${1 + adj.saturation/100})`   : '',
+                    adj.warmth     != null && adj.warmth     !== 0 ? `sepia(${Math.abs(adj.warmth)/200})`    : '',
+                    adj.sharpen    != null && adj.sharpen    !== 0 ? `contrast(${1 + adj.sharpen/300})`      : '',
+                ].filter(Boolean).join(' ');
+                const fullFilter = [filterCss, adjCss].filter(Boolean).join(' ') || 'none';
+
+                // Measure overlay positions relative to the video element itself
+                const vidRect = vid.getBoundingClientRect();
+
+                // MediaRecorder setup
+                const FPS = 30;
+                const mimeType = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']
+                    .find(m => MediaRecorder.isTypeSupported(m)) || '';
+                const canvasStream = renderCanvas.captureStream(FPS);
+
+                // Audio: capture original audio track
+                let mediaStream = canvasStream;
+                try {
+                    // Re-use the original video src as an audio source through WebAudio
+                    const audioCtxBake = new (window.AudioContext || window.webkitAudioContext)();
+                    const audioDest = audioCtxBake.createMediaStreamDestination();
+                    const gainBake  = audioCtxBake.createGain();
+                    gainBake.gain.value = kvibeVideoMuted ? 0 : (kvibeVideoVolume / 100);
+                    gainBake.connect(audioDest);
+
+                    // Source from video element
+                    const srcNode = audioCtxBake.createMediaElementSource(vid);
+                    srcNode.connect(gainBake);
+                    srcNode.connect(audioCtxBake.destination); // keep editor audio playing
+
+                    const audioTrack = audioDest.stream.getAudioTracks()[0];
+                    if (audioTrack) {
+                        mediaStream = new MediaStream([canvasStream.getVideoTracks()[0], audioTrack]);
+                    }
+                } catch(e) {
+                    // Audio capture failed — video-only is fine
+                }
+
+                const recorder = new MediaRecorder(mediaStream, {
+                    mimeType,
+                    videoBitsPerSecond: 8_000_000
+                });
+                const chunks = [];
+                recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+                recorder.onstop = () => {
+                    progressToast.remove();
+                    if (renderCancelled) return;
+
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const file = new File([blob], `kvibe_edited_${Date.now()}.webm`, { type: 'video/webm' });
+                    currentVideoBlob = blob;
+
+                    // Swap into the main video player
+                    const url = URL.createObjectURL(blob);
+                    const dt  = new DataTransfer();
+                    dt.items.add(file);
+                    document.getElementById('video_file').files = dt.files;
+                    const ve = document.getElementById('videoElement');
+                    if (ve) { ve.src = url; ve.load(); ve.pause(); }
+                    document.getElementById('videoPlayer')?.classList.add('active');
+
+                    closeMediaEditor();
+                    updatePreview(); updateFileSizeDisplay(); updateShareButtonState();
+                    createFloatingEmoji('✨', window.innerWidth/2, 100);
+                    vibeVibrate(30);
                 };
 
-                // Store metadata in a hidden input for backend processing
-                let metaInput = document.getElementById('videoEditMetaInput');
-                if (!metaInput) {
-                    metaInput = document.createElement('input');
-                    metaInput.type = 'hidden';
-                    metaInput.name = 'video_edit_meta';
-                    metaInput.id = 'videoEditMetaInput';
-                    const form = document.querySelector('form');
-                    if (form) form.appendChild(metaInput);
-                }
-                metaInput.value = JSON.stringify(videoEditMeta);
+                // Seek to trim start and wait for seeked event before recording
+                let renderCancelled = false;
+                vid.playbackRate = kvibeVideoSpeed || 1;
+                vid.currentTime  = trimStart;
 
-                // Apply video CSS filter visually on the main video player element (if present)
-                const mainVideoPlayer = document.querySelector('.kvibe-video-player video') || document.querySelector('#videoPlayerSection video');
-                if (mainVideoPlayer) {
-                    const filterCss = KV_VIDEO_FILTERS.find(f => f.id === kvibeVideoFilter)?.css || '';
-                    mainVideoPlayer.style.filter = filterCss;
-                    mainVideoPlayer.playbackRate = kvibeVideoSpeed;
-                }
+                await new Promise(res => {
+                    vid.onseeked = () => { vid.onseeked = null; res(); };
+                    setTimeout(res, 500); // fallback
+                });
 
-                // Update the video player display badge to show edits applied
-                const videoEditBadge = document.getElementById('videoEditBadge');
-                if (videoEditBadge) videoEditBadge.style.display = 'flex';
+                vid.play().catch(() => {});
+                recorder.start(100);
 
-                // Build summary
-                const filterName = KV_VIDEO_FILTERS.find(f => f.id === kvibeVideoFilter)?.name || 'Normal';
-                const trimInfo = (kvibeTrimStartPct > 0 || kvibeTrimEndPct < 100) 
-                    ? ` · Trim: ${formatTime((kvibeTrimStartPct/100)*videoDuration)}–${formatTime((kvibeTrimEndPct/100)*videoDuration)}`
-                    : '';
-                const speedInfo = kvibeVideoSpeed !== 1 ? ` · ${kvibeVideoSpeed}×` : '';
-                const summary = `Filter: ${filterName}${speedInfo}${trimInfo}`;
+                // Frame render loop — setInterval for accurate timing (not rAF)
+                const frameInterval = 1000 / FPS;
+                const totalFrames   = Math.ceil(duration * FPS / (kvibeVideoSpeed || 1));
+                let frameIdx = 0;
 
-                closeMediaEditor();
-                updatePreview();
-                updateFileSizeDisplay();
-                createFloatingEmoji('🎬', window.innerWidth/2, 100);
-                vibeVibrate(30);
+                const renderInterval = setInterval(() => {
+                    if (renderCancelled) { clearInterval(renderInterval); recorder.stop(); return; }
 
-                // Show brief success toast
-                const toast = document.createElement('div');
-                toast.style.cssText = `position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:white;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:700;z-index:9999;backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.12);max-width:300px;text-align:center;animation:floatEmoji 2.5s ease-out forwards;`;
-                toast.textContent = `✅ Video edits saved — ${summary}`;
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 2500);
+                    // Check if we've passed trim end
+                    if (vid.currentTime >= trimEnd || frameIdx >= totalFrames) {
+                        clearInterval(renderInterval);
+                        vid.pause();
+                        setTimeout(() => recorder.stop(), 200);
+                        return;
+                    }
+
+                    // Draw video frame with filter
+                    rctx.save();
+                    rctx.filter = fullFilter;
+                    rctx.drawImage(vid, 0, 0, vW, vH);
+                    rctx.filter = 'none';
+                    rctx.restore();
+
+                    // Bake overlay elements (stickers, images, text)
+                    overlaySnap.forEach(el => {
+                        const elRect = el.getBoundingClientRect();
+                        const x = (elRect.left - vidRect.left) * (vW / vidRect.width);
+                        const y = (elRect.top  - vidRect.top)  * (vH / vidRect.height);
+                        const w = elRect.width  * (vW / vidRect.width);
+                        const h = elRect.height * (vH / vidRect.height);
+
+                        // Image / sticker overlay
+                        const imgEl = el.querySelector('img');
+                        if (imgEl && imgEl.complete) {
+                            rctx.drawImage(imgEl, x, y, w, h);
+                            return;
+                        }
+
+                        // Text overlay
+                        const rawText = el.childNodes[0]?.textContent?.trim() || '';
+                        if (!rawText) return;
+                        const style    = window.getComputedStyle(el);
+                        const fontSize = parseFloat(style.fontSize) * (vW / vidRect.width);
+                        rctx.font         = `bold ${fontSize}px ${style.fontFamily}`;
+                        rctx.fillStyle    = style.color;
+                        rctx.textBaseline = 'top';
+                        rctx.shadowColor  = 'rgba(0,0,0,0.7)';
+                        rctx.shadowBlur   = fontSize * 0.08;
+                        rctx.fillText(rawText, x, y);
+                        rctx.shadowBlur   = 0;
+                    });
+
+                    frameIdx++;
+                    const pct = Math.round((frameIdx / totalFrames) * 100);
+                    if (frameIdx % 15 === 0) progressToast.textContent = `🎬 Baking video… ${pct}%`;
+
+                }, frameInterval);
             }
         }
 
