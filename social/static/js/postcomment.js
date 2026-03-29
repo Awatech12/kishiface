@@ -826,7 +826,7 @@ function kvCmtGenerateWaveform(audioId) {
   var wc = document.getElementById('kvibe-wave-container-' + audioId);
   if (!wc) return;
   wc.innerHTML = '';
-  var BAR_COUNT = 40;
+  var BAR_COUNT = 24;
   for (var i = 0; i < BAR_COUNT; i++) {
     var bar  = document.createElement('div');
     bar.className = 'kvibe-wave-bar';
