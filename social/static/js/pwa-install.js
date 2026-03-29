@@ -109,7 +109,7 @@
     const banner = document.createElement('div');
     banner.id            = BANNER_ID;
     banner.setAttribute('role', 'dialog');
-    banner.setAttribute('aria-label', 'Install KVibe app');
+    banner.setAttribute('aria-label', 'Install Kishiface app');
 
     // Detect iOS separately (no beforeinstallprompt, needs manual instructions)
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
@@ -181,10 +181,10 @@
     return [
       '<div class="kvibe-pwa-inner">',
       '  <div class="kvibe-pwa-app-row">',
-      '    <img class="kvibe-pwa-icon" src="/static/images/small.png" alt="KishiVibe" ',
+      '    <img class="kvibe-pwa-icon" src="/static/images/small.png" alt="Kishiface" ',
       '         onerror="this.style.display=\'none\'">',
       '    <div class="kvibe-pwa-info">',
-      '      <div class="kvibe-pwa-name">KishiVibe</div>',
+      '      <div class="kvibe-pwa-name">Kishiface</div>',
       '      <div class="kvibe-pwa-desc">Add to Home Screen for faster access</div>',
       '    </div>',
       '    <button class="kvibe-pwa-dismiss-x" id="kvibe-pwa-dismiss-btn" ',
@@ -212,10 +212,10 @@
     return [
       '<div class="kvibe-pwa-inner">',
       '  <div class="kvibe-pwa-app-row">',
-      '    <img class="kvibe-pwa-icon" src="/static/images/small.png" alt="KishiVibe" ',
+      '    <img class="kvibe-pwa-icon" src="/static/images/small.png" alt="Kishiface" ',
       '         onerror="this.style.display=\'none\'">',
       '    <div class="kvibe-pwa-info">',
-      '      <div class="kvibe-pwa-name">Install KishiVibe</div>',
+      '      <div class="kvibe-pwa-name">Install Kishiface</div>',
       '      <div class="kvibe-pwa-desc">Add to Home Screen for the best experience</div>',
       '    </div>',
       '    <button class="kvibe-pwa-dismiss-x" id="kvibe-pwa-dismiss-btn" ',
