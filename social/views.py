@@ -1271,30 +1271,6 @@ def home(request):
     profile = Profile.objects.get(user=request.user)
     following = profile.followings.values_list('user', flat=True)
 
-    followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
-        last_app_activity=Max('channel_messages__created_at')
-    ).order_by('-last_app_activity', '-created_at')
-
-    followed_list = []
-    total_unread  = 0
-
-    for channel in followed_channels:
-        unread = channel.unread_count_for_user(request.user)
-        total_unread += unread
-        last_msg = channel.channel_messages.order_by('-created_at').first()
-        msg_type = 'text'
-        if last_msg:
-            if   last_msg.file_type == 'audio': msg_type = 'audio'
-            elif last_msg.file_type == 'video': msg_type = 'video'
-            elif last_msg.file_type == 'image': msg_type = 'image'
-        followed_list.append({
-            'channel':      channel,
-            'unread_count': unread,
-            'last_message': last_msg.message if last_msg else 'No messages yet',
-            'last_time':    last_msg.created_at if last_msg else None,
-            'message_type': msg_type,
-        })
-
     following_ids = list(following)
 
     unread_follow_count = FollowNotification.objects.filter(
@@ -1336,7 +1312,6 @@ def home(request):
         'posts_with_ads':             feed,
         'next_cursor':                next_cursor,
         'feed_anchor':                feed_anchor_ts,
-        'followed_list':              followed_list[:8],
         'unread_follow_count':        unread_follow_count,
         'unread_notifications_count': unread_notifications_count,
         'users':                      users,
