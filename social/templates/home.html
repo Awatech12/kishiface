@@ -2331,6 +2331,39 @@
       font-size: 12px;
     }
 
+    /* ── Sidebar connection spinner ── */
+    .kvibe-conn-spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: var(--kvibe-primary);
+      font-size: 20px;
+    }
+
+    /* htmx indicator: hidden by default, shown during request */
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: flex; }
+
+    /* ── "Load more" button inside sidebar lists ── */
+    .kvibe-conn-load-more {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      background: none;
+      border: none;
+      border-top: 1px solid var(--kvibe-border);
+      color: var(--kvibe-primary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s;
+    }
+    .kvibe-conn-load-more:hover {
+      background: var(--kvibe-bg);
+    }
+
 
     /* =====================
        SNIPPET: post_like.html — Vibe Reactions
@@ -3199,64 +3232,36 @@
 
             <!-- Tab Nav -->
             <div class="kvibe-sidebar-tabs">
-              <button class="kvibe-sidebar-tab active" data-tab="following" onclick="kvibeSwitchTab('following', this)">
+              <button class="kvibe-sidebar-tab active" data-tab="following"
+                      onclick="kvibeSwitchTab('following', this); kvibeLoadConnectionsOnce('following')">
                 Following
-                <span class="kvibe-sidebar-tab-count">{{ sidebar_followings.count }}</span>
+                <span class="kvibe-sidebar-tab-count">{{ sidebar_following_count }}</span>
               </button>
-              <button class="kvibe-sidebar-tab" data-tab="followers" onclick="kvibeSwitchTab('followers', this)">
+              <button class="kvibe-sidebar-tab" data-tab="followers"
+                      onclick="kvibeSwitchTab('followers', this); kvibeLoadConnectionsOnce('followers')">
                 Followers
-                <span class="kvibe-sidebar-tab-count">{{ sidebar_followers.count }}</span>
+                <span class="kvibe-sidebar-tab-count">{{ sidebar_follower_count }}</span>
               </button>
             </div>
 
-            <!-- Following List -->
+            <!-- Following List (HTMX paginated) -->
             <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-following">
-              {% for profile_obj in sidebar_followings %}
-              {% if profile_obj.user != request.user %}
-              <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
-                <img src="{{ profile_obj.user.profile.get_picture_url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
-                <div class="kvibe-sidebar-user-info">
-                  <span class="kvibe-sidebar-user-name">
-                    {{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}
-                    {% if profile_obj.user.profile.is_verify %}
-                      <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align:middle;">
-                    {% endif %}
-                  </span>
-                  <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
+              <div id="kvibe-following-list"
+                   hx-get="{% url 'sidebar_connections' %}?type=following&page=1"
+                   hx-trigger="load"
+                   hx-swap="innerHTML"
+                   hx-indicator="#kvibe-following-spinner">
+                <div id="kvibe-following-spinner" class="kvibe-conn-spinner htmx-indicator">
+                  <i class="fas fa-circle-notch fa-spin"></i>
                 </div>
-              </a>
-              {% endif %}
-              {% empty %}
-              <div class="kvibe-sidebar-empty">
-                <i class="fas fa-user-friends"></i>
-                <p>Not following anyone yet</p>
               </div>
-              {% endfor %}
             </div>
 
-            <!-- Followers List -->
+            <!-- Followers List (HTMX paginated) -->
             <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-followers">
-              {% for profile_obj in sidebar_followers %}
-              {% if profile_obj.user != request.user %}
-              <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
-                <img src="{{ profile_obj.user.profile.get_picture_url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
-                <div class="kvibe-sidebar-user-info">
-                  <span class="kvibe-sidebar-user-name">
-                    {{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}
-                    {% if profile_obj.user.profile.is_verify %}
-                      <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align:middle;">
-                    {% endif %}
-                  </span>
-                  <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
-                </div>
-              </a>
-              {% endif %}
-              {% empty %}
-              <div class="kvibe-sidebar-empty">
-                <i class="fas fa-user-friends"></i>
-                <p>No followers yet</p>
+              <div id="kvibe-followers-list">
+                <!-- loaded lazily when tab is first activated -->
               </div>
-              {% endfor %}
             </div>
 
           </div><!-- end .kvibe-sidebar-social -->
@@ -3316,64 +3321,36 @@
 
       <div class="kvibe-sidebar-social" style="margin-bottom: 16px;">
         <div class="kvibe-sidebar-tabs">
-          <button class="kvibe-sidebar-tab active" data-tab="mob-following" onclick="kvibeSwitchTab('mob-following', this)">
+          <button class="kvibe-sidebar-tab active" data-tab="mob-following"
+                  onclick="kvibeSwitchTab('mob-following', this); kvibeLoadConnectionsOnce('mob-following')">
             Following
-            <span class="kvibe-sidebar-tab-count">{{ sidebar_followings.count }}</span>
+            <span class="kvibe-sidebar-tab-count">{{ sidebar_following_count }}</span>
           </button>
-          <button class="kvibe-sidebar-tab" data-tab="mob-followers" onclick="kvibeSwitchTab('mob-followers', this)">
+          <button class="kvibe-sidebar-tab" data-tab="mob-followers"
+                  onclick="kvibeSwitchTab('mob-followers', this); kvibeLoadConnectionsOnce('mob-followers')">
             Followers
-            <span class="kvibe-sidebar-tab-count">{{ sidebar_followers.count }}</span>
+            <span class="kvibe-sidebar-tab-count">{{ sidebar_follower_count }}</span>
           </button>
         </div>
 
-        <!-- Following List -->
+        <!-- Following List (HTMX paginated) -->
         <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-mob-following">
-          {% for profile_obj in sidebar_followings %}
-          {% if profile_obj.user != request.user %}
-          <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
-            <img src="{{ profile_obj.user.profile.get_picture_url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
-            <div class="kvibe-sidebar-user-info">
-              <span class="kvibe-sidebar-user-name">
-                {{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}
-                {% if profile_obj.user.profile.is_verify %}
-                  <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align:middle;">
-                {% endif %}
-              </span>
-              <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
+          <div id="kvibe-mob-following-list"
+               hx-get="{% url 'sidebar_connections' %}?type=following&page=1"
+               hx-trigger="revealed"
+               hx-swap="innerHTML"
+               hx-indicator="#kvibe-mob-following-spinner">
+            <div id="kvibe-mob-following-spinner" class="kvibe-conn-spinner htmx-indicator">
+              <i class="fas fa-circle-notch fa-spin"></i>
             </div>
-          </a>
-          {% endif %}
-          {% empty %}
-          <div class="kvibe-sidebar-empty">
-            <i class="fas fa-user-friends"></i>
-            <p>Not following anyone yet</p>
           </div>
-          {% endfor %}
         </div>
 
-        <!-- Followers List -->
+        <!-- Followers List (HTMX paginated) -->
         <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-mob-followers">
-          {% for profile_obj in sidebar_followers %}
-          {% if profile_obj.user != request.user %}
-          <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
-            <img src="{{ profile_obj.user.profile.get_picture_url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
-            <div class="kvibe-sidebar-user-info">
-              <span class="kvibe-sidebar-user-name">
-                {{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}
-                {% if profile_obj.user.profile.is_verify %}
-                  <img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" style="vertical-align:middle;">
-                {% endif %}
-              </span>
-              <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
-            </div>
-          </a>
-          {% endif %}
-          {% empty %}
-          <div class="kvibe-sidebar-empty">
-            <i class="fas fa-user-friends"></i>
-            <p>No followers yet</p>
+          <div id="kvibe-mob-followers-list">
+            <!-- loaded lazily when tab is first activated -->
           </div>
-          {% endfor %}
         </div>
       </div>
 
@@ -4397,6 +4374,41 @@
         container.querySelectorAll('.kvibe-sidebar-tab-panel').forEach(p => p.classList.remove('active'));
         const panel = document.getElementById('kvibe-tab-' + tab);
         if (panel) panel.classList.add('active');
+      }
+
+      /* ── Lazy-load sidebar connections on first tab activation ── */
+      const _kvibeConnLoaded = new Set();
+
+      function kvibeLoadConnectionsOnce(tab) {
+        if (_kvibeConnLoaded.has(tab)) return;
+        _kvibeConnLoaded.add(tab);
+
+        // Map tab id → list container id + API type
+        const map = {
+          'followers':     { listId: 'kvibe-followers-list',     type: 'followers'  },
+          'mob-followers': { listId: 'kvibe-mob-followers-list', type: 'followers'  },
+          // following tabs are loaded on page load via hx-trigger="load|revealed"
+        };
+        const cfg = map[tab];
+        if (!cfg) return;  // 'following' tabs already use hx-trigger
+
+        const container = document.getElementById(cfg.listId);
+        if (!container) return;
+
+        // Show spinner then fetch
+        container.innerHTML =
+          '<div class="kvibe-conn-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>';
+
+        fetch(`{% url 'sidebar_connections' %}?type=${cfg.type}&page=1`, {
+          credentials: 'same-origin',
+          headers: { 'HX-Request': 'true', 'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' }
+        })
+        .then(r => r.text())
+        .then(html => { container.innerHTML = html; htmx.process(container); })
+        .catch(() => {
+          container.innerHTML =
+            '<div class="kvibe-sidebar-empty"><i class="fas fa-exclamation-circle"></i><p>Could not load.</p></div>';
+        });
       }
 
 

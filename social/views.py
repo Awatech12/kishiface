@@ -1299,8 +1299,9 @@ def home(request):
     feed_anchor_ts = _dt.datetime.now(_dt.timezone.utc).timestamp()
     request.session['feed_anchor'] = feed_anchor_ts
 
-    sidebar_followings = profile.followings.select_related('user').all()
-    sidebar_followers  = profile.followers.select_related('user').all()
+    # Only pass counts — lists are loaded lazily via HTMX
+    sidebar_following_count = profile.followings.count()
+    sidebar_follower_count  = profile.followers.count()
 
     users = list(
         User.objects.exclude(id__in=following_ids)
@@ -1317,9 +1318,74 @@ def home(request):
         'users':                      users,
         'trending_hashtags':          trending_hashtags,
         'following_ids':              following_ids,
-        'sidebar_followings':         sidebar_followings,
-        'sidebar_followers':          sidebar_followers,
+        'sidebar_following_count':    sidebar_following_count,
+        'sidebar_follower_count':     sidebar_follower_count,
     })
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HTMX sidebar connections endpoint
+# GET /sidebar/connections/?type=following|followers&page=<int>
+# Returns a partial list of sidebar user rows (20 per page).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SIDEBAR_PAGE_SIZE = 20
+
+@login_required(login_url='/')
+@require_GET
+def sidebar_connections(request):
+    """
+    Paginated HTMX endpoint for the right-sidebar Following / Followers lists.
+    Handles 10 000+ connections gracefully via cursor-based offset pagination.
+    """
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    conn_type = request.GET.get('type', 'following')   # 'following' | 'followers'
+    try:
+        page = max(1, int(request.GET.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+
+    profile = get_object_or_404(Profile, user=request.user)
+
+    # profile.followers / profile.followings are a M2M of Profile objects.
+    # Each Profile already IS the profile — select_related('user') joins the
+    # auth_user row. 'user__profile' would be a circular self-join back to
+    # the same profile table and is incorrect here.
+    if conn_type == 'followers':
+        qs = (
+            profile.followers
+            .select_related('user')
+            .order_by('user__username')
+        )
+    else:
+        qs = (
+            profile.followings
+            .select_related('user')
+            .order_by('user__username')
+        )
+
+    # Exclude the logged-in user themselves
+    qs = qs.exclude(user=request.user)
+
+    total    = qs.count()
+    offset   = (page - 1) * _SIDEBAR_PAGE_SIZE
+    profiles = list(qs[offset: offset + _SIDEBAR_PAGE_SIZE])
+    has_more = (offset + _SIDEBAR_PAGE_SIZE) < total
+
+    html = render_to_string(
+        'snippet/sidebar_connections_partial.html',
+        {
+            'profiles':  profiles,
+            'has_more':  has_more,
+            'next_page': page + 1,
+            'conn_type': conn_type,
+            'request':   request,
+        },
+        request=request,
+    )
+    return HttpResponse(html)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HTMX infinite-scroll endpoint
@@ -2163,6 +2229,8 @@ def profile_videos(request, username):
         'total_comments_received': total_comments_received,
         'mutual_followings': mutual_followings, 'mutual_count': mutual_count,
         'is_blocked': is_blocked, 'active_tab': 'videos',
+        'can_view_details': profile.can_view_details(request.user),
+        'is_own_profile': request.user.is_authenticated and request.user == user,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
@@ -2223,6 +2291,8 @@ def profile_text_posts(request, username):
         'total_comments_received': total_comments_received,
         'mutual_followings': mutual_followings, 'mutual_count': mutual_count,
         'is_blocked': is_blocked, 'active_tab': 'text',
+        'can_view_details': profile.can_view_details(request.user),
+        'is_own_profile': request.user.is_authenticated and request.user == user,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):

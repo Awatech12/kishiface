@@ -19,8 +19,9 @@ urlpatterns = [
     path('forgot-password/reset/',  views.forgot_password_reset,  name='forgot_password_reset'),
 
     # ── Home feed ──────────────────────────────────────────────────────────────
-    path('home',              views.home,            name='home'),
-    path('feed/more/',        views.feed_load_more,  name='feed_load_more'),
+    path('home',                    views.home,                 name='home'),
+    path('feed/more/',              views.feed_load_more,       name='feed_load_more'),
+    path('sidebar/connections/',    views.sidebar_connections,  name='sidebar_connections'),
 
     # ── Notifications ──────────────────────────────────────────────────────────
     path('open/<uuid:post_id>/<str:notification_type>', views.open_notification,             name='open_notification'),

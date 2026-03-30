@@ -5622,10 +5622,39 @@ document.addEventListener('DOMContentLoaded', function() {
         return inner ? (inner.innerHTML || inner.outerHTML) : html;
     }
 
+    function initializeVideoGridClicks() {
+        var grid = postsContainer.querySelector('#kvibe-videos-grid');
+        if (!grid) return;
+        grid.addEventListener('click', function (e) {
+            var link = e.target.closest('a.kvibe-track-view');
+            if (!link) return;
+            var postId = link.dataset.postId;
+            var dest   = link.href;
+            if (!postId || !dest) return;
+            e.preventDefault();
+            fetch('/record-view/' + postId + '/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' }
+            })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                if (data && data.success) {
+                    var span = grid.querySelector('.kv-view-num[data-post-id="' + postId + '"]');
+                    if (span) span.textContent = Number(data.new_count).toLocaleString();
+                }
+            })
+            .catch(function () {})
+            .finally(function () { window.location.href = dest; });
+        });
+    }
+
     function afterRender(tabName) {
         showMoodFilter(tabName === 'posts');
         initializeLazyLoading();
-        if (tabName === 'videos') initializeVideoThumbnails();
+        if (tabName === 'videos') {
+            initializeVideoThumbnails();
+            initializeVideoGridClicks();
+        }
         updatePostCount(tabName);
         // re-run mood counters when posts tab reloads
         if (tabName === 'posts' && typeof run === 'function') {
@@ -5712,7 +5741,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function initializeVideoThumbnails() {
         postsContainer.querySelectorAll('video').forEach(v => {
             v.controls = false; v.muted = true; v.playsInline = true; v.preload = 'metadata';
-            v.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
+            v.addEventListener('click', e => { e.preventDefault(); });
             v.addEventListener('play', function () { this.pause(); });
         });
     }
