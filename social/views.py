@@ -1388,6 +1388,66 @@ def sidebar_connections(request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# HTMX profile sidebar connections endpoint
+# GET /profile-sidebar/<username>/connections/?type=following|followers&page=<n>
+# Scoped to the VIEWED profile's own following/followers, not request.user.
+# Works for authenticated viewers; public profiles visible to anyone.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@require_GET
+def profile_sidebar_connections(request, username):
+    """
+    Paginated HTMX endpoint for the profile page right-sidebar
+    Following / Followers lists.  Always scoped to the profile being *viewed*
+    (``username``), not the logged-in user, so visitors see the profile owner's
+    network — not their own.
+    """
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    profile_user   = get_object_or_404(User, username=username)
+    viewed_profile = get_object_or_404(Profile, user=profile_user)
+
+    conn_type = request.GET.get('type', 'following')   # 'following' | 'followers'
+    try:
+        page = max(1, int(request.GET.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+
+    if conn_type == 'followers':
+        qs = (
+            viewed_profile.followers
+            .select_related('user')
+            .order_by('user__username')
+        )
+    else:
+        qs = (
+            viewed_profile.followings
+            .select_related('user')
+            .order_by('user__username')
+        )
+
+    total    = qs.count()
+    offset   = (page - 1) * _SIDEBAR_PAGE_SIZE
+    profiles = list(qs[offset: offset + _SIDEBAR_PAGE_SIZE])
+    has_more = (offset + _SIDEBAR_PAGE_SIZE) < total
+
+    html = render_to_string(
+        'snippet/sidebar_connections_partial.html',
+        {
+            'profiles':         profiles,
+            'has_more':         has_more,
+            'next_page':        page + 1,
+            'conn_type':        conn_type,
+            'request':          request,
+            'profile_username': username,   # tells partial to use profile-scoped URL
+        },
+        request=request,
+    )
+    return HttpResponse(html)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # HTMX infinite-scroll endpoint
 # GET /feed/more/?cursor=<float_unix_timestamp>
 # Returns the next page partial (posts + new sentinel) or 204 if exhausted.
@@ -2026,6 +2086,11 @@ def profile(request, username):
     # ── Privacy: determine if viewer can see personal details ───────────────
     can_view_details = profile.can_view_details(request.user)
 
+    # Only pass counts — the full lists are loaded lazily via HTMX
+    # (profile_sidebar_connections endpoint), matching the home feed pattern.
+    sidebar_following_count = profile.followings.count()
+    sidebar_follower_count  = profile.followers.count()
+
     context = {
         'user': user, 'posts': posts, 'profile': profile,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
@@ -2035,6 +2100,8 @@ def profile(request, username):
         'is_blocked': False,
         'can_view_details': can_view_details,
         'is_own_profile': request.user.is_authenticated and request.user == user,
+        'sidebar_following_count': sidebar_following_count,
+        'sidebar_follower_count':  sidebar_follower_count,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -2440,24 +2507,7 @@ def search(request):
             .exclude(query=query).order_by('-created_at')[:8]
         )
 
-        from social.models import PostVibe as _PV
-        vibe_emojis = _PV.VIBE_EMOJIS
-
-        # ── Sidebar context (mirrors home view) ───────────────────────────────
-        _profile = request.user.profile
-        _followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
-            last_app_activity=Max('channel_messages__created_at')
-        ).order_by('-last_app_activity', '-created_at')
-        _followed_list = []
-        for _ch in _followed_channels:
-            _unread = _ch.unread_count_for_user(request.user)
-            _last_msg = _ch.channel_messages.order_by('-created_at').first()
-            _followed_list.append({
-                'channel':      _ch,
-                'unread_count': _unread,
-                'last_message': _last_msg.message if _last_msg else 'No messages yet',
-                'last_time':    _last_msg.created_at if _last_msg else None,
-            })
+        # ── Sidebar context (simplified - no follow lists) ─────────────────────
         _unread_follow_count = FollowNotification.objects.filter(to_user=request.user, is_read=False).count()
         _unread_notif_count  = Notification.objects.filter(recipient=request.user, is_read=False).count()
 
@@ -2476,12 +2526,9 @@ def search(request):
             'recent_searches':   recent_searches,
             'trending_hashtags': trending_hashtags,
             'page_size':         _PAGE,
-            # sidebar
-            'followed_list':              _followed_list[:8],
+            # sidebar (simplified)
             'unread_follow_count':        _unread_follow_count,
             'unread_notifications_count': _unread_notif_count,
-            'sidebar_followings':         _profile.followings.select_related('user').all(),
-            'sidebar_followers':          _profile.followers.select_related('user').all(),
         })
 
     # ── Explore (no query) ─────────────────────────────────────────────────────
@@ -2586,21 +2633,7 @@ def search(request):
     _pool_list.sort(key=_score_explore_post, reverse=True)
     explore_posts = _pool_list[:60]
 
-    # ── Sidebar context ────────────────────────────────────────────────────────
-    _profile = request.user.profile
-    _followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
-        last_app_activity=Max('channel_messages__created_at')
-    ).order_by('-last_app_activity', '-created_at')
-    _followed_list = []
-    for _ch in _followed_channels:
-        _unread = _ch.unread_count_for_user(request.user)
-        _last_msg = _ch.channel_messages.order_by('-created_at').first()
-        _followed_list.append({
-            'channel':      _ch,
-            'unread_count': _unread,
-            'last_message': _last_msg.message if _last_msg else 'No messages yet',
-            'last_time':    _last_msg.created_at if _last_msg else None,
-        })
+    # ── Sidebar context (simplified - no follow lists) ────────────────────────
     _unread_follow_count = FollowNotification.objects.filter(to_user=request.user, is_read=False).count()
     _unread_notif_count  = Notification.objects.filter(recipient=request.user, is_read=False).count()
 
@@ -2609,14 +2642,10 @@ def search(request):
         'trending_hashtags': trending_hashtags,
         'suggested_users':   suggested_users,
         'explore_posts':     explore_posts,
-        # sidebar
-        'followed_list':              _followed_list[:8],
+        # sidebar (simplified)
         'unread_follow_count':        _unread_follow_count,
         'unread_notifications_count': _unread_notif_count,
-        'sidebar_followings':         _profile.followings.select_related('user').all(),
-        'sidebar_followers':          _profile.followers.select_related('user').all(),
     })
-
 
 
 # ── HTMX search pagination partials ───────────────────────────────────────────

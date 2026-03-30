@@ -22,6 +22,7 @@ urlpatterns = [
     path('home',                    views.home,                 name='home'),
     path('feed/more/',              views.feed_load_more,       name='feed_load_more'),
     path('sidebar/connections/',    views.sidebar_connections,  name='sidebar_connections'),
+    path('profile-sidebar/<str:username>/connections/', views.profile_sidebar_connections, name='profile_sidebar_connections'),
 
     # ── Notifications ──────────────────────────────────────────────────────────
     path('open/<uuid:post_id>/<str:notification_type>', views.open_notification,             name='open_notification'),
