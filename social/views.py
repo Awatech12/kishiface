@@ -13,7 +13,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt, UserFeedProfile
 from django.db.models import Q
-from django.db.models import Count, Max, Min
+from django.db.models import Count, Max, Min, OuterRef, Subquery
 from django.core.paginator import Paginator
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -2069,7 +2069,7 @@ def profile(request, username):
 
     user_posts = Post.objects.filter(author=user)
     total_view = sum(p.view for p in user_posts)
-    total_like_recieved      = user_posts.aggregate(total=Count('likes'))['total'] or 0
+    total_like_recieved      = user_posts.aggregate(total=Count('vibes'))['total'] or 0
     total_comments_received  = PostComment.objects.filter(post__author=user).count()
 
     mutual_followings = None
@@ -2079,9 +2079,15 @@ def profile(request, username):
         mutual_followings = my_following.filter(followings=profile)[:3]
         mutual_count      = my_following.filter(followings=profile).count()
 
+    vibe_subquery = PostVibe.objects.filter(
+        post=OuterRef('pk')
+    ).values('post').annotate(c=Count('pk')).values('c')
+
     posts = Post.objects.filter(
         author=user, images__isnull=False
-    ).prefetch_related('images').distinct()[:30]
+    ).prefetch_related('images').annotate(
+        vibe_count=Subquery(vibe_subquery)
+    ).distinct()[:30]
 
     # ── Privacy: determine if viewer can see personal details ───────────────
     can_view_details = profile.can_view_details(request.user)
@@ -2273,13 +2279,19 @@ def profile_videos(request, username):
             blocker=request.user, blocked=user
         ).exists()
 
+    vibe_subquery = PostVibe.objects.filter(
+        post=OuterRef('pk')
+    ).values('post').annotate(c=Count('pk')).values('c')
+
     video_posts = Post.objects.filter(
         author=user, video_file__isnull=False
-    ).prefetch_related('images')[:30]
+    ).prefetch_related('images').annotate(
+        vibe_count=Subquery(vibe_subquery)
+    )[:30]
 
     user_posts = Post.objects.filter(author=user)
     total_view = sum(p.view for p in user_posts)
-    total_like_recieved = user_posts.aggregate(total=Count('likes'))['total'] or 0
+    total_like_recieved = user_posts.aggregate(total=Count('vibes'))['total'] or 0
     total_comments_received = PostComment.objects.filter(post__author=user).count()
 
     mutual_followings = None
