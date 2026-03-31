@@ -2631,7 +2631,10 @@ def search(request):
         return score
 
     _pool_list.sort(key=_score_explore_post, reverse=True)
-    explore_posts = _pool_list[:60]
+    # First page: 18 posts (divisible by 2 and 3 — fits both grid layouts cleanly)
+    _EXPLORE_PAGE = 18
+    explore_posts    = _pool_list[:_EXPLORE_PAGE]
+    explore_has_more = len(_pool_list) > _EXPLORE_PAGE
 
     # ── Sidebar context (simplified - no follow lists) ────────────────────────
     _unread_follow_count = FollowNotification.objects.filter(to_user=request.user, is_read=False).count()
@@ -2642,6 +2645,7 @@ def search(request):
         'trending_hashtags': trending_hashtags,
         'suggested_users':   suggested_users,
         'explore_posts':     explore_posts,
+        'explore_has_more':  explore_has_more,
         # sidebar (simplified)
         'unread_follow_count':        _unread_follow_count,
         'unread_notifications_count': _unread_notif_count,
@@ -2786,6 +2790,99 @@ def delete_history(request, history_id):
 def clear_history(request):
     SearchHistory.objects.filter(user=request.user).delete()
     return redirect('search')
+
+
+@login_required(login_url='/')
+@require_GET
+def explore_partial(request):
+    """
+    GET /search/explore/?page=N
+    HTMX infinite-scroll endpoint for the Explore grid (no-query mode).
+    Returns raw <a class="ks-grid-cell"> elements + optional next sentinel.
+    Page 1 is served by the main search() view; this handles page 2 onwards.
+    """
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    _EXPLORE_PAGE = 18   # must match the page size in search()
+    page   = max(2, int(request.GET.get('page', 2) or 2))
+    offset = (page - 1) * _EXPLORE_PAGE
+
+    # ── Candidate pool (mirrors search() logic exactly) ────────────────────────
+    _seen_ids = set(request.session.get('explore_seen_ids', []))
+
+    _pool = (
+        Post.objects
+        .filter(
+            Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False),
+            created_at__gte=timezone.now() - timedelta(days=7),
+        )
+        .select_related('author', 'author__profile', 'original_post', 'original_post__author')
+        .prefetch_related('images', 'likes', 'vibes')
+        .annotate(
+            vibe_count=Count('vibes', distinct=True),
+            like_count=Count('likes', distinct=True),
+        )
+        .distinct()
+    )
+    if _pool.count() < 30:
+        _pool = (
+            Post.objects
+            .filter(Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False))
+            .select_related('author', 'author__profile', 'original_post', 'original_post__author')
+            .prefetch_related('images', 'likes', 'vibes')
+            .annotate(
+                vibe_count=Count('vibes', distinct=True),
+                like_count=Count('likes', distinct=True),
+            )
+            .distinct()
+        )
+
+    _pool_list = list(_pool[:200])
+
+    # ── Scoring (mirrors search() logic) ──────────────────────────────────────
+    try:
+        _interest        = _build_user_interest_profile(request.user)
+        _author_affinity = _interest.get('author_affinity', {}) if _interest else {}
+        _liked_tags      = set(_interest.get('liked_hashtags', [])) if _interest else set()
+    except Exception:
+        _author_affinity = {}
+        _liked_tags      = set()
+
+    # Same deterministic daily seed as the main view so ordering is consistent
+    _today_str = timezone.now().strftime('%Y%m%d')
+    _seed      = hash(f"{request.user.id}_{_today_str}") & 0xFFFFFFFF
+    _rng       = random.Random(_seed)
+
+    def _score(p):
+        score = 0.0
+        rp    = p.original_post if p.original_post else p
+        score += min(p.vibe_count * 0.4, 6.0)
+        score += min(p.like_count * 0.2, 4.0)
+        score += float(_author_affinity.get(p.author_id, 0)) * 2.0
+        if rp.content and _liked_tags:
+            score += len(set(extract_hashtags(rp.content)) & _liked_tags) * 1.5
+        age_hours = (timezone.now() - p.created_at).total_seconds() / 3600
+        if age_hours < 24:
+            score += 2.0
+        elif age_hours < 72:
+            score += 0.5
+        if p.post_id in _seen_ids:
+            score -= 20.0
+        score += _rng.uniform(0, 1.5)
+        return score
+
+    _pool_list.sort(key=_score, reverse=True)
+
+    total         = len(_pool_list)
+    explore_posts = _pool_list[offset: offset + _EXPLORE_PAGE]
+    has_more      = (offset + _EXPLORE_PAGE) < total
+
+    return render(request, 'snippet/explore_partial.html', {
+        'explore_posts': explore_posts,
+        'next_page':     page + 1,
+        'has_more':      has_more,
+    })
 
 
 @login_required(login_url='/')
@@ -4423,9 +4520,6 @@ def hashtag_view(request, tag_name):
 
     related_hashtags = sorted(all_hashtags.items(), key=lambda x: x[1], reverse=True)[:10]
 
-    following_ids = list(profile.followings.values_list('user', flat=True))
-    sidebar_followings = profile.followings.select_related('user', 'user__profile').all()
-    sidebar_followers  = profile.followers.select_related('user', 'user__profile').all()
 
     hashtag_counts = {}
     recent_posts = Post.objects.filter(content__isnull=False).order_by('-created_at')[:200]
@@ -4447,9 +4541,6 @@ def hashtag_view(request, tag_name):
         'posts': posts,
         'post_count': post_count,
         'related_hashtags': related_hashtags,
-        'following_ids': following_ids,
-        'sidebar_followings': sidebar_followings,
-        'sidebar_followers': sidebar_followers,
         'trending_hashtags': trending_hashtags,
         'unread_follow_count': unread_follow_count,
         'unread_notifications_count': unread_notifications_count,

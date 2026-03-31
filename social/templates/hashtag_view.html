@@ -160,63 +160,6 @@
     }
     .kvibe-edit-icon:hover { color: var(--kvibe-primary); background-color: #f3f4f6; }
 
-    /* ── Follow / Following buttons — matches home.html exactly ── */
-    .kvibe-follow-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 5px 12px;
-      border-radius: 20px;
-      border: 1.5px solid var(--kvibe-primary);
-      background: var(--kvibe-primary);
-      color: white;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      white-space: nowrap;
-      font-family: inherit;
-      line-height: 1;
-    }
-
-    .kvibe-follow-btn:hover {
-      background: #0074cc;
-      border-color: #0074cc;
-      color: white;
-    }
-
-    .kvibe-follow-btn--following {
-      background: transparent;
-      color: #65676b;
-      border: 1.5px solid #ccc;
-    }
-
-    .kvibe-follow-btn--following:hover {
-      background: #fff0f0;
-      border-color: #e53935;
-      color: #e53935;
-    }
-
-    .kvibe-follow-btn--following:hover i::before {
-      content: "\f235"; /* fa-user-minus unicode */
-    }
-
-    .kvibe-follow-btn--following:hover span::after {
-      content: "Unfollow";
-    }
-
-    .kvibe-follow-btn--following:hover span {
-      font-size: 0;
-    }
-
-    .kvibe-follow-btn--following:hover span::after {
-      font-size: 12px;
-    }
-
-    .kvibe-follow-btn i {
-      font-size: 11px;
-    }
-
     /* Mood badge */
     .kvibe-mood-badge {
       display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
@@ -810,29 +753,6 @@
                 {% if request.user == post.author and not post.is_repost %}
                   <a href="{% url 'editpost' post.post_id %}" title="Edit" class="kvibe-edit-icon"><i class="fas fa-edit"></i></a>
                 {% endif %}
-                {% with post_author=post.get_original_author %}
-                {% if request.user != post_author %}
-                  {% if post_author.id in following_ids %}
-                    <button class="kvibe-follow-btn kvibe-follow-btn--following"
-                            data-user-id="{{ post_author.id }}"
-                            data-username="{{ post_author.username }}"
-                            onclick="kvibeToggleFollow(this)"
-                            title="Unfollow {{ post_author.username }}">
-                      <i class="fas fa-user-check"></i>
-                      <span>Following</span>
-                    </button>
-                  {% else %}
-                    <button class="kvibe-follow-btn"
-                            data-user-id="{{ post_author.id }}"
-                            data-username="{{ post_author.username }}"
-                            onclick="kvibeToggleFollow(this)"
-                            title="Follow {{ post_author.username }}">
-                      <i class="fas fa-user-plus"></i>
-                      <span>Follow</span>
-                    </button>
-                  {% endif %}
-                {% endif %}
-                {% endwith %}
               </div>
             </div>
 
@@ -950,48 +870,6 @@
       <!-- ═══ RIGHT SIDEBAR ═══ -->
       <aside class="kvibe-right-sidebar kvibe-desktop-only">
 
-        <!-- Following / Followers tabs -->
-        <div class="kvibe-sidebar-social">
-          <div class="kvibe-sidebar-tabs">
-            <button class="kvibe-sidebar-tab active" data-tab="following" onclick="kvibeSwitchTab('following', this)">
-              Following <span class="kvibe-sidebar-tab-count">{{ sidebar_followings.count }}</span>
-            </button>
-            <button class="kvibe-sidebar-tab" data-tab="followers" onclick="kvibeSwitchTab('followers', this)">
-              Followers <span class="kvibe-sidebar-tab-count">{{ sidebar_followers.count }}</span>
-            </button>
-          </div>
-          <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-following">
-            {% for profile_obj in sidebar_followings %}
-            {% if profile_obj.user != request.user %}
-            <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
-              <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
-              <div class="kvibe-sidebar-user-info">
-                <span class="kvibe-sidebar-user-name">{{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}{% if profile_obj.user.profile.is_verify %} <img src="{% static 'images/verify1.jpg' %}" height="11" width="11" alt="✓" style="vertical-align:middle;">{% endif %}</span>
-                <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
-              </div>
-            </a>
-            {% endif %}
-            {% empty %}
-            <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>Not following anyone yet</p></div>
-            {% endfor %}
-          </div>
-          <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-followers">
-            {% for profile_obj in sidebar_followers %}
-            {% if profile_obj.user != request.user %}
-            <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
-              <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
-              <div class="kvibe-sidebar-user-info">
-                <span class="kvibe-sidebar-user-name">{{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}{% if profile_obj.user.profile.is_verify %} <img src="{% static 'images/verify1.jpg' %}" height="11" width="11" alt="✓" style="vertical-align:middle;">{% endif %}</span>
-                <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
-              </div>
-            </a>
-            {% endif %}
-            {% empty %}
-            <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>No followers yet</p></div>
-            {% endfor %}
-          </div>
-        </div>
-
         <!-- Related Hashtags -->
         {% if related_hashtags %}
         <div class="kvibe-trending-hashtags" style="margin-top:16px;">
@@ -1055,46 +933,6 @@
       <button class="kvibe-mobile-sidebar-close" onclick="kvibeCloseMobileSidebar()"><i class="fas fa-times"></i></button>
     </div>
     <div class="kvibe-mobile-sidebar-body">
-      <div class="kvibe-sidebar-social" style="margin-bottom:16px;">
-        <div class="kvibe-sidebar-tabs">
-          <button class="kvibe-sidebar-tab active" data-tab="mob-following" onclick="kvibeSwitchTab('mob-following', this)">
-            Following <span class="kvibe-sidebar-tab-count">{{ sidebar_followings.count }}</span>
-          </button>
-          <button class="kvibe-sidebar-tab" data-tab="mob-followers" onclick="kvibeSwitchTab('mob-followers', this)">
-            Followers <span class="kvibe-sidebar-tab-count">{{ sidebar_followers.count }}</span>
-          </button>
-        </div>
-        <div class="kvibe-sidebar-tab-panel active" id="kvibe-tab-mob-following">
-          {% for profile_obj in sidebar_followings %}
-          {% if profile_obj.user != request.user %}
-          <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
-            <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
-            <div class="kvibe-sidebar-user-info">
-              <span class="kvibe-sidebar-user-name">{{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}</span>
-              <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
-            </div>
-          </a>
-          {% endif %}
-          {% empty %}
-          <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>Not following anyone yet</p></div>
-          {% endfor %}
-        </div>
-        <div class="kvibe-sidebar-tab-panel" id="kvibe-tab-mob-followers">
-          {% for profile_obj in sidebar_followers %}
-          {% if profile_obj.user != request.user %}
-          <a href="{% url 'profile' profile_obj.user.username %}" class="kvibe-sidebar-user-row">
-            <img src="{{ profile_obj.user.profile.picture.url }}" alt="{{ profile_obj.user.username }}" class="kvibe-sidebar-avatar" loading="lazy">
-            <div class="kvibe-sidebar-user-info">
-              <span class="kvibe-sidebar-user-name">{{ profile_obj.user.first_name }} {{ profile_obj.user.last_name }}</span>
-              <span class="kvibe-sidebar-user-handle">@{{ profile_obj.user.username }}</span>
-            </div>
-          </a>
-          {% endif %}
-          {% empty %}
-          <div class="kvibe-sidebar-empty"><i class="fas fa-user-friends"></i><p>No followers yet</p></div>
-          {% endfor %}
-        </div>
-      </div>
       {% if related_hashtags %}
       <div class="kvibe-trending-hashtags">
         <div class="kvibe-trending-header"><h3 class="kvibe-trending-title"><i class="fas fa-hashtag"></i> Related Hashtags</h3></div>
@@ -1147,66 +985,6 @@
         toast.style.animation = 'kvibeSlideOut 0.3s ease';
         setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
       }, 3000);
-    }
-
-    // ── Follow / Unfollow — matches home.html exactly ──
-    function kvibeToggleFollow(btn) {
-      const userId = btn.dataset.userId;
-      const username = btn.dataset.username;
-      const isFollowing = btn.classList.contains('kvibe-follow-btn--following');
-
-      // Optimistic UI update
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-      fetch(`/follow/${userId}/`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': getCsrfFromMeta(),
-          'Content-Type': 'application/json',
-        },
-      })
-      .then(r => r.json())
-      .then(data => {
-        btn.disabled = false;
-        if (data.success) {
-          if (data.followed) {
-            btn.classList.add('kvibe-follow-btn--following');
-            btn.title = `Unfollow ${username}`;
-            btn.innerHTML = '<i class="fas fa-user-check"></i><span>Following</span>';
-            showToast(`You are now following @${username}`, 'success');
-          } else {
-            btn.classList.remove('kvibe-follow-btn--following');
-            btn.title = `Follow ${username}`;
-            btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Follow</span>';
-            showToast(`Unfollowed @${username}`, 'info');
-          }
-        } else {
-          // Restore old state on error
-          btn.innerHTML = isFollowing
-            ? '<i class="fas fa-user-check"></i><span>Following</span>'
-            : '<i class="fas fa-user-plus"></i><span>Follow</span>';
-          showToast('Something went wrong. Please try again.', 'error');
-        }
-      })
-      .catch(() => {
-        btn.disabled = false;
-        btn.innerHTML = isFollowing
-          ? '<i class="fas fa-user-check"></i><span>Following</span>'
-          : '<i class="fas fa-user-plus"></i><span>Follow</span>';
-        showToast('Something went wrong. Please try again.', 'error');
-      });
-    }
-
-    /* ─── Sidebar tab switcher ─── */
-    function kvibeSwitchTab(tab, btn) {
-      const container = btn.closest('.kvibe-sidebar-social');
-      if (!container) return;
-      container.querySelectorAll('.kvibe-sidebar-tab').forEach(t => t.classList.remove('active'));
-      btn.classList.add('active');
-      container.querySelectorAll('.kvibe-sidebar-tab-panel').forEach(p => p.classList.remove('active'));
-      const panel = document.getElementById('kvibe-tab-' + tab);
-      if (panel) panel.classList.add('active');
     }
 
     // ── Repost — matches home.html / post_like.html exactly ────────────────

@@ -40,6 +40,7 @@ urlpatterns = [
     path('search/users/',                    views.search_users_partial,     name='search_users_partial'),
     path('search/posts/',                    views.search_posts_partial,     name='search_posts_partial'),
     path('search/tags/',                     views.search_hashtags_partial,  name='search_hashtags_partial'),
+    path('search/explore/',                  views.explore_partial,          name='explore_partial'),
     path('search/delete/<int:history_id>/',  views.delete_history,           name='delete_history'),
     path('search/clear/',                    views.clear_history,            name='clear_history'),
 

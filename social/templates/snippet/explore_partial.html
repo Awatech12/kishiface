@@ -1,0 +1,116 @@
+{% load static %}
+{% load time %}
+{% load text_filters %}
+
+<div style="display:contents">
+
+{% for ep in explore_posts %}{% with rp=ep.original_post|default:ep %}
+<a href="{% url 'postcomment' ep.post_id %}" class="ks-grid-cell" onclick="ksRecordExploreView('{{ ep.post_id }}')">
+
+  {# ── Media thumbnail ─────────────────────────────────────────────────── #}
+  {% if rp.images.exists %}
+    <img src="{{ rp.images.first.image.url }}" loading="lazy" alt="post">
+    {% if rp.images.count > 1 %}<span class="ks-grid-type-badge"><i class="fa-solid fa-clone"></i></span>{% endif %}
+
+  {% elif rp.video_file %}
+    <video src="{{ rp.video_file.url }}#t=0.5" preload="metadata" muted playsinline
+           style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;"></video>
+    <span class="ks-grid-type-badge"><i class="fa-solid fa-play"></i></span>
+
+  {% elif rp.file %}
+    <div class="ks-grid-text"><i class="fa-solid fa-music" style="font-size:28px;opacity:.6;"></i></div>
+
+  {% elif rp.content %}
+    {% with content_str=rp.content %}
+      {% if "youtube.com/watch" in content_str or "youtu.be/" in content_str %}
+        <div class="ks-grid-yt-wrap" data-yt-src="{{ content_str|truncatechars:300 }}">
+          <img src="" alt="YouTube" loading="lazy"
+               onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-brands fa-youtube\' style=\'font-size:30px;color:#ff0000;\'></i></div>'">
+          <div class="ks-grid-yt-play"><i class="fa-solid fa-play"></i></div>
+        </div>
+        <span class="ks-grid-type-badge"><i class="fa-brands fa-youtube" style="color:#ff0000;"></i></span>
+
+      {% elif "tiktok.com" in content_str %}
+        {% if rp.link_preview and rp.link_preview.image %}
+          <div class="ks-grid-yt-wrap">
+            <img src="{{ rp.link_preview.image }}" loading="lazy" alt="TikTok"
+                 onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-brands fa-tiktok\' style=\'font-size:28px;\'></i></div>'">
+            <div class="ks-grid-yt-play"><i class="fa-solid fa-play"></i></div>
+          </div>
+        {% else %}
+          <div class="ks-grid-text"><i class="fa-brands fa-tiktok" style="font-size:28px;"></i></div>
+        {% endif %}
+        <span class="ks-grid-type-badge"><i class="fa-brands fa-tiktok"></i></span>
+
+      {% elif "twitter.com" in content_str or "x.com" in content_str %}
+        {% if rp.link_preview and rp.link_preview.image %}
+          <div class="ks-grid-yt-wrap">
+            <img src="{{ rp.link_preview.image }}" loading="lazy" alt="X / Twitter"
+                 onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-brands fa-x-twitter\' style=\'font-size:28px;\'></i></div>'">
+          </div>
+        {% else %}
+          <div class="ks-grid-text"><i class="fa-brands fa-x-twitter" style="font-size:28px;"></i></div>
+        {% endif %}
+        <span class="ks-grid-type-badge"><i class="fa-brands fa-x-twitter"></i></span>
+
+      {% elif rp.link_preview and rp.link_preview.image %}
+        <div class="ks-grid-yt-wrap">
+          <img src="{{ rp.link_preview.image }}" loading="lazy" alt="link preview"
+               onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-solid fa-link\' style=\'font-size:24px;opacity:.6;\'></i></div>'">
+        </div>
+        <span class="ks-grid-type-badge"><i class="fa-solid fa-link"></i></span>
+
+      {% else %}
+        <div class="ks-grid-text">
+          <span class="ks-grid-text-quote">"</span>
+          <div class="ks-grid-text-inner {% if rp.content|length < 60 %}large{% elif rp.content|length < 120 %}medium{% endif %}">
+            {{ rp.content|truncatechars:100 }}
+          </div>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+  {% elif rp.link_preview and rp.link_preview.image %}
+    <div class="ks-grid-yt-wrap">
+      <img src="{{ rp.link_preview.image }}" loading="lazy" alt="link preview"
+           onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-solid fa-link\' style=\'font-size:24px;opacity:.6;\'></i></div>'">
+    </div>
+    <span class="ks-grid-type-badge"><i class="fa-solid fa-link"></i></span>
+
+  {% else %}
+    <div class="ks-grid-text"><i class="fa-solid fa-image" style="font-size:28px;opacity:.3;"></i></div>
+  {% endif %}
+
+  {# ── Vibe count (hover) ──────────────────────────────────────────────── #}
+  <div class="ks-grid-overlay">
+    <i class="fa-solid fa-fire" style="color:var(--vibe-fire);"></i>
+    <span>{{ ep.vibe_count }}</span>
+  </div>
+
+  {# ── Always-visible author + time bar ────────────────────────────────── #}
+  <div class="ks-grid-info">
+    <img src="{{ rp.author.profile.get_picture_url }}" class="ks-grid-info-avatar"
+         alt="{{ rp.author.username }}" loading="lazy"
+         onerror="this.style.display='none'">
+    <span class="ks-grid-info-name">{{ rp.author.username }}</span>
+    <span class="ks-grid-info-time">{{ ep.created_at|insta_timesince }}</span>
+  </div>
+
+</a>
+{% endwith %}{% endfor %}
+
+{# ── Next sentinel — replaces itself when scrolled into view ── #}
+{% if has_more %}
+<div id="explore-sentinel"
+     hx-get="{% url 'explore_partial' %}?page={{ next_page }}"
+     hx-trigger="intersect once"
+     hx-target="this"
+     hx-swap="outerHTML"
+     hx-on::after-request="ksInitYtThumbnails()"
+     class="ks-load-sentinel"
+     style="grid-column: 1 / -1;">
+  <span class="ks-spinner"></span>
+</div>
+{% endif %}
+
+</div>
