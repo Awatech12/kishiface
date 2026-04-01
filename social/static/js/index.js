@@ -1,9 +1,4 @@
-/* =============================================
-   KISHIVIBE LOGIN PAGE — index.js
-   Normal form POST — no AJAX.
-   Handles: splash, skeleton, password toggle,
-   shake on empty submit, loading spinner.
-============================================= */
+/* KISHIVIBE LOGIN PAGE — index.js */
 (function () {
   'use strict';
 
