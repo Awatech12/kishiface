@@ -1309,6 +1309,30 @@ def home(request):
                .order_by('?')[:3]
     )
 
+    # ── Recent DM conversation partners (home-page bubble row) ───────────────
+    # Pull unique conversation partners ordered by most-recent message.
+    from django.db.models import Max
+    _dm_qs = (
+        Message.objects
+        .filter(Q(sender=request.user) | Q(receiver=request.user))
+        .values('sender', 'receiver')
+        .annotate(latest=Max('created_at'))
+        .order_by('-latest')
+    )
+    _seen, _dm_ids = set(), []
+    for row in _dm_qs:
+        other_id = row['receiver'] if row['sender'] == request.user.id else row['sender']
+        if other_id not in _seen:
+            _seen.add(other_id)
+            _dm_ids.append(other_id)
+        if len(_dm_ids) >= 10:
+            break
+    _id_order = {uid: i for i, uid in enumerate(_dm_ids)}
+    recent_dm_users = sorted(
+        User.objects.filter(id__in=_dm_ids).select_related('profile'),
+        key=lambda u: _id_order.get(u.id, 999)
+    )
+
     return render(request, 'home.html', {
         'posts_with_ads':             feed,
         'next_cursor':                next_cursor,
@@ -1320,6 +1344,7 @@ def home(request):
         'following_ids':              following_ids,
         'sidebar_following_count':    sidebar_following_count,
         'sidebar_follower_count':     sidebar_follower_count,
+        'recent_dm_users':            recent_dm_users,
     })
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3617,6 +3642,125 @@ def inbox(request):
         'conversations': dict(sorted_conversations),
         'contacts': contacts,
         'user': request.user
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DM last-message preview  (used by home-page bubble row popup)
+# GET /inbox/last_message/?username=<str>
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+@require_GET
+def dm_last_message(request):
+    """Return a lightweight JSON preview of the last message with a partner."""
+    username = request.GET.get('username', '').strip()
+    if not username:
+        return JsonResponse({'error': 'username required'}, status=400)
+    try:
+        partner = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'not found'}, status=404)
+
+    last_msg = (
+        Message.objects
+        .filter(
+            Q(sender=request.user, receiver=partner) |
+            Q(sender=partner, receiver=request.user)
+        )
+        .order_by('-created_at')
+        .first()
+    )
+    if not last_msg:
+        return JsonResponse({'message': None, 'unread_count': 0})
+
+    unread = Message.objects.filter(
+        sender=partner, receiver=request.user, is_read=False
+    ).count()
+
+    return JsonResponse({
+        'message':      last_msg.conversation or '',
+        'file_type':    last_msg.file_type or '',
+        'has_media':    bool(last_msg.file_type),
+        'is_mine':      last_msg.sender_id == request.user.id,
+        'unread_count': unread,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DM full conversation  (used by home-page chat modal)
+# GET /inbox/conversation/?username=<str>
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+@require_GET
+def dm_conversation(request):
+    """Return the full conversation with a partner as JSON, mark unread as read."""
+    username = request.GET.get('username', '').strip()
+    if not username:
+        return JsonResponse({'error': 'username required'}, status=400)
+    try:
+        partner = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'not found'}, status=404)
+
+    # Mark incoming unread messages as read
+    Message.objects.filter(
+        sender=partner, receiver=request.user, is_read=False
+    ).update(is_read=True)
+
+    msgs = (
+        Message.objects
+        .filter(
+            Q(sender=request.user, receiver=partner) |
+            Q(sender=partner, receiver=request.user)
+        )
+        .select_related('sender', 'reply_to', 'reply_to__sender')
+        .order_by('created_at')
+    )
+
+    def file_url(msg):
+        if not msg.file:
+            return None
+        try:
+            return msg.file.url
+        except Exception:
+            return None
+
+    messages_data = []
+    for msg in msgs:
+        reply_preview = None
+        if msg.reply_to:
+            rp = msg.reply_to
+            reply_preview = {
+                'sender':  rp.sender.username,
+                'text':    (rp.conversation or '')[:80],
+                'file_type': rp.file_type or '',
+            }
+
+        messages_data.append({
+            'id':          msg.id,
+            'text':        msg.conversation or '',
+            'file_type':   msg.file_type or '',
+            'file_url':    file_url(msg),
+            'is_mine':     msg.sender_id == request.user.id,
+            'time':        msg.chat_time,
+            'date_label':  msg.chat_date_label,
+            'reply_to':    reply_preview,
+            'link_preview': msg.link_preview,
+        })
+
+    partner_avatar = None
+    try:
+        if partner.profile.picture:
+            partner_avatar = partner.profile.picture.url
+    except Exception:
+        pass
+
+    return JsonResponse({
+        'partner':        partner.username,
+        'partner_avatar': partner_avatar,
+        'messages':       messages_data,
     })
 
 

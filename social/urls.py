@@ -45,9 +45,11 @@ urlpatterns = [
     path('search/clear/',                    views.clear_history,            name='clear_history'),
 
     # ── Inbox / Messages ───────────────────────────────────────────────────────
-    path('inbox',                               views.inbox,          name='inbox'),
-    path('inbox_count',                         views.inbox_partial,  name='inbox_partial'),
-    path('private/<str:username>',              views.message,        name='message'),
+    path('inbox',                               views.inbox,             name='inbox'),
+    path('inbox_count',                         views.inbox_partial,     name='inbox_partial'),
+    path('inbox/last_message/',                 views.dm_last_message,   name='dm_last_message'),
+    path('inbox/conversation/',                 views.dm_conversation,   name='dm_conversation'),
+    path('private/<str:username>',              views.message,           name='message'),
     path('send_message/<str:username>/',        views.send_message,   name='send_message'),
     path('delete_message/<int:message_id>/',    views.delete_message, name='delete_message'),
     path('react_message/<int:message_id>/',     views.react_to_message, name='react_to_message'),
