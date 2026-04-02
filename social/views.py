@@ -209,8 +209,38 @@ def register(request):
             messages.error(request, 'Security answer must be at least 2 characters.')
             return redirect('register')
 
+        gender        = html_escape(request.POST.get('gender', '').strip())
+        dob_raw       = request.POST.get('date_of_birth', '').strip()
+
+        # Validate gender
+        valid_genders = ['male', 'female', 'non_binary', 'prefer_not_to_say']
+        if gender and gender not in valid_genders:
+            gender = ''
+
+        # Parse and validate date of birth
+        from datetime import date as date_type
+        import datetime
+        date_of_birth = None
+        if dob_raw:
+            try:
+                date_of_birth = datetime.date.fromisoformat(dob_raw)
+                min_age_date  = date_type.today().replace(year=date_type.today().year - 13)
+                if date_of_birth > min_age_date:
+                    messages.error(request, 'You must be at least 13 years old to register.')
+                    return redirect('register')
+                if date_of_birth.year < 1900:
+                    messages.error(request, 'Please enter a valid date of birth.')
+                    return redirect('register')
+            except ValueError:
+                messages.error(request, 'Please enter a valid date of birth.')
+                return redirect('register')
+
         user = User.objects.create_user(username=username, email=email, password=password)
-        Profile.objects.create(user=user)
+        Profile.objects.create(
+            user=user,
+            gender=gender,
+            date_of_birth=date_of_birth,
+        )
 
         sq = SecretQuestion(user=user, question=secret_question)
         sq.set_answer(secret_answer)
@@ -2160,10 +2190,29 @@ def update_profile(request, username):
         bio           = request.POST.get('bio')
         website       = request.POST.get('website')
         privacy_level = request.POST.get('privacy_level', '').strip()
+        gender        = request.POST.get('gender', '').strip()
+        dob_raw       = request.POST.get('date_of_birth', '').strip()
+        # Checkboxes: present in POST = True, absent = False
+        show_gender   = 'show_gender' in request.POST
+        show_dob      = 'show_dob'    in request.POST
 
         VALID_PRIVACY = {'public', 'followers_only', 'private'}
         if privacy_level not in VALID_PRIVACY:
             privacy_level = None
+
+        VALID_GENDERS = {'male', 'female', 'non_binary', 'prefer_not_to_say', ''}
+        if gender not in VALID_GENDERS:
+            gender = None
+
+        import datetime
+        date_of_birth = None
+        dob_changed = False
+        if dob_raw:
+            try:
+                date_of_birth = datetime.date.fromisoformat(dob_raw)
+                dob_changed = True
+            except ValueError:
+                pass  # ignore invalid date silently
 
         try:
             if fname and lname:
@@ -2180,6 +2229,16 @@ def update_profile(request, username):
             if privacy_level:
                 profile.privacy_level = privacy_level
                 profile_dirty = True
+            if gender is not None:
+                profile.gender = gender
+                profile_dirty = True
+            if dob_changed:
+                profile.date_of_birth = date_of_birth
+                profile_dirty = True
+            # Always update visibility toggles (they come as checkbox — present/absent)
+            profile.show_gender = show_gender
+            profile.show_dob    = show_dob
+            profile_dirty = True
 
             if profile_dirty:
                 profile.save()
@@ -2201,6 +2260,10 @@ def update_profile(request, username):
                         'picture_url':   profile.picture.url,
                         'website':       profile.website,
                         'privacy_level': profile.privacy_level,
+                        'gender':        profile.gender,
+                        'date_of_birth': profile.date_of_birth.isoformat() if profile.date_of_birth else '',
+                        'show_gender':   profile.show_gender,
+                        'show_dob':      profile.show_dob,
                     },
                     'message': 'Profile updated successfully!'
                 })

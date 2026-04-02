@@ -242,6 +242,39 @@
     }
     .kv-select option { color: var(--kv-text); background: var(--kv-white); }
 
+    /* ---- Date input ---- */
+    .kv-dob-input {
+      padding-left: 38px !important;
+      color-scheme: light;
+    }
+    .kv-dob-input::-webkit-calendar-picker-indicator {
+      opacity: 0.45;
+      cursor: pointer;
+      margin-right: 2px;
+      filter: invert(0);
+    }
+    .kv-dob-input::-webkit-datetime-edit { color: var(--kv-text); }
+    .kv-dob-input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+    /* muted color when empty */
+    .kv-dob-input:not([value]), .kv-dob-input[value=""] {
+      color: var(--kv-muted);
+    }
+
+    /* ---- Date input ---- */
+    input[type="date"].kv-input {
+      padding-left: 38px;
+      color-scheme: light;
+    }
+    input[type="date"].kv-input::-webkit-calendar-picker-indicator {
+      opacity: 0.5;
+      cursor: pointer;
+      margin-right: 4px;
+    }
+    input[type="date"].kv-input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+    input[type="date"].kv-input::-webkit-datetime-edit { color: var(--kv-text); }
+    input[type="date"].kv-input:not([value])::-webkit-datetime-edit,
+    input[type="date"].kv-input[value=""]::-webkit-datetime-edit { color: var(--kv-muted); }
+
     /* ---- Responsive ---- */
     @media (max-width: 360px) {
       body { padding: 12px; }
@@ -396,7 +429,37 @@
         <div class="kv-feedback" id="kv-confirm-fb"></div>
       </div>
 
+      <!-- ── Gender ────────────────────────────────────────────── -->
+      <div class="kv-group">
+        <div class="kv-field">
+          <i class="fas fa-venus-mars kv-icon" aria-hidden="true"></i>
+          <select id="kv-gender" name="gender" class="kv-input kv-select" style="cursor:pointer;" required>
+            <option value="" disabled selected>Gender (optional)</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="non_binary">Non-binary</option>
+            <option value="prefer_not_to_say">Prefer not to say</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- ── Date of Birth ─────────────────────────────────────── -->
+      <div class="kv-group">
+        <div class="kv-field">
+          <i class="fas fa-calendar-alt kv-icon" aria-hidden="true"></i>
+          <input
+            type="date" id="kv-dob" name="date_of_birth"
+            class="kv-input kv-dob-input"
+            max="" min="1900-01-01"
+          />
+          <span class="kv-status-icon" id="kv-dob-si"></span>
+        </div>
+        <div class="kv-hint"><i class="fas fa-info-circle" aria-hidden="true"></i> You must be at least 13 years old</div>
+        <div class="kv-feedback" id="kv-dob-fb"></div>
+      </div>
+
       <!-- ── Secret Question ─────────────────────────────────── -->
+      -->
       <div class="kv-group">
         <div class="kv-field">
           <i class="fas fa-shield-alt kv-icon" aria-hidden="true"></i>
@@ -547,6 +610,35 @@
     void el.offsetWidth;
     el.style.animation = 'kvShake .4s ease';
     setTimeout(function () { el.style.animation = ''; }, 400);
+  }
+
+  /* ── Set DOB max date (today - 13 years) ── */
+  (function () {
+    var dobInp = document.getElementById('kv-dob');
+    if (!dobInp) return;
+    var today = new Date();
+    var minAge = new Date(today.getFullYear() - 13, today.getMonth(), today.getDate());
+    dobInp.max = minAge.toISOString().split('T')[0];
+  })();
+
+  /* ── DOB validation ── */
+  var dobInp = document.getElementById('kv-dob');
+  var dobSi  = document.getElementById('kv-dob-si');
+  var dobFb  = document.getElementById('kv-dob-fb');
+
+  if (dobInp) {
+    dobInp.addEventListener('change', function () {
+      var val = dobInp.value;
+      if (!val) { setState(dobInp, dobSi, dobFb, 'idle'); return; }
+      var chosen = new Date(val);
+      var today  = new Date();
+      var minAge = new Date(today.getFullYear() - 13, today.getMonth(), today.getDate());
+      if (chosen > minAge) {
+        setState(dobInp, dobSi, dobFb, 'err', 'You must be at least 13 years old');
+      } else {
+        setState(dobInp, dobSi, dobFb, 'ok', '');
+      }
+    });
   }
 
   /* ── Toggle password visibility ── */

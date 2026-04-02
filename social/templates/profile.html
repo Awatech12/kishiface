@@ -1801,6 +1801,88 @@
 
         .kvibe-edit-form-help.error { color: var(--kvibe-danger); }
 
+        /* ─── Visibility toggle switch ─────────────────── */
+        .kv-toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: var(--kvibe-bg);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--kvibe-border-light);
+            margin-top: 8px;
+            gap: 12px;
+        }
+        .kv-toggle-label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .kv-toggle-label span:first-child {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--kvibe-text);
+        }
+        .kv-toggle-label span:last-child {
+            font-size: 11px;
+            color: var(--kvibe-gray);
+        }
+        .kv-switch {
+            position: relative;
+            width: 42px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+        .kv-switch input { opacity: 0; width: 0; height: 0; }
+        .kv-switch-track {
+            position: absolute;
+            inset: 0;
+            border-radius: 99px;
+            background: var(--kvibe-border);
+            transition: background .2s;
+            cursor: pointer;
+        }
+        .kv-switch-track::before {
+            content: '';
+            position: absolute;
+            left: 3px; top: 3px;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,.2);
+            transition: transform .2s;
+        }
+        .kv-switch input:checked + .kv-switch-track {
+            background: var(--kvibe-primary);
+        }
+        .kv-switch input:checked + .kv-switch-track::before {
+            transform: translateX(18px);
+        }
+
+        /* ─── Gender / DOB display badge (profile view) ─ */
+        .kv-profile-info-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px 4px 8px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 500;
+            background: var(--kvibe-border-light);
+            color: var(--kvibe-text);
+            border: 1px solid var(--kvibe-border);
+        }
+        .kv-profile-info-badge i {
+            font-size: 11px;
+            opacity: .7;
+        }
+        .kv-profile-info-badges-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
         .kvibe-edit-username-display {
             display: flex;
             align-items: center;
@@ -3877,6 +3959,47 @@
                             <input type="url" class="kvibe-edit-form-input" id="editWebsite" name="website" 
                                    value="{{profile.website|default:''}}" placeholder="https://yourwebsite.com" maxlength="500">
                         </div>
+
+                        <div class="kvibe-edit-form-group">
+                            <label class="kvibe-edit-form-label" for="editGender">Gender</label>
+                            <select class="kvibe-edit-form-input" id="editGender" name="gender" style="cursor:pointer;">
+                                <option value="" {% if not profile.gender %}selected{% endif %}>Select gender</option>
+                                <option value="male"              {% if profile.gender == 'male' %}selected{% endif %}>Male</option>
+                                <option value="female"            {% if profile.gender == 'female' %}selected{% endif %}>Female</option>
+                                <option value="non_binary"        {% if profile.gender == 'non_binary' %}selected{% endif %}>Non-binary</option>
+                                <option value="prefer_not_to_say" {% if profile.gender == 'prefer_not_to_say' %}selected{% endif %}>Prefer not to say</option>
+                            </select>
+                            <div class="kv-toggle-row">
+                                <div class="kv-toggle-label">
+                                    <span>Show on profile</span>
+                                    <span>Let others see your gender</span>
+                                </div>
+                                <label class="kv-switch">
+                                    <input type="checkbox" name="show_gender" id="toggleShowGender"
+                                           {% if profile.show_gender %}checked{% endif %}>
+                                    <span class="kv-switch-track"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="kvibe-edit-form-group">
+                            <label class="kvibe-edit-form-label" for="editDob">Date of Birth</label>
+                            <input type="date" class="kvibe-edit-form-input" id="editDob" name="date_of_birth"
+                                   value="{% if profile.date_of_birth %}{{profile.date_of_birth|date:'Y-m-d'}}{% endif %}"
+                                   min="1900-01-01">
+                            <span class="kvibe-edit-form-help">Your birthday is private by default</span>
+                            <div class="kv-toggle-row">
+                                <div class="kv-toggle-label">
+                                    <span>Show on profile</span>
+                                    <span>Let others see your date of birth</span>
+                                </div>
+                                <label class="kv-switch">
+                                    <input type="checkbox" name="show_dob" id="toggleShowDob"
+                                           {% if profile.show_dob %}checked{% endif %}>
+                                    <span class="kv-switch-track"></span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                         <div class="kv-privacy-section">
@@ -4096,6 +4219,24 @@
     <div class="kvibe-mobile-joined">
         <i class="far fa-calendar-alt"></i> Joined {{ profile.created_at|date:"F Y" }}
     </div>
+
+    <!-- Gender + DOB badges -->
+    {% if profile.gender and profile.show_gender and can_view_details or profile.gender and profile.show_gender and is_own_profile or profile.date_of_birth and profile.show_dob and can_view_details or profile.date_of_birth and profile.show_dob and is_own_profile %}
+    <div class="kv-profile-info-badges-row" id="mobileGenderDobRow">
+        {% if profile.gender and profile.show_gender %}
+        <span class="kv-profile-info-badge" id="mobileGenderBadge">
+            <i class="fas fa-venus-mars"></i>
+            {% if profile.gender == 'male' %}Male{% elif profile.gender == 'female' %}Female{% elif profile.gender == 'non_binary' %}Non-binary{% elif profile.gender == 'prefer_not_to_say' %}Prefers not to say{% endif %}
+        </span>
+        {% endif %}
+        {% if profile.date_of_birth and profile.show_dob %}
+        <span class="kv-profile-info-badge" id="mobileDobBadge">
+            <i class="fas fa-birthday-cake"></i>
+            {{ profile.date_of_birth|date:"F j, Y" }}
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
 
 </div>
 {% endif %}
@@ -4347,6 +4488,18 @@
                                 <i class="far fa-calendar"></i>
                                 <span>Joined {{profile.created_at|date:"F Y"}}</span>
                             </div>
+                            {% if profile.gender and profile.show_gender and can_view_details or profile.gender and profile.show_gender and is_own_profile %}
+                            <div class="kvibe-meta-item" id="mainProfileGenderMeta">
+                                <i class="fas fa-venus-mars"></i>
+                                <span id="mainProfileGender">{% if profile.gender == 'male' %}Male{% elif profile.gender == 'female' %}Female{% elif profile.gender == 'non_binary' %}Non-binary{% elif profile.gender == 'prefer_not_to_say' %}Prefers not to say{% endif %}</span>
+                            </div>
+                            {% endif %}
+                            {% if profile.date_of_birth and profile.show_dob and can_view_details or profile.date_of_birth and profile.show_dob and is_own_profile %}
+                            <div class="kvibe-meta-item" id="mainProfileDobMeta">
+                                <i class="fas fa-birthday-cake"></i>
+                                <span id="mainProfileDob">{{ profile.date_of_birth|date:"F j, Y" }}</span>
+                            </div>
+                            {% endif %}
                         </div>
 
                         <!-- Action buttons -->
@@ -5411,6 +5564,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const editWebsite = document.getElementById('editWebsite');
     const editAddress = document.getElementById('editAddress');
     const editLocation = document.getElementById('editLocation');
+    const editGender = document.getElementById('editGender');
+    const editDob = document.getElementById('editDob');
+    const toggleShowGender = document.getElementById('toggleShowGender');
+    const toggleShowDob    = document.getElementById('toggleShowDob');
     const bioCounter = document.getElementById('bioCounter');
     
     // Track form changes
@@ -5429,6 +5586,10 @@ document.addEventListener('DOMContentLoaded', function() {
             address: editAddress.value.trim(),
             website: editWebsite.value.trim(),
             privacy_level: (document.querySelector('input[name="privacy_level"]:checked') || {value: 'public'}).value,
+            gender: editGender ? editGender.value : '',
+            date_of_birth: editDob ? editDob.value : '',
+            show_gender: toggleShowGender ? toggleShowGender.checked : true,
+            show_dob:    toggleShowDob    ? toggleShowDob.checked    : false,
             picture: editProfilePicture.src
         };
         
@@ -5439,7 +5600,7 @@ document.addEventListener('DOMContentLoaded', function() {
         checkFormChanges();
         
         // Add event listeners for form changes
-        const formInputs = [editFirstName, editLastName, editBio, editPhone, editLocation, editAddress, editWebsite];
+        const formInputs = [editFirstName, editLastName, editBio, editPhone, editLocation, editAddress, editWebsite, editGender, editDob, toggleShowGender, toggleShowDob];
         formInputs.forEach(input => {
             input.addEventListener('input', handleFormChange);
             input.addEventListener('change', handleFormChange);
@@ -5489,7 +5650,11 @@ document.addEventListener('DOMContentLoaded', function() {
             phone: editPhone.value.trim(),
             location: editLocation.value.trim(),
             address: editAddress.value.trim(),
-            website: editWebsite.value.trim()
+            website: editWebsite.value.trim(),
+            gender: editGender ? editGender.value : '',
+            date_of_birth: editDob ? editDob.value : '',
+            show_gender: toggleShowGender ? toggleShowGender.checked : true,
+            show_dob:    toggleShowDob    ? toggleShowDob.checked    : false
         };
         
         formHasChanges = false;
@@ -5590,6 +5755,10 @@ document.addEventListener('DOMContentLoaded', function() {
             editLocation.value = originalValues.location;
             editAddress.value = originalValues.address;
             editWebsite.value = originalValues.website;
+            if (editGender) editGender.value = originalValues.gender || '';
+            if (editDob) editDob.value = originalValues.date_of_birth || '';
+            if (toggleShowGender) toggleShowGender.checked = originalValues.show_gender;
+            if (toggleShowDob)    toggleShowDob.checked    = originalValues.show_dob;
             editProfilePicture.src = originalValues.picture;
             
             updateBioCounter();
@@ -5776,6 +5945,118 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
 
+                // ── Gender + DOB live update ─────────────────────────────────
+                const newGender      = d.gender      !== undefined ? d.gender      : (editGender ? editGender.value : '');
+                const newShowGender  = d.show_gender !== undefined ? d.show_gender : (toggleShowGender ? toggleShowGender.checked : true);
+                const newDob         = d.date_of_birth !== undefined ? d.date_of_birth : (editDob ? editDob.value : '');
+                const newShowDob     = d.show_dob    !== undefined ? d.show_dob    : (toggleShowDob ? toggleShowDob.checked : false);
+
+                const genderLabels = {
+                    'male': 'Male', 'female': 'Female',
+                    'non_binary': 'Non-binary', 'prefer_not_to_say': 'Prefers not to say', '': ''
+                };
+                const genderText = genderLabels[newGender] || '';
+
+                // Desktop meta item
+                const desktopGenderMeta = document.getElementById('mainProfileGenderMeta');
+                const desktopGenderSpan = document.getElementById('mainProfileGender');
+                if (desktopGenderMeta) {
+                    if (genderText && newShowGender) {
+                        if (desktopGenderSpan) desktopGenderSpan.textContent = genderText;
+                        desktopGenderMeta.style.display = '';
+                    } else {
+                        desktopGenderMeta.style.display = 'none';
+                    }
+                } else if (genderText && newShowGender) {
+                    // Inject the meta item dynamically if it didn't exist
+                    const metaRow = document.querySelector('.kvibe-profile-meta');
+                    if (metaRow) {
+                        const el = document.createElement('div');
+                        el.className = 'kvibe-meta-item';
+                        el.id = 'mainProfileGenderMeta';
+                        el.innerHTML = '<i class="fas fa-venus-mars"></i><span id="mainProfileGender">' + genderText + '</span>';
+                        metaRow.appendChild(el);
+                    }
+                }
+
+                const desktopDobMeta = document.getElementById('mainProfileDobMeta');
+                const desktopDobSpan = document.getElementById('mainProfileDob');
+                if (desktopDobMeta) {
+                    if (newDob && newShowDob) {
+                        if (desktopDobSpan) {
+                            const dobDate = new Date(newDob + 'T00:00:00');
+                            desktopDobSpan.textContent = dobDate.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+                        }
+                        desktopDobMeta.style.display = '';
+                    } else {
+                        desktopDobMeta.style.display = 'none';
+                    }
+                } else if (newDob && newShowDob) {
+                    const metaRow = document.querySelector('.kvibe-profile-meta');
+                    if (metaRow) {
+                        const dobDate = new Date(newDob + 'T00:00:00');
+                        const el = document.createElement('div');
+                        el.className = 'kvibe-meta-item';
+                        el.id = 'mainProfileDobMeta';
+                        el.innerHTML = '<i class="fas fa-birthday-cake"></i><span id="mainProfileDob">' + dobDate.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) + '</span>';
+                        metaRow.appendChild(el);
+                    }
+                }
+
+                // Mobile badges
+                const mobileGenderBadge = document.getElementById('mobileGenderBadge');
+                const mobileDobBadge    = document.getElementById('mobileDobBadge');
+                let mobileBadgesRow     = document.getElementById('mobileGenderDobRow');
+
+                function ensureMobileBadgesRow() {
+                    if (!mobileBadgesRow) {
+                        const joinedEl = document.querySelector('.kvibe-mobile-joined');
+                        if (joinedEl) {
+                            mobileBadgesRow = document.createElement('div');
+                            mobileBadgesRow.className = 'kv-profile-info-badges-row';
+                            mobileBadgesRow.id = 'mobileGenderDobRow';
+                            joinedEl.insertAdjacentElement('afterend', mobileBadgesRow);
+                        }
+                    }
+                    return mobileBadgesRow;
+                }
+
+                if (genderText && newShowGender) {
+                    const row = ensureMobileBadgesRow();
+                    if (mobileGenderBadge) {
+                        mobileGenderBadge.querySelector('span') ?
+                            mobileGenderBadge.querySelector('span').textContent = genderText :
+                            (mobileGenderBadge.lastChild.textContent = ' ' + genderText);
+                        mobileGenderBadge.style.display = '';
+                    } else if (row) {
+                        const b = document.createElement('span');
+                        b.className = 'kv-profile-info-badge';
+                        b.id = 'mobileGenderBadge';
+                        b.innerHTML = '<i class="fas fa-venus-mars"></i> ' + genderText;
+                        row.prepend(b);
+                    }
+                } else if (mobileGenderBadge) {
+                    mobileGenderBadge.style.display = 'none';
+                }
+
+                if (newDob && newShowDob) {
+                    const row = ensureMobileBadgesRow();
+                    const dobDate = new Date(newDob + 'T00:00:00');
+                    const dobStr  = dobDate.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+                    if (mobileDobBadge) {
+                        mobileDobBadge.lastChild.textContent = ' ' + dobStr;
+                        mobileDobBadge.style.display = '';
+                    } else if (row) {
+                        const b = document.createElement('span');
+                        b.className = 'kv-profile-info-badge';
+                        b.id = 'mobileDobBadge';
+                        b.innerHTML = '<i class="fas fa-birthday-cake"></i> ' + dobStr;
+                        row.appendChild(b);
+                    }
+                } else if (mobileDobBadge) {
+                    mobileDobBadge.style.display = 'none';
+                }
+
                 // ── Profile picture ──────────────────────────────────────────
                 const newPicUrl = d.picture_url || null;
                 if (newPicUrl) {
@@ -5796,6 +6077,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     location:  d.location    ?? editLocation.value.trim(),
                     address:   d.address     ?? editAddress.value.trim(),
                     website:   d.website     ?? editWebsite.value.trim(),
+                    gender:    d.gender      ?? (editGender ? editGender.value : ''),
+                    date_of_birth: d.date_of_birth ?? (editDob ? editDob.value : ''),
+                    show_gender: d.show_gender !== undefined ? d.show_gender : (toggleShowGender ? toggleShowGender.checked : true),
+                    show_dob:    d.show_dob    !== undefined ? d.show_dob    : (toggleShowDob    ? toggleShowDob.checked    : false),
                     picture:   editProfilePicture ? editProfilePicture.src : originalValues.picture
                 };
 

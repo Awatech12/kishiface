@@ -166,6 +166,30 @@ class Profile(models.Model):
     else:
         picture = models.ImageField(upload_to='profile_image/', default='male.png')
     
+    # ── Gender ────────────────────────────────────────────────
+    GENDER_MALE        = 'male'
+    GENDER_FEMALE      = 'female'
+    GENDER_NON_BINARY  = 'non_binary'
+    GENDER_PREFER_NOT  = 'prefer_not_to_say'
+    GENDER_CHOICES = [
+        (GENDER_MALE,       'Male'),
+        (GENDER_FEMALE,     'Female'),
+        (GENDER_NON_BINARY, 'Non-binary'),
+        (GENDER_PREFER_NOT, 'Prefer not to say'),
+    ]
+    gender = models.CharField(
+        max_length=20,
+        choices=GENDER_CHOICES,
+        blank=True,
+        default='',
+    )
+
+    date_of_birth = models.DateField(null=True, blank=True)
+
+    # ── Gender / DOB visibility toggles ─────────────────────────
+    show_gender       = models.BooleanField(default=True,  help_text='Show gender on public profile')
+    show_dob          = models.BooleanField(default=False, help_text='Show date of birth on public profile')
+
     created_at = models.DateTimeField(auto_now_add=True)
     online = models.BooleanField(default=False)
 
