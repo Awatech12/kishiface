@@ -3727,6 +3727,25 @@ def dm_conversation(request):
         except Exception:
             return None
 
+    # ── Reactions for all messages in this conversation ──────────────────
+    from social.models import MessageReaction
+    from django.db.models import Count as _Count
+
+    reaction_rows = (
+        MessageReaction.objects
+        .filter(message__in=msgs)
+        .values('message_id', 'emoji')
+        .annotate(count=_Count('id'))
+    )
+    reactions_by_msg = {}
+    for row in reaction_rows:
+        reactions_by_msg.setdefault(row['message_id'], {})[row['emoji']] = row['count']
+
+    user_reaction_rows = MessageReaction.objects.filter(
+        message__in=msgs, user=request.user
+    ).values('message_id', 'emoji')
+    user_reactions = {r['message_id']: r['emoji'] for r in user_reaction_rows}
+
     messages_data = []
     for msg in msgs:
         reply_preview = None
@@ -3738,16 +3757,25 @@ def dm_conversation(request):
                 'file_type': rp.file_type or '',
             }
 
+        # iso: UTC ISO string so the JS formatDmTime() can convert to user's local tz
+        try:
+            iso_str = msg.created_at.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
+        except Exception:
+            iso_str = None
+
         messages_data.append({
-            'id':          msg.id,
-            'text':        msg.conversation or '',
-            'file_type':   msg.file_type or '',
-            'file_url':    file_url(msg),
-            'is_mine':     msg.sender_id == request.user.id,
-            'time':        msg.chat_time,
-            'date_label':  msg.chat_date_label,
-            'reply_to':    reply_preview,
+            'id':           msg.id,
+            'text':         msg.conversation or '',
+            'file_type':    msg.file_type or '',
+            'file_url':     file_url(msg),
+            'is_mine':      msg.sender_id == request.user.id,
+            'time':         msg.chat_time,
+            'iso':          iso_str,
+            'date_label':   msg.chat_date_label,
+            'reply_to':     reply_preview,
             'link_preview': msg.link_preview,
+            'reactions':    reactions_by_msg.get(msg.id, {}),
+            'my_reaction':  user_reactions.get(msg.id, None),
         })
 
     partner_avatar = None
