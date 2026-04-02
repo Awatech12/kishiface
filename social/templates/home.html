@@ -3995,6 +3995,7 @@
     overflow: hidden; position: relative; width: 100%; height: 100%; cursor: zoom-in;
   }
   .kvibe-dm-lb-body.zoomed { cursor: zoom-out; }
+  .kvibe-dm-lb-body.video-mode { cursor: default; }
   #kvibeDmLbImage {
     max-width: 100%; max-height: 100%; width: auto; height: auto;
     object-fit: contain; display: block; border-radius: 0;
@@ -4004,6 +4005,7 @@
   #kvibeDmLbVideo {
     max-width: 100%; max-height: 100%; width: auto; height: auto;
     display: block; border-radius: 0; background: #000;
+    pointer-events: all;
   }
   .kvibe-dm-lb-footer {
     position: absolute; bottom: 0; left: 0; right: 0;
@@ -6588,10 +6590,6 @@
 
     <!-- Action buttons -->
     <div class="kvibe-dm-modal-header-actions">
-      <!-- Shared media / gallery -->
-      <button class="kvibe-dm-modal-icon-btn" id="kvibeDmGalleryBtn" title="Shared media" onclick="kvibeDmOpenGallery()">
-        <i class="fas fa-images"></i>
-      </button>
       <!-- Open full chat page -->
       <a class="kvibe-dm-modal-icon-btn" id="kvibeDmModalOpenLink" href="#" title="Open full chat">
         <i class="fas fa-expand-alt"></i>
@@ -8559,6 +8557,7 @@
     if (type === 'image') {
       img.style.display = 'block';
       img.src = url;
+      body.classList.remove('video-mode');
       img.ondblclick = function(e) {
         e.stopPropagation();
         _lbImgScale = _lbImgScale > 1 ? 1 : 2.5;
@@ -8569,9 +8568,11 @@
       body.addEventListener('touchmove',  _lbTouchMove,  { passive: false });
       body.addEventListener('touchend',   _lbTouchEnd,   { passive: true  });
     } else if (type === 'video') {
+      body.classList.add('video-mode');
       vid.style.display = 'block';
       vid.src = url;
       vid.load();
+      vid.play().catch(function() { /* autoplay blocked — user can tap play */ });
     }
 
     lb.style.display = 'flex';
@@ -8590,11 +8591,12 @@
     var body = document.getElementById('kvibeDmLbBody');
     lb.style.display = 'none';
     lb.style.opacity = '';
-    vid.pause(); vid.src = '';
+    vid.pause(); vid.src = ''; vid.load();
     img.src = '';
     img.style.transform = 'scale(1)';
     _lbImgScale = 1;
     body.classList.remove('zoomed');
+    body.classList.remove('video-mode');
     _lbCurrentUrl = '';
     document.body.style.overflow = '';
     lb.removeEventListener('touchstart', _lbSwipeStart);
