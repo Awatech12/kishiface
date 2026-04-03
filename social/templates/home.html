@@ -1604,182 +1604,382 @@
     }
     /* ──────────────────────────────────────────────────────────────────── */
 
-    /* Media containers */
+    /* ===== MEDIA CONTAINERS ===== */
     .kvibe-media-container {
       width: 100%;
       position: relative;
       overflow: hidden;
+      /* No border-radius here — the post card handles it */
     }
-    
-    /* ===== MIXED MEDIA CAROUSEL ===== */
-    .kvibe-mixed-media-carousel {
-      width: 100%;
-      position: relative;
-      overflow: hidden;
-    }
-    
-    .kvibe-mixed-media-track {
-      display: flex;
-      transition: transform 0.3s ease;
-    }
-    
-    .kvibe-mixed-media-slide {
-      width: 100%;
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      background: #000; /* Dark background for better contrast */
-    }
-    
-    .kvibe-mixed-media-slide .kvibe-video-container,
-    .kvibe-mixed-media-slide .kvibe-image-slide {
-      width: 100%;
-      height: auto;
-      flex: 1;
-    }
-    
-    .kvibe-mixed-media-slide .kvibe-video {
-      width: 100%;
-      height: auto;
-      max-height: 600px;
-      object-fit: contain;
-    }
-    
-    .kvibe-mixed-media-slide .kvibe-image-slide {
-      width: 100%;
-      height: auto;
-      position: relative;
-      background: #fafafa;
-    }
-    
-    .kvibe-mixed-media-slide .kvibe-image-slide img {
-      width: 100%;
-      height: auto;
-      max-height: 600px;
-      object-fit: contain;
-      display: block;
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-    
-    .kvibe-mixed-media-slide .kvibe-image-slide img.loaded {
-      opacity: 1;
-    }
-    
-    /* Media type indicator */
-    .kvibe-media-type-badge {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      z-index: 25;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    
-    /* Mixed media carousel — swipe/keyboard only */
-    .kvibe-mixed-carousel-controls { display: none; }
-    .kvibe-mixed-carousel-prev, .kvibe-mixed-carousel-next { display: none; }
 
-    .kvibe-mixed-carousel-indicators {
-      position: absolute;
-      top: 6px;
-      left: 8px;
-      right: 8px;
-      display: flex;
-      gap: 3px;
-      z-index: 30;
-      pointer-events: none;
-    }
-    .kvibe-mixed-indicator {
-      flex: 1;
-      height: 3px;
-      border-radius: 2px;
-      background: rgba(255,255,255,0.35);
-      transition: background 0.25s;
-    }
-    .kvibe-mixed-indicator.active { background: rgba(255,255,255,0.95); }
-    .kvibe-mixed-media-carousel[data-total="1"] .kvibe-mixed-carousel-controls,
-    .kvibe-mixed-media-carousel[data-total="1"] .kvibe-mixed-carousel-indicators { display: none; }
+    /* ===== IMAGE CAROUSEL ===== */
 
-    /* Slide counter badge */
-    .kvibe-slide-counter {
-      position: absolute;
-      top: 18px;
-      right: 10px;
-      background: rgba(0,0,0,0.55);
-      color: rgba(255,255,255,0.92);
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 20px;
-      z-index: 31;
-      pointer-events: none;
-      letter-spacing: 0.02em;
-    }
-    .kvibe-mixed-media-carousel[data-total="1"] .kvibe-slide-counter,
-    .kvibe-image-carousel[data-total="1"] .kvibe-slide-counter { display: none; }
-    /* Hide type badges in multi-slide carousels */
-    .kvibe-mixed-media-carousel[data-total]:not([data-total="1"]) .kvibe-media-type-badge { display: none; }
-    
-    /* Image carousel (standalone) */
+    /* Wrapper — clips the sliding track */
     .kvibe-image-carousel {
       width: 100%;
       position: relative;
       overflow: hidden;
+      /* Neutral bg shown while images load */
+      background: #efefef;
+      /* Prevent text-select during drag */
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: pan-y; /* allow vertical scroll, block horizontal */
     }
-    
+
+    /* ── Aspect-ratio frame ──────────────────────────────────────────────── */
+    /* Default: 1:1 square (matches the standard feed crop) */
+    .kvibe-image-carousel .kvibe-carousel-aspect {
+      position: relative;
+      width: 100%;
+      padding-top: 100%; /* 1:1 */
+      overflow: hidden;
+    }
+
+    /* Portrait override: when post is portrait (set via JS) */
+    .kvibe-image-carousel.portrait .kvibe-carousel-aspect { padding-top: 125%; } /* 4:5 */
+    /* Landscape override: when post is landscape (set via JS) */
+    .kvibe-image-carousel.landscape .kvibe-carousel-aspect { padding-top: 56.25%; } /* 16:9 */
+
+    /* Sliding track lives inside the aspect frame */
     .kvibe-image-track {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       display: flex;
-      transition: transform 0.3s ease;
+      will-change: transform;
+      /* Transition is toggled by JS (disabled during live drag) */
+      transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    
+    .kvibe-image-track.dragging {
+      transition: none; /* snap-free during live drag */
+    }
+
+    /* Each slide */
     .kvibe-image-slide {
       width: 100%;
+      height: 100%;
       flex-shrink: 0;
       display: block;
-      background: #fafafa;
+      background: #efefef;
       position: relative;
+      overflow: hidden;
+      cursor: zoom-in;
     }
-    
     .kvibe-image-slide img {
       width: 100%;
-      height: auto;
+      height: 100%;
       display: block;
+      object-fit: cover;  /* crop to fill — same as the standard feed */
+      object-position: center;
       opacity: 0;
-      transition: opacity 0.3s;
+      transition: opacity 0.28s ease;
     }
-    
     .kvibe-image-slide img.loaded {
       opacity: 1;
+      animation: kvibeFadeIn 0.28s ease;
     }
+
+    /* Single-image posts (not in a carousel) — same aspect treatment */
+    .kvibe-media-container > .kvibe-image-slide {
+      position: relative;
+      width: 100%;
+      padding-top: 100%; /* default 1:1 */
+      background: #efefef;
+      overflow: hidden;
+      cursor: zoom-in;
+    }
+    .kvibe-media-container > .kvibe-image-slide.portrait { padding-top: 125%; }
+    .kvibe-media-container > .kvibe-image-slide.landscape { padding-top: 56.25%; }
+    .kvibe-media-container > .kvibe-image-slide img {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      object-position: center;
+      opacity: 0;
+      transition: opacity 0.28s ease;
+    }
+    .kvibe-media-container > .kvibe-image-slide img.loaded { opacity: 1; }
+
+    /* Market ad images: override — keep natural proportions, no padding-top trick */
+    .kvibe-market-img-slide {
+      position: relative !important;
+      padding-top: 0 !important;
+      width: 100% !important;
+      cursor: default !important;
+    }
+    .kvibe-market-img-slide img {
+      position: static !important;
+      width: 100% !important;
+      height: auto !important;
+      max-height: 380px;
+      object-fit: cover !important;
+      display: block;
+    }
+
+    /* Dot indicators — bottom-centre */
+    .kvibe-carousel-indicators {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 4px;
+      z-index: 30;
+      pointer-events: none;
+      max-width: calc(100% - 80px); /* don't overlap counter */
+      flex-wrap: nowrap;
+      overflow: hidden;
+    }
+    .kvibe-indicator {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      flex: none;
+      background: rgba(255,255,255,0.45);
+      transition: background 0.22s, transform 0.22s, width 0.22s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .kvibe-indicator.active {
+      background: #fff;
+      transform: scale(1.3);
+    }
+    /* Thin bar style for 6+ images */
+    .kvibe-image-carousel[data-total="6"] .kvibe-indicator,
+    .kvibe-image-carousel[data-total="7"] .kvibe-indicator,
+    .kvibe-image-carousel[data-total="8"] .kvibe-indicator,
+    .kvibe-image-carousel[data-total="9"] .kvibe-indicator,
+    .kvibe-image-carousel[data-total="10"] .kvibe-indicator {
+      width: 14px;
+      height: 3px;
+      border-radius: 2px;
+    }
+    .kvibe-image-carousel[data-total="6"] .kvibe-indicator.active,
+    .kvibe-image-carousel[data-total="7"] .kvibe-indicator.active,
+    .kvibe-image-carousel[data-total="8"] .kvibe-indicator.active,
+    .kvibe-image-carousel[data-total="9"] .kvibe-indicator.active,
+    .kvibe-image-carousel[data-total="10"] .kvibe-indicator.active {
+      transform: scaleY(1.4);
+    }
+
+    /* Slide counter pill — top-right */
+    .kvibe-slide-counter {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.5);
+      color: rgba(255,255,255,0.95);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 20px;
+      z-index: 31;
+      pointer-events: none;
+      letter-spacing: 0.03em;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+
+    /* Hide dots + counter for single-image posts */
+    .kvibe-image-carousel[data-total="1"] .kvibe-carousel-indicators,
+    .kvibe-image-carousel[data-total="1"] .kvibe-slide-counter { display: none; }
+
+    /* ── Arrow buttons ────────────────────────────────────────────────────── */
+    .kvibe-carousel-prev,
+    .kvibe-carousel-next {
+      display: none; /* mobile: swipe only */
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 32;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,0.95);
+      color: #262626;
+      font-size: 12px;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      opacity: 0;
+      transition: opacity 0.18s, background 0.15s, transform 0.15s, box-shadow 0.15s;
+      pointer-events: all;
+    }
+    .kvibe-carousel-prev { left: 8px; }
+    .kvibe-carousel-next { right: 8px; }
+
+    @media (min-width: 768px) {
+      .kvibe-carousel-prev,
+      .kvibe-carousel-next { display: flex; }
+
+      /* Reveal on hover */
+      .kvibe-image-carousel:hover .kvibe-carousel-prev:not([disabled]),
+      .kvibe-image-carousel:hover .kvibe-carousel-next:not([disabled]) { opacity: 1; }
+
+      .kvibe-carousel-prev:hover,
+      .kvibe-carousel-next:hover {
+        background: #fff;
+        box-shadow: 0 3px 14px rgba(0,0,0,0.3);
+        transform: translateY(-50%) scale(1.1);
+      }
+      .kvibe-carousel-prev:active,
+      .kvibe-carousel-next:active { transform: translateY(-50%) scale(0.92); }
+    }
+
+    /* ── Feed image lightbox ──────────────────────────────────────────────── */
+    .kvibe-feed-lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 99000;
+      background: rgba(0,0,0,0.96);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+    .kvibe-feed-lightbox.open { display: flex; }
+
+    /* Top bar */
+    .kvibe-feed-lb-bar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      z-index: 2;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%);
+    }
+    .kvibe-feed-lb-author {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .kvibe-feed-lb-author img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1.5px solid rgba(255,255,255,0.4);
+    }
+    .kvibe-feed-lb-author-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .kvibe-feed-lb-close {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      font-size: 17px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    .kvibe-feed-lb-close:hover { background: rgba(255,255,255,0.22); }
+
+    /* Image body */
+    .kvibe-feed-lb-body {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .kvibe-feed-lb-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+      transform-origin: center;
+      transition: transform 0.22s ease;
+      touch-action: none;
+      cursor: grab;
+    }
+    .kvibe-feed-lb-img.zoomed { cursor: move; }
+
+    /* Side arrows */
+    .kvibe-feed-lb-prev,
+    .kvibe-feed-lb-next {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 3;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,0.14);
+      color: #fff;
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, transform 0.15s;
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+    }
+    .kvibe-feed-lb-prev { left: 14px; }
+    .kvibe-feed-lb-next { right: 14px; }
+    .kvibe-feed-lb-prev:hover, .kvibe-feed-lb-next:hover { background: rgba(255,255,255,0.28); transform: translateY(-50%) scale(1.08); }
+    .kvibe-feed-lb-prev[hidden], .kvibe-feed-lb-next[hidden] { display: none; }
+
+    /* Bottom dots */
+    .kvibe-feed-lb-dots {
+      position: absolute;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 5px;
+      z-index: 3;
+    }
+    .kvibe-feed-lb-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.4);
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+      border: none;
+      padding: 0;
+    }
+    .kvibe-feed-lb-dot.active { background: #fff; transform: scale(1.25); }
     
 
     
     /* ===== VIDEO PLAYER ===== */
     .kvibe-video-container {
-      position: relative; 
+      position: relative;
       width: 100%;
       overflow: hidden;
       background-color: #000;
-      min-height: 200px; 
-      display: flex; 
+      /* 16:9 aspect ratio — consistent across all viewports */
+      aspect-ratio: 16 / 9;
+      display: flex;
       justify-content: center;
       align-items: center;
     }
 
     .kvibe-video {
-      max-width: 100%; 
-      height: auto; 
-      object-fit: contain; 
-      display: block; 
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      background: #000;
     }
 
     /* Styling for the Play/Pause Icon */
@@ -2484,40 +2684,12 @@
       display: none;
     }
     
-    /* Image carousel — swipe/keyboard only */
-    .kvibe-carousel-controls { display: none; }
-    .kvibe-carousel-prev, .kvibe-carousel-next { display: none; }
-
-    .kvibe-carousel-indicators {
-      position: absolute;
-      top: 6px;
-      left: 8px;
-      right: 8px;
-      display: flex;
-      gap: 3px;
-      z-index: 30;
-      pointer-events: none;
-    }
-    .kvibe-indicator {
-      flex: 1;
-      height: 3px;
-      border-radius: 2px;
-      background: rgba(255,255,255,0.35);
-      transition: background 0.25s;
-    }
-    .kvibe-indicator.active { background: rgba(255,255,255,0.95); }
-    .kvibe-image-carousel[data-total="1"] .kvibe-carousel-controls,
-    .kvibe-image-carousel[data-total="1"] .kvibe-carousel-indicators { display: none; }
-    
     /* Loading animation for images */
     @keyframes kvibeFadeIn {
       from { opacity: 0; }
-      to { opacity: 1; }
+      to   { opacity: 1; }
     }
-    
-    .kvibe-image-slide img.loaded {
-      animation: kvibeFadeIn 0.3s ease;
-    }
+    /* (duplicate .loaded animation handled above) */
     
 
     
@@ -5227,28 +5399,28 @@
       });
     }
     
+    // kvibeSlideCarousel is defined in home.js (loaded in <head>).
+    // This shim keeps any legacy direction-based callers working by converting
+    // direction (+1/-1) to an absolute index call.
     function kvibeSlideCarousel(postId, direction) {
-      const carousel = document.getElementById(`kvibe-carousel-${postId}`);
-      const track = document.getElementById(`kvibe-track-${postId}`);
-      const totalSlides = parseInt(carousel.getAttribute('data-total'));
-      let currentSlide = parseInt(carousel.getAttribute('data-slide'));
-      
-      currentSlide += direction;
-      
-      if (currentSlide < 0) currentSlide = totalSlides - 1;
-      if (currentSlide >= totalSlides) currentSlide = 0;
-      
-      track.style.transform = `translateX(-${currentSlide * 100}%)`;
-      carousel.setAttribute('data-slide', currentSlide);
-      
-      const indicators = carousel.querySelectorAll('.kvibe-indicator');
-      indicators.forEach((indicator, index) => {
-        if (index === currentSlide) {
-          indicator.classList.add('active');
-        } else {
-          indicator.classList.remove('active');
-        }
-      });
+      var carousel = document.getElementById('kvibe-carousel-' + postId);
+      if (!carousel) return;
+      var cur   = parseInt(carousel.getAttribute('data-slide') || '0', 10);
+      var total = parseInt(carousel.getAttribute('data-total') || '1', 10);
+      var next  = cur + direction;
+      if (next < 0) next = 0;
+      if (next >= total) next = total - 1;
+      // Delegate to the canonical version in home.js
+      if (typeof window.kvibeSlideCarouselAbs === 'function') {
+        window.kvibeSlideCarouselAbs(postId, next);
+      } else {
+        var track = document.getElementById('kvibe-track-' + postId);
+        if (track) track.style.transform = 'translateX(-' + next * 100 + '%)';
+        carousel.setAttribute('data-slide', next);
+        carousel.querySelectorAll('.kvibe-indicator').forEach(function(d,i){ d.classList.toggle('active', i===next); });
+        var ctr = carousel.querySelector('.kvibe-slide-counter');
+        if (ctr) ctr.textContent = (next+1) + ' / ' + total;
+      }
     }
     
     function kvibeDownloadImage(postId, url, filename) {
@@ -8454,6 +8626,40 @@
 
 }());
 </script>
+<!-- ── Feed Image Lightbox ───────────────────────────────────────────── -->
+<div class="kvibe-feed-lightbox" id="kvibeFeedLightbox" role="dialog" aria-modal="true" aria-label="Image viewer">
+  <!-- Top bar -->
+  <div class="kvibe-feed-lb-bar">
+    <a class="kvibe-feed-lb-author" id="kvibeFeedLbAuthorLink" href="#">
+      <img id="kvibeFeedLbAvatar" src="" alt="">
+      <span class="kvibe-feed-lb-author-name" id="kvibeFeedLbUsername"></span>
+    </a>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span id="kvibeFeedLbCounter" style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);display:none;"></span>
+      <button class="kvibe-feed-lb-close" onclick="kvibeCloseFeedLightbox()" aria-label="Close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Image body -->
+  <div class="kvibe-feed-lb-body" id="kvibeFeedLbBody">
+    <img class="kvibe-feed-lb-img" id="kvibeFeedLbImg" src="" alt="Post image" draggable="false">
+  </div>
+
+  <!-- Side arrows -->
+  <button class="kvibe-feed-lb-prev" id="kvibeFeedLbPrev" onclick="kvibeFlbPrev()" aria-label="Previous image" hidden>
+    <i class="fas fa-chevron-left"></i>
+  </button>
+  <button class="kvibe-feed-lb-next" id="kvibeFeedLbNext" onclick="kvibeFlbNext()" aria-label="Next image" hidden>
+    <i class="fas fa-chevron-right"></i>
+  </button>
+
+  <!-- Bottom dots -->
+  <div class="kvibe-feed-lb-dots" id="kvibeFeedLbDots" style="display:none;"></div>
+</div>
+<!-- ──────────────────────────────────────────────────────────────────────── -->
+
 <!-- ── DM Media Lightbox ──────────────────────────────────────────────── -->
 <!-- ── DM More-options dropdown (body-level so it clears modal overflow) ──── -->
 <div class="kvibe-dm-more-dropdown" id="kvibeDmMoreDropdown">

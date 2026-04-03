@@ -12,18 +12,37 @@
   /* ── Splash → skeleton → card ── */
   window.addEventListener('load', function () {
     setTimeout(function () {
+      /* 1. Hide splash overlay */
       var splash = document.getElementById('kishivibe-splash');
       if (splash) splash.classList.add('kishivibe-hidden');
 
       setTimeout(function () {
         var skel    = document.getElementById('kishivibe-skeleton');
         var content = document.getElementById('kishivibe-content');
-        if (skel)    skel.style.display = 'none';
-        if (content) content.classList.add('kishivibe-show');
 
-        /* Auto-focus username field */
-        var uInp = document.getElementById('kishivibe-username');
-        if (uInp) uInp.focus();
+        /* 2. Fade skeleton out */
+        if (skel) {
+          skel.style.transition = 'opacity 0.25s ease';
+          skel.style.opacity    = '0';
+        }
+
+        /* 3. After skeleton fades, swap to content and trigger its fade-in */
+        setTimeout(function () {
+          if (skel)    skel.style.display = 'none';
+          if (content) {
+            /* Two rAF frames ensure the browser registers the initial
+               opacity:0 state before adding the class that animates to 1 */
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                content.classList.add('kishivibe-show');
+              });
+            });
+          }
+
+          /* Auto-focus username field */
+          var uInp = document.getElementById('kishivibe-username');
+          if (uInp) setTimeout(function () { uInp.focus(); }, 400);
+        }, 260);
       }, 120);
     }, 700);
   });
