@@ -1,11 +1,771 @@
+{% load static %}
+{% load humanize %}
+{% load post_tags %}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Our Services</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <title>KishiFace - Services</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    :root {
+      --kvibe-bg:         #fafafa;
+      --kvibe-white:      #ffffff;
+      --kvibe-text:       #262626;
+      --kvibe-text-light: #8e8e8e;
+      --kvibe-primary:    #0095f6;
+      --kvibe-border:     #dbdbdb;
+      /* event type colours — kept in sync with SocialEvent.type_color */
+      --ev-town:     #0095f6;
+      --ev-festival: #ff6b35;
+      --ev-wedding:  #e91e8c;
+      --ev-other:    #7c3aed;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kvibe-bg);
+      color: var(--kvibe-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout — exact mirror of home.html ── */
+    .kvibe-desktop-layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px 20px 0 20px;
+      gap: 20px;
+    }
+
+    .kvibe-left-sidebar {
+      width: 245px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+
+    .kvibe-desktop-nav {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 20px 0;
+      background: var(--kvibe-white);
+    }
+
+    .kvibe-desktop-nav-item {
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+      width: 100%;
+      padding: 12px;
+      position: relative;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border-radius: 8px;
+      background: none;
+      border: none;
+      text-align: left;
+    }
+
+    .kvibe-desktop-nav-item:hover  { background: var(--kvibe-bg); }
+    .kvibe-desktop-nav-item.active { background: var(--kvibe-bg); }
+
+    .kvibe-desktop-nav-icon {
+      width: 24px; height: 24px;
+      margin-right: 12px;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .kvibe-desktop-nav-icon svg {
+      width: 100%; height: 100%;
+      stroke: var(--kvibe-text-light);
+      transition: stroke 0.2s ease;
+    }
+
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-icon svg,
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-icon svg { stroke: var(--kvibe-primary); }
+
+    .kvibe-desktop-nav-label {
+      font-size: 14px;
+      color: var(--kvibe-text-light);
+      font-weight: 400;
+      transition: color 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-label  { color: var(--kvibe-text); }
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-label { color: var(--kvibe-text); font-weight: 600; }
+
+    .kvibe-desktop-nav-item.logout .kvibe-desktop-nav-icon svg       { stroke: var(--kvibe-primary); }
+    .kvibe-desktop-nav-item.logout:hover .kvibe-desktop-nav-icon svg { stroke: var(--kvibe-primary); }
+    .kvibe-desktop-nav-item.logout:hover .kvibe-desktop-nav-label    { color: var(--kvibe-primary); }
+
+    .kvibe-main-feed {
+      flex: 1;
+      max-width: 700px;
+      margin: 0 auto;
+      padding-bottom: 60px;
+    }
+
+    .kvibe-right-sidebar {
+      width: 320px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-left: 10px;
+    }
+
+    @media (max-width: 767px) {
+      .kvibe-desktop-only { display: none !important; }
+      .kvibe-desktop-layout { padding: 12px 12px 0; gap: 0; }
+      .kvibe-main-feed { max-width: 100%; }
+      body { padding-bottom: 70px; }
+    }
+
+    @media (min-width: 768px) {
+      .kvibe-desktop-only { display: flex !important; }
+    }
+
+    /* ── Page Hero ── */
+    .kvs-hero {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 16px;
+      padding: 28px 24px 22px;
+      margin-bottom: 20px;
+    }
+
+    .kvs-hero h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .kvs-hero p  { font-size: 14px; color: var(--kvibe-text-light); }
+
+    /* ── Stats strip ── */
+    .kvs-stats-strip {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .kvs-stat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 20px;
+      padding: 5px 13px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--kvibe-text);
+      text-decoration: none;
+      transition: all 0.18s;
+    }
+
+    .kvs-stat-pill:hover {
+      border-color: var(--kvibe-primary);
+      color: var(--kvibe-primary);
+    }
+
+    .kvs-stat-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Service cards ── */
+    .kvs-services-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 520px) {
+      .kvs-services-grid { grid-template-columns: 1fr; }
+    }
+
+    .kvs-card {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 14px;
+      padding: 20px 18px;
+      text-decoration: none;
+      color: var(--kvibe-text);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .kvs-card:hover {
+      border-color: var(--kvibe-primary);
+      box-shadow: 0 4px 18px rgba(0,149,246,0.1);
+      transform: translateY(-2px);
+    }
+
+    .kvs-card.featured {
+      grid-column: span 2;
+      flex-direction: row;
+      align-items: center;
+      gap: 20px;
+      background: linear-gradient(135deg, #0095f6 0%, #0077cc 100%);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    @media (max-width: 520px) {
+      .kvs-card.featured { grid-column: span 1; flex-direction: column; }
+    }
+
+    .kvs-card.featured:hover {
+      box-shadow: 0 6px 24px rgba(0,149,246,0.3);
+      border-color: transparent;
+    }
+
+    .kvs-card-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      background: var(--kvibe-bg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .kvs-card.featured .kvs-card-icon {
+      background: rgba(255,255,255,0.2);
+      width: 60px; height: 60px;
+      border-radius: 16px;
+      font-size: 28px;
+    }
+
+    .kvs-card-body { flex: 1; }
+
+    .kvs-card-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+
+    .kvs-card-desc {
+      font-size: 13px;
+      color: var(--kvibe-text-light);
+      line-height: 1.5;
+    }
+
+    .kvs-card.featured .kvs-card-desc { color: rgba(255,255,255,0.85); }
+
+    .kvs-card-arrow {
+      font-size: 13px; font-weight: 600;
+      color: var(--kvibe-primary);
+      margin-top: 4px;
+    }
+
+    .kvs-card.featured .kvs-card-arrow { color: rgba(255,255,255,0.9); }
+
+    /* ── Right sidebar widgets ── */
+    .kvs-sidebar-widget {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .kvs-sidebar-widget h3 {
+      font-size: 14px; font-weight: 700;
+      margin-bottom: 14px;
+      color: var(--kvibe-text);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .kvs-sidebar-widget h3 a {
+      font-size: 12px; font-weight: 600;
+      color: var(--kvibe-primary);
+      text-decoration: none;
+    }
+
+    .kvs-sidebar-widget h3 a:hover { text-decoration: underline; }
+
+    /* Upcoming event row */
+    .kvs-ev-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--kvibe-border);
+      text-decoration: none;
+      color: var(--kvibe-text);
+      transition: opacity 0.15s;
+    }
+
+    .kvs-ev-row:last-of-type { border-bottom: none; padding-bottom: 0; }
+    .kvs-ev-row:hover { opacity: 0.72; }
+
+    .kvs-ev-badge {
+      width: 44px;
+      flex-shrink: 0;
+      background: var(--kvibe-bg);
+      border: 1px solid var(--kvibe-border);
+      border-top: 3px solid var(--ev-badge-color, var(--kvibe-primary));
+      border-radius: 10px;
+      padding: 6px 4px;
+      text-align: center;
+    }
+
+    .kvs-ev-badge .ev-month {
+      display: block;
+      font-size: 9px; font-weight: 700;
+      text-transform: uppercase;
+      color: var(--ev-badge-color, var(--kvibe-primary));
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    .kvs-ev-badge .ev-day {
+      display: block;
+      font-size: 20px; font-weight: 800;
+      color: var(--kvibe-text);
+      line-height: 1;
+    }
+
+    .kvs-ev-info { flex: 1; min-width: 0; }
+
+    .kvs-ev-title {
+      font-size: 13px; font-weight: 600;
+      color: var(--kvibe-text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      line-height: 1.35;
+    }
+
+    .kvs-ev-meta {
+      font-size: 11px;
+      color: var(--kvibe-text-light);
+      margin-top: 3px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+
+    .kvs-ev-meta span {
+      display: flex; align-items: center; gap: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .kvs-ev-type-dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .kvs-ev-empty {
+      text-align: center;
+      padding: 20px 0 8px;
+      color: var(--kvibe-text-light);
+      font-size: 13px;
+    }
+
+    .kvs-ev-empty i {
+      display: block; font-size: 28px;
+      margin-bottom: 10px; opacity: 0.35;
+    }
+
+    .kvs-ev-empty a {
+      color: var(--kvibe-primary); font-weight: 600; text-decoration: none;
+    }
+
+    .kvs-see-all-btn {
+      display: block;
+      text-align: center;
+      margin-top: 14px;
+      padding: 9px;
+      background: var(--kvibe-bg);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 10px;
+      font-size: 13px; font-weight: 600;
+      color: var(--kvibe-primary);
+      text-decoration: none;
+      transition: all 0.18s;
+    }
+
+    .kvs-see-all-btn:hover {
+      background: var(--kvibe-primary);
+      color: #fff;
+      border-color: var(--kvibe-primary);
+    }
+
+    /* Quick links */
+    .kvs-quick-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--kvibe-border);
+      font-size: 13px;
+      color: var(--kvibe-text);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .kvs-quick-link:last-child { border-bottom: none; padding-bottom: 0; }
+    .kvs-quick-link:hover { color: var(--kvibe-primary); }
+    .kvs-quick-link i { width: 18px; text-align: center; color: var(--kvibe-text-light); flex-shrink: 0; }
+    .kvs-quick-link:hover i { color: var(--kvibe-primary); }
+
+    .kvs-ql-count {
+      margin-left: auto;
+      font-weight: 700;
+      color: var(--kvibe-text-light);
+      font-size: 12px;
+    }
+
+    .kvs-type-swatch {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+  </style>
 </head>
 <body>
-    <h1>Welcome to Our Services Page</h1>
+
+{% include 'header.html' %}
+
+<main style="padding-top: 60px;">
+<div class="kvibe-desktop-layout">
+
+  <!-- ── Left Sidebar (identical to home.html) ── -->
+  <aside class="kvibe-left-sidebar kvibe-desktop-only" style="flex-direction: column;">
+    <div class="kvibe-desktop-nav">
+
+      <a href="{% url 'home' %}" class="kvibe-desktop-nav-item" title="Home">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Home</span>
+      </a>
+
+      <a href="{% url 'search' %}" class="kvibe-desktop-nav-item" title="Search">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Search</span>
+      </a>
+
+      <a href="{% url 'post' %}" class="kvibe-desktop-nav-item" title="Create Post">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" stroke-width="2"/>
+            <line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/>
+            <line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Create</span>
+      </a>
+
+      <a href="{% url 'notification_list' %}" class="kvibe-desktop-nav-item" title="Alerts">
+        <div class="kvibe-desktop-nav-icon">
+          <i class="fa-regular fa-bell" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+        </div>
+        <span class="kvibe-desktop-nav-label">Alerts</span>
+      </a>
+
+      <a href="{% url 'profile' request.user.username %}" class="kvibe-desktop-nav-item" title="Profile">
+        <div class="kvibe-desktop-nav-icon">
+          <i class="fa-regular fa-user" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+        </div>
+        <span class="kvibe-desktop-nav-label">Profile</span>
+      </a>
+
+      <a href="{% url 'channel_create' %}" class="kvibe-desktop-nav-item" title="Channels">
+        <div class="kvibe-desktop-nav-icon">
+          <i class="fa-regular fa-newspaper" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+        </div>
+        <span class="kvibe-desktop-nav-label">Channels</span>
+      </a>
+
+      <!-- Services — active on this page -->
+      <a href="{% url 'services' %}" class="kvibe-desktop-nav-item active" title="Services">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Services</span>
+      </a>
+
+      <button class="kvibe-desktop-nav-item logout" id="kvsSvcLogoutBtn" title="Log Out">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Logout</span>
+      </button>
+
+    </div>
+  </aside>
+
+  <!-- ── Main Content ── -->
+  <div class="kvibe-main-feed">
+
+    <!-- Hero -->
+    <div class="kvs-hero">
+      <h1>🛠️ KishiVibe Services</h1>
+      <p>Discover everything KVibe has to offer — from community events to marketplace tools.</p>
+    </div>
+
+    <!-- Event stats strip — only shown when DB has events -->
+    {% if event_counts.total %}
+    <div class="kvs-stats-strip">
+      <a href="{% url 'event_calendar' %}" class="kvs-stat-pill">
+        <span class="kvs-stat-dot" style="background:var(--kvibe-primary);"></span>
+        {{ event_counts.total }} event{{ event_counts.total|pluralize }}
+      </a>
+      {% if event_counts.town %}
+      <a href="{% url 'event_calendar' %}?type=town" class="kvs-stat-pill">
+        <span class="kvs-stat-dot" style="background:var(--ev-town);"></span>
+        {{ event_counts.town }} town meeting{{ event_counts.town|pluralize }}
+      </a>
+      {% endif %}
+      {% if event_counts.festival %}
+      <a href="{% url 'event_calendar' %}?type=festival" class="kvs-stat-pill">
+        <span class="kvs-stat-dot" style="background:var(--ev-festival);"></span>
+        {{ event_counts.festival }} festival{{ event_counts.festival|pluralize }}
+      </a>
+      {% endif %}
+      {% if event_counts.wedding %}
+      <a href="{% url 'event_calendar' %}?type=wedding" class="kvs-stat-pill">
+        <span class="kvs-stat-dot" style="background:var(--ev-wedding);"></span>
+        {{ event_counts.wedding }} wedding{{ event_counts.wedding|pluralize }}
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Service cards -->
+    <div class="kvs-services-grid">
+
+      <!-- Featured: Event Calendar -->
+      <a href="{% url 'event_calendar' %}" class="kvs-card featured">
+        <div class="kvs-card-icon">📅</div>
+        <div class="kvs-card-body">
+          <div class="kvs-card-title">Event Calendar</div>
+          <div class="kvs-card-desc">
+            Town meetings, local festivals, weddings and community social events — all in one place.
+            {% if event_counts.total %}
+            <br><strong style="color:rgba(255,255,255,0.95);">{{ event_counts.total }} event{{ event_counts.total|pluralize }} listed.</strong>
+            {% endif %}
+          </div>
+          <div class="kvs-card-arrow">Browse events →</div>
+        </div>
+      </a>
+
+      <a href="{% url 'market' %}" class="kvs-card">
+        <div class="kvs-card-icon">🛍️</div>
+        <div class="kvs-card-body">
+          <div class="kvs-card-title">Marketplace</div>
+          <div class="kvs-card-desc">Buy and sell products with the community.</div>
+          <div class="kvs-card-arrow" style="color:var(--kvibe-primary);">Visit market →</div>
+        </div>
+      </a>
+
+      <a href="{% url 'channel_create' %}" class="kvs-card">
+        <div class="kvs-card-icon">📰</div>
+        <div class="kvs-card-body">
+          <div class="kvs-card-title">Channels</div>
+          <div class="kvs-card-desc">Create or join community channels for shared interests.</div>
+          <div class="kvs-card-arrow" style="color:var(--kvibe-primary);">Explore channels →</div>
+        </div>
+      </a>
+
+      <a href="{% url 'spotlight' %}" class="kvs-card">
+        <div class="kvs-card-icon">✨</div>
+        <div class="kvs-card-body">
+          <div class="kvs-card-title">Spotlight</div>
+          <div class="kvs-card-desc">Discover trending creators and top posts.</div>
+          <div class="kvs-card-arrow" style="color:var(--kvibe-primary);">See spotlight →</div>
+        </div>
+      </a>
+
+      <a href="{% url 'inbox' %}" class="kvs-card">
+        <div class="kvs-card-icon">💬</div>
+        <div class="kvs-card-body">
+          <div class="kvs-card-title">Direct Messages</div>
+          <div class="kvs-card-desc">Private chats with voice messages, file sharing, and reactions.</div>
+          <div class="kvs-card-arrow" style="color:var(--kvibe-primary);">Open inbox →</div>
+        </div>
+      </a>
+
+      <a href="{% url 'job_vacancy' %}" class="kvs-card">
+        <div class="kvs-card-icon">💼</div>
+        <div class="kvs-card-body">
+          <div class="kvs-card-title">Job Vacancies</div>
+          <div class="kvs-card-desc">Browse gigs, full-time roles and apprenticeships posted by your community.</div>
+          <div class="kvs-card-arrow" style="color:var(--kvibe-primary);">Browse jobs →</div>
+        </div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ── Right Sidebar ── -->
+  <aside class="kvibe-right-sidebar kvibe-desktop-only" style="flex-direction: column;">
+
+    <!-- ── Upcoming Events (real DB data) ── -->
+    <div class="kvs-sidebar-widget">
+      <h3>
+        📅 Upcoming Events
+        <a href="{% url 'event_calendar' %}">View all</a>
+      </h3>
+
+      {% if upcoming_events %}
+
+        {% for ev in upcoming_events %}
+        <a href="{% url 'event_calendar' %}?type={{ ev.event_type }}"
+           class="kvs-ev-row"
+           style="--ev-badge-color: {{ ev.type_color }};">
+
+          <div class="kvs-ev-badge" style="--ev-badge-color: {{ ev.type_color }};">
+            <span class="ev-month">{{ ev.date|date:"M" }}</span>
+            <span class="ev-day">{{ ev.date|date:"j" }}</span>
+          </div>
+
+          <div class="kvs-ev-info">
+            <div class="kvs-ev-title">{{ ev.title }}</div>
+            <div class="kvs-ev-meta">
+              <span>
+                <span class="kvs-ev-type-dot" style="background:{{ ev.type_color }};"></span>
+                {{ ev.type_emoji }} {{ ev.get_event_type_display }}
+              </span>
+              {% if ev.location %}
+              <span>
+                <i class="fas fa-map-marker-alt" style="font-size:10px;"></i>
+                {{ ev.location|truncatechars:30 }}
+              </span>
+              {% endif %}
+              <span>
+                <i class="far fa-clock" style="font-size:10px;"></i>
+                {{ ev.time_display }}
+              </span>
+            </div>
+          </div>
+
+        </a>
+        {% endfor %}
+
+        <a href="{% url 'event_calendar' %}" class="kvs-see-all-btn">
+          See all {{ event_counts.total }} event{{ event_counts.total|pluralize }} →
+        </a>
+
+      {% else %}
+
+        <div class="kvs-ev-empty">
+          <i class="far fa-calendar-times"></i>
+          No upcoming events yet.
+          <br><br>
+          <a href="{% url 'event_calendar' %}">Add the first one →</a>
+        </div>
+
+      {% endif %}
+    </div>
+
+    <!-- ── Quick Links ── -->
+    <div class="kvs-sidebar-widget">
+      <h3>🔗 Quick Links</h3>
+
+      <a href="{% url 'market' %}" class="kvs-quick-link">
+        <i class="fas fa-store"></i> Marketplace
+      </a>
+      <a href="{% url 'channel_create' %}" class="kvs-quick-link">
+        <i class="fa-regular fa-newspaper"></i> Channels
+      </a>
+      <a href="{% url 'spotlight' %}" class="kvs-quick-link">
+        <i class="fas fa-star"></i> Spotlight
+      </a>
+      <a href="{% url 'inbox' %}" class="kvs-quick-link">
+        <i class="fa-regular fa-envelope"></i> Messages
+      </a>
+      <a href="{% url 'job_vacancy' %}" class="kvs-quick-link">
+        <i class="fas fa-briefcase"></i> Job Vacancies
+      </a>
+      <a href="{% url 'home' %}" class="kvs-quick-link">
+        <i class="fas fa-home"></i> Home Feed
+      </a>
+    </div>
+
+    <!-- ── Event Breakdown (only when DB has events) ── -->
+    {% if event_counts.total %}
+    <div class="kvs-sidebar-widget">
+      <h3>Event Breakdown</h3>
+
+      {% if event_counts.town %}
+      <a href="{% url 'event_calendar' %}?type=town" class="kvs-quick-link">
+        <span class="kvs-type-swatch" style="background:var(--ev-town);"></span>
+        🏛️ Town Meetings
+        <span class="kvs-ql-count">{{ event_counts.town }}</span>
+      </a>
+      {% endif %}
+
+      {% if event_counts.festival %}
+      <a href="{% url 'event_calendar' %}?type=festival" class="kvs-quick-link">
+        <span class="kvs-type-swatch" style="background:var(--ev-festival);"></span>
+        🎪 Festivals
+        <span class="kvs-ql-count">{{ event_counts.festival }}</span>
+      </a>
+      {% endif %}
+
+      {% if event_counts.wedding %}
+      <a href="{% url 'event_calendar' %}?type=wedding" class="kvs-quick-link">
+        <span class="kvs-type-swatch" style="background:var(--ev-wedding);"></span>
+        💍 Weddings
+        <span class="kvs-ql-count">{{ event_counts.wedding }}</span>
+      </a>
+      {% endif %}
+
+      {% if event_counts.other %}
+      <a href="{% url 'event_calendar' %}?type=other" class="kvs-quick-link">
+        <span class="kvs-type-swatch" style="background:var(--ev-other);"></span>
+        ✨ Other Events
+        <span class="kvs-ql-count">{{ event_counts.other }}</span>
+      </a>
+      {% endif %}
+
+    </div>
+    {% endif %}
+
+  </aside>
+
+</div>
+</main>
+
+<!-- Hidden logout form -->
+<form id="kvsLogoutForm" method="POST" action="{% url 'logout' %}" style="display:none;">
+  {% csrf_token %}
+</form>
+
+<script>
+document.getElementById('kvsSvcLogoutBtn').addEventListener('click', function() {
+  document.getElementById('kvsLogoutForm').submit();
+});
+</script>
+
 </body>
 </html>

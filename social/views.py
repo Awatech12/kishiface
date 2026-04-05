@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt, UserFeedProfile
+from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt, UserFeedProfile, SocialEvent, JobVacancy
 from django.db.models import Q
 from django.db.models import Count, Max, Min, OuterRef, Subquery
 from django.core.paginator import Paginator
@@ -4866,5 +4866,305 @@ def change_password(request):
 
 
 
+@login_required(login_url='/')
 def services(request):
-    return render(request, 'services.html')
+    """
+    Services landing page.
+    Passes the next 5 upcoming SocialEvents (today or later) to the sidebar,
+    plus per-type counts for the stats strip.
+    """
+    today = timezone.now().date()
+
+    upcoming_events = (
+        SocialEvent.objects
+        .filter(date__gte=today)
+        .order_by('date', 'time')
+        [:5]
+    )
+
+    event_counts = {
+        'town':     SocialEvent.objects.filter(event_type='town').count(),
+        'festival': SocialEvent.objects.filter(event_type='festival').count(),
+        'wedding':  SocialEvent.objects.filter(event_type='wedding').count(),
+        'other':    SocialEvent.objects.filter(event_type='other').count(),
+        'total':    SocialEvent.objects.count(),
+    }
+
+    return render(request, 'services.html', {
+        'upcoming_events': upcoming_events,
+        'event_counts':    event_counts,
+    })
+
+
+# ─── Event Calendar ───────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def event_calendar(request):
+    """
+    Main event calendar page.
+    Supports optional ?type= filter (town | festival | wedding | other).
+    """
+    event_type = request.GET.get('type', '').strip()
+
+    events = SocialEvent.objects.all().order_by('date', 'time')
+    if event_type and event_type in dict(SocialEvent.TYPE_CHOICES):
+        events = events.filter(event_type=event_type)
+
+    counts = {
+        'town':     SocialEvent.objects.filter(event_type='town').count(),
+        'festival': SocialEvent.objects.filter(event_type='festival').count(),
+        'wedding':  SocialEvent.objects.filter(event_type='wedding').count(),
+        'other':    SocialEvent.objects.filter(event_type='other').count(),
+    }
+
+    return render(request, 'event_calendar.html', {
+        'events':     events,
+        'event_type': event_type,
+        'counts':     counts,
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def event_calendar_create(request):
+    """AJAX endpoint — create a new SocialEvent from the in-page modal."""
+    title       = html_escape(request.POST.get('title', '').strip())
+    event_type  = request.POST.get('event_type', '').strip()
+    date_str    = request.POST.get('date', '').strip()
+    time_str    = request.POST.get('time', '').strip()
+    location    = html_escape(request.POST.get('location', '').strip())
+    description = html_escape(request.POST.get('description', '').strip())
+
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Title is required.'}, status=400)
+    if event_type not in dict(SocialEvent.TYPE_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Invalid event type.'}, status=400)
+    if not date_str:
+        return JsonResponse({'success': False, 'error': 'Date is required.'}, status=400)
+
+    try:
+        from datetime import date as date_cls, time as time_cls
+        ev_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'Invalid date format.'}, status=400)
+
+    time_obj = None
+    if time_str:
+        try:
+            time_obj = datetime.strptime(time_str, '%H:%M').time()
+        except ValueError:
+            pass
+
+    event = SocialEvent.objects.create(
+        title=title,
+        event_type=event_type,
+        date=ev_date,
+        time=time_obj,
+        location=location,
+        description=description,
+        created_by=request.user,
+    )
+
+    return JsonResponse({
+        'success': True,
+        'event': {
+            'id':          event.id,
+            'title':       event.title,
+            'event_type':  event.event_type,
+            'date':        event.date.isoformat(),
+            'time':        event.time.strftime('%H:%M') if event.time else '',
+            'location':    event.location,
+            'description': event.description,
+        }
+    })
+
+
+# =============================================================================
+# JOB VACANCY VIEWS - Updated to work with Cloudinary in both debug/production
+# =============================================================================
+
+@login_required(login_url='/')
+def job_vacancy(request):
+    """
+    Job Vacancy listing page.
+    Supports optional ?category= filter (gig | fulltime | apprenticeship).
+    """
+    category = request.GET.get('category', '').strip()
+
+    qs = JobVacancy.objects.filter(is_open=True).select_related('posted_by__profile')
+    if category and category in dict(JobVacancy.CATEGORY_CHOICES):
+        qs = qs.filter(category=category)
+
+    counts = {
+        'gig':            JobVacancy.objects.filter(is_open=True, category='gig').count(),
+        'fulltime':       JobVacancy.objects.filter(is_open=True, category='fulltime').count(),
+        'apprenticeship': JobVacancy.objects.filter(is_open=True, category='apprenticeship').count(),
+        'total':          JobVacancy.objects.filter(is_open=True).count(),
+    }
+
+    paginator = Paginator(qs, 12)
+    page_obj  = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'job_vacancy.html', {
+        'jobs':     page_obj,
+        'counts':   counts,
+        'category': category,
+        'CLOUDINARY_CLOUD_NAME': getattr(settings, 'CLOUDINARY_CLOUD_NAME', ''),
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def job_vacancy_create(request):
+    """AJAX — create a new JobVacancy."""
+    title        = html_escape(request.POST.get('title', '').strip())
+    category     = request.POST.get('category', '').strip()
+    company      = html_escape(request.POST.get('company', '').strip())
+    location     = html_escape(request.POST.get('location', '').strip())
+    description  = html_escape(request.POST.get('description', '').strip())
+    requirements = html_escape(request.POST.get('requirements', '').strip())
+    contact_info = html_escape(request.POST.get('contact_info', '').strip())
+    salary_range = html_escape(request.POST.get('salary_range', '').strip())
+    cover_image  = request.FILES.get('cover_image')
+
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Job title is required.'}, status=400)
+    if category not in dict(JobVacancy.CATEGORY_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Invalid category.'}, status=400)
+    if not description:
+        return JsonResponse({'success': False, 'error': 'Description is required.'}, status=400)
+
+    job = JobVacancy(
+        posted_by   = request.user,
+        title       = title,
+        category    = category,
+        company     = company,
+        location    = location,
+        description = description,
+        requirements= requirements,
+        contact_info= contact_info,
+        salary_range= salary_range,
+    )
+
+    if cover_image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if cover_image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if cover_image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+        
+        try:
+            import cloudinary.uploader as _cu
+            # Upload with explicit configuration - works in debug and production
+            result = _cu.upload(
+                cover_image, 
+                folder='job_covers',
+                use_filename=True,
+                unique_filename=True
+            )
+            job.cover_image = result['public_id']
+        except Exception as e:
+            # Log error but don't fail the job creation
+            import logging
+            logging.getLogger(__name__).warning(f'Cloudinary upload failed: {e}')
+            # Continue without cover image - job still gets created
+
+    job.save()
+
+    return JsonResponse({
+        'success': True,
+        'job': {
+            'id':       str(job.id),
+            'title':    job.title,
+            'category': job.category,
+        }
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def job_vacancy_edit(request, job_id):
+    """AJAX — edit an existing JobVacancy (owner only)."""
+    job = get_object_or_404(JobVacancy, id=job_id)
+    if job.posted_by != request.user:
+        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
+
+    title        = html_escape(request.POST.get('title', '').strip())
+    category     = request.POST.get('category', '').strip()
+    company      = html_escape(request.POST.get('company', '').strip())
+    location     = html_escape(request.POST.get('location', '').strip())
+    description  = html_escape(request.POST.get('description', '').strip())
+    requirements = html_escape(request.POST.get('requirements', '').strip())
+    contact_info = html_escape(request.POST.get('contact_info', '').strip())
+    salary_range = html_escape(request.POST.get('salary_range', '').strip())
+    is_open      = request.POST.get('is_open', '1').strip() == '1'
+    cover_image  = request.FILES.get('cover_image')
+
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Job title is required.'}, status=400)
+    if category not in dict(JobVacancy.CATEGORY_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Invalid category.'}, status=400)
+    if not description:
+        return JsonResponse({'success': False, 'error': 'Description is required.'}, status=400)
+
+    job.title        = title
+    job.category     = category
+    job.company      = company
+    job.location     = location
+    job.description  = description
+    job.requirements = requirements
+    job.contact_info = contact_info
+    job.salary_range = salary_range
+    job.is_open      = is_open
+
+    if cover_image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if cover_image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if cover_image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+        
+        try:
+            import cloudinary.uploader as _cu
+            # Delete old image if exists
+            if job.cover_image:
+                try:
+                    _cu.destroy(job.cover_image)
+                except Exception:
+                    pass
+            
+            # Upload new image
+            result = _cu.upload(
+                cover_image, 
+                folder='job_covers',
+                use_filename=True,
+                unique_filename=True
+            )
+            job.cover_image = result['public_id']
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f'Cloudinary upload failed: {e}')
+            # Keep existing cover image if upload fails
+
+    job.save()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def job_vacancy_delete(request, job_id):
+    """AJAX — delete a JobVacancy (owner only)."""
+    job = get_object_or_404(JobVacancy, id=job_id)
+    if job.posted_by != request.user:
+        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
+    
+    # Delete cover image from Cloudinary if it exists
+    if job.cover_image:
+        try:
+            import cloudinary.uploader as _cu
+            _cu.destroy(job.cover_image)
+        except Exception:
+            pass
+    
+    job.delete()
+    return JsonResponse({'success': True})

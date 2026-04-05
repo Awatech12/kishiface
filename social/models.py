@@ -1559,3 +1559,122 @@ class UserFeedProfile(models.Model):
             authors.remove(author_id)
         authors.insert(0, author_id)
         self.interacted_authors = authors[: self._MAX_AUTHORS]
+
+
+
+# SocialEvent — community event calendar entries.
+
+
+class SocialEvent(models.Model):
+    TYPE_TOWN     = 'town'
+    TYPE_FESTIVAL = 'festival'
+    TYPE_WEDDING  = 'wedding'
+    TYPE_OTHER    = 'other'
+
+    TYPE_CHOICES = [
+        (TYPE_TOWN,     'Town Meeting'),
+        (TYPE_FESTIVAL, 'Festival'),
+        (TYPE_WEDDING,  'Wedding'),
+        (TYPE_OTHER,    'Other'),
+    ]
+
+    title       = models.CharField(max_length=200)
+    event_type  = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_OTHER, db_index=True)
+    date        = models.DateField(db_index=True)
+    time        = models.TimeField(null=True, blank=True)
+    location    = models.CharField(max_length=300, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    created_by  = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='social_events',
+    )
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table  = 'SocialEvent_Table'
+        ordering  = ['date', 'time']
+
+    def __str__(self):
+        return f'{self.title} ({self.get_event_type_display()}) — {self.date}'
+
+    @property
+    def type_emoji(self):
+        return {
+            self.TYPE_TOWN:     '🏛️',
+            self.TYPE_FESTIVAL: '🎪',
+            self.TYPE_WEDDING:  '💍',
+            self.TYPE_OTHER:    '✨',
+        }.get(self.event_type, '📌')
+
+    @property
+    def type_color(self):
+        return {
+            self.TYPE_TOWN:     '#0095f6',
+            self.TYPE_FESTIVAL: '#ff6b35',
+            self.TYPE_WEDDING:  '#e91e8c',
+            self.TYPE_OTHER:    '#7c3aed',
+        }.get(self.event_type, '#0095f6')
+
+    @property
+    def time_display(self):
+        if not self.time:
+            return 'All Day'
+        h, m = self.time.hour, self.time.minute
+        ap = 'AM' if h < 12 else 'PM'
+        h12 = h % 12 or 12
+        return f'{h12}:{m:02d} {ap}'
+
+
+# ─── Job Vacancy ─────────────────────────────────────────────────────────────
+
+class JobVacancy(models.Model):
+    CAT_GIG          = 'gig'
+    CAT_FULLTIME     = 'fulltime'
+    CAT_APPRENTICE   = 'apprenticeship'
+
+    CATEGORY_CHOICES = [
+        (CAT_GIG,        'Gig'),
+        (CAT_FULLTIME,   'Full-time'),
+        (CAT_APPRENTICE, 'Apprenticeship'),
+    ]
+
+    id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    posted_by    = models.ForeignKey(User, on_delete=models.CASCADE, related_name='job_vacancies')
+    category     = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default=CAT_FULLTIME, db_index=True)
+    title        = models.CharField(max_length=200)
+    company      = models.CharField(max_length=150, blank=True, default='')
+    location     = models.CharField(max_length=300, blank=True, default='')
+    description  = models.TextField()
+    requirements = models.TextField(blank=True, default='')
+    contact_info = models.CharField(max_length=300, blank=True, default='',
+                                    help_text='Email, phone, or link to apply')
+    salary_range = models.CharField(max_length=100, blank=True, default='',
+                                    help_text='e.g. ₦80,000–₦120,000/month or "Negotiable"')
+    cover_image  = CloudinaryField('image', blank=True, null=True)
+    is_open      = models.BooleanField(default=True, db_index=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+    updated_at   = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'JobVacancy_Table'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.title} [{self.get_category_display()}] — {self.posted_by.username}'
+
+    @property
+    def category_emoji(self):
+        return {
+            self.CAT_GIG:        '🛠️',
+            self.CAT_FULLTIME:   '💼',
+            self.CAT_APPRENTICE: '🎓',
+        }.get(self.category, '📌')
+
+    @property
+    def category_color(self):
+        return {
+            self.CAT_GIG:        '#ff6b35',
+            self.CAT_FULLTIME:   '#0095f6',
+            self.CAT_APPRENTICE: '#7c3aed',
+        }.get(self.category, '#0095f6')

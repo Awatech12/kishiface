@@ -65,8 +65,12 @@ urlpatterns = [
     path('comment_like/<uuid:comment_id>',views.comment_like, name='comment_like'),
     path('comment_reply/<uuid:comment_id>',views.comment_reply,name='comment_reply'),
 
-    #_______ Services __________ 
-    path('services', views.services, name='services'),
+    # ── Services ───────────────────────────────────────────────────────────────
+    path('services',                   views.services,              name='services'),
+
+    # ── Event Calendar ─────────────────────────────────────────────────────────
+    path('events/',                    views.event_calendar,        name='event_calendar'),
+    path('events/create/',             views.event_calendar_create, name='event_calendar_create'),
 
     # ── Post Vibes ─────────────────────────────────────────────────────────────
     path('vibe/<uuid:post_id>/', views.get_post_vibes, name='get_post_vibes'),
@@ -96,6 +100,12 @@ urlpatterns = [
     path('followChannel/<uuid:channel_id>',                             views.follow_channel,              name='follow_channel'),
     path('channel/delete-message/<uuid:channel_id>/<uuid:message_id>/', views.delete_channel_message,      name='delete_channel_message'),
     path('channel/react/<uuid:message_id>/',                            views.react_to_channel_message,    name='react_to_channel_message'),
+
+    # ── Job Vacancy ────────────────────────────────────────────────────────
+    path('jobs/',                              views.job_vacancy,        name='job_vacancy'),
+    path('jobs/create/',                       views.job_vacancy_create, name='job_vacancy_create'),
+    path('jobs/<uuid:job_id>/edit/',           views.job_vacancy_edit,   name='job_vacancy_edit'),
+    path('jobs/<uuid:job_id>/delete/',         views.job_vacancy_delete, name='job_vacancy_delete'),
 
     # ── Ads ────────────────────────────────────────────────────────────
     path('market',                          views.market,          name='market'),
