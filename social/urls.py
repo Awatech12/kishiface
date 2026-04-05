@@ -65,6 +65,9 @@ urlpatterns = [
     path('comment_like/<uuid:comment_id>',views.comment_like, name='comment_like'),
     path('comment_reply/<uuid:comment_id>',views.comment_reply,name='comment_reply'),
 
+    #_______ Services __________ 
+    path('services', views.services, name='services'),
+
     # ── Post Vibes ─────────────────────────────────────────────────────────────
     path('vibe/<uuid:post_id>/', views.get_post_vibes, name='get_post_vibes'),
 

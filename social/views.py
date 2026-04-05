@@ -2017,7 +2017,7 @@ def postcomment(request, post_id):
         # ── Comment notification ──────────────────────────────────────────
         if post_obj.author != request.user:
             Notification.objects.create(
-                recipient=post_obj.author,
+                recipient=post_obj.author, 
                 actor=request.user,
                 post=post_obj,
                 notification_type=Notification.COMMENT,
@@ -4864,3 +4864,7 @@ def change_password(request):
 
     return JsonResponse({'success': True, 'message': 'Password updated successfully!'})
 
+
+
+def services(request):
+    return render(request, 'services.html')
