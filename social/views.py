@@ -5009,7 +5009,6 @@ def job_vacancy(request):
         'jobs':     page_obj,
         'counts':   counts,
         'category': category,
-        'CLOUDINARY_CLOUD_NAME': getattr(settings, 'CLOUDINARY_CLOUD_NAME', ''),
     })
 
 
@@ -5053,21 +5052,7 @@ def job_vacancy_create(request):
         if cover_image.size > 10 * 1024 * 1024:
             return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
         
-        try:
-            import cloudinary.uploader as _cu
-            # Upload with explicit configuration - works in debug and production
-            result = _cu.upload(
-                cover_image, 
-                folder='job_covers',
-                use_filename=True,
-                unique_filename=True
-            )
-            job.cover_image = result['public_id']
-        except Exception as e:
-            # Log error but don't fail the job creation
-            import logging
-            logging.getLogger(__name__).warning(f'Cloudinary upload failed: {e}')
-            # Continue without cover image - job still gets created
+        job.cover_image = cover_image
 
     job.save()
 
@@ -5124,27 +5109,7 @@ def job_vacancy_edit(request, job_id):
         if cover_image.size > 10 * 1024 * 1024:
             return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
         
-        try:
-            import cloudinary.uploader as _cu
-            # Delete old image if exists
-            if job.cover_image:
-                try:
-                    _cu.destroy(job.cover_image)
-                except Exception:
-                    pass
-            
-            # Upload new image
-            result = _cu.upload(
-                cover_image, 
-                folder='job_covers',
-                use_filename=True,
-                unique_filename=True
-            )
-            job.cover_image = result['public_id']
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f'Cloudinary upload failed: {e}')
-            # Keep existing cover image if upload fails
+        job.cover_image = cover_image
 
     job.save()
     return JsonResponse({'success': True})

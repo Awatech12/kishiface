@@ -1651,7 +1651,10 @@ class JobVacancy(models.Model):
                                     help_text='Email, phone, or link to apply')
     salary_range = models.CharField(max_length=100, blank=True, default='',
                                     help_text='e.g. ₦80,000–₦120,000/month or "Negotiable"')
-    cover_image  = CloudinaryField('image', blank=True, null=True)
+    if settings.USE_CLOUDINARY:
+        cover_image = CloudinaryField('image', folder='job_covers', blank=True, null=True)
+    else:
+        cover_image = models.ImageField(upload_to='job_covers/', blank=True, null=True)
     is_open      = models.BooleanField(default=True, db_index=True)
     created_at   = models.DateTimeField(auto_now_add=True)
     updated_at   = models.DateTimeField(auto_now=True)
