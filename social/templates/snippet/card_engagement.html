@@ -1,72 +1,169 @@
 {% comment %}
   snippet/card_engagement.html
   ────────────────────────────────────────────────────────────────────────────
-  Reusable vibe + comment + share bar for Market / Job / Event feed cards.
+  Vibe + comment (bottom sheet) + share bar for Market / Job / Event cards.
 
   USAGE:
     {% include 'snippet/card_engagement.html' with
         card_type="market"  card_id=item.data.product_id|stringformat:"s"
-        comment_count=item.data.comments.count %}
+        comment_count=item.data.comments.count
+        card_title=item.data.product_name %}
 
     {% include 'snippet/card_engagement.html' with
         card_type="jobs"    card_id=item.data.id|stringformat:"s"
-        comment_count=item.data.comments.count %}
+        comment_count=item.data.comments.count
+        card_title=item.data.title %}
 
     {% include 'snippet/card_engagement.html' with
         card_type="event"   card_id=item.data.id|stringformat:"s"
-        comment_count=item.data.comments.count %}
-
-  URL convention  (matches urls.py additions):
-    vibe      GET/POST  /<card_type>/<card_id>/vibe/
-    comments  GET/POST  /<card_type>/<card_id>/comments/
-    share     client-side Web Share API / clipboard copy
+        comment_count=item.data.comments.count
+        card_title=item.data.title %}
   ────────────────────────────────────────────────────────────────────────────
 {% endcomment %}
 {% load humanize %}
 
-{# ── one-time styles injected via JS ─────────────────────────────────────── #}
+{# ── One-time styles (same guard pattern as post_like.html) ─────────────── #}
 <script>
 (function(){
   if (document.getElementById('kv-card-engage-styles')) return;
   var s = document.createElement('style');
   s.id = 'kv-card-engage-styles';
   s.textContent = `
-/* Card engagement bar — mirrors .kvibe-actions-container */
-.kvc-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-top:1px solid var(--kvibe-border,#efefef);background:var(--kvibe-white,#fff);position:relative;z-index:2}
-.kvc-btn{display:flex;align-items:center;justify-content:center;gap:7px;color:var(--kvibe-text-light,#8e8e8e);font-size:13.5px;font-weight:500;padding:10px 14px;border-radius:999px;background:none;border:none;font-family:inherit;cursor:pointer;flex:1;min-width:0;transition:background .2s,color .2s;position:relative}
+/* ── Action bar (mirrors .kvibe-actions-container) ──────────────────── */
+.kvc-bar {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:4px 8px;border-top:1px solid var(--kvibe-border,#efefef);
+  background:var(--kvibe-white,#fff);position:relative;z-index:2;
+}
+.kvc-btn {
+  display:flex;align-items:center;justify-content:center;
+  gap:7px;color:var(--kvibe-text-light,#8e8e8e);font-size:13.5px;
+  font-weight:500;padding:10px 14px;border-radius:999px;
+  background:none;border:none;font-family:inherit;cursor:pointer;
+  flex:1;min-width:0;transition:background .2s,color .2s;position:relative;
+}
 .kvc-btn::after{content:'';position:absolute;inset:0;border-radius:999px;background:currentColor;opacity:0;transform:scale(.7);transition:opacity .25s,transform .25s cubic-bezier(.34,1.56,.64,1);pointer-events:none}
 .kvc-btn:hover::after{opacity:.06;transform:scale(1)}
 .kvc-btn:hover{color:var(--kvibe-text,#262626)}
-.kvc-btn:has(.fa-comment):hover{color:#0095f6}
-.kvc-btn:hover .fa-comment{animation:kv-comment-bop .5s cubic-bezier(.34,1.56,.64,1);color:#0095f6}
-.kvc-btn:has(.fa-paper-plane):hover{color:#a855f7}
-.kvc-btn:hover .fa-paper-plane{animation:kv-jelly .45s cubic-bezier(.34,1.56,.64,1);color:#a855f7}
+.kvc-btn:has(.fa-comment):hover,.kvc-btn:has(.fa-comment):hover .fa-comment{color:#0095f6}
+.kvc-btn:hover .fa-comment{animation:kv-comment-bop .5s cubic-bezier(.34,1.56,.64,1)}
+.kvc-btn:has(.fa-paper-plane):hover,.kvc-btn:has(.fa-paper-plane):hover .fa-paper-plane{color:#a855f7}
+.kvc-btn:hover .fa-paper-plane{animation:kv-jelly .45s cubic-bezier(.34,1.56,.64,1)}
 .kvc-icon{font-size:19px;display:inline-block;transition:color .25s}
 .kvc-count{font-size:13.5px;transition:all .25s;display:inline-block}
 .kvc-vibe-face{font-size:19px;display:inline-block;transition:color .25s}
-/* Vibe summary */
-.kvc-summary{display:flex;flex-wrap:wrap;align-items:center;padding:8px 16px 6px;border-top:1px solid var(--kvibe-border,#efefef);gap:8px;background:var(--kvibe-white,#fff)}
-.kvc-pill{display:inline-flex;align-items:center;gap:4px;background:rgba(0,0,0,.05);border-radius:999px;padding:3px 9px;font-size:13px;font-weight:600;cursor:default;transition:transform .2s,background .2s}
+
+/* ── Vibe summary pills ──────────────────────────────────────────────── */
+.kvc-summary{
+  display:flex;flex-wrap:wrap;align-items:center;
+  padding:8px 16px 6px;border-top:1px solid var(--kvibe-border,#efefef);
+  gap:8px;background:var(--kvibe-white,#fff);
+}
+.kvc-pill{
+  display:inline-flex;align-items:center;gap:4px;
+  background:rgba(0,0,0,.05);border-radius:999px;
+  padding:3px 9px;font-size:13px;font-weight:600;cursor:default;
+  transition:transform .2s,background .2s;
+}
 .kvc-pill:hover{transform:scale(1.07);background:rgba(0,0,0,.09)}
-.kvc-pill.mine{background:var(--pill-bg,rgba(59,130,246,.15));color:var(--pill-fg,#1d4ed8);box-shadow:0 0 0 1.5px var(--pill-border,rgba(59,130,246,.3))}
+.kvc-pill.mine{
+  background:var(--pill-bg,rgba(59,130,246,.15));
+  color:var(--pill-fg,#1d4ed8);
+  box-shadow:0 0 0 1.5px var(--pill-border,rgba(59,130,246,.3));
+}
 .kvc-no-vibes{color:var(--kvibe-text-light,#8e8e8e);font-size:13px}
-/* Comment drawer */
-.kvc-comment-drawer{display:none;flex-direction:column;border-top:1px solid var(--kvibe-border,#efefef);background:var(--kvibe-white,#fff);max-height:320px;overflow-y:auto}
-.kvc-comment-drawer.open{display:flex}
-.kvc-comment-item{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--kvibe-border,#efefef)}
+
+/* ── Card Comment Bottom Sheet ──────────────────────────────────────── */
+/* Reuses the exact same classes as home.html comment sheet             */
+.kvc-sheet-overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.5);z-index:5500;
+  display:none;align-items:flex-end;
+}
+.kvc-sheet-overlay.active{display:flex}
+.kvc-sheet-content{
+  background:#fff;width:100%;height:75vh;
+  border-radius:20px 20px 0 0;display:flex;flex-direction:column;
+  position:relative;animation:kvcSlideUp .3s ease-out;
+  max-width:600px;margin:0 auto;
+}
+@keyframes kvcSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.kvc-sheet-header{
+  padding:16px;border-bottom:1px solid #eee;text-align:center;
+  font-weight:600;font-size:16px;color:#262626;flex-shrink:0;position:relative;
+}
+.kvc-sheet-close{
+  position:absolute;right:16px;top:16px;font-size:20px;
+  cursor:pointer;color:#8e8e8e;background:none;border:none;padding:0;
+}
+.kvc-sheet-close:hover{color:#262626}
+
+/* Comment list */
+.kvc-sheet-list{
+  flex:1;overflow-y:auto;background:#fff;padding-bottom:80px;
+}
+.kvc-sheet-list::-webkit-scrollbar{width:0}
+
+/* Comment items — mirror .kvibe-comment from home.html */
+.kvc-comment-item{
+  display:flex;gap:10px;padding:12px 16px;align-items:flex-start;
+  border-bottom:1px solid var(--kvibe-border,#efefef);
+}
 .kvc-comment-item:last-child{border-bottom:none}
-.kvc-comment-avatar{width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0}
+.kvc-comment-avatar{
+  width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;
+}
 .kvc-comment-body{flex:1;min-width:0}
-.kvc-comment-author{font-weight:700;font-size:13px;color:var(--kvibe-text,#262626)}
-.kvc-comment-text{font-size:13px;color:var(--kvibe-text,#262626);margin-top:2px;word-break:break-word}
-.kvc-comment-time{font-size:11px;color:var(--kvibe-text-light,#8e8e8e);margin-top:2px}
-.kvc-comment-input-row{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--kvibe-border,#efefef);position:sticky;bottom:0;background:var(--kvibe-white,#fff)}
-.kvc-comment-input{flex:1;border:1px solid var(--kvibe-border,#dbdbdb);border-radius:20px;padding:8px 14px;font-size:13px;font-family:inherit;background:var(--kvibe-bg,#fafafa);color:var(--kvibe-text,#262626);outline:none;resize:none;transition:border-color .2s}
-.kvc-comment-input:focus{border-color:var(--kvibe-primary,#0095f6)}
-.kvc-comment-send{background:var(--kvibe-primary,#0095f6);color:#fff;border:none;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;flex-shrink:0;transition:transform .15s,background .2s}
-.kvc-comment-send:hover{transform:scale(1.1);background:#0080d9}
-.kvc-comment-empty,.kvc-comment-loading{color:var(--kvibe-text-light,#8e8e8e);font-size:13px;padding:14px;text-align:center}
-@media(max-width:767px){.kvc-bar{padding:2px 4px}.kvc-btn{padding:8px 10px;font-size:13px;gap:6px}.kvc-icon,.kvc-vibe-face{font-size:18px}}
+.kvc-comment-author{
+  font-size:13px;font-weight:700;color:#262626;line-height:1.2;margin-bottom:3px;
+}
+.kvc-comment-text{
+  font-size:14px;line-height:1.45;color:#262626;word-break:break-word;margin:0;
+}
+.kvc-comment-time{font-size:11px;color:#8e8e8e;margin-top:4px}
+.kvc-comment-empty,.kvc-comment-loading{
+  text-align:center;padding:40px 16px;color:#8e8e8e;
+}
+.kvc-comment-loading i{font-size:24px;display:block;margin-bottom:8px}
+
+/* Input area — mirror .kf-comment-input-area */
+.kvc-sheet-input-area{
+  position:absolute;bottom:0;left:0;right:0;z-index:10;
+  padding:10px 12px;background:#fff;border-top:1px solid #e4e6eb;
+}
+.kvc-sheet-input-wrapper{
+  display:flex;align-items:center;gap:6px;background:#fff;
+  border:1.5px solid #dbdbdb;border-radius:24px;padding:6px 10px;
+  min-height:46px;transition:border-color .2s;
+  box-shadow:0 2px 8px rgba(0,0,0,.06);
+}
+.kvc-sheet-input-wrapper:focus-within{
+  border-color:#0095f6;box-shadow:0 2px 12px rgba(0,149,246,.12);
+}
+.kvc-sheet-user-avatar{
+  width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;
+}
+.kvc-sheet-textarea{
+  flex:1;padding:6px 4px;border:none;background:transparent;
+  font-size:14px;outline:none;min-width:0;resize:none;
+  max-height:100px;line-height:1.45;color:#262626;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+.kvc-sheet-textarea::placeholder{color:#8e8e8e}
+.kvc-sheet-send{
+  width:34px;height:34px;border-radius:50%;border:none;
+  background:#0095f6;color:#fff;cursor:pointer;display:none;
+  align-items:center;justify-content:center;flex-shrink:0;
+  padding:0;transition:opacity .15s,transform .15s;
+}
+.kvc-sheet-send.visible{display:flex}
+.kvc-sheet-send:hover{opacity:.85;transform:scale(1.05)}
+
+@media(max-width:767px){
+  .kvc-bar{padding:2px 4px}
+  .kvc-btn{padding:8px 10px;font-size:13px;gap:6px}
+  .kvc-icon,.kvc-vibe-face{font-size:18px}
+}
   `;
   document.head.appendChild(s);
 })();
@@ -74,7 +171,7 @@
 
 {% with ckey=card_type|add:"-"|add:card_id %}
 
-<!-- ── VIBE PICKER (position:fixed, escapes overflow) ─────────────────────── -->
+<!-- ── VIBE PICKER (position:fixed, mirrors post_like.html) ──────────────── -->
 <div class="kv-picker"
      id="kvc-picker-{{ ckey }}"
      onmouseenter="kvcCancelClose('{{ ckey }}')"
@@ -91,7 +188,7 @@
 <!-- ── ACTION BAR ───────────────────────────────────────────────────────────── -->
 <div class="kvc-bar">
 
-  <!-- Vibe -->
+  <!-- Vibe button -->
   <button class="kvc-btn kvc-vibe-btn"
           id="kvc-vibe-btn-{{ ckey }}"
           data-ckey="{{ ckey }}"
@@ -100,17 +197,20 @@
           onmouseenter="kvcOpenPicker('{{ ckey }}')"
           onmouseleave="kvcScheduleClose('{{ ckey }}')"
           onclick="kvcTogglePicker('{{ ckey }}')">
-    <span id="kvc-face-{{ ckey }}" class="kvc-vibe-face"><i class="fa-regular fa-face-smile"></i></span>
+    <span id="kvc-face-{{ ckey }}" class="kvc-vibe-face">
+      <i class="fa-regular fa-face-smile"></i>
+    </span>
     <span id="kvc-vcount-{{ ckey }}" class="kvc-count">0</span>
   </button>
 
-  <!-- Comment -->
-  <button class="kvc-btn" onclick="kvcToggleComments('{{ ckey }}','{{ card_type }}','{{ card_id }}')">
+  <!-- Comment button — opens bottom sheet -->
+  <button class="kvc-btn"
+          onclick="kvcOpenSheet('{{ ckey }}','{{ card_type }}','{{ card_id }}','{{ card_title|default:card_type|escapejs }}')">
     <i class="fa-regular fa-comment kvc-icon"></i>
     <span class="kvc-count" id="kvc-ccount-{{ ckey }}">{{ comment_count|default:0|intcomma }}</span>
   </button>
 
-  <!-- Share -->
+  <!-- Share button -->
   <button class="kvc-btn" onclick="kvcShare('{{ ckey }}','{{ card_type }}','{{ card_id }}')">
     <i class="fa-regular fa-paper-plane kvc-icon"></i>
   </button>
@@ -122,22 +222,49 @@
   <span class="kvc-no-vibes">Be the first to vibe this ✨</span>
 </div>
 
-<!-- ── COMMENT DRAWER ─────────────────────────────────────────────────────── -->
-<div class="kvc-comment-drawer" id="kvc-drawer-{{ ckey }}">
-  <div id="kvc-drawer-body-{{ ckey }}"></div>
-  {% if request.user.is_authenticated %}
-  <div class="kvc-comment-input-row">
-    <textarea class="kvc-comment-input"
-              id="kvc-input-{{ ckey }}"
-              placeholder="Add a comment…"
-              rows="1"
-              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();kvcPostComment('{{ ckey }}','{{ card_type }}','{{ card_id }}');}"></textarea>
-    <button class="kvc-comment-send"
-            onclick="kvcPostComment('{{ ckey }}','{{ card_type }}','{{ card_id }}')">
-      <i class="fas fa-paper-plane"></i>
-    </button>
+<!-- ── BOTTOM SHEET ────────────────────────────────────────────────────────── -->
+<div class="kvc-sheet-overlay" id="kvc-sheet-{{ ckey }}">
+  <div class="kvc-sheet-content">
+
+    <div class="kvc-sheet-header">
+      <span id="kvc-sheet-title-{{ ckey }}">Comments</span>
+      <button class="kvc-sheet-close" onclick="kvcCloseSheet('{{ ckey }}')">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Comment list -->
+    <div class="kvc-sheet-list" id="kvc-sheet-list-{{ ckey }}">
+      <div class="kvc-comment-loading">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Loading…
+      </div>
+    </div>
+
+    <!-- Input area — mirrors kf-comment-input-area exactly -->
+    {% if request.user.is_authenticated %}
+    <div class="kvc-sheet-input-area">
+      <div class="kvc-sheet-input-wrapper">
+        <img src="{{ user.profile.get_picture_url }}"
+             alt=""
+             class="kvc-sheet-user-avatar"
+             onerror="this.src='https://placehold.co/32x32/dbdbdb/8e8e8e?text=U'">
+        <textarea class="kvc-sheet-textarea"
+                  id="kvc-textarea-{{ ckey }}"
+                  placeholder="Write a comment…"
+                  rows="1"
+                  oninput="kvcSheetInputChange('{{ ckey }}')"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();kvcSubmitComment('{{ ckey }}','{{ card_type }}','{{ card_id }}');}"></textarea>
+        <button class="kvc-sheet-send"
+                id="kvc-send-{{ ckey }}"
+                onclick="kvcSubmitComment('{{ ckey }}','{{ card_type }}','{{ card_id }}')">
+          <i class="fa-solid fa-paper-plane" style="font-size:14px;"></i>
+        </button>
+      </div>
+    </div>
+    {% endif %}
+
   </div>
-  {% endif %}
 </div>
 
 {% endwith %}
@@ -156,261 +283,367 @@
 
   /* ── Per-card state ─────────────────────────────────────────────────── */
   window._kvc = window._kvc || {};
-  function kst(ckey){
-    if(!window._kvc[ckey]) window._kvc[ckey]={userVibe:null,closeTimer:null,pickerOpen:false,hydrated:false};
+  function kst(ckey) {
+    if (!window._kvc[ckey]) window._kvc[ckey] = {
+      userVibe:null, closeTimer:null, pickerOpen:false, hydrated:false
+    };
     return window._kvc[ckey];
   }
 
   /* ── Helpers ────────────────────────────────────────────────────────── */
-  function csrf(){
+  function csrf() {
     return document.querySelector('meta[name="csrf-token"]')?.content
         || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
   }
-  function vibeUrl(ct,cid){ return '/'+ct+'/'+cid+'/vibe/'; }
-  function commentsUrl(ct,cid){ return '/'+ct+'/'+cid+'/comments/'; }
-  function _esc(str){
-    return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  function vibeUrl(ct, cid)     { return '/' + ct + '/' + cid + '/vibe/'; }
+  function commentsUrl(ct, cid) { return '/' + ct + '/' + cid + '/comments/'; }
+  function _esc(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   /* ══════════════════════════════════════════════════════════════════════
-     Picker (mirrors post_like.html kvibe picker)
+     Vibe Picker — exact mirror of post_like.html picker logic
   ══════════════════════════════════════════════════════════════════════ */
-  function kvcPositionPicker(ckey){
-    const btn=document.getElementById('kvc-vibe-btn-'+ckey);
-    const p=document.getElementById('kvc-picker-'+ckey);
-    if(!btn||!p) return;
-    p.style.visibility='hidden';p.style.display='flex';
-    const pw=p.offsetWidth,ph=p.offsetHeight;
-    p.style.display='';p.style.visibility='';
-    const r=btn.getBoundingClientRect(),vw=window.innerWidth,gap=10;
-    let left=r.left+r.width/2-pw/2;
-    left=Math.max(8,Math.min(left,vw-pw-8));
-    let top=r.top-ph-gap;
-    if(top<8) top=r.bottom+gap;
-    p.style.left=left+'px';p.style.top=top+'px';
-    const al=Math.max(16,Math.min(r.left+r.width/2-left,pw-16));
-    p.style.setProperty('--arrow-left',al+'px');
+  function kvcPositionPicker(ckey) {
+    const btn = document.getElementById('kvc-vibe-btn-' + ckey);
+    const p   = document.getElementById('kvc-picker-' + ckey);
+    if (!btn || !p) return;
+    p.style.visibility = 'hidden'; p.style.display = 'flex';
+    const pw = p.offsetWidth, ph = p.offsetHeight;
+    p.style.display = ''; p.style.visibility = '';
+    const r = btn.getBoundingClientRect(), vw = window.innerWidth, gap = 10;
+    let left = r.left + r.width / 2 - pw / 2;
+    left = Math.max(8, Math.min(left, vw - pw - 8));
+    let top = r.top - ph - gap;
+    if (top < 8) top = r.bottom + gap;
+    p.style.left = left + 'px'; p.style.top = top + 'px';
+    const al = Math.max(16, Math.min(r.left + r.width / 2 - left, pw - 16));
+    p.style.setProperty('--arrow-left', al + 'px');
   }
 
-  window.kvcOpenPicker=function(ckey){
+  window.kvcOpenPicker = function(ckey) {
     kvcCancelClose(ckey);
-    const p=document.getElementById('kvc-picker-'+ckey),s=kst(ckey);
-    if(p&&!s.pickerOpen){kvcPositionPicker(ckey);p.classList.add('open');s.pickerOpen=true;}
+    const p = document.getElementById('kvc-picker-' + ckey), s = kst(ckey);
+    if (p && !s.pickerOpen) { kvcPositionPicker(ckey); p.classList.add('open'); s.pickerOpen = true; }
   };
-  window.kvcClosePicker=function(ckey){
-    const p=document.getElementById('kvc-picker-'+ckey),s=kst(ckey);
-    if(p){p.classList.remove('open');s.pickerOpen=false;}
+  window.kvcClosePicker = function(ckey) {
+    const p = document.getElementById('kvc-picker-' + ckey), s = kst(ckey);
+    if (p) { p.classList.remove('open'); s.pickerOpen = false; }
   };
-  window.kvcScheduleClose=function(ckey){
-    const s=kst(ckey);s.closeTimer=setTimeout(()=>window.kvcClosePicker(ckey),350);
+  window.kvcScheduleClose = function(ckey) {
+    const s = kst(ckey); s.closeTimer = setTimeout(() => window.kvcClosePicker(ckey), 350);
   };
-  window.kvcCancelClose=function(ckey){
-    const s=kst(ckey);if(s.closeTimer){clearTimeout(s.closeTimer);s.closeTimer=null;}
+  window.kvcCancelClose = function(ckey) {
+    const s = kst(ckey); if (s.closeTimer) { clearTimeout(s.closeTimer); s.closeTimer = null; }
   };
-  window.kvcTogglePicker=function(ckey){
-    kst(ckey).pickerOpen?window.kvcClosePicker(ckey):window.kvcOpenPicker(ckey);
+  window.kvcTogglePicker = function(ckey) {
+    kst(ckey).pickerOpen ? window.kvcClosePicker(ckey) : window.kvcOpenPicker(ckey);
   };
 
-  /* ── Hydrate (GET vibes when card scrolls into view) ────────────────── */
-  function kvcHydrate(ckey,ct,cid){
-    const s=kst(ckey);
-    if(s.hydrated) return;
-    s.hydrated=true;
-    fetch(vibeUrl(ct,cid),{headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken':csrf()}})
-      .then(r=>r.ok?r.json():null)
-      .then(d=>{
-        if(!d) return;
-        s.userVibe=d.user_vibe||null;
-        kvcRender(ckey,d.summary||{},s.userVibe,d.total||0);
-        kvcFace(ckey,s.userVibe);
-      }).catch(()=>{});
+  /* ── Hydrate via IntersectionObserver ───────────────────────────────── */
+  function kvcHydrate(ckey, ct, cid) {
+    const s = kst(ckey);
+    if (s.hydrated) return;
+    s.hydrated = true;
+    fetch(vibeUrl(ct, cid), { headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrf() } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        s.userVibe = d.user_vibe || null;
+        kvcRender(ckey, d.summary || {}, s.userVibe, d.total || 0);
+        kvcFace(ckey, s.userVibe);
+      }).catch(() => {});
   }
 
   /* ── Render summary pills ───────────────────────────────────────────── */
-  function kvcRender(ckey,summary,userVibe,total){
-    const box=document.getElementById('kvc-summary-'+ckey);
-    const countEl=document.getElementById('kvc-vcount-'+ckey);
-    if(countEl) countEl.textContent=total>0?total.toLocaleString():'0';
-    if(!box) return;
-    const entries=Object.entries(summary).filter(([,v])=>v>0);
-    if(!entries.length){box.innerHTML='<span class="kvc-no-vibes">Be the first to vibe this ✨</span>';return;}
-    entries.sort((a,b)=>b[1]-a[1]);
-    box.innerHTML=entries.map(([vt,count])=>{
-      const mine=userVibe===vt;
-      const color=KVC_COLORS[vt]||'#666';
-      const style=mine?`style="--pill-bg:${color}22;--pill-fg:${color};--pill-border:${color}55"`:'';
-      return `<span class="kvc-pill${mine?' mine':''}" ${style}>${KVC_EMOJIS[vt]||'✨'} <b>${count}</b></span>`;
+  function kvcRender(ckey, summary, userVibe, total) {
+    const box     = document.getElementById('kvc-summary-' + ckey);
+    const countEl = document.getElementById('kvc-vcount-' + ckey);
+    if (countEl) countEl.textContent = total > 0 ? total.toLocaleString() : '0';
+    if (!box) return;
+    const entries = Object.entries(summary).filter(([, v]) => v > 0);
+    if (!entries.length) {
+      box.innerHTML = '<span class="kvc-no-vibes">Be the first to vibe this ✨</span>';
+      return;
+    }
+    entries.sort((a, b) => b[1] - a[1]);
+    box.innerHTML = entries.map(([vt, count]) => {
+      const mine  = userVibe === vt;
+      const color = KVC_COLORS[vt] || '#666';
+      const style = mine ? `style="--pill-bg:${color}22;--pill-fg:${color};--pill-border:${color}55"` : '';
+      return `<span class="kvc-pill${mine ? ' mine' : ''}" ${style}>${KVC_EMOJIS[vt] || '✨'} <b>${count}</b></span>`;
     }).join('');
   }
 
   /* ── Sync button face ───────────────────────────────────────────────── */
-  function kvcFace(ckey,vibe){
-    const el=document.getElementById('kvc-face-'+ckey);
-    if(!el) return;
-    if(vibe){el.className='kvc-vibe-face';el.textContent=KVC_EMOJIS[vibe]||'✨';}
-    else{el.className='kvc-vibe-face';el.innerHTML='<i class="fa-regular fa-face-smile"></i>';}
+  function kvcFace(ckey, vibe) {
+    const el = document.getElementById('kvc-face-' + ckey);
+    if (!el) return;
+    if (vibe) { el.className = 'kvc-vibe-face'; el.textContent = KVC_EMOJIS[vibe] || '✨'; }
+    else       { el.className = 'kvc-vibe-face'; el.innerHTML = '<i class="fa-regular fa-face-smile"></i>'; }
   }
 
   /* ══════════════════════════════════════════════════════════════════════
      Send vibe
   ══════════════════════════════════════════════════════════════════════ */
-  window.kvcSendVibe=function(evt,ckey,ct,cid,vibe){
+  window.kvcSendVibe = function(evt, ckey, ct, cid, vibe) {
     evt.stopPropagation();
     window.kvcClosePicker(ckey);
-    const s=kst(ckey);
-    const same=s.userVibe===vibe;
-    s.userVibe=same?null:vibe;
-    kvcFace(ckey,s.userVibe);
-    document.querySelectorAll('#kvc-picker-'+ckey+' .kv-vibe-opt').forEach(o=>
-      o.classList.toggle('selected',o.dataset.vibe===s.userVibe)
+    const s    = kst(ckey);
+    const same = s.userVibe === vibe;
+    s.userVibe = same ? null : vibe;
+    kvcFace(ckey, s.userVibe);
+    document.querySelectorAll('#kvc-picker-' + ckey + ' .kv-vibe-opt').forEach(o =>
+      o.classList.toggle('selected', o.dataset.vibe === s.userVibe)
     );
-    fetch(vibeUrl(ct,cid),{
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-      body:JSON.stringify({vibe_type:vibe}),
+    fetch(vibeUrl(ct, cid), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      body:    JSON.stringify({ vibe_type: vibe }),
     })
-    .then(r=>r.ok?r.json():null)
-    .then(d=>{
-      if(!d) return;
-      s.userVibe=d.user_vibe||null;
-      kvcRender(ckey,d.summary||{},s.userVibe,d.total||0);
-      kvcFace(ckey,s.userVibe);
-    }).catch(()=>{});
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (!d) return;
+      s.userVibe = d.user_vibe || null;
+      kvcRender(ckey, d.summary || {}, s.userVibe, d.total || 0);
+      kvcFace(ckey, s.userVibe);
+    }).catch(() => {});
   };
 
   /* ══════════════════════════════════════════════════════════════════════
-     Comment drawer
+     Bottom Sheet — mirrors kvibeOpenCommentSheet / kvibeCloseCommentSheet
   ══════════════════════════════════════════════════════════════════════ */
-  window.kvcToggleComments=function(ckey,ct,cid){
-    const drawer=document.getElementById('kvc-drawer-'+ckey);
-    if(!drawer) return;
-    const isOpen=drawer.classList.contains('open');
-    drawer.classList.toggle('open',!isOpen);
-    if(!isOpen) kvcLoadComments(ckey,ct,cid);
+  window.kvcOpenSheet = function(ckey, ct, cid, title) {
+    const overlay = document.getElementById('kvc-sheet-' + ckey);
+    if (!overlay) return;
+
+    // Title
+    const titleEl = document.getElementById('kvc-sheet-title-' + ckey);
+    if (titleEl) titleEl.textContent = title || 'Comments';
+
+    // Reset input
+    kvcResetInput(ckey);
+
+    // Open sheet
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Load comments
+    kvcLoadComments(ckey, ct, cid);
+
+    // Focus textarea after animation
+    setTimeout(function() {
+      const ta = document.getElementById('kvc-textarea-' + ckey);
+      if (ta) ta.focus();
+    }, 320);
   };
 
-  function kvcLoadComments(ckey,ct,cid){
-    const body=document.getElementById('kvc-drawer-body-'+ckey);
-    if(!body) return;
-    body.innerHTML='<div class="kvc-comment-loading"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Loading…</div>';
-    fetch(commentsUrl(ct,cid),{headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken':csrf()}})
-      .then(r=>r.ok?r.json():null)
-      .then(d=>{
-        if(!d){body.innerHTML='<div class="kvc-comment-empty">Could not load comments.</div>';return;}
-        if(!d.comments.length){
-          body.innerHTML='<div class="kvc-comment-empty">No comments yet. Be first! 👋</div>';
-        } else {
-          body.innerHTML=d.comments.map(c=>`
-            <div class="kvc-comment-item">
-              <img class="kvc-comment-avatar" src="${_esc(c.avatar)}" alt="${_esc(c.author)}" onerror="this.src='https://placehold.co/30x30/dbdbdb/8e8e8e?text=U'">
-              <div class="kvc-comment-body">
-                <div class="kvc-comment-author">${_esc(c.author_name)}</div>
-                <div class="kvc-comment-text">${_esc(c.text)}</div>
-                <div class="kvc-comment-time">${_esc(c.time)}</div>
-              </div>
-            </div>`).join('');
-        }
-        const cc=document.getElementById('kvc-ccount-'+ckey);
-        if(cc) cc.textContent=d.count.toLocaleString();
-      }).catch(()=>{body.innerHTML='<div class="kvc-comment-empty">Could not load comments.</div>';});
+  window.kvcCloseSheet = function(ckey) {
+    const overlay = document.getElementById('kvc-sheet-' + ckey);
+    if (!overlay) return;
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+    kvcResetInput(ckey);
+  };
+
+  function kvcResetInput(ckey) {
+    const ta   = document.getElementById('kvc-textarea-' + ckey);
+    const send = document.getElementById('kvc-send-' + ckey);
+    if (ta)   { ta.value = ''; ta.style.height = 'auto'; }
+    if (send)   send.classList.remove('visible');
   }
 
-  window.kvcPostComment=function(ckey,ct,cid){
-    const input=document.getElementById('kvc-input-'+ckey);
-    if(!input) return;
-    const text=input.value.trim();
-    if(!text) return;
-    input.disabled=true;
-    fetch(commentsUrl(ct,cid),{
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
-      body:JSON.stringify({text}),
+  window.kvcSheetInputChange = function(ckey) {
+    const ta   = document.getElementById('kvc-textarea-' + ckey);
+    const send = document.getElementById('kvc-send-' + ckey);
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 100) + 'px';
+    if (send) send.classList.toggle('visible', ta.value.trim().length > 0);
+  };
+
+  function kvcLoadComments(ckey, ct, cid) {
+    const list = document.getElementById('kvc-sheet-list-' + ckey);
+    if (!list) return;
+    list.innerHTML = '<div class="kvc-comment-loading"><i class="fa-solid fa-spinner fa-spin"></i>Loading…</div>';
+
+    fetch(commentsUrl(ct, cid), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrf() }
     })
-    .then(r=>r.ok?r.json():null)
-    .then(d=>{
-      input.disabled=false;
-      if(!d||d.error) return;
-      input.value='';
-      const body=document.getElementById('kvc-drawer-body-'+ckey);
-      if(body){
-        const empty=body.querySelector('.kvc-comment-empty');
-        if(empty) empty.remove();
-        const item=document.createElement('div');
-        item.className='kvc-comment-item';
-        item.innerHTML=`
-          <img class="kvc-comment-avatar" src="${_esc(d.avatar)}" alt="${_esc(d.author)}" onerror="this.src='https://placehold.co/30x30/dbdbdb/8e8e8e?text=U'">
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (!d) { list.innerHTML = '<div class="kvc-comment-empty">Could not load comments.</div>'; return; }
+      kvcRenderComments(ckey, d.comments, d.count);
+    })
+    .catch(() => { list.innerHTML = '<div class="kvc-comment-empty">Could not load comments.</div>'; });
+  }
+
+  function kvcRenderComments(ckey, comments, count) {
+    const list = document.getElementById('kvc-sheet-list-' + ckey);
+    const cc   = document.getElementById('kvc-ccount-' + ckey);
+    if (cc) cc.textContent = (count || 0).toLocaleString();
+    if (!list) return;
+
+    if (!comments || !comments.length) {
+      list.innerHTML = '<div class="kvc-comment-empty">No comments yet. Be the first to comment! 👋</div>';
+      return;
+    }
+    list.innerHTML = comments.map(c => `
+      <div class="kvc-comment-item">
+        <img class="kvc-comment-avatar"
+             src="${_esc(c.avatar)}"
+             alt="${_esc(c.author)}"
+             onerror="this.src='https://placehold.co/36x36/dbdbdb/8e8e8e?text=U'">
+        <div class="kvc-comment-body">
+          <div class="kvc-comment-author">${_esc(c.author_name)}</div>
+          <p class="kvc-comment-text">${_esc(c.text)}</p>
+          <div class="kvc-comment-time">${_esc(c.time)}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  /* ── Submit comment ─────────────────────────────────────────────────── */
+  window.kvcSubmitComment = function(ckey, ct, cid) {
+    const ta   = document.getElementById('kvc-textarea-' + ckey);
+    const send = document.getElementById('kvc-send-' + ckey);
+    if (!ta) return;
+    const text = ta.value.trim();
+    if (!text) return;
+
+    send && send.classList.remove('visible');
+    ta.disabled = true;
+
+    fetch(commentsUrl(ct, cid), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      body:    JSON.stringify({ text }),
+    })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      ta.disabled = false;
+      if (!d || d.error) return;
+
+      ta.value = '';
+      ta.style.height = 'auto';
+
+      // Prepend new comment to the list
+      const list = document.getElementById('kvc-sheet-list-' + ckey);
+      if (list) {
+        const empty = list.querySelector('.kvc-comment-empty');
+        if (empty) empty.remove();
+
+        const item = document.createElement('div');
+        item.className = 'kvc-comment-item';
+        item.innerHTML = `
+          <img class="kvc-comment-avatar"
+               src="${_esc(d.avatar)}"
+               alt="${_esc(d.author)}"
+               onerror="this.src='https://placehold.co/36x36/dbdbdb/8e8e8e?text=U'">
           <div class="kvc-comment-body">
             <div class="kvc-comment-author">${_esc(d.author_name)}</div>
-            <div class="kvc-comment-text">${_esc(d.text)}</div>
+            <p class="kvc-comment-text">${_esc(d.text)}</p>
             <div class="kvc-comment-time">Just now</div>
           </div>`;
-        body.appendChild(item);
-        item.scrollIntoView({behavior:'smooth',block:'nearest'});
+        list.insertBefore(item, list.firstChild);
+        item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
-      const cc=document.getElementById('kvc-ccount-'+ckey);
-      if(cc) cc.textContent=d.count.toLocaleString();
-    }).catch(()=>{input.disabled=false;});
+
+      // Update comment count badges
+      const cc = document.getElementById('kvc-ccount-' + ckey);
+      if (cc) cc.textContent = (d.count || 0).toLocaleString();
+    })
+    .catch(() => { ta.disabled = false; });
   };
 
   /* ══════════════════════════════════════════════════════════════════════
-     Share
+     Share — Web Share API with clipboard fallback
   ══════════════════════════════════════════════════════════════════════ */
-  window.kvcShare=function(ckey,ct,cid){
+  window.kvcShare = function(ckey, ct, cid) {
     let path;
-    if(ct==='market') path='/product/'+cid+'/';
-    else if(ct==='jobs') path='/jobs/';
-    else path='/events/';
-    const url=location.origin+path;
-    if(navigator.share){navigator.share({url}).catch(()=>{});}
-    else {
-      navigator.clipboard?.writeText(url).then(()=>{
-        const btn=document.querySelector('[data-ckey="'+ckey+'"]');
-        if(btn){
-          const pl=btn.querySelector('.fa-paper-plane');
-          if(pl){pl.className='fas fa-check';pl.style.color='#10b981';setTimeout(()=>{pl.className='fa-regular fa-paper-plane';pl.style.color='';},1500);}
+    if (ct === 'market')     path = '/product/' + cid + '/';
+    else if (ct === 'jobs')  path = '/jobs/';
+    else                     path = '/events/';
+    const url = location.origin + path;
+
+    if (navigator.share) {
+      navigator.share({ url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(url).then(() => {
+        // Flash the icon green briefly
+        const btn = document.querySelector('[data-ckey="' + ckey + '"] .fa-paper-plane')
+                    ?.closest('.kvc-btn');
+        if (btn) {
+          const icon = btn.querySelector('i');
+          if (icon) {
+            const orig = icon.className;
+            icon.className = 'fas fa-check';
+            icon.style.color = '#10b981';
+            setTimeout(() => { icon.className = orig; icon.style.color = ''; }, 1500);
+          }
         }
-      }).catch(()=>{});
+      }).catch(() => {});
     }
   };
 
-  /* ── Auto-hydrate via IntersectionObserver ──────────────────────────── */
-  function kvcObserve(){
-    if(!window.IntersectionObserver) return;
-    document.querySelectorAll('.kvc-vibe-btn:not([data-kvc-obs])').forEach(btn=>{
-      btn.dataset.kvcObs='1';
-      const ckey=btn.dataset.ckey,ct=btn.dataset.cardType,cid=btn.dataset.cardId;
-      if(!ckey||!ct||!cid) return;
-      new IntersectionObserver((entries,obs)=>{
-        if(entries[0].isIntersecting){kvcHydrate(ckey,ct,cid);obs.disconnect();}
-      },{threshold:0.1}).observe(btn);
+  /* ── Dismiss sheet on overlay backdrop click ────────────────────────── */
+  document.addEventListener('click', function(e) {
+    document.querySelectorAll('.kvc-sheet-overlay.active').forEach(overlay => {
+      if (e.target === overlay) {
+        const ckey = overlay.id.replace('kvc-sheet-', '');
+        window.kvcCloseSheet(ckey);
+      }
+    });
+  });
+
+  /* ── Dismiss sheet on Escape ────────────────────────────────────────── */
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll('.kvc-sheet-overlay.active').forEach(overlay => {
+      const ckey = overlay.id.replace('kvc-sheet-', '');
+      window.kvcCloseSheet(ckey);
+    });
+    // Also close open vibe pickers
+    document.querySelectorAll('[id^="kvc-picker-"]').forEach(p =>
+      window.kvcClosePicker(p.id.replace('kvc-picker-', ''))
+    );
+  });
+
+  /* ── Close vibe pickers on outside click ────────────────────────────── */
+  document.addEventListener('click', function(e) {
+    document.querySelectorAll('[id^="kvc-picker-"]').forEach(p => {
+      const ckey = p.id.replace('kvc-picker-', '');
+      const btn  = document.getElementById('kvc-vibe-btn-' + ckey);
+      if (btn && !btn.contains(e.target) && !p.contains(e.target))
+        window.kvcClosePicker(ckey);
+    });
+  });
+
+  /* ── Reposition pickers on scroll / resize ──────────────────────────── */
+  function kvcRepositionAll() {
+    Object.keys(window._kvc || {}).forEach(ckey => {
+      if (window._kvc[ckey].pickerOpen) kvcPositionPicker(ckey);
     });
   }
-  document.addEventListener('DOMContentLoaded',kvcObserve);
-  document.addEventListener('htmx:afterSwap',kvcObserve);
-  document.addEventListener('htmx:afterSettle',kvcObserve);
+  window.addEventListener('scroll', kvcRepositionAll, { passive: true, capture: true });
+  window.addEventListener('resize', kvcRepositionAll, { passive: true });
+
+  /* ── Auto-hydrate vibes when card scrolls into view ─────────────────── */
+  function kvcObserve() {
+    if (!window.IntersectionObserver) return;
+    document.querySelectorAll('.kvc-vibe-btn:not([data-kvc-obs])').forEach(btn => {
+      btn.dataset.kvcObs = '1';
+      const ckey = btn.dataset.ckey, ct = btn.dataset.cardType, cid = btn.dataset.cardId;
+      if (!ckey || !ct || !cid) return;
+      new IntersectionObserver((entries, obs) => {
+        if (entries[0].isIntersecting) { kvcHydrate(ckey, ct, cid); obs.disconnect(); }
+      }, { threshold: 0.1 }).observe(btn);
+    });
+  }
+  document.addEventListener('DOMContentLoaded',  kvcObserve);
+  document.addEventListener('htmx:afterSwap',    kvcObserve);
+  document.addEventListener('htmx:afterSettle',  kvcObserve);
   kvcObserve();
-
-  /* ── Close pickers on outside click / Escape ────────────────────────── */
-  document.addEventListener('click',e=>{
-    document.querySelectorAll('[id^="kvc-picker-"]').forEach(p=>{
-      const ckey=p.id.replace('kvc-picker-','');
-      const b=document.getElementById('kvc-vibe-btn-'+ckey);
-      if(b&&!b.contains(e.target)&&!p.contains(e.target)) window.kvcClosePicker(ckey);
-    });
-  });
-  document.addEventListener('keydown',e=>{
-    if(e.key!=='Escape') return;
-    document.querySelectorAll('[id^="kvc-picker-"]').forEach(p=>window.kvcClosePicker(p.id.replace('kvc-picker-','')));
-  });
-
-  /* ── Reposition open pickers on scroll/resize ───────────────────────── */
-  function kvcRepositionAll(){
-    Object.keys(window._kvc||{}).forEach(ckey=>{
-      if(window._kvc[ckey].pickerOpen) kvcPositionPicker(ckey);
-    });
-  }
-  window.addEventListener('scroll',kvcRepositionAll,{passive:true,capture:true});
-  window.addEventListener('resize',kvcRepositionAll,{passive:true});
 
 })();
 </script>
