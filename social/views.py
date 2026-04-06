@@ -2164,21 +2164,28 @@ def update_profile(request, username):
     profile = request.user.profile
 
     if request.method == 'POST':
-        fname         = request.POST.get('fname')
-        lname         = request.POST.get('lname')
-        phone         = request.POST.get('phone')
-        address       = request.POST.get('address')
-        location      = request.POST.get('location')
-        image         = request.FILES.get('image')
-        bio           = request.POST.get('bio')
-        website       = request.POST.get('website')
-        privacy_level = request.POST.get('privacy_level', '').strip()
-        gender        = request.POST.get('gender', '').strip()
-        dob_raw       = request.POST.get('date_of_birth', '').strip()
+        fname            = request.POST.get('fname', '').strip()
+        lname            = request.POST.get('lname', '').strip()
+        phone            = request.POST.get('phone', '').strip()
+        address          = request.POST.get('address', '').strip()
+        location         = request.POST.get('location', '').strip()
+        image            = request.FILES.get('image')
+        bio              = request.POST.get('bio', '').strip()
+        website          = request.POST.get('website', '').strip()
+        privacy_level    = request.POST.get('privacy_level', '').strip()
+        gender           = request.POST.get('gender', '').strip()
+        dob_raw          = request.POST.get('date_of_birth', '').strip()
         # Checkboxes: present in POST = True, absent = False
-        show_gender   = 'show_gender' in request.POST
-        show_dob      = 'show_dob'    in request.POST
+        show_gender      = 'show_gender' in request.POST
+        show_dob         = 'show_dob'    in request.POST
+        # Kishi community fields
+        community_area   = request.POST.get('community_area',   '').strip()
+        family_house     = request.POST.get('family_house',     '').strip()
+        profession       = request.POST.get('profession',       '').strip()
+        residency_status = request.POST.get('residency_status', '').strip()
+        secondary_school = request.POST.get('secondary_school', '').strip()
 
+        # ── Whitelist validation ─────────────────────────────────
         VALID_PRIVACY = {'public', 'followers_only', 'private'}
         if privacy_level not in VALID_PRIVACY:
             privacy_level = None
@@ -2187,13 +2194,21 @@ def update_profile(request, username):
         if gender not in VALID_GENDERS:
             gender = None
 
+        VALID_COMMUNITIES = {v for v, _ in Profile.KISHI_COMMUNITIES}
+        if community_area and community_area not in VALID_COMMUNITIES:
+            community_area = ''
+
+        VALID_RESIDENCY = {v for v, _ in Profile.RESIDENCY_CHOICES}
+        if residency_status and residency_status not in VALID_RESIDENCY:
+            residency_status = ''
+
         import datetime
         date_of_birth = None
-        dob_changed = False
+        dob_changed   = False
         if dob_raw:
             try:
                 date_of_birth = datetime.date.fromisoformat(dob_raw)
-                dob_changed = True
+                dob_changed   = True
             except ValueError:
                 pass  # ignore invalid date silently
 
@@ -2204,23 +2219,27 @@ def update_profile(request, username):
                 user.save()
 
             profile_dirty = False
-            if phone:    profile.phone    = phone;    profile_dirty = True
-            if address:  profile.address  = address;  profile_dirty = True
-            if location: profile.location = location; profile_dirty = True
-            if bio is not None: profile.bio = bio;    profile_dirty = True
-            if website:  profile.website  = website;  profile_dirty = True
-            if privacy_level:
-                profile.privacy_level = privacy_level
-                profile_dirty = True
-            if gender is not None:
-                profile.gender = gender
-                profile_dirty = True
-            if dob_changed:
-                profile.date_of_birth = date_of_birth
-                profile_dirty = True
-            # Always update visibility toggles (they come as checkbox — present/absent)
+
+            if phone:              profile.phone          = phone;            profile_dirty = True
+            if address:            profile.address        = address;          profile_dirty = True
+            if location:           profile.location       = location;         profile_dirty = True
+            if bio is not None:    profile.bio            = bio;              profile_dirty = True
+            if website:            profile.website        = website;          profile_dirty = True
+            if privacy_level:      profile.privacy_level  = privacy_level;    profile_dirty = True
+            if gender is not None: profile.gender         = gender;           profile_dirty = True
+            if dob_changed:        profile.date_of_birth  = date_of_birth;    profile_dirty = True
+
+            # Always update visibility toggles (checkbox — present/absent)
             profile.show_gender = show_gender
             profile.show_dob    = show_dob
+            profile_dirty = True
+
+            # Kishi community fields — always write (empty string clears the field)
+            profile.community_area   = community_area
+            profile.family_house     = family_house
+            profile.profession       = profession
+            profile.residency_status = residency_status
+            profile.secondary_school = secondary_school
             profile_dirty = True
 
             if profile_dirty:
@@ -2234,19 +2253,24 @@ def update_profile(request, username):
                 return JsonResponse({
                     'success': True,
                     'data': {
-                        'first_name':    user.first_name,
-                        'last_name':     user.last_name,
-                        'bio':           profile.bio,
-                        'phone':         profile.phone,
-                        'address':       profile.address,
-                        'location':      profile.location,
-                        'picture_url':   profile.picture.url,
-                        'website':       profile.website,
-                        'privacy_level': profile.privacy_level,
-                        'gender':        profile.gender,
-                        'date_of_birth': profile.date_of_birth.isoformat() if profile.date_of_birth else '',
-                        'show_gender':   profile.show_gender,
-                        'show_dob':      profile.show_dob,
+                        'first_name':      user.first_name,
+                        'last_name':       user.last_name,
+                        'bio':             profile.bio,
+                        'phone':           profile.phone,
+                        'address':         profile.address,
+                        'location':        profile.location,
+                        'picture_url':     profile.picture.url,
+                        'website':         profile.website,
+                        'privacy_level':   profile.privacy_level,
+                        'gender':          profile.gender,
+                        'date_of_birth':   profile.date_of_birth.isoformat() if profile.date_of_birth else '',
+                        'show_gender':     profile.show_gender,
+                        'show_dob':        profile.show_dob,
+                        'community_area':  profile.community_area,
+                        'family_house':    profile.family_house,
+                        'profession':      profile.profession,
+                        'residency_status': profile.residency_status,
+                        'secondary_school': profile.secondary_school,
                     },
                     'message': 'Profile updated successfully!'
                 })

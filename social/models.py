@@ -29,6 +29,9 @@ MAX_TEXT_LENGTHS = {
     'product_description': 5000,
     'product_name': 100,
     'channel_name': 200,
+    'family_house': 200,
+    'profession': 150,
+    'secondary_school': 200,
 }
 
 def sanitize_text(text, field_name=None):
@@ -190,6 +193,32 @@ class Profile(models.Model):
     show_gender       = models.BooleanField(default=True,  help_text='Show gender on public profile')
     show_dob          = models.BooleanField(default=False, help_text='Show date of birth on public profile')
 
+    # ── Kishi community fields ───────────────────────────────────
+    KISHI_COMMUNITIES = [
+        ('ajangba',   'Ajangba Community'),
+        ('ajana',     'Ajana Community'),
+        ('atipa',     'Atipa Community'),
+        ('agede',     'Agede Community'),
+        ('ehinke',    'Ehinke Community'),
+        ('mapo',      'Mapo Community'),
+        ('koso',      'Koso Community'),
+        ('oke_tege',  'Oke Tege Community'),
+        ('laha',      'Laha Community'),
+        ('ojupopo',   'Ojupopo Community'),
+        ('isale_odo', 'Isale Odo Community'),
+        ('fulani',    'Fulani Community'),
+    ]
+    RESIDENCY_CHOICES = [
+        ('resident', 'Living in Kishi'),
+        ('diaspora', 'Living Outside / Diaspora'),
+    ]
+
+    community_area   = models.CharField(max_length=50,  choices=KISHI_COMMUNITIES, blank=True, default='')
+    family_house     = models.CharField(max_length=200, blank=True, default='')
+    profession       = models.CharField(max_length=150, blank=True, default='')
+    residency_status = models.CharField(max_length=20,  choices=RESIDENCY_CHOICES, blank=True, default='')
+    secondary_school = models.CharField(max_length=200, blank=True, default='')
+
     created_at = models.DateTimeField(auto_now_add=True)
     online = models.BooleanField(default=False)
 
@@ -201,10 +230,21 @@ class Profile(models.Model):
 
     def clean(self):
         super().clean()
-        self.bio = sanitize_text(self.bio, 'bio')
-        self.location = sanitize_text(self.location, 'location')
-        self.full_name = sanitize_text(self.full_name)
-        self.address = sanitize_text(self.address)
+        self.bio          = sanitize_text(self.bio, 'bio')
+        self.location     = sanitize_text(self.location, 'location')
+        self.full_name    = sanitize_text(self.full_name)
+        self.address      = sanitize_text(self.address)
+        self.family_house    = sanitize_text(self.family_house,    'family_house')
+        self.profession      = sanitize_text(self.profession,      'profession')
+        self.secondary_school = sanitize_text(self.secondary_school, 'secondary_school')
+
+        # Validate choices fields — silently clear invalid values
+        valid_communities = {v for v, _ in self.KISHI_COMMUNITIES}
+        if self.community_area and self.community_area not in valid_communities:
+            self.community_area = ''
+        valid_residency = {v for v, _ in self.RESIDENCY_CHOICES}
+        if self.residency_status and self.residency_status not in valid_residency:
+            self.residency_status = ''
         
         if self.website:
             try:
