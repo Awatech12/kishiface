@@ -1,4 +1,5 @@
 {% load static %}
+{% load post_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -542,6 +543,135 @@
 
     .kvcal-form-submit:hover { background: #0077cc; }
 
+    /* ─── Event card cover image ─── */
+    .kvcal-event-card-img {
+      width: 100%;
+      max-height: 180px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin-top: 10px;
+      display: block;
+    }
+
+    /* ─── Event card action buttons (edit / delete) ─── */
+    .kvcal-event-card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .kvcal-event-action-btn {
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1.5px solid var(--kvibe-border);
+      background: var(--kvibe-white);
+      color: var(--kvibe-text-light);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.18s;
+    }
+
+    .kvcal-event-action-btn.edit:hover  { border-color: var(--kvibe-primary); color: var(--kvibe-primary); }
+    .kvcal-event-action-btn.delete:hover { border-color: #e74c3c; color: #e74c3c; }
+
+    /* ─── Image preview in modal ─── */
+    .kvcal-img-preview-wrap {
+      position: relative;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .kvcal-img-preview-wrap.visible { display: block; }
+
+    .kvcal-img-preview {
+      width: 100%;
+      max-height: 160px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1.5px solid var(--kvibe-border);
+    }
+
+    .kvcal-img-clear-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kvcal-img-upload-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border: 1.5px dashed var(--kvibe-border);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--kvibe-text-light);
+      transition: border-color 0.18s;
+    }
+
+    .kvcal-img-upload-label:hover { border-color: var(--kvibe-primary); color: var(--kvibe-primary); }
+
+    /* ─── Delete confirm modal ─── */
+    .kvcal-confirm-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(4px);
+      z-index: 9100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kvcal-confirm-overlay.open { display: flex; }
+
+    .kvcal-confirm-box {
+      background: var(--kvibe-white);
+      border-radius: 16px;
+      padding: 28px 24px;
+      width: 360px;
+      max-width: calc(100vw - 32px);
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      animation: kvcalSlideUp 0.2s ease;
+    }
+
+    .kvcal-confirm-box h3 { font-size: 17px; margin-bottom: 8px; }
+    .kvcal-confirm-box p  { font-size: 13px; color: var(--kvibe-text-light); margin-bottom: 20px; }
+
+    .kvcal-confirm-btns { display: flex; gap: 10px; }
+
+    .kvcal-confirm-btns button {
+      flex: 1;
+      padding: 11px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.18s;
+    }
+
+    .kvcal-confirm-btns button:hover { opacity: 0.85; }
+    .kvcal-confirm-btns .cancel-btn  { background: var(--kvibe-bg); color: var(--kvibe-text); border: 1.5px solid var(--kvibe-border); }
+    .kvcal-confirm-btns .delete-btn  { background: #e74c3c; color: #fff; }
+
     /* ─── Empty state ─── */
     .kvcal-empty {
       text-align: center;
@@ -762,11 +892,11 @@
   </div>
 </main>
 
-<!-- Add Event Modal -->
+<!-- Add / Edit Event Modal -->
 <div class="kvcal-modal-overlay" id="kvcalModalOverlay">
   <div class="kvcal-modal">
     <div class="kvcal-modal-title">
-      <span>📅 Add New Event</span>
+      <span id="kvcalModalHeading">📅 Add New Event</span>
       <button class="kvcal-modal-close" onclick="kvcalCloseModal()">
         <i class="fas fa-times"></i>
       </button>
@@ -809,9 +939,36 @@
       <textarea id="kvcalFormDesc" rows="3" placeholder="Brief event description…" style="resize: vertical;"></textarea>
     </div>
 
-    <button class="kvcal-form-submit" onclick="kvcalSubmitEvent()">
+    <!-- Image upload (optional) -->
+    <div class="kvcal-form-group">
+      <label>Cover Image <span style="font-weight:400;color:var(--kvibe-text-light);">(optional)</span></label>
+      <label class="kvcal-img-upload-label" for="kvcalFormImage">
+        <i class="fas fa-image"></i> Choose photo…
+      </label>
+      <input type="file" id="kvcalFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;">
+      <div class="kvcal-img-preview-wrap" id="kvcalImgPreviewWrap">
+        <img id="kvcalImgPreview" class="kvcal-img-preview" src="" alt="preview">
+        <button class="kvcal-img-clear-btn" type="button" onclick="kvcalClearImage()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
+    <button class="kvcal-form-submit" id="kvcalFormSubmitBtn" onclick="kvcalSubmitEvent()">
       <i class="fas fa-plus"></i> Add Event
     </button>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="kvcal-confirm-overlay" id="kvcalConfirmOverlay">
+  <div class="kvcal-confirm-box">
+    <h3>🗑️ Delete Event?</h3>
+    <p id="kvcalConfirmMsg">This event will be permanently deleted.</p>
+    <div class="kvcal-confirm-btns">
+      <button class="cancel-btn" onclick="kvcalCloseConfirm()">Cancel</button>
+      <button class="delete-btn" id="kvcalConfirmDeleteBtn">Delete</button>
+    </div>
   </div>
 </div>
 
@@ -829,7 +986,9 @@ var KVCAL_EVENTS = [
     date: "{{ ev.date|date:'Y-m-d' }}",
     time: "{% if ev.time %}{{ ev.time|time:'H:i' }}{% endif %}",
     location: "{{ ev.location|escapejs }}",
-    desc: "{{ ev.description|escapejs }}"
+    desc: "{{ ev.description|escapejs }}",
+    coverImage: "{% if ev.cover_image %}{{ ev.cover_image.url }}{% endif %}",
+    isOwner: {% if ev.created_by == request.user %}true{% else %}false{% endif %}
   }{% if not forloop.last %},{% endif %}
   {% empty %}
   /* no events yet — add some! */
@@ -852,6 +1011,10 @@ var MONTHS = ['January','February','March','April','May','June',
               'July','August','September','October','November','December'];
 var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+// ── Modal state ──
+var _kvcalEditId = null;   // null = create mode, number = edit mode
+var _kvcalClearImage = false;  // user clicked ✕ on existing image
+
 // ── Render everything ──
 function kvcalRender() {
   kvcalRenderGrid();
@@ -869,7 +1032,6 @@ function kvcalRenderGrid() {
   var today = new Date();
   today.setHours(0,0,0,0);
 
-  // Map events to day numbers for this month
   var evMap = {};
   KVCAL_EVENTS.forEach(function(ev) {
     var d = new Date(ev.date + 'T00:00:00');
@@ -881,11 +1043,9 @@ function kvcalRenderGrid() {
   });
 
   var html = '';
-  // Prev month days
   for (var i = firstDay - 1; i >= 0; i--) {
     html += '<button class="kvcal-day other-month" disabled>' + (daysInPrev - i) + '</button>';
   }
-  // Current month
   for (var day = 1; day <= daysInMonth; day++) {
     var dt = new Date(y, m, day);
     var cls = 'kvcal-day';
@@ -893,14 +1053,11 @@ function kvcalRenderGrid() {
     var dots = '';
     if (evMap[day]) {
       dots = '<div class="kvcal-day-dot">';
-      evMap[day].slice(0,3).forEach(function(c) {
-        dots += '<span style="background:' + c + ';"></span>';
-      });
+      evMap[day].slice(0,3).forEach(function(c) { dots += '<span style="background:' + c + ';"></span>'; });
       dots += '</div>';
     }
     html += '<button class="' + cls + '" onclick="kvcalSelectDay(' + y + ',' + m + ',' + day + ')">' + day + dots + '</button>';
   }
-  // Fill remaining cells
   var total = firstDay + daysInMonth;
   var remainder = total % 7 === 0 ? 0 : 7 - (total % 7);
   for (var n = 1; n <= remainder; n++) {
@@ -917,7 +1074,6 @@ function kvcalSelectDay(y, m, day) {
   document.getElementById('kvcalListTitle').textContent =
     dayEvs.length ? '📅 ' + title + ' — ' + dayEvs.length + ' event' + (dayEvs.length > 1 ? 's' : '') : '📅 ' + title + ' — No events';
   kvcalRenderEventCards(dayEvs);
-  // Highlight selected
   document.querySelectorAll('.kvcal-day.selected').forEach(function(b) { b.classList.remove('selected'); });
   var allBtns = document.querySelectorAll('#kvcalDaysGrid .kvcal-day:not(.other-month)');
   if (allBtns[day - 1]) allBtns[day - 1].classList.add('selected');
@@ -943,6 +1099,22 @@ function kvcalRenderEventCards(events) {
     var d = new Date(ev.date + 'T00:00:00');
     var tc = KVCAL_TYPES[ev.type] || { label: 'Event', emoji: '📌', color: '#0095f6' };
     var timeStr = ev.time ? formatTime(ev.time) : 'All Day';
+
+    var imgHtml = ev.coverImage
+      ? '<img class="kvcal-event-card-img" src="' + htmlEsc(ev.coverImage) + '" alt="Event cover" loading="lazy">'
+      : '';
+
+    var actionsHtml = ev.isOwner
+      ? '<div class="kvcal-event-card-actions">' +
+          '<button class="kvcal-event-action-btn edit" onclick="kvcalOpenEdit(' + ev.id + ');event.stopPropagation();">' +
+            '<i class="fas fa-pen"></i> Edit' +
+          '</button>' +
+          '<button class="kvcal-event-action-btn delete" onclick="kvcalOpenConfirmDelete(' + ev.id + ');event.stopPropagation();">' +
+            '<i class="fas fa-trash"></i> Delete' +
+          '</button>' +
+        '</div>'
+      : '';
+
     return '<div class="kvcal-event-card" style="--ev-color:' + tc.color + ';">' +
       '<div class="kvcal-event-card-date" style="--ev-color:' + tc.color + ';">' +
         '<span class="month">' + MONTHS_SHORT[d.getMonth()] + '</span>' +
@@ -956,6 +1128,8 @@ function kvcalRenderEventCards(events) {
         '</div>' +
         (ev.desc ? '<div style="font-size:12px;color:var(--kvibe-text-light);margin-top:6px;line-height:1.5;">' + htmlEsc(ev.desc) + '</div>' : '') +
         '<div class="kvcal-event-type-badge" style="--ev-color:' + tc.color + ';">' + tc.emoji + ' ' + tc.label + '</div>' +
+        imgHtml +
+        actionsHtml +
       '</div>' +
     '</div>';
   }).join('');
@@ -978,10 +1152,43 @@ function kvcalNextMonth() {
   kvcalRender();
 }
 
-// ── Modal ──
+// ── Modal helpers ──
+function kvcalResetForm() {
+  ['kvcalFormTitle','kvcalFormType','kvcalFormDate','kvcalFormTime','kvcalFormLocation','kvcalFormDesc']
+    .forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('kvcalFormImage').value = '';
+  document.getElementById('kvcalImgPreviewWrap').classList.remove('visible');
+  document.getElementById('kvcalImgPreview').src = '';
+  _kvcalClearImage = false;
+}
+
 function kvcalOpenModal() {
+  _kvcalEditId = null;
+  kvcalResetForm();
   var today = new Date();
   document.getElementById('kvcalFormDate').value = today.toISOString().slice(0,10);
+  document.getElementById('kvcalModalHeading').textContent = '📅 Add New Event';
+  document.getElementById('kvcalFormSubmitBtn').innerHTML = '<i class="fas fa-plus"></i> Add Event';
+  document.getElementById('kvcalModalOverlay').classList.add('open');
+}
+
+function kvcalOpenEdit(evId) {
+  var ev = KVCAL_EVENTS.find(function(e) { return e.id === evId; });
+  if (!ev) return;
+  _kvcalEditId = evId;
+  kvcalResetForm();
+  document.getElementById('kvcalFormTitle').value    = ev.title;
+  document.getElementById('kvcalFormType').value     = ev.type;
+  document.getElementById('kvcalFormDate').value     = ev.date;
+  document.getElementById('kvcalFormTime').value     = ev.time || '';
+  document.getElementById('kvcalFormLocation').value = ev.location || '';
+  document.getElementById('kvcalFormDesc').value     = ev.desc || '';
+  if (ev.coverImage) {
+    document.getElementById('kvcalImgPreview').src = ev.coverImage;
+    document.getElementById('kvcalImgPreviewWrap').classList.add('visible');
+  }
+  document.getElementById('kvcalModalHeading').textContent = '✏️ Edit Event';
+  document.getElementById('kvcalFormSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Save Changes';
   document.getElementById('kvcalModalOverlay').classList.add('open');
 }
 
@@ -989,6 +1196,27 @@ function kvcalCloseModal() {
   document.getElementById('kvcalModalOverlay').classList.remove('open');
 }
 
+// ── Image preview ──
+document.getElementById('kvcalFormImage').addEventListener('change', function() {
+  var file = this.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('kvcalImgPreview').src = e.target.result;
+    document.getElementById('kvcalImgPreviewWrap').classList.add('visible');
+    _kvcalClearImage = false;
+  };
+  reader.readAsDataURL(file);
+});
+
+function kvcalClearImage() {
+  document.getElementById('kvcalFormImage').value = '';
+  document.getElementById('kvcalImgPreview').src = '';
+  document.getElementById('kvcalImgPreviewWrap').classList.remove('visible');
+  _kvcalClearImage = true;
+}
+
+// ── Submit (create or edit) ──
 function kvcalSubmitEvent() {
   var title    = document.getElementById('kvcalFormTitle').value.trim();
   var type     = document.getElementById('kvcalFormType').value;
@@ -996,12 +1224,13 @@ function kvcalSubmitEvent() {
   var time     = document.getElementById('kvcalFormTime').value;
   var location = document.getElementById('kvcalFormLocation').value.trim();
   var desc     = document.getElementById('kvcalFormDesc').value.trim();
+  var imgFile  = document.getElementById('kvcalFormImage').files[0];
 
   if (!title) { kvcalToast('Please enter an event title.'); return; }
   if (!type)  { kvcalToast('Please select an event type.');  return; }
   if (!date)  { kvcalToast('Please choose a date.');         return; }
 
-  var submitBtn = document.querySelector('.kvcal-form-submit');
+  var submitBtn = document.getElementById('kvcalFormSubmitBtn');
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
 
   var fd = new FormData();
@@ -1012,39 +1241,123 @@ function kvcalSubmitEvent() {
   fd.append('time',        time);
   fd.append('location',    location);
   fd.append('description', desc);
+  if (imgFile) {
+    fd.append('cover_image', imgFile);
+  }
+  if (_kvcalClearImage) {
+    fd.append('clear_image', '1');
+  }
 
-  fetch('{% url "event_calendar_create" %}', {
+  var url = _kvcalEditId
+    ? '/events/' + _kvcalEditId + '/edit/'
+    : '{% url "event_calendar_create" %}';
+
+  fetch(url, {
     method: 'POST',
     headers: { 'X-Requested-With': 'XMLHttpRequest' },
     body: fd
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-plus"></i> Add Event'; }
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = _kvcalEditId
+        ? '<i class="fas fa-save"></i> Save Changes'
+        : '<i class="fas fa-plus"></i> Add Event';
+    }
     if (data.success) {
       var ev = data.event;
-      KVCAL_EVENTS.push({
+      var evObj = {
         id: ev.id, title: ev.title, type: ev.event_type,
-        date: ev.date, time: ev.time, location: ev.location, desc: ev.description
-      });
+        date: ev.date, time: ev.time, location: ev.location,
+        desc: ev.description, coverImage: ev.cover_image || '',
+        isOwner: true
+      };
+      if (_kvcalEditId) {
+        // Replace in array
+        var idx = KVCAL_EVENTS.findIndex(function(e) { return e.id === _kvcalEditId; });
+        if (idx !== -1) KVCAL_EVENTS[idx] = evObj;
+        kvcalToast('✅ Event updated!');
+      } else {
+        KVCAL_EVENTS.push(evObj);
+        kvcalToast('✅ Event added!');
+      }
       kvcalCloseModal();
       kvcalRender();
-      kvcalToast('✅ Event added!');
-      // Reset form
-      ['kvcalFormTitle','kvcalFormType','kvcalFormDate','kvcalFormTime','kvcalFormLocation','kvcalFormDesc']
-        .forEach(function(id) { document.getElementById(id).value = ''; });
     } else {
       kvcalToast(data.error || 'Could not save event.');
     }
   })
   .catch(function() {
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-plus"></i> Add Event'; }
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = _kvcalEditId
+        ? '<i class="fas fa-save"></i> Save Changes'
+        : '<i class="fas fa-plus"></i> Add Event';
+    }
+    kvcalToast('Network error — please try again.');
+  });
+}
+
+// ── Delete confirm ──
+var _kvcalDeleteTarget = null;
+
+function kvcalOpenConfirmDelete(evId) {
+  var ev = KVCAL_EVENTS.find(function(e) { return e.id === evId; });
+  _kvcalDeleteTarget = evId;
+  document.getElementById('kvcalConfirmMsg').textContent =
+    ev ? '"' + ev.title + '" will be permanently deleted.' : 'This event will be permanently deleted.';
+  document.getElementById('kvcalConfirmOverlay').classList.add('open');
+
+  document.getElementById('kvcalConfirmDeleteBtn').onclick = function() {
+    kvcalDoDelete(evId);
+  };
+}
+
+function kvcalCloseConfirm() {
+  document.getElementById('kvcalConfirmOverlay').classList.remove('open');
+  _kvcalDeleteTarget = null;
+}
+
+function kvcalDoDelete(evId) {
+  var btn = document.getElementById('kvcalConfirmDeleteBtn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  var fd = new FormData();
+  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+  fetch('/events/' + evId + '/delete/', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: fd
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+    if (data.success) {
+      KVCAL_EVENTS = KVCAL_EVENTS.filter(function(e) { return e.id !== evId; });
+      kvcalCloseConfirm();
+      kvcalRender();
+      kvcalToast('🗑️ Event deleted.');
+    } else {
+      kvcalToast(data.error || 'Could not delete event.');
+    }
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Delete';
     kvcalToast('Network error — please try again.');
   });
 }
 
 document.getElementById('kvcalModalOverlay').addEventListener('click', function(e) {
   if (e.target === this) kvcalCloseModal();
+});
+
+document.getElementById('kvcalConfirmOverlay').addEventListener('click', function(e) {
+  if (e.target === this) kvcalCloseConfirm();
 });
 
 // ── Helpers ──

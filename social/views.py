@@ -428,11 +428,7 @@ def extract_hashtags(content):
 
 
 def _safe_redirect_back(request, fallback='home'):
-    """
-    Redirect back to the referring page only if the referer is our own domain.
-    Prevents open-redirect attacks where a forged Referer header sends users
-    to an external site.
-    """
+   
     referer = request.META.get('HTTP_REFERER', '')
     allowed_origins = (
         'http://127.0.0.1',
@@ -444,20 +440,12 @@ def _safe_redirect_back(request, fallback='home'):
     return redirect(fallback)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Feed helpers — shared between home() and feed_load_more()
-# KVIBE FEED ALGORITHM v2.0
-# Signals: Rule-Based · Behavior-Based · Vibe-Based · Network · Exploration
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 FEED_PAGE_SIZE = 10          # posts returned per page
 _EXPLORE_RATIO = 0.15        # 15 % of each page is random exploration
 
-# _FEED_SAMPLE is now computed dynamically inside _get_feed_page().
-# Formula: clamp(following_count * 4, min=40, max=400)
-# - 0–10 followings  → 40   (new/small accounts)
-# - 50  followings   → 200  (healthy mid-size account)
-# - 100+ followings  → 400  (power users / viral scale)
+
 _FEED_SAMPLE_MIN = 40
 _FEED_SAMPLE_MAX = 400
 _FEED_SAMPLE_MULTIPLIER = 4   # posts per followed account in the candidate pool
@@ -516,28 +504,10 @@ def _get_or_create_feed_profile(user):
 
 
 def _build_user_interest_profile(user):
-    """
-    Behavior-Based — derive interacted post_ids & author affinity scores from
-    the last 30 days of likes, vibes, and comments.
-
-    AUTHOR AFFINITY DECAY: interactions are time-weighted so a like from
-    5 minutes ago carries far more signal than one from 29 days ago.
-    Each interaction's weight is: base_weight * exp(-age_days * ln(2) / 7)
-    giving a 7-day half-life.  The resulting per-author score is stored in
-    `author_affinity` (dict[author_id → float]) and used by _score_post()
-    instead of the old flat +4.0 bump for any author touched in 30 days.
-
-    Query count: 3 (one per model, each fetching timestamp + author in one pass).
-    Results are cached in Django's cache backend for 5 minutes so rapid
-    load-more scrolling doesn't re-run these on every page.
-
-    Returns:
-        interacted_post_ids : set[str]
-        author_affinity     : dict[int, float]   ← NEW (replaces flat set)
-    """
+   
     from django.core.cache import cache
 
-    cache_key = f'kvibe_interest_v2_{user.id}'
+    cache_key = f'kishiface_interest_v2_{user.id}'
     cached    = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -619,40 +589,7 @@ def _build_user_interest_profile(user):
 
 def _score_post(post, now, vibe_weights, interacted_post_ids,
                 author_affinity, fof_ids, adaptive_author_ids):
-    """
-    Master scoring — returns float.  Higher score = shown earlier.
-
-    ┌─────────────────────────────────────────────────────────────────┐
-    │ 1. Rule-Based                                                   │
-    │    engagement: pulled from the ORIGINAL post for reposts so    │
-    │                the full social proof of the original counts;    │
-    │                log2(1 + weighted_sum) — diminishing returns     │
-    │    recency:    age of THIS post object (repost row = fresh);   │
-    │                half-life 24 h + hard ceiling at 72 h           │
-    │    newness bonus: smooth exponential decay (half-life 1.5 h)   │
-    │                   so fresh posts surface without a cliff       │
-    │ 2. View Signals (3 sub-signals, all log-compressed)             │
-    │    velocity:   views/hour — surface fast-climbing content       │
-    │                before the crowd catches on (weight 1.5 max)     │
-    │    quality:    view-to-engagement ratio used as a multiplier    │
-    │                on the engagement score — rewards content that   │
-    │                converts passive viewers into active reactors    │
-    │                (capped at +10 % boost, min neutral 1.0×)       │
-    │    volume:     log-compressed raw view count — tiny tiebreaker  │
-    │                for proven-popular content (weight 0.5 max)      │
-    │ 3. Behavior-Based                                               │
-    │    +3   already interacted with this post / its original       │
-    │    affinity score from author_affinity dict (time-decayed,     │
-    │         7-day half-life — recent interactions worth far more)   │
-    │    +2   author in long-term UserFeedProfile history            │
-    │ 4. Vibe-Based 🔥                                                │
-    │    vibes pulled from original post for reposts;                │
-    │    weighted by viewer's personal vibe_weights                   │
-    │ 5. Network                                                      │
-    │    +2.5  original author is a friend-of-friend                 │
-    │ 6. Exploration jitter (applied in _get_feed_page, not here)     │
-    └─────────────────────────────────────────────────────────────────┘
-    """
+ 
     # ── Resolve the "real" post for engagement/vibe signals ──────────────────
     # For a repost we count the ORIGINAL post's engagement (its full social
     # proof) but use THIS post row's created_at for recency (the repost is a
@@ -2514,20 +2451,6 @@ def following_list(request, username):
 
 @login_required(login_url='/')
 def search(request):
-    """
-    Unified search with HTMX infinite-scroll pagination.
-
-    Main view — renders the shell + first page of results.
-    Paginated partials are served by the three helpers below:
-        search_users_partial   GET /search/users/
-        search_posts_partial   GET /search/posts/
-        search_hashtags_partial GET /search/tags/
-
-    Explore mode (no query):
-        · Recent search history
-        · Suggested users (not yet followed, by follower count)
-        · Trending hashtags (last 300 posts, global)
-    """
     _PAGE = 10   # items per HTMX page
 
     query = request.GET.get('q', '').strip()[:100]
@@ -2895,12 +2818,7 @@ def clear_history(request):
 @login_required(login_url='/')
 @require_GET
 def explore_partial(request):
-    """
-    GET /search/explore/?page=N
-    HTMX infinite-scroll endpoint for the Explore grid (no-query mode).
-    Returns raw <a class="ks-grid-cell"> elements + optional next sentinel.
-    Page 1 is served by the main search() view; this handles page 2 onwards.
-    """
+   
     if not request.headers.get('HX-Request'):
         return JsonResponse({'error': 'HTMX only'}, status=400)
 
@@ -3550,14 +3468,7 @@ def open_notification(request, post_id, notification_type):
 @login_required(login_url='/')
 @login_required(login_url='/')
 def notification_list(request):
-    """
-    Renders the notification page.
-    Marks ALL notifications (post-based + follow) as read on page load.
-    Grouped data is provided by the user_notifications context processor.
-
-    When ?panel=1 is present (desktop modal AJAX call) returns only the
-    inner list partial so no full page reload occurs.
-    """
+  
     Notification.objects.filter(
         recipient=request.user, is_read=False
     ).update(is_read=True)
@@ -4468,11 +4379,6 @@ def product_detail(request, product_id):
 
 @login_required(login_url='/')
 def contact_seller(request, product_id):
-    """
-    Redirect buyer to the private message thread with the seller,
-    carrying ?product=<uuid> so the message view can pre-populate
-    a product enquiry card in the composer.
-    """
     import uuid as _uuid_mod
     try:
         _pid = _uuid_mod.UUID(str(product_id))
@@ -4522,15 +4428,6 @@ def track_share(request, post_id):
 @require_POST
 @login_required(login_url='/')
 def increment_post_view(request, post_id):
-    """
-    Lightweight endpoint called from the frontend when:
-      - A user clicks the play icon on a video/audio post (first play only)
-      - A user opens the comment sheet for a post
-    Uses F() expression to avoid race conditions on concurrent increments.
-    Returns the new view count so the UI can update in place.
-    Also updates the viewer's UserFeedProfile author-affinity so the feed
-    algorithm learns that this viewer has passive interest in this creator.
-    """
     from django.db.models import F
     post_obj = get_object_or_404(Post, post_id=post_id)
     # Atomic increment — no read-modify-write race
@@ -4924,29 +4821,27 @@ def event_calendar(request):
     })
 
 
-@login_required(login_url='/')
-@require_POST
-def event_calendar_create(request):
-    """AJAX endpoint — create a new SocialEvent from the in-page modal."""
-    title       = html_escape(request.POST.get('title', '').strip())
-    event_type  = request.POST.get('event_type', '').strip()
-    date_str    = request.POST.get('date', '').strip()
-    time_str    = request.POST.get('time', '').strip()
-    location    = html_escape(request.POST.get('location', '').strip())
-    description = html_escape(request.POST.get('description', '').strip())
+def _event_parse_and_validate(post_data, files):
+    """Shared validation for create/edit. Returns (cleaned_data, error_str)."""
+    title       = html_escape(post_data.get('title', '').strip())
+    event_type  = post_data.get('event_type', '').strip()
+    date_str    = post_data.get('date', '').strip()
+    time_str    = post_data.get('time', '').strip()
+    location    = html_escape(post_data.get('location', '').strip())
+    description = html_escape(post_data.get('description', '').strip())
+    cover_image = files.get('cover_image') if files else None
 
     if not title:
-        return JsonResponse({'success': False, 'error': 'Title is required.'}, status=400)
+        return None, 'Title is required.'
     if event_type not in dict(SocialEvent.TYPE_CHOICES):
-        return JsonResponse({'success': False, 'error': 'Invalid event type.'}, status=400)
+        return None, 'Invalid event type.'
     if not date_str:
-        return JsonResponse({'success': False, 'error': 'Date is required.'}, status=400)
+        return None, 'Date is required.'
 
     try:
-        from datetime import date as date_cls, time as time_cls
         ev_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     except ValueError:
-        return JsonResponse({'success': False, 'error': 'Invalid date format.'}, status=400)
+        return None, 'Invalid date format.'
 
     time_obj = None
     if time_str:
@@ -4955,15 +4850,56 @@ def event_calendar_create(request):
         except ValueError:
             pass
 
-    event = SocialEvent.objects.create(
-        title=title,
-        event_type=event_type,
-        date=ev_date,
-        time=time_obj,
-        location=location,
-        description=description,
+    if cover_image:
+        _ALLOWED_IMG = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if cover_image.content_type not in _ALLOWED_IMG:
+            return None, 'Only JPEG, PNG, WebP or GIF images are allowed.'
+        if cover_image.size > 10 * 1024 * 1024:
+            return None, 'Image must be under 10 MB.'
+
+    return {
+        'title': title, 'event_type': event_type, 'date': ev_date,
+        'time': time_obj, 'location': location, 'description': description,
+        'cover_image': cover_image,
+    }, None
+
+
+def _event_image_url(event):
+    """Return a public URL for the event's cover image, or None."""
+    if not event.cover_image:
+        return None
+    try:
+        from cloudinary.utils import cloudinary_url
+        url, _ = cloudinary_url(str(event.cover_image), secure=True)
+        return url
+    except Exception:
+        pass
+    try:
+        return event.cover_image.url
+    except Exception:
+        return None
+
+
+@login_required(login_url='/')
+@require_POST
+def event_calendar_create(request):
+    """AJAX endpoint — create a new SocialEvent from the in-page modal."""
+    data, err = _event_parse_and_validate(request.POST, request.FILES)
+    if err:
+        return JsonResponse({'success': False, 'error': err}, status=400)
+
+    event = SocialEvent(
+        title=data['title'],
+        event_type=data['event_type'],
+        date=data['date'],
+        time=data['time'],
+        location=data['location'],
+        description=data['description'],
         created_by=request.user,
     )
+    if data['cover_image']:
+        event.cover_image = data['cover_image']
+    event.save()
 
     return JsonResponse({
         'success': True,
@@ -4975,8 +4911,84 @@ def event_calendar_create(request):
             'time':        event.time.strftime('%H:%M') if event.time else '',
             'location':    event.location,
             'description': event.description,
+            'cover_image': _event_image_url(event),
+            'is_owner':    True,
         }
     })
+
+
+@login_required(login_url='/')
+@require_POST
+def event_calendar_edit(request, event_id):
+    """AJAX endpoint — edit an existing SocialEvent (owner only)."""
+    event = get_object_or_404(SocialEvent, id=event_id)
+    if event.created_by != request.user:
+        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
+
+    data, err = _event_parse_and_validate(request.POST, request.FILES)
+    if err:
+        return JsonResponse({'success': False, 'error': err}, status=400)
+
+    event.title       = data['title']
+    event.event_type  = data['event_type']
+    event.date        = data['date']
+    event.time        = data['time']
+    event.location    = data['location']
+    event.description = data['description']
+
+    if data['cover_image']:
+        # Delete old Cloudinary image if present
+        if event.cover_image:
+            try:
+                import cloudinary.uploader as _cu
+                _cu.destroy(str(event.cover_image))
+            except Exception:
+                pass
+        event.cover_image = data['cover_image']
+
+    # Allow clearing the image
+    if request.POST.get('clear_image') == '1' and event.cover_image:
+        try:
+            import cloudinary.uploader as _cu
+            _cu.destroy(str(event.cover_image))
+        except Exception:
+            pass
+        event.cover_image = None
+
+    event.save()
+
+    return JsonResponse({
+        'success': True,
+        'event': {
+            'id':          event.id,
+            'title':       event.title,
+            'event_type':  event.event_type,
+            'date':        event.date.isoformat(),
+            'time':        event.time.strftime('%H:%M') if event.time else '',
+            'location':    event.location,
+            'description': event.description,
+            'cover_image': _event_image_url(event),
+        }
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def event_calendar_delete(request, event_id):
+    """AJAX endpoint — delete a SocialEvent (owner only)."""
+    event = get_object_or_404(SocialEvent, id=event_id)
+    if event.created_by != request.user:
+        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
+
+    if event.cover_image:
+        try:
+            import cloudinary.uploader as _cu
+            _cu.destroy(str(event.cover_image))
+        except Exception:
+            pass
+
+    event.delete()
+    return JsonResponse({'success': True})
 
 
 # =============================================================================

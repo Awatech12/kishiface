@@ -1584,6 +1584,12 @@ class SocialEvent(models.Model):
     time        = models.TimeField(null=True, blank=True)
     location    = models.CharField(max_length=300, blank=True, default='')
     description = models.TextField(blank=True, default='')
+
+    if settings.USE_CLOUDINARY:
+        cover_image = CloudinaryField('image', folder='event_covers', blank=True, null=True)
+    else:
+        cover_image = models.ImageField(upload_to='event_covers/', blank=True, null=True)
+
     created_by  = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='social_events',

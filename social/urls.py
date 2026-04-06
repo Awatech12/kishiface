@@ -71,6 +71,8 @@ urlpatterns = [
     # ── Event Calendar ─────────────────────────────────────────────────────────
     path('events/',                    views.event_calendar,        name='event_calendar'),
     path('events/create/',             views.event_calendar_create, name='event_calendar_create'),
+    path('events/<int:event_id>/edit/',   views.event_calendar_edit,   name='event_calendar_edit'),
+    path('events/<int:event_id>/delete/', views.event_calendar_delete, name='event_calendar_delete'),
 
     # ── Post Vibes ─────────────────────────────────────────────────────────────
     path('vibe/<uuid:post_id>/', views.get_post_vibes, name='get_post_vibes'),
