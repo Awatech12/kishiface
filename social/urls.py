@@ -127,6 +127,20 @@ urlpatterns = [
     path('api/online-status/<int:user_id>/', views.online_status_api, name='online_status_api'),
     path('set-offline/',                     views.set_offline,       name='set_offline'),
 
+
+    # ── Market ad reactions ────────────────────────────────────────────────────
+    path('market/<uuid:product_id>/vibe/',     views.market_vibe,     name='market_vibe'),
+    path('market/<uuid:product_id>/comments/', views.market_comments, name='market_comments'),
+    path('market/<uuid:product_id>/share/',    views.market_share,    name='market_share'),
+
+    # ── Job vacancy reactions ──────────────────────────────────────────────────
+    path('jobs/<uuid:job_id>/vibe/',           views.job_vibe,        name='job_vibe'),
+    path('jobs/<uuid:job_id>/comments/',       views.job_comments,    name='job_comments'),
+
+    # ── Social event reactions ─────────────────────────────────────────────────
+    path('events/<int:event_id>/vibe/',        views.event_vibe,      name='event_vibe'),
+    path('events/<int:event_id>/comments/',    views.event_comments,  name='event_comments'),
+
     # ── Profiles (catch-alls — must stay at the bottom) ───────────────────────
     path('?/<str:username>',              views.update_profile,    name='update_profile'),
     path('block/<str:username>/',         views.block_user,        name='block_user'),

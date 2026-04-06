@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt, UserFeedProfile, SocialEvent, JobVacancy
+from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt, UserFeedProfile, SocialEvent, JobVacancy, MarketVibe, MarketComment, JobVibe, JobComment, EventVibe, EventComment
 from django.db.models import Q
 from django.db.models import Count, Max, Min, OuterRef, Subquery
 from django.core.paginator import Paginator
@@ -5191,3 +5191,174 @@ def job_vacancy_delete(request, job_id):
     
     job.delete()
     return JsonResponse({'success': True})
+
+# =============================================================================
+# Card Vibe & Comment Views — Market ads, Job vacancies, Social events
+# =============================================================================
+
+def _card_vibe_toggle(request, obj, VibeCls, fk_field):
+    """
+    Generic vibe toggle for Market / Job / Event cards.
+    Returns JSON matching the shape of get_post_vibes.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'login required'}, status=401)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'method not allowed'}, status=405)
+
+    try:
+        body = json.loads(request.body)
+        vibe_type = body.get('vibe_type', '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+
+    allowed = {'fire', 'real', 'vibing', 'dead', 'cringe', 'chill', 'love'}
+    if vibe_type not in allowed:
+        return JsonResponse({'error': 'invalid vibe_type'}, status=400)
+
+    existing = VibeCls.objects.filter(**{fk_field: obj, 'user': request.user}).first()
+
+    if existing:
+        if existing.vibe_type == vibe_type:
+            existing.delete()
+            user_vibe = None
+        else:
+            existing.vibe_type = vibe_type
+            existing.save(update_fields=['vibe_type'])
+            user_vibe = vibe_type
+    else:
+        VibeCls.objects.create(**{fk_field: obj, 'user': request.user, 'vibe_type': vibe_type})
+        user_vibe = vibe_type
+
+    rows = (
+        VibeCls.objects.filter(**{fk_field: obj})
+        .values('vibe_type')
+        .annotate(cnt=Count('id'))
+    )
+    summary = {r['vibe_type']: r['cnt'] for r in rows}
+    total = sum(summary.values())
+
+    return JsonResponse({'user_vibe': user_vibe, 'summary': summary, 'total': total})
+
+
+def _card_vibe_get(request, obj, VibeCls, fk_field):
+    """GET vibe summary for a card (hydration on scroll-into-view)."""
+    rows = (
+        VibeCls.objects.filter(**{fk_field: obj})
+        .values('vibe_type')
+        .annotate(cnt=Count('id'))
+    )
+    summary = {r['vibe_type']: r['cnt'] for r in rows}
+    total   = sum(summary.values())
+
+    user_vibe = None
+    if request.user.is_authenticated:
+        v = VibeCls.objects.filter(**{fk_field: obj, 'user': request.user}).first()
+        if v:
+            user_vibe = v.vibe_type
+
+    return JsonResponse({'user_vibe': user_vibe, 'summary': summary, 'total': total})
+
+
+def _card_comments_get(request, obj, CommentCls, fk_field):
+    """GET latest 50 comments for a card."""
+    qs = (
+        CommentCls.objects.filter(**{fk_field: obj})
+        .select_related('author', 'author__profile')
+        .order_by('created_at')[:50]
+    )
+    data = [{
+        'id':          str(c.id),
+        'text':        c.text,
+        'author':      c.author.username,
+        'author_name': f"{c.author.first_name} {c.author.last_name}".strip() or c.author.username,
+        'avatar':      c.author.profile.get_picture_url,
+        'time':        c.created_at.strftime('%b %d'),
+    } for c in qs]
+    return JsonResponse({'comments': data, 'count': CommentCls.objects.filter(**{fk_field: obj}).count()})
+
+
+def _card_comments_post(request, obj, CommentCls, fk_field):
+    """POST a new comment on a card."""
+    try:
+        body = json.loads(request.body)
+        text = body.get('text', '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        text = request.POST.get('text', '').strip()
+
+    if not text:
+        return JsonResponse({'error': 'comment cannot be empty'}, status=400)
+    if len(text) > 5000:
+        return JsonResponse({'error': 'comment too long'}, status=400)
+
+    comment = CommentCls.objects.create(**{fk_field: obj, 'author': request.user, 'text': text})
+    return JsonResponse({
+        'id':          str(comment.id),
+        'text':        comment.text,
+        'author':      request.user.username,
+        'author_name': f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username,
+        'avatar':      request.user.profile.get_picture_url,
+        'time':        comment.created_at.strftime('%b %d'),
+        'count':       CommentCls.objects.filter(**{fk_field: obj}).count(),
+    })
+
+
+# ── Market ad reactions ────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def market_vibe(request, product_id):
+    product = get_object_or_404(Market, product_id=product_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, product, MarketVibe, 'product')
+    return _card_vibe_toggle(request, product, MarketVibe, 'product')
+
+
+@login_required(login_url='/')
+def market_comments(request, product_id):
+    product = get_object_or_404(Market, product_id=product_id)
+    if request.method == 'POST':
+        return _card_comments_post(request, product, MarketComment, 'product')
+    return _card_comments_get(request, product, MarketComment, 'product')
+
+
+@login_required(login_url='/')
+def market_share(request, product_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'method not allowed'}, status=405)
+    return JsonResponse({'success': True})
+
+
+# ── Job vacancy reactions ──────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def job_vibe(request, job_id):
+    job = get_object_or_404(JobVacancy, id=job_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, job, JobVibe, 'job')
+    return _card_vibe_toggle(request, job, JobVibe, 'job')
+
+
+@login_required(login_url='/')
+def job_comments(request, job_id):
+    job = get_object_or_404(JobVacancy, id=job_id)
+    if request.method == 'POST':
+        return _card_comments_post(request, job, JobComment, 'job')
+    return _card_comments_get(request, job, JobComment, 'job')
+
+
+# ── Social event reactions ─────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def event_vibe(request, event_id):
+    event = get_object_or_404(SocialEvent, id=event_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, event, EventVibe, 'event')
+    return _card_vibe_toggle(request, event, EventVibe, 'event')
+
+
+@login_required(login_url='/')
+def event_comments(request, event_id):
+    event = get_object_or_404(SocialEvent, id=event_id)
+    if request.method == 'POST':
+        return _card_comments_post(request, event, EventComment, 'event')
+    return _card_comments_get(request, event, EventComment, 'event')

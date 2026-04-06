@@ -1687,3 +1687,201 @@ class JobVacancy(models.Model):
             self.CAT_FULLTIME:   '#0095f6',
             self.CAT_APPRENTICE: '#7c3aed',
         }.get(self.category, '#0095f6')
+
+
+# =============================================================================
+# MarketVibe / MarketComment — reactions on Market ad feed cards
+# =============================================================================
+
+class MarketVibe(models.Model):
+    """Vibe reactions on Market (ad) cards in the feed. One per user per product."""
+
+    FIRE   = 'fire'
+    REAL   = 'real'
+    VIBING = 'vibing'
+    DEAD   = 'dead'
+    CRINGE = 'cringe'
+    CHILL  = 'chill'
+    LOVE   = 'love'
+
+    VIBE_CHOICES = [
+        (FIRE,   '🔥 Fire'),
+        (REAL,   '💯 Real'),
+        (VIBING, '🎵 Vibing'),
+        (DEAD,   '😂 Dead'),
+        (CRINGE, '😬 Cringe'),
+        (CHILL,  '🧊 Chill'),
+        (LOVE,   '❤️ Love'),
+    ]
+
+    VIBE_EMOJIS = {FIRE:'🔥', REAL:'💯', VIBING:'🎵', DEAD:'😂', CRINGE:'😬', CHILL:'🧊', LOVE:'❤️'}
+    VIBE_COLORS = {FIRE:'#ff4500', REAL:'#ff0080', VIBING:'#3b82f6', DEAD:'#f59e0b', CRINGE:'#8b5cf6', CHILL:'#06b6d4', LOVE:'#e11d48'}
+
+    product    = models.ForeignKey(Market, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User,   on_delete=models.CASCADE, related_name='market_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('product', 'user')
+        ordering = ['created_at']
+        db_table = 'MarketVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on product {self.product_id}"
+
+
+class MarketComment(models.Model):
+    """Comments on Market ad feed cards."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product    = models.ForeignKey(Market, on_delete=models.CASCADE, related_name='comments')
+    author     = models.ForeignKey(User,   on_delete=models.CASCADE, related_name='market_comments')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'MarketComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on {self.product.product_name}: {self.text[:50]}"
+
+
+# =============================================================================
+# JobVibe / JobComment — reactions on JobVacancy feed cards
+# =============================================================================
+
+class JobVibe(models.Model):
+    """Vibe reactions on JobVacancy cards in the feed. One per user per job."""
+
+    FIRE   = 'fire'
+    REAL   = 'real'
+    VIBING = 'vibing'
+    DEAD   = 'dead'
+    CRINGE = 'cringe'
+    CHILL  = 'chill'
+    LOVE   = 'love'
+
+    VIBE_CHOICES = [
+        (FIRE,   '🔥 Fire'),
+        (REAL,   '💯 Real'),
+        (VIBING, '🎵 Vibing'),
+        (DEAD,   '😂 Dead'),
+        (CRINGE, '😬 Cringe'),
+        (CHILL,  '🧊 Chill'),
+        (LOVE,   '❤️ Love'),
+    ]
+
+    VIBE_EMOJIS = {FIRE:'🔥', REAL:'💯', VIBING:'🎵', DEAD:'😂', CRINGE:'😬', CHILL:'🧊', LOVE:'❤️'}
+    VIBE_COLORS = {FIRE:'#ff4500', REAL:'#ff0080', VIBING:'#3b82f6', DEAD:'#f59e0b', CRINGE:'#8b5cf6', CHILL:'#06b6d4', LOVE:'#e11d48'}
+
+    job        = models.ForeignKey(JobVacancy, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User,       on_delete=models.CASCADE, related_name='job_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('job', 'user')
+        ordering = ['created_at']
+        db_table = 'JobVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on job {self.job_id}"
+
+
+class JobComment(models.Model):
+    """Comments on Job Vacancy feed cards."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job        = models.ForeignKey(JobVacancy, on_delete=models.CASCADE, related_name='comments')
+    author     = models.ForeignKey(User,       on_delete=models.CASCADE, related_name='job_comments')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'JobComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on {self.job.title}: {self.text[:50]}"
+
+
+# =============================================================================
+# EventVibe / EventComment — reactions on SocialEvent feed cards
+# =============================================================================
+
+class EventVibe(models.Model):
+    """Vibe reactions on SocialEvent cards in the feed. One per user per event."""
+
+    FIRE   = 'fire'
+    REAL   = 'real'
+    VIBING = 'vibing'
+    DEAD   = 'dead'
+    CRINGE = 'cringe'
+    CHILL  = 'chill'
+    LOVE   = 'love'
+
+    VIBE_CHOICES = [
+        (FIRE,   '🔥 Fire'),
+        (REAL,   '💯 Real'),
+        (VIBING, '🎵 Vibing'),
+        (DEAD,   '😂 Dead'),
+        (CRINGE, '😬 Cringe'),
+        (CHILL,  '🧊 Chill'),
+        (LOVE,   '❤️ Love'),
+    ]
+
+    VIBE_EMOJIS = {FIRE:'🔥', REAL:'💯', VIBING:'🎵', DEAD:'😂', CRINGE:'😬', CHILL:'🧊', LOVE:'❤️'}
+    VIBE_COLORS = {FIRE:'#ff4500', REAL:'#ff0080', VIBING:'#3b82f6', DEAD:'#f59e0b', CRINGE:'#8b5cf6', CHILL:'#06b6d4', LOVE:'#e11d48'}
+
+    event      = models.ForeignKey(SocialEvent, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User,        on_delete=models.CASCADE, related_name='event_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('event', 'user')
+        ordering = ['created_at']
+        db_table = 'EventVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on event {self.event_id}"
+
+
+class EventComment(models.Model):
+    """Comments on Social Event feed cards."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event      = models.ForeignKey(SocialEvent, on_delete=models.CASCADE, related_name='comments')
+    author     = models.ForeignKey(User,        on_delete=models.CASCADE, related_name='event_comments')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'EventComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on {self.event.title}: {self.text[:50]}"
