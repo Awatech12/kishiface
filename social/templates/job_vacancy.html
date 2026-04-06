@@ -131,12 +131,23 @@
     @media (max-width: 767px) {
       .kvibe-desktop-only { display: none !important; }
       .kvibe-desktop-layout { padding: 12px 12px 0; gap: 0; }
-      .kvibe-main-feed { max-width: 100%; }
-      body { padding-bottom: 70px; }
+      .kvibe-main-feed { max-width: 100%; padding-bottom: 20px; }
     }
 
     @media (min-width: 768px) {
       .kvibe-desktop-only { display: flex !important; }
+    }
+
+    /* Mobile footer spacing */
+    .mobile-footer-spacing {
+      display: none;
+    }
+    
+    @media (max-width: 767px) {
+      .mobile-footer-spacing {
+        display: block;
+        height: 70px;
+      }
     }
 
     /* ── Hero ── */
@@ -233,6 +244,12 @@
       height: 180px;
       object-fit: cover;
       display: block;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .kvj-card-cover:hover {
+      opacity: 0.95;
     }
 
     .kvj-card-body { padding: 16px; }
@@ -442,6 +459,53 @@
       font-weight: 700;
       font-size: 13px;
       color: var(--kvibe-text-light);
+    }
+
+    /* ── Full-size Image Modal ── */
+    .kvj-image-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .kvj-image-modal-overlay.open {
+      display: flex;
+    }
+
+    .kvj-image-modal {
+      max-width: 90vw;
+      max-height: 90vh;
+      text-align: center;
+    }
+
+    .kvj-image-modal img {
+      max-width: 100%;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+    .kvj-image-modal-close {
+      position: fixed;
+      top: 20px;
+      right: 30px;
+      font-size: 40px;
+      color: #fff;
+      cursor: pointer;
+      background: none;
+      border: none;
+      z-index: 10001;
+      transition: opacity 0.2s;
+    }
+
+    .kvj-image-modal-close:hover {
+      opacity: 0.7;
     }
 
     /* ── Modal overlay ── */
@@ -810,7 +874,8 @@
         {% if job.cover_image %}
         <img class="kvj-card-cover"
              src="{{ job.cover_image.url }}"
-             alt="{{ job.title }} cover">
+             alt="{{ job.title }} cover"
+             onclick="kvjOpenImageModal('{{ job.cover_image.url|escapejs }}')">
         {% endif %}
 
         <div class="kvj-card-body">
@@ -999,7 +1064,19 @@
   </aside>
 
 </div>
+<div class="mobile-footer-spacing"></div>
 </main>
+
+<!-- Mobile Footer -->
+{% include 'footer.html' %}
+
+<!-- Full-size Image Modal -->
+<div class="kvj-image-modal-overlay" id="kvjImageModalOverlay" onclick="kvjCloseImageModal()">
+  <button class="kvj-image-modal-close" onclick="kvjCloseImageModal()">&times;</button>
+  <div class="kvj-image-modal">
+    <img id="kvjModalImage" src="" alt="Full size image">
+  </div>
+</div>
 
 <!-- ══ Create / Edit Modal ══ -->
 <div class="kvj-modal-overlay" id="kvjCreateModal">
@@ -1111,7 +1188,32 @@
 (function () {
   const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 
-  /* ── Helpers ── */
+  /* ── Full-size image modal ── */
+  function kvjOpenImageModal(imageUrl) {
+    if (!imageUrl) return;
+    var modalImg = document.getElementById('kvjModalImage');
+    modalImg.src = imageUrl;
+    document.getElementById('kvjImageModalOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function kvjCloseImageModal() {
+    document.getElementById('kvjImageModalOverlay').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // Close image modal with Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      kvjCloseImageModal();
+    }
+  });
+
+  // Expose globally
+  window.kvjOpenImageModal = kvjOpenImageModal;
+  window.kvjCloseImageModal = kvjCloseImageModal;
+
+  /* ── Modal helpers ── */
   function showModal(overlay) {
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
@@ -1328,4 +1430,3 @@
 
 </body>
 </html>
-
