@@ -8616,6 +8616,28 @@
   window.kvibeDmUpdateReactionStrip= kvibeDmUpdateReactionStrip;
   window.kvibeDmHoverReact         = kvibeDmHoverReact;
   window.kvibeDmCancelReply     = kvibeDmCancelReply;
+  // ── Feed "Message" links (job/event cards) ────────────────────────────
+  // On desktop (>= 768 px) intercept .kvibe-dm-feed-msg anchor clicks and
+  // open the DM modal instead of navigating.  On mobile the link navigates
+  // normally to the full message.html page — exactly like market ads.
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('.kvibe-dm-feed-msg');
+    if (!link) return;
+    // Mobile: let the browser follow the href
+    if (window.innerWidth < 768) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var username  = link.dataset.username ? link.dataset.username.trim() : '';
+    var avatarUrl = link.dataset.avatar   ? link.dataset.avatar.trim()   : '';
+    if (!username) { window.location.href = link.href; return; }
+    var fakeRow = document.createElement('div');
+    fakeRow.dataset.username = username;
+    fakeRow.dataset.avatar   = avatarUrl || 'https://placehold.co/44x44/0084ff/ffffff?text=' + encodeURIComponent(username.slice(0,1).toUpperCase());
+    fakeRow.dataset.unread   = 'false';
+    _activeRow = null;
+    kvibeDmRowClick(fakeRow, { stopPropagation: function(){} });
+  });
+
   window.kvibeDmRowClick        = kvibeDmRowClick;
   window.kvibeDmCloseModal      = kvibeDmCloseModal;
   window.kvibeDmToggleQR        = kvibeDmToggleQR;

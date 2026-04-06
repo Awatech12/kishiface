@@ -1163,6 +1163,40 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     _market_injected = 0
     _MAX_MARKET_PER_PAGE = 2   # at most 2 product cards per feed page
 
+    # ── Job Vacancy injection ──────────────────────────────────────────────────
+    # Inject 1 open job card per feed page, at post position i % 7 == 5.
+    import datetime as _dt_feed
+    _job_pool = []
+    _job_count = JobVacancy.objects.filter(is_open=True).count()
+    if _job_count > 0:
+        _job_offset = random.randint(0, max(0, _job_count - 4))
+        _job_pool = list(
+            JobVacancy.objects
+            .filter(is_open=True)
+            .select_related('posted_by', 'posted_by__profile')
+            [_job_offset: _job_offset + 4]
+        )
+        random.shuffle(_job_pool)
+    _job_injected = 0
+    _MAX_JOB_PER_PAGE = 1   # at most 1 job card per feed page
+
+    # ── Social Event injection ─────────────────────────────────────────────────
+    # Inject 1 upcoming event card per feed page, at post position i % 9 == 7.
+    _today = _dt_feed.date.today()
+    _event_pool = []
+    _event_count = SocialEvent.objects.filter(date__gte=_today).count()
+    if _event_count > 0:
+        _event_offset = random.randint(0, max(0, _event_count - 4))
+        _event_pool = list(
+            SocialEvent.objects
+            .filter(date__gte=_today)
+            .select_related('created_by', 'created_by__profile')
+            .order_by('date')
+            [_event_offset: _event_offset + 4]
+        )
+    _event_injected = 0
+    _MAX_EVENT_PER_PAGE = 1  # at most 1 event card per feed page
+
     for i, post in enumerate(final_posts, 1):
         actual_author_id = (
             post.original_post.author_id
@@ -1185,6 +1219,18 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             feed_items.append({'type': 'market', 'data': _market_pool.pop(0)})
             _market_injected += 1
             _suggestion_injected += 1
+        # Inject a job card every 7 posts (offset by 5 to avoid collisions).
+        if (i % 7 == 5
+                and _job_pool
+                and _job_injected < _MAX_JOB_PER_PAGE):
+            feed_items.append({'type': 'job', 'data': _job_pool.pop(0)})
+            _job_injected += 1
+        # Inject an upcoming event card every 9 posts (offset by 7).
+        if (i % 9 == 7
+                and _event_pool
+                and _event_injected < _MAX_EVENT_PER_PAGE):
+            feed_items.append({'type': 'event', 'data': _event_pool.pop(0)})
+            _event_injected += 1
 
     return feed_items, next_cursor
 
