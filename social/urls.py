@@ -141,6 +141,19 @@ urlpatterns = [
     path('events/<int:event_id>/vibe/',        views.event_vibe,      name='event_vibe'),
     path('events/<int:event_id>/comments/',    views.event_comments,  name='event_comments'),
 
+    # ══════════════════════════════════════════════════════════════════════════
+    # ADMIN DASHBOARD  (staff only — guarded in views via @staff_member_required)
+    # ══════════════════════════════════════════════════════════════════════════
+    path('admin-dashboard/',                            views.admin_dashboard,      name='admin_dashboard'),
+    path('admin-dashboard/report/<int:report_id>/resolve/', views.admin_resolve_report, name='admin_resolve_report'),
+    path('admin-dashboard/user/<int:user_id>/delete/',      views.admin_delete_user,    name='admin_delete_user'),
+    path('admin-dashboard/user/<int:user_id>/verify/',      views.admin_verify_user,    name='admin_verify_user'),
+    path('admin-dashboard/post/<uuid:post_id>/delete/',     views.admin_delete_post,    name='admin_delete_post'),
+    path('admin-dashboard/channel/<uuid:channel_id>/delete/', views.admin_delete_channel, name='admin_delete_channel'),
+    path('admin-dashboard/product/<uuid:product_id>/delete/', views.admin_delete_product, name='admin_delete_product'),
+    path('admin-dashboard/event/<int:event_id>/delete/',    views.admin_delete_event,   name='admin_delete_event'),
+    path('admin-dashboard/job/<uuid:job_id>/delete/',       views.admin_delete_job,     name='admin_delete_job'),
+
     # ── Profiles (catch-alls — must stay at the bottom) ───────────────────────
     path('?/<str:username>',              views.update_profile,    name='update_profile'),
     path('block/<str:username>/',         views.block_user,        name='block_user'),

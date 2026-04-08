@@ -386,6 +386,49 @@
     .kvj-empty h3 { font-size: 16px; margin-bottom: 6px; }
     .kvj-empty p  { font-size: 13px; color: var(--kvibe-text-light); }
 
+    /* ── Verification banner ── */
+    .kvj-verify-banner {
+      background: #fff8e1;
+      border: 1.5px solid #ffc107;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 18px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .kvj-verify-banner-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+    .kvj-verify-banner-body { flex: 1; }
+    .kvj-verify-banner-title { font-size: 14px; font-weight: 700; color: #7a5800; margin-bottom: 4px; }
+    .kvj-verify-banner-desc  { font-size: 13px; color: #8a6800; line-height: 1.5; margin-bottom: 10px; }
+    .kvj-verify-banner-desc ul { margin: 6px 0 0 18px; }
+    .kvj-verify-banner-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffc107;
+      color: #3d2c00;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: opacity 0.18s;
+    }
+    .kvj-verify-banner-link:hover { opacity: 0.85; }
+    .kvj-post-btn-disabled {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(255,255,255,0.35);
+      color: rgba(255,255,255,0.55);
+      font-size: 13px; font-weight: 700;
+      padding: 9px 18px;
+      border-radius: 20px;
+      border: 1.5px solid rgba(255,255,255,0.3);
+      cursor: not-allowed;
+    }
+
     /* ── Pagination ── */
     .kvj-pagination {
       display: flex;
@@ -829,11 +872,42 @@
         <span style="font-size:13px;color:rgba(255,255,255,0.8);">
           {{ counts.total }} open listing{{ counts.total|pluralize }}
         </span>
-        <button class="kvj-post-btn" id="kvjOpenCreateBtn">
-          <i class="fas fa-plus"></i> Post a Job
-        </button>
+        {% if user_can_post %}
+          <button class="kvj-post-btn" id="kvjOpenCreateBtn">
+            <i class="fas fa-plus"></i> Post a Job
+          </button>
+        {% else %}
+          <button class="kvj-post-btn-disabled" id="kvjOpenCreateBtn"
+                  onclick="document.getElementById('kvjVerifyBanner').scrollIntoView({behavior:'smooth'});return false;">
+            <i class="fas fa-lock"></i> Post a Job
+          </button>
+        {% endif %}
       </div>
     </div>
+
+    <!-- Verification banner — shown only to unverified / incomplete users -->
+    {% if not user_can_post %}
+    <div class="kvj-verify-banner" id="kvjVerifyBanner">
+      <div class="kvj-verify-banner-icon">🔒</div>
+      <div class="kvj-verify-banner-body">
+        <div class="kvj-verify-banner-title">Verification required to post jobs</div>
+        <div class="kvj-verify-banner-desc">
+          To prevent scams and keep the community safe, only verified members with a complete profile can post job vacancies.
+          {% if not request.user.profile.is_verify %}
+            <br>Your account is <strong>not verified yet</strong>. Please complete your profile and request account verification.
+          {% else %}
+            <br>Your profile is missing the following required information:
+            <ul>
+              {% for field in missing_fields %}<li>{{ field }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+        <a href="{% url 'profile' request.user.username %}" class="kvj-verify-banner-link">
+          <i class="fas fa-user-edit"></i> Complete My Profile
+        </a>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Category Tabs -->
     <div class="kvj-tabs">
@@ -1055,8 +1129,8 @@
         <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:14px;line-height:1.5;">
           Post your vacancy and reach the entire Kishi community for free.
         </div>
-        <button class="kvj-post-btn" id="kvjOpenCreateBtn2" style="background:#fff;color:var(--kvibe-primary);width:100%;justify-content:center;">
-          <i class="fas fa-plus"></i> Post a Job Now
+        <button {% if user_can_post %}class="kvj-post-btn" id="kvjOpenCreateBtn2"{% else %}class="kvj-post-btn-disabled" onclick="document.getElementById('kvjVerifyBanner').scrollIntoView({behavior:'smooth'});return false;"{% endif %} style="background:#fff;color:var(--kvibe-primary);width:100%;justify-content:center;">
+          <i class="fas fa-{% if user_can_post %}plus{% else %}lock{% endif %}"></i> Post a Job Now
         </button>
       </div>
     </div>
@@ -1314,8 +1388,12 @@
   });
 
   /* Open buttons */
-  document.getElementById('kvjOpenCreateBtn').addEventListener('click', openCreate);
-  document.getElementById('kvjOpenCreateBtn2').addEventListener('click', openCreate);
+  const openBtn1 = document.getElementById('kvjOpenCreateBtn');
+  const openBtn2 = document.getElementById('kvjOpenCreateBtn2');
+  {% if user_can_post %}
+  if (openBtn1) openBtn1.addEventListener('click', openCreate);
+  if (openBtn2) openBtn2.addEventListener('click', openCreate);
+  {% endif %}
 
   /* Close */
   document.getElementById('kvjCloseModalBtn').addEventListener('click', () => hideModal(createOverlay));

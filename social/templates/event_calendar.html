@@ -752,6 +752,50 @@
 
     .kvcal-empty i { font-size: 40px; margin-bottom: 12px; display: block; }
 
+    /* ─── Verification banner ─── */
+    .kvcal-verify-banner {
+      background: #fff8e1;
+      border: 1.5px solid #ffc107;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 18px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .kvcal-verify-banner-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+    .kvcal-verify-banner-body { flex: 1; }
+    .kvcal-verify-banner-title { font-size: 14px; font-weight: 700; color: #7a5800; margin-bottom: 4px; }
+    .kvcal-verify-banner-desc  { font-size: 13px; color: #8a6800; line-height: 1.5; margin-bottom: 10px; }
+    .kvcal-verify-banner-desc ul { margin: 6px 0 0 18px; }
+    .kvcal-verify-banner-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffc107;
+      color: #3d2c00;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: opacity 0.18s;
+    }
+    .kvcal-verify-banner-link:hover { opacity: 0.85; }
+    .kvcal-add-btn-disabled {
+      background: #e0e0e0;
+      color: #9e9e9e;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: not-allowed;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     /* Toast */
     .kvcal-toast {
       position: fixed;
@@ -871,10 +915,40 @@
           <h1>📅 Event Calendar</h1>
           <p>Community events — town meetings, festivals, weddings &amp; more</p>
         </div>
-        <button class="kvcal-add-btn" onclick="kvcalOpenModal()">
-          <i class="fas fa-plus"></i> Add Event
-        </button>
+        {% if user_can_post %}
+          <button class="kvcal-add-btn" onclick="kvcalOpenModal()">
+            <i class="fas fa-plus"></i> Add Event
+          </button>
+        {% else %}
+          <button class="kvcal-add-btn-disabled" onclick="document.getElementById('kvcalVerifyBanner').scrollIntoView({behavior:'smooth'})">
+            <i class="fas fa-lock"></i> Add Event
+          </button>
+        {% endif %}
       </div>
+
+      <!-- Verification banner — shown only to unverified / incomplete users -->
+      {% if not user_can_post %}
+      <div class="kvcal-verify-banner" id="kvcalVerifyBanner">
+        <div class="kvcal-verify-banner-icon">🔒</div>
+        <div class="kvcal-verify-banner-body">
+          <div class="kvcal-verify-banner-title">Verification required to post events</div>
+          <div class="kvcal-verify-banner-desc">
+            To prevent scams and keep the community safe, only verified members with a complete profile can add events.
+            {% if not request.user.profile.is_verify %}
+              <br>Your account is <strong>not verified yet</strong>. Please complete your profile and request account verification.
+            {% else %}
+              <br>Your profile is missing the following required information:
+              <ul>
+                {% for field in missing_fields %}<li>{{ field }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+          <a href="{% url 'profile' request.user.username %}" class="kvcal-verify-banner-link">
+            <i class="fas fa-user-edit"></i> Complete My Profile
+          </a>
+        </div>
+      </div>
+      {% endif %}
 
       <!-- Category Filters -->
       <div class="kvcal-filter-bar">

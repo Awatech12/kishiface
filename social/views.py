@@ -123,6 +123,37 @@ def _safe_next(request, fallback='/home'):
         return next_url
     return fallback
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Verification gate for job/event posting
+# ─────────────────────────────────────────────────────────────────────────────
+
+_REQUIRED_PROFILE_FIELDS = [
+    ('full_name',        'Full name'),
+    ('phone',            'Phone number'),
+    ('community_area',   'Community area'),
+    ('residency_status', 'Residency status'),
+]
+
+def _profile_post_status(user):
+    """
+    Returns (can_post: bool, missing: list[str]).
+    can_post is True only when the user's profile is_verify=True
+    AND all required fields are filled.
+    """
+    try:
+        profile = user.profile
+    except Exception:
+        return False, [label for _, label in _REQUIRED_PROFILE_FIELDS]
+
+    missing = [
+        label
+        for field, label in _REQUIRED_PROFILE_FIELDS
+        if not getattr(profile, field, '').strip()
+    ]
+    can_post = profile.is_verify and not missing
+    return can_post, missing
+
+
 def index(request):
     # ── Already logged in ─────────────────────────────────────────────────────
     if request.user.is_authenticated:
@@ -4884,10 +4915,17 @@ def event_calendar(request):
         'other':    SocialEvent.objects.filter(event_type='other').count(),
     }
 
+    user_can_post = False
+    missing_fields = []
+    if request.user.is_authenticated:
+        user_can_post, missing_fields = _profile_post_status(request.user)
+
     return render(request, 'event_calendar.html', {
-        'events':     events,
-        'event_type': event_type,
-        'counts':     counts,
+        'events':        events,
+        'event_type':    event_type,
+        'counts':        counts,
+        'user_can_post': user_can_post,
+        'missing_fields': missing_fields,
     })
 
 
@@ -4954,6 +4992,14 @@ def _event_image_url(event):
 @require_POST
 def event_calendar_create(request):
     """AJAX endpoint — create a new SocialEvent from the in-page modal."""
+    can_post, missing = _profile_post_status(request.user)
+    if not can_post:
+        if not request.user.profile.is_verify:
+            msg = 'Your account is not verified yet. Please complete your profile and request verification before posting events.'
+        else:
+            msg = 'Please complete your profile before posting events. Missing: ' + ', '.join(missing) + '.'
+        return JsonResponse({'success': False, 'error': msg, 'error_code': 'not_verified'}, status=403)
+
     data, err = _event_parse_and_validate(request.POST, request.FILES)
     if err:
         return JsonResponse({'success': False, 'error': err}, status=400)
@@ -4991,6 +5037,14 @@ def event_calendar_create(request):
 @require_POST
 def event_calendar_edit(request, event_id):
     """AJAX endpoint — edit an existing SocialEvent (owner only)."""
+    can_post, missing = _profile_post_status(request.user)
+    if not can_post:
+        if not request.user.profile.is_verify:
+            msg = 'Your account is not verified yet. Please complete your profile and request verification before editing events.'
+        else:
+            msg = 'Please complete your profile before editing events. Missing: ' + ', '.join(missing) + '.'
+        return JsonResponse({'success': False, 'error': msg, 'error_code': 'not_verified'}, status=403)
+
     event = get_object_or_404(SocialEvent, id=event_id)
     if event.created_by != request.user:
         return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
@@ -5087,10 +5141,14 @@ def job_vacancy(request):
     paginator = Paginator(qs, 12)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
+    user_can_post, missing_fields = _profile_post_status(request.user)
+
     return render(request, 'job_vacancy.html', {
-        'jobs':     page_obj,
-        'counts':   counts,
-        'category': category,
+        'jobs':           page_obj,
+        'counts':         counts,
+        'category':       category,
+        'user_can_post':  user_can_post,
+        'missing_fields': missing_fields,
     })
 
 
@@ -5098,6 +5156,14 @@ def job_vacancy(request):
 @require_POST
 def job_vacancy_create(request):
     """AJAX — create a new JobVacancy."""
+    can_post, missing = _profile_post_status(request.user)
+    if not can_post:
+        if not request.user.profile.is_verify:
+            msg = 'Your account is not verified yet. Please complete your profile and request verification before posting jobs.'
+        else:
+            msg = 'Please complete your profile before posting jobs. Missing: ' + ', '.join(missing) + '.'
+        return JsonResponse({'success': False, 'error': msg, 'error_code': 'not_verified'}, status=403)
+
     title        = html_escape(request.POST.get('title', '').strip())
     category     = request.POST.get('category', '').strip()
     company      = html_escape(request.POST.get('company', '').strip())
@@ -5152,6 +5218,14 @@ def job_vacancy_create(request):
 @require_POST
 def job_vacancy_edit(request, job_id):
     """AJAX — edit an existing JobVacancy (owner only)."""
+    can_post, missing = _profile_post_status(request.user)
+    if not can_post:
+        if not request.user.profile.is_verify:
+            msg = 'Your account is not verified yet. Please complete your profile and request verification before editing jobs.'
+        else:
+            msg = 'Please complete your profile before editing jobs. Missing: ' + ', '.join(missing) + '.'
+        return JsonResponse({'success': False, 'error': msg, 'error_code': 'not_verified'}, status=403)
+
     job = get_object_or_404(JobVacancy, id=job_id)
     if job.posted_by != request.user:
         return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
@@ -5386,3 +5460,287 @@ def event_comments(request, event_id):
     if request.method == 'POST':
         return _card_comments_post(request, event, EventComment, 'event')
     return _card_comments_get(request, event, EventComment, 'event')
+
+# =============================================================================
+# ADMIN DASHBOARD VIEWS
+# Add these to the bottom of your existing views.py
+# =============================================================================
+
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.models import User
+from django.db.models import Count
+from social.models import (
+    Profile, Post, PostComment, UserReport, BlockedUser,
+    LoginAttempt, Message, Channel, Market, SocialEvent, JobVacancy,
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _community_stats():
+    """
+    Returns a list of dicts with community area name, count, and percentage,
+    sorted descending by count, excluding blank values.
+    """
+    qs = (
+        Profile.objects
+        .exclude(community_area='')
+        .values('community_area')
+        .annotate(count=Count('id'))
+        .order_by('-count')
+    )
+    label_map = dict(Profile.KISHI_COMMUNITIES)
+    total = sum(r['count'] for r in qs) or 1
+    return [
+        {
+            'name':  label_map.get(r['community_area'], r['community_area'].replace('_', ' ').title()),
+            'count': r['count'],
+            'pct':   round(r['count'] / total * 100),
+        }
+        for r in qs
+    ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main admin dashboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+def admin_dashboard(request):
+    """
+    Central KVibe admin dashboard.
+    Accessible only to staff / superuser accounts.
+    """
+    from datetime import date
+
+    context = {
+        # ── Overview counts ───────────────────────────────────────────────
+        'total_users':     User.objects.count(),
+        'online_users':    Profile.objects.filter(online=True).count(),
+        'total_posts':     Post.objects.count(),
+        'total_comments':  PostComment.objects.count(),
+        'total_products':  Market.objects.count(),
+        'total_channels':  Channel.objects.count(),
+        # SocialEvent field is `date` (not event_date)
+        'upcoming_events': SocialEvent.objects.filter(date__gte=date.today()).count(),
+        'pending_reports': UserReport.objects.filter(status='pending').count(),
+        'total_reports':   UserReport.objects.count(),
+        # LoginAttempt field is `succeeded` (not successful)
+        'failed_logins':   LoginAttempt.objects.filter(succeeded=False).count(),
+
+        # ── Community breakdown ───────────────────────────────────────────
+        'community_stats': _community_stats(),
+
+        # ── Recent users ──────────────────────────────────────────────────
+        'recent_users': (
+            User.objects
+            .select_related('profile')
+            .order_by('-date_joined')[:10]
+        ),
+
+        # ── Recent reports ────────────────────────────────────────────────
+        'recent_reports': (
+            UserReport.objects
+            .select_related('reporter__profile', 'reported__profile')
+            .order_by('-created_at')[:5]
+        ),
+
+        # ── All users ─────────────────────────────────────────────────────
+        'all_users': (
+            User.objects
+            .select_related('profile')
+            .order_by('-date_joined')
+        ),
+
+        # ── All posts ─────────────────────────────────────────────────────
+        'all_posts': (
+            Post.objects
+            .select_related('author__profile')
+            .prefetch_related('likes')
+            .order_by('-created_at')[:200]
+        ),
+
+        # ── All reports ───────────────────────────────────────────────────
+        'all_reports': (
+            UserReport.objects
+            .select_related('reporter__profile', 'reported__profile')
+            .order_by('-created_at')
+        ),
+
+        # ── Blocked list ──────────────────────────────────────────────────
+        'blocked_list': (
+            BlockedUser.objects
+            .select_related('blocker__profile', 'blocked__profile')
+            .order_by('-created_at')[:100]
+        ),
+
+        # ── Channels
+        # Channel fields: channel_owner, channel_name, subscriber (M2M), channel_messages (related_name)
+        'all_channels': (
+            Channel.objects
+            .select_related('channel_owner__profile')
+            .prefetch_related('subscriber', 'channel_messages')
+            .order_by('-created_at')
+        ),
+
+        # ── Marketplace
+        # Market fields: product_owner (FK), product_name, product_price, posted_on (DateTimeField)
+        'all_products': (
+            Market.objects
+            .select_related('product_owner__profile')
+            .order_by('-posted_on')
+        ),
+
+        # ── Events
+        # SocialEvent fields: title, event_type, date, time, location, description, created_by, vibes (related)
+        'all_events': (
+            SocialEvent.objects
+            .select_related('created_by__profile')
+            .prefetch_related('vibes')
+            .order_by('-date')
+        ),
+
+        # ── Jobs
+        # JobVacancy fields: id (UUID PK), posted_by, title, category, is_open, created_at
+        'all_jobs': (
+            JobVacancy.objects
+            .select_related('posted_by__profile')
+            .order_by('-created_at')
+        ),
+
+        # ── Login attempts
+        # LoginAttempt fields: username, attempted_at, succeeded
+        'login_attempts': (
+            LoginAttempt.objects
+            .order_by('-attempted_at')[:200]
+        ),
+
+        # ── Recent messages
+        # Message fields: sender, receiver, conversation (text), file_type, created_at
+        'recent_messages': (
+            Message.objects
+            .select_related('sender__profile', 'receiver__profile')
+            .order_by('-created_at')[:100]
+        ),
+    }
+
+    return render(request, 'social/admin_dashboard.html', context)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin action: Resolve / update a UserReport status
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+@require_POST
+def admin_resolve_report(request, report_id):
+    report = get_object_or_404(UserReport, id=report_id)
+    new_status = request.POST.get('status', 'reviewed')
+    allowed = {'reviewed', 'resolved', 'dismissed'}
+    if new_status in allowed:
+        report.status = new_status
+        report.save(update_fields=['status'])
+        messages.success(request, f'Report updated to "{new_status}".')
+    else:
+        messages.error(request, 'Invalid status value.')
+    return redirect('/admin-dashboard/#reports')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin action: Delete a user
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+def admin_delete_user(request, user_id):
+    target = get_object_or_404(User, id=user_id)
+    if target.is_staff or target.is_superuser:
+        messages.error(request, 'Cannot delete staff or superuser accounts.')
+        return redirect('/admin-dashboard/#users')
+    username = target.username
+    target.delete()
+    messages.success(request, f'User "{username}" has been deleted.')
+    return redirect('/admin-dashboard/#users')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin action: Delete a post
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+def admin_delete_post(request, post_id):
+    post = get_object_or_404(Post, post_id=post_id)
+    post.delete()
+    messages.success(request, 'Post deleted successfully.')
+    return redirect('/admin-dashboard/#posts')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin action: Delete a channel
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+def admin_delete_channel(request, channel_id):
+    ch = get_object_or_404(Channel, channel_id=channel_id)
+    name = ch.channel_name  # real field name is channel_name
+    ch.delete()
+    messages.success(request, f'Channel "{name}" deleted.')
+    return redirect('/admin-dashboard/#channels')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin action: Delete a product
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+def admin_delete_product(request, product_id):
+    product = get_object_or_404(Market, product_id=product_id)
+    name = product.product_name
+    product.delete()
+    messages.success(request, f'Product "{name}" deleted.')
+    return redirect('/admin-dashboard/#market')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin action: Delete an event
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+def admin_delete_event(request, event_id):
+    event = get_object_or_404(SocialEvent, id=event_id)
+    title = event.title
+    event.delete()
+    messages.success(request, f'Event "{title}" deleted.')
+    return redirect('/admin-dashboard/#events')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin action: Delete a job
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+def admin_delete_job(request, job_id):
+    # JobVacancy PK is `id` (UUID) — not job_id
+    job = get_object_or_404(JobVacancy, id=job_id)
+    title = job.title
+    job.delete()
+    messages.success(request, f'Job "{title}" deleted.')
+    return redirect('/admin-dashboard/#jobs')
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin action: Verify / unverify a user (toggles Profile.is_verify)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required
+@require_POST
+def admin_verify_user(request, user_id):
+    target = get_object_or_404(User, id=user_id)
+    profile = target.profile
+    profile.is_verify = not profile.is_verify
+    profile.save(update_fields=['is_verify'])
+    state = 'verified' if profile.is_verify else 'unverified'
+    messages.success(request, f'User "{target.username}" is now {state}.')
+    return redirect('/admin-dashboard/#users')
