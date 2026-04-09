@@ -137,8 +137,9 @@ _REQUIRED_PROFILE_FIELDS = [
 def _profile_post_status(user):
     """
     Returns (can_post: bool, missing: list[str]).
-    can_post is True only when the user's profile is_verify=True
-    AND all required fields are filled.
+    can_post is True when all required profile fields are filled.
+    Verification (is_verify) is intentionally not checked here — it will
+    be enforced separately once that feature is fully implemented.
     """
     try:
         profile = user.profile
@@ -150,7 +151,7 @@ def _profile_post_status(user):
         for field, label in _REQUIRED_PROFILE_FIELDS
         if not getattr(profile, field, '').strip()
     ]
-    can_post = profile.is_verify and not missing
+    can_post = not missing
     return can_post, missing
 
 
@@ -4317,6 +4318,15 @@ def market(request):
             from django.http import JsonResponse
             from urllib.parse import urlparse as _urlparse
 
+            # ── Profile-completion gate ────────────────────────────────────────
+            _can_post, _missing = _profile_post_status(request.user)
+            if not _can_post:
+                _msg = 'Please complete your profile before posting ads. Missing: ' + ', '.join(_missing) + '.'
+                if is_ajax:
+                    return JsonResponse({'success': False, 'errors': {'__all__': _msg}, 'error_code': 'incomplete_profile'}, status=403)
+                messages.error(request, _msg)
+                return redirect('marketform')
+
             # ── FIX 5: Rate limit ad creation — max 10 ads per user per hour ──
             _rl_key = f'ad_post:{request.user.id}'
             _rl_hits = cache.get(_rl_key, 0)
@@ -4455,6 +4465,20 @@ def market(request):
         'lowest_price':  lowest_price  or 0,
     }
     return render(request, 'marketplace.html', context)
+
+
+@login_required(login_url='/')
+def marketform(request):
+    """
+    Renders the New Ad form page.
+    Passes user_can_post and missing_fields so the template can show
+    the profile-completion banner and lock the form when needed.
+    """
+    user_can_post, missing_fields = _profile_post_status(request.user)
+    return render(request, 'marketform.html', {
+        'user_can_post':  user_can_post,
+        'missing_fields': missing_fields,
+    })
 
 
 @login_required(login_url='/')
@@ -4994,11 +5018,8 @@ def event_calendar_create(request):
     """AJAX endpoint — create a new SocialEvent from the in-page modal."""
     can_post, missing = _profile_post_status(request.user)
     if not can_post:
-        if not request.user.profile.is_verify:
-            msg = 'Your account is not verified yet. Please complete your profile and request verification before posting events.'
-        else:
-            msg = 'Please complete your profile before posting events. Missing: ' + ', '.join(missing) + '.'
-        return JsonResponse({'success': False, 'error': msg, 'error_code': 'not_verified'}, status=403)
+        msg = 'Please complete your profile before posting events. Missing: ' + ', '.join(missing) + '.'
+        return JsonResponse({'success': False, 'error': msg, 'error_code': 'incomplete_profile'}, status=403)
 
     data, err = _event_parse_and_validate(request.POST, request.FILES)
     if err:
@@ -5039,11 +5060,8 @@ def event_calendar_edit(request, event_id):
     """AJAX endpoint — edit an existing SocialEvent (owner only)."""
     can_post, missing = _profile_post_status(request.user)
     if not can_post:
-        if not request.user.profile.is_verify:
-            msg = 'Your account is not verified yet. Please complete your profile and request verification before editing events.'
-        else:
-            msg = 'Please complete your profile before editing events. Missing: ' + ', '.join(missing) + '.'
-        return JsonResponse({'success': False, 'error': msg, 'error_code': 'not_verified'}, status=403)
+        msg = 'Please complete your profile before editing events. Missing: ' + ', '.join(missing) + '.'
+        return JsonResponse({'success': False, 'error': msg, 'error_code': 'incomplete_profile'}, status=403)
 
     event = get_object_or_404(SocialEvent, id=event_id)
     if event.created_by != request.user:
@@ -5158,11 +5176,8 @@ def job_vacancy_create(request):
     """AJAX — create a new JobVacancy."""
     can_post, missing = _profile_post_status(request.user)
     if not can_post:
-        if not request.user.profile.is_verify:
-            msg = 'Your account is not verified yet. Please complete your profile and request verification before posting jobs.'
-        else:
-            msg = 'Please complete your profile before posting jobs. Missing: ' + ', '.join(missing) + '.'
-        return JsonResponse({'success': False, 'error': msg, 'error_code': 'not_verified'}, status=403)
+        msg = 'Please complete your profile before posting jobs. Missing: ' + ', '.join(missing) + '.'
+        return JsonResponse({'success': False, 'error': msg, 'error_code': 'incomplete_profile'}, status=403)
 
     title        = html_escape(request.POST.get('title', '').strip())
     category     = request.POST.get('category', '').strip()
@@ -5220,11 +5235,8 @@ def job_vacancy_edit(request, job_id):
     """AJAX — edit an existing JobVacancy (owner only)."""
     can_post, missing = _profile_post_status(request.user)
     if not can_post:
-        if not request.user.profile.is_verify:
-            msg = 'Your account is not verified yet. Please complete your profile and request verification before editing jobs.'
-        else:
-            msg = 'Please complete your profile before editing jobs. Missing: ' + ', '.join(missing) + '.'
-        return JsonResponse({'success': False, 'error': msg, 'error_code': 'not_verified'}, status=403)
+        msg = 'Please complete your profile before editing jobs. Missing: ' + ', '.join(missing) + '.'
+        return JsonResponse({'success': False, 'error': msg, 'error_code': 'incomplete_profile'}, status=403)
 
     job = get_object_or_404(JobVacancy, id=job_id)
     if job.posted_by != request.user:

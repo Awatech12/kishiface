@@ -110,9 +110,10 @@ urlpatterns = [
     path('jobs/<uuid:job_id>/delete/',         views.job_vacancy_delete, name='job_vacancy_delete'),
 
     # ── Ads ────────────────────────────────────────────────────────────
-    path('market',                          views.market,          name='market'),
-    path('product/<uuid:product_id>/',      views.product_detail,  name='product_detail'),
-    path('product/<uuid:product_id>/contact/', views.contact_seller, name='contact_seller'),
+    path('market',                             views.market,          name='market'),
+    path('market/new/',                        views.marketform,      name='marketform'),
+    path('product/<uuid:product_id>/',         views.product_detail,  name='product_detail'),
+    path('product/<uuid:product_id>/contact/', views.contact_seller,  name='contact_seller'),
 
     # ── Spotlight ──────────────────────────────────────────────────────────────
     path('spotlight/', views.spotlight_view, name='spotlight'),
