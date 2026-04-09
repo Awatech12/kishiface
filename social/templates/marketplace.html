@@ -1030,6 +1030,51 @@
         .kf-input-group.kf-input-prefix-wide .kf-input-prefix { font-size: 12px; }
         .kf-input-group.kf-input-prefix-wide .kf-form-control { padding-left: 44px; }
 
+        /* ===== PROFILE COMPLETION BANNER ===== */
+        .kf-verify-banner {
+            background: #fff8e1;
+            border: 1.5px solid #ffc107;
+            border-radius: 14px;
+            padding: 16px 18px;
+            margin-bottom: 18px;
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+        }
+        .kf-verify-banner-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+        .kf-verify-banner-body { flex: 1; }
+        .kf-verify-banner-title { font-size: 14px; font-weight: 700; color: #7a5800; margin-bottom: 4px; }
+        .kf-verify-banner-desc  { font-size: 13px; color: #8a6800; line-height: 1.5; margin-bottom: 10px; }
+        .kf-verify-banner-desc ul { margin: 6px 0 0 18px; }
+        .kf-verify-banner-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #ffc107;
+            color: #3d2c00;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 7px 14px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: opacity 0.18s;
+        }
+        .kf-verify-banner-link:hover { opacity: 0.85; }
+        /* Disabled "Post" button shown in header when profile is incomplete */
+        .kf-marketplace-add-btn-disabled {
+            padding: 10px 20px;
+            background: #e0e0e0;
+            color: #9e9e9e;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: not-allowed;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         /* ===== AD CARD EXTRAS ===== */
         .kf-product-meta {
             display: flex;
@@ -1168,10 +1213,18 @@
                     <h1>Ads</h1>
                     <p>Drop your ads. Buy, sell, slay. 🔥</p>
                 </div>
-                <button class="kf-marketplace-add-btn" onclick="openAdsModal()">
-                    <i class="fas fa-plus"></i>
-                    Post New Ad
-                </button>
+                {% if user_can_post %}
+                    <button class="kf-marketplace-add-btn" onclick="openAdsModal()">
+                        <i class="fas fa-plus"></i>
+                        Post New Ad
+                    </button>
+                {% else %}
+                    <button class="kf-marketplace-add-btn-disabled"
+                            onclick="document.getElementById('kfVerifyBanner').scrollIntoView({behavior:'smooth'});return false;">
+                        <i class="fas fa-user-edit"></i>
+                        Complete Profile to Post
+                    </button>
+                {% endif %}
             </div>
 
             <!-- Category Filter Bar -->
@@ -1185,6 +1238,28 @@
                     <a href="?category=Others" class="kf-category-chip {% if request.GET.category == 'Others' %}active{% endif %}">Others</a>
                 </div>
             </div>
+
+            <!-- Profile completion banner — shown only when required fields are missing -->
+            {% if not user_can_post %}
+            <div class="kf-verify-banner" id="kfVerifyBanner">
+                <div class="kf-verify-banner-icon">📝</div>
+                <div class="kf-verify-banner-body">
+                    <div class="kf-verify-banner-title">Complete your profile to post ads</div>
+                    <div class="kf-verify-banner-desc">
+                        To keep the community safe, you need a complete profile before posting marketplace ads.
+                        {% if missing_fields %}
+                            <br>Your profile is missing the following required information:
+                            <ul>
+                                {% for field in missing_fields %}<li>{{ field }}</li>{% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                    <a href="{% url 'profile' request.user.username %}" class="kf-verify-banner-link">
+                        <i class="fas fa-user-edit"></i> Update Profile
+                    </a>
+                </div>
+            </div>
+            {% endif %}
 
             <!-- Products Grid -->
             {% if products %}
@@ -1263,10 +1338,17 @@
                     <p class="kf-marketplace-empty-text">
                         Be the first to drop an ad in this category. 👀
                     </p>
-                    <button class="kf-marketplace-add-btn" onclick="openAdsModal()">
-                        <i class="fas fa-plus"></i>
-                        Post Your First Ad
-                    </button>
+                    {% if user_can_post %}
+                        <button class="kf-marketplace-add-btn" onclick="openAdsModal()">
+                            <i class="fas fa-plus"></i>
+                            Post Your First Ad
+                        </button>
+                    {% else %}
+                        <a href="{% url 'profile' request.user.username %}" class="kf-marketplace-add-btn" style="text-decoration:none;">
+                            <i class="fas fa-user-edit"></i>
+                            Complete Profile to Post
+                        </a>
+                    {% endif %}
                 </div>
             {% endif %}
         </main>
@@ -1316,10 +1398,17 @@
                     <i class="fas fa-bolt"></i> Quick Actions
                 </h3>
                 <div class="kf-quick-actions-list">
-                    <button class="kf-quick-action-btn" onclick="openAdsModal()">
-                        <i class="fas fa-plus-circle"></i>
-                        <span>Post New Ad</span>
-                    </button>
+                    {% if user_can_post %}
+                        <button class="kf-quick-action-btn" onclick="openAdsModal()">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Post New Ad</span>
+                        </button>
+                    {% else %}
+                        <a href="{% url 'profile' request.user.username %}" class="kf-quick-action-btn">
+                            <i class="fas fa-user-edit"></i>
+                            <span>Complete Profile to Post</span>
+                        </a>
+                    {% endif %}
                     <a href="{% url 'profile' request.user.username %}" class="kf-quick-action-btn">
                         <i class="fas fa-store"></i>
                         <span>Your Ads</span>
@@ -1363,9 +1452,15 @@
     </div>
 
     <!-- Floating Add Button (Mobile Only) -->
-    <button class="kf-marketplace-fab" onclick="openAdsModal()">
-        <i class="fas fa-plus"></i>
-    </button>
+    {% if user_can_post %}
+        <button class="kf-marketplace-fab" onclick="openAdsModal()">
+            <i class="fas fa-plus"></i>
+        </button>
+    {% else %}
+        <a href="{% url 'profile' request.user.username %}" class="kf-marketplace-fab" title="Complete profile to post ads">
+            <i class="fas fa-user-edit"></i>
+        </a>
+    {% endif %}
 
     <!-- Marketplace Modal (Form) -->
     <div class="kf-marketplace-modal" id="adsModal">
@@ -1596,6 +1691,11 @@
 
         // ── Modal open / close ──────────────────────────────────────────
         function openAdsModal() {
+            {% if not user_can_post %}
+            const banner = document.getElementById('kfVerifyBanner');
+            if (banner) banner.scrollIntoView({behavior: 'smooth'});
+            return;
+            {% endif %}
             document.getElementById('adsModal').classList.add('active');
             document.body.style.overflow = 'hidden';
         }

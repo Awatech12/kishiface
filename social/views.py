@@ -3871,6 +3871,17 @@ def dm_conversation(request):
 @login_required
 def channel_create(request):
     if request.method == 'POST':
+        # ── Profile guard ──────────────────────────────────────────────────
+        can_post, missing = _profile_post_status(request.user)
+        if not can_post:
+            from django.contrib import messages as _msgs
+            _msgs.error(
+                request,
+                'Complete your profile before creating a channel. Missing: ' + ', '.join(missing) + '.'
+            )
+            return redirect('channel_create')
+        # ───────────────────────────────────────────────────────────────────
+
         name  = request.POST.get('name')
         about = request.POST.get('about')
         icon  = request.FILES.get('icon')
@@ -3882,6 +3893,8 @@ def channel_create(request):
         )
         new_channel.subscriber.add(request.user)
         return redirect('channel', channel_id=new_channel.channel_id)
+
+    user_can_post, missing_fields = _profile_post_status(request.user)
 
     followed_channels = Channel.objects.filter(subscriber=request.user).annotate(
         last_app_activity=Max('channel_messages__created_at')
@@ -3911,6 +3924,8 @@ def channel_create(request):
         'followed_list': followed_list,
         'unfollowed_channels': unfollowed_channels,
         'total_followed_unread': total_unread,
+        'user_can_post':  user_can_post,
+        'missing_fields': missing_fields,
     }
     return render(request, 'channel_create.html', context)
 
@@ -4459,10 +4474,13 @@ def market(request):
                 messages.error(request, 'Something went wrong on our end. Please try again.')
                 return redirect('market')
 
+    user_can_post, missing_fields = _profile_post_status(request.user)
     context = {
-        'products': products,
-        'highest_price': highest_price or 0,
-        'lowest_price':  lowest_price  or 0,
+        'products':       products,
+        'highest_price':  highest_price or 0,
+        'lowest_price':   lowest_price  or 0,
+        'user_can_post':  user_can_post,
+        'missing_fields': missing_fields,
     }
     return render(request, 'marketplace.html', context)
 

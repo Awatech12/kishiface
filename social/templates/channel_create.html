@@ -1171,6 +1171,37 @@
         @keyframes spin {
             to { transform: translateY(-50%) rotate(360deg); }
         }
+
+        /* ── Incomplete-profile banner (shared with marketplace) ── */
+        .kf-verify-banner {
+            background: #fff8e1;
+            border: 1.5px solid #ffc107;
+            border-radius: 14px;
+            padding: 16px 18px;
+            margin-bottom: 18px;
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+        }
+        .kf-verify-banner-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+        .kf-verify-banner-body { flex: 1; }
+        .kf-verify-banner-title { font-size: 14px; font-weight: 700; color: #7a5800; margin-bottom: 4px; }
+        .kf-verify-banner-desc  { font-size: 13px; color: #8a6800; line-height: 1.5; margin-bottom: 10px; }
+        .kf-verify-banner-desc ul { margin: 6px 0 0 18px; }
+        .kf-verify-banner-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #ffc107;
+            color: #3d2c00;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 7px 14px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: opacity 0.18s;
+        }
+        .kf-verify-banner-link:hover { opacity: 0.85; }
     </style>
 </head>
 <body>
@@ -1288,7 +1319,7 @@
         </div>
     </div>
 
-    <button class="mobile-fab-button" onclick="openModal()"><i class="fas fa-plus"></i></button>
+    <button class="mobile-fab-button" onclick="{% if user_can_post %}openModal(){% else %}openIncompleteProfileModal(){% endif %}"><i class="fas fa-plus"></i></button>
 </div>
 
 <!-- DESKTOP VIEW (for screens >= 1024px) -->
@@ -1428,7 +1459,7 @@
         </div>
         
         <!-- Add Channel button on left sidebar -->
-        <button class="desktop-fab-button" onclick="openModal()"><i class="fas fa-plus"></i></button>
+        <button class="desktop-fab-button" onclick="{% if user_can_post %}openModal(){% else %}openIncompleteProfileModal(){% endif %}"><i class="fas fa-plus"></i></button>
     </div>
 
     <!-- Right Side - Chat Interface -->
@@ -1534,9 +1565,22 @@
         document.getElementById("createChannelModal").style.display = "none"; 
         document.body.style.overflow = "auto";
     }
+
+    function openIncompleteProfileModal() {
+        const m = document.getElementById('incompleteProfileModal');
+        if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+    }
+
+    function closeIncompleteProfileModal() {
+        const m = document.getElementById('incompleteProfileModal');
+        if (m) { m.style.display = 'none'; document.body.style.overflow = 'auto'; }
+    }
     
     window.onclick = e => { 
-        if (e.target.classList.contains('modal')) closeModal(); 
+        if (e.target.classList.contains('modal')) {
+            closeModal();
+            closeIncompleteProfileModal();
+        }
     }
 
     // ── Character counters ──
@@ -2376,5 +2420,36 @@
     // header update for desktop, for channel list real time communication
     
 </script>
+
+{% if not user_can_post %}
+<div id="incompleteProfileModal" class="modal">
+    <div class="modal-content" style="max-width:420px">
+        <div class="modal-header">
+            <h2 class="modal-title">complete your profile 🔒</h2>
+            <button class="close-modal" onclick="closeIncompleteProfileModal()" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="kf-verify-banner" style="margin-bottom:0">
+                <div class="kf-verify-banner-icon">📝</div>
+                <div class="kf-verify-banner-body">
+                    <div class="kf-verify-banner-title">You need a full profile to create a channel</div>
+                    <div class="kf-verify-banner-desc">
+                        To keep the community safe, finish filling in your profile before creating a channel.
+                        {% if missing_fields %}
+                            <br>Missing info:
+                            <ul>
+                                {% for field in missing_fields %}<li>{{ field }}</li>{% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                    <a href="{% url 'profile' request.user.username %}" class="kf-verify-banner-link">
+                        <i class="fas fa-user-edit"></i> Update Profile
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 </body>
 </html>
