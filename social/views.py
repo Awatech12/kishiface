@@ -950,16 +950,11 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     _last_visit = getattr(feed_prof, 'last_feed_visit', None)
     _unseen_since = _last_visit if _last_visit else (now - timedelta(hours=48))
 
-    if not following_ids:
-        base_qs = Post.objects.all()
-    else:
-        base_qs = Post.objects.filter(
-            Q(author__in=following_ids) |                    # people you follow
-            Q(author=user) |                                  # your own posts
-            Q(is_repost=True, author__in=following_ids) |    # reposts by followings
-            Q(author__in=fof_ids) |                           # friend-of-friend posts
-            Q(created_at__gte=_NEW_POST_WINDOW)               # ANY brand-new post (< 2 h)
-        )
+    # KishiVibe community feed: ALL posts are visible to ALL users.
+    # Since this is a community platform for the Kishi community, every post
+    # should surface in every member's feed regardless of follow status.
+    # Blocked users are still excluded below.
+    base_qs = Post.objects.all()
 
     # Exclude blocked users from the main pool
     if _blocked_ids:
@@ -1325,10 +1320,9 @@ def home(request):
         recipient=request.user, is_read=False
     ).count()
 
-    # Trending hashtags
+    # Trending hashtags — community-wide (all posts, not just followings)
     hashtag_counts = {}
     for post in (Post.objects
-                 .filter(Q(author__in=following_ids) | Q(author=request.user))
                  .only('content')
                  .order_by('-created_at')[:200]):
         if post.content:

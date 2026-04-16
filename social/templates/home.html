@@ -4530,6 +4530,13 @@
       {% include 'snippet/feed_posts_partial.html' with posts_with_ads=posts_with_ads next_cursor=next_cursor following_ids=following_ids %}
     </div><!-- end #kvibe-real-feed -->
 
+    <!-- Mood Filter Empty State (shown by JS when no posts match the active mood) -->
+    <div id="kvibe-mood-empty" style="display:none;text-align:center;padding:56px 24px 64px;color:var(--kvibe-text-light);">
+      <div style="font-size:52px;margin-bottom:16px;line-height:1;" id="kvibe-mood-empty-icon">✨</div>
+      <div style="font-size:16px;font-weight:700;color:var(--kvibe-text);margin-bottom:8px;" id="kvibe-mood-empty-title">No vibes here yet</div>
+      <div style="font-size:13px;color:var(--kvibe-text-light);max-width:260px;margin:0 auto;" id="kvibe-mood-empty-sub">No posts with this mood in your feed right now. Check back later or try a different vibe.</div>
+    </div>
+
     <!-- Spinner shown while HTMX fetches the next page -->
     <div id="kvibe-feed-loader" class="htmx-indicator"
          style="display:flex;justify-content:center;align-items:center;padding:24px;gap:8px;color:var(--kvibe-text-light);font-size:13px;">
@@ -5244,25 +5251,62 @@
     }
     
     // ===== MOOD FILTER =====
+    var _kvibeMoodMeta = {
+      'all':     { icon: '✨', title: 'No posts yet',            sub: 'Your feed is empty. Follow more people to see posts here.' },
+      'slay':    { icon: '💅', title: 'No slay posts yet',       sub: 'Nobody is slaying in your feed right now. Check back later!' },
+      'vibing':  { icon: '🎵', title: 'No vibing posts yet',     sub: 'The vibes are quiet. Come back when the playlist drops.' },
+      'sheesh':  { icon: '🥶', title: 'No sheesh posts yet',     sub: 'Too cold to find right now. Try a different mood.' },
+      'periodt': { icon: '⏸️', title: 'No periodt posts yet',    sub: 'Nothing to say about this mood yet. Check back later.' },
+      'no-cap':  { icon: '🎯', title: 'No cap-free posts yet',   sub: 'All cap in the feed right now. Try another filter.' },
+      'bussin':  { icon: '🔥', title: 'No bussin posts yet',     sub: 'The fire hasn\'t started yet. Check back soon.' },
+      'mid':     { icon: '😐', title: 'No mid posts yet',        sub: 'Not even mid content here. Try a different vibe.' },
+      'cringe':  { icon: '😬', title: 'No cringe posts yet',     sub: 'Surprisingly cringe-free feed. Try another mood.' },
+    };
+
     function kvibeFilterMood(mood, btn) {
       document.querySelectorAll('.kvibe-mood-filter-chip').forEach(c => c.classList.remove('active'));
       btn.classList.add('active');
 
+      var visibleCount = 0;
       document.querySelectorAll('.kvibe-post[data-post-id]').forEach(post => {
         if (mood === 'all') {
           post.classList.remove('kvibe-mood-hidden');
+          visibleCount++;
           return;
         }
-        // custom mood: match by data-custom-mood value
+        var hidden;
         if (mood.startsWith('__custom__')) {
           const label = mood.replace('__custom__', '');
           const postCustom = (post.getAttribute('data-custom-mood') || '').toLowerCase().trim();
-          post.classList.toggle('kvibe-mood-hidden', postCustom !== label);
+          hidden = postCustom !== label;
         } else {
           const postMood = post.getAttribute('data-mood') || '';
-          post.classList.toggle('kvibe-mood-hidden', postMood !== mood);
+          hidden = postMood !== mood;
         }
+        post.classList.toggle('kvibe-mood-hidden', hidden);
+        if (!hidden) visibleCount++;
       });
+
+      // Show / hide empty state
+      var emptyEl   = document.getElementById('kvibe-mood-empty');
+      var iconEl    = document.getElementById('kvibe-mood-empty-icon');
+      var titleEl   = document.getElementById('kvibe-mood-empty-title');
+      var subEl     = document.getElementById('kvibe-mood-empty-sub');
+      if (emptyEl) {
+        if (visibleCount === 0) {
+          var meta = _kvibeMoodMeta[mood] || { icon: '✨', title: 'No posts with this vibe', sub: 'No posts with this mood in your feed right now. Try a different vibe.' };
+          if (mood.startsWith('__custom__')) {
+            var label = mood.replace('__custom__', '');
+            meta = { icon: '✨', title: 'No \u201c' + label + '\u201d posts yet', sub: 'Nobody has posted with this mood yet. Check back later!' };
+          }
+          if (iconEl)  iconEl.textContent  = meta.icon;
+          if (titleEl) titleEl.textContent = meta.title;
+          if (subEl)   subEl.textContent   = meta.sub;
+          emptyEl.style.display = 'block';
+        } else {
+          emptyEl.style.display = 'none';
+        }
+      }
     }
 
     // Auto-inject custom mood chips from posts in the feed.
