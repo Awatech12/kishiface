@@ -5249,7 +5249,7 @@
           hx-on::after-request="if(event.detail.successful){ this.reset(); kvibeCSResetInputUI(); var e=document.getElementById('kvibe-empty-comments'); if(e) e.remove(); }">
           {% csrf_token %}
           <div class="kf-comment-input-wrapper">
-            <img src="{{ user.profile.get_picture_url }}" alt="" class="kf-comment-profile-img">
+            <img src="{{ user.profile.get_picture_url }}" alt="" class="kf-comment-profile-img" id="kvibe-my-avatar">
 
             <!-- Image attach -->
             <button type="button" class="kf-comment-action-btn"
@@ -9129,7 +9129,7 @@
       <!-- Reply bar -->
       <div class="kvibe-pm-reply-bar">
         <img class="kvibe-pm-reply-avatar" id="kvibePmReplyAvatar" src="" alt="">
-        <div class="kvibe-pm-reply-input" onclick="kvibePostModalOpenCommentSheet()">Post your reply</div>
+        <a class="kvibe-pm-reply-input" id="kvibePmReplyLink" href="#" onclick="event.stopPropagation()">Post your reply</a>
         <a class="kvibe-pm-view-link" id="kvibePmViewLink" href="#" onclick="event.stopPropagation()">View</a>
       </div>
     </div>
@@ -9178,13 +9178,13 @@
 
   /* ── Collect engagement counts from the post ─────────────────────── */
   function _getEngagement(postId) {
-    var article = document.querySelector('[data-post-id="' + postId + '"]');
-    if (!article) return { comment: 0, reposts: 0, likes: 0, view: 0 };
-    var commentEl = article.querySelector('[data-comment-count], .kvibe-comment-count');
-    var likeEl    = article.querySelector('[data-like-count], .kvibe-like-count, .kvibe-vibe-total');
-    var repostEl  = article.querySelector('[data-repost-count], .kvibe-repost-count');
     function _n(el) { if (!el) return 0; var v = parseInt((el.textContent || '').replace(/[^0-9]/g, ''), 10); return isNaN(v) ? 0 : v; }
-    return { comments: _n(commentEl), likes: _n(likeEl), reposts: _n(repostEl), views: 0 };
+    // Use the specific IDs written by post_like.html / post_tags
+    var commentEl = document.getElementById('kvibe-comment-count-' + postId);
+    var viewEl    = document.getElementById('kvibe-view-count-'    + postId);
+    var repostEl  = document.getElementById('kvibe-repost-count-'  + postId);
+    var likeEl    = document.getElementById('kv-vibe-count-'       + postId);
+    return { comments: _n(commentEl), likes: _n(likeEl), reposts: _n(repostEl), views: _n(viewEl) };
   }
 
   /* ── Format large numbers (1200 → 1.2K) ────────────────────────── */
@@ -9218,16 +9218,18 @@
     nameEl.href = profileUrl;
     document.getElementById('kvibePmAuthorHandle').textContent = '@' + authorHandle;
 
-    /* Reply avatar (current user's pic — reuse the author pic as fallback) */
+    /* Reply avatar — use the current user's pic already rendered in comment sheet */
     var replyAv = document.getElementById('kvibePmReplyAvatar');
-    var myPic = document.querySelector('.kvibe-create-post-avatar, .kvibe-navbar-avatar, .kvibe-nav-profile-pic');
-    replyAv.src = myPic ? myPic.src : ('https://placehold.co/34x34/555/fff?text=Me');
+    var myPic   = document.getElementById('kvibe-my-avatar')
+               || document.querySelector('.kf-comment-profile-img');
+    replyAv.src = myPic ? myPic.src : 'https://placehold.co/34x34/555/fff?text=Me';
     replyAv.onerror = function() { this.src = 'https://placehold.co/34x34/555/fff?text=Me'; };
 
     /* Post link */
     var postUrl = '/comment/' + postId;
     document.getElementById('kvibePmViewBtn').href  = postUrl;
     document.getElementById('kvibePmViewLink').href = postUrl;
+    document.getElementById('kvibePmReplyLink').href = postUrl;
 
     /* Caption */
     var capEl = document.getElementById('kvibePmCaption');
@@ -9244,6 +9246,34 @@
     document.getElementById('kvibePmRepostCount').textContent  = _fmt(eng.reposts);
     document.getElementById('kvibePmLikeCount').textContent    = _fmt(eng.likes);
     document.getElementById('kvibePmViewCount').textContent    = _fmt(eng.views);
+
+    /* Follow button — mirror feed card state */
+    var followBtn        = document.getElementById('kvibePmFollowBtn');
+    var articleFollowBtn = document.querySelector('[data-post-id="' + postId + '"] .kvibe-follow-btn');
+    if (followBtn) {
+      if (!articleFollowBtn) {
+        followBtn.style.display = 'none'; // own post — no follow btn
+      } else {
+        followBtn.style.display = '';
+        var isFollowing = articleFollowBtn.classList.contains('kvibe-follow-btn--following');
+        followBtn.textContent      = isFollowing ? 'Following' : 'Follow';
+        followBtn.dataset.userId   = articleFollowBtn.dataset.userId   || '';
+        followBtn.dataset.username = articleFollowBtn.dataset.username || '';
+        // Clone to remove any previous listeners
+        var newFollowBtn = followBtn.cloneNode(true);
+        followBtn.parentNode.replaceChild(newFollowBtn, followBtn);
+        newFollowBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          // Toggle on the feed card (which has the real data attrs)
+          if (articleFollowBtn) kvibeToggleFollow(articleFollowBtn);
+          // Mirror text in modal
+          var nowFollowing = articleFollowBtn
+            ? articleFollowBtn.classList.contains('kvibe-follow-btn--following')
+            : false;
+          newFollowBtn.textContent = nowFollowing ? 'Following' : 'Follow';
+        });
+      }
+    }
 
     /* Media */
     var img = document.getElementById('kvibePmImg');
@@ -9330,7 +9360,7 @@
 
   /* ── Setup comment button and reply bar listeners ─────────────────── */
   function setupPostModalInteractions() {
-    // Comment button
+    // Comment button — navigate to full comment thread (no bottom sheet)
     var commentBtn = document.getElementById('kvibePmCommentBtn');
     if (commentBtn) {
       var newCommentBtn = commentBtn.cloneNode(true);
@@ -9338,46 +9368,15 @@
       newCommentBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         if (_pm.postId) {
-          kvibePostModalClose(null, true);
-          setTimeout(function() {
-            kvibeOpenCommentSheet(_pm.postId);
-          }, 200);
+          window.location.href = '/comment/' + _pm.postId;
         }
       });
     }
 
-    // Reply input
-    var replyInput = document.querySelector('#kvibePmReplyInput, .kvibe-pm-reply-input');
-    if (replyInput) {
-      var newReplyInput = replyInput.cloneNode(true);
-      replyInput.parentNode.replaceChild(newReplyInput, replyInput);
-      newReplyInput.addEventListener('click', function(e) {
-        e.stopPropagation();
-        if (_pm.postId) {
-          kvibePostModalClose(null, true);
-          setTimeout(function() {
-            kvibeOpenCommentSheet(_pm.postId);
-          }, 200);
-        }
-      });
-    }
+    // Reply link — now a direct anchor to /comment/{postId}, no sheet needed.
+    // href is set in kvibePostModalOpen so nothing extra to wire here.
 
-    // View link (the "View" text next to reply)
-    var viewLink = document.getElementById('kvibePmViewLink');
-    if (viewLink) {
-      var newViewLink = viewLink.cloneNode(true);
-      viewLink.parentNode.replaceChild(newViewLink, viewLink);
-      newViewLink.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (_pm.postId) {
-          kvibePostModalClose(null, true);
-          setTimeout(function() {
-            kvibeOpenCommentSheet(_pm.postId);
-          }, 200);
-        }
-      });
-    }
+    // View link — href is already set by kvibePostModalOpen, nothing extra to wire.
   }
 
   /* ── Keyboard ────────────────────────────────────────────────────── */
