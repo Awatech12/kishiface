@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
-  <title>KVibe Admin — Dashboard</title>
+  <title>KishiHub Admin — Dashboard</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <style>
     :root {
@@ -239,8 +239,8 @@
 <!-- ══ TOP NAV BAR ══════════════════════════════════════════════════════════ -->
 <header class="kadmin-topbar">
   <a href="#" class="kadmin-topbar-logo" onclick="showPage('dashboard')">
-    <img src="{% static 'images/logo.jpg' %}" alt="KVibe" onerror="this.style.display='none'">
-    <span class="kadmin-topbar-logo-text">KishiVibe</span>
+    <img src="{% static 'images/logo.jpg' %}" alt="KishiHub" onerror="this.style.display='none'">
+    <span class="kadmin-topbar-logo-text">KishiHub</span>
     <span class="kadmin-topbar-logo-badge">Admin</span>
   </a>
   <div class="kadmin-topbar-right">
@@ -315,7 +315,7 @@
   <div class="kadmin-page active" id="page-dashboard">
     <div class="kadmin-page-header">
       <div class="kadmin-page-title"><i class="fas fa-chart-pie" style="color:var(--kvibe-primary)"></i> Dashboard</div>
-      <div class="kadmin-page-subtitle">KishiVibe platform overview · Kishi, Oyo State</div>
+      <div class="kadmin-page-subtitle">KishiHub platform overview · Kishi, Oyo State</div>
     </div>
 
     <div class="kadmin-stats-grid">
@@ -454,7 +454,7 @@
   <div class="kadmin-page" id="page-users">
     <div class="kadmin-page-header">
       <div class="kadmin-page-title"><i class="fas fa-users" style="color:var(--kvibe-primary)"></i> Members</div>
-      <div class="kadmin-page-subtitle">All registered KishiVibe members</div>
+      <div class="kadmin-page-subtitle">All registered KishiHub members</div>
     </div>
     <div class="kadmin-section">
       <div class="kadmin-search-bar">
@@ -492,6 +492,16 @@
               <td>
                 <a href="{% url 'profile' u.username %}" class="kadmin-action-btn ghost" target="_blank"><i class="fas fa-external-link-alt"></i> View</a>
                 {% if not u.is_staff %}
+                <form method="post" action="{% url 'admin_verify_user' u.id %}" style="display:inline" class="kadmin-inline-form">
+                  {% csrf_token %}
+                  <button type="submit"
+                          class="kadmin-action-btn {% if u.profile.is_verify %}ghost{% else %}primary{% endif %}"
+                          onclick="return confirmAction(this,'{% if u.profile.is_verify %}Remove verification from {{ u.username }}?{% else %}Verify {{ u.username }}?{% endif %}')"
+                          title="{% if u.profile.is_verify %}Unverify{% else %}Verify{% endif %}">
+                    <i class="fas fa-{% if u.profile.is_verify %}times-circle{% else %}check-circle{% endif %}"></i>
+                    {% if u.profile.is_verify %}Unverify{% else %}Verify{% endif %}
+                  </button>
+                </form>
                 <a href="{% url 'admin_delete_user' u.id %}" class="kadmin-action-btn danger"
                    onclick="return confirmAction(this,'Delete user {{ u.username }}? This cannot be undone.')">
                   <i class="fas fa-trash"></i>
@@ -926,7 +936,7 @@
     <p id="kadminConfirmMsg"></p>
     <div class="kadmin-modal-actions">
       <button class="kadmin-action-btn ghost" onclick="closeConfirm()">Cancel</button>
-      <a href="#" id="kadminConfirmOk" class="kadmin-action-btn danger">Delete</a>
+      <button id="kadminConfirmOk" class="kadmin-action-btn danger" onclick="doConfirmAction()">Confirm</button>
     </div>
   </div>
 </div>
@@ -978,11 +988,27 @@ function filterReports(status, tabEl) {
 }
 
 // ── Confirm modal ──────────────────────────────────────────────────────────
-function confirmAction(linkEl, msg) {
+var _kadminConfirmHref = null;
+var _kadminConfirmForm = null;
+function confirmAction(el, msg) {
   document.getElementById('kadminConfirmMsg').textContent = msg;
-  document.getElementById('kadminConfirmOk').href = linkEl.href;
+  if (el.tagName === 'A') {
+    _kadminConfirmHref = el.href;
+    _kadminConfirmForm = null;
+  } else {
+    _kadminConfirmHref = null;
+    _kadminConfirmForm = el.closest('form');
+  }
   document.getElementById('kadminConfirmOverlay').classList.add('open');
   return false;
+}
+function doConfirmAction() {
+  closeConfirm();
+  if (_kadminConfirmForm) {
+    _kadminConfirmForm.submit();
+  } else if (_kadminConfirmHref) {
+    window.location.href = _kadminConfirmHref;
+  }
 }
 function closeConfirm() {
   document.getElementById('kadminConfirmOverlay').classList.remove('open');

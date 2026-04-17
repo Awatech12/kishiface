@@ -182,19 +182,13 @@
 
         {# ── Repost: video ── #}
         {% if orig.video_file %}
-          <div class="kvibe-video-container paused">
-            <video id="kvibe-post-video-{{ item.data.post_id }}" class="kvibe-video" preload="metadata" playsinline
-                   onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)"
-                   onplay="this.closest('.kvibe-video-container').classList.remove('paused')"
-                   onpause="this.closest('.kvibe-video-container').classList.add('paused')"
-                   onended="this.closest('.kvibe-video-container').classList.add('paused')"
-                   poster="">
-              <source src="{{ orig.video_file.url }}" type="video/mp4">
-            </video>
-            <div class="kvibe-video-overlay" onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)">
-              <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
-              <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', -10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
-              <button class="kvibe-seek-overlay-btn kvibe-forward-btn"  onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', 10)">10s <i class="fa-solid fa-forward-step"></i></button>
+          <div class="kvibe-x-media-grid kvibe-x-media-single"
+               onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ orig.video_file.url }}', null, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+            <div class="kvibe-x-media-cell">
+              <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                <source src="{{ orig.video_file.url }}" type="video/mp4">
+              </video>
+              <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
             </div>
           </div>
 
@@ -206,63 +200,40 @@
             </audio>
           </div>
 
-        {# ── Repost: images (multi) ── #}
+        {# ── Repost: images ── #}
         {% elif orig.images.all %}
-          {% if orig.images.all|length > 1 %}
-            <div class="kvibe-image-carousel"
-                 id="kvibe-carousel-{{ item.data.post_id }}"
-                 data-slide="0"
-                 data-total="{{ orig.images.all|length }}">
-              <div class="kvibe-carousel-aspect">
-                <div class="kvibe-image-track" id="kvibe-track-{{ item.data.post_id }}">
-                  {% for image in orig.images.all %}
-                  <div class="kvibe-image-slide">
-                    <img src="{{ image.image.url }}"
-                         alt="Post image {{ forloop.counter }}"
-                         loading="lazy"
-                         onload="this.classList.add('loaded')"/>
-                  </div>
-                  {% endfor %}
-                </div>
+          {% with imgs=orig.images.all cnt=orig.images.all|length %}
+          <div class="kvibe-x-media-grid kvibe-x-media-count-{{ cnt|default:'1' }}{% if cnt > 4 %} kvibe-x-media-count-4{% endif %}">
+            {% for image in orig.images.all %}
+              {% if forloop.counter <= 4 %}
+              <div class="kvibe-x-media-cell"
+                   onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+                <img src="{{ image.image.url }}"
+                     alt="Post image {{ forloop.counter }}"
+                     class="kvibe-x-media-thumb"
+                     loading="lazy"
+                     onload="this.classList.add('loaded')">
+                {% if forloop.counter == 4 and cnt > 4 %}
+                <div class="kvibe-x-media-more">+{{ cnt|add:"-4" }}</div>
+                {% endif %}
               </div>
-              <div class="kvibe-carousel-indicators">
-                {% for image in orig.images.all %}
-                <span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>
-                {% endfor %}
-              </div>
-              <span class="kvibe-slide-counter">1 / {{ orig.images.all|length }}</span>
-            </div>
-
-          {# ── Repost: single image ── #}
-          {% else %}
-            {% with image=orig.images.first %}
-            <div class="kvibe-image-slide">
-              <img src="{{ image.image.url }}"
-                   alt="Post image"
-                   loading="lazy"
-                   onload="this.classList.add('loaded')"/>
-            </div>
-            {% endwith %}
-          {% endif %}
+              {% endif %}
+            {% endfor %}
+          </div>
+          {% endwith %}
         {% endif %}
 
       {% else %}
 
         {# ── Own post: video ── #}
         {% if item.data.video_file %}
-          <div class="kvibe-video-container paused">
-            <video id="kvibe-post-video-{{ item.data.post_id }}" class="kvibe-video" preload="metadata" playsinline
-                   onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)"
-                   onplay="this.closest('.kvibe-video-container').classList.remove('paused')"
-                   onpause="this.closest('.kvibe-video-container').classList.add('paused')"
-                   onended="this.closest('.kvibe-video-container').classList.add('paused')"
-                   poster="">
-              <source src="{{ item.data.video_file.url }}" type="video/mp4">
-            </video>
-            <div class="kvibe-video-overlay" onclick="kvibeTogglePlayPause('kvibe-post-video-{{ item.data.post_id }}', event)">
-              <i class="fa-solid fa-play kvibe-play-pause-icon" id="kvibe-play-icon-{{ item.data.post_id }}"></i>
-              <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', -10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
-              <button class="kvibe-seek-overlay-btn kvibe-forward-btn"  onclick="event.stopPropagation(); kvibeSeekVideo('kvibe-post-video-{{ item.data.post_id }}', 10)">10s <i class="fa-solid fa-forward-step"></i></button>
+          <div class="kvibe-x-media-grid kvibe-x-media-single"
+               onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ item.data.video_file.url }}', null, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+            <div class="kvibe-x-media-cell">
+              <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                <source src="{{ item.data.video_file.url }}" type="video/mp4">
+              </video>
+              <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
             </div>
           </div>
 
@@ -274,44 +245,27 @@
             </audio>
           </div>
 
-        {# ── Own post: images (multi) ── #}
+        {# ── Own post: images ── #}
         {% elif item.data.images.all %}
-          {% if item.data.images.all|length > 1 %}
-            <div class="kvibe-image-carousel"
-                 id="kvibe-carousel-{{ item.data.post_id }}"
-                 data-slide="0"
-                 data-total="{{ item.data.images.all|length }}">
-              <div class="kvibe-carousel-aspect">
-                <div class="kvibe-image-track" id="kvibe-track-{{ item.data.post_id }}">
-                  {% for image in item.data.images.all %}
-                  <div class="kvibe-image-slide">
-                    <img src="{{ image.image.url }}"
-                         alt="Post image {{ forloop.counter }}"
-                         loading="lazy"
-                         onload="this.classList.add('loaded')"/>
-                  </div>
-                  {% endfor %}
-                </div>
+          {% with imgs=item.data.images.all cnt=item.data.images.all|length %}
+          <div class="kvibe-x-media-grid kvibe-x-media-count-{{ cnt|default:'1' }}{% if cnt > 4 %} kvibe-x-media-count-4{% endif %}">
+            {% for image in item.data.images.all %}
+              {% if forloop.counter <= 4 %}
+              <div class="kvibe-x-media-cell"
+                   onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+                <img src="{{ image.image.url }}"
+                     alt="Post image {{ forloop.counter }}"
+                     class="kvibe-x-media-thumb"
+                     loading="lazy"
+                     onload="this.classList.add('loaded')">
+                {% if forloop.counter == 4 and cnt > 4 %}
+                <div class="kvibe-x-media-more">+{{ cnt|add:"-4" }}</div>
+                {% endif %}
               </div>
-              <div class="kvibe-carousel-indicators">
-                {% for image in item.data.images.all %}
-                <span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>
-                {% endfor %}
-              </div>
-              <span class="kvibe-slide-counter">1 / {{ item.data.images.all|length }}</span>
-            </div>
-
-          {# ── Own post: single image ── #}
-          {% else %}
-            {% with image=item.data.images.first %}
-            <div class="kvibe-image-slide">
-              <img src="{{ image.image.url }}"
-                   alt="Post image"
-                   loading="lazy"
-                   onload="this.classList.add('loaded')"/>
-            </div>
-            {% endwith %}
-          {% endif %}
+              {% endif %}
+            {% endfor %}
+          </div>
+          {% endwith %}
         {% endif %}
 
       {% endif %}

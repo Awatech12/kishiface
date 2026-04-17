@@ -1,5 +1,5 @@
 /**
- * KVibe PWA Install Manager
+ * KishiHub PWA Install Manager
  * ─────────────────────────
  * Detects as fast as possible whether the app is already installed,
  * then shows a native-style install banner only to users who haven't
@@ -109,7 +109,7 @@
     const banner = document.createElement('div');
     banner.id            = BANNER_ID;
     banner.setAttribute('role', 'dialog');
-    banner.setAttribute('aria-label', 'Install Kishiface app');
+    banner.setAttribute('aria-label', 'Install KishiHub app');
 
     // Detect iOS separately (no beforeinstallprompt, needs manual instructions)
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
@@ -181,10 +181,10 @@
     return [
       '<div class="kvibe-pwa-inner">',
       '  <div class="kvibe-pwa-app-row">',
-      '    <img class="kvibe-pwa-icon" src="/static/images/small.png" alt="Kishiface" ',
+      '    <img class="kvibe-pwa-icon" src="/static/images/small.png" alt="KishiHub" ',
       '         onerror="this.style.display=\'none\'">',
       '    <div class="kvibe-pwa-info">',
-      '      <div class="kvibe-pwa-name">Kishiface</div>',
+      '      <div class="kvibe-pwa-name">KishiHub</div>',
       '      <div class="kvibe-pwa-desc">Add to Home Screen for faster access</div>',
       '    </div>',
       '    <button class="kvibe-pwa-dismiss-x" id="kvibe-pwa-dismiss-btn" ',
@@ -212,10 +212,10 @@
     return [
       '<div class="kvibe-pwa-inner">',
       '  <div class="kvibe-pwa-app-row">',
-      '    <img class="kvibe-pwa-icon" src="/static/images/small.png" alt="Kishiface" ',
+      '    <img class="kvibe-pwa-icon" src="/static/images/small.png" alt="KishiHub" ',
       '         onerror="this.style.display=\'none\'">',
       '    <div class="kvibe-pwa-info">',
-      '      <div class="kvibe-pwa-name">Install Kishiface</div>',
+      '      <div class="kvibe-pwa-name">Install KishiHub</div>',
       '      <div class="kvibe-pwa-desc">Add to Home Screen for the best experience</div>',
       '    </div>',
       '    <button class="kvibe-pwa-dismiss-x" id="kvibe-pwa-dismiss-btn" ',

@@ -175,8 +175,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # PWA Settings
-PWA_APP_NAME            = 'KishiFace'
-PWA_APP_DESCRIPTION     = "Let Vibes"
+PWA_APP_NAME            = 'KishiHub'
+PWA_APP_DESCRIPTION     = "Let Connect Globally"
 PWA_APP_THEME_COLOR     = '#ffffff'
 PWA_APP_BACKGROUND_COLOR= '#ffffff'
 PWA_APP_DISPLAY         = 'standalone'

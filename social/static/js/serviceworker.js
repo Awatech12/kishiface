@@ -1,5 +1,5 @@
 /**
- * KVibe Service Worker v3.0
+ * KishiHub Service Worker v3.0
  * Strategies:
  *   - Static assets : Cache-first
  *   - HTML pages    : Network-first + offline fallback
@@ -153,7 +153,7 @@ function networkFirst(request) {
     return response;
   }).catch(function() {
     return caches.match(request).then(function(cached) {
-      return cached || new Response('Offline \u2022 Keep the Kishiface going \ud83d\udd25', { status: 503 });
+      return cached || new Response('Offline \u2022 Keep the KishiHub going \ud83d\udd25', { status: 503 });
     });
   });
 }
@@ -190,7 +190,7 @@ function networkFirstWithOfflineFallback(request) {
             '<\/style>' +
             '<div id="kvibe-offline-banner">' +
               '<i class="fas fa-wifi" style="margin-right:8px;opacity:0.6;"></i>' +
-              'You\'re offline \u2014 showing cached content \u2022 Keep the Kishiface going \ud83d\udd25' +
+              'You\'re offline \u2014 showing cached content \u2022 Keep the KishiHub going \ud83d\udd25' +
               '<button onclick="location.reload()" style="' +
                 'margin-left:12px;padding:4px 10px;' +
                 'border:1px solid #ffc107;background:transparent;' +
@@ -226,7 +226,7 @@ function networkFirstWithOfflineFallback(request) {
         // offline.html itself not cached — show a better minimal fallback
         return new Response(
           '<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px">' +
-          '<h2>You are offline</h2><p>No connection? No problem \u2014 keep the Kishiface going \ud83d\udd25</p><p style="color:#888;font-size:14px;">Check your connection and try again.</p>' +
+          '<h2>You are offline</h2><p>No connection? No problem \u2014 keep the KishiHub going \ud83d\udd25</p><p style="color:#888;font-size:14px;">Check your connection and try again.</p>' +
           '<button onclick="location.reload()">Retry</button></body></html>',
           { status: 503, headers: { 'Content-Type': 'text/html' } }
         );
@@ -248,17 +248,17 @@ self.addEventListener('sync', function(event) {
 self.addEventListener('push', function(event) {
   if (!event.data) return;
   var data = {};
-  try { data = event.data.json(); } catch(e) { data = { title: 'Kishiface', body: event.data.text() }; }
+  try { data = event.data.json(); } catch(e) { data = { title: 'KishiHub', body: event.data.text() }; }
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Kishiface', {
+    self.registration.showNotification(data.title || 'KishiHub', {
       body:    data.body || 'You have a new notification',
       icon:    '/static/images/small.png',
       badge:   '/static/images/small.png',
       vibrate: [100, 50, 100],
       data:    { url: data.url || '/home' },
       actions: [
-        { action: 'open',    title: 'Open Kishiface' },
+        { action: 'open',    title: 'Open KishiHub' },
         { action: 'dismiss', title: 'Dismiss'    }
       ]
     })
