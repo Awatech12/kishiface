@@ -3653,6 +3653,14 @@
       border-radius: 4px;
     }
 
+    /* Stop shimmer once skeleton is hidden — prevents off-screen animation cost */
+    #kvibe-skeleton-feed[style*="display: none"] .kvibe-skeleton,
+    #kvibe-skeleton-feed[style*="display:none"] .kvibe-skeleton,
+    #kvibe-skeleton-sidebar[style*="display: none"] .kvibe-skeleton,
+    #kvibe-skeleton-sidebar[style*="display:none"] .kvibe-skeleton {
+      animation: none;
+    }
+
     /* Skeleton Feed */
     .kvibe-skeleton-feed {
       display: none;
@@ -6333,7 +6341,11 @@
       }
       
       // ===== SKELETON LOADING: Reveal real content after page load =====
+      var _kvibeRevealed = false;
       function kvibeRevealContent() {
+        if (_kvibeRevealed) return;
+        _kvibeRevealed = true;
+
         // Feed
         const skelFeed = document.getElementById('kvibe-skeleton-feed');
         const realFeed = document.getElementById('kvibe-real-feed');
@@ -6346,7 +6358,6 @@
         if (skelSidebar) skelSidebar.style.display = 'none';
         if (realSidebar) realSidebar.style.display = 'block';
 
-
         // Attach swipe/drag handlers to all server-rendered carousels now that feed is visible
         if (typeof kvibeInitAllCarouselSwipe === 'function') kvibeInitAllCarouselSwipe();
 
@@ -6358,14 +6369,23 @@
         }
       }
 
-      // Reveal after a short delay to show kvibe-skeleton effect, or on load if already ready
-      if (document.readyState === 'complete') {
-        setTimeout(kvibeRevealContent, 600);
-      } else {
-        window.addEventListener('load', function() {
-          setTimeout(kvibeRevealContent, 400);
+      // Primary: fire as soon as DOM is parsed (no waiting for images/fonts)
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+          setTimeout(kvibeRevealContent, 300);
         });
+      } else {
+        // DOM already ready (interactive or complete)
+        setTimeout(kvibeRevealContent, 300);
       }
+
+      // Secondary: also fire on full load in case DOMContentLoaded was missed
+      window.addEventListener('load', function() {
+        setTimeout(kvibeRevealContent, 100);
+      });
+
+      // Hard fallback: guarantee skeleton is gone within 3 seconds no matter what
+      setTimeout(kvibeRevealContent, 3000);
 
 
       const lazyVideos = document.querySelectorAll('video[data-src]');
