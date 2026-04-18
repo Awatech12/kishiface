@@ -9,7 +9,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("SECRET_KEY") 
 DEBUG = os.getenv("DEBUG") 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 USE_CLOUDINARY = True
 ALLOWED_HOSTS = [
     '127.0.0.1', 
@@ -229,6 +228,8 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_DOMAIN = None
+    SESSION_COOKIE_DOMAIN = None
 
     # Browser protections
     SECURE_CONTENT_TYPE_NOSNIFF = True
