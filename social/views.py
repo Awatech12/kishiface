@@ -879,7 +879,8 @@ def _annotate_vibe_breakdown(posts):
 
 
 def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
-                   seen_post_ids=None, seen_suggestion_ids=None):
+                   seen_post_ids=None, seen_suggestion_ids=None,
+                   seen_market_ids=None, seen_job_ids=None, seen_event_ids=None):
     """
     Full scored/ranked feed page.
 
@@ -1037,6 +1038,17 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         )
         posts = posts + _orig_extras
 
+    # ── Deduplicate combined post pool ───────────────────────────────────────
+    # Merging base_qs + _unseen_extras + _orig_extras can introduce the same
+    # post_id multiple times. Remove duplicates while preserving order.
+    _seen_pool_ids: set = set()
+    _deduped_posts = []
+    for _p in posts:
+        if _p.post_id not in _seen_pool_ids:
+            _seen_pool_ids.add(_p.post_id)
+            _deduped_posts.append(_p)
+    posts = _deduped_posts
+
     # next_cursor is computed AFTER slicing to final_posts (step 6 below)
     # so it always points to the oldest post that was actually rendered.
     # Do NOT calculate it here from the raw 40-post pool — that skips posts.
@@ -1176,12 +1188,14 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # ── Market product injection ───────────────────────────────────────────────
     # Fetch a small pool of random products to sprinkle into the feed.
     # We use a random offset scan (no ORDER BY RANDOM()) to stay fast.
+    _seen_market_ids = set(str(i) for i in (seen_market_ids or []))
     _market_pool = []
-    _market_count = Market.objects.count()
+    _market_qs = Market.objects.exclude(product_id__in=_seen_market_ids) if _seen_market_ids else Market.objects
+    _market_count = _market_qs.count()
     if _market_count > 0:
         _market_offset = random.randint(0, max(0, _market_count - 6))
         _market_pool = list(
-            Market.objects
+            _market_qs
             .select_related('product_owner', 'product_owner__profile')
             .prefetch_related('images')
             [_market_offset: _market_offset + 6]
@@ -1193,13 +1207,16 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # ── Job Vacancy injection ──────────────────────────────────────────────────
     # Inject 1 open job card per feed page, at post position i % 7 == 5.
     import datetime as _dt_feed
+    _seen_job_ids = set(str(i) for i in (seen_job_ids or []))
     _job_pool = []
-    _job_count = JobVacancy.objects.filter(is_open=True).count()
+    _job_base_qs = JobVacancy.objects.filter(is_open=True)
+    if _seen_job_ids:
+        _job_base_qs = _job_base_qs.exclude(id__in=_seen_job_ids)
+    _job_count = _job_base_qs.count()
     if _job_count > 0:
         _job_offset = random.randint(0, max(0, _job_count - 4))
         _job_pool = list(
-            JobVacancy.objects
-            .filter(is_open=True)
+            _job_base_qs
             .select_related('posted_by', 'posted_by__profile')
             [_job_offset: _job_offset + 4]
         )
@@ -1210,13 +1227,16 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # ── Social Event injection ─────────────────────────────────────────────────
     # Inject 1 upcoming event card per feed page, at post position i % 9 == 7.
     _today = _dt_feed.date.today()
+    _seen_event_ids = set(str(i) for i in (seen_event_ids or []))
     _event_pool = []
-    _event_count = SocialEvent.objects.filter(date__gte=_today).count()
+    _event_base_qs = SocialEvent.objects.filter(date__gte=_today)
+    if _seen_event_ids:
+        _event_base_qs = _event_base_qs.exclude(id__in=_seen_event_ids)
+    _event_count = _event_base_qs.count()
     if _event_count > 0:
         _event_offset = random.randint(0, max(0, _event_count - 4))
         _event_pool = list(
-            SocialEvent.objects
-            .filter(date__gte=_today)
+            _event_base_qs
             .select_related('created_by', 'created_by__profile')
             .order_by('date')
             [_event_offset: _event_offset + 4]
@@ -1576,11 +1596,24 @@ def feed_load_more(request):
     seen_users_raw      = request.GET.get('seen_users', '')
     seen_suggestion_ids = set(seen_users_raw.split(',')) if seen_users_raw else set()
 
+    # Pass seen market/job/event IDs so the same card is never injected twice.
+    seen_markets_raw  = request.GET.get('seen_markets', '')
+    seen_market_ids   = set(seen_markets_raw.split(',')) if seen_markets_raw else set()
+
+    seen_jobs_raw  = request.GET.get('seen_jobs', '')
+    seen_job_ids   = set(seen_jobs_raw.split(',')) if seen_jobs_raw else set()
+
+    seen_events_raw  = request.GET.get('seen_events', '')
+    seen_event_ids   = set(seen_events_raw.split(',')) if seen_events_raw else set()
+
     feed, next_cursor = _get_feed_page(
         request.user, following_ids,
         cursor_dt=cursor_dt,
         seen_post_ids=seen_post_ids,
         seen_suggestion_ids=seen_suggestion_ids,
+        seen_market_ids=seen_market_ids,
+        seen_job_ids=seen_job_ids,
+        seen_event_ids=seen_event_ids,
     )
 
     # Only return 204 when there are genuinely no post items in the feed.

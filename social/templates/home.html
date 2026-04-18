@@ -5039,10 +5039,19 @@
     //                  Sent as ?seen=   so the explore slot never resurfaces them.
     // seenUserIds    : IDs of every suggestion card already rendered.
     //                  Sent as ?seen_users= so the same user is never suggested twice.
-    // Both sets are read by kvibeUpdateSentinel() which rewrites the sentinel's
+    // seenMarketIds  : product_id of every market card already rendered.
+    //                  Sent as ?seen_markets= so the same product is never re-injected.
+    // seenJobIds     : UUID id of every job card already rendered.
+    //                  Sent as ?seen_jobs= so the same job is never re-injected.
+    // seenEventIds   : id of every event card already rendered.
+    //                  Sent as ?seen_events= so the same event is never re-injected.
+    // All sets are read by kvibeUpdateSentinel() which rewrites the sentinel's
     // hx-get URL before HTMX processes it, ensuring the params are always fresh.
-    window._kvibeSeenPostIds = new Set();
-    window._kvibeSeenUserIds = new Set();
+    window._kvibeSeenPostIds   = new Set();
+    window._kvibeSeenUserIds   = new Set();
+    window._kvibeSeenMarketIds = new Set();
+    window._kvibeSeenJobIds    = new Set();
+    window._kvibeSeenEventIds  = new Set();
 
     function kvibeCollectSeenIds() {
       // Collect post IDs from all rendered post articles
@@ -5053,6 +5062,18 @@
       document.querySelectorAll('.kvibe-user-suggestion[data-user-id]').forEach(function(el) {
         window._kvibeSeenUserIds.add(el.dataset.userId);
       });
+      // Collect market card product IDs
+      document.querySelectorAll('.kvibe-post[data-market-id]').forEach(function(el) {
+        window._kvibeSeenMarketIds.add(el.dataset.marketId);
+      });
+      // Collect job card IDs
+      document.querySelectorAll('.kvibe-post[data-job-id]').forEach(function(el) {
+        window._kvibeSeenJobIds.add(el.dataset.jobId);
+      });
+      // Collect event card IDs
+      document.querySelectorAll('.kvibe-post[data-event-id]').forEach(function(el) {
+        window._kvibeSeenEventIds.add(el.dataset.eventId);
+      });
     }
 
     function kvibeUpdateSentinel() {
@@ -5061,13 +5082,19 @@
 
       kvibeCollectSeenIds();
 
-      var cursor = sentinel.dataset.cursor || '';
-      var seen      = Array.from(window._kvibeSeenPostIds).join(',');
-      var seenUsers = Array.from(window._kvibeSeenUserIds).join(',');
+      var cursor     = sentinel.dataset.cursor || '';
+      var seen       = Array.from(window._kvibeSeenPostIds).join(',');
+      var seenUsers  = Array.from(window._kvibeSeenUserIds).join(',');
+      var seenMarkets = Array.from(window._kvibeSeenMarketIds).join(',');
+      var seenJobs   = Array.from(window._kvibeSeenJobIds).join(',');
+      var seenEvents = Array.from(window._kvibeSeenEventIds).join(',');
 
       var url = '/feed/more/?cursor=' + encodeURIComponent(cursor);
-      if (seen)      url += '&seen='       + encodeURIComponent(seen);
-      if (seenUsers) url += '&seen_users=' + encodeURIComponent(seenUsers);
+      if (seen)        url += '&seen='         + encodeURIComponent(seen);
+      if (seenUsers)   url += '&seen_users='   + encodeURIComponent(seenUsers);
+      if (seenMarkets) url += '&seen_markets=' + encodeURIComponent(seenMarkets);
+      if (seenJobs)    url += '&seen_jobs='    + encodeURIComponent(seenJobs);
+      if (seenEvents)  url += '&seen_events='  + encodeURIComponent(seenEvents);
 
       sentinel.setAttribute('hx-get', url);
     }
