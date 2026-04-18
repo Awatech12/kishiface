@@ -27,6 +27,9 @@
       overflow: hidden;
       margin: 8px 0 4px;
       cursor: pointer;
+      /* Horizontal breathing room within post card */
+      margin-left: 12px;
+      margin-right: 12px;
     }
     /* Single media */
     .kvibe-x-media-single { grid-template-columns: 1fr; max-height: 520px; }
@@ -241,6 +244,11 @@
     .kvibe-pm-media-nav:hover { background: rgba(0,0,0,0.7); }
     .kvibe-pm-media-nav.prev { left: 10px; }
     .kvibe-pm-media-nav.next { right: 10px; }
+
+    /* On mobile, hide nav arrows — user swipes instead */
+    @media (max-width: 767px) {
+      .kvibe-pm-media-nav { display: none !important; }
+    }
     .kvibe-pm-media-counter {
       position: absolute;
       top: 14px;
@@ -9393,6 +9401,45 @@
     else if (e.key === 'ArrowLeft')  { kvibePmNav(-1); }
     else if (e.key === 'ArrowRight') { kvibePmNav(1); }
   });
+
+  /* ── Touch swipe left/right (mobile image navigation) ───────────── */
+  (function() {
+    var _swipeStartX = 0;
+    var _swipeStartY = 0;
+    var _swipeLocked = false;
+
+    var mediaEl = document.getElementById('kvibePmMedia');
+    if (!mediaEl) return;
+
+    mediaEl.addEventListener('touchstart', function(e) {
+      if (e.touches.length !== 1) return;
+      _swipeStartX = e.touches[0].clientX;
+      _swipeStartY = e.touches[0].clientY;
+      _swipeLocked = false;
+    }, { passive: true });
+
+    mediaEl.addEventListener('touchmove', function(e) {
+      if (e.touches.length !== 1) return;
+      var dx = e.touches[0].clientX - _swipeStartX;
+      var dy = e.touches[0].clientY - _swipeStartY;
+      if (!_swipeLocked && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
+        _swipeLocked = true;
+      }
+      if (_swipeLocked) e.preventDefault();
+    }, { passive: false });
+
+    mediaEl.addEventListener('touchend', function(e) {
+      if (_pm.mediaType !== 'images' || _pm.images.length <= 1) return;
+      var dx = e.changedTouches[0].clientX - _swipeStartX;
+      var dy = e.changedTouches[0].clientY - _swipeStartY;
+      if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return;
+      if (dx < 0) {
+        kvibePmNav(1);   // swipe left → next
+      } else {
+        kvibePmNav(-1);  // swipe right → prev
+      }
+    }, { passive: true });
+  }());
 
   /* ── Expose globally ─────────────────────────────────────────────── */
   window.kvibePostModalOpen  = kvibePostModalOpen;
