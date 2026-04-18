@@ -14,11 +14,11 @@ USE_CLOUDINARY = True
 ALLOWED_HOSTS = [
     '127.0.0.1', 
     'localhost',
-    'kishiface.onrender.com', 
+    'kishihub.onrender.com', 
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://kishiface.onrender.com',
+    'https://kishihub.onrender.com',
 ]
 
 INSTALLED_APPS = [
