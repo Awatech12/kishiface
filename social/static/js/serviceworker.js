@@ -1,19 +1,5 @@
 /**
  * KishiHub Service Worker v3.0
- * Strategies:
- *   - Static assets : Cache-first
- *   - HTML pages    : Network-first + offline fallback
- *   - Everything else: Network-first
- *
- * URLs verified against urls.py:
- *   home              → /home         (no trailing slash)
- *   notification_list → /list
- *   inbox             → /inbox        (no trailing slash)
- *   search            → /search       (no trailing slash)
- *   post              → /post         (no trailing slash)
- *   spotlight         → /spotlight/
- *   explore           → /explore/
- *   channel_create    → /create_channel
  */
 
 'use strict';

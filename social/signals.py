@@ -15,4 +15,5 @@ def create_superuser(sender, **kwargs):
             password=password,
             email=email
         )
+        
         print("Super User Created")

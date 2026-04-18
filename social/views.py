@@ -104,7 +104,7 @@ def _validate_registration(username, email, password, password2):
 _ALLOWED_ORIGINS = (
     'http://127.0.0.1',
     'http://localhost',
-    'https://kishiface.onrender.com',
+    'https://kishihub.onrender.com',
 )
 
 def _safe_next(request, fallback='/home'):
@@ -465,7 +465,7 @@ def _safe_redirect_back(request, fallback='home'):
     allowed_origins = (
         'http://127.0.0.1',
         'http://localhost',
-        'https://kishiface.onrender.com',
+        'https://kishihub.onrender.com',
     )
     if referer and any(referer.startswith(origin) for origin in allowed_origins):
         return redirect(referer)
