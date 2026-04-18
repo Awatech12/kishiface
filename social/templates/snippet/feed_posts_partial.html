@@ -180,20 +180,7 @@
 
       {% if item.data.is_repost and orig %}
 
-        {# ── Repost: video ── #}
-        {% if orig.video_file %}
-          <div class="kvibe-x-media-grid kvibe-x-media-single"
-               onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ orig.video_file.url }}', null, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-            <div class="kvibe-x-media-cell">
-              <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
-                <source src="{{ orig.video_file.url }}" type="video/mp4">
-              </video>
-              <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
-            </div>
-          </div>
-        {% endif %}
-
-        {# ── Repost: audio ── #}
+        {# ── Repost: audio (always standalone) ── #}
         {% if orig.file %}
           <div style="padding:12px 16px;">
             <audio controls preload="none" style="width:100%;border-radius:8px;">
@@ -202,46 +189,81 @@
           </div>
         {% endif %}
 
-        {# ── Repost: images ── #}
-        {% if orig.images.all %}
-          {% with imgs=orig.images.all cnt=orig.images.all|length %}
-          <div class="kvibe-x-media-grid kvibe-x-media-count-{{ cnt|default:'1' }}{% if cnt > 4 %} kvibe-x-media-count-4{% endif %}"
-               data-all-images="[{% for image in orig.images.all %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
-            {% for image in orig.images.all %}
-              {% if forloop.counter <= 4 %}
+        {# ── Repost: video + images unified grid ── #}
+        {% if orig.video_file or orig.images.all %}
+          {% with orig_imgs=orig.images.all orig_img_cnt=orig.images.all|length orig_has_video=orig.video_file %}
+          {# Resolve author info once for reuse #}
+          {% with r_name="{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}" r_handle="{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}" %}
+          {% if orig_has_video and orig_imgs %}
+            {# Mixed: video slot 1, images fill remaining slots #}
+            {% with orig_total=orig_img_cnt|add:"1" %}
+            <div class="kvibe-x-media-grid kvibe-x-media-count-{{ orig_total|default:'1' }}{% if orig_total > 4 %} kvibe-x-media-count-4{% endif %}"
+                 data-all-images="[{% for image in orig_imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+              {# Slot 1: video #}
               <div class="kvibe-x-media-cell"
-                   onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-                <img src="{{ image.image.url }}"
-                     alt="Post image {{ forloop.counter }}"
-                     class="kvibe-x-media-thumb"
-                     loading="lazy"
-                     onload="this.classList.add('loaded')">
-                {% if forloop.counter == 4 and cnt > 4 %}
-                <div class="kvibe-x-media-more">+{{ cnt|add:"-4" }}</div>
-                {% endif %}
+                   onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ orig.video_file.url }}', null, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+                <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                  <source src="{{ orig.video_file.url }}" type="video/mp4">
+                </video>
+                <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
               </div>
-              {% endif %}
-            {% endfor %}
-          </div>
+              {# Slots 2–4: images #}
+              {% for image in orig_imgs %}
+                {% if forloop.counter <= 3 %}
+                <div class="kvibe-x-media-cell"
+                     onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+                  <img src="{{ image.image.url }}"
+                       alt="Post image {{ forloop.counter }}"
+                       class="kvibe-x-media-thumb"
+                       loading="lazy"
+                       onload="this.classList.add('loaded')">
+                  {% if forloop.counter == 3 and orig_img_cnt > 3 %}
+                  <div class="kvibe-x-media-more">+{{ orig_img_cnt|add:"-3" }}</div>
+                  {% endif %}
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+            {% endwith %}
+          {% elif orig_has_video %}
+            {# Video only #}
+            <div class="kvibe-x-media-grid kvibe-x-media-single"
+                 onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ orig.video_file.url }}', null, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+              <div class="kvibe-x-media-cell">
+                <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                  <source src="{{ orig.video_file.url }}" type="video/mp4">
+                </video>
+                <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+              </div>
+            </div>
+          {% else %}
+            {# Images only #}
+            <div class="kvibe-x-media-grid kvibe-x-media-count-{{ orig_img_cnt|default:'1' }}{% if orig_img_cnt > 4 %} kvibe-x-media-count-4{% endif %}"
+                 data-all-images="[{% for image in orig_imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+              {% for image in orig_imgs %}
+                {% if forloop.counter <= 4 %}
+                <div class="kvibe-x-media-cell"
+                     onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+                  <img src="{{ image.image.url }}"
+                       alt="Post image {{ forloop.counter }}"
+                       class="kvibe-x-media-thumb"
+                       loading="lazy"
+                       onload="this.classList.add('loaded')">
+                  {% if forloop.counter == 4 and orig_img_cnt > 4 %}
+                  <div class="kvibe-x-media-more">+{{ orig_img_cnt|add:"-4" }}</div>
+                  {% endif %}
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% endwith %}
           {% endwith %}
         {% endif %}
 
       {% else %}
 
-        {# ── Own post: video ── #}
-        {% if item.data.video_file %}
-          <div class="kvibe-x-media-grid kvibe-x-media-single"
-               onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ item.data.video_file.url }}', null, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-            <div class="kvibe-x-media-cell">
-              <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
-                <source src="{{ item.data.video_file.url }}" type="video/mp4">
-              </video>
-              <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
-            </div>
-          </div>
-        {% endif %}
-
-        {# ── Own post: audio ── #}
+        {# ── Own post: audio (always standalone) ── #}
         {% if item.data.file %}
           <div style="padding:12px 16px;">
             <audio controls preload="none" style="width:100%;border-radius:8px;">
@@ -250,27 +272,73 @@
           </div>
         {% endif %}
 
-        {# ── Own post: images ── #}
-        {% if item.data.images.all %}
-          {% with imgs=item.data.images.all cnt=item.data.images.all|length %}
-          <div class="kvibe-x-media-grid kvibe-x-media-count-{{ cnt|default:'1' }}{% if cnt > 4 %} kvibe-x-media-count-4{% endif %}"
-               data-all-images="[{% for image in item.data.images.all %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
-            {% for image in item.data.images.all %}
-              {% if forloop.counter <= 4 %}
+        {# ── Own post: video + images unified grid ── #}
+        {% if item.data.video_file or item.data.images.all %}
+          {% with imgs=item.data.images.all img_cnt=item.data.images.all|length has_video=item.data.video_file %}
+          {# total = 1 video (if any) + image count; grid class based on total, capped at 4 #}
+          {% if has_video and imgs %}
+            {# Mixed: video occupies slot 1, images fill remaining slots #}
+            {% with total=img_cnt|add:"1" %}
+            <div class="kvibe-x-media-grid kvibe-x-media-count-{{ total|default:'1' }}{% if total > 4 %} kvibe-x-media-count-4{% endif %}"
+                 data-all-images="[{% for image in imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+              {# Slot 1: video #}
               <div class="kvibe-x-media-cell"
-                   onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-                <img src="{{ image.image.url }}"
-                     alt="Post image {{ forloop.counter }}"
-                     class="kvibe-x-media-thumb"
-                     loading="lazy"
-                     onload="this.classList.add('loaded')">
-                {% if forloop.counter == 4 and cnt > 4 %}
-                <div class="kvibe-x-media-more">+{{ cnt|add:"-4" }}</div>
-                {% endif %}
+                   onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ item.data.video_file.url }}', null, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+                <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                  <source src="{{ item.data.video_file.url }}" type="video/mp4">
+                </video>
+                <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
               </div>
-              {% endif %}
-            {% endfor %}
-          </div>
+              {# Slots 2–4: images #}
+              {% for image in imgs %}
+                {% if forloop.counter <= 3 %}
+                <div class="kvibe-x-media-cell"
+                     onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+                  <img src="{{ image.image.url }}"
+                       alt="Post image {{ forloop.counter }}"
+                       class="kvibe-x-media-thumb"
+                       loading="lazy"
+                       onload="this.classList.add('loaded')">
+                  {% if forloop.counter == 3 and img_cnt > 3 %}
+                  <div class="kvibe-x-media-more">+{{ img_cnt|add:"-3" }}</div>
+                  {% endif %}
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+            {% endwith %}
+          {% elif has_video %}
+            {# Video only — single cell #}
+            <div class="kvibe-x-media-grid kvibe-x-media-single"
+                 onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ item.data.video_file.url }}', null, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+              <div class="kvibe-x-media-cell">
+                <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                  <source src="{{ item.data.video_file.url }}" type="video/mp4">
+                </video>
+                <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+              </div>
+            </div>
+          {% else %}
+            {# Images only — standard grid #}
+            <div class="kvibe-x-media-grid kvibe-x-media-count-{{ img_cnt|default:'1' }}{% if img_cnt > 4 %} kvibe-x-media-count-4{% endif %}"
+                 data-all-images="[{% for image in imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+              {% for image in imgs %}
+                {% if forloop.counter <= 4 %}
+                <div class="kvibe-x-media-cell"
+                     onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
+                  <img src="{{ image.image.url }}"
+                       alt="Post image {{ forloop.counter }}"
+                       class="kvibe-x-media-thumb"
+                       loading="lazy"
+                       onload="this.classList.add('loaded')">
+                  {% if forloop.counter == 4 and img_cnt > 4 %}
+                  <div class="kvibe-x-media-more">+{{ img_cnt|add:"-4" }}</div>
+                  {% endif %}
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
           {% endwith %}
         {% endif %}
 
