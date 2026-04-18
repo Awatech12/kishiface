@@ -9090,9 +9090,13 @@
         <div class="kvibe-pm-author-handle" id="kvibePmAuthorHandle"></div>
       </div>
       <button class="kvibe-pm-follow-btn" id="kvibePmFollowBtn" onclick="event.stopPropagation()">Follow</button>
-      <button class="kvibe-pm-menu-btn" onclick="event.stopPropagation()" aria-label="More options">
-        <i class="fas fa-ellipsis-vertical"></i>
-      </button>
+      <a class="kvibe-pm-menu-btn" id="kvibePmEditBtn"
+         href="#"
+         title="Edit post"
+         style="display:none;"
+         onclick="event.stopPropagation()">
+        <i class="fas fa-edit"></i>
+      </a>
     </div>
 
     <!-- BOTTOM BAR (overlaid) -->
@@ -9179,7 +9183,6 @@
   /* ── Collect engagement counts from the post ─────────────────────── */
   function _getEngagement(postId) {
     function _n(el) { if (!el) return 0; var v = parseInt((el.textContent || '').replace(/[^0-9]/g, ''), 10); return isNaN(v) ? 0 : v; }
-    // Use the specific IDs written by post_like.html / post_tags
     var commentEl = document.getElementById('kvibe-comment-count-' + postId);
     var viewEl    = document.getElementById('kvibe-view-count-'    + postId);
     var repostEl  = document.getElementById('kvibe-repost-count-'  + postId);
@@ -9218,6 +9221,18 @@
     nameEl.href = profileUrl;
     document.getElementById('kvibePmAuthorHandle').textContent = '@' + authorHandle;
 
+    /* Edit button — visible only when current user is the post author */
+    var editBtn     = document.getElementById('kvibePmEditBtn');
+    var editIconEl  = document.querySelector('[data-post-id="' + postId + '"] .kvibe-edit-icon');
+    if (editBtn) {
+      if (editIconEl) {
+        editBtn.href         = editIconEl.href;   // e.g. /editpost/<uuid>
+        editBtn.style.display = '';
+      } else {
+        editBtn.style.display = 'none';
+      }
+    }
+
     /* Reply avatar — use the current user's pic already rendered in comment sheet */
     var replyAv = document.getElementById('kvibePmReplyAvatar');
     var myPic   = document.getElementById('kvibe-my-avatar')
@@ -9227,8 +9242,8 @@
 
     /* Post link */
     var postUrl = '/comment/' + postId;
-    document.getElementById('kvibePmViewBtn').href  = postUrl;
-    document.getElementById('kvibePmViewLink').href = postUrl;
+    document.getElementById('kvibePmViewBtn').href   = postUrl;
+    document.getElementById('kvibePmViewLink').href  = postUrl;
     document.getElementById('kvibePmReplyLink').href = postUrl;
 
     /* Caption */
@@ -9247,26 +9262,23 @@
     document.getElementById('kvibePmLikeCount').textContent    = _fmt(eng.likes);
     document.getElementById('kvibePmViewCount').textContent    = _fmt(eng.views);
 
-    /* Follow button — mirror feed card state */
+    /* Follow button — mirror feed card state, hide if own post */
     var followBtn        = document.getElementById('kvibePmFollowBtn');
     var articleFollowBtn = document.querySelector('[data-post-id="' + postId + '"] .kvibe-follow-btn');
     if (followBtn) {
       if (!articleFollowBtn) {
-        followBtn.style.display = 'none'; // own post — no follow btn
+        followBtn.style.display = 'none';
       } else {
         followBtn.style.display = '';
         var isFollowing = articleFollowBtn.classList.contains('kvibe-follow-btn--following');
         followBtn.textContent      = isFollowing ? 'Following' : 'Follow';
         followBtn.dataset.userId   = articleFollowBtn.dataset.userId   || '';
         followBtn.dataset.username = articleFollowBtn.dataset.username || '';
-        // Clone to remove any previous listeners
         var newFollowBtn = followBtn.cloneNode(true);
         followBtn.parentNode.replaceChild(newFollowBtn, followBtn);
         newFollowBtn.addEventListener('click', function(e) {
           e.stopPropagation();
-          // Toggle on the feed card (which has the real data attrs)
           if (articleFollowBtn) kvibeToggleFollow(articleFollowBtn);
-          // Mirror text in modal
           var nowFollowing = articleFollowBtn
             ? articleFollowBtn.classList.contains('kvibe-follow-btn--following')
             : false;
@@ -9358,7 +9370,7 @@
     }
   };
 
-  /* ── Setup comment button and reply bar listeners ─────────────────── */
+  /* ── Setup comment button listener ───────────────────────────────── */
   function setupPostModalInteractions() {
     // Comment button — navigate to full comment thread (no bottom sheet)
     var commentBtn = document.getElementById('kvibePmCommentBtn');
@@ -9367,16 +9379,11 @@
       commentBtn.parentNode.replaceChild(newCommentBtn, commentBtn);
       newCommentBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        if (_pm.postId) {
-          window.location.href = '/comment/' + _pm.postId;
-        }
+        if (_pm.postId) window.location.href = '/comment/' + _pm.postId;
       });
     }
-
-    // Reply link — now a direct anchor to /comment/{postId}, no sheet needed.
-    // href is set in kvibePostModalOpen so nothing extra to wire here.
-
-    // View link — href is already set by kvibePostModalOpen, nothing extra to wire.
+    // Reply link and View link hrefs are set dynamically in kvibePostModalOpen.
+    // Edit button href is also set there — nothing extra to wire here.
   }
 
   /* ── Keyboard ────────────────────────────────────────────────────── */
