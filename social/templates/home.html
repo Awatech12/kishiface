@@ -9194,12 +9194,32 @@
   };
 
   /* ── Collect all image srcs from a post's media grid ──────────────── */
+  /* Prefers data-all-images JSON on the grid (set by template for 5+ image posts).
+     Falls back to scraping rendered <img> cells (works for 1-4 image posts). */
   function _collectImages(postId) {
     var article = document.querySelector('[data-post-id="' + postId + '"]');
     if (!article) return [];
+
+    // 1. Try data-all-images on the grid element (all URLs, even hidden ones)
+    var grid = article.querySelector('.kvibe-x-media-grid');
+    if (grid && grid.dataset.allImages) {
+      try {
+        var parsed = JSON.parse(grid.dataset.allImages);
+        if (Array.isArray(parsed) && parsed.length) {
+          return parsed.map(function(src) { return { src: src, alt: 'Post image' }; });
+        }
+      } catch(e) { /* fall through to DOM scrape */ }
+    }
+
+    // 2. Fallback: scrape rendered thumbnail cells (covers ≤4 images without template change)
     var cells = article.querySelectorAll('.kvibe-x-media-cell img.kvibe-x-media-thumb');
     var imgs = [];
-    cells.forEach(function(img) { imgs.push({ src: img.src, alt: img.alt || 'Post image' }); });
+    cells.forEach(function(img) {
+      // Skip the overlay cell that just shows "+N" (no real src)
+      if (img.src && img.src.indexOf('data:') !== 0) {
+        imgs.push({ src: img.src, alt: img.alt || 'Post image' });
+      }
+    });
     return imgs;
   }
 
@@ -9229,7 +9249,10 @@
   }
 
   /* ── Open ─────────────────────────────────────────────────────────── */
-  function kvibePostModalOpen(postId, mediaType, videoUrl, startIdx, authorName, authorHandle, time, caption) {
+  /* allImages (optional): JSON string of all image URLs — used when the grid
+     only renders 4 cells but the post has more. Pass from the template as:
+     kvibePostModalOpen(postId,'images','',idx,...,caption, JSON.stringify([url1,url2,...])) */
+  function kvibePostModalOpen(postId, mediaType, videoUrl, startIdx, authorName, authorHandle, time, caption, allImages) {
     _pm.postId       = postId;
     _pm.mediaType    = mediaType;
     _pm.authorName   = authorName   || '';
@@ -9280,30 +9303,22 @@
     /* Caption */
     var capEl    = document.getElementById('kvibePmCaption');
     var toggleEl = document.getElementById('kvibePmCaptionToggle');
+    // Always fully reset state on each open
+    capEl.classList.remove('collapsed');
+    toggleEl.classList.remove('visible');
+    toggleEl.textContent = 'more';
+
     if (caption && caption.trim()) {
-      capEl.textContent = caption;
+      capEl.textContent  = caption;
       capEl.style.display = '';
-      // Reset state for each new open
-      capEl.classList.remove('collapsed');
-      toggleEl.classList.remove('visible');
-      toggleEl.textContent = 'more';
-      // Measure after paint to check if text overflows 2 lines
-      requestAnimationFrame(function() {
-        // Apply collapsed first so we can measure
+      // Use character count as a reliable threshold:
+      // ~100 chars comfortably fits 2 lines at 14px on mobile widths.
+      if (caption.trim().length > 100) {
         capEl.classList.add('collapsed');
-        var clampedH = capEl.scrollHeight;
-        capEl.classList.remove('collapsed');
-        var fullH = capEl.scrollHeight;
-        if (fullH > clampedH + 2) {
-          // Text is longer than 2 lines — enable toggle
-          capEl.classList.add('collapsed');
-          toggleEl.classList.add('visible');
-          toggleEl.textContent = 'more';
-        }
-      });
+        toggleEl.classList.add('visible');
+      }
     } else {
       capEl.style.display = 'none';
-      if (toggleEl) { toggleEl.classList.remove('visible'); }
     }
 
     /* Engagement counts */
@@ -9352,7 +9367,17 @@
       vid.play().catch(function() {});
       _hidePmNav();
     } else if (mediaType === 'images') {
-      _pm.images = _collectImages(postId);
+      // If caller passed all image URLs directly, use them; otherwise scrape DOM
+      if (allImages) {
+        try {
+          var parsed = JSON.parse(allImages);
+          _pm.images = Array.isArray(parsed) && parsed.length
+            ? parsed.map(function(src) { return { src: src, alt: 'Post image' }; })
+            : _collectImages(postId);
+        } catch(e) { _pm.images = _collectImages(postId); }
+      } else {
+        _pm.images = _collectImages(postId);
+      }
       _renderPmImage();
       _updatePmNav();
     }
