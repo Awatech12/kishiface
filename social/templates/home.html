@@ -244,89 +244,6 @@
       background: rgba(229,57,53,0.15);
     }
 
-    /* ── Custom Delete Confirm Dialog ── */
-    .kvibe-confirm-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.55);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 99999;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.18s ease;
-    }
-    .kvibe-confirm-overlay.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
-    .kvibe-confirm-dialog {
-      background: var(--kvibe-card-bg, #fff);
-      border-radius: 20px;
-      padding: 32px 28px 24px;
-      width: min(88vw, 360px);
-      text-align: center;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-      transform: scale(0.88) translateY(12px);
-      transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
-    }
-    .kvibe-confirm-overlay.open .kvibe-confirm-dialog {
-      transform: scale(1) translateY(0);
-    }
-    .kvibe-confirm-icon {
-      width: 58px;
-      height: 58px;
-      background: #fff0f0;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-      font-size: 22px;
-      color: #e53935;
-    }
-    .kvibe-confirm-title {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--kvibe-text, #262626);
-      margin-bottom: 8px;
-    }
-    .kvibe-confirm-body {
-      font-size: 14px;
-      color: var(--kvibe-text-secondary, #8e8e8e);
-      line-height: 1.5;
-      margin-bottom: 24px;
-    }
-    .kvibe-confirm-actions {
-      display: flex;
-      gap: 10px;
-    }
-    .kvibe-confirm-btn {
-      flex: 1;
-      padding: 12px 0;
-      border-radius: 12px;
-      font-size: 15px;
-      font-weight: 600;
-      border: none;
-      cursor: pointer;
-      transition: opacity 0.15s, transform 0.1s;
-      font-family: inherit;
-    }
-    .kvibe-confirm-btn:active { transform: scale(0.97); }
-    .kvibe-confirm-cancel {
-      background: var(--kvibe-border, #efefef);
-      color: var(--kvibe-text, #262626);
-    }
-    .kvibe-confirm-cancel:hover { opacity: 0.8; }
-    .kvibe-confirm-ok {
-      background: #e53935;
-      color: #fff;
-    }
-    .kvibe-confirm-ok:hover { opacity: 0.88; }
-
     /* ── Media pane (fills screen) ── */
     .kvibe-pm-media {
       flex: 1;
@@ -3653,14 +3570,6 @@
       border-radius: 4px;
     }
 
-    /* Stop shimmer once skeleton is hidden — prevents off-screen animation cost */
-    #kvibe-skeleton-feed[style*="display: none"] .kvibe-skeleton,
-    #kvibe-skeleton-feed[style*="display:none"] .kvibe-skeleton,
-    #kvibe-skeleton-sidebar[style*="display: none"] .kvibe-skeleton,
-    #kvibe-skeleton-sidebar[style*="display:none"] .kvibe-skeleton {
-      animation: none;
-    }
-
     /* Skeleton Feed */
     .kvibe-skeleton-feed {
       display: none;
@@ -5685,6 +5594,7 @@
       e.stopPropagation();
       const dropdown = btn.nextElementSibling;
       const isOpen = dropdown.style.display !== 'none';
+      // Close all other open menus first
       document.querySelectorAll('.kvibe-post-menu-dropdown').forEach(d => { d.style.display = 'none'; });
       dropdown.style.display = isOpen ? 'none' : 'block';
     }
@@ -5696,57 +5606,27 @@
       if (pmDrop) pmDrop.style.display = 'none';
     });
 
-    // ── Custom confirm dialog ──
-    var _kvibeConfirmCallback = null;
-
-    function kvibeConfirm(callback) {
-      _kvibeConfirmCallback = callback;
-      var overlay = document.getElementById('kvibeConfirmOverlay');
-      if (overlay) {
-        overlay.style.display = 'flex';
-        requestAnimationFrame(function() { overlay.classList.add('open'); });
-      }
-    }
-
-    function kvibeConfirmCancel() {
-      _kvibeConfirmCallback = null;
-      var overlay = document.getElementById('kvibeConfirmOverlay');
-      if (overlay) {
-        overlay.classList.remove('open');
-        setTimeout(function() { overlay.style.display = 'none'; }, 200);
-      }
-    }
-
-    document.getElementById('kvibeConfirmOkBtn').addEventListener('click', function() {
-      var cb = _kvibeConfirmCallback;
-      kvibeConfirmCancel();
-      if (cb) cb();
-    });
-
-    function _kvibeDoDeletePost(postId, articleEl) {
-      var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') ?
-                      document.querySelector('[name=csrfmiddlewaretoken]').value :
-                      (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+    function kvibeDeletePost(postId, btn, e) {
+      e.stopPropagation();
+      if (!confirm('Delete this post? This cannot be undone.')) return;
+      const article = btn.closest('article.kvibe-post');
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') ?
+                        document.querySelector('[name=csrfmiddlewaretoken]').value :
+                        (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
       fetch('/deletepost/' + postId, {
         method: 'POST',
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken }
       })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.status === 'ok' && articleEl) {
-          articleEl.style.transition = 'opacity 0.25s, transform 0.25s';
-          articleEl.style.opacity    = '0';
-          articleEl.style.transform  = 'scale(0.97)';
-          setTimeout(function() { articleEl.remove(); }, 260);
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'ok' && article) {
+          article.style.transition = 'opacity 0.25s, transform 0.25s';
+          article.style.opacity = '0';
+          article.style.transform = 'scale(0.97)';
+          setTimeout(() => article.remove(), 260);
         }
       })
-      .catch(function() {});
-    }
-
-    function kvibeDeletePost(postId, btn, e) {
-      e.stopPropagation();
-      var article = btn.closest('article.kvibe-post');
-      kvibeConfirm(function() { _kvibeDoDeletePost(postId, article); });
+      .catch(() => alert('Could not delete post. Please try again.'));
     }
 
     // ── Modal 3-dot menu ──
@@ -5762,14 +5642,27 @@
       var btn    = document.getElementById('kvibePmMenuBtn');
       var postId = btn ? btn.dataset.postId : null;
       if (!postId) return;
-      // Close modal dropdown first
-      var drop = document.getElementById('kvibePmMenuDropdown');
-      if (drop) drop.style.display = 'none';
+      if (!confirm('Delete this post? This cannot be undone.')) return;
+      // Close modal first
+      kvibePostModalClose(null, true);
       var article = document.querySelector('[data-post-id="' + postId + '"]');
-      kvibeConfirm(function() {
-        kvibePostModalClose(null, true);
-        _kvibeDoDeletePost(postId, article);
-      });
+      var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') ?
+                      document.querySelector('[name=csrfmiddlewaretoken]').value :
+                      (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+      fetch('/deletepost/' + postId, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'ok' && article) {
+          article.style.transition = 'opacity 0.25s, transform 0.25s';
+          article.style.opacity = '0';
+          article.style.transform = 'scale(0.97)';
+          setTimeout(() => article.remove(), 260);
+        }
+      })
+      .catch(() => alert('Could not delete post. Please try again.'));
     }
 
     // ==========================================
@@ -6341,11 +6234,7 @@
       }
       
       // ===== SKELETON LOADING: Reveal real content after page load =====
-      var _kvibeRevealed = false;
       function kvibeRevealContent() {
-        if (_kvibeRevealed) return;
-        _kvibeRevealed = true;
-
         // Feed
         const skelFeed = document.getElementById('kvibe-skeleton-feed');
         const realFeed = document.getElementById('kvibe-real-feed');
@@ -6358,6 +6247,7 @@
         if (skelSidebar) skelSidebar.style.display = 'none';
         if (realSidebar) realSidebar.style.display = 'block';
 
+
         // Attach swipe/drag handlers to all server-rendered carousels now that feed is visible
         if (typeof kvibeInitAllCarouselSwipe === 'function') kvibeInitAllCarouselSwipe();
 
@@ -6369,23 +6259,14 @@
         }
       }
 
-      // Primary: fire as soon as DOM is parsed (no waiting for images/fonts)
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() {
-          setTimeout(kvibeRevealContent, 300);
-        });
+      // Reveal after a short delay to show kvibe-skeleton effect, or on load if already ready
+      if (document.readyState === 'complete') {
+        setTimeout(kvibeRevealContent, 600);
       } else {
-        // DOM already ready (interactive or complete)
-        setTimeout(kvibeRevealContent, 300);
+        window.addEventListener('load', function() {
+          setTimeout(kvibeRevealContent, 400);
+        });
       }
-
-      // Secondary: also fire on full load in case DOMContentLoaded was missed
-      window.addEventListener('load', function() {
-        setTimeout(kvibeRevealContent, 100);
-      });
-
-      // Hard fallback: guarantee skeleton is gone within 3 seconds no matter what
-      setTimeout(kvibeRevealContent, 3000);
 
 
       const lazyVideos = document.querySelectorAll('video[data-src]');
@@ -9407,21 +9288,6 @@
 
 }());
 </script>
-<!-- ══ Custom Delete Confirm Dialog ═════════════════════════════════════ -->
-<div class="kvibe-confirm-overlay" id="kvibeConfirmOverlay" onclick="kvibeConfirmCancel()">
-  <div class="kvibe-confirm-dialog" onclick="event.stopPropagation()">
-    <div class="kvibe-confirm-icon">
-      <i class="fas fa-trash-alt"></i>
-    </div>
-    <div class="kvibe-confirm-title">Delete Post?</div>
-    <div class="kvibe-confirm-body">This post will be permanently removed and cannot be recovered.</div>
-    <div class="kvibe-confirm-actions">
-      <button class="kvibe-confirm-btn kvibe-confirm-cancel" onclick="kvibeConfirmCancel()">Cancel</button>
-      <button class="kvibe-confirm-btn kvibe-confirm-ok" id="kvibeConfirmOkBtn">Delete</button>
-    </div>
-  </div>
-</div>
-
 <!-- ══ X/Twitter-style Post Detail Modal ════════════════════════════════ -->
 <div class="kvibe-post-modal-overlay" id="kvibePostModalOverlay" onclick="kvibePostModalClose(event)">
   <div class="kvibe-post-modal" id="kvibePostModal">
