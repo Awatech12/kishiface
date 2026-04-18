@@ -57,6 +57,7 @@ urlpatterns = [
     # ── Posts ──────────────────────────────────────────────────────────────────
     path('post',                          views.post,         name='post'),
     path('editpost/<uuid:post_id>',       views.editpost,     name='editpost'),
+    path('deletepost/<uuid:post_id>',     views.delete_post,  name='deletepost'),
     path('like/<uuid:post_id>',           views.like_post,    name='like_post'),
     path('repost/<uuid:post_id>/',        views.repost_post,  name='repost_post'),
     path('comment/<uuid:post_id>',        views.post_comment, name='post_comment'),

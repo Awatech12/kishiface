@@ -104,7 +104,7 @@ def _validate_registration(username, email, password, password2):
 _ALLOWED_ORIGINS = (
     'http://127.0.0.1',
     'http://localhost',
-    'https://kishihub.onrender.com',
+    'https://kishiface.onrender.com',
 )
 
 def _safe_next(request, fallback='/home'):
@@ -465,7 +465,7 @@ def _safe_redirect_back(request, fallback='home'):
     allowed_origins = (
         'http://127.0.0.1',
         'http://localhost',
-        'https://kishihub.onrender.com',
+        'https://kishiface.onrender.com',
     )
     if referer and any(referer.startswith(origin) for origin in allowed_origins):
         return redirect(referer)
@@ -1927,6 +1927,20 @@ def editpost(request, post_id):
         'post_id': post_id
     }
     return render(request, 'editpost.html', context)
+
+
+@login_required(login_url='/')
+@require_POST
+def delete_post(request, post_id):
+    """Delete the author's own post (non-repost only)."""
+    post_obj = get_object_or_404(Post, post_id=post_id, author=request.user)
+    if post_obj.is_repost:
+        return JsonResponse({'status': 'error', 'message': 'Cannot delete a repost this way.'}, status=403)
+    post_obj.delete()
+    cache.delete(f'kvibe_interest_v2_{request.user.id}')
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'status': 'ok'})
+    return redirect('home')
 
 
 @login_required(login_url='/')
