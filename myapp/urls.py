@@ -22,7 +22,7 @@ from django.conf.urls.static import static
 
 
 urlpatterns = [
-    path('kishiFaceADMPannel/', admin.site.urls),
+    path('kishiHubADMPannel/', admin.site.urls),
     path('', include('pwa.urls')),
     path('', include('social.urls')),
     
