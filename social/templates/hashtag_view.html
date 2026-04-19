@@ -15,7 +15,240 @@
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
 
   <style>
-    /* ── Root variables — exact match to home.html ── */
+    /* ══ X/Twitter-style Media Grid ══════════════════════════════════════ */
+    .kvibe-x-media-grid {
+      display: grid;
+      gap: 2px;
+      border-radius: 14px;
+      overflow: hidden;
+      margin: 8px 0 4px;
+      cursor: pointer;
+      margin-left: 12px;
+      margin-right: 12px;
+    }
+    .kvibe-x-media-single { grid-template-columns: 1fr; max-height: 520px; }
+    .kvibe-x-media-single .kvibe-x-media-cell { max-height: 520px; }
+    .kvibe-x-media-count-2 { grid-template-columns: 1fr 1fr; aspect-ratio: 16/9; }
+    .kvibe-x-media-count-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; aspect-ratio: 16/10; }
+    .kvibe-x-media-count-3 .kvibe-x-media-cell:first-child { grid-row: 1 / 3; }
+    .kvibe-x-media-count-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; aspect-ratio: 1; }
+    .kvibe-x-media-cell {
+      position: relative;
+      overflow: hidden;
+      background: #111;
+      min-height: 80px;
+    }
+    .kvibe-x-media-cell:hover .kvibe-x-media-thumb { opacity: 0.88; }
+    .kvibe-x-media-thumb {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: opacity 0.15s;
+    }
+    video.kvibe-x-media-thumb { object-fit: cover; }
+    .kvibe-x-media-play-badge {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .kvibe-x-media-play-badge i {
+      width: 52px; height: 52px;
+      background: rgba(0,0,0,0.55);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #fff;
+      backdrop-filter: blur(4px);
+    }
+    .kvibe-x-media-more {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* ══ Post Detail Modal (X/Twitter full-screen style) ════════════════ */
+    .kvibe-post-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 12000;
+      background: #000;
+      overscroll-behavior: contain;
+    }
+    .kvibe-post-modal-overlay.open { display: flex; flex-direction: column; }
+    .kvibe-post-modal {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      animation: kvibePostModalIn 0.2s ease-out;
+    }
+    @keyframes kvibePostModalIn {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .kvibe-pm-topbar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 100%);
+    }
+    .kvibe-pm-back {
+      background: none; border: none; color: #fff;
+      font-size: 20px; width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0; padding: 0;
+    }
+    .kvibe-pm-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      object-fit: cover; flex-shrink: 0;
+      border: 1.5px solid rgba(255,255,255,0.35);
+    }
+    .kvibe-pm-author-info { flex: 1; min-width: 0; }
+    .kvibe-pm-author-name {
+      font-size: 14px; font-weight: 700; color: #fff;
+      text-decoration: none; display: flex; align-items: center;
+      gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kvibe-pm-author-name:hover { text-decoration: underline; }
+    .kvibe-pm-author-handle {
+      font-size: 12px; color: rgba(255,255,255,0.65);
+      margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kvibe-pm-follow-btn {
+      background: transparent; border: 1.5px solid rgba(255,255,255,0.75);
+      color: #fff; font-size: 13px; font-weight: 700;
+      padding: 5px 16px; border-radius: 50px; cursor: pointer;
+      flex-shrink: 0; transition: background 0.14s; white-space: nowrap;
+    }
+    .kvibe-pm-follow-btn:hover { background: rgba(255,255,255,0.12); }
+    .kvibe-pm-menu-btn {
+      background: none; border: none; color: #fff;
+      font-size: 20px; width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0; padding: 0; position: relative;
+    }
+    .kvibe-pm-menu-dropdown {
+      position: absolute; top: calc(100% + 6px); right: 0;
+      min-width: 155px; background: #1e1e1e;
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.55); overflow: hidden;
+      z-index: 9999; animation: kvibeFadeIn 0.12s ease;
+    }
+    .kvibe-pm-menu-item {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 12px 16px; font-size: 14px;
+      color: #efefef; text-decoration: none; background: none;
+      border: none; cursor: pointer; transition: background 0.12s;
+      font-family: inherit; box-sizing: border-box;
+    }
+    .kvibe-pm-menu-item:hover { background: rgba(255,255,255,0.08); }
+    .kvibe-pm-menu-delete { color: #ff6b6b; }
+    .kvibe-pm-menu-delete:hover { background: rgba(229,57,53,0.15); }
+    .kvibe-pm-media {
+      flex: 1; background: #000;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; position: relative; width: 100%;
+    }
+    .kvibe-pm-media img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .kvibe-pm-media video { width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .kvibe-pm-media-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(0,0,0,0.45); border: none; color: #fff;
+      width: 38px; height: 38px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 15px; z-index: 5; transition: background 0.15s;
+    }
+    .kvibe-pm-media-nav:hover { background: rgba(0,0,0,0.7); }
+    .kvibe-pm-media-nav.prev { left: 10px; }
+    .kvibe-pm-media-nav.next { right: 10px; }
+    @media (max-width: 767px) { .kvibe-pm-media-nav { display: none !important; } }
+    .kvibe-pm-media-counter {
+      position: absolute; top: 14px; right: 16px;
+      background: rgba(0,0,0,0.55); color: #fff;
+      font-size: 12px; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; z-index: 6;
+    }
+    .kvibe-pm-bottom {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
+      background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, transparent 100%);
+      padding: 8px 0 0;
+    }
+    .kvibe-pm-caption {
+      padding: 4px 16px 0; font-size: 14px;
+      color: rgba(255,255,255,0.92); line-height: 1.45; word-break: break-word;
+    }
+    .kvibe-pm-caption.collapsed {
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .kvibe-pm-caption-toggle {
+      display: none; background: none; border: none;
+      padding: 2px 16px 8px; font-size: 13px; font-weight: 700;
+      color: rgba(255,255,255,0.55); cursor: pointer; letter-spacing: 0.01em; transition: color 0.15s;
+    }
+    .kvibe-pm-caption-toggle:hover { color: #fff; }
+    .kvibe-pm-caption-toggle.visible { display: block; }
+    .kvibe-pm-engage-row {
+      display: flex; align-items: center; padding: 4px 8px 2px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    .kvibe-pm-eng-btn {
+      display: flex; align-items: center; gap: 5px;
+      background: none; border: none; cursor: pointer;
+      padding: 8px 10px; border-radius: 50px;
+      font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.75);
+      transition: background 0.14s, color 0.14s; text-decoration: none;
+    }
+    .kvibe-pm-eng-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .kvibe-pm-eng-btn i { font-size: 17px; }
+    .kvibe-pm-eng-btn.right { margin-left: auto; }
+    .kvibe-pm-reply-bar {
+      display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+    .kvibe-pm-reply-avatar {
+      width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
+      flex-shrink: 0; border: 1px solid rgba(255,255,255,0.25);
+    }
+    .kvibe-pm-reply-input {
+      flex: 1; background: none; border: none; outline: none;
+      color: rgba(255,255,255,0.55); font-size: 15px; font-family: inherit; cursor: pointer;
+    }
+    .kvibe-pm-reply-input::placeholder { color: rgba(255,255,255,0.45); }
+    .kvibe-pm-view-link {
+      font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.45);
+      text-decoration: none; padding: 6px 10px; border-radius: 50px; flex-shrink: 0;
+    }
+    .kvibe-pm-view-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .kvibe-pm-loading {
+      display: flex; align-items: center; justify-content: center;
+      padding: 32px; color: rgba(255,255,255,0.5); font-size: 13px; gap: 8px;
+    }
+    .kvibe-pm-loading i { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .kvibe-pm-detail { display: none; }
+
+    /* ── Root variables ── */
     :root {
       --kvibe-bg: #fafafa;
       --kvibe-white: #ffffff;
@@ -39,51 +272,29 @@
       line-height: 1.4;
     }
 
-    /* ── Layout — mirrors home.html exactly ── */
+    /* ── Layout ── */
     .kvibe-container { max-width: 100%; width: 100%; }
-
     .kvibe-desktop-layout {
-      display: flex;
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px 20px 0 20px;
-      gap: 20px;
+      display: flex; max-width: 1400px; margin: 0 auto;
+      padding: 20px 20px 0 20px; gap: 20px;
     }
-
     .kvibe-left-sidebar {
-      width: 245px;
-      flex-shrink: 0;
-      position: sticky;
-      top: 50px;
-      height: calc(100vh - 104px);
-      overflow-y: auto;
-      padding-right: 10px;
+      width: 245px; flex-shrink: 0; position: sticky; top: 50px;
+      height: calc(100vh - 104px); overflow-y: auto; padding-right: 10px;
     }
-
     .kvibe-main-feed { flex: 1; max-width: 600px; margin: 0 auto; }
-
     .kvibe-right-sidebar {
-      width: 380px;
-      flex-shrink: 0;
-      position: sticky;
-      top: 50px;
-      height: calc(100vh - 104px);
-      overflow-y: auto;
-      padding-left: 10px;
+      width: 380px; flex-shrink: 0; position: sticky; top: 50px;
+      height: calc(100vh - 104px); overflow-y: auto; padding-left: 10px;
     }
-
     .kvibe-desktop-only { display: none; }
 
     /* ── Desktop nav ── */
-    .kvibe-desktop-nav {
-      width: 100%; display: flex; flex-direction: column;
-      gap: 8px; padding: 20px 0; background: var(--kvibe-white);
-    }
+    .kvibe-desktop-nav { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 20px 0; background: var(--kvibe-white); }
     .kvibe-desktop-nav-item {
       display: flex; align-items: center; text-decoration: none;
-      width: 100%; padding: 12px; position: relative;
-      transition: all 0.2s ease; cursor: pointer; border-radius: 8px;
-      color: var(--kvibe-text);
+      width: 100%; padding: 12px; position: relative; transition: all 0.2s ease;
+      cursor: pointer; border-radius: 8px; color: var(--kvibe-text);
     }
     .kvibe-desktop-nav-item:hover, .kvibe-desktop-nav-item.active { background: var(--kvibe-bg); }
     .kvibe-desktop-nav-icon { width: 24px; height: 24px; margin-right: 12px; position: relative; flex-shrink: 0; }
@@ -98,13 +309,8 @@
 
     /* ── Hashtag hero ── */
     .kvibe-hashtag-hero {
-      background: var(--kvibe-white);
-      border-bottom: 1px solid var(--kvibe-border);
-      padding: 20px 16px;
-      margin-bottom: 0;
-      display: flex;
-      align-items: center;
-      gap: 16px;
+      background: var(--kvibe-white); border-bottom: 1px solid var(--kvibe-border);
+      padding: 20px 16px; margin-bottom: 0; display: flex; align-items: center; gap: 16px;
     }
     .kvibe-hashtag-hero-icon {
       width: 56px; height: 56px; border-radius: 50%;
@@ -112,9 +318,7 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 24px; color: white; flex-shrink: 0;
     }
-    .kvibe-hashtag-hero-title {
-      font-size: 22px; font-weight: 700; color: var(--kvibe-text);
-    }
+    .kvibe-hashtag-hero-title { font-size: 22px; font-weight: 700; color: var(--kvibe-text); }
     .kvibe-hashtag-hero-title span { color: var(--kvibe-primary); }
     .kvibe-hashtag-hero-stats {
       font-size: 13px; color: var(--kvibe-text-light);
@@ -124,21 +328,16 @@
     /* ── Back button ── */
     .kvibe-back-btn {
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 8px 14px; background: var(--kvibe-white);
-      color: var(--kvibe-text); text-decoration: none;
-      border-radius: 8px; font-size: 13px; font-weight: 500;
-      border: 1px solid var(--kvibe-border); margin: 12px 16px;
-      transition: all 0.2s ease;
+      padding: 8px 14px; background: var(--kvibe-white); color: var(--kvibe-text);
+      text-decoration: none; border-radius: 8px; font-size: 13px; font-weight: 500;
+      border: 1px solid var(--kvibe-border); margin: 12px 16px; transition: all 0.2s ease;
     }
     .kvibe-back-btn:hover { background: var(--kvibe-bg); color: var(--kvibe-primary); }
 
-    /* ── Post card — exact same as home.html ── */
+    /* ── Post card ── */
     .kvibe-post {
-      background: var(--kvibe-white);
-      margin-bottom: 0;
-      border-bottom: 1px solid var(--kvibe-border);
-      border-radius: 8px;
-      overflow: hidden;
+      background: var(--kvibe-white); margin-bottom: 0;
+      border-bottom: 1px solid var(--kvibe-border); border-radius: 8px; overflow: hidden;
     }
     .kvibe-repost-header {
       display: flex; align-items: center; padding: 8px 16px;
@@ -196,34 +395,6 @@
     .kvibe-text-toggle:hover { color: var(--kvibe-text); }
     .kvibe-text-toggle i { font-size: 12px; }
 
-    /* Media */
-    .kvibe-media-container { width: 100%; position: relative; overflow: hidden; }
-    .kvibe-image-slide { width: 100%; position: relative; background: #fafafa; }
-    .kvibe-image-slide img { width: 100%; max-height: 600px; object-fit: contain; display: block; }
-    .kvibe-video-container { position: relative; width: 100%; background: #000; min-height: 200px; display: flex; justify-content: center; align-items: center; }
-    .kvibe-video { max-width: 100%; max-height: 600px; object-fit: contain; }
-    .kvibe-play-pause-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 4em; color: white; background: rgba(0,0,0,.4); border-radius: 50%; padding: 15px 20px 15px 23px; pointer-events: none; opacity: 0; transition: opacity .3s ease; }
-    .kvibe-video-container.paused .kvibe-play-pause-icon { opacity: 1; }
-    .kvibe-seek-overlay-btn { position: absolute; bottom: 10px; background: rgba(0,0,0,.4); color: white; border: none; border-radius: 5px; padding: 8px 10px; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 5px; z-index: 10; opacity: 0; transition: opacity .3s ease; }
-    .kvibe-video-container.paused .kvibe-seek-overlay-btn, .kvibe-video-container:hover .kvibe-seek-overlay-btn { opacity: 1; }
-    .kvibe-backward-btn { left: 10px; } .kvibe-forward-btn { right: 10px; }
-    .kvibe-mixed-media-carousel { width: 100%; position: relative; overflow: hidden; }
-    .kvibe-mixed-media-track { display: flex; transition: transform .3s ease; }
-    .kvibe-mixed-media-slide { width: 100%; flex-shrink: 0; display: flex; flex-direction: column; position: relative; background: #000; }
-    .kvibe-media-type-badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; z-index: 25; display: flex; align-items: center; gap: 4px; }
-    .kvibe-mixed-carousel-controls { position: absolute; top: 0; bottom: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; pointer-events: none; }
-    .kvibe-mixed-carousel-prev, .kvibe-mixed-carousel-next { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,.5); border: none; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: all; opacity: .8; transition: opacity .2s; z-index: 30; }
-    .kvibe-mixed-carousel-indicators { position: absolute; bottom: 16px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; z-index: 30; }
-    .kvibe-mixed-indicator { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.5); transition: background .2s, transform .2s; cursor: pointer; }
-    .kvibe-mixed-indicator.active { background: white; transform: scale(1.2); }
-    .kvibe-image-carousel { width: 100%; position: relative; overflow: hidden; }
-    .kvibe-image-track { display: flex; transition: transform .3s ease; }
-    .kvibe-carousel-controls { position: absolute; top: 0; bottom: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; pointer-events: none; }
-    .kvibe-carousel-prev, .kvibe-carousel-next { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,.5); border: none; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: all; opacity: .8; transition: opacity .2s; }
-    .kvibe-carousel-indicators { position: absolute; bottom: 16px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
-    .kvibe-indicator { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.5); transition: background .2s; }
-    .kvibe-indicator.active { background: white; }
-
     /* ── Empty state ── */
     .kvibe-empty-state { text-align: center; padding: 60px 20px; background: var(--kvibe-white); border-radius: 8px; }
     .kvibe-empty-state i { font-size: 48px; color: var(--kvibe-text-light); margin-bottom: 16px; display: block; }
@@ -272,21 +443,6 @@
     .kvibe-sidebar-tab { flex: 1; padding: 12px 8px; background: none; border: none; font-size: 13px; font-weight: 600; color: var(--kvibe-text-light); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all .2s ease; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit; }
     .kvibe-sidebar-tab:hover { color: var(--kvibe-text); background: var(--kvibe-bg); }
     .kvibe-sidebar-tab.active { color: var(--kvibe-primary); border-bottom-color: var(--kvibe-primary); background: none; }
-    .kvibe-sidebar-tab-count { background: var(--kvibe-border); color: var(--kvibe-text); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center; transition: background .2s, color .2s; }
-    .kvibe-sidebar-tab.active .kvibe-sidebar-tab-count { background: rgba(0,149,246,.12); color: var(--kvibe-primary); }
-    .kvibe-sidebar-tab-panel { display: none; max-height: 340px; overflow-y: auto; padding: 8px 0; scrollbar-width: thin; scrollbar-color: var(--kvibe-border) transparent; }
-    .kvibe-sidebar-tab-panel::-webkit-scrollbar { width: 4px; }
-    .kvibe-sidebar-tab-panel::-webkit-scrollbar-thumb { background: var(--kvibe-border); border-radius: 2px; }
-    .kvibe-sidebar-tab-panel.active { display: block; }
-    .kvibe-sidebar-user-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; text-decoration: none; transition: background .15s ease; border-radius: 0; }
-    .kvibe-sidebar-user-row:hover { background: var(--kvibe-bg); }
-    .kvibe-sidebar-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--kvibe-border); }
-    .kvibe-sidebar-user-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .kvibe-sidebar-user-name { font-size: 13px; font-weight: 600; color: var(--kvibe-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .kvibe-sidebar-user-handle { font-size: 11px; color: var(--kvibe-text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .kvibe-sidebar-empty { text-align: center; padding: 24px 16px; color: var(--kvibe-text-light); }
-    .kvibe-sidebar-empty i { font-size: 22px; margin-bottom: 8px; opacity: .4; display: block; }
-    .kvibe-sidebar-empty p { font-size: 12px; }
 
     /* ── Trending hashtags ── */
     .kvibe-trending-hashtags { background: var(--kvibe-white); border-radius: 16px; overflow: hidden; margin-bottom: 20px; }
@@ -303,7 +459,6 @@
     /* ── Mobile sidebar ── */
     .kvibe-mobile-footer-only { display: none; }
     @media (max-width: 767px) { .kvibe-mobile-footer-only { display: block; } }
-
     .kvibe-mobile-sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1100; opacity: 0; transition: opacity .3s ease; }
     .kvibe-mobile-sidebar-overlay.active { display: block; opacity: 1; }
     .kvibe-mobile-right-sidebar { position: fixed; top: 0; right: -100%; width: 82vw; max-width: 320px; height: 100dvh; background: var(--kvibe-white); z-index: 1101; overflow-y: auto; transition: right .32s cubic-bezier(.4,0,.2,1); box-shadow: -4px 0 24px rgba(0,0,0,.15); padding-bottom: 80px; }
@@ -319,14 +474,14 @@
       .kvibe-mobile-sidebar-toggle span { font-size: 9px; font-weight: 700; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: .5px; }
     }
 
-    /* ── Snippet action bar styles (copied from home.html) ── */
-    @keyframes heartMorph { 0% { transform:scale(1) rotate(0deg); } 10% { transform:scale(.7) rotate(-8deg); } 30% { transform:scale(1.45) rotate(4deg); } 50% { transform:scale(.9) rotate(-2deg); } 65% { transform:scale(1.15) rotate(1deg); } 80% { transform:scale(.97) rotate(0deg); } 100% { transform:scale(1) rotate(0deg); } }
-    @keyframes jellyPop { 0% { transform:scale(1); } 25% { transform:scale(1.3,.75); } 50% { transform:scale(.85,1.2); } 75% { transform:scale(1.1,.9); } 100% { transform:scale(1); } }
-    @keyframes repostSpin { 0% { transform:rotate(0deg) scale(1); } 40% { transform:rotate(200deg) scale(.8); } 70% { transform:rotate(340deg) scale(1.1); } 100% { transform:rotate(360deg) scale(1); } }
-    @keyframes commentBounce { 0% { transform:translateY(0) scaleY(1); } 25% { transform:translateY(-6px) scaleY(.9); } 55% { transform:translateY(2px) scaleY(1.05); } 75% { transform:translateY(-2px) scaleY(.98); } 100% { transform:translateY(0) scaleY(1); } }
-    @keyframes youShimmer { 0% { background-position:-100% center; } 100% { background-position:200% center; } }
-    @keyframes avatarPeek { 0% { transform:translateX(-6px) scale(.8);opacity:0; } 60% { transform:translateX(2px) scale(1.05);opacity:1; } 100% { transform:translateX(0) scale(1);opacity:1; } }
-    @keyframes countTick { 0% { transform:translateY(0);opacity:1; } 30% { transform:translateY(-14px);opacity:0; } 31% { transform:translateY(14px);opacity:0; } 70% { transform:translateY(0);opacity:1; } }
+    /* ── Snippet action bar styles ── */
+    @keyframes heartMorph { 0%{transform:scale(1) rotate(0deg);} 10%{transform:scale(.7) rotate(-8deg);} 30%{transform:scale(1.45) rotate(4deg);} 50%{transform:scale(.9) rotate(-2deg);} 65%{transform:scale(1.15) rotate(1deg);} 80%{transform:scale(.97) rotate(0deg);} 100%{transform:scale(1) rotate(0deg);} }
+    @keyframes jellyPop { 0%{transform:scale(1);} 25%{transform:scale(1.3,.75);} 50%{transform:scale(.85,1.2);} 75%{transform:scale(1.1,.9);} 100%{transform:scale(1);} }
+    @keyframes repostSpin { 0%{transform:rotate(0deg) scale(1);} 40%{transform:rotate(200deg) scale(.8);} 70%{transform:rotate(340deg) scale(1.1);} 100%{transform:rotate(360deg) scale(1);} }
+    @keyframes commentBounce { 0%{transform:translateY(0) scaleY(1);} 25%{transform:translateY(-6px) scaleY(.9);} 55%{transform:translateY(2px) scaleY(1.05);} 75%{transform:translateY(-2px) scaleY(.98);} 100%{transform:translateY(0) scaleY(1);} }
+    @keyframes youShimmer { 0%{background-position:-100% center;} 100%{background-position:200% center;} }
+    @keyframes avatarPeek { 0%{transform:translateX(-6px) scale(.8);opacity:0;} 60%{transform:translateX(2px) scale(1.05);opacity:1;} 100%{transform:translateX(0) scale(1);opacity:1;} }
+    @keyframes countTick { 0%{transform:translateY(0);opacity:1;} 30%{transform:translateY(-14px);opacity:0;} 31%{transform:translateY(14px);opacity:0;} 70%{transform:translateY(0);opacity:1;} }
     .kvibe-engagement { display:flex;flex-wrap:wrap;align-items:center;padding:10px 16px 8px;border-top:1px solid var(--kvibe-border);gap:10px;background:var(--kvibe-white); }
     .kvibe-likers-container { display:flex;margin-right:6px; }
     .kvibe-liker-pic { width:24px;height:24px;border-radius:50%;border:2px solid var(--kvibe-white);margin-left:-6px;animation:avatarPeek .4s cubic-bezier(.34,1.56,.64,1) both; }
@@ -356,10 +511,12 @@
     .kvibe-share-count { font-size:13.5px;display:none; }
     .kvibe-share-count.kvibe-show { display:inline; }
     .kvibe-share-btn:hover .kvibe-action-icon { color:var(--kvibe-primary);animation:jellyPop .45s cubic-bezier(.34,1.56,.64,1); }
+
+    /* ── Share modal ── */
     .kvibe-share-modal { position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:flex-end;z-index:6000; }
     .kvibe-share-modal.active { display:flex; }
     .kvibe-share-modal-content { background:var(--kvibe-white);width:100%;border-radius:20px 20px 0 0;padding:20px;max-width:500px;animation:kvibeShareSlideUp .3s ease-out; }
-    @keyframes kvibeShareSlideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+    @keyframes kvibeShareSlideUp { from{transform:translateY(100%);} to{transform:translateY(0);} }
     .kvibe-share-header { display:flex;justify-content:space-between;align-items:center;font-weight:bold;font-size:18px;margin-bottom:20px;color:var(--kvibe-text); }
     .kvibe-share-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:20px 10px;text-align:center;max-height:60vh;overflow-y:auto;padding-bottom:10px; }
     .kvibe-share-item { display:flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none;color:var(--kvibe-text);font-size:11px;cursor:pointer; }
@@ -367,9 +524,7 @@
     .kvibe-share-icon-wrap:active { transform:scale(.9); }
     .si-whatsapp{background:#25D366;}.si-facebook{background:#1877F2;}.si-x{background:#000;}.si-telegram{background:#0088cc;}.si-snapchat{background:#FFFC00;}.si-sms{background:#4cd964;}.si-email{background:var(--kvibe-text-light);}.si-copy{background:var(--kvibe-text-light);}
 
-    /* ═══════════════════════════════════════════════
-       COMMENT BOTTOM SHEET — same as home.html
-       ═══════════════════════════════════════════════ */
+    /* ── Comment bottom sheet ── */
     .comment-sheet-overlay { position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:5000;display:none;align-items:flex-end; }
     .comment-sheet-overlay.active { display:flex; }
     .comment-sheet-content { background:#fff;width:100%;height:75vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;position:relative;animation:slideUp 0.3s ease-out; }
@@ -402,7 +557,7 @@
     .kf-recording-info { display:flex;flex-direction:column;gap:3px; }
     .kf-recording-text { font-size:14px;font-weight:500; }
     .kf-recording-timer { font-size:13px;color:#ed4956;font-weight:700; }
-    .kf-recording-hint  { font-size:11px;opacity:0.75; }
+    .kf-recording-hint { font-size:11px;opacity:0.75; }
     .kf-mic-pulse { animation:kfMicPulse 1.5s infinite;color:#ed4956 !important; }
     @keyframes kfMicPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
     .kvibe-audio-container { display:inline-flex;align-items:center;gap:6px;background:#efefef;border-radius:20px;padding:5px 10px;max-width:185px;width:185px;margin-bottom:6px;box-sizing:border-box; }
@@ -434,61 +589,21 @@
     .kvibe-comment { display:flex;gap:10px;padding:12px 16px;align-items:flex-start;background:#fff; }
     .kvibe-cmt-avatar-wrap { display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:36px; }
     .kvibe-cmt-avatar { width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block; }
-    .kvibe-cmt-avatar-letter { background:linear-gradient(135deg,#0095f6,#4fb3f7);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center; }
-    .kvibe-cmt-thread-line { width:2px;flex:1;background:#dbdbdb;border-radius:1px;margin-top:6px;display:none;min-height:20px; }
-    .kvibe-cmt-thread-line.visible { display:block; }
     .kvibe-cmt-body { flex:1;min-width:0; }
     .kvibe-cmt-meta-row { display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:3px; }
     .kvibe-cmt-username { font-size:13px;font-weight:700;color:#262626;text-decoration:none;line-height:1.2; }
     .kvibe-cmt-time { font-size:11px;color:#8e8e8e;line-height:1.2; }
     .kvibe-cmt-text { font-size:14px;line-height:1.45;color:#262626;margin:0 0 6px;word-break:break-word; }
-    .kvibe-cmt-image { max-width:180px;border-radius:10px;margin-bottom:6px;display:block; }
     .kvibe-cmt-actions-row { display:flex;align-items:center;gap:14px;margin-top:4px;flex-wrap:wrap; }
     .kvibe-cmt-action-link { background:none;border:none;padding:0;font-size:12px;font-weight:600;color:#8e8e8e;cursor:pointer;line-height:1;transition:color 0.15s;margin:0; }
     .kvibe-cmt-action-link:hover { color:#262626; }
-    .kvibe-cmt-view-replies { background:none;border:none;padding:0;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#8e8e8e;cursor:pointer;transition:color 0.15s;line-height:1;margin:0; }
-    .kvibe-cmt-view-replies:hover { color:#262626; }
-    .kvibe-cmt-line-dash { display:inline-block;width:20px;height:2px;background:#dbdbdb;border-radius:1px;vertical-align:middle; }
-    .kvibe-cmt-like-wrap { display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:2px; }
-    .kvibe-comment-like-btn { display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:4px 2px;user-select:none;-webkit-tap-highlight-color:transparent;text-decoration:none; }
-    .kvibe-clb-icon { font-size:18px;color:#8e8e8e;transition:color 0.15s ease,transform 0.2s cubic-bezier(0.175,0.885,0.32,1.5);line-height:1; }
-    .kvibe-clb-icon--liked { color:#0095f6; }
-    .kvibe-clb-pulse { animation:kvibePulse 0.35s cubic-bezier(0.175,0.885,0.32,1.5) forwards; }
-    @keyframes kvibePulse { 0%{transform:scale(1);} 40%{transform:scale(1.45);} 70%{transform:scale(0.88);} 100%{transform:scale(1);} }
-    .kvibe-clb-count { font-size:11px;font-weight:600;color:#8e8e8e;line-height:1;min-height:13px;display:block;text-align:center;transition:color 0.15s; }
-    .kvibe-clb-count--liked { color:#0095f6; }
-    .kvibe-reply-item { display:flex;gap:8px;padding:8px 0;align-items:flex-start;animation:kvibeFadeIn 0.22s ease forwards; }
-    @keyframes kvibeFadeIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
-    .kvibe-rpl-avatar-wrap { flex-shrink:0;width:28px; }
-    .kvibe-rpl-avatar { width:28px;height:28px;border-radius:50%;object-fit:cover;display:block; }
-    .kvibe-rpl-body { flex:1;min-width:0; }
-    .kvibe-rpl-meta-row { display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:2px; }
-    .kvibe-rpl-username { font-size:12.5px;font-weight:700;color:#262626;text-decoration:none;line-height:1.2; }
-    .kvibe-rpl-time { font-size:11px;color:#8e8e8e;line-height:1.2; }
-    .kvibe-rpl-content { font-size:13.5px;line-height:1.45;color:#262626;word-break:break-word;margin-bottom:4px; }
-    .kvibe-rpl-actions-row { display:flex;align-items:center;gap:10px; }
-    .kvibe-rpl-action { background:none;border:none;font-size:11.5px;font-weight:600;color:#8e8e8e;cursor:pointer;padding:0;transition:color 0.15s;line-height:1;margin:0; }
-    .kvibe-rpl-action:hover { color:#262626; }
-    .kvibe-rpl-like-wrap { display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:2px; }
-    .kvibe-rpl-like-right-btn { display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;cursor:pointer;padding:4px 2px;margin:0; }
-    .kvibe-rpl-heart-right { font-size:16px;color:#8e8e8e;transition:color 0.15s ease,transform 0.2s cubic-bezier(0.175,0.885,0.32,1.5);line-height:1; }
-    .kvibe-rpl-heart-right--liked { color:#0095f6; }
-    .kvibe-rpl-like-right-count { font-size:10.5px;font-weight:600;color:#8e8e8e;line-height:1;min-height:12px;display:block;text-align:center; }
-    .kvibe-reply-input-row { display:flex;align-items:center;gap:8px; }
-    .kvibe-reply-mini-avatar { width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0; }
-    .kvibe-reply-input { flex:1;padding:7px 12px;border:1.5px solid #dbdbdb;border-radius:20px;font-size:13px;color:#262626;background:#fafafa;outline:none;transition:border-color 0.2s;font-family:inherit; }
-    .kvibe-reply-input:focus { border-color:#0095f6;background:#fff; }
-    .kvibe-reply-send-btn { background:none;border:none;color:#0095f6;font-size:15px;cursor:pointer;padding:4px;transition:opacity 0.15s;flex-shrink:0;margin:0; }
-    .kvibe-replies-container { margin-top:8px; }
     .kvibe-no-comments { display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 24px 48px;text-align:center;margin:16px;border-radius:16px;border:1.5px dashed #dbdbdb;background:#fff; }
     .kvibe-no-cmt-icon { width:64px;height:64px;background:#fafafa;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;color:#dbdbdb;margin-bottom:16px; }
     .kvibe-no-cmt-title { font-size:16px;font-weight:700;color:#262626;margin:0 0 6px; }
     .kvibe-no-cmt-sub { font-size:13px;color:#8e8e8e;margin:0; }
 
     /* ── Responsive ── */
-    @media (min-width: 768px) {
-      .kvibe-desktop-only { display: block; }
-    }
+    @media (min-width: 768px) { .kvibe-desktop-only { display: block; } }
     @media (max-width: 767px) {
       .kvibe-desktop-layout { display: block; padding: 2px 0 0 0; }
       .kvibe-left-sidebar, .kvibe-right-sidebar { display: none; }
@@ -530,7 +645,7 @@
     </div>
   </div>
 
-  <!-- ═══ COMMENT BOTTOM SHEET (same as home.html) ═══ -->
+  <!-- ═══ COMMENT BOTTOM SHEET ═══ -->
   <div class="comment-sheet-overlay" id="commentSheet">
     <div class="comment-sheet-content">
       <div class="comment-sheet-header">
@@ -542,8 +657,6 @@
           <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Loading...
         </div>
       </div>
-
-      <!-- Recording overlay -->
       <div class="kf-comment-recording-overlay" id="kfCommentRecordingOverlay">
         <canvas class="kf-recording-wave-canvas" id="kfCommentRecordingWave" width="60" height="30"></canvas>
         <div class="kf-recording-info">
@@ -552,8 +665,6 @@
           <div class="kf-recording-hint">Release to send</div>
         </div>
       </div>
-
-      <!-- Emoji picker -->
       <div class="kf-cs-emoji-picker" id="kfCsEmojiPicker">
         <div class="kf-cs-emoji-tabs" id="kfCsEmojiTabs"></div>
         <div class="kf-cs-emoji-search">
@@ -563,7 +674,6 @@
           <div class="kf-cs-emoji-grid" id="kfCsEmojiGrid"></div>
         </div>
       </div>
-
       <div class="kf-comment-input-area">
         <form id="modalPostForm"
           hx-post=""
@@ -573,37 +683,22 @@
           hx-on::after-request="if(event.detail.successful){ this.reset(); kvibeCSResetInputUI(); var e=document.getElementById('kvibe-empty-comments'); if(e) e.remove(); }">
           {% csrf_token %}
           <div class="kf-comment-input-wrapper">
-            <img src="{{ user.profile.get_picture_url }}" alt="" class="kf-comment-profile-img">
-
-            <!-- Image attach -->
-            <button type="button" class="kf-comment-action-btn"
-                    onclick="document.getElementById('modal_image_input').click()" title="Attach image">
+            <img src="{{ user.profile.get_picture_url }}" alt="" class="kf-comment-profile-img" id="kvibe-my-avatar">
+            <button type="button" class="kf-comment-action-btn" onclick="document.getElementById('modal_image_input').click()" title="Attach image">
               <i class="fa-regular fa-image"></i>
             </button>
             <input type="file" id="modal_image_input" name="image" multiple hidden onchange="kvibeCSUpdateSendBtn()">
             <input type="file" id="modal_audio_file" name="audio_file" hidden>
-
-            <!-- AI quick replies -->
-            <button type="button" class="kf-comment-action-btn kvibe-ai-btn"
-                    onclick="kvibeCSToggleAI()" title="Quick replies">
+            <button type="button" class="kf-comment-action-btn kvibe-ai-btn" onclick="kvibeCSToggleAI()" title="Quick replies">
               <i class="fa-solid fa-wand-magic-sparkles"></i>
             </button>
-
-            <!-- Emoji button -->
-            <button type="button" class="kf-comment-action-btn" id="kfCsEmojiBtn"
-                    onclick="kfCsToggleEmojiPicker(event)" title="Emoji">
+            <button type="button" class="kf-comment-action-btn" id="kfCsEmojiBtn" onclick="kfCsToggleEmojiPicker(event)" title="Emoji">
               <i class="far fa-smile"></i>
             </button>
-
-            <textarea class="kf-comment-input" name="comment" id="modalTextInput"
-                      placeholder="Write a comment…" rows="1"
-                      oninput="kvibeCSOnInput()"></textarea>
-
+            <textarea class="kf-comment-input" name="comment" id="modalTextInput" placeholder="Write a comment…" rows="1" oninput="kvibeCSOnInput()"></textarea>
             <button type="submit" class="kf-comment-send-btn" id="modalSendBtn" style="display:none;">
               <i class="fa-solid fa-paper-plane" style="font-size:14px;"></i>
             </button>
-
-            <!-- Hold-to-record mic -->
             <button type="button" class="kf-comment-action-btn" id="modalMicBtn"
                     title="Hold to record"
                     onmousedown="kfCsStartRecording(event)"
@@ -641,7 +736,6 @@
             <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
             <span class="kvibe-desktop-nav-label">Home</span>
           </a>
-        
           <a href="{% url 'search' %}" class="kvibe-desktop-nav-item" title="Search">
             <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round"/></svg></div>
             <span class="kvibe-desktop-nav-label">Search</span>
@@ -650,13 +744,9 @@
             <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/><line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/></svg></div>
             <span class="kvibe-desktop-nav-label">Create</span>
           </a>
-          <!-- Notifications (desktop → slide-in panel, same as home.html) -->
           <button class="kvibe-desktop-nav-item kvibe-notif-panel-trigger"
-                  id="kvibe-desktop-notif-btn"
-                  title="Notifications"
-                  aria-haspopup="true"
-                  aria-expanded="false"
-                  aria-controls="kvibe-notif-panel"
+                  id="kvibe-desktop-notif-btn" title="Notifications"
+                  aria-haspopup="true" aria-expanded="false" aria-controls="kvibe-notif-panel"
                   style="background:none;border:none;cursor:pointer;width:100%;text-align:left;">
             <div class="kvibe-desktop-nav-icon">
               <i class="fa-regular fa-bell" id="kvibe-desktop-bell-icon" style="font-size:20px;color:var(--kvibe-text-light);"></i>
@@ -716,11 +806,8 @@
             <div class="kvibe-post-header">
               <img
                 src="{% if post.is_repost and post.original_post %}{{ post.original_post.author.profile.picture.url }}{% else %}{{ post.author.profile.picture.url }}{% endif %}"
-                class="kvibe-profile-pic"
-                alt="profile"
-                loading="lazy"
-                onerror="this.onerror=null;this.src='https://placehold.co/32x32/dbdbdb/8e8e8e?text=U';"
-              >
+                class="kvibe-profile-pic" alt="profile" loading="lazy"
+                onerror="this.onerror=null;this.src='https://placehold.co/32x32/dbdbdb/8e8e8e?text=U';">
               <div style="flex:1;">
                 <div style="display:flex;align-items:center;flex-wrap:wrap;">
                   <a href="/{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}/" class="kvibe-username" data-user="{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}">
@@ -789,70 +876,151 @@
             </div>
             {% endif %}
 
-            <!-- Media -->
-            {% if post.file or post.video_file or post.images.all or post.is_repost %}
+            <!-- ══ Media — X/Twitter grid (matches home.html / feed_posts_partial.html) ══ -->
+            {% with op=post.original_post %}
+            {% if post.video_file or post.file or post.images.all or op and op.video_file or op and op.file or op and op.images.all %}
             <div class="kvibe-media-container">
-              {% if post.is_repost and post.original_post %}
-                {% with op=post.original_post %}
-                  {% if op.video_file %}
-                  <div class="kvibe-video-container paused" id="kvibe-container-{{ post.post_id }}">
-                    <video class="kvibe-video" id="kvibe-post-video-{{ post.post_id }}" preload="metadata"
-                           poster="{% if op.video_thumbnail %}{{ op.video_thumbnail.url }}{% endif %}"
-                           data-src="{{ op.video_file.url }}"
-                           onclick="kvibeTogglePlayPause('kvibe-post-video-{{ post.post_id }}', event)">
-                      <source data-src="{{ op.video_file.url }}#t=0.5" type="video/mp4">
-                    </video>
-                    <i class="fa-solid fa-play kvibe-play-pause-icon"></i>
-                    <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ post.post_id }}',-10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
-                    <button class="kvibe-seek-overlay-btn kvibe-forward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ post.post_id }}',10)">10s <i class="fa-solid fa-forward-step"></i></button>
-                  </div>
-                  {% elif op.images.count > 1 %}
-                  <div class="kvibe-image-carousel" id="kvibe-carousel-{{ post.post_id }}" data-slide="0" data-total="{{ op.images.count }}">
-                    <div class="kvibe-image-track" id="kvibe-track-{{ post.post_id }}">
-                      {% for img in op.images.all %}<div class="kvibe-image-slide"><img src="{{ img.image.url }}" alt="Image {{ forloop.counter }}" loading="lazy" onload="this.classList.add('loaded')"></div>{% endfor %}
-                    </div>
-                    <div class="kvibe-carousel-controls">
-                      <button class="kvibe-carousel-prev" onclick="kvibeSlideCarousel('{{ post.post_id }}',-1)"><i class="fas fa-chevron-left"></i></button>
-                      <button class="kvibe-carousel-next" onclick="kvibeSlideCarousel('{{ post.post_id }}',1)"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-                    <div class="kvibe-carousel-indicators">{% for img in op.images.all %}<span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>{% endfor %}</div>
-                  </div>
-                  {% elif op.images.first %}
-                  <div class="kvibe-image-slide"><img src="{{ op.images.first.image.url }}" alt="Post image" loading="lazy" onload="this.classList.add('loaded')"></div>
-                  {% endif %}
-                {% endwith %}
-              {% else %}
-                {% if post.video_file %}
-                <div class="kvibe-video-container paused" id="kvibe-container-{{ post.post_id }}">
-                  <video class="kvibe-video" id="kvibe-post-video-{{ post.post_id }}" preload="metadata"
-                         poster="{% if post.video_thumbnail %}{{ post.video_thumbnail.url }}{% endif %}"
-                         data-src="{{ post.video_file.url }}"
-                         onclick="kvibeTogglePlayPause('kvibe-post-video-{{ post.post_id }}', event)">
-                    <source data-src="{{ post.video_file.url }}#t=0.5" type="video/mp4">
-                  </video>
-                  <i class="fa-solid fa-play kvibe-play-pause-icon"></i>
-                  <button class="kvibe-seek-overlay-btn kvibe-backward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ post.post_id }}',-10)"><i class="fa-solid fa-backward-step"></i> 10s</button>
-                  <button class="kvibe-seek-overlay-btn kvibe-forward-btn" onclick="event.stopPropagation();kvibeSeekVideo('kvibe-post-video-{{ post.post_id }}',10)">10s <i class="fa-solid fa-forward-step"></i></button>
+
+              {% if post.is_repost and op %}
+
+                {# ── Repost: audio standalone ── #}
+                {% if op.file %}
+                <div style="padding:12px 16px;">
+                  <audio controls preload="none" style="width:100%;border-radius:8px;">
+                    <source src="{{ op.file.url }}">
+                  </audio>
                 </div>
-                {% elif post.images.count > 1 %}
-                <div class="kvibe-image-carousel" id="kvibe-carousel-{{ post.post_id }}" data-slide="0" data-total="{{ post.images.count }}">
-                  <div class="kvibe-image-track" id="kvibe-track-{{ post.post_id }}">
-                    {% for img in post.images.all %}<div class="kvibe-image-slide"><img src="{{ img.image.url }}" alt="Image {{ forloop.counter }}" loading="lazy" onload="this.classList.add('loaded')"></div>{% endfor %}
-                  </div>
-                  <div class="kvibe-carousel-controls">
-                    <button class="kvibe-carousel-prev" onclick="kvibeSlideCarousel('{{ post.post_id }}',-1)"><i class="fas fa-chevron-left"></i></button>
-                    <button class="kvibe-carousel-next" onclick="kvibeSlideCarousel('{{ post.post_id }}',1)"><i class="fas fa-chevron-right"></i></button>
-                  </div>
-                  <div class="kvibe-carousel-indicators">{% for img in post.images.all %}<span class="kvibe-indicator {% if forloop.first %}active{% endif %}"></span>{% endfor %}</div>
-                </div>
-                {% elif post.images.first %}
-                <div class="kvibe-image-slide"><img src="{{ post.images.first.image.url }}" alt="Post image" loading="lazy" onload="this.classList.add('loaded')"></div>
                 {% endif %}
+
+                {# ── Repost: video + images unified grid ── #}
+                {% if op.video_file or op.images.all %}
+                  {% with orig_imgs=op.images.all orig_img_cnt=op.images.all|length orig_has_video=op.video_file %}
+                  {% if orig_has_video and orig_imgs %}
+                    {% with orig_total=orig_img_cnt|add:"1" %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-count-{{ orig_total|default:'1' }}{% if orig_total > 4 %} kvibe-x-media-count-4{% endif %}"
+                         data-all-images="[{% for image in orig_imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+                      <div class="kvibe-x-media-cell"
+                           onclick="kvibePostModalOpen('{{ post.post_id }}','video','{{ op.video_file.url }}',null,'{% if op %}{{ op.author.get_full_name|escapejs }}{% else %}{{ post.author.get_full_name|escapejs }}{% endif %}','{% if op %}{{ op.author.username }}{% else %}{{ post.author.username }}{% endif %}','{{ post.created_at|insta_timesince }}','{{ post.original_post.content|default:post.content|escapejs }}')">
+                        <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                          <source src="{{ op.video_file.url }}" type="video/mp4">
+                        </video>
+                        <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+                      </div>
+                      {% for image in orig_imgs %}
+                        {% if forloop.counter <= 3 %}
+                        <div class="kvibe-x-media-cell"
+                             onclick="kvibePostModalOpen('{{ post.post_id }}','images',null,{{ forloop.counter0 }},'{% if op %}{{ op.author.get_full_name|escapejs }}{% else %}{{ post.author.get_full_name|escapejs }}{% endif %}','{% if op %}{{ op.author.username }}{% else %}{{ post.author.username }}{% endif %}','{{ post.created_at|insta_timesince }}','{{ post.original_post.content|default:post.content|escapejs }}')">
+                          <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" class="kvibe-x-media-thumb" loading="lazy" onload="this.classList.add('loaded')">
+                          {% if forloop.counter == 3 and orig_img_cnt > 3 %}
+                          <div class="kvibe-x-media-more">+{{ orig_img_cnt|add:"-3" }}</div>
+                          {% endif %}
+                        </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                    {% endwith %}
+                  {% elif orig_has_video %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-single"
+                         onclick="kvibePostModalOpen('{{ post.post_id }}','video','{{ op.video_file.url }}',null,'{% if op %}{{ op.author.get_full_name|escapejs }}{% else %}{{ post.author.get_full_name|escapejs }}{% endif %}','{% if op %}{{ op.author.username }}{% else %}{{ post.author.username }}{% endif %}','{{ post.created_at|insta_timesince }}','{{ post.original_post.content|default:post.content|escapejs }}')">
+                      <div class="kvibe-x-media-cell">
+                        <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                          <source src="{{ op.video_file.url }}" type="video/mp4">
+                        </video>
+                        <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+                      </div>
+                    </div>
+                  {% else %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-count-{{ orig_img_cnt|default:'1' }}{% if orig_img_cnt > 4 %} kvibe-x-media-count-4{% endif %}"
+                         data-all-images="[{% for image in orig_imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+                      {% for image in orig_imgs %}
+                        {% if forloop.counter <= 4 %}
+                        <div class="kvibe-x-media-cell"
+                             onclick="kvibePostModalOpen('{{ post.post_id }}','images',null,{{ forloop.counter0 }},'{% if op %}{{ op.author.get_full_name|escapejs }}{% else %}{{ post.author.get_full_name|escapejs }}{% endif %}','{% if op %}{{ op.author.username }}{% else %}{{ post.author.username }}{% endif %}','{{ post.created_at|insta_timesince }}','{{ post.original_post.content|default:post.content|escapejs }}')">
+                          <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" class="kvibe-x-media-thumb" loading="lazy" onload="this.classList.add('loaded')">
+                          {% if forloop.counter == 4 and orig_img_cnt > 4 %}
+                          <div class="kvibe-x-media-more">+{{ orig_img_cnt|add:"-4" }}</div>
+                          {% endif %}
+                        </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                  {% endwith %}
+                {% endif %}
+
+              {% else %}
+
+                {# ── Own post: audio standalone ── #}
+                {% if post.file %}
+                <div style="padding:12px 16px;">
+                  <audio controls preload="none" style="width:100%;border-radius:8px;">
+                    <source src="{{ post.file.url }}">
+                  </audio>
+                </div>
+                {% endif %}
+
+                {# ── Own post: video + images unified grid ── #}
+                {% if post.video_file or post.images.all %}
+                  {% with imgs=post.images.all img_cnt=post.images.all|length has_video=post.video_file %}
+                  {% if has_video and imgs %}
+                    {% with total=img_cnt|add:"1" %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-count-{{ total|default:'1' }}{% if total > 4 %} kvibe-x-media-count-4{% endif %}"
+                         data-all-images="[{% for image in imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+                      <div class="kvibe-x-media-cell"
+                           onclick="kvibePostModalOpen('{{ post.post_id }}','video','{{ post.video_file.url }}',null,'{{ post.author.get_full_name|escapejs }}','{{ post.author.username }}','{{ post.created_at|insta_timesince }}','{{ post.content|escapejs }}')">
+                        <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                          <source src="{{ post.video_file.url }}" type="video/mp4">
+                        </video>
+                        <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+                      </div>
+                      {% for image in imgs %}
+                        {% if forloop.counter <= 3 %}
+                        <div class="kvibe-x-media-cell"
+                             onclick="kvibePostModalOpen('{{ post.post_id }}','images',null,{{ forloop.counter0 }},'{{ post.author.get_full_name|escapejs }}','{{ post.author.username }}','{{ post.created_at|insta_timesince }}','{{ post.content|escapejs }}')">
+                          <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" class="kvibe-x-media-thumb" loading="lazy" onload="this.classList.add('loaded')">
+                          {% if forloop.counter == 3 and img_cnt > 3 %}
+                          <div class="kvibe-x-media-more">+{{ img_cnt|add:"-3" }}</div>
+                          {% endif %}
+                        </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                    {% endwith %}
+                  {% elif has_video %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-single"
+                         onclick="kvibePostModalOpen('{{ post.post_id }}','video','{{ post.video_file.url }}',null,'{{ post.author.get_full_name|escapejs }}','{{ post.author.username }}','{{ post.created_at|insta_timesince }}','{{ post.content|escapejs }}')">
+                      <div class="kvibe-x-media-cell">
+                        <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                          <source src="{{ post.video_file.url }}" type="video/mp4">
+                        </video>
+                        <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+                      </div>
+                    </div>
+                  {% else %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-count-{{ img_cnt|default:'1' }}{% if img_cnt > 4 %} kvibe-x-media-count-4{% endif %}"
+                         data-all-images="[{% for image in imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+                      {% for image in imgs %}
+                        {% if forloop.counter <= 4 %}
+                        <div class="kvibe-x-media-cell"
+                             onclick="kvibePostModalOpen('{{ post.post_id }}','images',null,{{ forloop.counter0 }},'{{ post.author.get_full_name|escapejs }}','{{ post.author.username }}','{{ post.created_at|insta_timesince }}','{{ post.content|escapejs }}')">
+                          <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" class="kvibe-x-media-thumb" loading="lazy" onload="this.classList.add('loaded')">
+                          {% if forloop.counter == 4 and img_cnt > 4 %}
+                          <div class="kvibe-x-media-more">+{{ img_cnt|add:"-4" }}</div>
+                          {% endif %}
+                        </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                  {% endwith %}
+                {% endif %}
+
               {% endif %}
             </div>
             {% endif %}
+            {% endwith %}
 
-            <!-- Post actions — same snippet as home -->
+            <!-- Post actions -->
             {% include 'snippet/post_like.html' with post=post %}
 
           </article>
@@ -869,8 +1037,6 @@
 
       <!-- ═══ RIGHT SIDEBAR ═══ -->
       <aside class="kvibe-right-sidebar kvibe-desktop-only">
-
-        <!-- Related Hashtags -->
         {% if related_hashtags %}
         <div class="kvibe-trending-hashtags" style="margin-top:16px;">
           <div class="kvibe-trending-header">
@@ -891,8 +1057,6 @@
           </div>
         </div>
         {% endif %}
-
-        <!-- Trending Hashtags (global) -->
         {% if trending_hashtags %}
         <div class="kvibe-trending-hashtags" style="margin-top:16px;">
           <div class="kvibe-trending-header">
@@ -908,7 +1072,6 @@
           </div>
         </div>
         {% endif %}
-
       </aside>
 
     </div>
@@ -918,15 +1081,10 @@
     {% include 'footer.html' %}
   </div>
 
-  <!-- Mobile sidebar toggle -->
   <button class="kvibe-mobile-sidebar-toggle" id="kvibe-mobile-sidebar-toggle" onclick="kvibeOpenMobileSidebar()" aria-label="Open sidebar">
     <i class="fas fa-chevron-left"></i><span>MORE</span>
   </button>
-
-  <!-- Mobile sidebar overlay -->
   <div class="kvibe-mobile-sidebar-overlay" id="kvibe-mobile-sidebar-overlay" onclick="kvibeCloseMobileSidebar()"></div>
-
-  <!-- Mobile right sidebar -->
   <aside class="kvibe-mobile-right-sidebar" id="kvibe-mobile-right-sidebar">
     <div class="kvibe-mobile-sidebar-header">
       <span class="kvibe-mobile-sidebar-title">Discover</span>
@@ -962,13 +1120,150 @@
     </div>
   </aside>
 
+  <!-- ═══ POST DETAIL MODAL (X/Twitter style — matches home.html exactly) ═══ -->
+  <div class="kvibe-post-modal-overlay" id="kvibePostModalOverlay" onclick="kvibePostModalClose(event)">
+    <div class="kvibe-post-modal" id="kvibePostModal">
+
+      <!-- MEDIA (full screen) -->
+      <div class="kvibe-pm-media" id="kvibePmMedia">
+        <img id="kvibePmImg" src="" alt="Post media" style="display:none;">
+        <video id="kvibePmVideo" controls playsinline style="display:none;"></video>
+        <button class="kvibe-pm-media-nav prev" id="kvibePmPrev" onclick="kvibePmNav(-1)" style="display:none;"><i class="fas fa-chevron-left"></i></button>
+        <button class="kvibe-pm-media-nav next" id="kvibePmNext" onclick="kvibePmNav(1)"  style="display:none;"><i class="fas fa-chevron-right"></i></button>
+        <div class="kvibe-pm-media-counter" id="kvibePmCounter" style="display:none;"></div>
+      </div>
+
+      <!-- TOP BAR (overlaid) -->
+      <div class="kvibe-pm-topbar">
+        <button class="kvibe-pm-back" onclick="kvibePostModalClose(null, true)" aria-label="Back">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <a id="kvibePmAvatarLink" href="#" onclick="event.stopPropagation()">
+          <img class="kvibe-pm-avatar" id="kvibePmAvatar" src="" alt="">
+        </a>
+        <div class="kvibe-pm-author-info">
+          <a class="kvibe-pm-author-name" id="kvibePmAuthorName" href="#" onclick="event.stopPropagation()"></a>
+          <div class="kvibe-pm-author-handle" id="kvibePmAuthorHandle"></div>
+        </div>
+        <button class="kvibe-pm-follow-btn" id="kvibePmFollowBtn" onclick="event.stopPropagation()">Follow</button>
+        <button class="kvibe-pm-menu-btn" id="kvibePmMenuBtn"
+                style="display:none; position:relative;"
+                onclick="kvibePmToggleMenu(event)"
+                aria-label="Post options">
+          <i class="fas fa-ellipsis-h"></i>
+        </button>
+        <div class="kvibe-pm-menu-dropdown" id="kvibePmMenuDropdown" style="display:none;">
+          <a class="kvibe-pm-menu-item" id="kvibePmEditItem" href="#" onclick="event.stopPropagation()">
+            <i class="fas fa-edit"></i> Edit
+          </a>
+          <button class="kvibe-pm-menu-item kvibe-pm-menu-delete" id="kvibePmDeleteItem"
+                  onclick="kvibePmDeletePost(event)">
+            <i class="fas fa-trash-alt"></i> Delete
+          </button>
+        </div>
+      </div>
+
+      <!-- BOTTOM BAR (overlaid) -->
+      <div class="kvibe-pm-bottom">
+        <div class="kvibe-pm-caption" id="kvibePmCaption" style="display:none;"></div>
+        <button class="kvibe-pm-caption-toggle" id="kvibePmCaptionToggle" onclick="kvibePmToggleCaption(); event.stopPropagation();">more</button>
+        <div class="kvibe-pm-engage-row" id="kvibePmEngageRow">
+          <button class="kvibe-pm-eng-btn" id="kvibePmCommentBtn" onclick="event.stopPropagation()">
+            <i class="far fa-comment"></i>
+            <span id="kvibePmCommentCount">0</span>
+          </button>
+          <button class="kvibe-pm-eng-btn" id="kvibePmRepostBtn" onclick="event.stopPropagation()">
+            <i class="fas fa-retweet"></i>
+            <span id="kvibePmRepostCount">0</span>
+          </button>
+          <button class="kvibe-pm-eng-btn" id="kvibePmLikeBtn" onclick="event.stopPropagation()">
+            <i class="far fa-heart"></i>
+            <span id="kvibePmLikeCount">0</span>
+          </button>
+          <button class="kvibe-pm-eng-btn" id="kvibePmViewsBtn" onclick="event.stopPropagation()">
+            <i class="fas fa-chart-bar"></i>
+            <span id="kvibePmViewCount">0</span>
+          </button>
+          <a class="kvibe-pm-eng-btn right" id="kvibePmViewBtn" href="#" onclick="event.stopPropagation()">
+            <i class="far fa-bookmark"></i>
+          </a>
+          <a class="kvibe-pm-eng-btn" id="kvibePmShareBtn" href="#" onclick="event.stopPropagation()">
+            <i class="fas fa-share-nodes"></i>
+          </a>
+        </div>
+        <div class="kvibe-pm-reply-bar">
+          <img class="kvibe-pm-reply-avatar" id="kvibePmReplyAvatar" src="" alt="">
+          <a class="kvibe-pm-reply-input" id="kvibePmReplyLink" href="#" onclick="event.stopPropagation()">Post your reply</a>
+          <a class="kvibe-pm-view-link" id="kvibePmViewLink" href="#" onclick="event.stopPropagation()">View</a>
+        </div>
+      </div>
+
+      <div class="kvibe-pm-detail" style="display:none;"></div>
+    </div>
+  </div>
+  <!-- ──────────────────────────────────────────────────────────────────────── -->
+
+  <!-- ═══ DESKTOP NOTIFICATION PANEL ═══ -->
+  <div id="kvibe-notif-backdrop"
+       style="display:none;position:fixed;inset:0;z-index:1199;background:rgba(0,0,0,.35);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);"
+       aria-hidden="true"></div>
+  <aside id="kvibe-notif-panel"
+         role="dialog" aria-modal="true" aria-label="Notifications"
+         style="display:none;position:fixed;top:0;left:0;width:400px;max-width:94vw;height:100vh;background:#fff;z-index:1200;box-shadow:4px 0 32px rgba(0,0,0,.15);display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .3s cubic-bezier(.4,0,.2,1);will-change:transform;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 14px;border-bottom:1px solid #efefef;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10;flex-shrink:0;">
+      <span style="font-size:20px;font-weight:700;letter-spacing:-.3px;color:#262626;">Notifications</span>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button id="kvibe-panel-mark-all"
+                style="background:none;border:none;color:#0095f6;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0;transition:opacity .15s;"
+                onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"
+                onclick="kvibePanelMarkAllRead()">Mark all read</button>
+        <button id="kvibe-panel-close" aria-label="Close notifications"
+                style="background:none;border:none;color:#8e8e8e;font-size:20px;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background .15s;"
+                onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div id="kvibe-notif-panel-body" style="flex:1;overflow-y:auto;overscroll-behavior:contain;">
+      <div id="kvibe-panel-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:12px;">
+        <i class="fas fa-circle-notch fa-spin" style="font-size:28px;color:#0095f6;"></i>
+        <span style="font-size:13px;color:#8e8e8e;">Loading notifications…</span>
+      </div>
+    </div>
+    <div style="padding:12px 18px;border-top:1px solid #efefef;text-align:center;flex-shrink:0;">
+      <a href="{% url 'notification_list' %}"
+         style="font-size:13px;font-weight:600;color:#0095f6;text-decoration:none;"
+         onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
+        See all notifications
+      </a>
+    </div>
+  </aside>
+
+  <style>
+    #kvibe-notif-panel .kishiface-notification-wrapper { position:relative; transition:opacity .25s,transform .25s; }
+    #kvibe-notif-panel .kishiface-notification-wrapper:hover { background:#fafafa; }
+    #kvibe-notif-panel .kishiface-remove-btn { position:absolute;right:16px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.9);border:1px solid #efefef;color:#8e8e8e;cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;opacity:0;transition:opacity .2s,background .15s,color .15s;box-shadow:0 1px 4px rgba(0,0,0,.08);z-index:10;font-size:11px; }
+    #kvibe-notif-panel .kishiface-notification-wrapper:hover .kishiface-remove-btn { opacity:1; }
+    #kvibe-notif-panel .kishiface-remove-btn:hover { background:#ffe5e5;color:#ed4956;border-color:#ed4956; }
+    #kvibe-notif-panel .kishiface-notification-wrapper .kishiface-notif-item { padding-right:50px !important; }
+    #kvibe-notif-panel .kv-panel-section-title { padding:14px 16px 6px;font-size:13px;font-weight:600;color:#262626;background:#fff;position:sticky;top:0;z-index:5; }
+    #kvibe-notif-panel .kishiface-empty-notifications { display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px 40px;text-align:center; }
+    #kvibe-notif-panel .kishiface-empty-icon { font-size:56px;color:#dbdbdb;margin-bottom:16px; }
+    #kvibe-notif-panel .kishiface-empty-title { font-size:20px;font-weight:600;margin-bottom:8px; }
+    #kvibe-notif-panel .kishiface-empty-text { font-size:13px;color:#8e8e8e;max-width:260px;line-height:1.4; }
+    @keyframes kv-panel-slideout { to { opacity:0;transform:translateX(30px);max-height:0; } }
+    #kvibe-notif-panel .kishiface-removing { animation: kv-panel-slideout .25s ease forwards;overflow:hidden; }
+    #kvibe-desktop-notif-btn.kvibe-notif-panel-open .kvibe-desktop-nav-icon i,
+    #kvibe-desktop-notif-btn.kvibe-notif-panel-open .kvibe-desktop-nav-label { color: var(--kvibe-primary) !important; }
+    @media (max-width: 767px) { #kvibe-notif-panel, #kvibe-notif-backdrop { display:none !important; } }
+  </style>
+
   <script>
     /* ─── CSRF ─── */
     function getCsrfFromMeta() {
       return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     }
 
-    /* ─── Current logged-in user ID (for self-follow guard) ─── */
     const KVIBE_CURRENT_USER_ID = "{{ request.user.id }}";
 
     /* ─── Repost state ─── */
@@ -987,12 +1282,11 @@
       }, 3000);
     }
 
-    // ── Repost — matches home.html / post_like.html exactly ────────────────
+    /* ─── Repost ─── */
     function kvibeToggleRepost(postId, button) {
       currentRepostPostId = postId;
       currentRepostButton = button;
       if (button.getAttribute('data-reposted') === 'true') {
-        // Already reposted → undo immediately, no modal needed
         kvibePerformRepost(postId, '', true);
       } else {
         kvibeOpenRepostModal();
@@ -1002,7 +1296,6 @@
     function kvibeOpenRepostModal() {
       const modal = document.getElementById('kvibe-repost-modal');
       if (!modal) return;
-      // Reset textarea + char counter
       const ta = modal.querySelector('textarea');
       if (ta) ta.value = '';
       const counter = document.getElementById('kvibe-repost-char-count');
@@ -1029,13 +1322,11 @@
     }
 
     function kvibePerformRepost(postId, caption, undo) {
-      // Disable the confirm button while in-flight
       const confirmBtn = document.getElementById('kvibe-repost-confirm-btn');
       if (confirmBtn && !undo) {
         confirmBtn.disabled = true;
         confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reposting…';
       }
-
       fetch(`/repost/${postId}/`, {
         method: 'POST',
         headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' },
@@ -1043,19 +1334,13 @@
       })
       .then(r => r.json())
       .then(data => {
-        if (confirmBtn) {
-          confirmBtn.disabled = false;
-          confirmBtn.innerHTML = '<i class="fas fa-retweet"></i> Repost';
-        }
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.innerHTML = '<i class="fas fa-retweet"></i> Repost'; }
         if (data.success) {
           if (currentRepostButton) {
             const reposted = data.reposted;
-            // Update data attribute
             currentRepostButton.setAttribute('data-reposted', reposted ? 'true' : 'false');
-            // Update icon colour
             const icon = currentRepostButton.querySelector('i.fa-retweet');
             if (icon) icon.classList.toggle('reposted', reposted);
-            // Update count by ID — same pattern as post_like.html
             const countEl = document.getElementById(`kvibe-repost-count-${postId}`);
             if (countEl) {
               const count = data.repost_count ?? 0;
@@ -1070,33 +1355,9 @@
         }
       })
       .catch(() => {
-        if (confirmBtn) {
-          confirmBtn.disabled = false;
-          confirmBtn.innerHTML = '<i class="fas fa-retweet"></i> Repost';
-        }
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.innerHTML = '<i class="fas fa-retweet"></i> Repost'; }
         showToast('Something went wrong.', 'error');
       });
-    }
-
-    /* ─── Like ─── */
-    function kvibeToggleLike(postId, btn) {
-      fetch(`/like/${postId}/`, {
-        method: 'POST',
-        headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' }
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.liked !== undefined) {
-          const icon = btn.querySelector('i');
-          if (icon) {
-            icon.className = data.liked ? 'fas fa-heart' : 'far fa-heart';
-            icon.style.color = data.liked ? '#ed4956' : '';
-          }
-          const countEl = btn.nextElementSibling;
-          if (countEl) countEl.textContent = data.like_count ?? data.likes_count ?? '';
-        }
-      })
-      .catch(() => {});
     }
 
     /* ─── Share modal ─── */
@@ -1104,12 +1365,10 @@
       const modal = document.getElementById(`kvibe-share-modal-${postId}`);
       if (modal) modal.classList.add('active');
     }
-
     function kvibeCloseShareModal(postId) {
       const modal = document.getElementById(`kvibe-share-modal-${postId}`);
       if (modal) modal.classList.remove('active');
     }
-
     function kvibeCopyLink(url) {
       navigator.clipboard.writeText(url).then(() => showToast('Link copied!', 'success'));
     }
@@ -1141,202 +1400,15 @@
       document.body.style.overflow = '';
     }
 
-    // ─── GLOBAL MEDIA TRACKING (matches home.js) ───────────────────────────
-    let kvibeCurrentlyPlayingMedia = null;
-
-    // ─── Pause every other video when a new one starts ───────────────────────
-    function kvibePauseAllOtherMedia(currentMediaElement) {
-      if (kvibeCurrentlyPlayingMedia && kvibeCurrentlyPlayingMedia !== currentMediaElement) {
-        kvibeCurrentlyPlayingMedia.pause();
-        if (kvibeCurrentlyPlayingMedia.tagName === 'VIDEO') {
-          const prevContainer = kvibeCurrentlyPlayingMedia.closest('.kvibe-video-container');
-          if (prevContainer) {
-            prevContainer.classList.add('paused');
-            const prevPlayIcon = prevContainer.querySelector('.kvibe-play-pause-icon');
-            if (prevPlayIcon) prevPlayIcon.style.opacity = '1';
-          }
-        }
-      }
-      if (currentMediaElement && !currentMediaElement.paused) {
-        kvibeCurrentlyPlayingMedia = currentMediaElement;
-      }
-    }
-
-    // ─── Toggle play / pause for a video ─────────────────────────────────────
-    function kvibeTogglePlayPause(videoId, e) {
-      if (e && e.target.closest('.kvibe-seek-overlay-btn')) return;
-      const video = document.getElementById(videoId);
-      if (!video) return;
-      if (video.paused || video.ended) {
-        kvibePauseAllOtherMedia(video);
-        video.play().then(() => {
-          const container = video.closest('.kvibe-video-container');
-          if (container) {
-            container.classList.remove('paused');
-            const playIcon = container.querySelector('.kvibe-play-pause-icon');
-            if (playIcon) playIcon.style.opacity = '0';
-          }
-        }).catch(err => console.error('Video play error:', err));
-      } else {
-        video.pause();
-        const container = video.closest('.kvibe-video-container');
-        if (container) {
-          container.classList.add('paused');
-          const playIcon = container.querySelector('.kvibe-play-pause-icon');
-          if (playIcon) playIcon.style.opacity = '1';
-        }
-      }
-    }
-
-    // ─── Seek forward / backward ──────────────────────────────────────────────
-    function kvibeSeekVideo(videoId, seconds) {
-      const video = document.getElementById(videoId);
-      if (!video) return;
-      let t = video.currentTime + seconds;
-      t = Math.max(0, t);
-      if (video.duration) t = Math.min(t, video.duration);
-      video.currentTime = t;
-    }
-
-    // ─── Image-only carousel ──────────────────────────────────────────────────
-    function kvibeSlideCarousel(postId, direction) {
-      const carousel = document.getElementById(`kvibe-carousel-${postId}`);
-      const track    = document.getElementById(`kvibe-track-${postId}`);
-      const indicators = carousel?.querySelectorAll('.kvibe-indicator');
-      if (!carousel || !track) return;
-      let current = parseInt(carousel.dataset.slide || 0);
-      const total = parseInt(carousel.dataset.total || 1);
-      if (total <= 1) return;
-      current = (current + direction + total) % total;
-      track.style.transform = `translateX(-${current * 100}%)`;
-      carousel.dataset.slide = current;
-      indicators?.forEach((ind, i) => ind.classList.toggle('active', i === current));
-    }
-
-    // ─── Mixed-media carousel (image + video slides) ─────────────────────────
-    function kvibeSlideMixedCarousel(postId, direction) {
-      const carousel   = document.getElementById(`kvibe-mixed-${postId}`);
-      const track      = document.getElementById(`kvibe-mixed-track-${postId}`);
-      const indicators = carousel?.querySelectorAll('.kvibe-mixed-indicator');
-      if (!carousel || !track) return;
-      // Pause any playing video in the current slide before navigating
-      const currentSlide = track.querySelector(`.kvibe-mixed-media-slide:nth-child(${parseInt(carousel.dataset.slide || 0) + 1})`);
-      if (currentSlide) {
-        const vid = currentSlide.querySelector('.kvibe-video');
-        if (vid && !vid.paused) {
-          vid.pause();
-          const container = vid.closest('.kvibe-video-container');
-          if (container) {
-            container.classList.add('paused');
-            const playIcon = container.querySelector('.kvibe-play-pause-icon');
-            if (playIcon) playIcon.style.opacity = '1';
-          }
-          if (kvibeCurrentlyPlayingMedia === vid) kvibeCurrentlyPlayingMedia = null;
-        }
-      }
-      let current = parseInt(carousel.dataset.slide || 0);
-      const total = parseInt(carousel.dataset.total || 1);
-      if (total <= 1) return;
-      current = (current + direction + total) % total;
-      track.style.transform = `translateX(-${current * 100}%)`;
-      carousel.dataset.slide = current;
-      indicators?.forEach((ind, i) => ind.classList.toggle('active', i === current));
-    }
-
-    // ─── Lazy-load videos with data-src ──────────────────────────────────────
-    function kvibeInitVideoLazyLoad() {
-      const lazyVideos = document.querySelectorAll('video[data-src]');
-      if (!lazyVideos.length) return;
-      if ('IntersectionObserver' in window) {
-        const obs = new IntersectionObserver(entries => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const video = entry.target;
-              video.src = video.dataset.src;
-              video.removeAttribute('data-src');
-              obs.unobserve(video);
-            }
-          });
-        });
-        lazyVideos.forEach(v => obs.observe(v));
-      } else {
-        lazyVideos.forEach(v => { v.src = v.dataset.src; v.removeAttribute('data-src'); });
-      }
-    }
-
-    // ─── Auto-pause videos when they scroll out of view ──────────────────────
-    function kvibeInitMediaObserver() {
-      if (!('IntersectionObserver' in window)) return;
-      const observer = new IntersectionObserver(entries => {
-        entries.forEach(entry => {
-          if (!entry.isIntersecting) {
-            const container = entry.target;
-            const video = container.querySelector('.kvibe-video');
-            if (video && !video.paused) {
-              video.pause();
-              container.classList.add('paused');
-              const playIcon = container.querySelector('.kvibe-play-pause-icon');
-              if (playIcon) playIcon.style.opacity = '1';
-              if (kvibeCurrentlyPlayingMedia === video) kvibeCurrentlyPlayingMedia = null;
-            }
-          }
-        });
-      }, { threshold: 0.25 });
-
-      document.querySelectorAll('.kvibe-video-container').forEach(container => {
-        observer.observe(container);
-      });
-    }
-
-    // ─── Attach play/pause/ended listeners to every video container ──────────
-    function kvibeInitVideoContainers() {
-      document.querySelectorAll('.kvibe-video-container').forEach(container => {
-        const video = container.querySelector('.kvibe-video');
-        if (!video) return;
-
-        // Show play icon initially
-        container.classList.add('paused');
-
-        video.addEventListener('play', () => {
-          container.classList.remove('paused');
-          const playIcon = container.querySelector('.kvibe-play-pause-icon');
-          if (playIcon) playIcon.style.opacity = '0';
-          kvibeCurrentlyPlayingMedia = video;
-        });
-
-        video.addEventListener('pause', () => {
-          container.classList.add('paused');
-          const playIcon = container.querySelector('.kvibe-play-pause-icon');
-          if (playIcon) playIcon.style.opacity = '1';
-          if (kvibeCurrentlyPlayingMedia === video) kvibeCurrentlyPlayingMedia = null;
-        });
-
-        video.addEventListener('ended', () => {
-          container.classList.add('paused');
-          const playIcon = container.querySelector('.kvibe-play-pause-icon');
-          if (playIcon) playIcon.style.opacity = '1';
-          if (kvibeCurrentlyPlayingMedia === video) kvibeCurrentlyPlayingMedia = null;
-        });
-      });
-    }
-
-    /* ─── DOMContentLoaded init ─── */
+    /* ─── DOMContentLoaded ─── */
     document.addEventListener('DOMContentLoaded', function() {
-      kvibeInitVideoLazyLoad();
-      kvibeInitVideoContainers();
-      kvibeInitMediaObserver();
-
-      // Wire repost confirm button
       const repostConfirmBtn = document.getElementById('kvibe-repost-confirm-btn');
       if (repostConfirmBtn) repostConfirmBtn.onclick = kvibeSubmitRepost;
 
-      // Live char counter for repost textarea
       const repostTextarea = document.getElementById('kvibe-repost-caption');
       const repostCharCount = document.getElementById('kvibe-repost-char-count');
       if (repostTextarea && repostCharCount) {
-        repostTextarea.addEventListener('input', () => {
-          repostCharCount.textContent = repostTextarea.value.length;
-        });
+        repostTextarea.addEventListener('input', () => { repostCharCount.textContent = repostTextarea.value.length; });
       }
 
       const sidebar = document.getElementById('kvibe-mobile-right-sidebar');
@@ -1363,7 +1435,11 @@
         if (e.target === document.getElementById('kvibe-repost-modal')) kvibeCloseRepostModal();
         const logoutModal = document.getElementById('kvibeLogoutModal');
         if (logoutModal && logoutModal.classList.contains('active') && e.target === logoutModal) logoutModal.classList.remove('active');
+        document.querySelectorAll('.kvibe-post-menu-dropdown').forEach(d => { d.style.display = 'none'; });
+        const pmDrop = document.getElementById('kvibePmMenuDropdown');
+        if (pmDrop) pmDrop.style.display = 'none';
       });
+
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
           kvibeCloseRepostModal();
@@ -1373,7 +1449,6 @@
         }
       });
 
-      // Comment sheet — backdrop click to close
       const _commentSheet = document.getElementById('commentSheet');
       if (_commentSheet) {
         _commentSheet.addEventListener('click', function(e) {
@@ -1383,14 +1458,10 @@
         });
       }
 
-      // Init audio players
       kvibeInitAudioPlayers(document);
     });
 
-  /* ═══════════════════════════════════════════════════════
-     COMMENT BOTTOM SHEET — same as home.html
-     ═══════════════════════════════════════════════════════ */
-
+  /* ═══ COMMENT BOTTOM SHEET ═══ */
   var _kvcsCurrentPostId = null;
   var _kvcsQuickReplies = [
     'This is amazing!','Great post!','Love the vibe!',
@@ -1403,29 +1474,16 @@
     var sheet  = document.getElementById('commentSheet');
     var form   = document.getElementById('modalPostForm');
     var listEl = document.getElementById('modal_comment_list');
-
     kvibeCSResetInputUI();
     sheet.classList.add('active');
     document.body.style.overflow = 'hidden';
-
-    // Wire the HTMX form to this specific post
     form.setAttribute('hx-post', '/comments/' + postId);
     if (typeof htmx !== 'undefined') htmx.process(form);
-
-    // Load existing comments
     listEl.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#8e8e8e;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Loading...</div>';
     if (typeof htmx !== 'undefined') {
-      htmx.ajax('GET', '/comment/' + postId, {
-        target: '#modal_comment_list',
-        select: '#comment_list',
-        swap: 'innerHTML'
-      });
+      htmx.ajax('GET', '/comment/' + postId, { target: '#modal_comment_list', select: '#comment_list', swap: 'innerHTML' });
     }
-
-    setTimeout(function() {
-      var ta = document.getElementById('modalTextInput');
-      if (ta) ta.focus();
-    }, 300);
+    setTimeout(function() { var ta = document.getElementById('modalTextInput'); if (ta) ta.focus(); }, 300);
   }
 
   function kvibeCloseCommentSheet() {
@@ -1440,15 +1498,11 @@
     _kvcsCurrentPostId = null;
   }
 
-  // Update comment count badge after successful submit
   document.addEventListener('htmx:afterRequest', function(evt) {
     if (evt.target && evt.target.id === 'modalPostForm' && evt.detail.successful) {
       if (_kvcsCurrentPostId) {
         var el = document.getElementById('kvibe-comment-count-' + _kvcsCurrentPostId);
-        if (el) {
-          var n = parseInt(el.textContent.replace(/,/g, '')) || 0;
-          el.textContent = (n + 1).toLocaleString();
-        }
+        if (el) { var n = parseInt(el.textContent.replace(/,/g, '')) || 0; el.textContent = (n + 1).toLocaleString(); }
       }
     }
   });
@@ -1466,12 +1520,9 @@
     var mic   = document.getElementById('modalMicBtn');
     var imgIn = document.getElementById('modal_image_input');
     var audIn = document.getElementById('modal_audio_file');
-    var has = (ta    && ta.value.trim().length > 0)
-           || (imgIn && imgIn.files && imgIn.files.length > 0)
-           || (audIn && audIn.files && audIn.files.length > 0);
+    var has = (ta && ta.value.trim().length > 0) || (imgIn && imgIn.files && imgIn.files.length > 0) || (audIn && audIn.files && audIn.files.length > 0);
     if (send) send.style.display = has ? 'flex' : 'none';
-    if (mic)  { if (has) mic.classList.add('record-mode-hidden');
-                else     mic.classList.remove('record-mode-hidden'); }
+    if (mic) { if (has) mic.classList.add('record-mode-hidden'); else mic.classList.remove('record-mode-hidden'); }
   }
 
   function kvibeCSResetInputUI() {
@@ -1496,20 +1547,14 @@
     var hidden = !box.style.display || box.style.display === 'none';
     if (!hidden) { box.style.display = 'none'; return; }
     box.innerHTML = '';
-    _kvcsQuickReplies.slice().sort(function() { return 0.5 - Math.random(); }).slice(0, 6)
-      .forEach(function(text) {
-        var chip = document.createElement('button');
-        chip.type = 'button';
-        chip.style.cssText = 'display:inline-block;background:#f5f5f5;border:1px solid #dbdbdb;border-radius:16px;padding:6px 12px;font-size:13px;color:#262626;cursor:pointer;font-family:inherit;margin-right:6px;white-space:nowrap;';
-        chip.textContent = text;
-        chip.onclick = function() {
-          var ta = document.getElementById('modalTextInput');
-          ta.value = text;
-          kvibeCSOnInput();
-          ta.focus();
-        };
-        box.appendChild(chip);
-      });
+    _kvcsQuickReplies.slice().sort(function() { return 0.5 - Math.random(); }).slice(0, 6).forEach(function(text) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.style.cssText = 'display:inline-block;background:#f5f5f5;border:1px solid #dbdbdb;border-radius:16px;padding:6px 12px;font-size:13px;color:#262626;cursor:pointer;font-family:inherit;margin-right:6px;white-space:nowrap;';
+      chip.textContent = text;
+      chip.onclick = function() { var ta = document.getElementById('modalTextInput'); ta.value = text; kvibeCSOnInput(); ta.focus(); };
+      box.appendChild(chip);
+    });
     box.style.display = 'flex';
   }
 
@@ -1544,10 +1589,7 @@
         var audioInput = document.getElementById('modal_audio_file');
         if (audioInput) audioInput.files = dt.files;
         var form = document.getElementById('modalPostForm');
-        if (form) {
-          if (typeof htmx !== 'undefined') { htmx.trigger(form, 'submit'); }
-          else { form.submit(); }
-        }
+        if (form) { if (typeof htmx !== 'undefined') { htmx.trigger(form, 'submit'); } else { form.submit(); } }
       };
       _kfCsRecorder.onerror = function(){ _kfCsCleanup(); };
       _kfCsRecorder.start(100);
@@ -1564,13 +1606,7 @@
     }
   }
 
-  function kfCsStopRecording() {
-    if (_kfCsRecorder && _kfCsRecording) {
-      try { _kfCsRecorder.requestData(); } catch(e) {}
-      _kfCsRecorder.stop();
-    }
-  }
-
+  function kfCsStopRecording() { if (_kfCsRecorder && _kfCsRecording) { try { _kfCsRecorder.requestData(); } catch(e) {} _kfCsRecorder.stop(); } }
   function kfCsTouchStart(e) { e.preventDefault(); kfCsStartRecording(e); }
   function kfCsTouchEnd(e)   { e.preventDefault(); kfCsStopRecording(); }
 
@@ -1676,25 +1712,15 @@
     if (audio.paused) {
       if (_kfCsCurrentAudio && _kfCsCurrentAudio !== audio) {
         _kfCsCurrentAudio.pause();
-        var otherId  = _kfCsCurrentAudio.id.replace('audio-','');
+        var otherId = _kfCsCurrentAudio.id.replace('audio-','');
         kfCsUpdateWaveform(otherId, false);
         var otherBtn = document.querySelector('[onclick*="kvCmtToggleAudio"][onclick*="\''+otherId+'\'"]');
         if (otherBtn) otherBtn.innerHTML = '<i class="fas fa-play"></i>';
-        var otherDur = document.getElementById('kvibe-cmt-duration-'+otherId);
-        if (otherDur && _kfCsCurrentAudio.duration) otherDur.textContent = fmt(_kfCsCurrentAudio.duration);
       }
       audio.play().then(function() {
         _kfCsCurrentAudio = audio;
         button.innerHTML = '<i class="fas fa-pause"></i>';
         kfCsUpdateWaveform(audioId, true);
-        var setDur = function(){ if(durEl&&audio.duration) durEl.textContent=fmt(audio.duration); };
-        if (audio.duration) setDur(); else audio.addEventListener('loadedmetadata', setDur, {once:true});
-        function timeTick() {
-          if (audio.paused||audio.ended) return;
-          if (durEl) durEl.textContent = fmt(audio.currentTime);
-          requestAnimationFrame(timeTick);
-        }
-        requestAnimationFrame(timeTick);
         function onStop() {
           button.innerHTML = '<i class="fas fa-play"></i>';
           kfCsUpdateWaveform(audioId, false);
@@ -1708,7 +1734,6 @@
       audio.pause();
       button.innerHTML = '<i class="fas fa-play"></i>';
       kfCsUpdateWaveform(audioId, false);
-      if (durEl&&audio.duration) durEl.textContent = fmt(audio.duration);
       if (_kfCsCurrentAudio===audio) _kfCsCurrentAudio = null;
     }
   }
@@ -1741,19 +1766,17 @@
     });
   }
 
-  if (typeof htmx !== 'undefined') {
-    htmx.onLoad(function(el){ kvibeInitAudioPlayers(el); });
-  }
+  if (typeof htmx !== 'undefined') { htmx.onLoad(function(el){ kvibeInitAudioPlayers(el); }); }
 
   /* ── Emoji picker ── */
   var _kfCsEmojiCategories = [
     { label:'😀', emojis:['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','😗','😙','😚','🙂','🤗','🤩','🤔','🤨','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴','😌','😛','😜','😝','🤤','😒','😓','😔','😟','😕','🙃','🤑','😲','☹️','🙁','😖','😞','😟','😠','😡','🤬','😤','😢','😭','😦','😧','😨','😩','🤯','😬','😰','😱','🥵','🥶','😳','🤪','😵','🤠','🥳','😷','🤒','🤕','🤢','🤮','🤧','🥴','🤥','🤓'] },
     { label:'👍', emojis:['👍','👎','👊','✊','🤛','🤜','🤞','✌️','🤟','🤘','👌','🤌','🤏','👈','👉','👆','👇','☝️','👋','🤚','🖐️','✋','🖖','👏','🙌','🤲','🤝','🙏','✍️','💪','🦾','🤙','💅','🤳'] },
     { label:'❤️', emojis:['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','♥️','🔥','✨','⭐','🌟','💫','⚡','🌈','🎉','🎊','🥂','🍾'] },
-    { label:'🐶', emojis:['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🦋','🐌','🐞','🦋','🐢','🐍','🦎','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐋','🦈'] },
+    { label:'🐶', emojis:['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🦋','🐌','🐞','🐢','🐍','🦎','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐋','🦈'] },
     { label:'🍕', emojis:['🍕','🍔','🍟','🌭','🍿','🥓','🥚','🍳','🥞','🧇','🥐','🥖','🍞','🧀','🥗','🥙','🥪','🌮','🌯','🍱','🍙','🍚','🍛','🍜','🍝','🍣','🍤','🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🍫','🍬','🍭','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🌽','🧄','🧅','🥔'] },
     { label:'⚽', emojis:['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱','🏓','🏸','⛳','🎣','🥊','🥋','🏆','🥇','🥈','🥉','🎮','🎯','🎲','♟️','🎳','🎭','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🎷','🎺','🎸','🎻'] },
-    { label:'🚗', emojis:['🚗','🚕','🚙','🚌','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🛵','🏍️','🚲','✈️','🛩️','🚀','🛸','🚂','🚄','🚅','🚇','🚊','🛺','🛳️','🚢','⛵','🛥️','🚤'] }
+    { label:'🚗', emojis:['🚗','🚕','🚙','🚌','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🛵','🏍️','🚲','✈️','🛩️','🚀','🛸','🚂','🚄','🚅','🚇','🚊','🛺','🚢','⛵','🚤'] }
   ];
   var _kfCsCurrentCat = 0, _kfCsAllEmojis = [];
   (function() {
@@ -1775,38 +1798,28 @@
     if (!grid) return;
     grid.innerHTML = '';
     _kfCsEmojiCategories[index].emojis.forEach(function(emoji) {
-      var d = document.createElement('div');
-      d.className = 'kf-cs-emoji-item';
-      d.textContent = emoji;
-      d.onclick = function() { kfCsInsertEmoji(emoji); };
-      grid.appendChild(d);
+      var d = document.createElement('div'); d.className = 'kf-cs-emoji-item'; d.textContent = emoji;
+      d.onclick = function() { kfCsInsertEmoji(emoji); }; grid.appendChild(d);
     });
   }
 
   function kfCsSearchEmoji(query) {
-    var grid = document.getElementById('kfCsEmojiGrid');
-    if (!grid) return;
+    var grid = document.getElementById('kfCsEmojiGrid'); if (!grid) return;
     grid.innerHTML = '';
     var q = query.trim().toLowerCase();
     var list = q ? _kfCsAllEmojis.filter(function(e){ return e.cat.toLowerCase().includes(q)||e.emoji.includes(q); }).map(function(e){ return e.emoji; }) : _kfCsEmojiCategories[_kfCsCurrentCat].emojis;
     list.forEach(function(emoji) {
-      var d = document.createElement('div');
-      d.className = 'kf-cs-emoji-item';
-      d.textContent = emoji;
-      d.onclick = function() { kfCsInsertEmoji(emoji); };
-      grid.appendChild(d);
+      var d = document.createElement('div'); d.className = 'kf-cs-emoji-item'; d.textContent = emoji;
+      d.onclick = function() { kfCsInsertEmoji(emoji); }; grid.appendChild(d);
     });
   }
 
   function kfCsInsertEmoji(emoji) {
-    var ta = document.getElementById('modalTextInput');
-    if (!ta) return;
+    var ta = document.getElementById('modalTextInput'); if (!ta) return;
     var start = ta.selectionStart, end = ta.selectionEnd;
     ta.value = ta.value.substring(0,start) + emoji + ta.value.substring(end);
     ta.selectionStart = ta.selectionEnd = start + emoji.length;
-    ta.dispatchEvent(new Event('input', {bubbles:true}));
-    kvibeCSOnInput();
-    ta.focus();
+    ta.dispatchEvent(new Event('input', {bubbles:true})); kvibeCSOnInput(); ta.focus();
   }
 
   function kfCsToggleEmojiPicker(event) {
@@ -1815,12 +1828,10 @@
     var btn = document.getElementById('kfCsEmojiBtn');
     if (!picker) return;
     if (picker.classList.contains('open')) {
-      picker.classList.remove('open');
-      if (btn) btn.classList.remove('active');
+      picker.classList.remove('open'); if (btn) btn.classList.remove('active');
       document.removeEventListener('click', kfCsCloseEmojiOnOutside);
     } else {
-      picker.classList.add('open');
-      if (btn) btn.classList.add('active');
+      picker.classList.add('open'); if (btn) btn.classList.add('active');
       var searchEl = document.getElementById('kfCsEmojiSearch');
       if (searchEl) { searchEl.value=''; kfCsRenderCat(_kfCsCurrentCat); }
       setTimeout(function(){ document.addEventListener('click', kfCsCloseEmojiOnOutside); }, 50);
@@ -1831,230 +1842,383 @@
     var picker = document.getElementById('kfCsEmojiPicker');
     var btn    = document.getElementById('kfCsEmojiBtn');
     if (picker && !picker.contains(e.target) && e.target !== btn) {
-      picker.classList.remove('open');
-      if (btn) btn.classList.remove('active');
+      picker.classList.remove('open'); if (btn) btn.classList.remove('active');
       document.removeEventListener('click', kfCsCloseEmojiOnOutside);
     }
   }
   </script>
 
-<!-- ═══════════════════════════════════════════════════════════════════
-     DESKTOP NOTIFICATION PANEL MODAL  (matches home.html exactly)
-     Only shown on desktop (≥768px). On mobile the footer link navigates
-     to the full notification_list page as before.
-     ═══════════════════════════════════════════════════════════════════ -->
+  <!-- ═══ POST DETAIL MODAL JS (matches home.html exactly) ═══ -->
+  <script>
+  (function() {
+    'use strict';
 
-<!-- Backdrop -->
-<div id="kvibe-notif-backdrop"
-     style="display:none;position:fixed;inset:0;z-index:1199;background:rgba(0,0,0,.35);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);"
-     aria-hidden="true"></div>
+    var _pm = {
+      postId: null, mediaType: null, images: [], idx: 0,
+      authorName: '', authorHandle: '', authorAvatar: '', time: '', caption: '',
+    };
 
-<!-- Slide-in Panel -->
-<aside id="kvibe-notif-panel"
-       role="dialog"
-       aria-modal="true"
-       aria-label="Notifications"
-       style="
-         display:none;
-         position:fixed;
-         top:0; left:0;
-         width:400px; max-width:94vw;
-         height:100vh;
-         background:#fff;
-         z-index:1200;
-         box-shadow:4px 0 32px rgba(0,0,0,.15);
-         display:flex;
-         flex-direction:column;
-         transform:translateX(-100%);
-         transition:transform .3s cubic-bezier(.4,0,.2,1);
-         will-change:transform;
-       ">
+    function _collectImages(postId) {
+      var article = document.querySelector('[data-post-id="' + postId + '"]');
+      if (!article) return [];
+      var grid = article.querySelector('.kvibe-x-media-grid');
+      if (grid && grid.dataset.allImages) {
+        try {
+          var parsed = JSON.parse(grid.dataset.allImages);
+          if (Array.isArray(parsed) && parsed.length) {
+            return parsed.map(function(src) { return { src: src, alt: 'Post image' }; });
+          }
+        } catch(e) {}
+      }
+      var cells = article.querySelectorAll('.kvibe-x-media-cell img.kvibe-x-media-thumb');
+      var imgs = [];
+      cells.forEach(function(img) {
+        if (img.src && img.src.indexOf('data:') !== 0) { imgs.push({ src: img.src, alt: img.alt || 'Post image' }); }
+      });
+      return imgs;
+    }
 
-  <!-- Panel Header -->
-  <div style="
-    display:flex; align-items:center; justify-content:space-between;
-    padding:16px 18px 14px;
-    border-bottom:1px solid #efefef;
-    background:rgba(255,255,255,.97);
-    backdrop-filter:blur(8px);
-    position:sticky; top:0; z-index:10;
-    flex-shrink:0;
-  ">
-    <span style="font-size:20px;font-weight:700;letter-spacing:-.3px;color:#262626;">Notifications</span>
-    <div style="display:flex;align-items:center;gap:12px;">
-      <button id="kvibe-panel-mark-all"
-              style="background:none;border:none;color:#0095f6;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0;transition:opacity .15s;"
-              onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"
-              onclick="kvibePanelMarkAllRead()">
-        Mark all read
-      </button>
-      <button id="kvibe-panel-close"
-              aria-label="Close notifications"
-              style="background:none;border:none;color:#8e8e8e;font-size:20px;cursor:pointer;
-                     width:32px;height:32px;display:flex;align-items:center;justify-content:center;
-                     border-radius:50%;transition:background .15s;"
-              onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
-        <i class="fas fa-times"></i>
-      </button>
-    </div>
-  </div>
+    function _getAuthorAvatar(postId) {
+      var article = document.querySelector('[data-post-id="' + postId + '"]');
+      if (!article) return '';
+      var pic = article.querySelector('.kvibe-profile-pic');
+      return pic ? pic.src : '';
+    }
 
-  <!-- Panel Body — filled by AJAX -->
-  <div id="kvibe-notif-panel-body"
-       style="flex:1;overflow-y:auto;overscroll-behavior:contain;">
-    <div id="kvibe-panel-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:12px;">
-      <i class="fas fa-circle-notch fa-spin" style="font-size:28px;color:#0095f6;"></i>
-      <span style="font-size:13px;color:#8e8e8e;">Loading notifications…</span>
-    </div>
-  </div>
+    function _getEngagement(postId) {
+      function _n(el) { if (!el) return 0; var v = parseInt((el.textContent || '').replace(/[^0-9]/g, ''), 10); return isNaN(v) ? 0 : v; }
+      var commentEl = document.getElementById('kvibe-comment-count-' + postId);
+      var viewEl    = document.getElementById('kvibe-view-count-'    + postId);
+      var repostEl  = document.getElementById('kvibe-repost-count-'  + postId);
+      var likeEl    = document.getElementById('kv-vibe-count-'       + postId);
+      return { comments: _n(commentEl), likes: _n(likeEl), reposts: _n(repostEl), views: _n(viewEl) };
+    }
 
-  <!-- Panel Footer -->
-  <div style="padding:12px 18px;border-top:1px solid #efefef;text-align:center;flex-shrink:0;">
-    <a href="{% url 'notification_list' %}"
-       style="font-size:13px;font-weight:600;color:#0095f6;text-decoration:none;"
-       onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
-      See all notifications
-    </a>
-  </div>
-</aside>
+    function _fmt(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1000)    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+      return String(n);
+    }
 
-<style>
-  #kvibe-notif-panel .kishiface-notification-wrapper { position:relative; transition:opacity .25s,transform .25s; }
-  #kvibe-notif-panel .kishiface-notification-wrapper:hover { background:#fafafa; }
-  #kvibe-notif-panel .kishiface-remove-btn {
-    position:absolute; right:16px; top:50%; transform:translateY(-50%);
-    background:rgba(255,255,255,.9); border:1px solid #efefef; color:#8e8e8e;
-    cursor:pointer; width:28px; height:28px;
-    display:flex; align-items:center; justify-content:center;
-    border-radius:50%; opacity:0;
-    transition:opacity .2s,background .15s,color .15s;
-    box-shadow:0 1px 4px rgba(0,0,0,.08); z-index:10; font-size:11px;
-  }
-  #kvibe-notif-panel .kishiface-notification-wrapper:hover .kishiface-remove-btn { opacity:1; }
-  #kvibe-notif-panel .kishiface-remove-btn:hover { background:#ffe5e5; color:#ed4956; border-color:#ed4956; }
-  #kvibe-notif-panel .kishiface-notification-wrapper .kishiface-notif-item { padding-right:50px !important; }
-  #kvibe-notif-panel .kv-panel-section-title { padding:14px 16px 6px; font-size:13px; font-weight:600; color:#262626; background:#fff; position:sticky; top:0; z-index:5; }
-  #kvibe-notif-panel .kishiface-empty-notifications { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 24px 40px; text-align:center; }
-  #kvibe-notif-panel .kishiface-empty-icon { font-size:56px; color:#dbdbdb; margin-bottom:16px; }
-  #kvibe-notif-panel .kishiface-empty-title { font-size:20px; font-weight:600; margin-bottom:8px; }
-  #kvibe-notif-panel .kishiface-empty-text { font-size:13px; color:#8e8e8e; max-width:260px; line-height:1.4; }
-  @keyframes kv-panel-slideout { to { opacity:0; transform:translateX(30px); max-height:0; } }
-  #kvibe-notif-panel .kishiface-removing { animation: kv-panel-slideout .25s ease forwards; overflow:hidden; }
-  #kvibe-desktop-notif-btn.kvibe-notif-panel-open .kvibe-desktop-nav-icon i,
-  #kvibe-desktop-notif-btn.kvibe-notif-panel-open .kvibe-desktop-nav-label { color: var(--kvibe-primary) !important; }
-  @media (max-width: 767px) {
-    #kvibe-notif-panel, #kvibe-notif-backdrop { display:none !important; }
-  }
-</style>
+    function kvibePostModalOpen(postId, mediaType, videoUrl, startIdx, authorName, authorHandle, time, caption, allImages) {
+      _pm.postId       = postId;
+      _pm.mediaType    = mediaType;
+      _pm.authorName   = authorName   || '';
+      _pm.authorHandle = authorHandle || '';
+      _pm.authorAvatar = _getAuthorAvatar(postId);
+      _pm.time         = time    || '';
+      _pm.caption      = caption || '';
+      _pm.idx          = startIdx != null ? parseInt(startIdx, 10) : 0;
 
-<script>
-(function () {
-  'use strict';
-  if (window.innerWidth < 768) return;
+      var profileUrl = '/' + authorHandle + '/';
+      document.getElementById('kvibePmAvatarLink').href = profileUrl;
+      var av = document.getElementById('kvibePmAvatar');
+      av.src = _pm.authorAvatar;
+      av.onerror = function() { this.src = 'https://placehold.co/40x40/555/fff?text=' + (authorHandle.slice(0,1).toUpperCase() || 'U'); };
+      var nameEl = document.getElementById('kvibePmAuthorName');
+      nameEl.textContent = authorName; nameEl.href = profileUrl;
+      document.getElementById('kvibePmAuthorHandle').textContent = '@' + authorHandle;
 
-  var trigger  = document.getElementById('kvibe-desktop-notif-btn');
-  var panel    = document.getElementById('kvibe-notif-panel');
-  var backdrop = document.getElementById('kvibe-notif-backdrop');
-  var closeBtn = document.getElementById('kvibe-panel-close');
-  var body     = document.getElementById('kvibe-notif-panel-body');
-  var loading  = document.getElementById('kvibe-panel-loading');
-  var badge    = document.getElementById('kvibe-desktop-notif-badge');
+      var pmMenuBtn  = document.getElementById('kvibePmMenuBtn');
+      var pmEditItem = document.getElementById('kvibePmEditItem');
+      var pmMenuDropdown = document.getElementById('kvibePmMenuDropdown');
+      var postMenuEl = document.querySelector('[data-post-id="' + postId + '"] .kvibe-post-actions a[href*="editpost"]');
+      if (pmMenuBtn) {
+        if (postMenuEl) {
+          pmMenuBtn.style.display = '';
+          pmMenuBtn.dataset.postId = postId;
+          if (pmEditItem) pmEditItem.href = postMenuEl.href;
+          if (pmMenuDropdown) pmMenuDropdown.style.display = 'none';
+        } else {
+          pmMenuBtn.style.display = 'none';
+          if (pmMenuDropdown) pmMenuDropdown.style.display = 'none';
+        }
+      }
 
-  if (!trigger || !panel) return;
+      var replyAv = document.getElementById('kvibePmReplyAvatar');
+      var myPic   = document.getElementById('kvibe-my-avatar') || document.querySelector('.kf-comment-profile-img');
+      replyAv.src = myPic ? myPic.src : 'https://placehold.co/34x34/555/fff?text=Me';
+      replyAv.onerror = function() { this.src = 'https://placehold.co/34x34/555/fff?text=Me'; };
 
-  panel.style.display = 'flex';
-  backdrop.style.display = 'block';
-  panel.style.visibility = 'hidden';
-  backdrop.style.opacity = '0';
-  backdrop.style.pointerEvents = 'none';
+      var postUrl = '/comment/' + postId;
+      document.getElementById('kvibePmViewBtn').href   = postUrl;
+      document.getElementById('kvibePmViewLink').href  = postUrl;
+      document.getElementById('kvibePmReplyLink').href = postUrl;
 
-  var isOpen = false, loaded = false;
+      var capEl    = document.getElementById('kvibePmCaption');
+      var toggleEl = document.getElementById('kvibePmCaptionToggle');
+      capEl.classList.remove('collapsed'); toggleEl.classList.remove('visible'); toggleEl.textContent = 'more';
+      if (caption && caption.trim()) {
+        capEl.textContent = caption; capEl.style.display = '';
+        if (caption.trim().length > 100) { capEl.classList.add('collapsed'); toggleEl.classList.add('visible'); }
+      } else {
+        capEl.style.display = 'none';
+      }
 
-  function getCsrf() {
-    var el = document.querySelector('[name=csrfmiddlewaretoken]');
-    if (el) return el.value;
-    var m = document.cookie.match(/csrftoken=([^;]+)/);
-    return m ? decodeURIComponent(m[1]) : '';
-  }
+      var eng = _getEngagement(postId);
+      document.getElementById('kvibePmCommentCount').textContent = _fmt(eng.comments);
+      document.getElementById('kvibePmRepostCount').textContent  = _fmt(eng.reposts);
+      document.getElementById('kvibePmLikeCount').textContent    = _fmt(eng.likes);
+      document.getElementById('kvibePmViewCount').textContent    = _fmt(eng.views);
 
-  function openPanel() {
-    if (isOpen) return;
-    isOpen = true;
-    backdrop.style.visibility = 'visible';
-    backdrop.style.pointerEvents = 'auto';
-    backdrop.style.opacity = '0';
-    backdrop.style.transition = 'opacity .3s';
-    setTimeout(function () { backdrop.style.opacity = '1'; }, 10);
-    panel.style.visibility = 'visible';
-    panel.style.pointerEvents = 'auto';
-    panel.style.transform = 'translateX(-100%)';
-    setTimeout(function () { panel.style.transform = 'translateX(0)'; }, 10);
-    trigger.setAttribute('aria-expanded', 'true');
-    trigger.classList.add('kvibe-notif-panel-open');
-    if (badge) badge.style.display = 'none';
-    var footerBadge = document.getElementById('footerNotificationBadge');
-    if (footerBadge) { footerBadge.classList.add('hidden-badge'); footerBadge.style.display = 'none'; }
-    var footerCount = document.getElementById('footerNotificationCount');
-    if (footerCount) footerCount.innerText = '0';
-    if (!loaded) fetchNotifications();
-  }
+      var followBtn = document.getElementById('kvibePmFollowBtn');
+      if (followBtn) { followBtn.style.display = 'none'; }
 
-  function closePanel() {
-    if (!isOpen) return;
-    isOpen = false;
-    backdrop.style.opacity = '0';
-    backdrop.style.pointerEvents = 'none';
-    panel.style.transform = 'translateX(-100%)';
-    setTimeout(function () {
-      backdrop.style.visibility = 'hidden';
-      panel.style.visibility = 'hidden';
-      panel.style.pointerEvents = 'none';
-    }, 300);
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.classList.remove('kvibe-notif-panel-open');
-  }
+      var img = document.getElementById('kvibePmImg');
+      var vid = document.getElementById('kvibePmVideo');
+      img.style.display = 'none'; vid.style.display = 'none';
+      vid.pause(); vid.src = '';
 
-  trigger.addEventListener('click', function (e) { e.stopPropagation(); isOpen ? closePanel() : openPanel(); });
-  closeBtn.addEventListener('click', closePanel);
-  backdrop.addEventListener('click', closePanel);
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && isOpen) closePanel(); });
+      if (mediaType === 'video' && videoUrl) {
+        vid.src = videoUrl; vid.load(); vid.style.display = 'block';
+        vid.play().catch(function() {}); _hidePmNav();
+      } else if (mediaType === 'images') {
+        if (allImages) {
+          try {
+            var parsed = JSON.parse(allImages);
+            _pm.images = Array.isArray(parsed) && parsed.length
+              ? parsed.map(function(src) { return { src: src, alt: 'Post image' }; })
+              : _collectImages(postId);
+          } catch(e) { _pm.images = _collectImages(postId); }
+        } else {
+          _pm.images = _collectImages(postId);
+        }
+        _renderPmImage();
+        _updatePmNav();
+      }
 
-  function fetchNotifications() {
-    if (loading) loading.style.display = 'flex';
-    fetch('{% url "notification_list" %}?panel=1', {
-      credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrf() }
-    })
-    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-    .then(function (html) {
-      loaded = true;
-      if (loading) loading.style.display = 'none';
-      body.insertAdjacentHTML('beforeend', html);
-    })
-    .catch(function () {
-      if (loading) loading.innerHTML =
-        '<div style="text-align:center;padding:40px 24px;color:#8e8e8e;font-size:13px;">' +
-        '<i class="fas fa-exclamation-circle" style="font-size:24px;color:#ed4956;margin-bottom:8px;display:block;"></i>' +
-        'Could not load notifications.<br>' +
-        '<a href="{% url "notification_list" %}" style="color:#0095f6;font-weight:600;">View all</a></div>';
+      document.getElementById('kvibePostModalOverlay').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function _renderPmImage() {
+      var img = document.getElementById('kvibePmImg');
+      var cur = _pm.images[_pm.idx];
+      if (!cur) return;
+      img.src = cur.src; img.alt = cur.alt; img.style.display = 'block';
+      img.onerror = function() { this.src = 'https://placehold.co/600x400/111/fff?text=Image'; };
+    }
+
+    function _updatePmNav() {
+      var total = _pm.images.length;
+      var prev  = document.getElementById('kvibePmPrev');
+      var next  = document.getElementById('kvibePmNext');
+      var ctr   = document.getElementById('kvibePmCounter');
+      if (total > 1) {
+        prev.style.display = _pm.idx > 0         ? '' : 'none';
+        next.style.display = _pm.idx < total - 1 ? '' : 'none';
+        ctr.style.display  = ''; ctr.textContent = (_pm.idx + 1) + ' / ' + total;
+      } else { _hidePmNav(); }
+    }
+
+    function _hidePmNav() {
+      document.getElementById('kvibePmPrev').style.display    = 'none';
+      document.getElementById('kvibePmNext').style.display    = 'none';
+      document.getElementById('kvibePmCounter').style.display = 'none';
+    }
+
+    function kvibePmNav(dir) {
+      _pm.idx = Math.max(0, Math.min(_pm.images.length - 1, _pm.idx + dir));
+      _renderPmImage(); _updatePmNav();
+    }
+
+    function kvibePostModalClose(e, force) {
+      if (!force && e && e.target !== document.getElementById('kvibePostModalOverlay')) return;
+      var overlay = document.getElementById('kvibePostModalOverlay');
+      overlay.classList.remove('open');
+      document.body.style.overflow = '';
+      var vid = document.getElementById('kvibePmVideo');
+      vid.pause(); vid.src = ''; vid.load();
+      document.getElementById('kvibePmImg').src = '';
+      _pm.postId = null;
+    }
+
+    function kvibePmToggleMenu(e) {
+      e.stopPropagation();
+      var drop = document.getElementById('kvibePmMenuDropdown');
+      if (!drop) return;
+      drop.style.display = drop.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function kvibePmDeletePost(e) {
+      e.stopPropagation();
+      var btn = document.getElementById('kvibePmMenuBtn');
+      var postId = btn ? btn.dataset.postId : null;
+      if (!postId) return;
+      if (!confirm('Delete this post? This cannot be undone.')) return;
+      kvibePostModalClose(null, true);
+      var article = document.querySelector('[data-post-id="' + postId + '"]');
+      var csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+      fetch('/deletepost/' + postId, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'ok' && article) {
+          article.style.transition = 'opacity 0.25s, transform 0.25s';
+          article.style.opacity = '0'; article.style.transform = 'scale(0.97)';
+          setTimeout(() => article.remove(), 260);
+        }
+      })
+      .catch(() => alert('Could not delete post. Please try again.'));
+    }
+
+    function kvibePmToggleCaption() {
+      var capEl    = document.getElementById('kvibePmCaption');
+      var toggleEl = document.getElementById('kvibePmCaptionToggle');
+      if (!capEl || !toggleEl) return;
+      var collapsed = capEl.classList.contains('collapsed');
+      if (collapsed) { capEl.classList.remove('collapsed'); toggleEl.textContent = 'less'; }
+      else           { capEl.classList.add('collapsed');    toggleEl.textContent = 'more'; }
+    }
+
+    document.addEventListener('keydown', function(e) {
+      var overlay = document.getElementById('kvibePostModalOverlay');
+      if (!overlay || !overlay.classList.contains('open')) return;
+      if (e.key === 'Escape')         { kvibePostModalClose(null, true); }
+      else if (e.key === 'ArrowLeft') { kvibePmNav(-1); }
+      else if (e.key === 'ArrowRight'){ kvibePmNav(1); }
     });
-  }
 
-  window.kvibePanelMarkAllRead = function () {
-    fetch('/notifications/mark-all-read/', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-      body: JSON.stringify({})
-    }).then(function () {
-      body.querySelectorAll('.kishiface-unread').forEach(function (el) { el.classList.remove('kishiface-unread'); });
-      body.querySelectorAll('.kishiface-unread-dot').forEach(function (d) { d.remove(); });
-    });
-  };
+    (function() {
+      var _swipeStartX = 0, _swipeStartY = 0, _swipeLocked = false;
+      var mediaEl = document.getElementById('kvibePmMedia');
+      if (!mediaEl) return;
+      mediaEl.addEventListener('touchstart', function(e) {
+        if (e.touches.length !== 1) return;
+        _swipeStartX = e.touches[0].clientX; _swipeStartY = e.touches[0].clientY; _swipeLocked = false;
+      }, { passive: true });
+      mediaEl.addEventListener('touchmove', function(e) {
+        if (e.touches.length !== 1) return;
+        var dx = e.touches[0].clientX - _swipeStartX; var dy = e.touches[0].clientY - _swipeStartY;
+        if (!_swipeLocked && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) { _swipeLocked = true; }
+        if (_swipeLocked) e.preventDefault();
+      }, { passive: false });
+      mediaEl.addEventListener('touchend', function(e) {
+        if (_pm.mediaType !== 'images' || _pm.images.length <= 1) return;
+        var dx = e.changedTouches[0].clientX - _swipeStartX; var dy = e.changedTouches[0].clientY - _swipeStartY;
+        if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return;
+        if (dx < 0) { kvibePmNav(1); } else { kvibePmNav(-1); }
+      }, { passive: true });
+    }());
 
-  window.addEventListener('resize', function () { if (window.innerWidth < 768 && isOpen) closePanel(); });
-}());
-</script>
+    function setupPostModalInteractions() {
+      var commentBtn = document.getElementById('kvibePmCommentBtn');
+      if (commentBtn) {
+        var newCommentBtn = commentBtn.cloneNode(true);
+        commentBtn.parentNode.replaceChild(newCommentBtn, commentBtn);
+        newCommentBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (_pm.postId) window.location.href = '/comment/' + _pm.postId;
+        });
+      }
+    }
+
+    window.kvibePostModalOpen  = kvibePostModalOpen;
+    window.kvibePostModalClose = kvibePostModalClose;
+    window.kvibePmNav          = kvibePmNav;
+    window.kvibePmToggleCaption = kvibePmToggleCaption;
+    window.kvibePmToggleMenu   = kvibePmToggleMenu;
+    window.kvibePmDeletePost   = kvibePmDeletePost;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupPostModalInteractions);
+    } else {
+      setupPostModalInteractions();
+    }
+  }());
+  </script>
+
+  <!-- ═══ DESKTOP NOTIFICATION PANEL JS ═══ -->
+  <script>
+  (function () {
+    'use strict';
+    if (window.innerWidth < 768) return;
+    var trigger  = document.getElementById('kvibe-desktop-notif-btn');
+    var panel    = document.getElementById('kvibe-notif-panel');
+    var backdrop = document.getElementById('kvibe-notif-backdrop');
+    var closeBtn = document.getElementById('kvibe-panel-close');
+    var body     = document.getElementById('kvibe-notif-panel-body');
+    var loading  = document.getElementById('kvibe-panel-loading');
+    var badge    = document.getElementById('kvibe-desktop-notif-badge');
+    if (!trigger || !panel) return;
+    panel.style.display = 'flex'; backdrop.style.display = 'block';
+    panel.style.visibility = 'hidden'; backdrop.style.opacity = '0'; backdrop.style.pointerEvents = 'none';
+    var isOpen = false, loaded = false;
+
+    function getCsrf() {
+      var el = document.querySelector('[name=csrfmiddlewaretoken]');
+      if (el) return el.value;
+      var m = document.cookie.match(/csrftoken=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    }
+
+    function openPanel() {
+      if (isOpen) return; isOpen = true;
+      backdrop.style.visibility = 'visible'; backdrop.style.pointerEvents = 'auto';
+      backdrop.style.opacity = '0'; backdrop.style.transition = 'opacity .3s';
+      setTimeout(function () { backdrop.style.opacity = '1'; }, 10);
+      panel.style.visibility = 'visible'; panel.style.pointerEvents = 'auto';
+      panel.style.transform = 'translateX(-100%)';
+      setTimeout(function () { panel.style.transform = 'translateX(0)'; }, 10);
+      trigger.setAttribute('aria-expanded', 'true'); trigger.classList.add('kvibe-notif-panel-open');
+      if (badge) badge.style.display = 'none';
+      var footerBadge = document.getElementById('footerNotificationBadge');
+      if (footerBadge) { footerBadge.classList.add('hidden-badge'); footerBadge.style.display = 'none'; }
+      var footerCount = document.getElementById('footerNotificationCount');
+      if (footerCount) footerCount.innerText = '0';
+      if (!loaded) fetchNotifications();
+    }
+
+    function closePanel() {
+      if (!isOpen) return; isOpen = false;
+      backdrop.style.opacity = '0'; backdrop.style.pointerEvents = 'none';
+      panel.style.transform = 'translateX(-100%)';
+      setTimeout(function () { backdrop.style.visibility = 'hidden'; panel.style.visibility = 'hidden'; panel.style.pointerEvents = 'none'; }, 300);
+      trigger.setAttribute('aria-expanded', 'false'); trigger.classList.remove('kvibe-notif-panel-open');
+    }
+
+    trigger.addEventListener('click', function (e) { e.stopPropagation(); isOpen ? closePanel() : openPanel(); });
+    closeBtn.addEventListener('click', closePanel);
+    backdrop.addEventListener('click', closePanel);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && isOpen) closePanel(); });
+
+    function fetchNotifications() {
+      if (loading) loading.style.display = 'flex';
+      fetch('{% url "notification_list" %}?panel=1', {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrf() }
+      })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function (html) {
+        loaded = true;
+        if (loading) loading.style.display = 'none';
+        body.insertAdjacentHTML('beforeend', html);
+      })
+      .catch(function () {
+        if (loading) loading.innerHTML =
+          '<div style="text-align:center;padding:40px 24px;color:#8e8e8e;font-size:13px;">' +
+          '<i class="fas fa-exclamation-circle" style="font-size:24px;color:#ed4956;margin-bottom:8px;display:block;"></i>' +
+          'Could not load notifications.<br>' +
+          '<a href="{% url "notification_list" %}" style="color:#0095f6;font-weight:600;">View all</a></div>';
+      });
+    }
+
+    window.kvibePanelMarkAllRead = function () {
+      fetch('/notifications/mark-all-read/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        body: JSON.stringify({})
+      }).then(function () {
+        body.querySelectorAll('.kishiface-unread').forEach(function (el) { el.classList.remove('kishiface-unread'); });
+        body.querySelectorAll('.kishiface-unread-dot').forEach(function (d) { d.remove(); });
+      });
+    };
+
+    window.addEventListener('resize', function () { if (window.innerWidth < 768 && isOpen) closePanel(); });
+  }());
+  </script>
 
 </body>
 </html>
