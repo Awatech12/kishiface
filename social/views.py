@@ -5815,3 +5815,149 @@ def admin_verify_user(request, user_id):
     state = 'verified' if profile.is_verify else 'unverified'
     messages.success(request, f'User "{target.username}" is now {state}.')
     return redirect('/admin-dashboard/#users')
+    
+    
+# ─────────────────────────────────────────────────────────────────────────────
+# Seller: Edit a marketplace product (AJAX / multipart POST)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def edit_product(request, product_id):
+    """
+    Owner-only endpoint to update a marketplace listing.
+    Accepts multipart/form-data so the seller can add new images.
+    Returns JSON so the JS modal can update the page inline.
+    """
+    from django.http import JsonResponse
+    from urllib.parse import urlparse as _urlparse
+
+    product = get_object_or_404(Market, product_id=product_id)
+
+    # Ownership check
+    if request.user != product.product_owner:
+        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed.'}, status=405)
+
+    # ── Allowlists ──────────────────────────────────────────────────────────
+    _VALID_CATEGORIES   = {'Phones', 'Electronics', 'Fashion', 'Properties', 'Others'}
+    _VALID_CONDITIONS   = {'New', 'Used', 'Used-Fair'}
+    _VALID_AVAILABILITY = {'Single Item', 'In Stock'}
+
+    product_name         = request.POST.get('product_name', '').strip()
+    product_price        = request.POST.get('product_price', '').strip()
+    product_location     = request.POST.get('location', '').strip()
+    product_description  = request.POST.get('description', '').strip()
+    product_availability = request.POST.get('availability', 'Single Item')
+    product_category     = request.POST.get('category', '').strip()
+    product_condition    = request.POST.get('product_condition', 'New')
+    whatsapp_number      = request.POST.get('whatsapp_number', '').strip()
+
+    # Clamp enum fields
+    if product_availability not in _VALID_AVAILABILITY:
+        product_availability = 'Single Item'
+    if product_condition not in _VALID_CONDITIONS:
+        product_condition = 'New'
+
+    # ── Validation ──────────────────────────────────────────────────────────
+    errors = {}
+    if not product_name:
+        errors['product_name'] = 'Ad title is required.'
+    if not product_price:
+        errors['product_price'] = 'Price is required.'
+    else:
+        try:
+            price_val = int(float(product_price))
+            if price_val < 0:
+                errors['product_price'] = 'Price cannot be negative.'
+            elif price_val > 1_000_000_000:
+                errors['product_price'] = 'Price is too high.'
+        except (ValueError, TypeError):
+            errors['product_price'] = 'Enter a valid price.'
+
+    if not product_category or product_category not in _VALID_CATEGORIES:
+        errors['product_category'] = 'Please select a valid category.'
+    if not product_description:
+        errors['product_description'] = 'Description is required.'
+    if not whatsapp_number:
+        errors['whatsapp_number'] = 'WhatsApp number is required.'
+
+    if errors:
+        return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+    # ── Sanitise free-text ───────────────────────────────────────────────────
+    try:
+        from social.models import sanitize_text as _sanitize
+        product_name        = _sanitize(product_name, 'product_name')
+        product_description = _sanitize(product_description, 'product_description')
+        product_location    = _sanitize(product_location)
+    except Exception:
+        pass  # sanitize_text is a best-effort helper; never block a save on its failure
+
+    # ── Apply changes ────────────────────────────────────────────────────────
+    product.product_name         = product_name
+    product.product_price        = int(float(product_price))
+    product.product_location     = product_location
+    product.product_description  = product_description
+    product.product_availability = product_availability
+    product.product_category     = product_category
+    product.product_condition    = product_condition
+    product.whatsapp_number      = whatsapp_number
+    product.save()
+
+    # ── Delete images that the seller removed in the modal ───────────────────
+    delete_ids_raw = request.POST.getlist('delete_image_ids')
+    if delete_ids_raw:
+        for raw_id in delete_ids_raw:
+            try:
+                img_obj = MarketImage.objects.get(id=int(raw_id), product=product)
+                img_obj.delete()
+            except (MarketImage.DoesNotExist, ValueError, TypeError):
+                pass  # already gone or bad id – silently skip
+
+    # ── Add new images ────────────────────────────────────────────────────────
+    new_images = request.FILES.getlist('new_images')
+    current_count = product.images.count()
+    slots_left = max(0, 5 - current_count)
+    for img_file in new_images[:slots_left]:
+        MarketImage.objects.create(product=product, product_image=img_file)
+
+    return JsonResponse({
+        'success':             True,
+        'product_name':        product.product_name,
+        'product_price':       product.product_price,
+        'product_description': product.product_description,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Seller: Delete a marketplace product (AJAX POST)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def delete_product(request, product_id):
+    """
+    Owner-only endpoint to permanently delete a marketplace listing.
+    Returns JSON so the modal JS can redirect after success.
+    """
+    from django.http import JsonResponse
+
+    product = get_object_or_404(Market, product_id=product_id)
+
+    if request.user != product.product_owner:
+        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed.'}, status=405)
+
+    try:
+        product.delete()
+        return JsonResponse({'success': True})
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            'delete_product failed for user %s product %s', request.user.id, product_id
+        )
+        return JsonResponse({'success': False, 'error': 'Something went wrong. Please try again.'}, status=500)
+

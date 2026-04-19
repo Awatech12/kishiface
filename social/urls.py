@@ -115,6 +115,11 @@ urlpatterns = [
     path('market/new/',                        views.marketform,      name='marketform'),
     path('product/<uuid:product_id>/',         views.product_detail,  name='product_detail'),
     path('product/<uuid:product_id>/contact/', views.contact_seller,  name='contact_seller'),
+  
+
+path('product/<uuid:product_id>/edit/',   views.edit_product,   name='edit_product'),
+path('product/<uuid:product_id>/delete/', views.delete_product, name='delete_product'),
+
 
     # ── Spotlight ──────────────────────────────────────────────────────────────
     path('spotlight/', views.spotlight_view, name='spotlight'),
