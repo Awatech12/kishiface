@@ -1,0 +1,290 @@
+{% load static %}
+{% load humanize %}
+{% load text_filters %}
+
+{% if posts %}
+<div class="kvibe-text-feed">
+  {% for post in posts %}
+
+  <article class="kvibe-post"
+           data-post-id="{{ post.post_id }}"
+           data-mood="{{ post.mood|default:'' }}"
+           data-custom-mood="{{ post.custom_mood|default:'' }}"
+           {% if not post.file and not post.video_file and not post.images.all %}
+             {% if not post.link_preview or not post.link_preview.title and not post.link_preview.image %}
+               {% if post.content %}data-lp-url="{{ post.content|truncatechars:2048 }}"{% endif %}
+             {% endif %}
+           {% endif %}>
+
+    <!-- Header -->
+    <div class="kvibe-post-header">
+      {% if post.author.profile.picture %}
+        <img src="{{ post.author.profile.picture.url }}"
+             class="kvibe-profile-pic" alt="{{ post.author.username }}"
+             loading="lazy"
+             onerror="this.onerror=null;this.src='https://placehold.co/36x36/efefef/888?text=U';">
+      {% else %}
+        <img src="https://placehold.co/36x36/efefef/888?text=U"
+             class="kvibe-profile-pic" alt="{{ post.author.username }}">
+      {% endif %}
+
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;">
+          <a href="{% url 'profile' post.author.username %}" class="kvibe-username">
+            {{ post.author.first_name }} {{ post.author.last_name }}
+          </a>
+          {% if post.author.profile.is_verify %}
+            <img src="{% static 'images/verify1.jpg' %}" width="15" height="15"
+                 alt="✓" style="vertical-align:middle;flex-shrink:0;">
+          {% endif %}
+          {% if post.mood %}
+            <span class="kvibe-mood-badge kvibe-mood-{{ post.mood }}">
+              <i class="fa-regular fa-face-smile"></i>
+              {{ post.get_mood_display|default:post.mood }}
+            </span>
+          {% endif %}
+        </div>
+        <div class="kvibe-post-time">
+          @{{ post.author.username }}&nbsp;&middot;&nbsp;{{ post.created_at|timesince }} ago
+        </div>
+      </div>
+
+      {% if request.user == post.author %}
+        <a href="{% url 'editpost' post.post_id %}" class="kvibe-edit-icon" title="Edit">
+          <i class="fas fa-edit"></i>
+        </a>
+      {% endif %}
+    </div>
+
+    <!-- Text content -->
+    <div class="kvibe-post-content">
+      <div class="kvibe-post-text {% if post.content|length > 150 %}collapsed{% endif %}"
+           id="kvibe-text-{{ post.post_id }}">
+        {{ post.content|format_post_text|safe }}
+      </div>
+      {% if post.content|length > 150 %}
+        <button class="kvibe-text-toggle" onclick="kvibeToggleText('{{ post.post_id }}')">
+          <span>more</span><i class="fas fa-chevron-down"></i>
+        </button>
+      {% endif %}
+    </div>
+
+    <!-- Link Preview Card -->
+    {% with lp=post.link_preview %}
+    {% if lp %}{% if lp.title or lp.image %}
+    <a class="kvibe-post-link-preview"
+       href="{{ lp.url }}"
+       target="_blank"
+       rel="noopener noreferrer"
+       onclick="event.stopPropagation()">
+      {% if lp.image %}<img class="kvibe-plp-image" src="{{ lp.image }}" alt="" onerror="this.style.display='none'">{% endif %}
+      <div class="kvibe-plp-body">
+        {% if lp.domain %}<div class="kvibe-plp-domain">{{ lp.domain }}</div>{% endif %}
+        {% if lp.title %}<div class="kvibe-plp-title">{{ lp.title }}</div>{% endif %}
+        {% if lp.description %}<div class="kvibe-plp-desc">{{ lp.description }}</div>{% endif %}
+      </div>
+    </a>
+    {% endif %}{% endif %}
+    {% endwith %}
+    <!-- client-side lp injection point -->
+    <div class="kvibe-lp-slot"></div>
+
+    <!-- Action buttons — Vibe Reactions (WebSocket real-time) -->
+    <div class="kvibe-actions-container">
+
+      <!-- VIBE BUTTON -->
+      <div class="kvibe-action-item kv-vibe-btn"
+           id="kv-vibe-btn-{{ post.post_id }}"
+           data-post-id="{{ post.post_id }}"
+           data-user-vibe=""
+           onmouseenter="kvOpenPicker('{{ post.post_id }}')"
+           onmouseleave="kvScheduleClose('{{ post.post_id }}')"
+           onclick="kvTogglePicker('{{ post.post_id }}')">
+
+        <!-- Picker popover -->
+        <div class="kv-picker"
+             id="kv-picker-{{ post.post_id }}"
+             onmouseenter="kvCancelClose('{{ post.post_id }}')"
+             onmouseleave="kvScheduleClose('{{ post.post_id }}')">
+          <div class="kv-vibe-opt" data-vibe="fire"   onclick="kvSendVibe(event,'{{ post.post_id }}','fire')">
+            <span class="kv-opt-emoji">🔥</span><span class="kv-opt-label">Fire</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="real"   onclick="kvSendVibe(event,'{{ post.post_id }}','real')">
+            <span class="kv-opt-emoji">💯</span><span class="kv-opt-label">Real</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="vibing" onclick="kvSendVibe(event,'{{ post.post_id }}','vibing')">
+            <span class="kv-opt-emoji">🎵</span><span class="kv-opt-label">Vibing</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="dead"   onclick="kvSendVibe(event,'{{ post.post_id }}','dead')">
+            <span class="kv-opt-emoji">😂</span><span class="kv-opt-label">Dead</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="cringe" onclick="kvSendVibe(event,'{{ post.post_id }}','cringe')">
+            <span class="kv-opt-emoji">😬</span><span class="kv-opt-label">Cringe</span>
+          </div>
+          <div class="kv-vibe-opt" data-vibe="chill"  onclick="kvSendVibe(event,'{{ post.post_id }}','chill')">
+            <span class="kv-opt-emoji">🧊</span><span class="kv-opt-label">Chill</span>
+          </div>
+        </div>
+
+        <span id="kv-active-emoji-{{ post.post_id }}" class="kvibe-action-icon">
+          <i class="fa-regular fa-face-smile"></i>
+        </span>
+        <span class="kv-vibe-count" id="kv-vibe-count-{{ post.post_id }}">0</span>
+        <span class="kv-live-dot offline" id="kv-live-dot-{{ post.post_id }}" title="Connecting…"></span>
+      </div>
+
+      <!-- COMMENT -->
+      <button class="kvibe-action-item"
+              onclick="kvRecordPostView('{{ post.post_id }}'); kvibeOpenCommentSheet('{{ post.post_id }}')"
+              style="border:none;font-family:inherit;cursor:pointer;">
+        <i class="fa-regular fa-comment kvibe-action-icon"></i>
+        <span class="kv-vibe-count" id="kvibe-comment-count-{{ post.post_id }}">{{ post.comments.count|intcomma }}</span>
+      </button>
+
+      <!-- REPOST -->
+      <button class="kvibe-action-item"
+              data-post-id="{% if post.is_repost and post.original_post %}{{ post.original_post.post_id }}{% else %}{{ post.post_id }}{% endif %}"
+              data-reposted="{% if request.user in post.reposts.all %}true{% else %}false{% endif %}"
+              onclick="kvibeToggleRepost(this)"
+              style="border:none;font-family:inherit;cursor:pointer;">
+        <i class="fas fa-retweet kvibe-action-icon {% if request.user in post.reposts.all %}kvibe-reposted{% endif %}"></i>
+        <span class="kvibe-repost-count {% if post.reposts.count > 0 %}kvibe-show{% endif %}"
+              id="kvibe-repost-count-{{ post.post_id }}">
+          {% if post.reposts.count > 0 %}{{ post.reposts.count|intcomma }}{% endif %}
+        </span>
+      </button>
+
+      <!-- SHARE -->
+      <button class="kvibe-action-item"
+              onclick="kvibeOpenShareModal('{{ post.post_id }}','{{ post.content|escapejs|truncatechars:100 }}')"
+              style="border:none;font-family:inherit;cursor:pointer;">
+        <i class="fa-regular fa-paper-plane kvibe-action-icon"></i>
+        <span class="kvibe-share-count {% if post.share > 0 %}kvibe-show{% endif %}"
+              id="kvibe-share-count-{{ post.post_id }}">
+          {% if post.share > 0 %}{{ post.share|intcomma }}{% endif %}
+        </span>
+      </button>
+
+    </div>
+
+    <!-- Vibe summary + view count row -->
+    <div class="kvibe-engagement-row">
+      <div class="kv-vibe-summary" id="kv-vibe-summary-{{ post.post_id }}">
+        <span class="kv-no-vibes">Be the first to vibe this ✨</span>
+      </div>
+      <span class="kv-total-text" id="kv-vibe-total-{{ post.post_id }}" style="display:none;"></span>
+      <span class="kvibe-separator-dot">·</span>
+      <span class="kvibe-view-text">
+        <i class="fa-regular fa-chart-bar"></i>
+        <span id="kvibe-view-count-{{ post.post_id }}">{{ post.view|intcomma }}</span>
+      </span>
+    </div>
+
+    <!-- Share modal -->
+    <div class="kvibe-share-modal" id="kvibe-share-modal-{{ post.post_id }}"
+         onclick="kvibeCloseShareModal('{{ post.post_id }}')">
+      <div class="kvibe-share-modal-content" onclick="event.stopPropagation()">
+        <div class="kvibe-share-header">
+          Share to
+          <i class="fa-solid fa-xmark" style="cursor:pointer"
+             onclick="kvibeCloseShareModal('{{ post.post_id }}')"></i>
+        </div>
+        <div class="kvibe-share-grid">
+          <div class="kvibe-share-item" onclick="kvibeShareVia('whatsapp','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
+            <span>WhatsApp</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('facebook','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-facebook"><i class="fa-brands fa-facebook-f"></i></div>
+            <span>Facebook</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('telegram','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-telegram"><i class="fa-brands fa-telegram"></i></div>
+            <span>Telegram</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('snapchat','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-snapchat" style="color:#000"><i class="fa-brands fa-snapchat"></i></div>
+            <span>Snapchat</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('sms','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-sms"><i class="fa-solid fa-comment-sms"></i></div>
+            <span>SMS</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('email','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-email"><i class="fa-solid fa-envelope"></i></div>
+            <span>Email</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('x','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-x"><i class="fa-brands fa-x-twitter"></i></div>
+            <span>X</span>
+          </div>
+          <div class="kvibe-share-item" onclick="kvibeShareVia('copy','{{ post.post_id }}')">
+            <div class="kvibe-share-icon-wrap si-copy"><i class="fa-solid fa-link"></i></div>
+            <span>Copy link</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Repost modal -->
+    <div class="kvibe-repost-modal" id="kvibe-repost-modal-{{ post.post_id }}"
+         onclick="kvibeCloseRepostModal('{{ post.post_id }}')">
+      <div class="kvibe-repost-modal-content" onclick="event.stopPropagation()">
+        <div class="kvibe-share-header">
+          Repost
+          <i class="fa-solid fa-xmark" style="cursor:pointer"
+             onclick="kvibeCloseRepostModal('{{ post.post_id }}')"></i>
+        </div>
+        <textarea class="kvibe-repost-caption"
+                  id="kvibe-repost-caption-{{ post.post_id }}"
+                  placeholder="Add a comment (optional)…" rows="3"></textarea>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="kvibe-repost-cancel-btn"
+                  onclick="kvibeCloseRepostModal('{{ post.post_id }}')">Cancel</button>
+          <button class="kvibe-repost-confirm-btn"
+                  id="kvibe-repost-confirm-{{ post.post_id }}"
+                  onclick="kvibeConfirmRepost('{{ post.post_id }}', this)">Repost</button>
+        </div>
+      </div>
+    </div>
+
+  </article>
+  {% endfor %}
+</div>
+
+{% else %}
+<div style="padding:64px 24px;text-align:center;color:#8e8e8e;">
+  <div style="font-size:48px;margin-bottom:14px;">✍️</div>
+  <h3 style="font-size:18px;font-weight:600;margin:0 0 6px;color:#262626;">No text posts yet</h3>
+  <p style="font-size:14px;margin:0;">Text posts will appear here.</p>
+</div>
+{% endif %}
+
+<script>
+// kvRecordPostView — fire once per post per page load, update view span in place.
+// Safe to re-declare: profile.html may also define this; the last definition wins
+// and both are identical, so there is no conflict.
+if (typeof window.kvRecordPostView !== 'function') {
+  window.kvRecordPostView = function (postId) {
+    if (!window._kvViewTracked) window._kvViewTracked = new Set();
+    if (window._kvViewTracked.has(postId)) return;
+    window._kvViewTracked.add(postId);
+
+    var csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content
+            || (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+
+    fetch('/record-view/' + postId + '/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrf }
+    })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      if (!data || !data.success) return;
+      var el = document.getElementById('kvibe-view-count-' + postId);
+      if (el) el.textContent = Number(data.new_count).toLocaleString();
+    })
+    .catch(function () {});
+  };
+}
+</script>
+

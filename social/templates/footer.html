@@ -1,0 +1,316 @@
+{% load static %}
+{% load pwa %}
+<html lang="en">  
+<head>  
+  <meta charset="utf-8" />  
+  <meta name="viewport" content="width=device-width, initial-scale=1" />  
+   {% progressive_web_app_meta %}
+  <script src="{% static 'js/pwa-install.js' %}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  
+  <style>  
+  
+    :root {
+      --nav-bg: rgba(255, 255, 255, 0.97);
+      --nav-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.06);
+      --nav-icon-color: #8e8e8e;
+      --nav-icon-active: #0095f6;
+      --nav-accent: #0095f6;
+      --badge-color: #0095f6;
+      --nav-border: #dbdbdb;
+    }
+
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+      margin: 0; 
+    }  
+    
+    /* === FLOATING PILL NAVIGATION === */
+    .bottom-nav { 
+      position: fixed; 
+      bottom: 20px; 
+      left: 50%; 
+      transform: translateX(-50%); 
+      width: 92%; 
+      max-width: 400px; 
+      height: 65px; 
+      
+      background: var(--nav-bg); 
+      backdrop-filter: blur(20px); 
+      -webkit-backdrop-filter: blur(20px);
+      
+      border-radius: 35px; 
+      box-shadow: var(--nav-shadow); 
+      border: 1px solid var(--nav-border);
+      
+      display: flex; 
+      align-items: center; 
+      justify-content: space-evenly;
+      padding: 0 5px;
+      z-index: 1000; 
+      
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
+    }
+    
+    .bottom-nav.hidden { 
+      transform: translate(-50%, 150%); 
+      opacity: 0; 
+      pointer-events: none;
+    }
+    
+    /* === ICONS === */
+    .nav-item { 
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 45px;
+      height: 45px;
+      color: var(--nav-icon-color); 
+      font-size: 22px; 
+      text-decoration: none;
+      position: relative;
+      transition: color 0.2s, transform 0.1s;
+      border-radius: 50%;
+    }
+    
+    .nav-item.active { 
+      color: var(--nav-icon-active); 
+    }
+    
+    .nav-item:active {
+      transform: scale(0.9);
+    }
+
+    /* === FAB (CREATE POST - CENTER) === */
+    .nav-fab { 
+      width: 48px; 
+      height: 48px; 
+      background: var(--nav-accent); 
+      color: #ffffff; 
+      border-radius: 50%; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      font-size: 20px; 
+      box-shadow: 0 4px 14px rgba(0, 149, 246, 0.4); 
+      cursor: pointer; 
+      text-decoration: none;
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      margin: 0 5px;
+    }
+    
+    .nav-fab:active {
+      transform: scale(0.9);
+    }
+
+    /* === BADGES === */
+    .nav-badge-count {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: var(--badge-color);
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      min-width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #ffffff;
+      pointer-events: none;
+    }
+    
+    .hidden-badge { display: none !important; }
+
+    /* Bell animation when there are unread notifications */
+    @keyframes kvibe-bell-ring {
+      0%  { transform: rotate(0deg); }
+      10% { transform: rotate(15deg); }
+      20% { transform: rotate(-12deg); }
+      30% { transform: rotate(10deg); }
+      40% { transform: rotate(-8deg); }
+      50% { transform: rotate(5deg); }
+      60% { transform: rotate(0deg); }
+      100%{ transform: rotate(0deg); }
+    }
+    .bell-ringing {
+      animation: kvibe-bell-ring 0.6s ease forwards;
+      display: inline-block;
+    }
+
+    @media (max-width: 360px) {
+      .bottom-nav { width: 96%; height: 60px; }
+      .nav-item { font-size: 20px; width: 35px; }
+      .nav-fab { width: 42px; height: 42px; }
+    }
+  </style>  
+</head>  
+<body>  
+
+<!-- Navigation Bar -->
+<nav class="bottom-nav" id="bottomNav">
+    
+    <!-- 1. Home -->
+    <a href="{% url 'home' %}" 
+       class="nav-item {% if request.path == '/' or 'home' in request.path %}active{% endif %}" 
+       title="Home">
+        <i class="fas fa-home"></i>
+    </a>
+    
+    <!-- 2. Search -->
+    <a href="{% url 'search' %}" 
+       class="nav-item {% if '/search' in request.path %}active{% endif %}" 
+       title="Search">
+        <i class="fas fa-search"></i>
+    </a>
+    
+    <!-- 3. Create (Center FAB) -->
+    <a href="{% url 'post' %}" class="nav-fab" title="Create">
+        <i class="fas fa-plus"></i>
+    </a>
+    
+    <!-- 4. Services -->
+    <a href="{% url 'services' %}" 
+       class="nav-item {% if '/services' in request.path %}active{% endif %}" 
+       title="Services">
+        <i class="fas fa-briefcase"></i>
+    </a>
+    
+    <!-- 5. Notifications — unified badge (likes + comments + reposts + mentions + follows) -->
+    <a href="{% url 'notification_list' %}" 
+       class="nav-item notification-link {% if '/list' in request.path %}active{% endif %}" 
+       title="Activity">
+
+        <i class="far fa-bell" id="footerBellIcon"></i>
+
+        {# Compute combined unread count: post-based + follow notifications #}
+        {% with total_unread=unread_notifications_count|add:unread_follow_count %}
+        <div class="nav-badge-count {% if total_unread == 0 %}hidden-badge{% endif %}"
+             id="footerNotificationBadge"
+             data-count="{{ total_unread|default:0 }}">
+            <span id="footerNotificationCount">
+                {% if total_unread > 99 %}99+{% else %}{{ total_unread|default:0 }}{% endif %}
+            </span>
+            {# Silent HTMX poller — refreshes only the count text every 10s #}
+            <span
+              hx-get="{% url 'notification_partial' %}"
+              hx-trigger="every 10s"
+              hx-target="#footerNotificationCount"
+              hx-swap="innerHTML"
+              style="display:none;"
+            ></span>
+        </div>
+        {% endwith %}
+    </a>
+
+</nav>  
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+
+    var bottomNav  = document.getElementById('bottomNav');
+    var bellIcon   = document.getElementById('footerBellIcon');
+
+    // ── Scroll hide / show ────────────────────────────────────────────────
+    var lastScrollTop  = 0;
+    var scrollThreshold = 10;
+    var isNavVisible   = true;
+
+    function handleScroll() {
+      var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      var scrollDelta = scrollTop - lastScrollTop;
+
+      if (scrollTop < 0 || scrollTop + window.innerHeight > document.documentElement.scrollHeight) return;
+
+      if (Math.abs(scrollDelta) > scrollThreshold) {
+        if (scrollDelta > 0 && isNavVisible) {
+          bottomNav.classList.add('hidden');
+          isNavVisible = false;
+        } else if (scrollDelta < 0 && !isNavVisible) {
+          bottomNav.classList.remove('hidden');
+          isNavVisible = true;
+        }
+        lastScrollTop = scrollTop;
+      }
+    }
+
+    var scrollTimeout;
+    window.addEventListener('scroll', function () {
+      if (!scrollTimeout) {
+        scrollTimeout = setTimeout(function () {
+          handleScroll();
+          scrollTimeout = null;
+        }, 100);
+      }
+    });
+
+    // Always show nav on touch/click (UX improvement)
+    function showNav() {
+      if (!isNavVisible) {
+        bottomNav.classList.remove('hidden');
+        isNavVisible = true;
+      }
+    }
+    document.addEventListener('touchstart', showNav);
+    document.addEventListener('mousedown', showNav);
+
+    // ── Badge update helper ───────────────────────────────────────────────
+    function updateNotificationBadge() {
+      var badge   = document.getElementById('footerNotificationBadge');
+      var countEl = document.getElementById('footerNotificationCount');
+      if (!badge || !countEl) return;
+
+      var raw   = countEl.innerText.trim().replace('+', '');
+      var count = parseInt(raw) || 0;
+
+      if (count > 0) {
+        badge.classList.remove('hidden-badge');
+        badge.style.display = 'flex';
+        badge.dataset.count = count;
+
+        // Ring the bell once if it wasn't ringing already
+        if (bellIcon && !bellIcon.classList.contains('bell-ringing')) {
+          bellIcon.classList.add('bell-ringing');
+          bellIcon.addEventListener('animationend', function () {
+            bellIcon.classList.remove('bell-ringing');
+          }, { once: true });
+        }
+      } else {
+        badge.classList.add('hidden-badge');
+        badge.style.display = 'none';
+        badge.dataset.count = 0;
+      }
+    }
+
+    // Run once on load
+    setTimeout(updateNotificationBadge, 300);
+
+    // Re-run every time HTMX swaps in new count
+    document.body.addEventListener('htmx:afterSwap', function (e) {
+      if (e.target && e.target.id === 'footerNotificationCount') {
+        setTimeout(updateNotificationBadge, 100);
+      }
+    });
+
+    // Clear badge visually when user taps the notification link
+    var notifLink = document.querySelector('.notification-link');
+    if (notifLink) {
+      notifLink.addEventListener('click', function () {
+        var badge   = document.getElementById('footerNotificationBadge');
+        var countEl = document.getElementById('footerNotificationCount');
+        if (badge)   { badge.classList.add('hidden-badge'); badge.style.display = 'none'; }
+        if (countEl) { countEl.innerText = '0'; }
+      });
+    }
+
+  });
+</script>
+
+  {% if user.is_authenticated %}
+  {% include 'onlineStatus.html' %}
+  {% endif %}
+</body>  
+</html>

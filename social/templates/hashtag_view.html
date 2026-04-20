@@ -1,0 +1,2224 @@
+{% load static %}
+{% load humanize %}
+{% load time %}
+{% load text_filters %}
+{% load post_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>#{{ tag_name }} - KishiHub</title>
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
+
+  <style>
+    /* ══ X/Twitter-style Media Grid ══════════════════════════════════════ */
+    .kvibe-x-media-grid {
+      display: grid;
+      gap: 2px;
+      border-radius: 14px;
+      overflow: hidden;
+      margin: 8px 0 4px;
+      cursor: pointer;
+      margin-left: 12px;
+      margin-right: 12px;
+    }
+    .kvibe-x-media-single { grid-template-columns: 1fr; max-height: 520px; }
+    .kvibe-x-media-single .kvibe-x-media-cell { max-height: 520px; }
+    .kvibe-x-media-count-2 { grid-template-columns: 1fr 1fr; aspect-ratio: 16/9; }
+    .kvibe-x-media-count-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; aspect-ratio: 16/10; }
+    .kvibe-x-media-count-3 .kvibe-x-media-cell:first-child { grid-row: 1 / 3; }
+    .kvibe-x-media-count-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; aspect-ratio: 1; }
+    .kvibe-x-media-cell {
+      position: relative;
+      overflow: hidden;
+      background: #111;
+      min-height: 80px;
+    }
+    .kvibe-x-media-cell:hover .kvibe-x-media-thumb { opacity: 0.88; }
+    .kvibe-x-media-thumb {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: opacity 0.15s;
+    }
+    video.kvibe-x-media-thumb { object-fit: cover; }
+    .kvibe-x-media-play-badge {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .kvibe-x-media-play-badge i {
+      width: 52px; height: 52px;
+      background: rgba(0,0,0,0.55);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #fff;
+      backdrop-filter: blur(4px);
+    }
+    .kvibe-x-media-more {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* ══ Post Detail Modal (X/Twitter full-screen style) ════════════════ */
+    .kvibe-post-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 12000;
+      background: #000;
+      overscroll-behavior: contain;
+    }
+    .kvibe-post-modal-overlay.open { display: flex; flex-direction: column; }
+    .kvibe-post-modal {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      animation: kvibePostModalIn 0.2s ease-out;
+    }
+    @keyframes kvibePostModalIn {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .kvibe-pm-topbar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 100%);
+    }
+    .kvibe-pm-back {
+      background: none; border: none; color: #fff;
+      font-size: 20px; width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0; padding: 0;
+    }
+    .kvibe-pm-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      object-fit: cover; flex-shrink: 0;
+      border: 1.5px solid rgba(255,255,255,0.35);
+    }
+    .kvibe-pm-author-info { flex: 1; min-width: 0; }
+    .kvibe-pm-author-name {
+      font-size: 14px; font-weight: 700; color: #fff;
+      text-decoration: none; display: flex; align-items: center;
+      gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kvibe-pm-author-name:hover { text-decoration: underline; }
+    .kvibe-pm-author-handle {
+      font-size: 12px; color: rgba(255,255,255,0.65);
+      margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kvibe-pm-follow-btn {
+      background: transparent; border: 1.5px solid rgba(255,255,255,0.75);
+      color: #fff; font-size: 13px; font-weight: 700;
+      padding: 5px 16px; border-radius: 50px; cursor: pointer;
+      flex-shrink: 0; transition: background 0.14s; white-space: nowrap;
+    }
+    .kvibe-pm-follow-btn:hover { background: rgba(255,255,255,0.12); }
+    .kvibe-pm-menu-btn {
+      background: none; border: none; color: #fff;
+      font-size: 20px; width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0; padding: 0; position: relative;
+    }
+    .kvibe-pm-menu-dropdown {
+      position: absolute; top: calc(100% + 6px); right: 0;
+      min-width: 155px; background: #1e1e1e;
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.55); overflow: hidden;
+      z-index: 9999; animation: kvibeFadeIn 0.12s ease;
+    }
+    .kvibe-pm-menu-item {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 12px 16px; font-size: 14px;
+      color: #efefef; text-decoration: none; background: none;
+      border: none; cursor: pointer; transition: background 0.12s;
+      font-family: inherit; box-sizing: border-box;
+    }
+    .kvibe-pm-menu-item:hover { background: rgba(255,255,255,0.08); }
+    .kvibe-pm-menu-delete { color: #ff6b6b; }
+    .kvibe-pm-menu-delete:hover { background: rgba(229,57,53,0.15); }
+    .kvibe-pm-media {
+      flex: 1; background: #000;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; position: relative; width: 100%;
+    }
+    .kvibe-pm-media img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .kvibe-pm-media video { width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .kvibe-pm-media-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(0,0,0,0.45); border: none; color: #fff;
+      width: 38px; height: 38px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 15px; z-index: 5; transition: background 0.15s;
+    }
+    .kvibe-pm-media-nav:hover { background: rgba(0,0,0,0.7); }
+    .kvibe-pm-media-nav.prev { left: 10px; }
+    .kvibe-pm-media-nav.next { right: 10px; }
+    @media (max-width: 767px) { .kvibe-pm-media-nav { display: none !important; } }
+    .kvibe-pm-media-counter {
+      position: absolute; top: 14px; right: 16px;
+      background: rgba(0,0,0,0.55); color: #fff;
+      font-size: 12px; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; z-index: 6;
+    }
+    .kvibe-pm-bottom {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
+      background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, transparent 100%);
+      padding: 8px 0 0;
+    }
+    .kvibe-pm-caption {
+      padding: 4px 16px 0; font-size: 14px;
+      color: rgba(255,255,255,0.92); line-height: 1.45; word-break: break-word;
+    }
+    .kvibe-pm-caption.collapsed {
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .kvibe-pm-caption-toggle {
+      display: none; background: none; border: none;
+      padding: 2px 16px 8px; font-size: 13px; font-weight: 700;
+      color: rgba(255,255,255,0.55); cursor: pointer; letter-spacing: 0.01em; transition: color 0.15s;
+    }
+    .kvibe-pm-caption-toggle:hover { color: #fff; }
+    .kvibe-pm-caption-toggle.visible { display: block; }
+    .kvibe-pm-engage-row {
+      display: flex; align-items: center; padding: 4px 8px 2px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    .kvibe-pm-eng-btn {
+      display: flex; align-items: center; gap: 5px;
+      background: none; border: none; cursor: pointer;
+      padding: 8px 10px; border-radius: 50px;
+      font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.75);
+      transition: background 0.14s, color 0.14s; text-decoration: none;
+    }
+    .kvibe-pm-eng-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .kvibe-pm-eng-btn i { font-size: 17px; }
+    .kvibe-pm-eng-btn.right { margin-left: auto; }
+    .kvibe-pm-reply-bar {
+      display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+    .kvibe-pm-reply-avatar {
+      width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
+      flex-shrink: 0; border: 1px solid rgba(255,255,255,0.25);
+    }
+    .kvibe-pm-reply-input {
+      flex: 1; background: none; border: none; outline: none;
+      color: rgba(255,255,255,0.55); font-size: 15px; font-family: inherit; cursor: pointer;
+    }
+    .kvibe-pm-reply-input::placeholder { color: rgba(255,255,255,0.45); }
+    .kvibe-pm-view-link {
+      font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.45);
+      text-decoration: none; padding: 6px 10px; border-radius: 50px; flex-shrink: 0;
+    }
+    .kvibe-pm-view-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .kvibe-pm-loading {
+      display: flex; align-items: center; justify-content: center;
+      padding: 32px; color: rgba(255,255,255,0.5); font-size: 13px; gap: 8px;
+    }
+    .kvibe-pm-loading i { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .kvibe-pm-detail { display: none; }
+
+    /* ── Root variables ── */
+    :root {
+      --kvibe-bg: #fafafa;
+      --kvibe-white: #ffffff;
+      --kvibe-text: #262626;
+      --kvibe-text-light: #8e8e8e;
+      --kvibe-primary: #0095f6;
+      --kvibe-border: #dbdbdb;
+      --kvibe-repost: #0095f6;
+      --kvibe-repost-bg: #ffffff;
+      --mood-slay: #ff1493; --mood-vibing: #9933ff; --mood-sheesh: #00cc66;
+      --mood-periodt: #ff6b00; --mood-no-cap: #ff4444; --mood-bussin: #ffd700;
+      --mood-mid: #808080; --mood-cringe: #8b4513;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kvibe-bg);
+      color: var(--kvibe-text);
+      line-height: 1.4;
+    }
+
+    /* ── Layout ── */
+    .kvibe-container { max-width: 100%; width: 100%; }
+    .kvibe-desktop-layout {
+      display: flex; max-width: 1400px; margin: 0 auto;
+      padding: 20px 20px 0 20px; gap: 20px;
+    }
+    .kvibe-left-sidebar {
+      width: 245px; flex-shrink: 0; position: sticky; top: 50px;
+      height: calc(100vh - 104px); overflow-y: auto; padding-right: 10px;
+    }
+    .kvibe-main-feed { flex: 1; max-width: 600px; margin: 0 auto; }
+    .kvibe-right-sidebar {
+      width: 380px; flex-shrink: 0; position: sticky; top: 50px;
+      height: calc(100vh - 104px); overflow-y: auto; padding-left: 10px;
+    }
+    .kvibe-desktop-only { display: none; }
+
+    /* ── Desktop nav ── */
+    .kvibe-desktop-nav { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 20px 0; background: var(--kvibe-white); }
+    .kvibe-desktop-nav-item {
+      display: flex; align-items: center; text-decoration: none;
+      width: 100%; padding: 12px; position: relative; transition: all 0.2s ease;
+      cursor: pointer; border-radius: 8px; color: var(--kvibe-text);
+    }
+    .kvibe-desktop-nav-item:hover, .kvibe-desktop-nav-item.active { background: var(--kvibe-bg); }
+    .kvibe-desktop-nav-icon { width: 24px; height: 24px; margin-right: 12px; position: relative; flex-shrink: 0; }
+    .kvibe-desktop-nav-icon svg { width: 24px; height: 24px; stroke: var(--kvibe-text-light); }
+    .kvibe-desktop-nav-label { font-size: 14px; font-weight: 500; color: var(--kvibe-text-light); }
+    .kvibe-desktop-notification-badge {
+      position: absolute; top: -4px; right: -6px;
+      background: #ff3b30; color: white; font-size: 9px; font-weight: 700;
+      min-width: 16px; height: 16px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; padding: 0 3px;
+    }
+
+    /* ── Hashtag hero ── */
+    .kvibe-hashtag-hero {
+      background: var(--kvibe-white); border-bottom: 1px solid var(--kvibe-border);
+      padding: 20px 16px; margin-bottom: 0; display: flex; align-items: center; gap: 16px;
+    }
+    .kvibe-hashtag-hero-icon {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--kvibe-primary), #6c63ff);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; color: white; flex-shrink: 0;
+    }
+    .kvibe-hashtag-hero-title { font-size: 22px; font-weight: 700; color: var(--kvibe-text); }
+    .kvibe-hashtag-hero-title span { color: var(--kvibe-primary); }
+    .kvibe-hashtag-hero-stats {
+      font-size: 13px; color: var(--kvibe-text-light);
+      display: flex; align-items: center; gap: 6px; margin-top: 4px;
+    }
+
+    /* ── Back button ── */
+    .kvibe-back-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px; background: var(--kvibe-white); color: var(--kvibe-text);
+      text-decoration: none; border-radius: 8px; font-size: 13px; font-weight: 500;
+      border: 1px solid var(--kvibe-border); margin: 12px 16px; transition: all 0.2s ease;
+    }
+    .kvibe-back-btn:hover { background: var(--kvibe-bg); color: var(--kvibe-primary); }
+
+    /* ── Post card ── */
+    .kvibe-post {
+      background: var(--kvibe-white); margin-bottom: 0;
+      border-bottom: 1px solid var(--kvibe-border); border-radius: 8px; overflow: hidden;
+    }
+    .kvibe-repost-header {
+      display: flex; align-items: center; padding: 8px 16px;
+      background: var(--kvibe-bg); font-size: 12px; color: var(--kvibe-repost);
+    }
+    .kvibe-repost-header i { color: var(--kvibe-repost); margin-right: 6px; }
+    .kvibe-repost-header a { color: var(--kvibe-primary); text-decoration: none; font-weight: 500; margin: 0 4px; }
+    .kvibe-repost-header a:hover { text-decoration: underline; }
+    .kvibe-post-header { display: flex; align-items: center; padding: 14px 16px; flex-wrap: wrap; }
+    .kvibe-profile-pic { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; margin-right: 12px; }
+    .kvibe-username { font-weight: 600; font-size: 14px; color: var(--kvibe-text); text-decoration: none; }
+    .kvibe-username:hover { color: var(--kvibe-primary); }
+    .kvibe-post-time { font-size: 12px; color: var(--kvibe-text-light); margin-top: 2px; }
+    .kvibe-post-actions { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+    .kvibe-edit-icon {
+      color: var(--kvibe-text); padding: 8px; border-radius: 50%;
+      transition: all 0.15s ease-in-out; text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .kvibe-edit-icon:hover { color: var(--kvibe-primary); background-color: #f3f4f6; }
+
+    /* Mood badge */
+    .kvibe-mood-badge {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+      background: linear-gradient(135deg, var(--mood-color, var(--kvibe-primary)), color-mix(in srgb, var(--mood-color, var(--kvibe-primary)) 70%, white));
+      border-radius: 20px; color: white; font-size: 12px; font-weight: 600; margin-left: 8px;
+    }
+
+    /* Repost caption */
+    .kvibe-repost-caption-container { padding: 12px 16px 0 16px; background: white; }
+    .kvibe-repost-caption { padding: 10px; background: var(--kvibe-white); border: 1px solid whitesmoke; border-radius: 8px; font-size: 14px; line-height: 1.5; }
+    .kvibe-repost-caption-author { font-weight: 600; color: var(--kvibe-repost); display: block; margin-bottom: 4px; }
+    .kvibe-repost-caption-text { color: var(--kvibe-text); }
+
+    /* Post content */
+    .kvibe-post-content { padding: 0 16px 12px; font-size: 14px; line-height: 1.5; position: relative; }
+    .kvibe-post-text { overflow: hidden; transition: max-height 0.3s ease; }
+    .kvibe-post-text.collapsed { max-height: 60px; }
+    .kvibe-post-text.expanded { max-height: 1000px; }
+    .kvibe-post-paragraph { margin-bottom: 10px; line-height: 1.5; }
+    .kvibe-post-paragraph:last-child { margin-bottom: 0; }
+    .kvibe-post-paragraph a, .kvibe-post-text a { color: var(--kvibe-primary); text-decoration: none; font-weight: 500; }
+    .kvibe-post-paragraph a:hover, .kvibe-post-text a:hover { text-decoration: underline; }
+    .kvibe-mention-link { color: var(--kvibe-primary); text-decoration: none; font-weight: 600; background: rgba(0,149,246,.1); padding: 0 2px; border-radius: 3px; }
+    .kvibe-mention-link:hover { text-decoration: underline; background: rgba(0,149,246,.2); }
+    .kvibe-hashtag { color: var(--kvibe-primary); text-decoration: none; font-weight: 600; background: rgba(0,149,246,.1); padding: 0 2px; border-radius: 3px; }
+    .kvibe-hashtag:hover { text-decoration: underline; background: rgba(0,149,246,.2); }
+    .kvibe-url-link { color: var(--kvibe-primary); text-decoration: none; font-weight: 500; word-break: break-word; }
+    .kvibe-url-link:hover { text-decoration: underline; }
+    .kvibe-text-toggle {
+      background: none; border: none; color: var(--kvibe-text-light);
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      padding: 4px 0; margin-top: 4px; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .kvibe-text-toggle:hover { color: var(--kvibe-text); }
+    .kvibe-text-toggle i { font-size: 12px; }
+
+    /* ── Empty state ── */
+    .kvibe-empty-state { text-align: center; padding: 60px 20px; background: var(--kvibe-white); border-radius: 8px; }
+    .kvibe-empty-state i { font-size: 48px; color: var(--kvibe-text-light); margin-bottom: 16px; display: block; }
+    .kvibe-empty-state h3 { font-size: 20px; margin-bottom: 8px; }
+    .kvibe-empty-state p { color: var(--kvibe-text-light); }
+
+    /* ── Repost modal ── */
+    .kvibe-repost-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5); display: flex; justify-content: center; align-items: center; z-index: 2000; opacity: 0; visibility: hidden; transition: opacity .3s, visibility .3s; }
+    .kvibe-repost-modal.active { opacity: 1; visibility: visible; }
+    .kvibe-repost-modal-content { background: var(--kvibe-white); border-radius: 12px; width: 90%; max-width: 400px; overflow: hidden; }
+    .kvibe-repost-modal-header { padding: 16px; border-bottom: 1px solid var(--kvibe-border); text-align: center; font-weight: 600; }
+    .kvibe-repost-modal-body { padding: 16px; }
+    .kvibe-repost-textarea { width: 100%; border: 1px solid var(--kvibe-border); border-radius: 8px; padding: 12px; font-family: inherit; font-size: 14px; resize: vertical; min-height: 80px; margin-bottom: 16px; }
+    .kvibe-repost-modal-footer { padding: 16px; border-top: 1px solid var(--kvibe-border); display: flex; gap: 12px; }
+    .kvibe-repost-btn { flex: 1; padding: 10px; background: var(--kvibe-repost); color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .kvibe-repost-cancel-btn { flex: 1; padding: 10px; background: transparent; color: var(--kvibe-text); border: 1px solid var(--kvibe-border); border-radius: 6px; font-weight: 500; cursor: pointer; }
+    .kvibe-repost-btn:hover { opacity: .9; }
+    .kvibe-repost-cancel-btn:hover { background: var(--kvibe-bg); }
+
+    /* ── Logout modal ── */
+    .kvibe-logout-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5); display: none; justify-content: center; align-items: center; z-index: 3000; }
+    .kvibe-logout-modal.active { display: flex; }
+    .kvibe-logout-modal-content { background: var(--kvibe-white); border-radius: 12px; padding: 24px; max-width: 320px; width: 90%; animation: kvibeFadeIn .2s ease; }
+    @keyframes kvibeFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .kvibe-logout-modal-title { font-size: 18px; font-weight: 600; margin-bottom: 12px; color: #000; }
+    .kvibe-logout-modal-message { font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.5; }
+    .kvibe-logout-modal-buttons { display: flex; gap: 12px; }
+    .kvibe-logout-modal-btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all .2s ease; }
+    .logout-modal-cancel { background: #f5f5f5; color: #333; }
+    .logout-modal-cancel:hover { background: #e5e5e5; }
+    .logout-modal-confirm { background: #ff4444; color: white; }
+    .logout-modal-confirm:hover { background: #ff0000; }
+
+    /* ── Toast ── */
+    .kvibe-toast {
+      position: fixed; top: 20px; right: 20px; background: var(--kvibe-primary); color: white;
+      padding: 12px 20px; border-radius: 6px; font-size: 14px; z-index: 9999;
+      animation: kvibeSlideIn .3s ease; display: flex; align-items: center; gap: 8px;
+    }
+    @keyframes kvibeSlideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes kvibeSlideOut { from { opacity: 1; } to { opacity: 0; transform: translateX(20px); } }
+
+    /* ── Right sidebar ── */
+    .kvibe-sidebar-social { background: var(--kvibe-white); border-radius: 12px; overflow: hidden; }
+    .kvibe-sidebar-tabs { display: flex; border-bottom: 1px solid var(--kvibe-border); }
+    .kvibe-sidebar-tab { flex: 1; padding: 12px 8px; background: none; border: none; font-size: 13px; font-weight: 600; color: var(--kvibe-text-light); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all .2s ease; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit; }
+    .kvibe-sidebar-tab:hover { color: var(--kvibe-text); background: var(--kvibe-bg); }
+    .kvibe-sidebar-tab.active { color: var(--kvibe-primary); border-bottom-color: var(--kvibe-primary); background: none; }
+
+    /* ── Trending hashtags ── */
+    .kvibe-trending-hashtags { background: var(--kvibe-white); border-radius: 16px; overflow: hidden; margin-bottom: 20px; }
+    .kvibe-trending-header { padding: 16px; border-bottom: 1px solid var(--kvibe-border); }
+    .kvibe-trending-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .kvibe-trending-list { padding: 8px; }
+    .kvibe-trending-item { display: flex; align-items: center; padding: 12px; border-radius: 8px; transition: background .2s ease; cursor: pointer; text-decoration: none; color: var(--kvibe-text); }
+    .kvibe-trending-item:hover { background: var(--kvibe-bg); }
+    .kvibe-trending-hashtag { font-weight: 600; color: var(--kvibe-primary); margin-right: 8px; }
+    .kvibe-trending-count { font-size: 12px; color: var(--kvibe-text-light); margin-left: auto; }
+    .kvibe-btn-secondary { display: block; text-align: center; padding: 8px 16px; background: transparent; color: var(--kvibe-primary); border: 1px solid var(--kvibe-border); border-radius: 6px; font-size: 13px; font-weight: 500; text-decoration: none; transition: all .2s ease; }
+    .kvibe-btn-secondary:hover { background: var(--kvibe-bg); }
+
+    /* ── Mobile sidebar ── */
+    .kvibe-mobile-footer-only { display: none; }
+    @media (max-width: 767px) { .kvibe-mobile-footer-only { display: block; } }
+    .kvibe-mobile-sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1100; opacity: 0; transition: opacity .3s ease; }
+    .kvibe-mobile-sidebar-overlay.active { display: block; opacity: 1; }
+    .kvibe-mobile-right-sidebar { position: fixed; top: 0; right: -100%; width: 82vw; max-width: 320px; height: 100dvh; background: var(--kvibe-white); z-index: 1101; overflow-y: auto; transition: right .32s cubic-bezier(.4,0,.2,1); box-shadow: -4px 0 24px rgba(0,0,0,.15); padding-bottom: 80px; }
+    .kvibe-mobile-right-sidebar.open { right: 0; }
+    .kvibe-mobile-sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--kvibe-border); position: sticky; top: 0; background: var(--kvibe-white); z-index: 2; }
+    .kvibe-mobile-sidebar-title { font-size: 15px; font-weight: 700; color: var(--kvibe-text); }
+    .kvibe-mobile-sidebar-close { width: 32px; height: 32px; border: none; background: var(--kvibe-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--kvibe-text); font-size: 16px; }
+    .kvibe-mobile-sidebar-body { padding: 16px; }
+    .kvibe-mobile-sidebar-toggle { display: none; }
+    @media (max-width: 767px) {
+      .kvibe-mobile-sidebar-toggle { display: flex; align-items: center; justify-content: center; position: fixed; top: 50%; right: 0; transform: translateY(-50%); z-index: 1200; background: var(--kvibe-primary); color: white; border: none; border-radius: 8px 0 0 8px; width: 28px; height: 64px; cursor: pointer; box-shadow: -2px 2px 10px rgba(0,0,0,.18); flex-direction: column; gap: 4px; padding: 0; }
+      .kvibe-mobile-sidebar-toggle i { font-size: 13px; }
+      .kvibe-mobile-sidebar-toggle span { font-size: 9px; font-weight: 700; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: .5px; }
+    }
+
+    /* ── Snippet action bar styles ── */
+    @keyframes heartMorph { 0%{transform:scale(1) rotate(0deg);} 10%{transform:scale(.7) rotate(-8deg);} 30%{transform:scale(1.45) rotate(4deg);} 50%{transform:scale(.9) rotate(-2deg);} 65%{transform:scale(1.15) rotate(1deg);} 80%{transform:scale(.97) rotate(0deg);} 100%{transform:scale(1) rotate(0deg);} }
+    @keyframes jellyPop { 0%{transform:scale(1);} 25%{transform:scale(1.3,.75);} 50%{transform:scale(.85,1.2);} 75%{transform:scale(1.1,.9);} 100%{transform:scale(1);} }
+    @keyframes repostSpin { 0%{transform:rotate(0deg) scale(1);} 40%{transform:rotate(200deg) scale(.8);} 70%{transform:rotate(340deg) scale(1.1);} 100%{transform:rotate(360deg) scale(1);} }
+    @keyframes commentBounce { 0%{transform:translateY(0) scaleY(1);} 25%{transform:translateY(-6px) scaleY(.9);} 55%{transform:translateY(2px) scaleY(1.05);} 75%{transform:translateY(-2px) scaleY(.98);} 100%{transform:translateY(0) scaleY(1);} }
+    @keyframes youShimmer { 0%{background-position:-100% center;} 100%{background-position:200% center;} }
+    @keyframes avatarPeek { 0%{transform:translateX(-6px) scale(.8);opacity:0;} 60%{transform:translateX(2px) scale(1.05);opacity:1;} 100%{transform:translateX(0) scale(1);opacity:1;} }
+    @keyframes countTick { 0%{transform:translateY(0);opacity:1;} 30%{transform:translateY(-14px);opacity:0;} 31%{transform:translateY(14px);opacity:0;} 70%{transform:translateY(0);opacity:1;} }
+    .kvibe-engagement { display:flex;flex-wrap:wrap;align-items:center;padding:10px 16px 8px;border-top:1px solid var(--kvibe-border);gap:10px;background:var(--kvibe-white); }
+    .kvibe-likers-container { display:flex;margin-right:6px; }
+    .kvibe-liker-pic { width:24px;height:24px;border-radius:50%;border:2px solid var(--kvibe-white);margin-left:-6px;animation:avatarPeek .4s cubic-bezier(.34,1.56,.64,1) both; }
+    .kvibe-likers-container a:first-child .kvibe-liker-pic { margin-left:0; }
+    .kvibe-like-text { font-weight:normal;color:var(--kvibe-text);font-size:13.5px; }
+    .kvibe-no-likes { color:var(--kvibe-text-light);font-size:13px; }
+    .kvibe-view-text { font-size:13px;color:var(--kvibe-text-light); }
+    .kvibe-separator-dot { color:var(--kvibe-border);font-size:12px;margin:0 2px; }
+    .kvibe-engagement-item { display:flex;align-items:center;gap:4px; }
+    .kvibe-you-text { font-weight:600;background:linear-gradient(90deg,var(--kvibe-text) 30%,var(--kvibe-text-light) 50%,var(--kvibe-text) 70%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:youShimmer 1.8s ease; }
+    .kvibe-actions-container { display:flex;align-items:center;justify-content:space-between;padding:4px 8px;background:var(--kvibe-white);border-top:1px solid var(--kvibe-border); }
+    .kvibe-action-item { display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;color:var(--kvibe-text-light);font-size:13.5px;font-weight:500;padding:10px 16px;border-radius:999px;transition:background .2s ease,color .2s ease;position:relative;overflow:visible;cursor:pointer;background:none;border:none;flex:1;min-width:0;font-family:inherit; }
+    .kvibe-action-item::after { content:'';position:absolute;inset:0;border-radius:999px;background:currentColor;opacity:0;transform:scale(.7);transition:opacity .25s ease,transform .25s cubic-bezier(.34,1.56,.64,1);pointer-events:none; }
+    .kvibe-action-item:hover::after { opacity:.06;transform:scale(1); }
+    .kvibe-action-item:hover { color:var(--kvibe-text); }
+    .kvibe-action-icon { font-size:19px;transition:color .25s ease;position:relative;display:inline-block; }
+    .kvibe-heart-animate { animation:heartMorph .65s cubic-bezier(.34,1.56,.64,1) forwards; }
+    .kvibe-action-item:hover .fa-comment { animation:commentBounce .5s cubic-bezier(.34,1.56,.64,1); }
+    .kvibe-repost-icon { display:flex;align-items:center;justify-content:center;gap:8px;color:var(--kvibe-text-light);font-size:13.5px;font-weight:500;padding:10px 16px;border-radius:999px;transition:background .2s ease,color .2s ease;position:relative;cursor:pointer;background:none;border:none;font-family:inherit;flex:1;min-width:0; }
+    .kvibe-repost-icon::after { content:'';position:absolute;inset:0;border-radius:999px;background:currentColor;opacity:0;transform:scale(.7);transition:opacity .25s ease,transform .25s cubic-bezier(.34,1.56,.64,1);pointer-events:none; }
+    .kvibe-repost-icon:hover::after { opacity:.06;transform:scale(1); }
+    .kvibe-repost-icon:hover .fa-retweet { animation:repostSpin .55s cubic-bezier(.34,1.56,.64,1);color:#10b981; }
+    .kvibe-repost-icon:hover { color:#10b981; }
+    .fa-retweet.reposted { color:#10b981; }
+    .kvibe-repost-count { font-size:13.5px;display:none; }
+    .kvibe-repost-count.kvibe-show { display:inline; }
+    .kvibe-share-count { font-size:13.5px;display:none; }
+    .kvibe-share-count.kvibe-show { display:inline; }
+    .kvibe-share-btn:hover .kvibe-action-icon { color:var(--kvibe-primary);animation:jellyPop .45s cubic-bezier(.34,1.56,.64,1); }
+
+    /* ── Share modal ── */
+    .kvibe-share-modal { position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:flex-end;z-index:6000; }
+    .kvibe-share-modal.active { display:flex; }
+    .kvibe-share-modal-content { background:var(--kvibe-white);width:100%;border-radius:20px 20px 0 0;padding:20px;max-width:500px;animation:kvibeShareSlideUp .3s ease-out; }
+    @keyframes kvibeShareSlideUp { from{transform:translateY(100%);} to{transform:translateY(0);} }
+    .kvibe-share-header { display:flex;justify-content:space-between;align-items:center;font-weight:bold;font-size:18px;margin-bottom:20px;color:var(--kvibe-text); }
+    .kvibe-share-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:20px 10px;text-align:center;max-height:60vh;overflow-y:auto;padding-bottom:10px; }
+    .kvibe-share-item { display:flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none;color:var(--kvibe-text);font-size:11px;cursor:pointer; }
+    .kvibe-share-icon-wrap { width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;color:white;transition:transform .2s; }
+    .kvibe-share-icon-wrap:active { transform:scale(.9); }
+    .si-whatsapp{background:#25D366;}.si-facebook{background:#1877F2;}.si-x{background:#000;}.si-telegram{background:#0088cc;}.si-snapchat{background:#FFFC00;}.si-sms{background:#4cd964;}.si-email{background:var(--kvibe-text-light);}.si-copy{background:var(--kvibe-text-light);}
+
+    /* ── Comment bottom sheet ── */
+    .comment-sheet-overlay { position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:5000;display:none;align-items:flex-end; }
+    .comment-sheet-overlay.active { display:flex; }
+    .comment-sheet-content { background:#fff;width:100%;height:75vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;position:relative;animation:slideUp 0.3s ease-out; }
+    @keyframes slideUp { from{transform:translateY(100%);} to{transform:translateY(0);} }
+    .comment-sheet-header { padding:16px;border-bottom:1px solid #eee;text-align:center;font-weight:600;font-size:16px;color:#262626;flex-shrink:0;position:relative; }
+    .close-sheet { position:absolute;right:16px;top:16px;font-size:20px;cursor:pointer;color:#8e8e8e; }
+    .close-sheet:hover { color:#262626; }
+    #modal_comment_list { flex:1;overflow-y:auto;background:#fff;padding-bottom:80px; }
+    #modal_comment_list::-webkit-scrollbar { width:0; }
+    .kf-comment-input-area { position:absolute;bottom:0;left:0;right:0;z-index:999;padding:10px 12px;background:#fff;border-top:1px solid #e4e6eb; }
+    .kf-comment-input-wrapper { display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #dbdbdb;border-radius:24px;padding:6px 10px;min-height:46px;transition:border-color 0.2s;box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+    .kf-comment-input-wrapper:focus-within { border-color:#0095f6;box-shadow:0 2px 12px rgba(0,149,246,0.12); }
+    .kf-comment-profile-img { width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0; }
+    .kf-comment-input { flex:1;padding:6px 4px;border:none;background:transparent;font-size:14px;outline:none;min-width:0;resize:none;max-height:100px;line-height:1.45;color:#262626;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+    .kf-comment-input::placeholder { color:#8e8e8e; }
+    .kf-comment-action-btn { width:34px;height:34px;border-radius:50%;border:none;background:transparent;color:#8e8e8e;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;margin:0;transition:color 0.15s,background 0.15s,transform 0.15s; }
+    .kf-comment-action-btn:hover { color:#262626;background:rgba(0,0,0,0.05);transform:scale(1.08); }
+    .kf-comment-send-btn { width:34px;height:34px;border-radius:50%;border:none;background:#0095f6;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;margin:0;transition:opacity 0.15s,transform 0.15s; }
+    .kf-comment-send-btn:hover { opacity:0.85;transform:scale(1.05); }
+    .kvibe-ai-btn { background:-webkit-linear-gradient(45deg,#8e2de2,#4a00e0);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
+    .record-mode-hidden { display:none !important; }
+    #kvibe-cs-ai-box { scrollbar-width:none; }
+    #kvibe-cs-ai-box::-webkit-scrollbar { display:none; }
+    #kvibe-cs-ai-box button { display:inline-block;background:#f5f5f5;border:1px solid #dbdbdb;border-radius:16px;padding:6px 12px;font-size:13px;color:#262626;cursor:pointer;font-family:inherit;margin-right:6px;white-space:nowrap;transition:background 0.15s,border-color 0.15s,color 0.15s; }
+    #kvibe-cs-ai-box button:hover { background:#e8f3ff;border-color:#0095f6;color:#0095f6; }
+    .kf-comment-recording-overlay { position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.88);color:#fff;padding:14px 20px;border-radius:14px;display:none;align-items:center;gap:12px;z-index:6000;min-width:210px;animation:kfCmtSlideUp 0.3s ease;backdrop-filter:blur(8px); }
+    .kf-comment-recording-overlay.active { display:flex; }
+    @keyframes kfCmtSlideUp { from{opacity:0;transform:translateX(-50%) translateY(20px);} to{opacity:1;transform:translateX(-50%) translateY(0);} }
+    .kf-recording-wave-canvas { width:60px;height:30px; }
+    .kf-recording-info { display:flex;flex-direction:column;gap:3px; }
+    .kf-recording-text { font-size:14px;font-weight:500; }
+    .kf-recording-timer { font-size:13px;color:#ed4956;font-weight:700; }
+    .kf-recording-hint { font-size:11px;opacity:0.75; }
+    .kf-mic-pulse { animation:kfMicPulse 1.5s infinite;color:#ed4956 !important; }
+    @keyframes kfMicPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+    .kvibe-audio-container { display:inline-flex;align-items:center;gap:6px;background:#efefef;border-radius:20px;padding:5px 10px;max-width:185px;width:185px;margin-bottom:6px;box-sizing:border-box; }
+    .kvibe-audio-content { display:flex;align-items:center;gap:6px;width:100%; }
+    .kvibe-play-pause-btn { border:none;width:26px;height:26px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;background:rgba(0,0,0,0.14);color:#262626;transition:background 0.15s;padding:0;margin:0; }
+    .kvibe-play-pause-btn:hover { background:rgba(0,0,0,0.22); }
+    .kvibe-audio-info { flex:1;min-width:0;display:flex;align-items:center;gap:4px; }
+    .kvibe-audio-waveform { flex:1;height:22px;display:flex;align-items:center;position:relative;overflow:hidden;cursor:pointer;min-width:0; }
+    .kvibe-wave-container { display:flex;align-items:center;gap:1px;height:100%;width:100%; }
+    .kvibe-wave-bar { width:2px;border-radius:2px;flex-shrink:0;background:rgba(0,0,0,0.22);transition:background 0.1s; }
+    .kvibe-wave-bar.played { background:rgba(0,149,246,0.85); }
+    .kvibe-wave-bar.current { animation:kvCmtWavePulse 0.5s ease-in-out infinite alternate; }
+    @keyframes kvCmtWavePulse { from{transform:scaleY(0.85);} to{transform:scaleY(1.15);} }
+    .kvibe-audio-duration { font-size:11px;min-width:26px;text-align:right;font-weight:500;color:#8e8e8e;flex-shrink:0; }
+    .kvibe-hidden-audio { display:none; }
+    .kf-cs-emoji-picker { position:fixed;left:0;right:0;bottom:0;z-index:7000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.15);display:none;flex-direction:column;max-height:340px;overflow:hidden; }
+    .kf-cs-emoji-picker.open { display:flex; }
+    .kf-cs-emoji-tabs { display:flex;overflow-x:auto;gap:0;padding:10px 10px 0;background:#fff;scrollbar-width:none;flex-shrink:0;border-bottom:1.5px solid #f0f0f0; }
+    .kf-cs-emoji-tabs::-webkit-scrollbar { display:none; }
+    .kf-cs-emoji-tab { flex-shrink:0;padding:6px 10px 8px;font-size:20px;cursor:pointer;border-bottom:2.5px solid transparent;transition:border-color 0.2s;line-height:1; }
+    .kf-cs-emoji-tab.active { border-bottom-color:#0095f6; }
+    .kf-cs-emoji-search { padding:8px 12px 4px;flex-shrink:0; }
+    .kf-cs-emoji-search input { width:100%;background:#f3f3f3;border:none;border-radius:10px;padding:7px 12px;font-size:13px;outline:none;color:#262626; }
+    .kf-cs-emoji-search input::placeholder { color:#8e8e8e; }
+    .kf-cs-emoji-scroll { flex:1;overflow-y:auto;padding:6px 10px 10px;scrollbar-width:thin; }
+    .kf-cs-emoji-grid { display:grid;grid-template-columns:repeat(8,1fr);gap:4px; }
+    .kf-cs-emoji-item { font-size:24px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:8px;transition:background 0.15s;user-select:none; }
+    .kf-cs-emoji-item:hover { background:#f0f0f0; }
+    .kvibe-comment { display:flex;gap:10px;padding:12px 16px;align-items:flex-start;background:#fff; }
+    .kvibe-cmt-avatar-wrap { display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:36px; }
+    .kvibe-cmt-avatar { width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;display:block; }
+    .kvibe-cmt-body { flex:1;min-width:0; }
+    .kvibe-cmt-meta-row { display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:3px; }
+    .kvibe-cmt-username { font-size:13px;font-weight:700;color:#262626;text-decoration:none;line-height:1.2; }
+    .kvibe-cmt-time { font-size:11px;color:#8e8e8e;line-height:1.2; }
+    .kvibe-cmt-text { font-size:14px;line-height:1.45;color:#262626;margin:0 0 6px;word-break:break-word; }
+    .kvibe-cmt-actions-row { display:flex;align-items:center;gap:14px;margin-top:4px;flex-wrap:wrap; }
+    .kvibe-cmt-action-link { background:none;border:none;padding:0;font-size:12px;font-weight:600;color:#8e8e8e;cursor:pointer;line-height:1;transition:color 0.15s;margin:0; }
+    .kvibe-cmt-action-link:hover { color:#262626; }
+    .kvibe-no-comments { display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 24px 48px;text-align:center;margin:16px;border-radius:16px;border:1.5px dashed #dbdbdb;background:#fff; }
+    .kvibe-no-cmt-icon { width:64px;height:64px;background:#fafafa;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;color:#dbdbdb;margin-bottom:16px; }
+    .kvibe-no-cmt-title { font-size:16px;font-weight:700;color:#262626;margin:0 0 6px; }
+    .kvibe-no-cmt-sub { font-size:13px;color:#8e8e8e;margin:0; }
+
+    /* ── Responsive ── */
+    @media (min-width: 768px) { .kvibe-desktop-only { display: block; } }
+    @media (max-width: 767px) {
+      .kvibe-desktop-layout { display: block; padding: 2px 0 0 0; }
+      .kvibe-left-sidebar, .kvibe-right-sidebar { display: none; }
+      .kvibe-main-feed { max-width: 100%; padding: 0; }
+      .kvibe-desktop-only { display: none; }
+      .kvibe-post { border-radius: 0; margin-bottom: 8px; }
+      .kvibe-actions-container { padding: 2px 4px; }
+      .kvibe-action-item { padding: 8px 10px; font-size: 13px; }
+      .kvibe-action-icon { font-size: 18px; }
+      .kvibe-repost-icon { padding: 8px 10px; font-size: 13px; }
+    }
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .kvibe-desktop-layout { padding: 4px 15px 0 15px; }
+      .kvibe-left-sidebar { width: 245px; }
+      .kvibe-right-sidebar { width: 200px; }
+    }
+    @media (min-width: 1024px) {
+      .kvibe-desktop-layout { padding: 44px 20px 0 20px; }
+      .kvibe-left-sidebar { width: 245px; }
+      .kvibe-right-sidebar { width: 330px; }
+    }
+  </style>
+</head>
+<body>
+  {% include 'header.html' %}
+
+  <!-- Repost Modal -->
+  <div class="kvibe-repost-modal" id="kvibe-repost-modal">
+    <div class="kvibe-repost-modal-content">
+      <div class="kvibe-repost-modal-header">Repost</div>
+      <div class="kvibe-repost-modal-body">
+        <textarea class="kvibe-repost-textarea" id="kvibe-repost-caption" placeholder="Add a comment to your repost (optional)" maxlength="500"></textarea>
+        <div style="font-size:12px;color:var(--kvibe-text-light);text-align:right;"><span id="kvibe-repost-char-count">0</span>/500</div>
+      </div>
+      <div class="kvibe-repost-modal-footer">
+        <button class="kvibe-repost-cancel-btn" onclick="kvibeCloseRepostModal()">Cancel</button>
+        <button class="kvibe-repost-btn" id="kvibe-repost-confirm-btn"><i class="fas fa-retweet"></i> Repost</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ COMMENT BOTTOM SHEET ═══ -->
+  <div class="comment-sheet-overlay" id="commentSheet">
+    <div class="comment-sheet-content">
+      <div class="comment-sheet-header">
+        Comments
+        <i class="fa-solid fa-xmark close-sheet" onclick="kvibeCloseCommentSheet()"></i>
+      </div>
+      <div id="modal_comment_list">
+        <div style="text-align:center;padding:40px 16px;color:#8e8e8e;">
+          <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Loading...
+        </div>
+      </div>
+      <div class="kf-comment-recording-overlay" id="kfCommentRecordingOverlay">
+        <canvas class="kf-recording-wave-canvas" id="kfCommentRecordingWave" width="60" height="30"></canvas>
+        <div class="kf-recording-info">
+          <div class="kf-recording-text">Recording…</div>
+          <div class="kf-recording-timer" id="kfCommentRecordingTimer">0:00</div>
+          <div class="kf-recording-hint">Release to send</div>
+        </div>
+      </div>
+      <div class="kf-cs-emoji-picker" id="kfCsEmojiPicker">
+        <div class="kf-cs-emoji-tabs" id="kfCsEmojiTabs"></div>
+        <div class="kf-cs-emoji-search">
+          <input type="text" id="kfCsEmojiSearch" placeholder="Search emoji…" oninput="kfCsSearchEmoji(this.value)">
+        </div>
+        <div class="kf-cs-emoji-scroll">
+          <div class="kf-cs-emoji-grid" id="kfCsEmojiGrid"></div>
+        </div>
+      </div>
+      <div class="kf-comment-input-area">
+        <form id="modalPostForm"
+          hx-post=""
+          hx-target="#modal_comment_list"
+          hx-encoding="multipart/form-data"
+          hx-swap="afterbegin"
+          hx-on::after-request="if(event.detail.successful){ this.reset(); kvibeCSResetInputUI(); var e=document.getElementById('kvibe-empty-comments'); if(e) e.remove(); }">
+          {% csrf_token %}
+          <div class="kf-comment-input-wrapper">
+            <img src="{{ user.profile.get_picture_url }}" alt="" class="kf-comment-profile-img" id="kvibe-my-avatar">
+            <button type="button" class="kf-comment-action-btn" onclick="document.getElementById('modal_image_input').click()" title="Attach image">
+              <i class="fa-regular fa-image"></i>
+            </button>
+            <input type="file" id="modal_image_input" name="image" multiple hidden onchange="kvibeCSUpdateSendBtn()">
+            <input type="file" id="modal_audio_file" name="audio_file" hidden>
+            <button type="button" class="kf-comment-action-btn kvibe-ai-btn" onclick="kvibeCSToggleAI()" title="Quick replies">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
+            <button type="button" class="kf-comment-action-btn" id="kfCsEmojiBtn" onclick="kfCsToggleEmojiPicker(event)" title="Emoji">
+              <i class="far fa-smile"></i>
+            </button>
+            <textarea class="kf-comment-input" name="comment" id="modalTextInput" placeholder="Write a comment…" rows="1" oninput="kvibeCSOnInput()"></textarea>
+            <button type="submit" class="kf-comment-send-btn" id="modalSendBtn" style="display:none;">
+              <i class="fa-solid fa-paper-plane" style="font-size:14px;"></i>
+            </button>
+            <button type="button" class="kf-comment-action-btn" id="modalMicBtn"
+                    title="Hold to record"
+                    onmousedown="kfCsStartRecording(event)"
+                    onmouseup="kfCsStopRecording()"
+                    ontouchstart="kfCsTouchStart(event)"
+                    ontouchend="kfCsTouchEnd(event)">
+              <i class="fas fa-microphone"></i>
+            </button>
+          </div>
+        </form>
+        <div id="kvibe-cs-ai-box" style="display:none;overflow-x:auto;white-space:nowrap;padding:6px 4px 2px;scrollbar-width:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logout Modal -->
+  <div class="kvibe-logout-modal" id="kvibeLogoutModal">
+    <div class="kvibe-logout-modal-content">
+      <h3 class="kvibe-logout-modal-title">Log Out?</h3>
+      <p class="kvibe-logout-modal-message">Are you sure you want to log out of your account?</p>
+      <div class="kvibe-logout-modal-buttons">
+        <button class="kvibe-logout-modal-btn logout-modal-cancel" id="kvibeCancelLogout">Cancel</button>
+        <button class="kvibe-logout-modal-btn logout-modal-confirm" id="kvibeConfirmLogout">Log Out</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="kvibe-container">
+    <div class="kvibe-desktop-layout">
+
+      <!-- ═══ LEFT SIDEBAR ═══ -->
+      <aside class="kvibe-left-sidebar kvibe-desktop-only">
+        <div class="kvibe-desktop-nav">
+          <a href="{% url 'home' %}" class="kvibe-desktop-nav-item" title="Home">
+            <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <span class="kvibe-desktop-nav-label">Home</span>
+          </a>
+          <a href="{% url 'search' %}" class="kvibe-desktop-nav-item" title="Search">
+            <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <span class="kvibe-desktop-nav-label">Search</span>
+          </a>
+          <a href="{% url 'post' %}" class="kvibe-desktop-nav-item" title="Create Post">
+            <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/><line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/></svg></div>
+            <span class="kvibe-desktop-nav-label">Create</span>
+          </a>
+          <button class="kvibe-desktop-nav-item kvibe-notif-panel-trigger"
+                  id="kvibe-desktop-notif-btn" title="Notifications"
+                  aria-haspopup="true" aria-expanded="false" aria-controls="kvibe-notif-panel"
+                  style="background:none;border:none;cursor:pointer;width:100%;text-align:left;">
+            <div class="kvibe-desktop-nav-icon">
+              <i class="fa-regular fa-bell" id="kvibe-desktop-bell-icon" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+              {% if unread_notifications_count and unread_notifications_count > 0 %}
+              <span class="kvibe-desktop-notification-badge" id="kvibe-desktop-notif-badge">{{ unread_notifications_count }}</span>
+              {% endif %}
+            </div>
+            <span class="kvibe-desktop-nav-label">Alerts</span>
+          </button>
+          <a href="{% url 'profile' request.user.username %}" class="kvibe-desktop-nav-item" title="Profile">
+            <div class="kvibe-desktop-nav-icon"><i class="fa-regular fa-user" style="font-size:20px;color:var(--kvibe-text-light);"></i></div>
+            <span class="kvibe-desktop-nav-label">Profile</span>
+          </a>
+          <a href="{% url 'channel_create' %}" class="kvibe-desktop-nav-item" title="Channels">
+            <div class="kvibe-desktop-nav-icon"><i class="fa-regular fa-newspaper" style="font-size:20px;color:var(--kvibe-text-light);"></i></div>
+            <span class="kvibe-desktop-nav-label">Channels</span>
+          </a>
+          <a href="#" class="kvibe-desktop-nav-item" title="Log Out" id="desktopLogoutIcon">
+            <div class="kvibe-desktop-nav-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg></div>
+            <span class="kvibe-desktop-nav-label">Logout</span>
+          </a>
+        </div>
+      </aside>
+
+      <!-- ═══ MAIN FEED ═══ -->
+      <div class="kvibe-main-feed">
+
+        <!-- Back button -->
+        <a href="javascript:history.back()" class="kvibe-back-btn">
+          <i class="fas fa-arrow-left"></i> Back
+        </a>
+
+        <!-- Hashtag hero -->
+        <div class="kvibe-hashtag-hero">
+          <div class="kvibe-hashtag-hero-icon"><i class="fas fa-hashtag"></i></div>
+          <div>
+            <div class="kvibe-hashtag-hero-title"><span>#</span>{{ tag_name }}</div>
+            <div class="kvibe-hashtag-hero-stats">
+              <i class="fas fa-file-alt"></i> {{ post_count }} post{{ post_count|pluralize }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Posts -->
+        {% if posts %}
+          {% for post in posts %}
+          <article class="kvibe-post" data-post-id="{{ post.post_id }}" data-mood="{{ post.mood|default:'' }}" data-custom-mood="{% if post.mood == 'custom' or not post.mood %}{{ post.custom_mood|default:'' }}{% endif %}">
+
+            {% if post.is_repost %}
+            <div class="kvibe-repost-header">
+              <i class="fas fa-retweet"></i>
+              <span><a href="/{{ post.author.username }}/">{{ post.author.first_name }} {{ post.author.last_name }}</a> reposted</span>
+            </div>
+            {% endif %}
+
+            <!-- Post Header -->
+            <div class="kvibe-post-header">
+              <img
+                src="{% if post.is_repost and post.original_post %}{{ post.original_post.author.profile.picture.url }}{% else %}{{ post.author.profile.picture.url }}{% endif %}"
+                class="kvibe-profile-pic" alt="profile" loading="lazy"
+                onerror="this.onerror=null;this.src='https://placehold.co/32x32/dbdbdb/8e8e8e?text=U';">
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;flex-wrap:wrap;">
+                  <a href="/{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}/" class="kvibe-username" data-user="{% if post.is_repost and post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}">
+                    {% if post.is_repost and post.original_post %}
+                      {{ post.original_post.author.first_name }} {{ post.original_post.author.last_name }}
+                      {% if post.original_post.author.profile.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align:middle;margin-left:3px;">{% endif %}
+                    {% else %}
+                      {{ post.author.first_name }} {{ post.author.last_name }}
+                      {% if post.author.profile.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align:middle;margin-left:3px;">{% endif %}
+                    {% endif %}
+                  </a>
+                  {% if post.mood %}
+                  <span class="kvibe-mood-badge" style="--mood-color:var(--mood-{{ post.mood }}, var(--kvibe-primary));">
+                    <i class="fa-regular fa-face-smile"></i>
+                    {% if post.mood == 'custom' %}{{ post.custom_mood }}{% else %}{{ post.mood }}{% endif %}
+                  </span>
+                  {% endif %}
+                </div>
+                <div class="kvibe-post-time">
+                  {% if post.is_repost %}
+                    @{% if post.original_post %}{{ post.original_post.author.username }}{% else %}{{ post.author.username }}{% endif %}
+                    · Original: {{ post.original_post.created_at|insta_timesince }}
+                    · Reposted: {{ post.created_at|insta_timesince }}
+                  {% else %}
+                    @{{ post.author.username }} · {{ post.created_at|insta_timesince }}
+                  {% endif %}
+                </div>
+              </div>
+              <div class="kvibe-post-actions">
+                {% if request.user == post.author and not post.is_repost %}
+                  <a href="{% url 'editpost' post.post_id %}" title="Edit" class="kvibe-edit-icon"><i class="fas fa-edit"></i></a>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Repost caption -->
+            {% if post.is_repost and post.repost_content %}
+            <div class="kvibe-repost-caption-container">
+              <div class="kvibe-repost-caption">
+                <span class="kvibe-repost-caption-author">
+                  {{ post.author.first_name }} {{ post.author.last_name }}
+                  {% if post.author.profile.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="13" width="13" alt="✓" style="vertical-align:middle;">{% endif %}
+                </span>
+                <div class="kvibe-repost-caption-text">{{ post.repost_content|format_post_text|safe }}</div>
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Post content -->
+            {% if post.content or post.is_repost %}
+            <div class="kvibe-post-content">
+              <div class="kvibe-post-text collapsed" id="kvibe-text-{{ post.post_id }}">
+                {% if post.is_repost and post.original_post %}
+                  {{ post.original_post.content|format_post_text|safe }}
+                {% else %}
+                  {{ post.content|format_post_text|safe }}
+                {% endif %}
+              </div>
+              {% with txt=post.original_post.content|default:post.content %}
+                {% if txt|length > 150 %}
+                <button class="kvibe-text-toggle" onclick="kvibeToggleText('{{ post.post_id }}')">
+                  <span>more</span><i class="fas fa-chevron-down"></i>
+                </button>
+                {% endif %}
+              {% endwith %}
+            </div>
+            {% endif %}
+
+            <!-- ══ Media — X/Twitter grid (matches home.html / feed_posts_partial.html) ══ -->
+            {% with op=post.original_post %}
+            {% if post.video_file or post.file or post.images.all or op and op.video_file or op and op.file or op and op.images.all %}
+            <div class="kvibe-media-container">
+
+              {% if post.is_repost and op %}
+
+                {# ── Repost: audio standalone ── #}
+                {% if op.file %}
+                <div style="padding:12px 16px;">
+                  <audio controls preload="none" style="width:100%;border-radius:8px;">
+                    <source src="{{ op.file.url }}">
+                  </audio>
+                </div>
+                {% endif %}
+
+                {# ── Repost: video + images unified grid ── #}
+                {% if op.video_file or op.images.all %}
+                  {% with orig_imgs=op.images.all orig_img_cnt=op.images.all|length orig_has_video=op.video_file %}
+                  {% if orig_has_video and orig_imgs %}
+                    {% with orig_total=orig_img_cnt|add:"1" %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-count-{{ orig_total|default:'1' }}{% if orig_total > 4 %} kvibe-x-media-count-4{% endif %}"
+                         data-all-images="[{% for image in orig_imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+                      <div class="kvibe-x-media-cell"
+                           onclick="kvibePostModalOpen('{{ post.post_id }}','video','{{ op.video_file.url }}',null,'{% if op %}{{ op.author.get_full_name|escapejs }}{% else %}{{ post.author.get_full_name|escapejs }}{% endif %}','{% if op %}{{ op.author.username }}{% else %}{{ post.author.username }}{% endif %}','{{ post.created_at|insta_timesince }}','{{ post.original_post.content|default:post.content|escapejs }}')">
+                        <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                          <source src="{{ op.video_file.url }}" type="video/mp4">
+                        </video>
+                        <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+                      </div>
+                      {% for image in orig_imgs %}
+                        {% if forloop.counter <= 3 %}
+                        <div class="kvibe-x-media-cell"
+                             onclick="kvibePostModalOpen('{{ post.post_id }}','images',null,{{ forloop.counter0 }},'{% if op %}{{ op.author.get_full_name|escapejs }}{% else %}{{ post.author.get_full_name|escapejs }}{% endif %}','{% if op %}{{ op.author.username }}{% else %}{{ post.author.username }}{% endif %}','{{ post.created_at|insta_timesince }}','{{ post.original_post.content|default:post.content|escapejs }}')">
+                          <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" class="kvibe-x-media-thumb" loading="lazy" onload="this.classList.add('loaded')">
+                          {% if forloop.counter == 3 and orig_img_cnt > 3 %}
+                          <div class="kvibe-x-media-more">+{{ orig_img_cnt|add:"-3" }}</div>
+                          {% endif %}
+                        </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                    {% endwith %}
+                  {% elif orig_has_video %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-single"
+                         onclick="kvibePostModalOpen('{{ post.post_id }}','video','{{ op.video_file.url }}',null,'{% if op %}{{ op.author.get_full_name|escapejs }}{% else %}{{ post.author.get_full_name|escapejs }}{% endif %}','{% if op %}{{ op.author.username }}{% else %}{{ post.author.username }}{% endif %}','{{ post.created_at|insta_timesince }}','{{ post.original_post.content|default:post.content|escapejs }}')">
+                      <div class="kvibe-x-media-cell">
+                        <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                          <source src="{{ op.video_file.url }}" type="video/mp4">
+                        </video>
+                        <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+                      </div>
+                    </div>
+                  {% else %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-count-{{ orig_img_cnt|default:'1' }}{% if orig_img_cnt > 4 %} kvibe-x-media-count-4{% endif %}"
+                         data-all-images="[{% for image in orig_imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+                      {% for image in orig_imgs %}
+                        {% if forloop.counter <= 4 %}
+                        <div class="kvibe-x-media-cell"
+                             onclick="kvibePostModalOpen('{{ post.post_id }}','images',null,{{ forloop.counter0 }},'{% if op %}{{ op.author.get_full_name|escapejs }}{% else %}{{ post.author.get_full_name|escapejs }}{% endif %}','{% if op %}{{ op.author.username }}{% else %}{{ post.author.username }}{% endif %}','{{ post.created_at|insta_timesince }}','{{ post.original_post.content|default:post.content|escapejs }}')">
+                          <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" class="kvibe-x-media-thumb" loading="lazy" onload="this.classList.add('loaded')">
+                          {% if forloop.counter == 4 and orig_img_cnt > 4 %}
+                          <div class="kvibe-x-media-more">+{{ orig_img_cnt|add:"-4" }}</div>
+                          {% endif %}
+                        </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                  {% endwith %}
+                {% endif %}
+
+              {% else %}
+
+                {# ── Own post: audio standalone ── #}
+                {% if post.file %}
+                <div style="padding:12px 16px;">
+                  <audio controls preload="none" style="width:100%;border-radius:8px;">
+                    <source src="{{ post.file.url }}">
+                  </audio>
+                </div>
+                {% endif %}
+
+                {# ── Own post: video + images unified grid ── #}
+                {% if post.video_file or post.images.all %}
+                  {% with imgs=post.images.all img_cnt=post.images.all|length has_video=post.video_file %}
+                  {% if has_video and imgs %}
+                    {% with total=img_cnt|add:"1" %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-count-{{ total|default:'1' }}{% if total > 4 %} kvibe-x-media-count-4{% endif %}"
+                         data-all-images="[{% for image in imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+                      <div class="kvibe-x-media-cell"
+                           onclick="kvibePostModalOpen('{{ post.post_id }}','video','{{ post.video_file.url }}',null,'{{ post.author.get_full_name|escapejs }}','{{ post.author.username }}','{{ post.created_at|insta_timesince }}','{{ post.content|escapejs }}')">
+                        <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                          <source src="{{ post.video_file.url }}" type="video/mp4">
+                        </video>
+                        <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+                      </div>
+                      {% for image in imgs %}
+                        {% if forloop.counter <= 3 %}
+                        <div class="kvibe-x-media-cell"
+                             onclick="kvibePostModalOpen('{{ post.post_id }}','images',null,{{ forloop.counter0 }},'{{ post.author.get_full_name|escapejs }}','{{ post.author.username }}','{{ post.created_at|insta_timesince }}','{{ post.content|escapejs }}')">
+                          <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" class="kvibe-x-media-thumb" loading="lazy" onload="this.classList.add('loaded')">
+                          {% if forloop.counter == 3 and img_cnt > 3 %}
+                          <div class="kvibe-x-media-more">+{{ img_cnt|add:"-3" }}</div>
+                          {% endif %}
+                        </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                    {% endwith %}
+                  {% elif has_video %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-single"
+                         onclick="kvibePostModalOpen('{{ post.post_id }}','video','{{ post.video_file.url }}',null,'{{ post.author.get_full_name|escapejs }}','{{ post.author.username }}','{{ post.created_at|insta_timesince }}','{{ post.content|escapejs }}')">
+                      <div class="kvibe-x-media-cell">
+                        <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
+                          <source src="{{ post.video_file.url }}" type="video/mp4">
+                        </video>
+                        <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
+                      </div>
+                    </div>
+                  {% else %}
+                    <div class="kvibe-x-media-grid kvibe-x-media-count-{{ img_cnt|default:'1' }}{% if img_cnt > 4 %} kvibe-x-media-count-4{% endif %}"
+                         data-all-images="[{% for image in imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
+                      {% for image in imgs %}
+                        {% if forloop.counter <= 4 %}
+                        <div class="kvibe-x-media-cell"
+                             onclick="kvibePostModalOpen('{{ post.post_id }}','images',null,{{ forloop.counter0 }},'{{ post.author.get_full_name|escapejs }}','{{ post.author.username }}','{{ post.created_at|insta_timesince }}','{{ post.content|escapejs }}')">
+                          <img src="{{ image.image.url }}" alt="Post image {{ forloop.counter }}" class="kvibe-x-media-thumb" loading="lazy" onload="this.classList.add('loaded')">
+                          {% if forloop.counter == 4 and img_cnt > 4 %}
+                          <div class="kvibe-x-media-more">+{{ img_cnt|add:"-4" }}</div>
+                          {% endif %}
+                        </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                  {% endwith %}
+                {% endif %}
+
+              {% endif %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            <!-- Post actions -->
+            {% include 'snippet/post_like.html' with post=post %}
+
+          </article>
+          {% endfor %}
+        {% else %}
+        <div class="kvibe-empty-state">
+          <i class="fas fa-hashtag"></i>
+          <h3>No posts yet</h3>
+          <p>There are no posts with #{{ tag_name }} yet.<br>Be the first to use this hashtag!</p>
+        </div>
+        {% endif %}
+
+      </div><!-- end .kvibe-main-feed -->
+
+      <!-- ═══ RIGHT SIDEBAR ═══ -->
+      <aside class="kvibe-right-sidebar kvibe-desktop-only">
+        {% if related_hashtags %}
+        <div class="kvibe-trending-hashtags" style="margin-top:16px;">
+          <div class="kvibe-trending-header">
+            <h3 class="kvibe-trending-title"><i class="fas fa-hashtag"></i> Related Hashtags</h3>
+          </div>
+          <div class="kvibe-trending-list">
+            {% for tag, count in related_hashtags|slice:":10" %}
+            <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+              <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+              <span class="kvibe-trending-count">{{ count }} post{{ count|pluralize }}</span>
+            </a>
+            {% endfor %}
+          </div>
+          <div style="padding:8px 16px 16px;">
+            <a href="{% url 'search' %}?q=%23" class="kvibe-btn-secondary" style="text-align:center;display:block;font-size:12px;">
+              <i class="fas fa-search"></i> Explore All Hashtags
+            </a>
+          </div>
+        </div>
+        {% endif %}
+        {% if trending_hashtags %}
+        <div class="kvibe-trending-hashtags" style="margin-top:16px;">
+          <div class="kvibe-trending-header">
+            <h3 class="kvibe-trending-title"><i class="fas fa-fire"></i> Trending Hashtags</h3>
+          </div>
+          <div class="kvibe-trending-list">
+            {% for tag, count in trending_hashtags %}
+            <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+              <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+              <span class="kvibe-trending-count">{{ count }} post{{ count|pluralize }}</span>
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </aside>
+
+    </div>
+  </main>
+
+  <div class="kvibe-mobile-footer-only">
+    {% include 'footer.html' %}
+  </div>
+
+  <button class="kvibe-mobile-sidebar-toggle" id="kvibe-mobile-sidebar-toggle" onclick="kvibeOpenMobileSidebar()" aria-label="Open sidebar">
+    <i class="fas fa-chevron-left"></i><span>MORE</span>
+  </button>
+  <div class="kvibe-mobile-sidebar-overlay" id="kvibe-mobile-sidebar-overlay" onclick="kvibeCloseMobileSidebar()"></div>
+  <aside class="kvibe-mobile-right-sidebar" id="kvibe-mobile-right-sidebar">
+    <div class="kvibe-mobile-sidebar-header">
+      <span class="kvibe-mobile-sidebar-title">Discover</span>
+      <button class="kvibe-mobile-sidebar-close" onclick="kvibeCloseMobileSidebar()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="kvibe-mobile-sidebar-body">
+      {% if related_hashtags %}
+      <div class="kvibe-trending-hashtags">
+        <div class="kvibe-trending-header"><h3 class="kvibe-trending-title"><i class="fas fa-hashtag"></i> Related Hashtags</h3></div>
+        <div class="kvibe-trending-list">
+          {% for tag, count in related_hashtags|slice:":10" %}
+          <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+            <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+            <span class="kvibe-trending-count">{{ count }} post{{ count|pluralize }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% if trending_hashtags %}
+      <div class="kvibe-trending-hashtags" style="margin-top:12px;">
+        <div class="kvibe-trending-header"><h3 class="kvibe-trending-title"><i class="fas fa-fire"></i> Trending Hashtags</h3></div>
+        <div class="kvibe-trending-list">
+          {% for tag, count in trending_hashtags %}
+          <a href="{% url 'hashtag_view' tag %}" class="kvibe-trending-item">
+            <span class="kvibe-trending-hashtag">#{{ tag }}</span>
+            <span class="kvibe-trending-count">{{ count }} post{{ count|pluralize }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </aside>
+
+  <!-- ═══ POST DETAIL MODAL (X/Twitter style — matches home.html exactly) ═══ -->
+  <div class="kvibe-post-modal-overlay" id="kvibePostModalOverlay" onclick="kvibePostModalClose(event)">
+    <div class="kvibe-post-modal" id="kvibePostModal">
+
+      <!-- MEDIA (full screen) -->
+      <div class="kvibe-pm-media" id="kvibePmMedia">
+        <img id="kvibePmImg" src="" alt="Post media" style="display:none;">
+        <video id="kvibePmVideo" controls playsinline style="display:none;"></video>
+        <button class="kvibe-pm-media-nav prev" id="kvibePmPrev" onclick="kvibePmNav(-1)" style="display:none;"><i class="fas fa-chevron-left"></i></button>
+        <button class="kvibe-pm-media-nav next" id="kvibePmNext" onclick="kvibePmNav(1)"  style="display:none;"><i class="fas fa-chevron-right"></i></button>
+        <div class="kvibe-pm-media-counter" id="kvibePmCounter" style="display:none;"></div>
+      </div>
+
+      <!-- TOP BAR (overlaid) -->
+      <div class="kvibe-pm-topbar">
+        <button class="kvibe-pm-back" onclick="kvibePostModalClose(null, true)" aria-label="Back">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <a id="kvibePmAvatarLink" href="#" onclick="event.stopPropagation()">
+          <img class="kvibe-pm-avatar" id="kvibePmAvatar" src="" alt="">
+        </a>
+        <div class="kvibe-pm-author-info">
+          <a class="kvibe-pm-author-name" id="kvibePmAuthorName" href="#" onclick="event.stopPropagation()"></a>
+          <div class="kvibe-pm-author-handle" id="kvibePmAuthorHandle"></div>
+        </div>
+        <button class="kvibe-pm-follow-btn" id="kvibePmFollowBtn" onclick="event.stopPropagation()">Follow</button>
+        <button class="kvibe-pm-menu-btn" id="kvibePmMenuBtn"
+                style="display:none; position:relative;"
+                onclick="kvibePmToggleMenu(event)"
+                aria-label="Post options">
+          <i class="fas fa-ellipsis-h"></i>
+        </button>
+        <div class="kvibe-pm-menu-dropdown" id="kvibePmMenuDropdown" style="display:none;">
+          <a class="kvibe-pm-menu-item" id="kvibePmEditItem" href="#" onclick="event.stopPropagation()">
+            <i class="fas fa-edit"></i> Edit
+          </a>
+          <button class="kvibe-pm-menu-item kvibe-pm-menu-delete" id="kvibePmDeleteItem"
+                  onclick="kvibePmDeletePost(event)">
+            <i class="fas fa-trash-alt"></i> Delete
+          </button>
+        </div>
+      </div>
+
+      <!-- BOTTOM BAR (overlaid) -->
+      <div class="kvibe-pm-bottom">
+        <div class="kvibe-pm-caption" id="kvibePmCaption" style="display:none;"></div>
+        <button class="kvibe-pm-caption-toggle" id="kvibePmCaptionToggle" onclick="kvibePmToggleCaption(); event.stopPropagation();">more</button>
+        <div class="kvibe-pm-engage-row" id="kvibePmEngageRow">
+          <button class="kvibe-pm-eng-btn" id="kvibePmCommentBtn" onclick="event.stopPropagation()">
+            <i class="far fa-comment"></i>
+            <span id="kvibePmCommentCount">0</span>
+          </button>
+          <button class="kvibe-pm-eng-btn" id="kvibePmRepostBtn" onclick="event.stopPropagation()">
+            <i class="fas fa-retweet"></i>
+            <span id="kvibePmRepostCount">0</span>
+          </button>
+          <button class="kvibe-pm-eng-btn" id="kvibePmLikeBtn" onclick="event.stopPropagation()">
+            <i class="far fa-heart"></i>
+            <span id="kvibePmLikeCount">0</span>
+          </button>
+          <button class="kvibe-pm-eng-btn" id="kvibePmViewsBtn" onclick="event.stopPropagation()">
+            <i class="fas fa-chart-bar"></i>
+            <span id="kvibePmViewCount">0</span>
+          </button>
+          <a class="kvibe-pm-eng-btn right" id="kvibePmViewBtn" href="#" onclick="event.stopPropagation()">
+            <i class="far fa-bookmark"></i>
+          </a>
+          <a class="kvibe-pm-eng-btn" id="kvibePmShareBtn" href="#" onclick="event.stopPropagation()">
+            <i class="fas fa-share-nodes"></i>
+          </a>
+        </div>
+        <div class="kvibe-pm-reply-bar">
+          <img class="kvibe-pm-reply-avatar" id="kvibePmReplyAvatar" src="" alt="">
+          <a class="kvibe-pm-reply-input" id="kvibePmReplyLink" href="#" onclick="event.stopPropagation()">Post your reply</a>
+          <a class="kvibe-pm-view-link" id="kvibePmViewLink" href="#" onclick="event.stopPropagation()">View</a>
+        </div>
+      </div>
+
+      <div class="kvibe-pm-detail" style="display:none;"></div>
+    </div>
+  </div>
+  <!-- ──────────────────────────────────────────────────────────────────────── -->
+
+  <!-- ═══ DESKTOP NOTIFICATION PANEL ═══ -->
+  <div id="kvibe-notif-backdrop"
+       style="display:none;position:fixed;inset:0;z-index:1199;background:rgba(0,0,0,.35);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);"
+       aria-hidden="true"></div>
+  <aside id="kvibe-notif-panel"
+         role="dialog" aria-modal="true" aria-label="Notifications"
+         style="display:none;position:fixed;top:0;left:0;width:400px;max-width:94vw;height:100vh;background:#fff;z-index:1200;box-shadow:4px 0 32px rgba(0,0,0,.15);display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .3s cubic-bezier(.4,0,.2,1);will-change:transform;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 14px;border-bottom:1px solid #efefef;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10;flex-shrink:0;">
+      <span style="font-size:20px;font-weight:700;letter-spacing:-.3px;color:#262626;">Notifications</span>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button id="kvibe-panel-mark-all"
+                style="background:none;border:none;color:#0095f6;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0;transition:opacity .15s;"
+                onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"
+                onclick="kvibePanelMarkAllRead()">Mark all read</button>
+        <button id="kvibe-panel-close" aria-label="Close notifications"
+                style="background:none;border:none;color:#8e8e8e;font-size:20px;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background .15s;"
+                onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div id="kvibe-notif-panel-body" style="flex:1;overflow-y:auto;overscroll-behavior:contain;">
+      <div id="kvibe-panel-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:12px;">
+        <i class="fas fa-circle-notch fa-spin" style="font-size:28px;color:#0095f6;"></i>
+        <span style="font-size:13px;color:#8e8e8e;">Loading notifications…</span>
+      </div>
+    </div>
+    <div style="padding:12px 18px;border-top:1px solid #efefef;text-align:center;flex-shrink:0;">
+      <a href="{% url 'notification_list' %}"
+         style="font-size:13px;font-weight:600;color:#0095f6;text-decoration:none;"
+         onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
+        See all notifications
+      </a>
+    </div>
+  </aside>
+
+  <style>
+    #kvibe-notif-panel .kishiface-notification-wrapper { position:relative; transition:opacity .25s,transform .25s; }
+    #kvibe-notif-panel .kishiface-notification-wrapper:hover { background:#fafafa; }
+    #kvibe-notif-panel .kishiface-remove-btn { position:absolute;right:16px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.9);border:1px solid #efefef;color:#8e8e8e;cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;opacity:0;transition:opacity .2s,background .15s,color .15s;box-shadow:0 1px 4px rgba(0,0,0,.08);z-index:10;font-size:11px; }
+    #kvibe-notif-panel .kishiface-notification-wrapper:hover .kishiface-remove-btn { opacity:1; }
+    #kvibe-notif-panel .kishiface-remove-btn:hover { background:#ffe5e5;color:#ed4956;border-color:#ed4956; }
+    #kvibe-notif-panel .kishiface-notification-wrapper .kishiface-notif-item { padding-right:50px !important; }
+    #kvibe-notif-panel .kv-panel-section-title { padding:14px 16px 6px;font-size:13px;font-weight:600;color:#262626;background:#fff;position:sticky;top:0;z-index:5; }
+    #kvibe-notif-panel .kishiface-empty-notifications { display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px 40px;text-align:center; }
+    #kvibe-notif-panel .kishiface-empty-icon { font-size:56px;color:#dbdbdb;margin-bottom:16px; }
+    #kvibe-notif-panel .kishiface-empty-title { font-size:20px;font-weight:600;margin-bottom:8px; }
+    #kvibe-notif-panel .kishiface-empty-text { font-size:13px;color:#8e8e8e;max-width:260px;line-height:1.4; }
+    @keyframes kv-panel-slideout { to { opacity:0;transform:translateX(30px);max-height:0; } }
+    #kvibe-notif-panel .kishiface-removing { animation: kv-panel-slideout .25s ease forwards;overflow:hidden; }
+    #kvibe-desktop-notif-btn.kvibe-notif-panel-open .kvibe-desktop-nav-icon i,
+    #kvibe-desktop-notif-btn.kvibe-notif-panel-open .kvibe-desktop-nav-label { color: var(--kvibe-primary) !important; }
+    @media (max-width: 767px) { #kvibe-notif-panel, #kvibe-notif-backdrop { display:none !important; } }
+  </style>
+
+  <script>
+    /* ─── CSRF ─── */
+    function getCsrfFromMeta() {
+      return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    }
+
+    const KVIBE_CURRENT_USER_ID = "{{ request.user.id }}";
+
+    /* ─── Repost state ─── */
+    let currentRepostPostId = null;
+    let currentRepostButton = null;
+
+    /* ─── Toast ─── */
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = 'kvibe-toast';
+      toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i><span>${message}</span>`;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.animation = 'kvibeSlideOut 0.3s ease';
+        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+      }, 3000);
+    }
+
+    /* ─── Repost ─── */
+    function kvibeToggleRepost(postId, button) {
+      currentRepostPostId = postId;
+      currentRepostButton = button;
+      if (button.getAttribute('data-reposted') === 'true') {
+        kvibePerformRepost(postId, '', true);
+      } else {
+        kvibeOpenRepostModal();
+      }
+    }
+
+    function kvibeOpenRepostModal() {
+      const modal = document.getElementById('kvibe-repost-modal');
+      if (!modal) return;
+      const ta = modal.querySelector('textarea');
+      if (ta) ta.value = '';
+      const counter = document.getElementById('kvibe-repost-char-count');
+      if (counter) counter.textContent = '0';
+      modal.classList.add('active');
+    }
+
+    function kvibeCloseRepostModal() {
+      const modal = document.getElementById('kvibe-repost-modal');
+      if (modal) {
+        modal.classList.remove('active');
+        const ta = modal.querySelector('textarea');
+        if (ta) ta.value = '';
+        const counter = document.getElementById('kvibe-repost-char-count');
+        if (counter) counter.textContent = '0';
+      }
+      currentRepostPostId = null;
+      currentRepostButton = null;
+    }
+
+    function kvibeSubmitRepost() {
+      const caption = document.getElementById('kvibe-repost-caption')?.value.trim() || '';
+      if (currentRepostPostId) kvibePerformRepost(currentRepostPostId, caption, false);
+    }
+
+    function kvibePerformRepost(postId, caption, undo) {
+      const confirmBtn = document.getElementById('kvibe-repost-confirm-btn');
+      if (confirmBtn && !undo) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reposting…';
+      }
+      fetch(`/repost/${postId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrfFromMeta(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption, undo })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.innerHTML = '<i class="fas fa-retweet"></i> Repost'; }
+        if (data.success) {
+          if (currentRepostButton) {
+            const reposted = data.reposted;
+            currentRepostButton.setAttribute('data-reposted', reposted ? 'true' : 'false');
+            const icon = currentRepostButton.querySelector('i.fa-retweet');
+            if (icon) icon.classList.toggle('reposted', reposted);
+            const countEl = document.getElementById(`kvibe-repost-count-${postId}`);
+            if (countEl) {
+              const count = data.repost_count ?? 0;
+              countEl.textContent = count > 0 ? count : '';
+              countEl.classList.toggle('kvibe-show', count > 0);
+            }
+          }
+          showToast(data.message || (data.reposted ? 'Reposted!' : 'Repost removed'), 'success');
+          kvibeCloseRepostModal();
+        } else {
+          showToast(data.error || 'Something went wrong', 'error');
+        }
+      })
+      .catch(() => {
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.innerHTML = '<i class="fas fa-retweet"></i> Repost'; }
+        showToast('Something went wrong.', 'error');
+      });
+    }
+
+    /* ─── Share modal ─── */
+    function kvibeOpenShareModal(postId) {
+      const modal = document.getElementById(`kvibe-share-modal-${postId}`);
+      if (modal) modal.classList.add('active');
+    }
+    function kvibeCloseShareModal(postId) {
+      const modal = document.getElementById(`kvibe-share-modal-${postId}`);
+      if (modal) modal.classList.remove('active');
+    }
+    function kvibeCopyLink(url) {
+      navigator.clipboard.writeText(url).then(() => showToast('Link copied!', 'success'));
+    }
+
+    /* ─── Text expand/collapse ─── */
+    function kvibeToggleText(postId) {
+      const el = document.getElementById(`kvibe-text-${postId}`);
+      if (!el) return;
+      const btn = el.nextElementSibling;
+      const expanded = el.classList.toggle('expanded');
+      el.classList.toggle('collapsed', !expanded);
+      if (btn && btn.classList.contains('kvibe-text-toggle')) {
+        const span = btn.querySelector('span');
+        const icon = btn.querySelector('i');
+        if (span) span.textContent = expanded ? 'less' : 'more';
+        if (icon) { icon.className = expanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'; }
+      }
+    }
+
+    /* ─── Mobile sidebar ─── */
+    function kvibeOpenMobileSidebar() {
+      document.getElementById('kvibe-mobile-right-sidebar')?.classList.add('open');
+      document.getElementById('kvibe-mobile-sidebar-overlay')?.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+    function kvibeCloseMobileSidebar() {
+      document.getElementById('kvibe-mobile-right-sidebar')?.classList.remove('open');
+      document.getElementById('kvibe-mobile-sidebar-overlay')?.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    /* ─── DOMContentLoaded ─── */
+    document.addEventListener('DOMContentLoaded', function() {
+      const repostConfirmBtn = document.getElementById('kvibe-repost-confirm-btn');
+      if (repostConfirmBtn) repostConfirmBtn.onclick = kvibeSubmitRepost;
+
+      const repostTextarea = document.getElementById('kvibe-repost-caption');
+      const repostCharCount = document.getElementById('kvibe-repost-char-count');
+      if (repostTextarea && repostCharCount) {
+        repostTextarea.addEventListener('input', () => { repostCharCount.textContent = repostTextarea.value.length; });
+      }
+
+      const sidebar = document.getElementById('kvibe-mobile-right-sidebar');
+      if (sidebar) {
+        let startX = 0;
+        sidebar.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+        sidebar.addEventListener('touchend', e => { if (e.changedTouches[0].clientX - startX > 60) kvibeCloseMobileSidebar(); }, { passive: true });
+      }
+
+      const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
+      if (desktopLogoutIcon) {
+        desktopLogoutIcon.addEventListener('click', function(e) {
+          e.preventDefault();
+          const modal = document.getElementById('kvibeLogoutModal');
+          if (modal) {
+            modal.classList.add('active');
+            document.getElementById('kvibeCancelLogout').onclick = () => modal.classList.remove('active');
+            document.getElementById('kvibeConfirmLogout').onclick = () => { window.location.href = "{% url 'logout' %}"; };
+          }
+        });
+      }
+
+      document.addEventListener('click', e => {
+        if (e.target === document.getElementById('kvibe-repost-modal')) kvibeCloseRepostModal();
+        const logoutModal = document.getElementById('kvibeLogoutModal');
+        if (logoutModal && logoutModal.classList.contains('active') && e.target === logoutModal) logoutModal.classList.remove('active');
+        document.querySelectorAll('.kvibe-post-menu-dropdown').forEach(d => { d.style.display = 'none'; });
+        const pmDrop = document.getElementById('kvibePmMenuDropdown');
+        if (pmDrop) pmDrop.style.display = 'none';
+      });
+
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+          kvibeCloseRepostModal();
+          kvibeCloseCommentSheet();
+          document.querySelectorAll('.kvibe-share-modal.active').forEach(m => m.classList.remove('active'));
+          document.getElementById('kvibeLogoutModal')?.classList.remove('active');
+        }
+      });
+
+      const _commentSheet = document.getElementById('commentSheet');
+      if (_commentSheet) {
+        _commentSheet.addEventListener('click', function(e) {
+          if (e.target === _commentSheet) kvibeCloseCommentSheet();
+          const picker = document.getElementById('kfCsEmojiPicker');
+          if (picker && picker.classList.contains('open') && !picker.contains(e.target)) kfCsToggleEmojiPicker();
+        });
+      }
+
+      kvibeInitAudioPlayers(document);
+    });
+
+  /* ═══ COMMENT BOTTOM SHEET ═══ */
+  var _kvcsCurrentPostId = null;
+  var _kvcsQuickReplies = [
+    'This is amazing!','Great post!','Love the vibe!',
+    'Facts only.','Well said!','Totally agree.',
+    'Big mood.','We move!','So inspiring!'
+  ];
+
+  function kvibeOpenCommentSheet(postId) {
+    _kvcsCurrentPostId = postId;
+    var sheet  = document.getElementById('commentSheet');
+    var form   = document.getElementById('modalPostForm');
+    var listEl = document.getElementById('modal_comment_list');
+    kvibeCSResetInputUI();
+    sheet.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    form.setAttribute('hx-post', '/comments/' + postId);
+    if (typeof htmx !== 'undefined') htmx.process(form);
+    listEl.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#8e8e8e;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Loading...</div>';
+    if (typeof htmx !== 'undefined') {
+      htmx.ajax('GET', '/comment/' + postId, { target: '#modal_comment_list', select: '#comment_list', swap: 'innerHTML' });
+    }
+    setTimeout(function() { var ta = document.getElementById('modalTextInput'); if (ta) ta.focus(); }, 300);
+  }
+
+  function kvibeCloseCommentSheet() {
+    var sheet = document.getElementById('commentSheet');
+    if (!sheet) return;
+    sheet.classList.remove('active');
+    document.body.style.overflow = '';
+    if (typeof kfCsStopRecording === 'function') kfCsStopRecording();
+    var picker = document.getElementById('kfCsEmojiPicker');
+    if (picker) picker.classList.remove('open');
+    kvibeCSResetInputUI();
+    _kvcsCurrentPostId = null;
+  }
+
+  document.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.target && evt.target.id === 'modalPostForm' && evt.detail.successful) {
+      if (_kvcsCurrentPostId) {
+        var el = document.getElementById('kvibe-comment-count-' + _kvcsCurrentPostId);
+        if (el) { var n = parseInt(el.textContent.replace(/,/g, '')) || 0; el.textContent = (n + 1).toLocaleString(); }
+      }
+    }
+  });
+
+  function kvibeCSOnInput() {
+    var ta = document.getElementById('modalTextInput');
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 100) + 'px';
+    kvibeCSUpdateSendBtn();
+  }
+
+  function kvibeCSUpdateSendBtn() {
+    var ta    = document.getElementById('modalTextInput');
+    var send  = document.getElementById('modalSendBtn');
+    var mic   = document.getElementById('modalMicBtn');
+    var imgIn = document.getElementById('modal_image_input');
+    var audIn = document.getElementById('modal_audio_file');
+    var has = (ta && ta.value.trim().length > 0) || (imgIn && imgIn.files && imgIn.files.length > 0) || (audIn && audIn.files && audIn.files.length > 0);
+    if (send) send.style.display = has ? 'flex' : 'none';
+    if (mic) { if (has) mic.classList.add('record-mode-hidden'); else mic.classList.remove('record-mode-hidden'); }
+  }
+
+  function kvibeCSResetInputUI() {
+    var ta    = document.getElementById('modalTextInput');
+    var send  = document.getElementById('modalSendBtn');
+    var mic   = document.getElementById('modalMicBtn');
+    var audIn = document.getElementById('modal_audio_file');
+    var imgIn = document.getElementById('modal_image_input');
+    var aiBox = document.getElementById('kvibe-cs-ai-box');
+    var emojiPicker = document.getElementById('kfCsEmojiPicker');
+    if (ta)    { ta.value = ''; ta.style.height = 'auto'; ta.classList.remove('record-mode-hidden'); }
+    if (send)  send.style.display = 'none';
+    if (mic)   { mic.style.display = ''; mic.classList.remove('record-mode-hidden', 'kf-mic-pulse'); }
+    if (audIn) audIn.value = '';
+    if (imgIn) imgIn.value = '';
+    if (aiBox) { aiBox.style.display = 'none'; aiBox.innerHTML = ''; }
+    if (emojiPicker) emojiPicker.classList.remove('open');
+  }
+
+  function kvibeCSToggleAI() {
+    var box = document.getElementById('kvibe-cs-ai-box');
+    var hidden = !box.style.display || box.style.display === 'none';
+    if (!hidden) { box.style.display = 'none'; return; }
+    box.innerHTML = '';
+    _kvcsQuickReplies.slice().sort(function() { return 0.5 - Math.random(); }).slice(0, 6).forEach(function(text) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.style.cssText = 'display:inline-block;background:#f5f5f5;border:1px solid #dbdbdb;border-radius:16px;padding:6px 12px;font-size:13px;color:#262626;cursor:pointer;font-family:inherit;margin-right:6px;white-space:nowrap;';
+      chip.textContent = text;
+      chip.onclick = function() { var ta = document.getElementById('modalTextInput'); ta.value = text; kvibeCSOnInput(); ta.focus(); };
+      box.appendChild(chip);
+    });
+    box.style.display = 'flex';
+  }
+
+  /* ── Mic hold-to-record ── */
+  var _kfCsStream = null, _kfCsRecorder = null, _kfCsChunks = [],
+      _kfCsRecording = false, _kfCsTimer = null, _kfCsStartTime = 0,
+      _kfCsAudioCtx = null, _kfCsAnalyser = null;
+
+  async function kfCsStartRecording(event) {
+    if (event) event.preventDefault();
+    var textInput = document.getElementById('modalTextInput');
+    if (textInput && textInput.value.trim()) return;
+    var micBtn = document.getElementById('modalMicBtn');
+    if (micBtn) micBtn.classList.add('kf-mic-pulse');
+    try {
+      _kfCsStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, sampleRate:44100 } });
+      var opts = { mimeType:'audio/webm' };
+      if (!MediaRecorder.isTypeSupported('audio/webm')) opts.mimeType = 'audio/mp4';
+      if (!MediaRecorder.isTypeSupported(opts.mimeType)) delete opts.mimeType;
+      _kfCsRecorder = new MediaRecorder(_kfCsStream, opts);
+      _kfCsChunks = [];
+      _kfCsRecorder.ondataavailable = function(e){ if(e.data.size>0) _kfCsChunks.push(e.data); };
+      _kfCsRecorder.onstop = async function() {
+        var mimeType = (_kfCsRecorder && _kfCsRecorder.mimeType) ? _kfCsRecorder.mimeType : 'audio/webm';
+        var chunks   = _kfCsChunks.slice();
+        _kfCsCleanup();
+        if (chunks.length === 0) return;
+        var blob = new Blob(chunks, { type: mimeType });
+        var ext  = mimeType.includes('webm') ? 'webm' : 'mp4';
+        var file = new File([blob], 'voice_comment_' + Date.now() + '.' + ext, { type: mimeType });
+        var dt = new DataTransfer(); dt.items.add(file);
+        var audioInput = document.getElementById('modal_audio_file');
+        if (audioInput) audioInput.files = dt.files;
+        var form = document.getElementById('modalPostForm');
+        if (form) { if (typeof htmx !== 'undefined') { htmx.trigger(form, 'submit'); } else { form.submit(); } }
+      };
+      _kfCsRecorder.onerror = function(){ _kfCsCleanup(); };
+      _kfCsRecorder.start(100);
+      _kfCsStartTime = Date.now();
+      _kfCsRecording = true;
+      var overlay = document.getElementById('kfCommentRecordingOverlay');
+      if (overlay) overlay.classList.add('active');
+      _kfCsStartTimer();
+      _kfCsStartVisualizer(_kfCsStream);
+    } catch(err) {
+      console.error('Mic error:', err);
+      alert('Unable to access microphone. Please check permissions.');
+      if (micBtn) micBtn.classList.remove('kf-mic-pulse');
+    }
+  }
+
+  function kfCsStopRecording() { if (_kfCsRecorder && _kfCsRecording) { try { _kfCsRecorder.requestData(); } catch(e) {} _kfCsRecorder.stop(); } }
+  function kfCsTouchStart(e) { e.preventDefault(); kfCsStartRecording(e); }
+  function kfCsTouchEnd(e)   { e.preventDefault(); kfCsStopRecording(); }
+
+  function _kfCsCleanup() {
+    if (_kfCsStream) { _kfCsStream.getTracks().forEach(function(t){ t.stop(); }); _kfCsStream = null; }
+    if (_kfCsTimer) { clearInterval(_kfCsTimer); _kfCsTimer = null; }
+    if (_kfCsAudioCtx && _kfCsAudioCtx.state !== 'closed') { _kfCsAudioCtx.close(); _kfCsAudioCtx = null; }
+    _kfCsChunks = []; _kfCsRecording = false; _kfCsRecorder = null;
+    var overlay = document.getElementById('kfCommentRecordingOverlay');
+    if (overlay) overlay.classList.remove('active');
+    var timerEl = document.getElementById('kfCommentRecordingTimer');
+    if (timerEl) timerEl.textContent = '0:00';
+    var micBtn = document.getElementById('modalMicBtn');
+    if (micBtn) micBtn.classList.remove('kf-mic-pulse');
+  }
+
+  function _kfCsStartTimer() {
+    _kfCsTimer = setInterval(function() {
+      var elapsed = Math.floor((Date.now() - _kfCsStartTime) / 1000);
+      var m = Math.floor(elapsed/60), s = elapsed%60;
+      var el = document.getElementById('kfCommentRecordingTimer');
+      if (el) el.textContent = m+':'+(s<10?'0':'')+s;
+    }, 1000);
+  }
+
+  function _kfCsStartVisualizer(stream) {
+    try {
+      _kfCsAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      _kfCsAnalyser = _kfCsAudioCtx.createAnalyser();
+      var src = _kfCsAudioCtx.createMediaStreamSource(stream);
+      src.connect(_kfCsAnalyser);
+      _kfCsAnalyser.fftSize = 256;
+      var bufLen = _kfCsAnalyser.frequencyBinCount;
+      var dataArr = new Uint8Array(bufLen);
+      var canvas = document.getElementById('kfCommentRecordingWave');
+      if (!canvas) return;
+      var ctx2d = canvas.getContext('2d');
+      function draw() {
+        if (!_kfCsRecording || !_kfCsAnalyser) return;
+        requestAnimationFrame(draw);
+        _kfCsAnalyser.getByteFrequencyData(dataArr);
+        ctx2d.clearRect(0,0,canvas.width,canvas.height);
+        var barW = (canvas.width/bufLen)*2.5, x=0;
+        for (var i=0; i<bufLen; i++) {
+          var barH = dataArr[i]/2;
+          var g = ctx2d.createLinearGradient(0,0,0,canvas.height);
+          g.addColorStop(0,'#0095f6'); g.addColorStop(1,'#1877f2');
+          ctx2d.fillStyle = g;
+          ctx2d.fillRect(x, canvas.height-barH, barW, barH);
+          x += barW+1;
+        }
+      }
+      draw();
+    } catch(e) { console.error('Visualizer error:', e); }
+  }
+
+  /* ── Waveform audio player ── */
+  var _kfCsCurrentAudio = null, _kfCsWaveRAF = {};
+
+  function kfCsGenerateWaveform(audioId) {
+    var wc = document.getElementById('kvibe-wave-container-'+audioId);
+    if (!wc) return;
+    wc.innerHTML = '';
+    var BAR_COUNT = 24;
+    for (var i=0; i<BAR_COUNT; i++) {
+      var bar = document.createElement('div');
+      bar.className = 'kvibe-wave-bar';
+      var dist = Math.abs(i - BAR_COUNT/2) / (BAR_COUNT/2);
+      bar.style.height = Math.max(3, (1-dist*0.6)*18+(Math.random()*10-5)) + 'px';
+      wc.appendChild(bar);
+    }
+  }
+
+  function kfCsUpdateWaveform(audioId, isPlaying) {
+    if (_kfCsWaveRAF[audioId]) { cancelAnimationFrame(_kfCsWaveRAF[audioId]); delete _kfCsWaveRAF[audioId]; }
+    var wc = document.getElementById('kvibe-wave-container-'+audioId);
+    if (!wc) return;
+    var bars = wc.querySelectorAll('.kvibe-wave-bar');
+    if (!isPlaying) { bars.forEach(function(b){ b.classList.remove('played','current'); }); return; }
+    var audio = document.getElementById('audio-'+audioId);
+    if (!audio) return;
+    function tick() {
+      if (audio.paused||audio.ended) return;
+      var progress = audio.duration ? audio.currentTime/audio.duration : 0;
+      var playedCount = Math.floor(progress*bars.length);
+      bars.forEach(function(b,i){
+        if      (i<playedCount)  { b.classList.add('played'); b.classList.remove('current'); }
+        else if (i===playedCount){ b.classList.remove('played'); b.classList.add('current'); }
+        else                     { b.classList.remove('played','current'); }
+      });
+      _kfCsWaveRAF[audioId] = requestAnimationFrame(tick);
+    }
+    _kfCsWaveRAF[audioId] = requestAnimationFrame(tick);
+  }
+
+  function kvCmtToggleAudio(button, audioId) {
+    var audio = document.getElementById('audio-'+audioId);
+    if (!audio) return;
+    var wc = document.getElementById('kvibe-wave-container-'+audioId);
+    if (wc && !wc.querySelector('.kvibe-wave-bar')) kfCsGenerateWaveform(audioId);
+    var durEl = document.getElementById('kvibe-cmt-duration-'+audioId);
+    var fmt = function(s){ return isNaN(s)?'0:00':Math.floor(s/60)+':'+(Math.floor(s%60)<10?'0':'')+Math.floor(s%60); };
+    if (audio.paused) {
+      if (_kfCsCurrentAudio && _kfCsCurrentAudio !== audio) {
+        _kfCsCurrentAudio.pause();
+        var otherId = _kfCsCurrentAudio.id.replace('audio-','');
+        kfCsUpdateWaveform(otherId, false);
+        var otherBtn = document.querySelector('[onclick*="kvCmtToggleAudio"][onclick*="\''+otherId+'\'"]');
+        if (otherBtn) otherBtn.innerHTML = '<i class="fas fa-play"></i>';
+      }
+      audio.play().then(function() {
+        _kfCsCurrentAudio = audio;
+        button.innerHTML = '<i class="fas fa-pause"></i>';
+        kfCsUpdateWaveform(audioId, true);
+        function onStop() {
+          button.innerHTML = '<i class="fas fa-play"></i>';
+          kfCsUpdateWaveform(audioId, false);
+          if (durEl&&audio.duration) durEl.textContent = fmt(audio.duration);
+          if (_kfCsCurrentAudio===audio) _kfCsCurrentAudio = null;
+        }
+        audio.addEventListener('pause', onStop, {once:true});
+        audio.addEventListener('ended', onStop, {once:true});
+      }).catch(function(e){ console.error('Audio play error:',e); });
+    } else {
+      audio.pause();
+      button.innerHTML = '<i class="fas fa-play"></i>';
+      kfCsUpdateWaveform(audioId, false);
+      if (_kfCsCurrentAudio===audio) _kfCsCurrentAudio = null;
+    }
+  }
+
+  function kvCmtWaveformClick(e, audioId) {
+    e.stopPropagation();
+    var audio = document.getElementById('audio-'+audioId);
+    var wc    = document.getElementById('kvibe-wave-container-'+audioId);
+    if (!audio||!wc||!audio.duration) return;
+    var rect = wc.getBoundingClientRect();
+    audio.currentTime = Math.max(0, Math.min(1,(e.clientX-rect.left)/rect.width)) * audio.duration;
+  }
+
+  function kvibeInitAudioPlayers(root) {
+    (root||document).querySelectorAll('.kvibe-audio-container[data-audio-id]').forEach(function(container) {
+      if (container._kfWaveInited) return;
+      container._kfWaveInited = true;
+      var audioId = container.dataset.audioId;
+      kfCsGenerateWaveform(audioId);
+      var audio = document.getElementById('audio-'+audioId);
+      if (audio) {
+        audio.addEventListener('loadedmetadata', function() {
+          var el = document.getElementById('kvibe-cmt-duration-'+audioId);
+          if (el && !isNaN(audio.duration)) {
+            var m = Math.floor(audio.duration/60), s = Math.floor(audio.duration%60);
+            el.textContent = m+':'+(s<10?'0':'')+s;
+          }
+        });
+      }
+    });
+  }
+
+  if (typeof htmx !== 'undefined') { htmx.onLoad(function(el){ kvibeInitAudioPlayers(el); }); }
+
+  /* ── Emoji picker ── */
+  var _kfCsEmojiCategories = [
+    { label:'😀', emojis:['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','😗','😙','😚','🙂','🤗','🤩','🤔','🤨','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴','😌','😛','😜','😝','🤤','😒','😓','😔','😟','😕','🙃','🤑','😲','☹️','🙁','😖','😞','😟','😠','😡','🤬','😤','😢','😭','😦','😧','😨','😩','🤯','😬','😰','😱','🥵','🥶','😳','🤪','😵','🤠','🥳','😷','🤒','🤕','🤢','🤮','🤧','🥴','🤥','🤓'] },
+    { label:'👍', emojis:['👍','👎','👊','✊','🤛','🤜','🤞','✌️','🤟','🤘','👌','🤌','🤏','👈','👉','👆','👇','☝️','👋','🤚','🖐️','✋','🖖','👏','🙌','🤲','🤝','🙏','✍️','💪','🦾','🤙','💅','🤳'] },
+    { label:'❤️', emojis:['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','♥️','🔥','✨','⭐','🌟','💫','⚡','🌈','🎉','🎊','🥂','🍾'] },
+    { label:'🐶', emojis:['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🦋','🐌','🐞','🐢','🐍','🦎','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐋','🦈'] },
+    { label:'🍕', emojis:['🍕','🍔','🍟','🌭','🍿','🥓','🥚','🍳','🥞','🧇','🥐','🥖','🍞','🧀','🥗','🥙','🥪','🌮','🌯','🍱','🍙','🍚','🍛','🍜','🍝','🍣','🍤','🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🍫','🍬','🍭','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🌽','🧄','🧅','🥔'] },
+    { label:'⚽', emojis:['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱','🏓','🏸','⛳','🎣','🥊','🥋','🏆','🥇','🥈','🥉','🎮','🎯','🎲','♟️','🎳','🎭','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🎷','🎺','🎸','🎻'] },
+    { label:'🚗', emojis:['🚗','🚕','🚙','🚌','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🛵','🏍️','🚲','✈️','🛩️','🚀','🛸','🚂','🚄','🚅','🚇','🚊','🛺','🚢','⛵','🚤'] }
+  ];
+  var _kfCsCurrentCat = 0, _kfCsAllEmojis = [];
+  (function() {
+    _kfCsAllEmojis = _kfCsEmojiCategories.flatMap(function(c){ return c.emojis.map(function(e){ return {emoji:e,cat:c.label}; }); });
+    var tabs = document.getElementById('kfCsEmojiTabs');
+    if (!tabs) return;
+    _kfCsEmojiCategories.forEach(function(cat, i) {
+      var t = document.createElement('div');
+      t.className = 'kf-cs-emoji-tab' + (i===0?' active':'');
+      t.textContent = cat.label;
+      t.onclick = function() { _kfCsCurrentCat=i; document.querySelectorAll('.kf-cs-emoji-tab').forEach(function(x,j){x.classList.toggle('active',j===i);}); kfCsRenderCat(i); };
+      tabs.appendChild(t);
+    });
+    kfCsRenderCat(0);
+  })();
+
+  function kfCsRenderCat(index) {
+    var grid = document.getElementById('kfCsEmojiGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    _kfCsEmojiCategories[index].emojis.forEach(function(emoji) {
+      var d = document.createElement('div'); d.className = 'kf-cs-emoji-item'; d.textContent = emoji;
+      d.onclick = function() { kfCsInsertEmoji(emoji); }; grid.appendChild(d);
+    });
+  }
+
+  function kfCsSearchEmoji(query) {
+    var grid = document.getElementById('kfCsEmojiGrid'); if (!grid) return;
+    grid.innerHTML = '';
+    var q = query.trim().toLowerCase();
+    var list = q ? _kfCsAllEmojis.filter(function(e){ return e.cat.toLowerCase().includes(q)||e.emoji.includes(q); }).map(function(e){ return e.emoji; }) : _kfCsEmojiCategories[_kfCsCurrentCat].emojis;
+    list.forEach(function(emoji) {
+      var d = document.createElement('div'); d.className = 'kf-cs-emoji-item'; d.textContent = emoji;
+      d.onclick = function() { kfCsInsertEmoji(emoji); }; grid.appendChild(d);
+    });
+  }
+
+  function kfCsInsertEmoji(emoji) {
+    var ta = document.getElementById('modalTextInput'); if (!ta) return;
+    var start = ta.selectionStart, end = ta.selectionEnd;
+    ta.value = ta.value.substring(0,start) + emoji + ta.value.substring(end);
+    ta.selectionStart = ta.selectionEnd = start + emoji.length;
+    ta.dispatchEvent(new Event('input', {bubbles:true})); kvibeCSOnInput(); ta.focus();
+  }
+
+  function kfCsToggleEmojiPicker(event) {
+    if (event) event.stopPropagation();
+    var picker = document.getElementById('kfCsEmojiPicker');
+    var btn = document.getElementById('kfCsEmojiBtn');
+    if (!picker) return;
+    if (picker.classList.contains('open')) {
+      picker.classList.remove('open'); if (btn) btn.classList.remove('active');
+      document.removeEventListener('click', kfCsCloseEmojiOnOutside);
+    } else {
+      picker.classList.add('open'); if (btn) btn.classList.add('active');
+      var searchEl = document.getElementById('kfCsEmojiSearch');
+      if (searchEl) { searchEl.value=''; kfCsRenderCat(_kfCsCurrentCat); }
+      setTimeout(function(){ document.addEventListener('click', kfCsCloseEmojiOnOutside); }, 50);
+    }
+  }
+
+  function kfCsCloseEmojiOnOutside(e) {
+    var picker = document.getElementById('kfCsEmojiPicker');
+    var btn    = document.getElementById('kfCsEmojiBtn');
+    if (picker && !picker.contains(e.target) && e.target !== btn) {
+      picker.classList.remove('open'); if (btn) btn.classList.remove('active');
+      document.removeEventListener('click', kfCsCloseEmojiOnOutside);
+    }
+  }
+  </script>
+
+  <!-- ═══ POST DETAIL MODAL JS (matches home.html exactly) ═══ -->
+  <script>
+  (function() {
+    'use strict';
+
+    var _pm = {
+      postId: null, mediaType: null, images: [], idx: 0,
+      authorName: '', authorHandle: '', authorAvatar: '', time: '', caption: '',
+    };
+
+    function _collectImages(postId) {
+      var article = document.querySelector('[data-post-id="' + postId + '"]');
+      if (!article) return [];
+      var grid = article.querySelector('.kvibe-x-media-grid');
+      if (grid && grid.dataset.allImages) {
+        try {
+          var parsed = JSON.parse(grid.dataset.allImages);
+          if (Array.isArray(parsed) && parsed.length) {
+            return parsed.map(function(src) { return { src: src, alt: 'Post image' }; });
+          }
+        } catch(e) {}
+      }
+      var cells = article.querySelectorAll('.kvibe-x-media-cell img.kvibe-x-media-thumb');
+      var imgs = [];
+      cells.forEach(function(img) {
+        if (img.src && img.src.indexOf('data:') !== 0) { imgs.push({ src: img.src, alt: img.alt || 'Post image' }); }
+      });
+      return imgs;
+    }
+
+    function _getAuthorAvatar(postId) {
+      var article = document.querySelector('[data-post-id="' + postId + '"]');
+      if (!article) return '';
+      var pic = article.querySelector('.kvibe-profile-pic');
+      return pic ? pic.src : '';
+    }
+
+    function _getEngagement(postId) {
+      function _n(el) { if (!el) return 0; var v = parseInt((el.textContent || '').replace(/[^0-9]/g, ''), 10); return isNaN(v) ? 0 : v; }
+      var commentEl = document.getElementById('kvibe-comment-count-' + postId);
+      var viewEl    = document.getElementById('kvibe-view-count-'    + postId);
+      var repostEl  = document.getElementById('kvibe-repost-count-'  + postId);
+      var likeEl    = document.getElementById('kv-vibe-count-'       + postId);
+      return { comments: _n(commentEl), likes: _n(likeEl), reposts: _n(repostEl), views: _n(viewEl) };
+    }
+
+    function _fmt(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1000)    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+      return String(n);
+    }
+
+    function kvibePostModalOpen(postId, mediaType, videoUrl, startIdx, authorName, authorHandle, time, caption, allImages) {
+      _pm.postId       = postId;
+      _pm.mediaType    = mediaType;
+      _pm.authorName   = authorName   || '';
+      _pm.authorHandle = authorHandle || '';
+      _pm.authorAvatar = _getAuthorAvatar(postId);
+      _pm.time         = time    || '';
+      _pm.caption      = caption || '';
+      _pm.idx          = startIdx != null ? parseInt(startIdx, 10) : 0;
+
+      var profileUrl = '/' + authorHandle + '/';
+      document.getElementById('kvibePmAvatarLink').href = profileUrl;
+      var av = document.getElementById('kvibePmAvatar');
+      av.src = _pm.authorAvatar;
+      av.onerror = function() { this.src = 'https://placehold.co/40x40/555/fff?text=' + (authorHandle.slice(0,1).toUpperCase() || 'U'); };
+      var nameEl = document.getElementById('kvibePmAuthorName');
+      nameEl.textContent = authorName; nameEl.href = profileUrl;
+      document.getElementById('kvibePmAuthorHandle').textContent = '@' + authorHandle;
+
+      var pmMenuBtn  = document.getElementById('kvibePmMenuBtn');
+      var pmEditItem = document.getElementById('kvibePmEditItem');
+      var pmMenuDropdown = document.getElementById('kvibePmMenuDropdown');
+      var postMenuEl = document.querySelector('[data-post-id="' + postId + '"] .kvibe-post-actions a[href*="editpost"]');
+      if (pmMenuBtn) {
+        if (postMenuEl) {
+          pmMenuBtn.style.display = '';
+          pmMenuBtn.dataset.postId = postId;
+          if (pmEditItem) pmEditItem.href = postMenuEl.href;
+          if (pmMenuDropdown) pmMenuDropdown.style.display = 'none';
+        } else {
+          pmMenuBtn.style.display = 'none';
+          if (pmMenuDropdown) pmMenuDropdown.style.display = 'none';
+        }
+      }
+
+      var replyAv = document.getElementById('kvibePmReplyAvatar');
+      var myPic   = document.getElementById('kvibe-my-avatar') || document.querySelector('.kf-comment-profile-img');
+      replyAv.src = myPic ? myPic.src : 'https://placehold.co/34x34/555/fff?text=Me';
+      replyAv.onerror = function() { this.src = 'https://placehold.co/34x34/555/fff?text=Me'; };
+
+      var postUrl = '/comment/' + postId;
+      document.getElementById('kvibePmViewBtn').href   = postUrl;
+      document.getElementById('kvibePmViewLink').href  = postUrl;
+      document.getElementById('kvibePmReplyLink').href = postUrl;
+
+      var capEl    = document.getElementById('kvibePmCaption');
+      var toggleEl = document.getElementById('kvibePmCaptionToggle');
+      capEl.classList.remove('collapsed'); toggleEl.classList.remove('visible'); toggleEl.textContent = 'more';
+      if (caption && caption.trim()) {
+        capEl.textContent = caption; capEl.style.display = '';
+        if (caption.trim().length > 100) { capEl.classList.add('collapsed'); toggleEl.classList.add('visible'); }
+      } else {
+        capEl.style.display = 'none';
+      }
+
+      var eng = _getEngagement(postId);
+      document.getElementById('kvibePmCommentCount').textContent = _fmt(eng.comments);
+      document.getElementById('kvibePmRepostCount').textContent  = _fmt(eng.reposts);
+      document.getElementById('kvibePmLikeCount').textContent    = _fmt(eng.likes);
+      document.getElementById('kvibePmViewCount').textContent    = _fmt(eng.views);
+
+      var followBtn = document.getElementById('kvibePmFollowBtn');
+      if (followBtn) { followBtn.style.display = 'none'; }
+
+      var img = document.getElementById('kvibePmImg');
+      var vid = document.getElementById('kvibePmVideo');
+      img.style.display = 'none'; vid.style.display = 'none';
+      vid.pause(); vid.src = '';
+
+      if (mediaType === 'video' && videoUrl) {
+        vid.src = videoUrl; vid.load(); vid.style.display = 'block';
+        vid.play().catch(function() {}); _hidePmNav();
+      } else if (mediaType === 'images') {
+        if (allImages) {
+          try {
+            var parsed = JSON.parse(allImages);
+            _pm.images = Array.isArray(parsed) && parsed.length
+              ? parsed.map(function(src) { return { src: src, alt: 'Post image' }; })
+              : _collectImages(postId);
+          } catch(e) { _pm.images = _collectImages(postId); }
+        } else {
+          _pm.images = _collectImages(postId);
+        }
+        _renderPmImage();
+        _updatePmNav();
+      }
+
+      document.getElementById('kvibePostModalOverlay').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function _renderPmImage() {
+      var img = document.getElementById('kvibePmImg');
+      var cur = _pm.images[_pm.idx];
+      if (!cur) return;
+      img.src = cur.src; img.alt = cur.alt; img.style.display = 'block';
+      img.onerror = function() { this.src = 'https://placehold.co/600x400/111/fff?text=Image'; };
+    }
+
+    function _updatePmNav() {
+      var total = _pm.images.length;
+      var prev  = document.getElementById('kvibePmPrev');
+      var next  = document.getElementById('kvibePmNext');
+      var ctr   = document.getElementById('kvibePmCounter');
+      if (total > 1) {
+        prev.style.display = _pm.idx > 0         ? '' : 'none';
+        next.style.display = _pm.idx < total - 1 ? '' : 'none';
+        ctr.style.display  = ''; ctr.textContent = (_pm.idx + 1) + ' / ' + total;
+      } else { _hidePmNav(); }
+    }
+
+    function _hidePmNav() {
+      document.getElementById('kvibePmPrev').style.display    = 'none';
+      document.getElementById('kvibePmNext').style.display    = 'none';
+      document.getElementById('kvibePmCounter').style.display = 'none';
+    }
+
+    function kvibePmNav(dir) {
+      _pm.idx = Math.max(0, Math.min(_pm.images.length - 1, _pm.idx + dir));
+      _renderPmImage(); _updatePmNav();
+    }
+
+    function kvibePostModalClose(e, force) {
+      if (!force && e && e.target !== document.getElementById('kvibePostModalOverlay')) return;
+      var overlay = document.getElementById('kvibePostModalOverlay');
+      overlay.classList.remove('open');
+      document.body.style.overflow = '';
+      var vid = document.getElementById('kvibePmVideo');
+      vid.pause(); vid.src = ''; vid.load();
+      document.getElementById('kvibePmImg').src = '';
+      _pm.postId = null;
+    }
+
+    function kvibePmToggleMenu(e) {
+      e.stopPropagation();
+      var drop = document.getElementById('kvibePmMenuDropdown');
+      if (!drop) return;
+      drop.style.display = drop.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function kvibePmDeletePost(e) {
+      e.stopPropagation();
+      var btn = document.getElementById('kvibePmMenuBtn');
+      var postId = btn ? btn.dataset.postId : null;
+      if (!postId) return;
+      if (!confirm('Delete this post? This cannot be undone.')) return;
+      kvibePostModalClose(null, true);
+      var article = document.querySelector('[data-post-id="' + postId + '"]');
+      var csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+      fetch('/deletepost/' + postId, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'ok' && article) {
+          article.style.transition = 'opacity 0.25s, transform 0.25s';
+          article.style.opacity = '0'; article.style.transform = 'scale(0.97)';
+          setTimeout(() => article.remove(), 260);
+        }
+      })
+      .catch(() => alert('Could not delete post. Please try again.'));
+    }
+
+    function kvibePmToggleCaption() {
+      var capEl    = document.getElementById('kvibePmCaption');
+      var toggleEl = document.getElementById('kvibePmCaptionToggle');
+      if (!capEl || !toggleEl) return;
+      var collapsed = capEl.classList.contains('collapsed');
+      if (collapsed) { capEl.classList.remove('collapsed'); toggleEl.textContent = 'less'; }
+      else           { capEl.classList.add('collapsed');    toggleEl.textContent = 'more'; }
+    }
+
+    document.addEventListener('keydown', function(e) {
+      var overlay = document.getElementById('kvibePostModalOverlay');
+      if (!overlay || !overlay.classList.contains('open')) return;
+      if (e.key === 'Escape')         { kvibePostModalClose(null, true); }
+      else if (e.key === 'ArrowLeft') { kvibePmNav(-1); }
+      else if (e.key === 'ArrowRight'){ kvibePmNav(1); }
+    });
+
+    (function() {
+      var _swipeStartX = 0, _swipeStartY = 0, _swipeLocked = false;
+      var mediaEl = document.getElementById('kvibePmMedia');
+      if (!mediaEl) return;
+      mediaEl.addEventListener('touchstart', function(e) {
+        if (e.touches.length !== 1) return;
+        _swipeStartX = e.touches[0].clientX; _swipeStartY = e.touches[0].clientY; _swipeLocked = false;
+      }, { passive: true });
+      mediaEl.addEventListener('touchmove', function(e) {
+        if (e.touches.length !== 1) return;
+        var dx = e.touches[0].clientX - _swipeStartX; var dy = e.touches[0].clientY - _swipeStartY;
+        if (!_swipeLocked && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) { _swipeLocked = true; }
+        if (_swipeLocked) e.preventDefault();
+      }, { passive: false });
+      mediaEl.addEventListener('touchend', function(e) {
+        if (_pm.mediaType !== 'images' || _pm.images.length <= 1) return;
+        var dx = e.changedTouches[0].clientX - _swipeStartX; var dy = e.changedTouches[0].clientY - _swipeStartY;
+        if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return;
+        if (dx < 0) { kvibePmNav(1); } else { kvibePmNav(-1); }
+      }, { passive: true });
+    }());
+
+    function setupPostModalInteractions() {
+      var commentBtn = document.getElementById('kvibePmCommentBtn');
+      if (commentBtn) {
+        var newCommentBtn = commentBtn.cloneNode(true);
+        commentBtn.parentNode.replaceChild(newCommentBtn, commentBtn);
+        newCommentBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (_pm.postId) window.location.href = '/comment/' + _pm.postId;
+        });
+      }
+    }
+
+    window.kvibePostModalOpen  = kvibePostModalOpen;
+    window.kvibePostModalClose = kvibePostModalClose;
+    window.kvibePmNav          = kvibePmNav;
+    window.kvibePmToggleCaption = kvibePmToggleCaption;
+    window.kvibePmToggleMenu   = kvibePmToggleMenu;
+    window.kvibePmDeletePost   = kvibePmDeletePost;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupPostModalInteractions);
+    } else {
+      setupPostModalInteractions();
+    }
+  }());
+  </script>
+
+  <!-- ═══ DESKTOP NOTIFICATION PANEL JS ═══ -->
+  <script>
+  (function () {
+    'use strict';
+    if (window.innerWidth < 768) return;
+    var trigger  = document.getElementById('kvibe-desktop-notif-btn');
+    var panel    = document.getElementById('kvibe-notif-panel');
+    var backdrop = document.getElementById('kvibe-notif-backdrop');
+    var closeBtn = document.getElementById('kvibe-panel-close');
+    var body     = document.getElementById('kvibe-notif-panel-body');
+    var loading  = document.getElementById('kvibe-panel-loading');
+    var badge    = document.getElementById('kvibe-desktop-notif-badge');
+    if (!trigger || !panel) return;
+    panel.style.display = 'flex'; backdrop.style.display = 'block';
+    panel.style.visibility = 'hidden'; backdrop.style.opacity = '0'; backdrop.style.pointerEvents = 'none';
+    var isOpen = false, loaded = false;
+
+    function getCsrf() {
+      var el = document.querySelector('[name=csrfmiddlewaretoken]');
+      if (el) return el.value;
+      var m = document.cookie.match(/csrftoken=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    }
+
+    function openPanel() {
+      if (isOpen) return; isOpen = true;
+      backdrop.style.visibility = 'visible'; backdrop.style.pointerEvents = 'auto';
+      backdrop.style.opacity = '0'; backdrop.style.transition = 'opacity .3s';
+      setTimeout(function () { backdrop.style.opacity = '1'; }, 10);
+      panel.style.visibility = 'visible'; panel.style.pointerEvents = 'auto';
+      panel.style.transform = 'translateX(-100%)';
+      setTimeout(function () { panel.style.transform = 'translateX(0)'; }, 10);
+      trigger.setAttribute('aria-expanded', 'true'); trigger.classList.add('kvibe-notif-panel-open');
+      if (badge) badge.style.display = 'none';
+      var footerBadge = document.getElementById('footerNotificationBadge');
+      if (footerBadge) { footerBadge.classList.add('hidden-badge'); footerBadge.style.display = 'none'; }
+      var footerCount = document.getElementById('footerNotificationCount');
+      if (footerCount) footerCount.innerText = '0';
+      if (!loaded) fetchNotifications();
+    }
+
+    function closePanel() {
+      if (!isOpen) return; isOpen = false;
+      backdrop.style.opacity = '0'; backdrop.style.pointerEvents = 'none';
+      panel.style.transform = 'translateX(-100%)';
+      setTimeout(function () { backdrop.style.visibility = 'hidden'; panel.style.visibility = 'hidden'; panel.style.pointerEvents = 'none'; }, 300);
+      trigger.setAttribute('aria-expanded', 'false'); trigger.classList.remove('kvibe-notif-panel-open');
+    }
+
+    trigger.addEventListener('click', function (e) { e.stopPropagation(); isOpen ? closePanel() : openPanel(); });
+    closeBtn.addEventListener('click', closePanel);
+    backdrop.addEventListener('click', closePanel);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && isOpen) closePanel(); });
+
+    function fetchNotifications() {
+      if (loading) loading.style.display = 'flex';
+      fetch('{% url "notification_list" %}?panel=1', {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrf() }
+      })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function (html) {
+        loaded = true;
+        if (loading) loading.style.display = 'none';
+        body.insertAdjacentHTML('beforeend', html);
+      })
+      .catch(function () {
+        if (loading) loading.innerHTML =
+          '<div style="text-align:center;padding:40px 24px;color:#8e8e8e;font-size:13px;">' +
+          '<i class="fas fa-exclamation-circle" style="font-size:24px;color:#ed4956;margin-bottom:8px;display:block;"></i>' +
+          'Could not load notifications.<br>' +
+          '<a href="{% url "notification_list" %}" style="color:#0095f6;font-weight:600;">View all</a></div>';
+      });
+    }
+
+    window.kvibePanelMarkAllRead = function () {
+      fetch('/notifications/mark-all-read/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        body: JSON.stringify({})
+      }).then(function () {
+        body.querySelectorAll('.kishiface-unread').forEach(function (el) { el.classList.remove('kishiface-unread'); });
+        body.querySelectorAll('.kishiface-unread-dot').forEach(function (d) { d.remove(); });
+      });
+    };
+
+    window.addEventListener('resize', function () { if (window.innerWidth < 768 && isOpen) closePanel(); });
+  }());
+  </script>
+
+</body>
+</html>

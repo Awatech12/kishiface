@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{{ channel.channel_name }} | KishiHub</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        :root {
+            /* ── Core kvibe tokens (matches home.html exactly) ── */
+            --kv-primary: #0095f6;
+            --kv-primary-hover: #0080d4;
+            --kv-bg: #ffffff;
+            --kv-border: #dbdbdb;
+            --kv-text: #262626;
+            --kv-text-light: #8e8e8e;
+            --kv-sent-bg: #0095f6;
+            --kv-received-bg: #efefef;
+            --kv-danger: #ed4956;
+            --kv-reply-bg: rgba(0,0,0,0.06);
+
+            /* ── Gen Z accent system ── */
+            --gz-purple:    #9333ff;
+            --gz-pink:      #ff1493;
+            --gz-cyan:      #00d4ff;
+            --gz-orange:    #ff6b00;
+            --gz-grad:      linear-gradient(135deg, #9333ff 0%, #0095f6 50%, #00d4ff 100%);
+            --gz-grad-hot:  linear-gradient(135deg, #ff1493 0%, #ff6b00 100%);
+            --gz-grad-cool: linear-gradient(135deg, #0095f6 0%, #9333ff 100%);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; -webkit-tap-highlight-color:transparent; }
+        body,html { background:var(--kv-bg); height:100vh; overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+        /* ── Layout ── */
+        .kv-container { display:flex; flex-direction:column; height:100dvh; width:100%; position:relative; }
+
+        /* ── Progress bar (gradient) ── */
+        .kv-progress-bar-wrap { position:fixed; top:0; left:0; right:0; height:3px; z-index:2001; display:none; }
+        .kv-progress-bar-fill { height:100%; background:var(--gz-grad); width:0%; transition:width .3s ease; }
+
+        /* ── Header ── */
+        .kv-header { padding:8px 16px; background:var(--kv-bg); border-bottom:1px solid var(--kv-border); display:flex; align-items:center; height:60px; z-index:100; flex-shrink:0; position:relative; overflow:hidden; }
+        /* gradient top stripe matching channel_create */
+        .kv-header::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--gz-grad); }
+        .kv-back-btn { background:none; border:none; color:var(--kv-text); font-size:22px; cursor:pointer; padding:8px; margin-right:4px; }
+        .kv-header-info { display:flex; align-items:center; flex:1; cursor:pointer; min-width:0; }
+        /* gradient ring on header avatar */
+        .kv-header-avatar { width:36px; height:36px; border-radius:50%; object-fit:cover; margin-right:10px; flex-shrink:0; box-shadow:0 0 0 2px var(--kv-bg), 0 0 0 4px var(--gz-purple); }
+        .kv-header-details { min-width:0; flex:1; }
+        .kv-header-details h3 { font-size:15px; font-weight:700; color:var(--kv-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .kv-header-sub { font-size:12px; color:var(--kv-text-light); }
+        .kv-header-typing { display:none; font-size:12px; font-weight:600; color:var(--gz-purple); animation:kvTypingPulse 1.2s ease-in-out infinite; }
+        @keyframes kvTypingPulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+        .kv-icon-btn { background:none; border:none; font-size:20px; color:var(--kv-text-light); cursor:pointer; padding:8px 4px; display:flex; align-items:center; transition:color .15s; }
+        .kv-icon-btn:hover { color:var(--gz-purple); }
+
+        /* ── Sliding action bar ── */
+        .kv-action-bar { position:absolute; inset:0; background:var(--kv-bg); display:flex; align-items:center; padding:0 8px 0 4px; gap:4px; z-index:200; transform:translateY(-100%); transition:transform .22s cubic-bezier(.4,0,.2,1); pointer-events:none; border-bottom:3px solid transparent; border-image:var(--gz-grad) 1; }
+        .kv-action-bar.active { transform:translateY(0); pointer-events:all; }
+        .kv-action-bar-close { background:none; border:none; color:var(--kv-text); font-size:20px; cursor:pointer; padding:8px; flex-shrink:0; }
+        .kv-action-bar-preview { flex:1; font-size:13px; color:var(--kv-text-light); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+        .kv-action-bar-btns { display:flex; align-items:center; flex-shrink:0; }
+        .kv-action-bar-btn { background:none; border:none; color:var(--kv-text); font-size:19px; cursor:pointer; padding:8px 10px; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+        .kv-action-bar-btn:hover { background:rgba(147,51,255,.08); color:var(--gz-purple); }
+        .kv-action-bar-btn.danger { color:var(--kv-danger); }
+
+        /* ── Messages ── */
+        .kv-messages { flex:1; padding:16px 16px 200px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; -webkit-overflow-scrolling:touch; }
+        .kv-messages::-webkit-scrollbar { width:4px; }
+        .kv-messages::-webkit-scrollbar-thumb { background:rgba(147,51,255,.18); border-radius:2px; }
+        .kv-date-sep { text-align:center; margin:16px 0 8px; }
+        .kv-date-sep span { font-size:11px; font-weight:700; padding:4px 12px; border-radius:20px; background:rgba(147,51,255,.08); color:var(--gz-purple); letter-spacing:0.3px; text-transform:uppercase; }
+
+        /* ── Message row ── */
+        .kv-msg-row { display:flex; flex-direction:column; margin-bottom:10px; position:relative; touch-action:pan-y; }
+        .kv-msg-row.outgoing { align-items:flex-end; }
+        .kv-msg-row.incoming { align-items:flex-start; flex-direction:row; gap:8px; }
+        .kv-author-avatar { width:28px; height:28px; border-radius:50%; object-fit:cover; flex-shrink:0; align-self:flex-end; margin-bottom:2px; }
+        .kv-incoming-wrap { display:flex; flex-direction:column; align-items:flex-start; max-width:100%; }
+        .kv-sender-name { font-size:11px; font-weight:700; margin-bottom:2px; margin-left:2px; text-decoration:none; background:var(--gz-grad-cool); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+
+        /* ── Bubble ── */
+        .kv-bubble { max-width:100%; padding:9px 14px; border-radius:18px; position:relative; animation:kvMsgIn .25s ease; word-wrap:break-word; cursor:pointer; transition:filter .15s; }
+        .kv-incoming-wrap .kv-bubble { max-width:100%; }
+        @keyframes kvMsgIn { from{opacity:0;transform:scale(.88) translateY(6px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        /* Outgoing: gradient bubble */
+        .kv-bubble.outgoing { background:var(--gz-grad-cool); color:#fff; box-shadow:0 2px 10px rgba(0,149,246,.25); }
+        /* Incoming: light neutral */
+        .kv-bubble.incoming { background:#f0f0f5; color:var(--kv-text); }
+        .kv-bubble.has-media,
+        .kv-bubble.outgoing.has-media,
+        .kv-bubble.incoming.has-media { padding:0!important; max-width:70%; background:transparent!important; background-color:transparent!important; box-shadow:none!important; border:none!important; position:relative; }
+        .kv-bubble:hover { filter:brightness(.94); }
+        .kv-bubble.kv-lp-highlight { filter:brightness(.88); transition:filter .1s; }
+
+        /* ── Message text ── */
+        .kv-msg-text { font-size:14px; font-weight:400; line-height:1.4; white-space:pre-wrap; word-break:break-word; }
+        .kv-msg-text.collapsed { display:-webkit-box; -webkit-line-clamp:10; -webkit-box-orient:vertical; overflow:hidden; }
+        .kv-read-more { color:var(--kv-text-light); font-size:13px; cursor:pointer; margin-top:4px; display:block; font-weight:500; }
+        .kv-bubble.outgoing .kv-read-more { color:rgba(255,255,255,.8); }
+
+        /* ── Meta (time) ── */
+        .kv-msg-meta { display:flex; align-items:center; gap:4px; margin-top:4px; justify-content:flex-end; }
+        .kv-msg-time { font-size:11px; opacity:.65; white-space:nowrap; }
+        .kv-bubble.outgoing .kv-msg-time { color:rgba(255,255,255,.9); }
+        .kv-bubble.incoming .kv-msg-time { color:var(--kv-text-light); }
+
+        /* ── Reply indicator ── */
+        .kv-reply-indicator { background:var(--kv-reply-bg); border-left:3px solid var(--gz-purple); border-radius:8px; padding:6px 10px; margin-bottom:6px; cursor:pointer; font-size:12px; }
+        .kv-bubble.outgoing .kv-reply-indicator { background:rgba(255,255,255,.18); border-left-color:#fff; color:rgba(255,255,255,.9); }
+        .kv-reply-label { font-weight:700; display:block; margin-bottom:2px; }
+        .kv-reply-quote-text { color:inherit; opacity:.8; }
+        .kv-replied-indicator { font-size:11px; color:var(--kv-text-light); margin-bottom:2px; display:flex; align-items:center; gap:4px; align-self:flex-end; }
+
+        /* ── Media ── */
+        .kv-img-wrap { border-radius:18px; overflow:hidden; max-width:250px; cursor:pointer; position:relative; }
+        .kv-img-wrap img { width:100%; display:block; border-radius:18px; }
+        .kv-video-wrap { border-radius:18px; overflow:hidden; max-width:250px; cursor:pointer; position:relative; background:#000; }
+        .kv-video-wrap video { width:100%; display:block; border-radius:18px; }
+        .kv-video-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+        .kv-video-play-icon { width:48px; height:48px; background:rgba(255,255,255,.9); border-radius:50%; display:flex; align-items:center; justify-content:center; color:#333; font-size:18px; }
+        .kv-bubble.has-media .kv-msg-text { position:absolute; bottom:0; left:0; right:0; padding:24px 10px 8px; background:linear-gradient(to top,rgba(0,0,0,.65) 0%,transparent 100%); border-radius:0 0 18px 18px; color:#fff!important; font-size:13px; pointer-events:none; z-index:2; }
+
+        /* ── Audio player ── */
+        .kv-audio-player { border-radius:22px; max-width:200px; cursor:pointer; }
+        .kv-audio-content { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:22px; }
+        .kv-msg-row.outgoing .kv-audio-content { background:var(--gz-grad-cool); margin-left:auto; margin-right:0; }
+        .kv-msg-row.incoming .kv-audio-content { background:#f0f0f5; margin-right:auto; margin-left:0; }
+        .kv-audio-play-btn { border:none; width:32px; height:32px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; z-index:2; }
+        .kv-msg-row.outgoing .kv-audio-play-btn { background:rgba(255,255,255,.3); color:#fff; }
+        .kv-msg-row.incoming .kv-audio-play-btn { background:rgba(0,0,0,.1); color:var(--kv-text); }
+        .kv-audio-info { flex:1; min-width:0; display:flex; align-items:center; gap:8px; }
+        .kv-waveform { flex:1; height:28px; display:flex; align-items:center; overflow:hidden; cursor:pointer; }
+        .kv-wave-container { display:flex; align-items:center; gap:2px; height:100%; width:100%; }
+        .kv-wave-bar { width:3px; border-radius:2px; flex-shrink:0; transition:background .1s,opacity .1s; }
+        .kv-msg-row.outgoing .kv-wave-bar { background:rgba(255,255,255,.45); }
+        .kv-msg-row.incoming .kv-wave-bar { background:rgba(0,0,0,.25); }
+        .kv-msg-row.outgoing .kv-wave-bar.played { background:rgba(255,255,255,1); }
+        .kv-msg-row.incoming .kv-wave-bar.played { background:var(--gz-purple); }
+        .kv-wave-bar.current { animation:kvWavePulse .5s ease-in-out infinite alternate; }
+        @keyframes kvWavePulse { from{transform:scaleY(.85)} to{transform:scaleY(1.15)} }
+        .kv-audio-duration { font-size:12px; min-width:35px; text-align:right; font-weight:400; }
+        .kv-msg-row.outgoing .kv-audio-duration { color:rgba(255,255,255,.9); }
+        .kv-msg-row.incoming .kv-audio-duration { color:var(--kv-text-light); }
+        .kv-audio-caption { font-size:13px; padding:4px 2px 0; }
+        .kv-msg-row.outgoing .kv-audio-caption { color:rgba(255,255,255,.9); }
+
+        /* ── Document card ── */
+        .kv-doc-card { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; cursor:pointer; background:rgba(0,0,0,.04); margin-top:4px; }
+        .kv-bubble.outgoing .kv-doc-card { background:rgba(255,255,255,.15); }
+        .kv-doc-icon { width:38px; height:38px; border-radius:10px; background:rgba(0,149,246,.12); color:var(--kv-primary); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+        .kv-bubble.outgoing .kv-doc-icon { background:rgba(255,255,255,.2); color:#fff; }
+        .kv-doc-info { flex:1; min-width:0; }
+        .kv-doc-name { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .kv-doc-type { font-size:11px; opacity:.7; margin-top:1px; }
+        .kv-doc-dl { width:30px; height:30px; border-radius:50%; border:none; background:rgba(0,149,246,.12); color:var(--kv-primary); display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer; flex-shrink:0; }
+        .kv-bubble.outgoing .kv-doc-dl { background:rgba(255,255,255,.2); color:#fff; }
+
+        /* ── Link preview ── */
+        .kv-link-preview { display:block; border-radius:10px; overflow:hidden; border:1px solid rgba(0,0,0,.1); margin-top:8px; text-decoration:none; background:#fff; }
+        .kv-bubble.outgoing .kv-link-preview { border-color:rgba(255,255,255,.25); background:rgba(255,255,255,.12); }
+        .kv-lp-image { width:100%; height:120px; object-fit:cover; display:block; }
+        .kv-lp-body { padding:8px 10px; }
+        .kv-lp-domain { font-size:11px; color:var(--kv-primary); font-weight:600; text-transform:uppercase; margin-bottom:2px; }
+        .kv-lp-title { font-size:13px; font-weight:600; color:var(--kv-text); line-height:1.3; margin-bottom:2px; }
+        .kv-lp-desc { font-size:12px; color:var(--kv-text-light); line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .kv-bubble.outgoing .kv-lp-domain { color:rgba(255,255,255,.8); }
+        .kv-bubble.outgoing .kv-lp-title { color:#fff; }
+        .kv-bubble.outgoing .kv-lp-desc { color:rgba(255,255,255,.7); }
+
+        /* ── Reply indicator ── */
+        .kv-reply-indicator { background:var(--kv-reply-bg); border-left:3px solid var(--gz-purple); border-radius:8px; padding:6px 10px; margin-bottom:6px; cursor:pointer; font-size:12px; }
+        .kv-bubble.outgoing .kv-reply-indicator { background:rgba(255,255,255,.18); border-left-color:#fff; color:rgba(255,255,255,.9); }
+        .kv-reply-label { font-weight:700; display:block; margin-bottom:2px; }
+        .kv-reply-quote-text { color:inherit; opacity:.8; }
+        .kv-replied-indicator { font-size:11px; color:var(--kv-text-light); margin-bottom:2px; display:flex; align-items:center; gap:4px; align-self:flex-end; }
+
+        /* ── Reaction strip ── */
+        .kv-reaction-strip { display:flex; flex-wrap:wrap; gap:4px; margin-top:-4px; max-width:220px; z-index:100; }
+        .kv-msg-row.outgoing .kv-reaction-strip { justify-content:flex-end; align-self:flex-end; }
+        .kv-msg-row.incoming .kv-reaction-strip, .kv-incoming-wrap .kv-reaction-strip { justify-content:flex-start; align-self:flex-start; }
+        .kv-reaction-badge { display:inline-flex; align-items:center; gap:3px; padding:3px 8px 3px 5px; border-radius:20px; background:rgba(0,0,0,.06); border:1.5px solid rgba(0,0,0,.08); font-size:13px; cursor:pointer; user-select:none; transition:all .15s; }
+        .kv-reaction-badge:hover { transform:scale(1.08); }
+        .kv-reaction-badge.mine { background:rgba(147,51,255,.1); border-color:rgba(147,51,255,.35); }
+        .kv-reaction-badge .badge-emoji { font-size:15px; line-height:1; }
+        .kv-reaction-badge .badge-count { display:inline; font-size:12px; font-weight:700; color:var(--kv-text); line-height:1; }
+        .kv-reaction-badge.mine .badge-count { color:var(--gz-purple); }
+
+        /* ── Hover react btn ── */
+        .kv-hover-react-btn { position:absolute; top:50%; transform:translateY(-50%); width:30px; height:30px; border-radius:50%; border:1.5px solid #e0e0e0; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.12); display:none; align-items:center; justify-content:center; font-size:16px; cursor:pointer; z-index:10; line-height:1; padding:0; transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .15s; }
+        .kv-msg-row.outgoing .kv-hover-react-btn { left:4px; }
+        .kv-msg-row.incoming .kv-hover-react-btn { right:4px; left:auto; }
+        @media(hover:hover) and (pointer:fine) { .kv-msg-row:hover .kv-hover-react-btn { display:flex; } }
+        .kv-hover-react-btn:hover { transform:translateY(-50%) scale(1.2); box-shadow:0 3px 10px rgba(0,0,0,.18); }
+
+        /* ── Reaction picker ── */
+        .kv-reaction-picker { position:fixed; background:#fff; border-radius:30px; padding:6px 10px; display:flex; align-items:center; gap:2px; box-shadow:0 4px 28px rgba(147,51,255,.18); z-index:1050; animation:kvPickerIn .22s cubic-bezier(.34,1.56,.64,1); border:1px solid rgba(147,51,255,.12); }
+        @keyframes kvPickerIn { from{opacity:0;transform:scale(.6) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        .kv-reaction-btn { width:40px; height:40px; border-radius:50%; border:none; background:transparent; font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .18s cubic-bezier(.34,1.56,.64,1),background .15s; }
+        .kv-reaction-btn:hover { transform:scale(1.45) translateY(-4px); background:rgba(147,51,255,.08); }
+        .kv-reaction-btn.active { background:rgba(147,51,255,.12); }
+        .kv-reaction-backdrop { position:fixed; inset:0; z-index:1049; background:transparent; }
+        @media(hover:none) { .kv-reaction-btn{width:46px;height:46px;font-size:28px;} .kv-reaction-picker{padding:8px 12px;border-radius:34px;} }
+
+        /* ── Reply preview bar ── */
+        .kv-reply-preview { display:none; background:#faf8ff; border-top:1px solid rgba(147,51,255,.15); border-left:4px solid var(--gz-purple); padding:8px 16px; position:relative; flex-shrink:0; }
+        .kv-reply-preview-close { position:absolute; right:12px; top:10px; cursor:pointer; color:var(--kv-text-light); background:none; border:none; font-size:16px; }
+        .kv-reply-preview-author { font-size:13px; font-weight:700; color:var(--gz-purple); }
+        .kv-reply-preview-text { font-size:12px; color:var(--kv-text-light); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:280px; }
+
+        /* ── Input area ── */
+        .kv-input-container { padding:8px 12px calc(env(safe-area-inset-bottom,0px) + 10px); background:var(--kv-bg); display:flex; flex-direction:column; border-top:1px solid #f0f0f0; position:fixed; bottom:0; left:0; right:0; z-index:100; max-height:70vh; overflow:hidden; }
+        .kv-quick-replies { display:flex; align-items:center; gap:8px; padding:4px 4px 8px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; flex-shrink:0; }
+        .kv-quick-replies.hidden { display:flex; }
+        .kv-quick-replies::-webkit-scrollbar { display:none; }
+        /* Gen Z quick chips */
+        .kv-quick-chip { display:inline-flex; align-items:center; gap:5px; padding:6px 14px; border-radius:20px; border:1.5px solid rgba(147,51,255,.2); background:rgba(147,51,255,.05); font-size:13px; font-weight:600; color:var(--gz-purple); cursor:pointer; white-space:nowrap; flex-shrink:0; transition:all .18s ease; user-select:none; }
+        .kv-quick-chip:hover { background:rgba(147,51,255,.12); border-color:rgba(147,51,255,.4); transform:translateY(-1px); }
+        .kv-quick-chip:active { transform:scale(.94); }
+        .kv-input-lp { display:none; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; border:1px solid var(--kv-border); background:#fafafa; margin-bottom:6px; }
+        .kv-input-lp-thumb { width:44px; height:44px; border-radius:6px; object-fit:cover; flex-shrink:0; display:none; }
+        .kv-input-lp-text { flex:1; min-width:0; }
+        .kv-input-lp-domain { font-size:11px; color:var(--kv-primary); font-weight:600; }
+        .kv-input-lp-title { font-size:13px; font-weight:600; color:var(--kv-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .kv-input-lp-dismiss { background:none; border:none; color:var(--kv-text-light); font-size:18px; cursor:pointer; flex-shrink:0; line-height:1; padding:4px; }
+        .kv-input-wrapper { display:flex; align-items:center; gap:8px; background:#f4f3ff; border-radius:24px; padding:8px 14px; min-height:46px; transition:background .2s; border:1.5px solid rgba(147,51,255,.12); }
+        .kv-input-wrapper:focus-within { background:#ede9ff; border-color:rgba(147,51,255,.28); }
+        .kv-input-actions { display:flex; gap:4px; }
+        .kv-input-btn { width:28px; height:28px; border-radius:50%; border:none; background:transparent; color:var(--gz-purple); font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s; flex-shrink:0; }
+        .kv-input-btn:hover { background:rgba(147,51,255,.1); transform:scale(1.1); }
+        .kv-msg-input { flex:1; padding:6px 4px; border:none; background:transparent; font-size:14px; outline:none; min-width:0; resize:none; max-height:100px; line-height:1.4; color:var(--kv-text); }
+        .kv-msg-input::placeholder { color:#b0a8d0; }
+        /* Send button: gradient */
+        .kv-send-btn { border:none; background:var(--gz-grad-cool); color:#fff; width:34px; height:34px; border-radius:50%; cursor:pointer; display:none; align-items:center; justify-content:center; font-size:13px; font-weight:600; flex-shrink:0; transition:all .2s; box-shadow:0 2px 10px rgba(147,51,255,.35); }
+        .kv-send-btn:hover { opacity:.88; transform:scale(1.08); }
+        .kv-send-btn:disabled { background:#ccc; cursor:not-allowed; box-shadow:none; }
+        .kv-broadcast-notice { text-align:center; color:var(--kv-text-light); font-size:13px; padding:12px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px; }
+        .kv-broadcast-notice i { color:var(--gz-purple); }
+
+        /* ── Recording overlay ── */
+        .kv-recording-overlay { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.85); color:#fff; padding:16px 20px; border-radius:12px; display:none; align-items:center; gap:12px; z-index:1000; min-width:200px; animation:kvSlideUp .3s ease; }
+        @keyframes kvSlideUp { from{opacity:0;transform:translateX(-50%) translateY(20px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+        .kv-recording-timer { font-size:13px; color:var(--kv-danger); font-weight:600; }
+        .kv-recording-pulse { animation:kvPulse 1.5s infinite; color:var(--kv-danger)!important; }
+        @keyframes kvPulse { 0%{opacity:1} 50%{opacity:.5} 100%{opacity:1} }
+
+        /* ── Emoji picker ── */
+        .kv-emoji-picker { position:fixed; bottom:0; left:0; right:0; z-index:1001; display:none; border-radius:20px 20px 0 0; background:#fff; box-shadow:0 -4px 20px rgba(0,0,0,.1); flex-direction:column; height:300px; }
+        .kv-emoji-tabs { display:flex; overflow-x:auto; scrollbar-width:none; padding:8px 8px 4px; gap:2px; flex-shrink:0; border-bottom:1px solid #f0f0f0; }
+        .kv-emoji-tabs::-webkit-scrollbar { display:none; }
+        .kv-emoji-tab { width:34px; height:34px; border-radius:8px; border:none; background:transparent; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .kv-emoji-tab.active { background:#f0f0f0; }
+        .kv-emoji-search { padding:6px 10px; flex-shrink:0; }
+        .kv-emoji-search input { width:100%; padding:6px 10px; border:1px solid var(--kv-border); border-radius:20px; font-size:13px; outline:none; }
+        .kv-emoji-scroll { flex:1; overflow-y:auto; padding:4px 8px 8px; }
+        .kv-emoji-grid { display:grid; grid-template-columns:repeat(8,1fr); gap:2px; }
+        .kv-emoji-item { width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer; border-radius:6px; transition:background .15s; }
+        .kv-emoji-item:hover { background:#f0f0f0; }
+
+        /* ── Media modal ── */
+        .kv-media-modal { display:none; position:fixed; inset:0; background:#000; z-index:2000; flex-direction:column; animation:kvModalIn .22s ease; }
+        @keyframes kvModalIn { from{opacity:0} to{opacity:1} }
+        .kv-mm-header { position:absolute; top:0; left:0; right:0; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:14px 16px; background:linear-gradient(to bottom,rgba(0,0,0,.7) 0%,transparent 100%); transition:opacity .3s; }
+        .kv-mm-sender { display:flex; align-items:center; gap:10px; }
+        .kv-mm-avatar { width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid rgba(255,255,255,.3); }
+        .kv-mm-name { font-size:14px; font-weight:600; color:#fff; }
+        .kv-mm-time { font-size:11px; color:rgba(255,255,255,.65); }
+        .kv-mm-actions { display:flex; gap:6px; }
+        .kv-mm-btn { width:38px; height:38px; border-radius:50%; border:none; background:rgba(255,255,255,.15); color:#fff; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .2s; }
+        .kv-mm-btn:hover { background:rgba(255,255,255,.28); }
+        .kv-mm-body { flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; width:100%; height:100%; }
+        #kvMmImage { max-width:100%; max-height:100%; object-fit:contain; display:block; transition:transform .25s ease; user-select:none; }
+        #kvMmVideo { max-width:100%; max-height:100%; display:block; background:#000; }
+        .kv-mm-audio { background:rgba(255,255,255,.08); backdrop-filter:blur(20px); border-radius:20px; padding:28px 24px; display:flex; flex-direction:column; align-items:center; gap:20px; width:min(320px,90vw); border:1px solid rgba(255,255,255,.12); }
+        .kv-mm-audio-icon { width:72px; height:72px; border-radius:50%; background:rgba(0,149,246,.2); border:2px solid rgba(0,149,246,.4); display:flex; align-items:center; justify-content:center; font-size:28px; color:var(--kv-primary); }
+        .kv-mm-audio-title { font-size:15px; font-weight:600; color:#fff; text-align:center; }
+        .kv-mm-audio-time { font-size:13px; color:rgba(255,255,255,.6); text-align:center; }
+        .kv-mm-audio-controls { display:flex; align-items:center; gap:24px; }
+        .kv-mm-skip { width:40px; height:40px; border-radius:50%; border:none; background:rgba(255,255,255,.12); color:#fff; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+        .kv-mm-play-btn { background:var(--gz-grad-cool); border:none; width:58px; height:58px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; font-size:20px; box-shadow:0 4px 18px rgba(147,51,255,.45); }
+        .kv-mm-progress { width:100%; height:4px; background:rgba(255,255,255,.2); border-radius:2px; cursor:pointer; }
+        .kv-mm-progress-fill { height:100%; background:var(--gz-grad-cool); width:0%; border-radius:2px; transition:width .1s linear; }
+        .kv-mm-footer { position:absolute; bottom:0; left:0; right:0; padding:16px 20px calc(env(safe-area-inset-bottom,0px) + 16px); background:linear-gradient(to top,rgba(0,0,0,.72) 0%,transparent 100%); }
+        .kv-mm-caption { font-size:14px; color:rgba(255,255,255,.92); line-height:1.4; word-break:break-word; }
+        .kv-mm-ui-hidden .kv-mm-header, .kv-mm-ui-hidden .kv-mm-footer { opacity:0; pointer-events:none; }
+
+        /* ── Gallery sheet ── */
+        .kv-gallery-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:900; backdrop-filter:blur(2px); }
+        .kv-gallery-backdrop.open { display:block; }
+        .kv-gallery-sheet { position:fixed; bottom:0; left:0; right:0; z-index:901; background:#fff; border-radius:20px 20px 0 0; display:flex; flex-direction:column; max-height:82vh; transform:translateY(100%); transition:transform .32s cubic-bezier(.32,.72,0,1); overflow:hidden; }
+        .kv-gallery-sheet.open { transform:translateY(0); }
+        .kv-gallery-handle { width:36px; height:4px; background:linear-gradient(90deg,var(--gz-purple),var(--kv-primary)); border-radius:2px; margin:10px auto 0; flex-shrink:0; }
+        .kv-gallery-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px 8px; flex-shrink:0; }
+        .kv-gallery-title { font-size:16px; font-weight:700; color:var(--kv-text); }
+        .kv-gallery-count { font-size:12px; color:var(--kv-text-light); margin-left:6px; font-weight:400; }
+        .kv-gallery-close { width:30px; height:30px; border-radius:50%; border:none; background:#f0f0f0; color:var(--kv-text); font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+        .kv-gallery-tabs { display:flex; padding:0 16px; border-bottom:1.5px solid #f0f0f0; flex-shrink:0; overflow-x:auto; scrollbar-width:none; }
+        .kv-gallery-tabs::-webkit-scrollbar { display:none; }
+        .kv-gallery-tab { padding:8px 14px; font-size:13px; font-weight:600; color:var(--kv-text-light); border:none; background:none; cursor:pointer; border-bottom:2.5px solid transparent; margin-bottom:-1.5px; white-space:nowrap; display:flex; align-items:center; gap:5px; transition:color .15s,border-color .15s; }
+        .kv-gallery-tab.active { color:var(--gz-purple); border-bottom-color:var(--gz-purple); }
+        .kv-gallery-badge { background:#f0f0f0; color:var(--kv-text-light); border-radius:8px; font-size:10px; font-weight:700; padding:1px 5px; }
+        .kv-gallery-tab.active .kv-gallery-badge { background:rgba(147,51,255,.1); color:var(--gz-purple); }
+        .kv-gallery-body { flex:1; overflow-y:auto; padding:12px 16px calc(env(safe-area-inset-bottom,0px) + 16px); }
+        .kv-gallery-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:3px; }
+        .kv-gallery-cell { aspect-ratio:1; border-radius:8px; overflow:hidden; cursor:pointer; position:relative; background:#f0f0f0; }
+        .kv-gallery-cell img,.kv-gallery-cell video { width:100%; height:100%; object-fit:cover; display:block; }
+        .kv-gallery-cell:active img,.kv-gallery-cell:active video { transform:scale(.96); }
+        .kv-gallery-vid-badge { position:absolute; bottom:5px; right:6px; background:rgba(0,0,0,.55); color:#fff; border-radius:4px; font-size:10px; padding:1px 5px; font-weight:600; }
+        .kv-gallery-play-icon { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+        .kv-gallery-play-icon i { width:32px; height:32px; background:rgba(255,255,255,.85); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; color:#333; }
+        .kv-gallery-list { display:flex; flex-direction:column; gap:8px; }
+        .kv-gallery-audio-row { display:flex; align-items:center; gap:12px; padding:10px 12px; background:#f8f8f8; border-radius:12px; }
+        .kv-gallery-audio-play { width:38px; height:38px; border-radius:50%; background:var(--kv-primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; border:none; cursor:pointer; flex-shrink:0; }
+        .kv-gallery-audio-info { flex:1; min-width:0; }
+        .kv-gallery-audio-name { font-size:13px; font-weight:600; color:var(--kv-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .kv-gallery-audio-meta { font-size:11px; color:var(--kv-text-light); margin-top:1px; }
+        .kv-gallery-audio-dl { width:32px; height:32px; border-radius:50%; background:rgba(0,149,246,.1); color:var(--kv-primary); border:none; display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer; flex-shrink:0; }
+        .kv-gallery-file-row { display:flex; align-items:center; gap:12px; padding:10px 12px; background:#f8f8f8; border-radius:12px; cursor:pointer; }
+        .kv-gallery-file-icon { width:40px; height:40px; border-radius:10px; background:rgba(0,149,246,.1); color:var(--kv-primary); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+        .kv-gallery-file-info { flex:1; min-width:0; }
+        .kv-gallery-file-name { font-size:13px; font-weight:600; color:var(--kv-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .kv-gallery-file-meta { font-size:11px; color:var(--kv-text-light); margin-top:1px; }
+        .kv-gallery-file-dl { width:32px; height:32px; border-radius:50%; background:rgba(0,149,246,.1); color:var(--kv-primary); border:none; display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer; }
+        .kv-gallery-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 20px; color:var(--kv-text-light); text-align:center; gap:8px; }
+        .kv-gallery-empty i { font-size:40px; opacity:.4; }
+
+        /* ── Delete modal ── */
+        .kv-delete-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:2001; align-items:center; justify-content:center; animation:kvOverlayIn .2s ease; }
+        @keyframes kvOverlayIn { from{opacity:0} to{opacity:1} }
+        .kv-delete-content { background:#fff; border-radius:20px; padding:28px 24px 20px; max-width:300px; width:90%; text-align:center; animation:kvModalPop .25s cubic-bezier(.25,.46,.45,.94); overflow:hidden; position:relative; }
+        .kv-delete-content::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--kv-danger); }
+        .kv-delete-title { font-size:17px; font-weight:800; margin-bottom:8px; color:var(--kv-text); }
+        .kv-delete-msg { font-size:14px; color:var(--kv-text-light); margin-bottom:24px; line-height:1.5; }
+        .kv-delete-btns { display:flex; gap:10px; }
+        .kv-delete-btn { padding:11px 20px; border-radius:24px; cursor:pointer; font-size:14px; font-weight:700; border:none; flex:1; transition:opacity .15s, transform .1s; }
+        .kv-delete-btn:active { transform:scale(.97); }
+        .kv-delete-cancel { background:#f0f0f5; color:var(--kv-text); }
+        .kv-delete-cancel:hover { background:#e8e8f0; }
+        .kv-delete-confirm { background:var(--kv-danger); color:#fff; box-shadow:0 3px 12px rgba(237,73,86,.35); }
+        .kv-delete-confirm:hover { opacity:.88; }
+
+        /* ── Copy toast ── */
+        .kv-toast { position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; padding:10px 22px; border-radius:24px; font-size:13px; font-weight:600; z-index:1003; display:none; animation:kvSlideUp .3s ease; border:1px solid rgba(147,51,255,.3); box-shadow:0 4px 20px rgba(0,0,0,.3); letter-spacing:.2px; }
+
+        /* ── Flash highlight ── */
+        .kv-flash { animation:kvFlash 2s ease; }
+        @keyframes kvFlash { 0%{background-color:rgba(147,51,255,.15)} 100%{background-color:transparent} }
+
+        /* ── Emoji burst particles ── */
+        .kv-emoji-particle { position:fixed; pointer-events:none; z-index:99999; font-size:20px; line-height:1; user-select:none; will-change:transform,opacity; transform-origin:center center; }
+
+        /* ── Shared modal overlay & card ── */
+        .kf-modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.65); z-index:2000; display:none; justify-content:center; align-items:center; padding:20px; backdrop-filter:blur(4px); animation:kvOverlayIn .2s ease; }
+        .kf-modal { background:#fff; width:100%; max-width:400px; border-radius:20px; overflow:hidden; animation:kvModalPop .25s cubic-bezier(.25,.46,.45,.94); max-height:88vh; display:flex; flex-direction:column; }
+        @keyframes kvModalPop { from{transform:translateY(18px) scale(.97);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
+
+        /* Modal header: gradient top stripe + centered title */
+        .kf-modal-header {
+            padding:16px;
+            border-bottom:1px solid #f0f0f5;
+            text-align:center;
+            font-weight:800;
+            font-size:15px;
+            color:var(--kv-text);
+            position:relative;
+            letter-spacing:-.1px;
+        }
+        .kf-modal-header::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--gz-grad); }
+        .kf-modal-close {
+            position:absolute; right:14px; top:50%; transform:translateY(-50%);
+            color:var(--gz-purple); cursor:pointer; font-size:13px; font-weight:700;
+            border:none; background:none; padding:4px 8px; border-radius:12px;
+            transition:background .15s;
+        }
+        .kf-modal-close:hover { background:rgba(147,51,255,.08); }
+
+        .kf-modal-body { padding:20px; overflow-y:auto; flex:1; }
+
+        /* Channel info section */
+        .kf-info-section { display:flex; flex-direction:column; align-items:center; margin-bottom:20px; }
+        .kf-large-avatar {
+            width:88px; height:88px; border-radius:50%; object-fit:cover; margin-bottom:12px;
+            box-shadow:0 0 0 3px #fff, 0 0 0 5px var(--gz-purple);
+        }
+        .kf-info-name { font-size:18px; font-weight:800; color:var(--kv-text); margin-bottom:4px; }
+        .kf-info-subs { font-size:13px; color:var(--kv-text-light); font-weight:500; }
+
+        /* Form fields inside modal */
+        .kf-form-group { margin-bottom:16px; }
+        .kf-form-group label { display:block; font-size:11px; color:var(--kv-text-light); font-weight:700; text-transform:uppercase; margin-bottom:6px; letter-spacing:.6px; }
+        .kf-form-input {
+            width:100%; padding:10px 12px;
+            border:1.5px solid #e8e8f0; border-radius:10px;
+            font-size:14px; outline:none; font-family:inherit;
+            background:#fafafa; color:var(--kv-text);
+            transition:border-color .2s, background .2s;
+        }
+        .kf-form-input:focus { border-color:var(--gz-purple); background:#fff; }
+
+        /* Submit button: gradient pill */
+        .kf-submit-btn {
+            width:100%; background:var(--gz-grad-cool); color:#fff;
+            padding:12px; border:none; border-radius:24px; font-weight:800;
+            cursor:pointer; margin-top:10px; font-size:14px;
+            box-shadow:0 3px 14px rgba(147,51,255,.3);
+            transition:opacity .2s, transform .1s;
+        }
+        .kf-submit-btn:hover { opacity:.88; transform:translateY(-1px); }
+        .kf-submit-btn:active { transform:scale(.98); }
+
+        /* ── Member list ── */
+        .member-item { display:flex; align-items:center; padding:12px 0; border-bottom:1px solid #f5f5fa; position:relative; }
+        .member-item:last-child { border-bottom:none; }
+        .member-avatar { width:44px; height:44px; border-radius:50%; object-fit:cover; margin-right:12px; }
+        .member-info { flex:1; min-width:0; }
+        .member-name { font-size:14px; font-weight:600; color:var(--kv-text); text-decoration:none; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .member-name:hover { color:var(--gz-purple); }
+        /* Gen Z owner/admin badge */
+        .admin-badge {
+            font-size:10px; padding:2px 8px; border-radius:20px;
+            margin-left:6px; font-weight:700; letter-spacing:.2px;
+            background:var(--gz-grad-cool); color:#fff;
+        }
+        .member-dropdown { position:relative; }
+        .member-dots-btn { background:none; border:none; font-size:18px; color:var(--kv-text-light); cursor:pointer; padding:5px 10px; border-radius:50%; transition:background .15s, color .15s; }
+        .member-dots-btn:hover { background:rgba(147,51,255,.08); color:var(--gz-purple); }
+        .member-dropdown-content {
+            display:none; position:absolute; right:0; top:100%;
+            background:#fff; box-shadow:0 6px 24px rgba(0,0,0,.12);
+            border-radius:14px; z-index:100; min-width:148px; overflow:hidden;
+            border:1px solid #f0f0f5;
+            animation:kvModalPop .18s cubic-bezier(.25,.46,.45,.94);
+        }
+        .member-dropdown-content.show { display:block; }
+        .member-dropdown-content button {
+            width:100%; text-align:left; background:none; border:none;
+            padding:12px 16px; font-size:13px; font-weight:500; cursor:pointer;
+            color:var(--kv-text); border-bottom:1px solid #f5f5fa;
+            transition:background .15s;
+        }
+        .member-dropdown-content button:last-child { border-bottom:none; }
+        .member-dropdown-content button:hover { background:#f8f7ff; color:var(--gz-purple); }
+        .member-dropdown-content button.danger { color:var(--kv-danger); }
+        .member-dropdown-content button.danger:hover { background:#fff5f5; color:var(--kv-danger); }
+
+        /* ── Gallery audio/file rows ── */
+        .kv-gallery-audio-play { width:38px; height:38px; border-radius:50%; background:var(--gz-grad-cool); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; border:none; cursor:pointer; flex-shrink:0; box-shadow:0 2px 8px rgba(147,51,255,.3); }
+        .kv-gallery-audio-dl { width:32px; height:32px; border-radius:50%; background:rgba(147,51,255,.1); color:var(--gz-purple); border:none; display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer; flex-shrink:0; }
+        .kv-gallery-file-icon { width:40px; height:40px; border-radius:12px; background:rgba(147,51,255,.08); color:var(--gz-purple); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+        .kv-gallery-file-dl { width:32px; height:32px; border-radius:50%; background:rgba(147,51,255,.1); color:var(--gz-purple); border:none; display:flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer; }
+        .kv-gallery-empty i { font-size:40px; background:var(--gz-grad); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; opacity:1 !important; }
+
+        /* ── Emoji picker ── */
+        .kv-emoji-picker { position:fixed; bottom:0; left:0; right:0; z-index:1001; display:none; border-radius:24px 24px 0 0; background:#fff; box-shadow:0 -4px 24px rgba(147,51,255,.12); flex-direction:column; height:300px; }
+        .kv-emoji-picker::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:24px 24px 0 0; background:var(--gz-grad); }
+        .kv-emoji-tabs { display:flex; overflow-x:auto; scrollbar-width:none; padding:12px 8px 4px; gap:2px; flex-shrink:0; border-bottom:1px solid #f0f0f0; }
+        .kv-emoji-tabs::-webkit-scrollbar { display:none; }
+        .kv-emoji-tab { width:34px; height:34px; border-radius:10px; border:none; background:transparent; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background .15s; }
+        .kv-emoji-tab.active { background:rgba(147,51,255,.1); }
+        .kv-emoji-search { padding:6px 10px; flex-shrink:0; }
+        .kv-emoji-search input { width:100%; padding:7px 14px; border:1.5px solid #e8e8f0; border-radius:20px; font-size:13px; outline:none; background:#fafafa; transition:border-color .2s; }
+        .kv-emoji-search input:focus { border-color:var(--gz-purple); background:#fff; }
+        .kv-emoji-scroll { flex:1; overflow-y:auto; padding:4px 8px 8px; }
+        .kv-emoji-grid { display:grid; grid-template-columns:repeat(8,1fr); gap:2px; }
+        .kv-emoji-item { width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer; border-radius:8px; transition:background .15s; }
+        .kv-emoji-item:hover { background:rgba(147,51,255,.08); }
+    </style>
+</head>
+<body>
+<div class="kv-container">
+
+    <!-- Progress bar -->
+    <div class="kv-progress-bar-wrap" id="kvProgressWrap"><div class="kv-progress-bar-fill" id="kvProgressFill"></div></div>
+
+    <!-- Header -->
+    <header class="kv-header" id="kvHeader">
+        <button class="kv-back-btn" onclick="window.history.back()"><i class="fas fa-chevron-left"></i></button>
+        <div class="kv-header-info" onclick="openModal('infoModal')">
+            <img src="{{ channel.image.url }}" class="kv-header-avatar" alt="">
+            <div class="kv-header-details">
+                <h3>{{ channel.channel_name }}</h3>
+                <div class="kv-header-sub">
+                    <span id="kvTypingIndicator" class="kv-header-typing"></span>
+                    <span id="kvMemberCount">{{ channel.subscriber.count }} members</span>
+                </div>
+            </div>
+        </div>
+        <button class="kv-icon-btn" onclick="kvOpenGallery()" title="Shared media"><i class="fas fa-photo-film"></i></button>
+        <button class="kv-icon-btn" onclick="openModal('membersModal')" title="Members"><i class="fas fa-info-circle"></i></button>
+
+        <!-- Sliding action bar (shown on long-press / message select) -->
+        <div class="kv-action-bar" id="kvActionBar">
+            <button class="kv-action-bar-close" onclick="kvDismissActionBar()"><i class="fas fa-times"></i></button>
+            <span class="kv-action-bar-preview" id="kvActionBarPreview"></span>
+            <div class="kv-action-bar-btns">
+                <button class="kv-action-bar-btn" onclick="kvActionReact()" title="React"><i class="far fa-smile"></i></button>
+                <button class="kv-action-bar-btn" onclick="kvActionReply()" title="Reply"><i class="fas fa-reply"></i></button>
+                <button class="kv-action-bar-btn" onclick="kvActionCopy()" title="Copy"><i class="fas fa-copy"></i></button>
+                <button class="kv-action-bar-btn danger" id="kvActionDeleteBtn" onclick="kvActionDelete()" title="Delete"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Messages -->
+    <main class="kv-messages" id="kvMessages">
+        {% for label, msgs in grouped_messages.items %}
+            <div class="kv-date-sep"><span>{{ label }}</span></div>
+            {% for message in msgs %}
+            <div id="msg-{{ message.channelmessage_id }}"
+                 class="kv-msg-row {% if message.author == request.user %}outgoing{% else %}incoming{% endif %}"
+                 data-message-id="{{ message.channelmessage_id }}"
+                 data-can-delete="{% if is_admin or message.author == request.user %}true{% else %}false{% endif %}">
+
+                {% if message.author != request.user %}
+                <img class="kv-author-avatar"
+                     src="{% if message.author.profile.picture %}{{ message.author.profile.picture.url }}{% else %}https://placehold.co/28x28/0095f6/FFFFFF?text={{ message.author.username|slice:':1'|upper }}{% endif %}"
+                     alt="{{ message.author.username }}"
+                     onerror="this.src='https://placehold.co/28x28/0095f6/FFFFFF?text={{ message.author.username|slice:':1'|upper }}'">
+                {% endif %}
+
+                <div class="{% if message.author != request.user %}kv-incoming-wrap{% endif %}">
+                    {% if message.author != request.user %}
+                    <a href="{% url 'profile' message.author.username %}" class="kv-sender-name">{{ message.author.username }}</a>
+                    {% endif %}
+
+                    <!-- Reply quote -->
+                    {% if message.reply_to %}
+                    <div class="kv-reply-indicator" onclick="kvScrollToMsg('{{ message.reply_to.channelmessage_id }}')">
+                        <span class="kv-reply-label">{{ message.reply_to.author.username }}</span>
+                        <span class="kv-reply-quote-text">
+                            {% if message.reply_to.file_type == 'image' %}<i class="fas fa-image"></i> Photo
+                            {% elif message.reply_to.file_type == 'video' %}<i class="fas fa-video"></i> Video
+                            {% elif message.reply_to.file_type == 'audio' %}<i class="fas fa-microphone"></i> Audio
+                            {% else %}{{ message.reply_to.message|truncatechars:40 }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    <!-- Bubble -->
+                    {% if message.file %}
+                        {% if message.file_type == 'audio' %}
+                        <!-- Audio: rendered outside has-media bubble so row-level CSS applies correctly -->
+                        <div class="kv-audio-player" data-utc="{{ message.created_at.isoformat }}" onclick="kvOpenMediaModal('{{ message.file.url }}','audio','{{ message.created_at.isoformat }}','{{ message.message|default:'' }}','{{ message.author.username }}','{% if message.author.profile.picture %}{{ message.author.profile.picture.url }}{% endif %}')">
+                            <div class="kv-audio-content">
+                                <button class="kv-audio-play-btn" onclick="event.stopPropagation(); kvToggleAudio(this,'{{ message.channelmessage_id }}')"><i class="fas fa-play"></i></button>
+                                <div class="kv-audio-info">
+                                    <div class="kv-waveform" id="waveform-{{ message.channelmessage_id }}" onclick="event.stopPropagation(); kvWaveformClick(event,'{{ message.channelmessage_id }}')">
+                                        <div class="kv-wave-container" id="wave-container-{{ message.channelmessage_id }}"></div>
+                                    </div>
+                                    <div class="kv-audio-duration" id="duration-{{ message.channelmessage_id }}">0:00</div>
+                                </div>
+                            </div>
+                            <audio src="{{ message.file.url }}" preload="metadata" id="audio-{{ message.channelmessage_id }}"></audio>
+                        </div>
+                        {% if message.message %}<div class="kv-audio-caption">{{ message.message }}</div>{% endif %}
+                        {% else %}
+                        <!-- Image / Video / Document: use has-media bubble wrapper -->
+                        <div class="kv-bubble {% if message.author == request.user %}outgoing{% else %}incoming{% endif %} has-media">
+                            {% if message.file_type == 'image' %}
+                            <div class="kv-img-wrap" onclick="kvOpenMediaModal('{{ message.file.url }}','image','{{ message.created_at.isoformat }}','{{ message.message|default:'' }}','{{ message.author.username }}','{% if message.author.profile.picture %}{{ message.author.profile.picture.url }}{% endif %}')">
+                                <img src="{{ message.file.url }}" alt="" loading="lazy">
+                                {% if message.message %}<div class="kv-msg-text">{{ message.message }}</div>{% endif %}
+                            </div>
+                            {% elif message.file_type == 'video' %}
+                            <div class="kv-video-wrap" onclick="kvOpenMediaModal('{{ message.file.url }}','video','{{ message.created_at.isoformat }}','{{ message.message|default:'' }}','{{ message.author.username }}','{% if message.author.profile.picture %}{{ message.author.profile.picture.url }}{% endif %}')">
+                                <video preload="metadata" id="video-{{ message.channelmessage_id }}"><source src="{{ message.file.url }}"></video>
+                                <div class="kv-video-overlay"><div class="kv-video-play-icon"><i class="fas fa-play"></i></div></div>
+                                {% if message.message %}<div class="kv-msg-text">{{ message.message }}</div>{% endif %}
+                            </div>
+                            {% elif message.file_type == 'document' %}
+                            <div class="kv-bubble {% if message.author == request.user %}outgoing{% else %}incoming{% endif %}" style="max-width:65%">
+                                {% if message.message %}<div class="kv-msg-text">{{ message.message }}</div>{% endif %}
+                                <div class="kv-doc-card" data-url="{{ message.file.url }}" data-filename="{{ message.file.name|default:'' }}" data-utc="{{ message.created_at.isoformat }}"
+                                     onclick="kvOpenDocModal('{{ message.file.url }}','{{ message.file.name|default:'' }}')">
+                                    <div class="kv-doc-icon"><i class="fas fa-file"></i></div>
+                                    <div class="kv-doc-info">
+                                        <div class="kv-doc-name">{{ message.file.name|default:"Document" }}</div>
+                                        <div class="kv-doc-type">FILE</div>
+                                    </div>
+                                    <button class="kv-doc-dl" onclick="event.stopPropagation(); kvDownloadFile('{{ message.file.url }}','{{ message.file.name|default:''}}')"><i class="fas fa-download"></i></button>
+                                </div>
+                                <div class="kv-msg-meta"><span class="kv-msg-time" data-utc="{{ message.created_at.isoformat }}"></span></div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    {% else %}
+                    <!-- Text bubble -->
+                    <div class="kv-bubble {% if message.author == request.user %}outgoing{% else %}incoming{% endif %}">
+                        {% if message.message %}<div class="kv-msg-text" data-full-text="{{ message.message }}">{{ message.message }}</div>{% endif %}
+                        <div class="kv-msg-meta">
+                            <span class="kv-msg-time" data-utc="{{ message.created_at.isoformat }}"></span>
+                        </div>
+                        {% if message.link_preview and message.link_preview.title or message.link_preview and message.link_preview.image %}
+                        <a class="kv-link-preview" href="{{ message.link_preview.url }}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">
+                            {% if message.link_preview.image %}<img class="kv-lp-image" src="{{ message.link_preview.image }}" alt="" onerror="this.style.display='none'">{% endif %}
+                            <div class="kv-lp-body">
+                                {% if message.link_preview.domain %}<div class="kv-lp-domain">{{ message.link_preview.domain }}</div>{% endif %}
+                                {% if message.link_preview.title %}<div class="kv-lp-title">{{ message.link_preview.title }}</div>{% endif %}
+                                {% if message.link_preview.description %}<div class="kv-lp-desc">{{ message.link_preview.description }}</div>{% endif %}
+                            </div>
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Reaction strip -->
+                    <div class="kv-reaction-strip" id="reactions-{{ message.channelmessage_id }}">
+                        {% for emoji, count in message.reactions_summary.items %}
+                        <button class="kv-reaction-badge {% if message.my_reaction == emoji %}mine{% endif %}"
+                                data-emoji="{{ emoji }}"
+                                onclick="kvReactToMessage('{{ message.channelmessage_id }}','{{ emoji }}')">
+                            <span class="badge-emoji">{{ emoji }}</span>
+                            <span class="badge-count">{{ count }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div><!-- end incoming-wrap / fragment -->
+
+                <!-- Desktop hover react button -->
+                <button class="kv-hover-react-btn" title="React" onclick="kvOpenHoverReact(event,'{{ message.channelmessage_id }}')">😊</button>
+            </div>
+            {% endfor %}
+        {% endfor %}
+    </main>
+
+    <!-- Reply preview -->
+    <div id="kvReplyPreview" class="kv-reply-preview">
+        <button class="kv-reply-preview-close" onclick="kvCancelReply()"><i class="fas fa-times"></i></button>
+        <div class="kv-reply-preview-author" id="kvReplyAuthor"></div>
+        <div class="kv-reply-preview-text" id="kvReplyText"></div>
+    </div>
+
+    <!-- Input -->
+    <div class="kv-input-container" id="kvInputContainer">
+        {% if not channel.is_broadcast_only or is_admin %}
+        <!-- Quick reply chips -->
+        <div class="kv-quick-replies" id="kvQuickReplies"></div>
+
+        <!-- Link preview banner -->
+        <div class="kv-input-lp" id="kvInputLp">
+            <img class="kv-input-lp-thumb" id="kvInputLpThumb" src="" alt="">
+            <div class="kv-input-lp-text">
+                <div class="kv-input-lp-domain" id="kvInputLpDomain"></div>
+                <div class="kv-input-lp-title" id="kvInputLpTitle"></div>
+            </div>
+            <button class="kv-input-lp-dismiss" onclick="kvInputLpDismiss()">×</button>
+        </div>
+
+        <div class="kv-input-wrapper">
+            <div class="kv-input-actions">
+                <button type="button" class="kv-input-btn" id="kvEmojiBtn" onclick="kvToggleEmojiPicker(event)" title="Emoji"><i class="far fa-smile"></i></button>
+                <button type="button" class="kv-input-btn" onclick="document.getElementById('kvFileInput').click()" title="Attach"><i class="fas fa-paperclip"></i></button>
+                <button type="button" class="kv-input-btn" id="kvVibeToggle" onclick="kvToggleQuickReplies()" title="Vibe replies"><i class="fas fa-bolt"></i></button>
+            </div>
+            <textarea class="kv-msg-input" id="kvMsgInput" placeholder="say something…" rows="1"></textarea>
+            <button type="button" class="kv-send-btn" id="kvSendBtn" onclick="kvSendMessage()">
+                <i class="fas fa-paper-plane" style="font-size:12px;margin-left:1px;"></i>
+            </button>
+            <button type="button" class="kv-input-btn" id="kvMicBtn" title="Hold to record"
+                    onmousedown="kvStartRecording(event)" onmouseup="kvStopRecording()"
+                    ontouchstart="kvStartRecording(event)" ontouchend="kvStopRecording()">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <input type="file" id="kvFileInput" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt">
+        </div>
+        {% else %}
+        <div class="kv-broadcast-notice"><i class="fas fa-broadcast-tower"></i> admins only can post here</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Recording overlay -->
+<div class="kv-recording-overlay" id="kvRecordingOverlay">
+    <i class="fas fa-microphone kv-recording-pulse"></i>
+    <div>
+        <div style="font-size:14px;font-weight:500;">Recording…</div>
+        <div class="kv-recording-timer" id="kvRecordingTimer">0:00</div>
+        <div style="font-size:12px;opacity:.8;">Release to send</div>
+    </div>
+</div>
+
+<!-- Gallery sheet -->
+<div class="kv-gallery-backdrop" id="kvGalleryBackdrop" onclick="kvCloseGallery()"></div>
+<div class="kv-gallery-sheet" id="kvGallerySheet">
+    <div class="kv-gallery-handle"></div>
+    <div class="kv-gallery-header">
+        <div><span class="kv-gallery-title">Shared Media</span><span class="kv-gallery-count" id="kvGalleryCount"></span></div>
+        <button class="kv-gallery-close" onclick="kvCloseGallery()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="kv-gallery-tabs">
+        <button class="kv-gallery-tab active" data-tab="image" onclick="kvGalleryTab('image')">Photos <span class="kv-gallery-badge" id="kvBadgeImg">0</span></button>
+        <button class="kv-gallery-tab" data-tab="video" onclick="kvGalleryTab('video')">Videos <span class="kv-gallery-badge" id="kvBadgeVid">0</span></button>
+        <button class="kv-gallery-tab" data-tab="audio" onclick="kvGalleryTab('audio')">Audio <span class="kv-gallery-badge" id="kvBadgeAud">0</span></button>
+        <button class="kv-gallery-tab" data-tab="document" onclick="kvGalleryTab('document')">Files <span class="kv-gallery-badge" id="kvBadgeDoc">0</span></button>
+    </div>
+    <div class="kv-gallery-body" id="kvGalleryBody"></div>
+</div>
+
+<!-- Media modal -->
+<div class="kv-media-modal" id="kvMediaModal">
+    <div class="kv-mm-header" id="kvMmHeader">
+        <div class="kv-mm-sender">
+            <img class="kv-mm-avatar" id="kvMmAvatar" src="" alt="">
+            <div>
+                <div class="kv-mm-name" id="kvMmName"></div>
+                <div class="kv-mm-time" id="kvMmTime"></div>
+            </div>
+        </div>
+        <div class="kv-mm-actions">
+            <button class="kv-mm-btn" onclick="kvDownloadModalFile()" title="Download"><i class="fas fa-download"></i></button>
+            <button class="kv-mm-btn" onclick="kvCloseMediaModal()" title="Close"><i class="fas fa-times"></i></button>
+        </div>
+    </div>
+    <div class="kv-mm-body" id="kvMmBody">
+        <img id="kvMmImage" src="" alt="" style="display:none;">
+        <video id="kvMmVideo" controls playsinline style="display:none;"></video>
+        <div id="kvMmAudio" class="kv-mm-audio" style="display:none;">
+            <div class="kv-mm-audio-icon"><i class="fas fa-microphone"></i></div>
+            <div>
+                <div class="kv-mm-audio-title">Voice Message</div>
+                <div class="kv-mm-audio-time" id="kvMmAudioTime">0:00 / 0:00</div>
+            </div>
+            <div class="kv-mm-audio-controls">
+                <button class="kv-mm-skip" onclick="kvAudioSkip(-10)"><i class="fas fa-undo"></i></button>
+                <button class="kv-mm-play-btn" id="kvMmPlayBtn"><i class="fas fa-play"></i></button>
+                <button class="kv-mm-skip" onclick="kvAudioSkip(10)"><i class="fas fa-redo"></i></button>
+            </div>
+            <div class="kv-mm-progress" id="kvMmProgressBar"><div class="kv-mm-progress-fill" id="kvMmProgressFill"></div></div>
+        </div>
+    </div>
+    <div class="kv-mm-footer" id="kvMmFooter" style="display:none;">
+        <div class="kv-mm-caption" id="kvMmCaption"></div>
+    </div>
+</div>
+
+<!-- Reaction picker -->
+<div class="kv-reaction-backdrop" id="kvReactionBackdrop" style="display:none;" onclick="kvCloseReactionPicker()"></div>
+<div class="kv-reaction-picker" id="kvReactionPicker" style="display:none;">
+    <button class="kv-reaction-btn" data-emoji="❤️" onclick="kvPickReaction('❤️')">❤️</button>
+    <button class="kv-reaction-btn" data-emoji="😂" onclick="kvPickReaction('😂')">😂</button>
+    <button class="kv-reaction-btn" data-emoji="😮" onclick="kvPickReaction('😮')">😮</button>
+    <button class="kv-reaction-btn" data-emoji="😢" onclick="kvPickReaction('😢')">😢</button>
+    <button class="kv-reaction-btn" data-emoji="😡" onclick="kvPickReaction('😡')">😡</button>
+    <button class="kv-reaction-btn" data-emoji="👍" onclick="kvPickReaction('👍')">👍</button>
+    <button class="kv-reaction-btn" data-emoji="🔥" onclick="kvPickReaction('🔥')">🔥</button>
+    <button class="kv-reaction-btn" data-emoji="🎉" onclick="kvPickReaction('🎉')">🎉</button>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="kv-delete-modal" id="kvDeleteModal">
+    <div class="kv-delete-content">
+        <div class="kv-delete-title">delete this? 🗑️</div>
+        <div class="kv-delete-msg" id="kvDeleteMsgText">This message will be gone for everyone. No take-backs fr.</div>
+        <div class="kv-delete-btns">
+            <button class="kv-delete-btn kv-delete-cancel" onclick="kvCancelDelete()">nah, keep it</button>
+            <button class="kv-delete-btn kv-delete-confirm" onclick="kvConfirmDelete()">delete it</button>
+        </div>
+    </div>
+</div>
+
+<!-- Copy toast -->
+<div class="kv-toast" id="kvToast">copied ✓</div>
+
+<!-- Emoji picker -->
+<div class="kv-emoji-picker" id="kvEmojiPicker">
+    <div class="kv-emoji-tabs" id="kvEmojiTabs"></div>
+    <div class="kv-emoji-search"><input type="text" id="kvEmojiSearch" placeholder="Search emoji…" oninput="kvSearchEmoji(this.value)"></div>
+    <div class="kv-emoji-scroll"><div class="kv-emoji-grid" id="kvEmojiGrid"></div></div>
+</div>
+
+<!-- Channel info modal -->
+<div class="kf-modal-overlay" id="infoModal" onclick="closeModal('infoModal')">
+    <div class="kf-modal" onclick="event.stopPropagation()">
+        <div class="kf-modal-header">Channel Info <button class="kf-modal-close" onclick="closeModal('infoModal')">Done</button></div>
+        <div class="kf-modal-body">
+            <div class="kf-info-section">
+                <img src="{{ channel.image.url }}" class="kf-large-avatar" alt="">
+                <div class="kf-info-name">{{ channel.channel_name }}</div>
+                <div class="kf-info-subs">{{ channel.subscriber.count }} members</div>
+            </div>
+            {% if is_admin %}
+            <form method="POST" action="{% url 'update_channel' channel.channel_id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="kf-form-group"><label>Channel Name</label><input type="text" name="name" class="kf-form-input" value="{{ channel.channel_name }}" placeholder="e.g. Tech Updates"></div>
+                <div class="kf-form-group"><label>About</label><textarea name="about" class="kf-form-input" rows="3" placeholder="Describe your channel…">{{ channel.about }}</textarea></div>
+                <div class="kf-form-group"><label>Broadcast Mode</label>
+                    <select name="broadcast" class="kf-form-input">
+                        <option value="false" {% if not channel.is_broadcast_only %}selected{% endif %}>Public Chat</option>
+                        <option value="true" {% if channel.is_broadcast_only %}selected{% endif %}>Broadcast Only</option>
+                    </select>
+                </div>
+                <div class="kf-form-group"><label>Update Icon</label><input type="file" name="image" class="kf-form-input" accept="image/*"></div>
+                <button type="submit" class="kf-submit-btn">save changes ✓</button>
+            </form>
+            {% else %}
+            <div class="kf-form-group"><label>About</label><p style="font-size:14px;color:var(--kv-text);line-height:1.5;">{{ channel.about|default:"No description." }}</p></div>
+            <div class="kf-form-group"><label>Owner</label><p style="font-size:14px;font-weight:600;color:var(--kv-text);">@{{ channel.channel_owner.username }}</p></div>
+            <a href="{% url 'follow_channel' channel.channel_id %}" style="display:block;text-align:center;text-decoration:none;padding:12px;border-radius:24px;color:#fff;font-weight:800;margin-top:10px;background:var(--kv-danger);box-shadow:0 3px 12px rgba(237,73,86,.3);font-size:14px;">leave channel 👋</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Members modal -->
+<div class="kf-modal-overlay" id="membersModal" onclick="closeModal('membersModal')">
+    <div class="kf-modal" onclick="event.stopPropagation()">
+        <div class="kf-modal-header">Members 👥 <button class="kf-modal-close" onclick="closeModal('membersModal')">Close</button></div>
+        <div class="kf-modal-body">
+            <!-- Owner -->
+            <div class="member-item" id="member-{{ channel.channel_owner.id }}">
+                <img class="member-avatar" src="{% if channel.channel_owner.profile.picture %}{{ channel.channel_owner.profile.picture.url }}{% else %}https://placehold.co/44x44/0095f6/FFFFFF?text={{ channel.channel_owner.username|slice:':1'|upper }}{% endif %}" alt="">
+                <div class="member-info">
+                    <a href="{% url 'profile' channel.channel_owner.username %}" class="member-name">{{ channel.channel_owner.username }} <span class="admin-badge">Owner</span></a>
+                </div>
+            </div>
+            {% for member in channel.subscriber.all %}
+                {% if member != channel.channel_owner %}
+                <div class="member-item" id="member-{{ member.id }}">
+                    <img class="member-avatar" src="{% if member.profile.picture %}{{ member.profile.picture.url }}{% else %}https://placehold.co/44x44/0095f6/FFFFFF?text={{ member.username|slice:':1'|upper }}{% endif %}" alt="">
+                    <div class="member-info">
+                        <a href="{% url 'profile' member.username %}" class="member-name">
+                            {{ member.username }}
+                            {% if channel.admins.all|length %}{% for a in channel.admins.all %}{% if a == member %}<span class="admin-badge">Admin</span>{% endif %}{% endfor %}{% endif %}
+                        </a>
+                    </div>
+                    {% if is_admin %}
+                    <div class="member-dropdown">
+                        <button class="member-dots-btn" onclick="kvToggleMemberDropdown(event,{{ member.id }})"><i class="fas fa-ellipsis-v"></i></button>
+                        <div class="member-dropdown-content" id="dropdown-{{ member.id }}">
+                            {% if is_owner %}<button onclick="kvToggleAdmin({{ member.id }})">Toggle Admin</button>{% endif %}
+                            <button onclick="kvManageMember('remove',{{ member.id }})">Remove</button>
+                            <button class="danger" onclick="kvManageMember('block',{{ member.id }})">Block</button>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+    const csrftoken   = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const channelId   = '{{ channel_id }}';
+    const currentUser = '{{ request.user.username }}';
+    const isAdmin     = '{{ is_admin }}' === 'True';
+    const isOwner     = '{{ is_owner }}' === 'True';
+
+    const kvMessages     = document.getElementById('kvMessages');
+    const kvMsgInput     = document.getElementById('kvMsgInput');
+    const kvSendBtn      = document.getElementById('kvSendBtn');
+    const kvMicBtn       = document.getElementById('kvMicBtn');
+    const kvFileInput    = document.getElementById('kvFileInput');
+
+    let replyToId = null;
+    let selectedMsgId  = null;
+    let selectedMsgRow = null;
+    let selectedMsgText = '';
+    let selectedCanDelete = false;
+
+    let socket = null;
+    let typingTimeout = null;
+    let isTypingSent  = false;
+
+    let mediaRecorder = null;
+    let audioChunks   = [];
+    let recordingTimer = null;
+    let secondsElapsed = 0;
+    let isRecording   = false;
+
+    let currentlyPlayingAudio = null;
+    let currentModalFileUrl   = '';
+    let modalAudioEl          = null;
+    let kvGalleryActiveTab    = 'image';
+    let autoScroll            = true;
+
+    let longPressTimer = null;
+    let isLongPress    = false;
+    const LP_DURATION  = 480;
+
+    let fileToUpload  = null;
+    let isUploading   = false;
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    const scrollToBottom = () => { kvMessages.scrollTop = kvMessages.scrollHeight; };
+
+    function showProgress(pct) {
+        const w = document.getElementById('kvProgressWrap');
+        const f = document.getElementById('kvProgressFill');
+        w.style.display = 'block'; f.style.width = pct + '%';
+    }
+    function hideProgress() {
+        document.getElementById('kvProgressWrap').style.display = 'none';
+        document.getElementById('kvProgressFill').style.width = '0%';
+    }
+
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function kvScrollToMsg(id) {
+        const el = document.querySelector(`[data-message-id="${id}"]`);
+        if (el) { el.scrollIntoView({behavior:'smooth',block:'center'}); el.classList.add('kv-flash'); setTimeout(()=>el.classList.remove('kv-flash'),2000); }
+    }
+
+    function formatTime(sec) {
+        if (!isFinite(sec)) return '0:00';
+        const m = Math.floor(sec/60), s = Math.floor(sec%60);
+        return `${m}:${s.toString().padStart(2,'0')}`;
+    }
+
+    function kvFormatUtc(iso) {
+        if (!iso) return '';
+        const normalized = iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z';
+        const d = new Date(normalized);
+        if (isNaN(d.getTime())) return iso;
+        let h = d.getHours(), m = d.getMinutes().toString().padStart(2,'0');
+        const ap = h >= 12 ? 'PM' : 'AM';
+        h = h % 12 || 12;
+        return `${h}:${m} ${ap}`;
+    }
+
+    function kvInitTimestamps() {
+        document.querySelectorAll('.kv-msg-time[data-utc]').forEach(el => {
+            el.textContent = kvFormatUtc(el.dataset.utc);
+        });
+    }
+
+    function kvShowToast(msg) {
+        const t = document.getElementById('kvToast');
+        t.textContent = msg || 'Done';
+        t.style.display = 'block';
+        setTimeout(()=>{ t.style.display='none'; }, 2000);
+    }
+
+    // ── Read more ──────────────────────────────────────────────────────────────
+    function kvInitReadMore(ctx) {
+        (ctx||document).querySelectorAll('.kv-msg-text[data-full-text]').forEach(el => {
+            if (el.querySelector('.kv-read-more')) return;
+            const text = el.dataset.fullText || el.textContent;
+            if (text.length <= 300) return;
+            el.classList.add('collapsed');
+            const btn = document.createElement('span');
+            btn.className = 'kv-read-more';
+            btn.textContent = 'Read more';
+            btn.onclick = e => {
+                e.stopPropagation();
+                const collapsed = el.classList.toggle('collapsed');
+                btn.textContent = collapsed ? 'Read more' : 'Read less';
+            };
+            el.parentElement.appendChild(btn);
+        });
+    }
+
+    // ── Input visibility ───────────────────────────────────────────────────────
+    function kvUpdateInput() {
+        const has = kvMsgInput.value.trim().length > 0 || (fileToUpload != null);
+        kvSendBtn.style.display = has ? 'flex' : 'none';
+        kvMicBtn.style.display  = has ? 'none'  : 'flex';
+    }
+
+    kvMsgInput && kvMsgInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
+        kvUpdateInput();
+        kvHandleTyping();
+        kvHandleLinkPreview(this.value);
+    });
+    kvFileInput && kvFileInput.addEventListener('change', () => {
+        fileToUpload = kvFileInput.files[0] || null;
+        kvUpdateInput();
+    });
+    kvMessages && kvMessages.addEventListener('scroll', () => {
+        const {scrollTop,scrollHeight,clientHeight} = kvMessages;
+        autoScroll = scrollTop + clientHeight >= scrollHeight - 100;
+    });
+
+    // ── Typing indicator ───────────────────────────────────────────────────────
+    function kvHandleTyping() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        if (!isTypingSent) {
+            isTypingSent = true;
+            socket.send(JSON.stringify({type:'typing', is_typing:true}));
+        }
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            isTypingSent = false;
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({type:'typing', is_typing:false}));
+            }
+        }, 2500);
+    }
+
+    function kvStopTyping() {
+        clearTimeout(typingTimeout);
+        if (isTypingSent && socket && socket.readyState === WebSocket.OPEN) {
+            isTypingSent = false;
+            socket.send(JSON.stringify({type:'typing', is_typing:false}));
+        }
+    }
+
+    function kvShowTyping(sender, isTyping) {
+        const ind = document.getElementById('kvTypingIndicator');
+        const sub = document.getElementById('kvMemberCount');
+        if (isTyping) {
+            ind.textContent = `${sender} is typing…`;
+            ind.style.display = 'inline';
+            sub.style.display = 'none';
+        } else {
+            ind.style.display = 'none';
+            sub.style.display = 'inline';
+        }
+    }
+
+    // ── WebSocket ──────────────────────────────────────────────────────────────
+    function kvInitWS() {
+        const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+        socket = new WebSocket(`${proto}${location.host}/ws/${channelId}/`);
+        socket.onopen = () => { isTypingSent = false; };
+        socket.onmessage = e => {
+            try { kvHandleWS(JSON.parse(e.data)); } catch(_) {}
+        };
+        socket.onclose = () => {
+            kvShowTyping('', false);
+            setTimeout(kvInitWS, 3000);
+        };
+    }
+
+    function kvHandleWS(data) {
+        if (data.type === 'new_message')      { kvAppendMessage(data); }
+        else if (data.type === 'typing')       { kvShowTyping(data.sender, data.is_typing); }
+        else if (data.type === 'message_deleted') {
+            const el = document.querySelector(`[data-message-id="${data.message_id}"]`);
+            if (el) el.remove();
+        }
+        else if (data.type === 'message_reaction') {
+            const strip = document.getElementById(`reactions-${data.message_id}`);
+            const myBadge = strip ? strip.querySelector('.kv-reaction-badge.mine') : null;
+            const myEmoji = myBadge ? myBadge.dataset.emoji : null;
+            kvRenderReactions(data.message_id, data.reactions, data.user_reaction !== undefined ? data.user_reaction : myEmoji);
+        }
+        else if (data.type === 'unread_update') {
+            socket.send(JSON.stringify({type:'mark_as_read'}));
+        }
+    }
+
+    // ── Append new message ──────────────────────────────────────────────────────
+    function kvAppendMessage(data) {
+        const isOut = data.author === currentUser;
+        const mid   = String(data.message_id || '');
+        const safeAuthor    = String(data.author || '');
+        const safeAvatar    = String(data.author_avatar || '');
+        const safeMsg       = String(data.message || '');
+        const safeFileUrl   = String(data.file_url || '');
+        const safeFileType  = String(data.file_type || '');
+        const safeFileName  = String(data.file_name || '');
+        const safeTime      = String(data.time || '');
+
+        const row = document.createElement('div');
+        row.className = `kv-msg-row ${isOut ? 'outgoing' : 'incoming'}`;
+        row.dataset.messageId = mid;
+        row.dataset.canDelete = (isOut || isAdmin) ? 'true' : 'false';
+
+        let contentTarget = row;
+
+        // Author avatar (incoming)
+        if (!isOut) {
+            const avt = document.createElement('img');
+            avt.className = 'kv-author-avatar';
+            avt.src = safeAvatar || `https://placehold.co/28x28/0095f6/FFFFFF?text=${encodeURIComponent((safeAuthor||'?').charAt(0).toUpperCase())}`;
+            avt.alt = safeAuthor;
+            avt.onerror = function() { this.src = `https://placehold.co/28x28/0095f6/FFFFFF?text=${encodeURIComponent((safeAuthor||'?').charAt(0).toUpperCase())}`; };
+            row.appendChild(avt);
+            const wrap = document.createElement('div');
+            wrap.className = 'kv-incoming-wrap';
+            row.appendChild(wrap);
+            contentTarget = wrap;
+            // Sender name
+            const nameEl = document.createElement('a');
+            nameEl.className = 'kv-sender-name';
+            nameEl.href = `/${safeAuthor}/`;
+            nameEl.textContent = safeAuthor;
+            contentTarget.appendChild(nameEl);
+        }
+
+        // Reply quote
+        if (data.reply_to) {
+            const ri = document.createElement('div');
+            ri.className = 'kv-reply-indicator';
+            if (data.reply_to.message_id) ri.addEventListener('click', () => kvScrollToMsg(data.reply_to.message_id));
+            const rl = document.createElement('span');
+            rl.className = 'kv-reply-label';
+            rl.textContent = data.reply_to.author || '';
+            const qt = document.createElement('span');
+            qt.className = 'kv-reply-quote-text';
+            const ft = data.reply_to.file_type;
+            if (ft === 'image')      qt.innerHTML = '<i class="fas fa-image"></i> Photo';
+            else if (ft === 'video') qt.innerHTML = '<i class="fas fa-video"></i> Video';
+            else if (ft === 'audio') qt.innerHTML = '<i class="fas fa-microphone"></i> Audio';
+            else { const raw = String(data.reply_to.message||''); qt.textContent = raw.length>60 ? raw.slice(0,60)+'…' : raw; }
+            ri.appendChild(rl); ri.appendChild(qt);
+            contentTarget.appendChild(ri);
+        }
+
+        // Bubble
+        const hasText  = safeMsg.trim().length > 0;
+        const hasMedia = safeFileUrl.length > 0;
+
+        if (hasMedia) {
+            const bubble = document.createElement('div');
+            bubble.className = `kv-bubble ${isOut?'outgoing':'incoming'} has-media`;
+
+            if (safeFileType === 'image') {
+                const wrap = document.createElement('div');
+                wrap.className = 'kv-img-wrap';
+                wrap.addEventListener('click', () => kvOpenMediaModal(safeFileUrl,'image',safeTime,safeMsg,safeAuthor,safeAvatar));
+                const img = document.createElement('img');
+                img.src = safeFileUrl; img.alt = '';
+                img.onerror = function() { this.src='https://placehold.co/250x250/ccc/666?text=Image+Error'; };
+                wrap.appendChild(img);
+                if (hasText) { const cap=document.createElement('div'); cap.className='kv-msg-text'; cap.textContent=safeMsg; wrap.appendChild(cap); }
+                bubble.appendChild(wrap); contentTarget.appendChild(bubble);
+
+            } else if (safeFileType === 'video') {
+                const wrap = document.createElement('div');
+                wrap.className = 'kv-video-wrap';
+                wrap.addEventListener('click', () => kvOpenMediaModal(safeFileUrl,'video',safeTime,safeMsg,safeAuthor,safeAvatar));
+                const vid = document.createElement('video');
+                vid.preload='metadata'; vid.id=`video-${mid}`;
+                const src = document.createElement('source'); src.src=safeFileUrl; vid.appendChild(src);
+                const ov = document.createElement('div'); ov.className='kv-video-overlay';
+                ov.innerHTML='<div class="kv-video-play-icon"><i class="fas fa-play"></i></div>';
+                wrap.appendChild(vid); wrap.appendChild(ov);
+                if (hasText) { const cap=document.createElement('div'); cap.className='kv-msg-text'; cap.textContent=safeMsg; wrap.appendChild(cap); }
+                bubble.appendChild(wrap); contentTarget.appendChild(bubble);
+
+            } else if (safeFileType === 'audio') {
+                // Audio must NOT go inside the has-media bubble (it forces background:transparent)
+                // Append directly to contentTarget so row-level CSS (.kv-msg-row.outgoing) applies
+                const audioWrap = document.createElement('div');
+                audioWrap.className = 'kv-audio-player';
+                audioWrap.dataset.utc = safeTime;
+                audioWrap.addEventListener('click', () => kvOpenMediaModal(safeFileUrl,'audio',safeTime,safeMsg,safeAuthor,safeAvatar));
+                const content = document.createElement('div'); content.className='kv-audio-content';
+                const playBtn = document.createElement('button'); playBtn.className='kv-audio-play-btn';
+                playBtn.innerHTML='<i class="fas fa-play"></i>';
+                playBtn.addEventListener('click', e => { e.stopPropagation(); kvToggleAudio(playBtn, mid); });
+                const info = document.createElement('div'); info.className='kv-audio-info';
+                const wf = document.createElement('div'); wf.className='kv-waveform'; wf.id=`waveform-${mid}`;
+                wf.addEventListener('click', e => { e.stopPropagation(); kvWaveformClick(e,mid); });
+                const wc = document.createElement('div'); wc.className='kv-wave-container'; wc.id=`wave-container-${mid}`;
+                wf.appendChild(wc);
+                const dur = document.createElement('div'); dur.className='kv-audio-duration'; dur.id=`duration-${mid}`; dur.textContent='0:00';
+                info.appendChild(wf); info.appendChild(dur);
+                const audioEl = document.createElement('audio'); audioEl.src=safeFileUrl; audioEl.preload='metadata'; audioEl.id=`audio-${mid}`;
+                content.appendChild(playBtn); content.appendChild(info);
+                audioWrap.appendChild(content); audioWrap.appendChild(audioEl);
+                if (hasText) { const cap=document.createElement('div'); cap.className='kv-audio-caption'; cap.textContent=safeMsg; audioWrap.appendChild(cap); }
+                contentTarget.appendChild(audioWrap); // <-- directly to contentTarget, not bubble
+                setTimeout(()=>kvGenerateWaveform(mid), 80);
+                audioEl.addEventListener('loadedmetadata', () => {
+                    const d = document.getElementById(`duration-${mid}`);
+                    if (d) d.textContent = formatTime(audioEl.duration);
+                });
+
+            } else if (safeFileType === 'document') {
+                bubble.classList.remove('has-media');
+                if (hasText) { const td=document.createElement('div'); td.className='kv-msg-text'; td.textContent=safeMsg; bubble.appendChild(td); }
+                const card = document.createElement('div'); card.className='kv-doc-card'; card.dataset.url=safeFileUrl; card.dataset.filename=safeFileName; card.dataset.utc=safeTime;
+                card.addEventListener('click', () => kvOpenDocModal(safeFileUrl, safeFileName));
+                const ext = (safeFileName||safeFileUrl).split('.').pop().toLowerCase();
+                const iconMap={pdf:'fa-file-pdf',doc:'fa-file-word',docx:'fa-file-word',xls:'fa-file-excel',xlsx:'fa-file-excel',ppt:'fa-file-powerpoint',pptx:'fa-file-powerpoint',txt:'fa-file-alt'};
+                const icon=document.createElement('div'); icon.className='kv-doc-icon'; icon.innerHTML=`<i class="fas ${iconMap[ext]||'fa-file'}"></i>`;
+                const info=document.createElement('div'); info.className='kv-doc-info';
+                const nm=document.createElement('div'); nm.className='kv-doc-name'; nm.textContent=safeFileName||safeFileUrl.split('/').pop()||'Document';
+                const tp=document.createElement('div'); tp.className='kv-doc-type'; tp.textContent=ext.toUpperCase()||'FILE';
+                info.appendChild(nm); info.appendChild(tp);
+                const dl=document.createElement('button'); dl.className='kv-doc-dl'; dl.title='Download'; dl.innerHTML='<i class="fas fa-download"></i>';
+                dl.addEventListener('click', e=>{ e.stopPropagation(); kvDownloadFile(safeFileUrl,safeFileName||'file'); });
+                card.appendChild(icon); card.appendChild(info); card.appendChild(dl);
+                const meta=document.createElement('div'); meta.className='kv-msg-meta';
+                const ts=document.createElement('span'); ts.className='kv-msg-time'; ts.textContent=kvFormatUtc(safeTime)||'';
+                meta.appendChild(ts); bubble.appendChild(card); bubble.appendChild(meta);
+                contentTarget.appendChild(bubble);
+            } else {
+                contentTarget.appendChild(bubble);
+            }
+
+        } else if (hasText) {
+            const bubble = document.createElement('div');
+            bubble.className = `kv-bubble ${isOut?'outgoing':'incoming'}`;
+            const td = document.createElement('div'); td.className='kv-msg-text'; td.dataset.fullText=safeMsg; td.textContent=safeMsg;
+            const meta = document.createElement('div'); meta.className='kv-msg-meta';
+            const ts = document.createElement('span'); ts.className='kv-msg-time'; ts.textContent=kvFormatUtc(safeTime)||'';
+            meta.appendChild(ts); bubble.appendChild(td); bubble.appendChild(meta);
+            if (data.link_preview) { const lp=kvBuildLpCard(data.link_preview); if(lp) bubble.appendChild(lp); }
+            contentTarget.appendChild(bubble);
+        }
+
+        // Reaction strip
+        const strip = document.createElement('div');
+        strip.className = 'kv-reaction-strip';
+        strip.id = `reactions-${mid}`;
+        contentTarget.appendChild(strip);
+
+        // Desktop hover react btn
+        const hoverBtn = document.createElement('button');
+        hoverBtn.className = 'kv-hover-react-btn'; hoverBtn.title='React'; hoverBtn.textContent='😊';
+        hoverBtn.addEventListener('click', e => kvOpenHoverReact(e, mid));
+        row.insertBefore(hoverBtn, row.firstChild);
+
+        kvMessages.appendChild(row);
+        kvAttachLongPress(row);
+        kvInitReadMore(row);
+        if (autoScroll) scrollToBottom();
+    }
+
+    // ── Send ────────────────────────────────────────────────────────────────────
+    async function kvSendMessage() {
+        kvStopTyping();
+        const text = kvMsgInput.value.trim();
+        if (!text && !fileToUpload) return;
+
+        kvTriggerEmojiBurst(text);
+
+        if (fileToUpload) {
+            await kvUploadFile(text);
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('message', text);
+        if (replyToId) fd.append('reply_to', replyToId);
+
+        kvMsgInput.value = ''; kvMsgInput.style.height='auto'; kvUpdateInput(); kvCancelReply();
+        kvInputLpDismiss();
+
+        try {
+            await fetch(`/channel_message/${channelId}/`, {method:'POST', headers:{'X-CSRFToken':csrftoken}, body:fd});
+        } catch(e) { console.error(e); }
+    }
+
+    async function kvUploadFile(caption) {
+        showProgress(10); isUploading=true;
+        const fd = new FormData();
+        if (caption) fd.append('message', caption);
+        if (replyToId) fd.append('reply_to', replyToId);
+        fd.append('file_upload', fileToUpload);
+
+        const xhr = new XMLHttpRequest();
+        xhr.upload.addEventListener('progress', ev => {
+            if (ev.lengthComputable) showProgress(10 + Math.floor((ev.loaded/ev.total)*85));
+        });
+        await new Promise((res,rej) => {
+            xhr.onload=res; xhr.onerror=rej;
+            xhr.open('POST', `/channel_message/${channelId}/`);
+            xhr.setRequestHeader('X-CSRFToken', csrftoken);
+            xhr.send(fd);
+        });
+        showProgress(100);
+        setTimeout(()=>{ hideProgress(); isUploading=false; }, 400);
+        fileToUpload=null; kvFileInput.value='';
+        kvMsgInput.value=''; kvMsgInput.style.height='auto'; kvUpdateInput(); kvCancelReply();
+        kvInputLpDismiss();
+    }
+
+    // ── Recording ──────────────────────────────────────────────────────────────
+    async function kvStartRecording(e) {
+        e.preventDefault();
+        if (isUploading) return;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = ev => audioChunks.push(ev.data);
+            mediaRecorder.onstop = kvSendAudio;
+            audioChunks=[]; secondsElapsed=0;
+            isRecording=true;
+            document.getElementById('kvRecordingOverlay').style.display='flex';
+            document.getElementById('kvRecordingTimer').textContent='0:00';
+            kvMicBtn.classList.add('kv-recording-pulse');
+            recordingTimer = setInterval(()=>{
+                secondsElapsed++;
+                document.getElementById('kvRecordingTimer').textContent=`${Math.floor(secondsElapsed/60)}:${(secondsElapsed%60).toString().padStart(2,'0')}`;
+            },1000);
+            mediaRecorder.start();
+        } catch(err) { console.error(err); }
+    }
+
+    function kvStopRecording() {
+        if (!isRecording) return;
+        isRecording=false;
+        clearInterval(recordingTimer);
+        if (mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
+        document.getElementById('kvRecordingOverlay').style.display='none';
+        kvMicBtn.classList.remove('kv-recording-pulse');
+    }
+
+    async function kvSendAudio() {
+        if (!audioChunks.length) return;
+        const blob = new Blob(audioChunks,{type:'audio/webm'});
+        const fd = new FormData();
+        fd.append('file_upload', blob,'rec.webm');
+        if (replyToId) fd.append('reply_to', replyToId);
+        audioChunks=[]; kvCancelReply();
+        showProgress(30);
+        try {
+            await fetch(`/channel_message/${channelId}/`,{method:'POST',headers:{'X-CSRFToken':csrftoken},body:fd});
+        } catch(e) { console.error(e); }
+        showProgress(100); setTimeout(hideProgress,400);
+    }
+
+    // ── Audio playback ──────────────────────────────────────────────────────────
+    function kvGenerateWaveform(id) {
+        const wc = document.getElementById(`wave-container-${id}`);
+        if (!wc) return; wc.innerHTML='';
+        const N=40, centre=N/2;
+        for(let i=0;i<N;i++){
+            const b=document.createElement('div'); b.className='kv-wave-bar';
+            const dist=Math.abs(i-centre)/centre;
+            const h=Math.max(3,(1-dist*.6)*18+(Math.random()*10-5));
+            b.style.height=`${h}px`; wc.appendChild(b);
+        }
+    }
+
+    const kvWaveRAF={};
+    function kvUpdateWaveProgress(id, isPlaying) {
+        if (kvWaveRAF[id]) { cancelAnimationFrame(kvWaveRAF[id]); delete kvWaveRAF[id]; }
+        const wc=document.getElementById(`wave-container-${id}`);
+        if (!wc) return;
+        const bars=wc.querySelectorAll('.kv-wave-bar');
+        if (!isPlaying) { bars.forEach(b=>b.classList.remove('played','current')); return; }
+        const audio=document.getElementById(`audio-${id}`);
+        if (!audio) return;
+        function tick(){
+            if(audio.paused||audio.ended) return;
+            const prog=audio.duration?audio.currentTime/audio.duration:0;
+            const pc=Math.floor(prog*bars.length);
+            bars.forEach((b,i)=>{ if(i<pc){b.classList.add('played');b.classList.remove('current');} else if(i===pc){b.classList.remove('played');b.classList.add('current');} else{b.classList.remove('played','current');} });
+            kvWaveRAF[id]=requestAnimationFrame(tick);
+        }
+        kvWaveRAF[id]=requestAnimationFrame(tick);
+    }
+
+    function kvToggleAudio(btn, id) {
+        const audio = document.getElementById(`audio-${id}`);
+        if (!audio) return;
+        if (currentlyPlayingAudio && currentlyPlayingAudio !== audio) {
+            currentlyPlayingAudio.pause();
+            const prevId = currentlyPlayingAudio.id.replace('audio-','');
+            const prevBtn = document.querySelector(`#waveform-${prevId}`)?.closest('.kv-audio-content')?.querySelector('.kv-audio-play-btn');
+            if (prevBtn) prevBtn.innerHTML='<i class="fas fa-play"></i>';
+            kvUpdateWaveProgress(prevId, false);
+        }
+        if (audio.paused) {
+            audio.play();
+            btn.innerHTML='<i class="fas fa-pause"></i>';
+            currentlyPlayingAudio = audio;
+            kvUpdateWaveProgress(id, true);
+            audio.onended=()=>{ btn.innerHTML='<i class="fas fa-play"></i>'; kvUpdateWaveProgress(id,false); currentlyPlayingAudio=null; };
+            audio.ontimeupdate=()=>{
+                const d=document.getElementById(`duration-${id}`);
+                if(d) d.textContent=formatTime(audio.currentTime);
+            };
+        } else {
+            audio.pause();
+            btn.innerHTML='<i class="fas fa-play"></i>';
+            kvUpdateWaveProgress(id, false);
+        }
+    }
+
+    function kvWaveformClick(e, id) {
+        const audio=document.getElementById(`audio-${id}`);
+        const wc=document.getElementById(`wave-container-${id}`);
+        if (!audio||!wc||!audio.duration) return;
+        const rect=wc.getBoundingClientRect();
+        audio.currentTime=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*audio.duration;
+    }
+
+    // ── Media modal ─────────────────────────────────────────────────────────────
+    function kvOpenMediaModal(url, type, time, caption, name, avatar) {
+        currentModalFileUrl = url;
+        const modal = document.getElementById('kvMediaModal');
+        document.getElementById('kvMmTime').textContent = kvFormatUtc(time) || time || '';
+        document.getElementById('kvMmName').textContent = name || '';
+        const avt = document.getElementById('kvMmAvatar');
+        avt.src=avatar||''; avt.style.display=avatar?'':'none';
+        const cap=document.getElementById('kvMmCaption');
+        const foot=document.getElementById('kvMmFooter');
+        cap.textContent=caption||''; foot.style.display=(caption&&caption.trim())?'':'none';
+        document.getElementById('kvMmImage').style.display='none';
+        document.getElementById('kvMmVideo').style.display='none';
+        document.getElementById('kvMmAudio').style.display='none';
+        if (currentlyPlayingAudio) { currentlyPlayingAudio.pause(); currentlyPlayingAudio=null; }
+        if (modalAudioEl) { modalAudioEl.pause(); modalAudioEl=null; }
+        if (type==='image') {
+            const img=document.getElementById('kvMmImage'); img.src=url; img.style.display='block';
+        } else if (type==='video') {
+            const vid=document.getElementById('kvMmVideo'); vid.src=url; vid.style.display='block'; vid.load();
+        } else if (type==='audio') {
+            document.getElementById('kvMmAudio').style.display='flex';
+            modalAudioEl=new Audio(url); modalAudioEl.preload='metadata';
+            modalAudioEl.addEventListener('loadedmetadata',()=>{ document.getElementById('kvMmAudioTime').textContent=`0:00 / ${formatTime(modalAudioEl.duration)}`; });
+            modalAudioEl.addEventListener('timeupdate',()=>{
+                const pct=(modalAudioEl.currentTime/modalAudioEl.duration)*100;
+                document.getElementById('kvMmAudioTime').textContent=`${formatTime(modalAudioEl.currentTime)} / ${formatTime(modalAudioEl.duration)}`;
+                document.getElementById('kvMmProgressFill').style.width=pct+'%';
+            });
+            modalAudioEl.addEventListener('play',()=>{ document.getElementById('kvMmPlayBtn').innerHTML='<i class="fas fa-pause"></i>'; });
+            modalAudioEl.addEventListener('pause',()=>{ document.getElementById('kvMmPlayBtn').innerHTML='<i class="fas fa-play"></i>'; });
+            modalAudioEl.addEventListener('ended',()=>{ document.getElementById('kvMmPlayBtn').innerHTML='<i class="fas fa-play"></i>'; document.getElementById('kvMmProgressFill').style.width='0%'; });
+        }
+        modal.style.display='flex'; document.body.style.overflow='hidden';
+    }
+
+    document.getElementById('kvMmPlayBtn').addEventListener('click',()=>{ if(modalAudioEl){ modalAudioEl.paused?modalAudioEl.play():modalAudioEl.pause(); } });
+    document.getElementById('kvMmProgressBar').addEventListener('click',function(e){ if(!modalAudioEl||!modalAudioEl.duration) return; const r=this.getBoundingClientRect(); modalAudioEl.currentTime=((e.clientX-r.left)/r.width)*modalAudioEl.duration; });
+
+    function kvAudioSkip(s){ if(modalAudioEl) modalAudioEl.currentTime=Math.max(0,Math.min(modalAudioEl.duration||0,modalAudioEl.currentTime+s)); }
+
+    function kvCloseMediaModal() {
+        document.getElementById('kvMediaModal').style.display='none';
+        const vid=document.getElementById('kvMmVideo'); vid.pause(); vid.src='';
+        document.getElementById('kvMmImage').src='';
+        if (modalAudioEl) { modalAudioEl.pause(); modalAudioEl=null; }
+        document.body.style.overflow=''; currentModalFileUrl='';
+    }
+    document.getElementById('kvMmBody').addEventListener('click',e=>{ if(e.target.id==='kvMmImage'||e.target.id==='kvMmBody') document.getElementById('kvMediaModal').classList.toggle('kv-mm-ui-hidden'); });
+    document.addEventListener('keydown',e=>{ if(document.getElementById('kvMediaModal').style.display==='flex'&&e.key==='Escape') kvCloseMediaModal(); });
+
+    function kvDownloadModalFile() { if(currentModalFileUrl) kvDownloadFile(currentModalFileUrl,'channel-media'); }
+    function kvDownloadFile(url, name) {
+        fetch(url).then(r=>r.blob()).then(blob=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name||'download'; a.click(); URL.revokeObjectURL(a.href); }).catch(()=>{ window.open(url,'_blank'); });
+    }
+
+    // ── Doc modal ───────────────────────────────────────────────────────────────
+    function kvOpenDocModal(url, filename) {
+        window.open(url, '_blank');
+    }
+
+    // ── Link preview build card ─────────────────────────────────────────────────
+    function kvBuildLpCard(lp) {
+        if (!lp || (!lp.title&&!lp.image)) return null;
+        const a=document.createElement('a'); a.className='kv-link-preview'; a.href=lp.url||'#'; a.target='_blank'; a.rel='noopener noreferrer';
+        a.addEventListener('click',e=>e.stopPropagation());
+        if(lp.image){ const img=document.createElement('img'); img.className='kv-lp-image'; img.src=lp.image; img.alt=''; img.onerror=()=>{img.style.display='none';}; a.appendChild(img); }
+        const body=document.createElement('div'); body.className='kv-lp-body';
+        if(lp.domain){ const d=document.createElement('div'); d.className='kv-lp-domain'; d.textContent=lp.domain; body.appendChild(d); }
+        if(lp.title){ const t=document.createElement('div'); t.className='kv-lp-title'; t.textContent=lp.title; body.appendChild(t); }
+        if(lp.description){ const ds=document.createElement('div'); ds.className='kv-lp-desc'; ds.textContent=lp.description; body.appendChild(ds); }
+        a.appendChild(body); return a;
+    }
+
+    // ── Link preview banner ─────────────────────────────────────────────────────
+    let kvLpTimer=null, kvLpLastUrl=null, kvLpDismissed=false;
+    const kvUrlRe=/(https?:\/\/[^\s]{4,})/;
+    function kvHandleLinkPreview(val) {
+        const m=val.match(kvUrlRe);
+        if (!m) { clearTimeout(kvLpTimer); kvLpDismissed=false; kvLpLastUrl=null; kvInputLpHide(); return; }
+        const url=m[1];
+        if (kvLpDismissed||url===kvLpLastUrl) return;
+        clearTimeout(kvLpTimer);
+        kvLpTimer=setTimeout(async()=>{
+            kvLpLastUrl=url;
+            try {
+                const res=await fetch(`/fetch_link_preview/?url=${encodeURIComponent(url)}`);
+                const data=await res.json();
+                if (data.title||data.image) kvInputLpShow({...data, url});
+            } catch(_) {}
+        },750);
+    }
+    function kvInputLpShow(data) {
+        document.getElementById('kvInputLpDomain').textContent=data.domain||'';
+        document.getElementById('kvInputLpTitle').textContent=data.title||data.url;
+        const thumb=document.getElementById('kvInputLpThumb');
+        if(data.image){thumb.src=data.image;thumb.style.display='block';thumb.onerror=()=>{thumb.style.display='none';};}
+        else{thumb.style.display='none';}
+        document.getElementById('kvInputLp').style.display='flex';
+    }
+    function kvInputLpHide() { document.getElementById('kvInputLp').style.display='none'; }
+    function kvInputLpDismiss() { kvLpDismissed=true; kvLpLastUrl=null; kvInputLpHide(); }
+
+    // ── Reply ───────────────────────────────────────────────────────────────────
+    function kvInitiateReply(id) {
+        const row=document.querySelector(`[data-message-id="${id}"]`);
+        if (!row) return;
+        replyToId=id;
+        const nameEl=row.querySelector('.kv-sender-name');
+        const textEl=row.querySelector('.kv-msg-text');
+        document.getElementById('kvReplyAuthor').textContent=nameEl?nameEl.textContent:currentUser;
+        document.getElementById('kvReplyText').textContent=textEl?(textEl.dataset.fullText||textEl.textContent):'Media';
+        document.getElementById('kvReplyPreview').style.display='block';
+        kvMsgInput&&kvMsgInput.focus();
+    }
+    function kvCancelReply() { replyToId=null; document.getElementById('kvReplyPreview').style.display='none'; }
+
+    // ── Action bar (long-press) ─────────────────────────────────────────────────
+    function kvShowActionBar(row) {
+        selectedMsgRow  = row;
+        selectedMsgId   = row.dataset.messageId;
+        selectedCanDelete = row.dataset.canDelete === 'true';
+        const textEl    = row.querySelector('.kv-msg-text');
+        selectedMsgText = textEl ? (textEl.dataset.fullText||textEl.textContent) : '';
+        document.getElementById('kvActionBarPreview').textContent = selectedMsgText.slice(0,60) || 'Media message';
+        document.getElementById('kvActionDeleteBtn').style.display = selectedCanDelete ? 'flex' : 'none';
+        document.getElementById('kvActionBar').classList.add('active');
+        row.querySelector('.kv-bubble')?.classList.add('kv-lp-highlight');
+    }
+    function kvDismissActionBar() {
+        document.getElementById('kvActionBar').classList.remove('active');
+        if (selectedMsgRow) selectedMsgRow.querySelector('.kv-bubble')?.classList.remove('kv-lp-highlight');
+        selectedMsgId=null; selectedMsgRow=null; selectedMsgText='';
+    }
+    function kvActionReact() {
+        if(!selectedMsgId) return;
+        const id  = selectedMsgId;
+        const row = document.querySelector(`[data-message-id="${id}"]`);
+        kvReactionTargetId = id;
+        kvDismissActionBar();
+        if(row) kvShowReactionPicker(row);
+    }
+    function kvActionReply() { if(!selectedMsgId) return; kvInitiateReply(selectedMsgId); kvDismissActionBar(); }
+    function kvActionCopy() {
+        if (!selectedMsgText) return;
+        navigator.clipboard.writeText(selectedMsgText).catch(()=>{
+            const ta=document.createElement('textarea'); ta.value=selectedMsgText; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+        });
+        kvShowToast('Copied to clipboard'); kvDismissActionBar();
+    }
+    function kvActionDelete() {
+        if(!selectedMsgId||!selectedCanDelete) return;
+        document.getElementById('kvActionBar').classList.remove('active');
+        if (selectedMsgRow) selectedMsgRow.querySelector('.kv-bubble')?.classList.remove('kv-lp-highlight');
+        selectedMsgRow = null;
+        document.getElementById('kvDeleteModal').style.display='flex';
+    }
+
+    // ── Long press ─────────────────────────────────────────────────────────────
+    function kvAttachLongPress(row) {
+        let lpT=null, moved=false, startX=0, startY=0;
+        const start=e=>{
+            moved=false;
+            startX=e.touches?e.touches[0].clientX:e.clientX;
+            startY=e.touches?e.touches[0].clientY:e.clientY;
+            lpT=setTimeout(()=>{ if(!moved) kvShowActionBar(row); }, LP_DURATION);
+        };
+        const move=e=>{
+            if (!lpT) return;
+            const dx=Math.abs((e.touches?e.touches[0].clientX:e.clientX)-startX);
+            const dy=Math.abs((e.touches?e.touches[0].clientY:e.clientY)-startY);
+            if(dx>8||dy>8){moved=true;clearTimeout(lpT);lpT=null;}
+        };
+        const end=()=>{ clearTimeout(lpT); lpT=null; };
+        row.addEventListener('touchstart',start,{passive:true});
+        row.addEventListener('touchmove',move,{passive:true});
+        row.addEventListener('touchend',end);
+        row.addEventListener('mousedown',start);
+        row.addEventListener('mousemove',move);
+        row.addEventListener('mouseup',end);
+        row.addEventListener('dblclick',e=>{
+            const bubble=e.target.closest('.kv-bubble');
+            if(bubble){ const row2=bubble.closest('.kv-msg-row'); if(row2) kvShowActionBar(row2); }
+        });
+        row.addEventListener('contextmenu',e=>e.preventDefault());
+    }
+
+    // ── Delete ──────────────────────────────────────────────────────────────────
+    function kvCancelDelete() { document.getElementById('kvDeleteModal').style.display='none'; selectedMsgId=null; }
+    async function kvConfirmDelete() {
+        const id=selectedMsgId;
+        if (!id) return;
+        document.getElementById('kvDeleteModal').style.display='none';
+        showProgress(50);
+        try {
+            const res=await fetch(`/channel/delete-message/${channelId}/${id}/`,{method:'POST',headers:{'X-CSRFToken':csrftoken}});
+            const data=await res.json();
+            if(data.status==='success') { const el=document.querySelector(`[data-message-id="${id}"]`); if(el)el.remove(); }
+            else { alert(data.message||'Failed to delete'); }
+        } catch(e) { alert('Error deleting message'); }
+        showProgress(100); setTimeout(hideProgress,400); selectedMsgId=null;
+    }
+
+    // ── Reactions ───────────────────────────────────────────────────────────────
+    let kvReactionTargetId=null;
+    function kvOpenHoverReact(e, id) { e.stopPropagation(); kvReactionTargetId=id; const row=document.querySelector(`[data-message-id="${id}"]`); if(row) kvShowReactionPicker(row); }
+    function kvShowReactionPicker(row) {
+        const picker=document.getElementById('kvReactionPicker');
+        const backdrop=document.getElementById('kvReactionBackdrop');
+        const strip=row.querySelector('.kv-reaction-strip');
+        const mine=strip?strip.querySelector('.kv-reaction-badge.mine'):null;
+        const myEmoji=mine?mine.dataset.emoji:null;
+        picker.querySelectorAll('.kv-reaction-btn').forEach(b=>b.classList.toggle('active',b.dataset.emoji===myEmoji));
+        picker.style.display='flex'; backdrop.style.display='block';
+        picker.style.animation='none'; picker.offsetHeight; picker.style.animation='';
+        requestAnimationFrame(()=>{
+            const rect=row.getBoundingClientRect();
+            const pw=picker.offsetWidth, ph=picker.offsetHeight;
+            const isSent=row.classList.contains('outgoing'), margin=8;
+            let left=isSent?rect.right-pw:rect.left;
+            left=Math.max(margin,Math.min(left,window.innerWidth-pw-margin));
+            let top=rect.top-ph-12; if(top<margin) top=rect.bottom+12;
+            top=Math.min(top,window.innerHeight-ph-margin);
+            picker.style.left=left+'px'; picker.style.top=top+'px';
+        });
+    }
+    function kvCloseReactionPicker() {
+        document.getElementById('kvReactionPicker').style.display='none';
+        document.getElementById('kvReactionBackdrop').style.display='none';
+        kvReactionTargetId=null;
+    }
+    function kvPickReaction(emoji) { const id=kvReactionTargetId; kvCloseReactionPicker(); if(id) kvReactToMessage(id,emoji); }
+    async function kvReactToMessage(msgId, emoji) {
+        try {
+            const res=await fetch(`/channel/react/${msgId}/`,{method:'POST',headers:{'X-CSRFToken':csrftoken,'Content-Type':'application/json'},body:JSON.stringify({emoji})});
+            const data=await res.json();
+            if(data.status==='success') kvRenderReactions(msgId, data.reactions, data.user_reaction);
+        } catch(e) { console.error(e); }
+    }
+    function kvRenderReactions(msgId, reactions, userReaction) {
+        const strip=document.getElementById(`reactions-${msgId}`);
+        if (!strip) return;
+        strip.innerHTML='';
+        Object.entries(reactions).forEach(([emoji,count])=>{
+            const btn=document.createElement('button');
+            btn.className='kv-reaction-badge'+(emoji===userReaction?' mine':'');
+            btn.dataset.emoji=emoji;
+            btn.addEventListener('click',()=>kvReactToMessage(msgId,emoji));
+            btn.innerHTML=`<span class="badge-emoji">${emoji}</span><span class="badge-count">${count}</span>`;
+            strip.appendChild(btn);
+        });
+    }
+
+    // ── Emoji picker ────────────────────────────────────────────────────────────
+    const kvEmojiCategories=[
+        {icon:'😀',label:'Smileys',emojis:['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉','😊','😇','🥰','😍','🤩','😘','😋','😛','😜','🤪','😝','🤑','🤗','🤔','😐','😑','😶','😏','😒','🙄','😬','😌','😔','😪','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','😵','🤯','🥳','😎','😕','😟','🙁','☹️','😮','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😩','😫','😤','😡','😠','🤬','😈','👿','💀','💩','🤡','👻','👽','🤖']},
+        {icon:'👋',label:'People',emojis:['👋','🤚','🖐️','✋','🖖','👌','✌️','🤞','🤟','🤘','👈','👉','👆','👇','☝️','👍','👎','✊','👊','👏','🙌','🤲','🤝','🙏','💪','👀','👅','👄','💋','👶','🧒','👦','👧','🧑','👱','👨','👩','🧓','👴','👵','🙍','🙎','🙅','🙆','💁','🙋','🙇','🤦','🤷','👮','💂','👷','🤴','👸','👳','👲','🧕','🤵','👰','🤰','👼','🎅','🤶','🦸','🦹','🧙','🧝','🧛','🧟','🧜','🧚','👫','👬','👭','💏','💑','👪']},
+        {icon:'🐶',label:'Animals',emojis:['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🐢','🐍','🦎','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🐈','🐓','🦃','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔']},
+        {icon:'🍕',label:'Food',emojis:['🍎','🍊','🍋','🍌','🍉','🍇','🍓','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥒','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🧀','🥚','🍳','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🥪','🌮','🌯','🥗','🥘','🥫','🍝','🍜','🍲','🍣','🍱','🥟','🍤','🍙','🍚','🍘','🍥','🥮','🍢','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🍵','☕','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🍾']},
+        {icon:'⚽',label:'Sports',emojis:['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱','🏓','🏸','🥍','🏒','🏏','⛳','🎣','🤿','🎽','🎿','🛷','🥌','🎯','🏋️','🤼','🤸','⛹️','🏄','🚣','🧗','🚵','🚴','🏆','🥇','🥈','🥉','🏅','🎖️','🎭','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🎷','🎺','🎸','🎲','♟️','🎳','🎮','🎰','🧩']},
+        {icon:'🚀',label:'Travel',emojis:['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🛵','🏍️','🚲','🛴','✈️','🚀','🛩️','⛵','🚤','🛥️','🚢','🚂','🚃','🚄','🚅','🚇','🚊','🚝','🚋','🚌','🚐','🚑','🚒','🚓','🚗','🚙','🚛','🚜','🏗️','🌍','🌎','🌏','🗺️','🧭','🏔️','⛰️','🌋','🗻','🏕️','🏖️','🏜️','🏝️','🏞️','🏟️','🏛️','🏘️','🏠','🏡','🏢','🏥','🏦','🏨','🏩','🏪','🏫','🏬','🏭','🏯','🏰','💒','🗼','🗽','⛪','🕌','🕍','🕋']},
+        {icon:'❤️',label:'Symbols',emojis:['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','❤️‍🔥','❤️‍🩹','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉️','☸️','✡️','🔯','🕎','☯️','☦️','🛐','⭕','✅','☑️','✔️','❎','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔺','🔻','💠','🔷','🔹','🔶','🔸']},
+        {icon:'🏁',label:'Flags',emojis:['🏁','🚩','🎌','🏴','🏳️','🏳️‍🌈','🏴‍☠️','🇺🇸','🇬🇧','🇨🇦','🇦🇺','🇳🇬','🇬🇭','🇿🇦','🇧🇷','🇦🇷','🇫🇷','🇩🇪','🇪🇸','🇮🇹','🇵🇹','🇯🇵','🇰🇷','🇨🇳','🇮🇳','🇷🇺','🇲🇽','🇪🇬','🇸🇦','🇵🇭','🇮🇩','🇹🇷','🇵🇱','🇳🇱','🇸🇪','🇳🇴','🇩🇰','🇫🇮','🇨🇭','🇦🇹','🇧🇪','🇬🇷','🇵🇰','🇧🇩','🇻🇳','🇹🇭','🇮🇷','🇮🇶','🇸🇾','🇾🇪','🇱🇾','🇸🇩']}
+    ];
+    let kvEmojiCat=0, kvAllEmojis=[];
+
+    function kvInitEmojiPicker() {
+        kvAllEmojis=kvEmojiCategories.flatMap(c=>c.emojis.map(e=>({emoji:e,cat:c.label})));
+        const tabs=document.getElementById('kvEmojiTabs'); tabs.innerHTML='';
+        kvEmojiCategories.forEach((cat,i)=>{
+            const t=document.createElement('div'); t.className='kv-emoji-tab'+(i===0?' active':'');
+            t.textContent=cat.icon; t.title=cat.label; t.onclick=()=>kvSelectEmojiCat(i); tabs.appendChild(t);
+        });
+        kvRenderEmojiCat(0);
+    }
+    function kvSelectEmojiCat(i) { kvEmojiCat=i; document.getElementById('kvEmojiSearch').value=''; document.querySelectorAll('.kv-emoji-tab').forEach((t,j)=>t.classList.toggle('active',j===i)); kvRenderEmojiCat(i); }
+    function kvRenderEmojiCat(i) {
+        const grid=document.getElementById('kvEmojiGrid'); grid.innerHTML='';
+        kvEmojiCategories[i].emojis.forEach(emoji=>{
+            const el=document.createElement('div'); el.className='kv-emoji-item'; el.textContent=emoji;
+            el.onclick=()=>kvInsertEmoji(emoji); grid.appendChild(el);
+        });
+    }
+    function kvSearchEmoji(q) {
+        const grid=document.getElementById('kvEmojiGrid'); grid.innerHTML='';
+        const lq=q.trim().toLowerCase();
+        const results=lq?kvAllEmojis.filter(e=>e.cat.toLowerCase().includes(lq)||e.emoji.includes(lq)).map(e=>e.emoji):kvEmojiCategories[kvEmojiCat].emojis;
+        document.querySelectorAll('.kv-emoji-tab').forEach(t=>t.classList.toggle('active',!lq));
+        results.forEach(emoji=>{ const el=document.createElement('div'); el.className='kv-emoji-item'; el.textContent=emoji; el.onclick=()=>kvInsertEmoji(emoji); grid.appendChild(el); });
+    }
+    function kvInsertEmoji(emoji) {
+        const inp=kvMsgInput; if(!inp) return;
+        const s=inp.selectionStart||0, e=inp.selectionEnd||0;
+        inp.value=inp.value.slice(0,s)+emoji+inp.value.slice(e);
+        inp.selectionStart=inp.selectionEnd=s+emoji.length;
+        inp.dispatchEvent(new Event('input')); inp.focus();
+    }
+    function kvToggleEmojiPicker(ev) {
+        ev&&ev.stopPropagation();
+        const picker=document.getElementById('kvEmojiPicker');
+        const isOpen=picker.style.display==='flex';
+        picker.style.display=isOpen?'none':'flex';
+        document.getElementById('kvEmojiBtn').classList.toggle('active',!isOpen);
+        if(!isOpen){ document.getElementById('kvEmojiSearch').value=''; kvRenderEmojiCat(kvEmojiCat); }
+    }
+    document.addEventListener('click',e=>{
+        if(!e.target.closest('.kv-emoji-picker')&&!e.target.closest('#kvEmojiBtn')) { document.getElementById('kvEmojiPicker').style.display='none'; document.getElementById('kvEmojiBtn')?.classList.remove('active'); }
+    });
+
+    // ── Emoji burst ─────────────────────────────────────────────────────────────
+    function kvTriggerEmojiBurst(text) {
+        const btn=document.getElementById('kvSendBtn'); if(!btn) return;
+        const re=/(\p{Emoji_Presentation}|\p{Extended_Pictographic})(\u200d(\p{Emoji_Presentation}|\p{Extended_Pictographic})|\uFE0F|\p{Emoji_Modifier})*/gu;
+        const found=text?[...text.matchAll(re)].map(m=>m[0]):null;
+        const emojis=found&&found.length?found:['✨','💬','🔥','💫'];
+        const N=16; const rect=btn.getBoundingClientRect();
+        const ox=rect.left+rect.width/2, oy=rect.top+rect.height/2;
+        btn.style.transform='scale(1.35)'; setTimeout(()=>{btn.style.transform='';},200);
+        for(let i=0;i<N;i++){
+            const emoji=emojis[i%emojis.length];
+            const angle=200+((140/(N-1))*i); const rad=(angle*Math.PI)/180;
+            const speed=3.5+Math.random()*5; const vx=Math.cos(rad)*speed, vy=Math.sin(rad)*speed;
+            const gravity=.18+Math.random()*.1; const rot=(Math.random()-.5)*18; const size=16+Math.random()*10;
+            setTimeout(()=>{
+                const el=document.createElement('div'); el.className='kv-emoji-particle'; el.textContent=emoji; el.style.fontSize=size+'px'; el.style.left=ox+'px'; el.style.top=oy+'px';
+                document.body.appendChild(el);
+                let x=0,y=0,cvx=vx,cvy=vy,rotation=0,opacity=1,frame=0,total=55+Math.floor(Math.random()*20);
+                function animate(){frame++;cvy+=gravity;cvx*=.985;x+=cvx;y+=cvy;rotation+=rot;opacity=frame<total*.6?1:1-((frame-total*.6)/(total*.4)); el.style.transform=`translate(${x}px,${y}px) rotate(${rotation}deg)`; el.style.opacity=Math.max(0,opacity); if(frame<total) requestAnimationFrame(animate); else el.remove(); }
+                requestAnimationFrame(animate);
+            }, i*18);
+        }
+    }
+
+    // ── Quick reply chips ───────────────────────────────────────────────────────
+    const kvVibes=[
+        {emoji:'🔥',label:'Fire',text:"🔥 That's fire!"},
+        {emoji:'😂',label:'LOL',text:'😂 Lmaoo'},
+        {emoji:'💯',label:'100',text:'💯 Facts'},
+        {emoji:'👀',label:'Seen',text:'👀 Omg'},
+        {emoji:'❤️',label:'Love',text:'❤️ Love this'},
+        {emoji:'😭',label:'Dead',text:"😭 I'm dead"},
+        {emoji:'✨',label:'Vibe',text:'✨ Vibes only'},
+        {emoji:'🫶',label:'Support',text:'🫶 I got you'},
+        {emoji:'🤣',label:'Haha',text:'🤣 Hahahaha'},
+        {emoji:'👏',label:'Clap',text:'👏 Say it louder!'},
+        {emoji:'🎉',label:"Let's go",text:"🎉 Let's go!"},
+        {emoji:'💀',label:'Ded',text:"💀 I can't"},
+    ];
+    let kvVibesVisible=false;
+    function kvInitQuickReplies(){
+        const c=document.getElementById('kvQuickReplies'); if(!c) return; c.innerHTML='';
+        kvVibes.forEach(v=>{
+            const chip=document.createElement('button'); chip.type='button'; chip.className='kv-quick-chip';
+            chip.innerHTML=`<span>${v.emoji}</span><span>${v.label}</span>`;
+            chip.addEventListener('click',()=>kvSendChip(chip,v.text));
+            c.appendChild(chip);
+        });
+        c.classList.add('hidden');
+        document.getElementById('kvVibeToggle')?.classList.remove('active');
+    }
+    function kvToggleQuickReplies(){
+        const c=document.getElementById('kvQuickReplies'); if(!c) return;
+        kvVibesVisible=!kvVibesVisible; c.classList.toggle('hidden',!kvVibesVisible);
+        document.getElementById('kvVibeToggle')?.classList.toggle('active',kvVibesVisible);
+    }
+    async function kvSendChip(chip, text) {
+        chip.style.opacity='.6'; setTimeout(()=>{chip.style.opacity='';},400);
+        kvTriggerEmojiBurst(text);
+        const fd=new FormData(); fd.append('message',text);
+        if(replyToId) fd.append('reply_to',replyToId);
+        try { await fetch(`/channel_message/${channelId}/`,{method:'POST',headers:{'X-CSRFToken':csrftoken},body:fd}); kvCancelReply(); } catch(e){console.error(e);}
+    }
+
+    // ── Gallery ────────────────────────────────────────────────────────────────
+    function kvGalleryCollectItems(){
+        const items=[]; const rows=kvMessages.querySelectorAll('.kv-msg-row');
+        rows.forEach(row=>{
+            const mid=row.dataset.messageId||'';
+            const isOut=row.classList.contains('outgoing');
+            const senderName=isOut?currentUser:(row.querySelector('.kv-sender-name')?.textContent||'');
+            const timeEl=row.querySelector('.kv-msg-time'); const time=timeEl?timeEl.dataset.utc||timeEl.textContent:'';
+            const avt=isOut?'':(row.querySelector('.kv-author-avatar')?.src||'');
+            row.querySelectorAll('.kv-img-wrap img').forEach(img=>{ if(!img.src||img.src.includes('placehold.co')) return; const onclick=img.closest('.kv-img-wrap')?.getAttribute('onclick')||''; const parts=onclick.split("'"); const isoTime=parts.length>=4?parts[3]:''; items.push({type:'image',url:img.src,time:isoTime||time,caption:'',sender:senderName,avatar:avt,messageId:mid}); });
+            row.querySelectorAll('.kv-video-wrap video source').forEach(src=>{ if(!src.src) return; const onclick=src.closest('.kv-video-wrap')?.getAttribute('onclick')||''; const parts=onclick.split("'"); const isoTime=parts.length>=4?parts[3]:''; items.push({type:'video',url:src.src,time:isoTime||time,caption:'',sender:senderName,avatar:avt,messageId:mid}); });
+            row.querySelectorAll('.kv-audio-player audio').forEach(au=>{ if(!au.src) return; const utc=au.closest('.kv-audio-player')?.dataset.utc||time; items.push({type:'audio',url:au.src,time:utc,caption:'',sender:senderName,avatar:avt,messageId:mid}); });
+            row.querySelectorAll('.kv-doc-card').forEach(card=>{ const src=card.dataset.url||''; if(!src) return; const fn=card.dataset.filename||src.split('/').pop(); items.push({type:'document',url:src,time:card.dataset.utc||time,caption:'',sender:senderName,avatar:avt,messageId:mid,fileName:fn}); });
+        });
+        return items;
+    }
+    function kvGalleryFormatTime(iso){
+        if(!iso) return ''; const normalized=iso.endsWith('Z')||iso.includes('+')?iso:iso+'Z'; const d=new Date(normalized); if(isNaN(d.getTime())) return iso;
+        const now=new Date(), today=new Date(now.getFullYear(),now.getMonth(),now.getDate()), md=new Date(d.getFullYear(),d.getMonth(),d.getDate()), diff=Math.round((today-md)/86400000);
+        let h=d.getHours(); const m=d.getMinutes().toString().padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12||12;
+        const clock=`${h}:${m} ${ap}`; let day=diff===0?'Today':diff===1?'Yesterday':diff<7?d.toLocaleDateString('en-US',{weekday:'long'}):d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); return `${day} · ${clock}`;
+    }
+    function kvGalleryRender(items){
+        const body=document.getElementById('kvGalleryBody'); body.innerHTML='';
+        const filtered=items.filter(i=>i.type===kvGalleryActiveTab);
+        if(!filtered.length){
+            const e=document.createElement('div'); e.className='kv-gallery-empty';
+            const icons={image:'fa-images',video:'fa-video',audio:'fa-microphone',document:'fa-file'};
+            e.innerHTML=`<i class="fas ${icons[kvGalleryActiveTab]||'fa-images'}"></i><p>No ${kvGalleryActiveTab}s yet</p>`; body.appendChild(e); return;
+        }
+        if(kvGalleryActiveTab==='document'){
+            const list=document.createElement('div'); list.className='kv-gallery-list';
+            filtered.forEach(item=>{
+                const ext=(item.fileName||item.url).split('.').pop().toLowerCase();
+                const iconMap={pdf:'fa-file-pdf',doc:'fa-file-word',docx:'fa-file-word',xls:'fa-file-excel',xlsx:'fa-file-excel',ppt:'fa-file-powerpoint',pptx:'fa-file-powerpoint',txt:'fa-file-alt'};
+                const row=document.createElement('div'); row.className='kv-gallery-file-row';
+                row.innerHTML=`<div class="kv-gallery-file-icon"><i class="fas ${iconMap[ext]||'fa-file'}"></i></div><div class="kv-gallery-file-info"><div class="kv-gallery-file-name">${item.fileName||item.url.split('/').pop()}</div><div class="kv-gallery-file-meta">${item.sender} · ${kvGalleryFormatTime(item.time)}</div></div>`;
+                const dl=document.createElement('button'); dl.className='kv-gallery-file-dl'; dl.innerHTML='<i class="fas fa-download"></i>';
+                dl.addEventListener('click',e=>{e.stopPropagation(); kvDownloadFile(item.url,item.fileName||'file');});
+                row.appendChild(dl); list.appendChild(row);
+            });
+            body.appendChild(list); return;
+        }
+        if(kvGalleryActiveTab==='audio'){
+            const list=document.createElement('div'); list.className='kv-gallery-list';
+            filtered.forEach((item,idx)=>{
+                const row=document.createElement('div'); row.className='kv-gallery-audio-row';
+                const audioEl=document.createElement('audio'); audioEl.src=item.url; audioEl.preload='none'; row.appendChild(audioEl);
+                const playBtn=document.createElement('button'); playBtn.className='kv-gallery-audio-play'; playBtn.innerHTML='<i class="fas fa-play"></i>';
+                playBtn.addEventListener('click',()=>{
+                    if(audioEl.paused){
+                        document.querySelectorAll('.kv-gallery-list audio').forEach(a=>{if(a!==audioEl&&!a.paused){a.pause();const b=a.closest('.kv-gallery-audio-row')?.querySelector('.kv-gallery-audio-play');if(b)b.innerHTML='<i class="fas fa-play"></i>';}});
+                        audioEl.play(); playBtn.innerHTML='<i class="fas fa-pause"></i>'; audioEl.onended=()=>{playBtn.innerHTML='<i class="fas fa-play"></i>';};
+                    } else { audioEl.pause(); playBtn.innerHTML='<i class="fas fa-play"></i>'; }
+                });
+                row.appendChild(playBtn);
+                const info=document.createElement('div'); info.className='kv-gallery-audio-info';
+                info.innerHTML=`<div class="kv-gallery-audio-name">Voice message ${idx+1}</div><div class="kv-gallery-audio-meta">${item.sender} · ${kvGalleryFormatTime(item.time)}</div>`;
+                row.appendChild(info);
+                const dlBtn=document.createElement('button'); dlBtn.className='kv-gallery-audio-dl'; dlBtn.innerHTML='<i class="fas fa-download"></i>';
+                dlBtn.addEventListener('click',e=>{e.stopPropagation(); kvDownloadFile(item.url,`voice-message-${idx+1}.webm`);});
+                row.appendChild(dlBtn); list.appendChild(row);
+            });
+            body.appendChild(list); return;
+        }
+        const grid=document.createElement('div'); grid.className='kv-gallery-grid';
+        filtered.forEach(item=>{
+            const cell=document.createElement('div'); cell.className='kv-gallery-cell';
+            if(item.type==='image'){
+                const img=document.createElement('img'); img.src=item.url; img.alt=''; img.loading='lazy'; cell.appendChild(img);
+                cell.addEventListener('click',()=>{kvCloseGallery(); kvOpenMediaModal(item.url,'image',item.time,item.caption,item.sender,item.avatar);});
+            } else if(item.type==='video'){
+                const vid=document.createElement('video'); vid.src=item.url; vid.preload='metadata'; vid.muted=true; cell.appendChild(vid);
+                const pi=document.createElement('div'); pi.className='kv-gallery-play-icon'; pi.innerHTML='<i class="fas fa-play"></i>'; cell.appendChild(pi);
+                const badge=document.createElement('span'); badge.className='kv-gallery-vid-badge'; badge.textContent='VIDEO'; cell.appendChild(badge);
+                cell.addEventListener('click',()=>{kvCloseGallery(); kvOpenMediaModal(item.url,'video',item.time,item.caption,item.sender,item.avatar);});
+            }
+            grid.appendChild(cell);
+        });
+        body.appendChild(grid);
+    }
+    function kvGalleryUpdateBadges(items){
+        const counts={image:0,video:0,audio:0,document:0};
+        items.forEach(i=>{counts[i.type]=(counts[i.type]||0)+1;});
+        document.getElementById('kvBadgeImg').textContent=counts.image;
+        document.getElementById('kvBadgeVid').textContent=counts.video;
+        document.getElementById('kvBadgeAud').textContent=counts.audio;
+        document.getElementById('kvBadgeDoc').textContent=counts.document;
+        const total=items.length; document.getElementById('kvGalleryCount').textContent=total>0?`${total} item${total!==1?'s':''}`:' ';
+    }
+    function kvGalleryTab(tab){
+        kvGalleryActiveTab=tab;
+        document.querySelectorAll('.kv-gallery-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+        const items=kvGalleryCollectItems(); kvGalleryRender(items);
+    }
+    function kvOpenGallery(){
+        const items=kvGalleryCollectItems(); kvGalleryActiveTab='image';
+        document.querySelectorAll('.kv-gallery-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab==='image'));
+        kvGalleryUpdateBadges(items); kvGalleryRender(items);
+        document.getElementById('kvGalleryBackdrop').classList.add('open');
+        requestAnimationFrame(()=>document.getElementById('kvGallerySheet').classList.add('open'));
+        document.body.style.overflow='hidden';
+    }
+    function kvCloseGallery(){
+        document.getElementById('kvGallerySheet').classList.remove('open');
+        document.getElementById('kvGalleryBackdrop').classList.remove('open');
+        document.body.style.overflow='';
+    }
+
+    // ── Member modal ────────────────────────────────────────────────────────────
+    function kvToggleMemberDropdown(e, id){
+        e.stopPropagation();
+        document.querySelectorAll('.member-dropdown-content').forEach(d=>{if(d.id!==`dropdown-${id}`)d.classList.remove('show');});
+        document.getElementById(`dropdown-${id}`)?.classList.toggle('show');
+    }
+    window.addEventListener('click',()=>{ document.querySelectorAll('.member-dropdown-content').forEach(d=>d.classList.remove('show')); });
+
+    function kvToggleAdmin(uid){
+        fetch(`/channel/toggle-admin/${channelId}/${uid}/`,{method:'POST',headers:{'X-CSRFToken':csrftoken}})
+        .then(r=>r.json()).then(d=>{if(d.success)location.reload();});
+    }
+    function kvManageMember(action, uid){
+        if(!confirm(`Confirm ${action}?`)) return;
+        fetch(`/channel/manage-member/${channelId}/${uid}/`,{method:'POST',headers:{'X-CSRFToken':csrftoken,'Content-Type':'application/json'},body:JSON.stringify({action})})
+        .then(r=>r.json()).then(d=>{if(d.success){document.getElementById(`member-${uid}`)?.remove();}else{alert(d.message||'Error');}});
+    }
+
+    // ── Init ────────────────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+        kvInitTimestamps();
+        kvInitReadMore();
+        scrollToBottom();
+        kvInitQuickReplies();
+        kvInitEmojiPicker();
+        document.querySelectorAll('.kv-msg-row').forEach(row => {
+            kvAttachLongPress(row);
+            // Generate waveforms for pre-rendered audio
+            const wc=row.querySelector('[id^="wave-container-"]');
+            if(wc){ const id=wc.id.replace('wave-container-',''); kvGenerateWaveform(id);
+                const audio=document.getElementById(`audio-${id}`);
+                if(audio) audio.addEventListener('loadedmetadata',()=>{const d=document.getElementById(`duration-${id}`); if(d) d.textContent=formatTime(audio.duration);});
+            }
+        });
+        kvInitWS();
+        // Mark as read
+        if (socket) socket.addEventListener('open',()=>{ setTimeout(()=>{ if(socket.readyState===WebSocket.OPEN) socket.send(JSON.stringify({type:'mark_as_read'})); },500); });
+    });
+
+    // Keyboard send
+    kvMsgInput && kvMsgInput.addEventListener('keydown', e => {
+        if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); kvSendMessage(); }
+    });
+
+    // pagehide offline beacon
+    window.addEventListener('pagehide',()=>{
+        const userId=window.userId; if(!userId||userId==='None') return;
+        const meta=document.querySelector('meta[name="csrf-token"]');
+        const csrf=meta?meta.getAttribute('content'):'';
+        navigator.sendBeacon('/set-offline/',new URLSearchParams({csrfmiddlewaretoken:csrf,user_id:userId}));
+    });
+    window.userId='{{ request.user.id|default:"" }}';
+</script>
+</body>
+</html>

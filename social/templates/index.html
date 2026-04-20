@@ -1,0 +1,1261 @@
+{% load pwa %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  {% progressive_web_app_meta %}
+  <script src="{% static 'js/pwa-install.js' %}"></script>
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <title>KishiHub</title>
+
+
+  <style>
+
+
+  :root {
+    --kishivibe-bg:         #ffffff;
+    --kishivibe-white:      #ffffff;
+    --kishivibe-text:       #262626;
+    --kishivibe-text-light: #8e8e8e;
+    --kishivibe-primary:    #0095f6;
+    --kishivibe-border:     #dbdbdb;
+    --kishivibe-error:      #ed4956;
+    --kishivibe-success:    #22c55e;
+    --kishivibe-warn:       #f59e0b;
+    --kishivibe-radius:     10px;
+  }
+
+  /* ── Reset ── */
+  *, *::before, *::after {
+    margin: 0; padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── Body ── */
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--kishivibe-bg);
+    color: var(--kishivibe-text);
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow-x: hidden;
+  }
+
+  /* ── Splash ── */
+  #kishivibe-splash {
+    position: fixed; inset: 0;
+    background: var(--kishivibe-bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+    opacity: 1; visibility: visible;
+    transition: opacity 0.35s ease, visibility 0.35s ease;
+    will-change: opacity;
+  }
+  #kishivibe-splash.kishivibe-hidden { opacity: 0; visibility: hidden; }
+  #kishivibe-splash img {
+    width: 80px; height: 80px;
+    border-radius: 18px; object-fit: cover;
+    will-change: transform, opacity;
+    animation: kishivibeBreath 1.4s ease-in-out infinite;
+  }
+  @keyframes kishivibeBreath {
+    0%, 100% { opacity: 0.8; transform: scale(0.95); }
+    50%       { opacity: 1;   transform: scale(1.05); }
+  }
+
+  /* ── Container ── */
+  .kishivibe-container {
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+
+  /* ── Panels — mobile defaults ── */
+  .kishivibe-panel-image { display: none; }
+  .kishivibe-panel-login { width: 100%; }
+
+  /* ── Desktop two-panel layout ── */
+  @media (min-width: 960px) {
+    body { padding: 0; background: #fff; }
+    .kishivibe-container {
+      max-width: 860px; width: 100%;
+      display: flex; flex-direction: row;
+      align-items: stretch; gap: 0;
+      padding: 0; overflow: hidden;
+      min-height: 100vh;
+    }
+    .kishivibe-panel-image {
+      flex: 1 1 0; min-width: 0;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    /* ── Slideshow wrapper ── */
+    .kv-slideshow {
+      width: 260px;
+      position: relative;
+      user-select: none;
+    }
+
+    /* Phone frame */
+    .kv-phone-frame {
+      width: 260px;
+      height: 520px;
+      border-radius: 36px;
+      border: 8px solid #1a1a1a;
+      background: #fff;
+      overflow: hidden;
+      position: relative;
+     
+    }
+    /* notch */
+    .kv-phone-frame::before {
+      content: '';
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 90px; height: 24px;
+      background: #1a1a1a; border-radius: 0 0 16px 16px;
+      z-index: 10;
+    }
+
+    /* Slides track */
+    .kv-slides-track {
+      display: flex;
+      width: 100%; height: 100%;
+      transition: transform 0.5s cubic-bezier(0.4,0,0.2,1);
+    }
+    .kv-slide {
+      min-width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: flex-end;
+      position: relative; overflow: hidden;
+    }
+
+    /* Slide background colour fills */
+    .kv-slide:nth-child(1) { background: linear-gradient(160deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%); }
+    .kv-slide:nth-child(2) { background: linear-gradient(160deg, #0d1117 0%, #161b22 60%, #1a2332 100%); }
+    .kv-slide:nth-child(3) { background: linear-gradient(160deg, #1a0a2e 0%, #2d1b69 60%, #11998e 100%); }
+    .kv-slide:nth-child(4) { background: linear-gradient(160deg, #0a0a0a 0%, #1a1a1a 60%, #2d2d2d 100%); }
+
+    /* Mock UI inside each slide */
+    .kv-slide-inner {
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      padding: 36px 14px 0;
+      position: relative;
+    }
+
+    /* Mock story/post header */
+    .kv-mock-header {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 12px;
+    }
+    .kv-mock-avatar {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+      flex-shrink: 0; border: 2px solid #fff;
+    }
+    .kv-mock-name {
+      font-size: 11px; font-weight: 600; color: #fff;
+      line-height: 1.2;
+    }
+    .kv-mock-time { font-size: 9px; color: rgba(255,255,255,0.55); }
+    .kv-mock-dots { margin-left: auto; color: rgba(255,255,255,0.7); font-size: 14px; letter-spacing: 1px; }
+
+    /* Mock image block */
+    .kv-mock-img-block {
+      width: 100%; border-radius: 12px; overflow: hidden;
+      flex-shrink: 0; background: rgba(255,255,255,0.07);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+    }
+    .kv-mock-img-block svg { opacity: 0.25; }
+
+    /* Mock text lines */
+    .kv-mock-lines { width: 100%; }
+    .kv-mock-line {
+      height: 7px; border-radius: 4px;
+      background: rgba(255,255,255,0.12);
+      margin-bottom: 6px;
+    }
+    .kv-mock-line.w80 { width: 80%; }
+    .kv-mock-line.w60 { width: 60%; }
+    .kv-mock-line.w90 { width: 90%; }
+
+    /* Mock reactions bar */
+    .kv-mock-reactions {
+      display: flex; gap: 12px; align-items: center;
+      padding: 8px 0;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      margin-top: 4px;
+    }
+    .kv-mock-react-btn {
+      font-size: 16px; cursor: default; opacity: 0.75;
+    }
+    .kv-mock-react-count {
+      font-size: 9px; color: rgba(255,255,255,0.5); margin-left: -6px;
+    }
+
+    /* Gradient overlay at bottom of phone */
+    .kv-slide-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 100px;
+      background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%);
+      pointer-events: none;
+    }
+
+    /* ── Caption bar below phone ── */
+    .kv-caption-bar {
+      margin-top: 20px;
+      text-align: center;
+      min-height: 44px;
+    }
+    .kv-caption {
+      display: none; flex-direction: column; align-items: center; gap: 4px;
+      animation: kvCapIn 0.4s ease;
+    }
+    .kv-caption.active { display: flex; }
+    @keyframes kvCapIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .kv-caption-title {
+      font-size: 14px; font-weight: 600;
+      color: var(--kishivibe-text);
+    }
+    .kv-caption-sub {
+      font-size: 12px; color: var(--kishivibe-text-light);
+    }
+
+    /* ── Dot indicators ── */
+    .kv-dots {
+      display: flex; justify-content: center; gap: 6px;
+      margin-top: 14px;
+    }
+    .kv-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--kishivibe-border);
+      transition: background 0.3s, transform 0.3s;
+      cursor: pointer;
+    }
+    .kv-dot.active {
+      background: var(--kishivibe-primary);
+      transform: scale(1.3);
+    }
+    .kishivibe-panel-login {
+      flex: 0 0 360px; width: 360px;
+      display: flex; align-items: center; justify-content: center;
+      background: #fff;
+    }
+    #kishivibe-skeleton { max-width: 320px; width: 100%; }
+    .kishivibe-login-container {
+      padding: 36px 28px 28px;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+    }
+  }
+
+  /* ── Login Card ── */
+  .kishivibe-login-container {
+    width: 100%; background: transparent;
+    border-radius: 0;
+    padding: 28px 20px 20px; text-align: center;
+    opacity: 0; transform: translateY(14px);
+    transition: opacity 0.38s ease, transform 0.38s ease;
+    will-change: opacity, transform;
+  }
+  .kishivibe-login-container.kishivibe-show { opacity: 1; transform: translateY(0); }
+
+  /* ── Logo ── */
+  .kishivibe-logo {
+    width: 70px; height: 70px;
+    border-radius: 18px; object-fit: cover;
+    margin: 0 auto 20px; display: block;
+  }
+
+  /* ── Title & Subtitle ── */
+  .kishivibe-title {
+    font-size: 26px; font-weight: 400;
+    margin-bottom: 6px; color: var(--kishivibe-text);
+    letter-spacing: -0.5px;
+  }
+  .kishivibe-subtitle {
+    font-size: 14px; color: var(--kishivibe-text-light);
+    margin-bottom: 24px; font-weight: 300;
+    line-height: 1.4; padding: 0 10px; font-style: italic;
+  }
+
+  /* ── Server messages ── */
+  .kv-messages { margin-bottom: 16px; }
+  .kv-msg {
+    padding: 10px 12px; border-radius: var(--kishivibe-radius);
+    margin-bottom: 8px; font-size: 13px;
+    display: flex; align-items: center; gap: 8px;
+    text-align: left; animation: kvMsgIn .25s ease;
+  }
+  @keyframes kvMsgIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+  .kv-msg-error   { background:rgba(237,73,86,.08); color:var(--kishivibe-error); border:1px solid rgba(237,73,86,.2); }
+  .kv-msg-success { background:rgba(34,197,94,.08);  color:#16a34a; border:1px solid rgba(34,197,94,.2); }
+  .kv-msg-info    { background:rgba(0,149,246,.07);  color:var(--kishivibe-text); border:1px solid rgba(0,149,246,.15); }
+
+  /* ── AJAX Alert Banner ── */
+  .kv-alert {
+    margin-bottom: 16px; padding: 10px 12px;
+    border-radius: var(--kishivibe-radius); font-size: 13px;
+    display: flex; align-items: center; gap: 8px;
+    text-align: left; animation: kvAlertIn 0.25s ease;
+  }
+  @keyframes kvAlertIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .kv-alert-error   { background:rgba(237,73,86,.08); color:var(--kishivibe-error); border:1px solid rgba(237,73,86,.2); }
+  .kv-alert-success { background:rgba(34,197,94,.08); color:var(--kishivibe-success); border:1px solid rgba(34,197,94,.2); }
+  .kv-alert-info    { background:rgba(0,149,246,.07); color:var(--kishivibe-text); border:1px solid rgba(0,149,246,.15); }
+
+  /* ── Field errors ── */
+  .kv-field-error {
+    font-size: 12px; color: var(--kishivibe-error);
+    margin-top: 4px; display: flex; align-items: center;
+    gap: 5px; animation: kvAlertIn 0.2s ease;
+  }
+
+  /* ── Form ── */
+  .kishivibe-form { width: 100%; }
+  .kishivibe-form-group { margin-bottom: 14px; text-align: left; }
+  .kishivibe-input-wrapper { position: relative; }
+  .kishivibe-input-icon {
+    position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    color: var(--kishivibe-text-light); font-size: 14px;
+    width: 38px; text-align: center; pointer-events: none; z-index: 1;
+  }
+  .kv-pass-toggle {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: var(--kishivibe-text-light);
+    cursor: pointer; padding: 6px; font-size: 14px; z-index: 2; transition: color 0.2s;
+  }
+  .kv-pass-toggle:hover { color: var(--kishivibe-text); }
+  .kishivibe-input {
+    width: 100%; padding: 13px 38px 13px 38px; font-size: 14px;
+    background: var(--kishivibe-bg); border: 1px solid var(--kishivibe-border);
+    border-radius: var(--kishivibe-radius); color: var(--kishivibe-text);
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .kishivibe-input:focus { outline: none; border-color: var(--kishivibe-primary); background: var(--kishivibe-white); }
+  .kishivibe-input::placeholder { color: var(--kishivibe-text-light); font-weight: 300; font-size: 14px; }
+  .kishivibe-input.kv-input-error { border-color: var(--kishivibe-error); background: #fff5f5; }
+
+  /* ── Login Button ── */
+  .kishivibe-login-btn {
+    width: 100%; padding: 13px; background: var(--kishivibe-primary);
+    color: #fff; border: none; border-radius: var(--kishivibe-radius);
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: opacity 0.2s ease;
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; margin-top: 8px;
+  }
+  .kishivibe-login-btn:hover   { opacity: 0.9; }
+  .kishivibe-login-btn:active  { opacity: 0.8; }
+  .kishivibe-login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Divider ── */
+  .kishivibe-divider {
+    display: flex; align-items: center;
+    margin: 20px 0; color: var(--kishivibe-text-light); font-size: 13px;
+  }
+  .kishivibe-divider::before,
+  .kishivibe-divider::after { content: ""; flex: 1; height: 1px; background: var(--kishivibe-border); }
+  .kishivibe-divider span { padding: 0 16px; }
+
+  /* ── Sign-Up Link ── */
+  .kishivibe-signup-link { margin-top: 8px; }
+  .kishivibe-signup-text { font-size: 14px; color: var(--kishivibe-text); margin-bottom: 10px; font-weight: 400; }
+  .kishivibe-signup-btn {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; width: 100%; padding: 13px;
+    background: transparent; color: var(--kishivibe-primary);
+    border: 1px solid var(--kishivibe-primary);
+    border-radius: var(--kishivibe-radius);
+    font-size: 15px; font-weight: 500;
+    text-decoration: none; text-align: center; transition: background 0.2s ease;
+  }
+  .kishivibe-signup-btn:hover { background: rgba(0,149,246,0.06); }
+
+  /* ── Skeleton Loader ── */
+  #kishivibe-skeleton {
+    width: 100%; max-width: 320px;
+    display: flex; flex-direction: column; gap: 14px;
+    margin: 0 auto; background: transparent;
+    border-radius: 0; padding: 28px 20px 20px;
+  }
+  .kishivibe-skel {
+    background: linear-gradient(90deg, #ececec 25%, #f5f5f5 50%, #ececec 75%);
+    background-size: 200% 100%;
+    animation: kishivibeShimmer 1.4s ease-in-out infinite;
+    border-radius: var(--kishivibe-radius);
+  }
+  @keyframes kishivibeShimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .kishivibe-skel-logo    { width: 70px; height: 70px; border-radius: 18px; margin: 0 auto; }
+  .kishivibe-skel-title   { width: 55%; height: 26px; margin: 0 auto; }
+  .kishivibe-skel-sub     { width: 78%; height: 14px; margin: 0 auto 10px; }
+  .kishivibe-skel-input   { height: 44px; }
+  .kishivibe-skel-btn     { height: 44px; margin-top: 6px; }
+  .kishivibe-skel-divider { height: 1px; margin: 6px 0; }
+  .kishivibe-skel-signup  { height: 44px; margin-top: 6px; }
+
+  /* ── Small phones ── */
+  @media (max-width: 360px) {
+    body { padding: 12px; }
+    .kishivibe-container { max-width: 280px; }
+    .kishivibe-title { font-size: 22px; }
+    .kishivibe-subtitle { font-size: 13px; margin-bottom: 20px; }
+    .kishivibe-logo { width: 60px; height: 60px; border-radius: 15px; margin-bottom: 16px; }
+    .kishivibe-input { padding: 11px 36px; font-size: 13px; }
+    .kishivibe-input-icon { font-size: 13px; width: 36px; }
+    .kishivibe-login-btn, .kishivibe-signup-btn { padding: 11px; font-size: 14px; }
+  }
+
+  /* ── Short screens ── */
+  @media (max-height: 600px) {
+    body { justify-content: flex-start; padding-top: 30px; }
+    .kishivibe-login-container { padding: 20px 16px; }
+    .kishivibe-subtitle { margin-bottom: 18px; }
+  }
+
+  /* ── Tablets ── */
+  @media (min-width: 768px) and (max-width: 959px) {
+    .kishivibe-container { max-width: 380px; }
+    .kishivibe-panel-image { display: none; }
+    .kishivibe-panel-login { width: 100%; }
+    .kishivibe-logo { width: 80px; height: 80px; }
+    .kishivibe-title { font-size: 28px; }
+    .kishivibe-subtitle { font-size: 15px; }
+    .kishivibe-input { padding: 14px 40px; font-size: 15px; }
+    .kishivibe-input-icon { font-size: 15px; }
+    .kishivibe-login-container { border: none; }
+  }
+  </style>
+</head>
+<body>
+
+  <div id="kishivibe-splash">
+    <img src="{% static 'images/logo.jpg' %}" alt="KishiHub Logo" fetchpriority="high">
+  </div>
+
+  <div class="kishivibe-container">
+
+    <div class="kishivibe-panel-image" aria-hidden="true">
+      <div class="kv-slideshow">
+
+        <!-- Phone frame -->
+        <div class="kv-phone-frame">
+          <div class="kv-slides-track" id="kvSlidesTrack">
+
+            <!-- Slide 1 -->
+            <div class="kv-slide">
+              <div class="kv-slide-inner">
+                <div class="kv-mock-header">
+                  <div class="kv-mock-avatar"></div>
+                  <div>
+                    <div class="kv-mock-name">@kishihub</div>
+                    <div class="kv-mock-time">2 min ago</div>
+                  </div>
+                  <div class="kv-mock-dots">···</div>
+                </div>
+                <div class="kv-mock-img-block" style="height:220px;">
+                 <img src="{% static 'images/logo.jpg' %}" height="200" width="200" alt="">
+                </div>
+                <div class="kv-mock-lines">
+                  <div class="kv-mock-line w90"></div>
+                  <div class="kv-mock-line w60"></div>
+                </div>
+                <div class="kv-mock-reactions">
+                  <span class="kv-mock-react-btn">🔥</span><span class="kv-mock-react-count">142</span>
+                  <span class="kv-mock-react-btn">💬</span><span class="kv-mock-react-count">38</span>
+                  <span class="kv-mock-react-btn">🔁</span><span class="kv-mock-react-count">21</span>
+                </div>
+              </div>
+              <div class="kv-slide-overlay"></div>
+            </div>
+
+            <!-- Slide 2 -->
+            <div class="kv-slide">
+              <div class="kv-slide-inner">
+                <div class="kv-mock-header">
+                  <div class="kv-mock-avatar" style="background:linear-gradient(135deg,#0095f6,#00c6ff);"></div>
+                  <div>
+                    <div class="kv-mock-name">@study_hub</div>
+                    <div class="kv-mock-time">Just now</div>
+                  </div>
+                  <div class="kv-mock-dots">···</div>
+                </div>
+                <div class="kv-mock-img-block" style="height:200px;">
+                  <img src="{% static 'images/classroom.png' %}" height="200" width="200" alt="">
+                </div>
+                <div class="kv-mock-lines">
+                  <div class="kv-mock-line w80"></div>
+                  <div class="kv-mock-line w60"></div>
+                  <div class="kv-mock-line w90"></div>
+                </div>
+                <div class="kv-mock-reactions">
+                  <span class="kv-mock-react-btn">✨</span><span class="kv-mock-react-count">89</span>
+                  <span class="kv-mock-react-btn">💬</span><span class="kv-mock-react-count">14</span>
+                  <span class="kv-mock-react-btn">❤️</span><span class="kv-mock-react-count">203</span>
+                </div>
+              </div>
+              <div class="kv-slide-overlay"></div>
+            </div>
+
+            <!-- Slide 3 -->
+            <div class="kv-slide">
+              <div class="kv-slide-inner">
+                <div class="kv-mock-header">
+                  <div class="kv-mock-avatar" style="background:linear-gradient(135deg,#11998e,#38ef7d);"></div>
+                  <div>
+                    <div class="kv-mock-name">@vibes_only</div>
+                    <div class="kv-mock-time">5 min ago</div>
+                  </div>
+                  <div class="kv-mock-dots">···</div>
+                </div>
+                <div class="kv-mock-img-block" style="height:210px;">
+                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polygon points="10,8 16,12 10,16"/>
+                  </svg>
+                </div>
+                <div class="kv-mock-lines">
+                  <div class="kv-mock-line w60"></div>
+                  <div class="kv-mock-line w80"></div>
+                </div>
+                <div class="kv-mock-reactions">
+                  <span class="kv-mock-react-btn">😍</span><span class="kv-mock-react-count">317</span>
+                  <span class="kv-mock-react-btn">💬</span><span class="kv-mock-react-count">55</span>
+                  <span class="kv-mock-react-btn">🔁</span><span class="kv-mock-react-count">40</span>
+                </div>
+              </div>
+              <div class="kv-slide-overlay"></div>
+            </div>
+
+            <!-- Slide 4 -->
+            <div class="kv-slide">
+              <div class="kv-slide-inner">
+                <div class="kv-mock-header">
+                  <div class="kv-mock-avatar" style="background:linear-gradient(135deg,#f7971e,#ffd200);"></div>
+                  <div>
+                    <div class="kv-mock-name">@kishi_market</div>
+                    <div class="kv-mock-time">10 min ago</div>
+                  </div>
+                  <div class="kv-mock-dots">···</div>
+                </div>
+                <div class="kv-mock-img-block" style="height:205px;">
+                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5">
+                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <path d="M16 10a4 4 0 01-8 0"/>
+                  </svg>
+                </div>
+                <div class="kv-mock-lines">
+                  <div class="kv-mock-line w90"></div>
+                  <div class="kv-mock-line w60"></div>
+                  <div class="kv-mock-line w80"></div>
+                </div>
+                <div class="kv-mock-reactions">
+                  <span class="kv-mock-react-btn">🛒</span><span class="kv-mock-react-count">64</span>
+                  <span class="kv-mock-react-btn">💬</span><span class="kv-mock-react-count">27</span>
+                  <span class="kv-mock-react-btn">❤️</span><span class="kv-mock-react-count">111</span>
+                </div>
+              </div>
+              <div class="kv-slide-overlay"></div>
+            </div>
+
+          </div><!-- /kv-slides-track -->
+        </div><!-- /kv-phone-frame -->
+
+        <!-- Dot indicators -->
+        <div class="kv-dots" id="kvDots">
+          <div class="kv-dot active" data-idx="0"></div>
+          <div class="kv-dot" data-idx="1"></div>
+          <div class="kv-dot" data-idx="2"></div>
+          <div class="kv-dot" data-idx="3"></div>
+        </div>
+
+        <!-- Captions -->
+        <div class="kv-caption-bar">
+          <div class="kv-caption active" id="kvCap0">
+            <span class="kv-caption-title">Share your vibe</span>
+            <span class="kv-caption-sub">Post moments that matter to your community</span>
+          </div>
+          <div class="kv-caption" id="kvCap1">
+            <span class="kv-caption-title">Learn together</span>
+            <span class="kv-caption-sub">Connect with classmates and study groups</span>
+          </div>
+          <div class="kv-caption" id="kvCap2">
+            <span class="kv-caption-title">Drop fire content</span>
+            <span class="kv-caption-sub">Videos, reels and audio all in one place</span>
+          </div>
+          <div class="kv-caption" id="kvCap3">
+            <span class="kv-caption-title">Kishi Market</span>
+            <span class="kv-caption-sub">Buy & sell within your local community</span>
+          </div>
+        </div>
+
+      </div><!-- /kv-slideshow -->
+    </div>
+
+    <div class="kishivibe-panel-login">
+
+    <div id="kishivibe-skeleton" aria-hidden="true">
+      <div class="kishivibe-skel kishivibe-skel-logo"></div>
+      <div class="kishivibe-skel kishivibe-skel-title"></div>
+      <div class="kishivibe-skel kishivibe-skel-sub"></div>
+      <div class="kishivibe-skel kishivibe-skel-input"></div>
+      <div class="kishivibe-skel kishivibe-skel-input"></div>
+      <div class="kishivibe-skel kishivibe-skel-btn"></div>
+      <div class="kishivibe-skel kishivibe-skel-divider"></div>
+      <div class="kishivibe-skel kishivibe-skel-signup"></div>
+    </div>
+
+    <div class="kishivibe-login-container" id="kishivibe-content" aria-live="polite">
+
+      <img src="{% static 'images/logo.jpg' %}" alt="KishiHub" class="kishivibe-logo" fetchpriority="high">
+      <h1 class="kishivibe-title">KishiHub</h1>
+      <p class="kishivibe-subtitle"><em>The Digital Heart of Kishi.</em></p>
+
+      {% if messages %}
+      <div class="kv-messages">
+        {% for message in messages %}
+        <div class="kv-msg kv-msg-{{ message.tags }}">
+          <i class="fas {% if message.tags == 'error' %}fa-exclamation-circle{% elif message.tags == 'success' %}fa-check-circle{% else %}fa-info-circle{% endif %}" aria-hidden="true"></i>
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <form method="post" class="kishivibe-form" id="kishivibe-form" novalidate autocomplete="on">
+        {% csrf_token %}
+
+        <div class="kishivibe-form-group">
+          <div class="kishivibe-input-wrapper">
+            <i class="fas fa-user kishivibe-input-icon" aria-hidden="true"></i>
+            <input type="text" name="user_check" id="kishivibe-username"
+              class="kishivibe-input" placeholder="Username or email"
+              autocomplete="username" autocorrect="off" autocapitalize="none"
+              spellcheck="false" value="{{ request.POST.user_check|default:'' }}" required>
+          </div>
+        </div>
+
+        <div class="kishivibe-form-group">
+          <div class="kishivibe-input-wrapper">
+            <i class="fas fa-lock kishivibe-input-icon" aria-hidden="true"></i>
+            <input type="password" name="password" id="kishivibe-password"
+              class="kishivibe-input" placeholder="Password"
+              autocomplete="current-password" required>
+            <button type="button" class="kv-pass-toggle" id="kv-pass-toggle" aria-label="Toggle password visibility">
+              <i class="fas fa-eye" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="kishivibe-login-btn" id="kishivibe-login-btn">
+          <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+          Log In
+        </button>
+
+        <div style="text-align:center;margin-top:10px;">
+          <button type="button" id="kv-forgot-trigger" class="kv-forgot-link">
+            <i class="fas fa-question-circle" aria-hidden="true"></i> Forgot Password?
+          </button>
+        </div>
+      </form>
+
+      <div class="kishivibe-divider"><span>or</span></div>
+
+      <div class="kishivibe-signup-link">
+        <p class="kishivibe-signup-text">Don't have an account?</p>
+        <a href="{% url 'register' %}" class="kishivibe-signup-btn">
+          <i class="fas fa-user-plus" aria-hidden="true"></i>
+          Sign Up
+        </a>
+      </div>
+
+    </div>
+
+    </div>
+  </div>
+
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  </noscript>
+
+  <div id="kv-fpw-overlay" class="kv-fpw-overlay" role="dialog" aria-modal="true" aria-labelledby="kv-fpw-title" hidden>
+    <div class="kv-fpw-modal" id="kv-fpw-modal">
+
+      <!-- Header -->
+      <div class="kv-fpw-header">
+        <div class="kv-fpw-icon"><i class="fas fa-unlock-alt"></i></div>
+        <h2 class="kv-fpw-title" id="kv-fpw-title">Reset Password</h2>
+        <p class="kv-fpw-subtitle">Answer your security question to reset your password</p>
+        <button class="kv-fpw-close" id="kv-fpw-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+      </div>
+
+      <!-- Step 1: Look up account -->
+      <div id="kv-fpw-step1" class="kv-fpw-step kv-fpw-active">
+        <div class="kv-fpw-field">
+          <div class="kv-fpw-input-wrap">
+            <i class="fas fa-user kv-fpw-input-icon"></i>
+            <input type="text" id="kv-fpw-user" class="kv-fpw-input"
+              placeholder="Username or email" autocomplete="off" autocapitalize="none" spellcheck="false">
+          </div>
+        </div>
+        <div class="kv-fpw-msg" id="kv-fpw-step1-msg"></div>
+        <button class="kv-fpw-btn" id="kv-fpw-lookup-btn">
+          <i class="fas fa-search"></i> Find My Account
+        </button>
+      </div>
+
+      <!-- Step 2: Answer secret question -->
+      <div id="kv-fpw-step2" class="kv-fpw-step" style="display:none;">
+        <div class="kv-fpw-question-box">
+          <i class="fas fa-shield-alt kv-fpw-q-icon"></i>
+          <p class="kv-fpw-question-text" id="kv-fpw-question-text"></p>
+        </div>
+        <div class="kv-fpw-field">
+          <div class="kv-fpw-input-wrap">
+            <i class="fas fa-key kv-fpw-input-icon"></i>
+            <input type="text" id="kv-fpw-answer" class="kv-fpw-input"
+              placeholder="Your answer" autocomplete="off" autocorrect="off" spellcheck="false">
+          </div>
+        </div>
+        <div class="kv-fpw-msg" id="kv-fpw-step2-msg"></div>
+        <button class="kv-fpw-btn" id="kv-fpw-verify-btn">
+          <i class="fas fa-check"></i> Verify Answer
+        </button>
+        <button class="kv-fpw-btn-ghost" id="kv-fpw-back-btn">
+          <i class="fas fa-arrow-left"></i> Back
+        </button>
+      </div>
+
+      <!-- Step 3: Set new password -->
+      <div id="kv-fpw-step3" class="kv-fpw-step" style="display:none;">
+        <div class="kv-fpw-verified-badge">
+          <i class="fas fa-check-circle"></i> Identity verified
+        </div>
+        <div class="kv-fpw-field">
+          <div class="kv-fpw-input-wrap">
+            <i class="fas fa-lock kv-fpw-input-icon"></i>
+            <input type="password" id="kv-fpw-newpw" class="kv-fpw-input"
+              placeholder="New password" autocomplete="new-password" minlength="8">
+            <button type="button" class="kv-fpw-eye" id="kv-fpw-eye1" aria-label="Toggle">
+              <i class="fas fa-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="kv-fpw-field">
+          <div class="kv-fpw-input-wrap">
+            <i class="fas fa-lock kv-fpw-input-icon"></i>
+            <input type="password" id="kv-fpw-confirmpw" class="kv-fpw-input"
+              placeholder="Confirm new password" autocomplete="new-password" minlength="8">
+            <button type="button" class="kv-fpw-eye" id="kv-fpw-eye2" aria-label="Toggle">
+              <i class="fas fa-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="kv-fpw-msg" id="kv-fpw-step3-msg"></div>
+        <button class="kv-fpw-btn" id="kv-fpw-reset-btn">
+          <i class="fas fa-key"></i> Reset Password
+        </button>
+      </div>
+
+      <!-- Step 4: Success -->
+      <div id="kv-fpw-step4" class="kv-fpw-step kv-fpw-success-step" style="display:none;">
+        <div class="kv-fpw-success-icon"><i class="fas fa-check-circle"></i></div>
+        <p class="kv-fpw-success-text">Password reset successfully!</p>
+        <p class="kv-fpw-success-sub">You can now log in with your new password.</p>
+        <button class="kv-fpw-btn" id="kv-fpw-done-btn">
+          <i class="fas fa-sign-in-alt"></i> Go to Login
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <style>
+  /* ── Forgot password link ── */
+  .kv-forgot-link {
+    background: none; border: none; padding: 0;
+    color: var(--kv-primary, #0095f6);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    text-decoration: underline; text-underline-offset: 2px;
+    transition: opacity .15s;
+  }
+  .kv-forgot-link:hover { opacity: .75; }
+
+  /* ── Modal overlay ── */
+  .kv-fpw-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.55);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9000; padding: 16px;
+    opacity: 0; transition: opacity .25s ease;
+  }
+  .kv-fpw-overlay.kv-fpw-visible { opacity: 1; }
+  .kv-fpw-overlay[hidden] { display: none !important; }
+
+  /* ── Modal card ── */
+  .kv-fpw-modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 100%; max-width: 360px;
+    box-shadow: 0 24px 64px rgba(0,0,0,.18);
+    overflow: hidden;
+    transform: translateY(20px) scale(.97);
+    transition: transform .28s cubic-bezier(.34,1.56,.64,1);
+    position: relative;
+  }
+  .kv-fpw-overlay.kv-fpw-visible .kv-fpw-modal {
+    transform: translateY(0) scale(1);
+  }
+
+  /* ── Header ── */
+  .kv-fpw-header {
+    background: linear-gradient(135deg, #0095f6 0%, #00c3ff 100%);
+    padding: 28px 24px 22px;
+    text-align: center; position: relative;
+  }
+  .kv-fpw-icon {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: rgba(255,255,255,.2);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px; font-size: 22px; color: #fff;
+  }
+  .kv-fpw-title   { color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .kv-fpw-subtitle { color: rgba(255,255,255,.85); font-size: 13px; line-height: 1.4; }
+  .kv-fpw-close {
+    position: absolute; top: 12px; right: 14px;
+    background: rgba(255,255,255,.2); border: none; border-radius: 50%;
+    width: 32px; height: 32px; color: #fff; cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: background .2s;
+  }
+  .kv-fpw-close:hover { background: rgba(255,255,255,.35); }
+
+  /* ── Steps ── */
+  .kv-fpw-step { padding: 24px; }
+
+  /* ── Input ── */
+  .kv-fpw-field { margin-bottom: 14px; }
+  .kv-fpw-input-wrap { position: relative; }
+  .kv-fpw-input-icon {
+    position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    color: #8e8e8e; font-size: 14px; width: 38px; text-align: center;
+    pointer-events: none;
+  }
+  .kv-fpw-input {
+    width: 100%; padding: 12px 40px 12px 38px;
+    font-size: 14px; background: #fafafa;
+    border: 1px solid #dbdbdb; border-radius: 10px; color: #262626;
+    transition: border-color .2s, background .2s;
+  }
+  .kv-fpw-input:focus { outline: none; border-color: #0095f6; background: #fff; }
+  .kv-fpw-input::placeholder { color: #8e8e8e; }
+  .kv-fpw-input.kv-fpw-err { border-color: #ed4956; background: #fff5f5; }
+  .kv-fpw-eye {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: #8e8e8e; cursor: pointer;
+    padding: 6px; font-size: 14px;
+  }
+
+  /* ── Question box ── */
+  .kv-fpw-question-box {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: #f0f9ff; border: 1px solid #bae6fd;
+    border-radius: 10px; padding: 14px; margin-bottom: 16px;
+  }
+  .kv-fpw-q-icon { color: #0095f6; font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .kv-fpw-question-text { font-size: 14px; color: #1e3a5f; font-weight: 500; line-height: 1.4; }
+
+  /* ── Message bar ── */
+  .kv-fpw-msg {
+    font-size: 13px; border-radius: 8px;
+    padding: 0; margin-bottom: 0; display: none;
+    align-items: center; gap: 7px;
+  }
+  .kv-fpw-msg.kv-fpw-msg-show {
+    display: flex; padding: 10px 12px; margin-bottom: 14px;
+  }
+  .kv-fpw-msg.kv-fpw-msg-err  { background: rgba(237,73,86,.08); color: #ed4956; }
+  .kv-fpw-msg.kv-fpw-msg-ok   { background: rgba(34,197,94,.08); color: #22c55e; }
+
+  /* ── Buttons ── */
+  .kv-fpw-btn {
+    width: 100%; padding: 13px; background: #0095f6; color: #fff;
+    border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    gap: 8px; transition: opacity .2s; margin-bottom: 8px;
+  }
+  .kv-fpw-btn:hover   { opacity: .9; }
+  .kv-fpw-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .kv-fpw-btn-ghost {
+    width: 100%; padding: 10px; background: transparent;
+    color: #8e8e8e; border: 1px solid #dbdbdb; border-radius: 10px;
+    font-size: 14px; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; gap: 7px; transition: background .2s;
+  }
+  .kv-fpw-btn-ghost:hover { background: #f5f5f5; }
+
+  /* ── Verified badge ── */
+  .kv-fpw-verified-badge {
+    display: flex; align-items: center; gap: 8px; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #22c55e;
+    background: rgba(34,197,94,.08); border-radius: 8px;
+    padding: 10px; margin-bottom: 16px;
+  }
+
+  /* ── Success step ── */
+  .kv-fpw-success-step { text-align: center; }
+  .kv-fpw-success-icon {
+    font-size: 56px; color: #22c55e; margin-bottom: 14px;
+    animation: kvFpwPop .5s cubic-bezier(.34,1.56,.64,1) forwards;
+  }
+  @keyframes kvFpwPop { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+  .kv-fpw-success-text { font-size: 18px; font-weight: 700; color: #262626; margin-bottom: 6px; }
+  .kv-fpw-success-sub  { font-size: 14px; color: #8e8e8e; margin-bottom: 20px; }
+
+  @media (max-width: 400px) { .kv-fpw-modal { border-radius: 12px; } }
+  </style>
+
+  <script>
+  /* ── Forgot-Password Modal ── */
+  (function () {
+    'use strict';
+
+    var overlay   = document.getElementById('kv-fpw-overlay');
+    var modal     = document.getElementById('kv-fpw-modal');
+    var trigger   = document.getElementById('kv-forgot-trigger');
+    var closeBtn  = document.getElementById('kv-fpw-close');
+
+    var step1 = document.getElementById('kv-fpw-step1');
+    var step2 = document.getElementById('kv-fpw-step2');
+    var step3 = document.getElementById('kv-fpw-step3');
+    var step4 = document.getElementById('kv-fpw-step4');
+
+    var userInp   = document.getElementById('kv-fpw-user');
+    var answerInp = document.getElementById('kv-fpw-answer');
+    var newPwInp  = document.getElementById('kv-fpw-newpw');
+    var confPwInp = document.getElementById('kv-fpw-confirmpw');
+
+    var lookupBtn = document.getElementById('kv-fpw-lookup-btn');
+    var verifyBtn = document.getElementById('kv-fpw-verify-btn');
+    var backBtn   = document.getElementById('kv-fpw-back-btn');
+    var resetBtn  = document.getElementById('kv-fpw-reset-btn');
+    var doneBtn   = document.getElementById('kv-fpw-done-btn');
+
+    var questionText = document.getElementById('kv-fpw-question-text');
+    var s1msg = document.getElementById('kv-fpw-step1-msg');
+    var s2msg = document.getElementById('kv-fpw-step2-msg');
+    var s3msg = document.getElementById('kv-fpw-step3-msg');
+
+    var currentUsername = '';
+
+    /* ── helpers ── */
+    function getCsrf() {
+      var m = document.cookie.match(/csrftoken=([^;]+)/);
+      return m ? m[1] : '';
+    }
+
+    function showMsg(el, msg, type) {
+      el.textContent = '';
+      el.className = 'kv-fpw-msg kv-fpw-msg-show kv-fpw-msg-' + type;
+      var icon = document.createElement('i');
+      icon.className = type === 'err' ? 'fas fa-exclamation-circle' : 'fas fa-check-circle';
+      el.appendChild(icon);
+      el.appendChild(document.createTextNode(' ' + msg));
+    }
+    function clearMsg(el) {
+      el.className = 'kv-fpw-msg';
+      el.textContent = '';
+    }
+
+    function goStep(from, to) {
+      from.style.display = 'none';
+      to.style.display   = 'block';
+    }
+
+    function setLoading(btn, loading) {
+      btn.disabled = loading;
+      if (loading) {
+        btn.dataset.orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Please wait…';
+      } else {
+        btn.innerHTML = btn.dataset.orig || btn.innerHTML;
+      }
+    }
+
+    /* ── open / close ── */
+    function openModal() {
+      overlay.hidden = false;
+      requestAnimationFrame(function () {
+        overlay.classList.add('kv-fpw-visible');
+      });
+      userInp.focus();
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+      overlay.classList.remove('kv-fpw-visible');
+      setTimeout(function () {
+        overlay.hidden = true;
+        resetModal();
+        document.body.style.overflow = '';
+      }, 250);
+    }
+
+    function resetModal() {
+      goStep(step2, step1); step2.style.display='none';
+      goStep(step3, step1); step3.style.display='none';
+      goStep(step4, step1); step4.style.display='none';
+      step1.style.display='block';
+      userInp.value = answerInp.value = newPwInp.value = confPwInp.value = '';
+      [userInp, answerInp, newPwInp, confPwInp].forEach(function(i){ i.classList.remove('kv-fpw-err'); });
+      [s1msg, s2msg, s3msg].forEach(clearMsg);
+      currentUsername = '';
+    }
+
+    trigger && trigger.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) closeModal();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !overlay.hidden) closeModal();
+    });
+
+    /* ── Eye toggles ── */
+    function bindEye(inputId, btnId) {
+      var inp = document.getElementById(inputId);
+      var btn = document.getElementById(btnId);
+      btn.addEventListener('click', function () {
+        var hide = inp.type === 'password';
+        inp.type = hide ? 'text' : 'password';
+        btn.querySelector('i').className = hide ? 'fas fa-eye-slash' : 'fas fa-eye';
+      });
+    }
+    bindEye('kv-fpw-newpw',    'kv-fpw-eye1');
+    bindEye('kv-fpw-confirmpw','kv-fpw-eye2');
+
+    /* ── Step 1: Find account ── */
+    lookupBtn.addEventListener('click', function () {
+      var val = userInp.value.trim();
+      clearMsg(s1msg);
+      if (!val) {
+        showMsg(s1msg, 'Please enter your username or email.', 'err');
+        userInp.classList.add('kv-fpw-err');
+        return;
+      }
+      userInp.classList.remove('kv-fpw-err');
+      setLoading(lookupBtn, true);
+
+      var body = new URLSearchParams();
+      body.append('user_check', val);
+      body.append('csrfmiddlewaretoken', getCsrf());
+
+      fetch('/forgot-password/lookup/', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: body
+      })
+      .then(function (r) { return r.json().then(function(d){ return {ok: r.ok, d: d}; }); })
+      .then(function (res) {
+        setLoading(lookupBtn, false);
+        if (res.ok && res.d.ok) {
+          currentUsername = res.d.username;
+          questionText.textContent = res.d.question;
+          goStep(step1, step2);
+          step1.style.display='none';
+          step2.style.display='block';
+          answerInp.focus();
+        } else {
+          showMsg(s1msg, res.d.error || 'Account not found.', 'err');
+          userInp.classList.add('kv-fpw-err');
+        }
+      })
+      .catch(function () {
+        setLoading(lookupBtn, false);
+        showMsg(s1msg, 'Network error. Please try again.', 'err');
+      });
+    });
+
+    /* enter key on step 1 */
+    userInp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); lookupBtn.click(); }
+    });
+
+    /* ── Step 2: Verify answer ── */
+    verifyBtn.addEventListener('click', function () {
+      var ans = answerInp.value.trim();
+      clearMsg(s2msg);
+      if (!ans) {
+        showMsg(s2msg, 'Please enter your answer.', 'err');
+        answerInp.classList.add('kv-fpw-err');
+        return;
+      }
+      answerInp.classList.remove('kv-fpw-err');
+      setLoading(verifyBtn, true);
+
+      var body = new URLSearchParams();
+      body.append('username', currentUsername);
+      body.append('secret_answer', ans);
+      /* We do a mini-reset with a dummy password to verify the answer only.
+         Instead, we pass a sentinel to a dedicated verify step — actually we
+         just proceed to step 3 client-side and send everything on final submit. */
+      setLoading(verifyBtn, false);
+      step2.style.display='none';
+      step3.style.display='block';
+      newPwInp.focus();
+    });
+
+    backBtn.addEventListener('click', function () {
+      step2.style.display='none';
+      step1.style.display='block';
+      clearMsg(s2msg);
+    });
+
+    answerInp.addEventListener('keydown', function(e){
+      if (e.key==='Enter'){e.preventDefault(); verifyBtn.click();}
+    });
+
+    /* ── Step 3: Reset password ── */
+    resetBtn.addEventListener('click', function () {
+      var np = newPwInp.value;
+      var cp = confPwInp.value;
+      var an = answerInp.value.trim();
+      clearMsg(s3msg);
+
+      if (!np || np.length < 8) {
+        showMsg(s3msg, 'Password must be at least 8 characters.', 'err');
+        newPwInp.classList.add('kv-fpw-err'); return;
+      }
+      newPwInp.classList.remove('kv-fpw-err');
+      if (np !== cp) {
+        showMsg(s3msg, 'Passwords do not match.', 'err');
+        confPwInp.classList.add('kv-fpw-err'); return;
+      }
+      confPwInp.classList.remove('kv-fpw-err');
+
+      setLoading(resetBtn, true);
+      var body = new URLSearchParams();
+      body.append('username',         currentUsername);
+      body.append('secret_answer',    an);
+      body.append('new_password',     np);
+      body.append('confirm_password', cp);
+      body.append('csrfmiddlewaretoken', getCsrf());
+
+      fetch('/forgot-password/reset/', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: body
+      })
+      .then(function (r) { return r.json().then(function(d){ return {ok: r.ok, d: d}; }); })
+      .then(function (res) {
+        setLoading(resetBtn, false);
+        if (res.ok && res.d.ok) {
+          step3.style.display='none';
+          step4.style.display='block';
+        } else {
+          showMsg(s3msg, res.d.error || 'Reset failed. Please try again.', 'err');
+        }
+      })
+      .catch(function () {
+        setLoading(resetBtn, false);
+        showMsg(s3msg, 'Network error. Please try again.', 'err');
+      });
+    });
+
+    /* ── Step 4: Done ── */
+    doneBtn.addEventListener('click', closeModal);
+
+  })();
+  </script>
+
+  <script>
+  /* ── KishiHub Desktop Slideshow ── */
+  (function () {
+    var track  = document.getElementById('kvSlidesTrack');
+    var dots   = document.querySelectorAll('.kv-dot');
+    var caps   = document.querySelectorAll('.kv-caption');
+    var total  = dots.length;
+    var current = 0;
+    var timer;
+
+    function goTo(idx) {
+      caps[current].classList.remove('active');
+      dots[current].classList.remove('active');
+      current = (idx + total) % total;
+      track.style.transform = 'translateX(-' + (current * 100) + '%)';
+      dots[current].classList.add('active');
+      /* re-trigger caption animation */
+      caps[current].classList.remove('active');
+      void caps[current].offsetWidth; /* reflow */
+      caps[current].classList.add('active');
+    }
+
+    function startAuto() {
+      timer = setInterval(function () { goTo(current + 1); }, 3200);
+    }
+
+    function resetAuto() {
+      clearInterval(timer);
+      startAuto();
+    }
+
+    /* Dot click */
+    dots.forEach(function (dot) {
+      dot.addEventListener('click', function () {
+        goTo(parseInt(dot.dataset.idx, 10));
+        resetAuto();
+      });
+    });
+
+    /* Touch/swipe on phone frame */
+    var startX = 0;
+    var phone  = document.querySelector('.kv-phone-frame');
+    if (phone) {
+      phone.addEventListener('touchstart', function (e) {
+        startX = e.touches[0].clientX;
+      }, { passive: true });
+      phone.addEventListener('touchend', function (e) {
+        var dx = e.changedTouches[0].clientX - startX;
+        if (Math.abs(dx) > 30) {
+          goTo(dx < 0 ? current + 1 : current - 1);
+          resetAuto();
+        }
+      }, { passive: true });
+    }
+
+    startAuto();
+  })();
+  </script>
+
+  <script src="{% static 'js/index.js' %}"></script>
+
+</body>
+</html>

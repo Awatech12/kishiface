@@ -1,0 +1,109 @@
+{% load static %}
+{% for profile in profiles %}
+<div class="kf-user-suggestion" data-user-id="{{ profile.user.id }}" data-username="{{ profile.user.username }}">
+  <!-- Suggestion Header -->
+  <div class="kf-user-suggestion-header">
+    <div class="kf-user-suggestion-badge">
+      <i class="fas fa-user-plus"></i> 
+      {% if profile.followers.count > 100 %}
+        Popular Creator • {{ profile.followers.count }} followers
+      {% elif profile.followers.count > 10 %}
+        Growing Profile • {{ profile.followers.count }} followers
+      {% else %}
+        New on Kishiface
+      {% endif %}
+    </div>
+  </div>
+  
+  <!-- User Info -->
+  <div class="kf-user-suggestion-content">
+    <div class="kf-user-suggestion-profile">
+      <img 
+        src="{{ profile.picture.url }}" 
+        alt="{{ profile.user.username }}"
+        class="kf-user-suggestion-picture"
+        loading="lazy"
+      >
+      <div class="kf-user-suggestion-details">
+        <div class="kf-user-suggestion-name">
+          {{ profile.full_name|default:profile.user.username }}
+          {% if profile.is_verify %} 
+            <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align: middle;" loading="lazy">
+          {% endif %}
+        </div>
+        <div class="kf-user-suggestion-username">
+          @{{ profile.user.username }}
+        </div>
+        {% if profile.bio %}
+        <div class="kf-user-suggestion-bio">
+          {{ profile.bio }}
+        </div>
+        {% endif %}
+        {% if profile.location %}
+        <div class="kf-user-suggestion-username" style="margin-top: 4px;">
+          <i class="fas fa-location-dot" style="font-size: 11px;"></i>
+          {{ profile.location }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    
+    <!-- Stats -->
+    <div style="display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; color: var(--kf-text-light);">
+      <div>
+        <span style="font-weight: 600; color: var(--kf-text);">{{ profile.followings.count }}</span> Following
+      </div>
+      <div>
+        <span style="font-weight: 600; color: var(--kf-text);">{{ profile.followers.count }}</span> Followers
+      </div>
+      <div>
+        <span style="font-weight: 600; color: var(--kf-text);">{{ profile.user.post_set.count }}</span> Posts
+      </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="kf-user-suggestion-actions">
+      {% if profile.user in current_user.profile.followings.all %}
+        <button class="kf-user-suggestion-btn-success" 
+                onclick="kfToggleFollow('{{ profile.user.id }}', '{{ profile.user.username }}', this)">
+          <i class="fas fa-check"></i> Following
+        </button>
+      {% else %}
+        <button class="kf-user-suggestion-btn-primary" 
+                onclick="kfToggleFollow('{{ profile.user.id }}', '{{ profile.user.username }}', this)">
+          <i class="fas fa-user-plus"></i> Follow
+        </button>
+      {% endif %}
+      <a href="{% url 'profile' profile.user.username %}" class="kf-user-suggestion-btn-secondary">
+        <i class="fas fa-user"></i> View Profile
+      </a>
+    </div>
+  </div>
+</div>
+{% empty %}
+<!-- Empty State -->
+<div class="kf-empty-state">
+  <div class="kf-empty-icon">
+    <i class="fas fa-search"></i>
+  </div>
+  <h3 class="kf-empty-title">
+    {% if request.GET.q %}
+      No users found for "{{ request.GET.q }}"
+    {% else %}
+      No users to explore
+    {% endif %}
+  </h3>
+  <p class="kf-empty-text">
+    {% if request.GET.q %}
+      Try searching with different keywords or browse all users.
+    {% else %}
+      All users are already in your network. Try following more people!
+    {% endif %}
+  </p>
+  {% if request.GET.q %}
+  <button class="kf-user-suggestion-btn-primary" onclick="document.getElementById('kf-search-input').value=''; kfSearchUsers();">
+    <i class="fas fa-times"></i> Clear Search
+  </button>
+  {% endif %}
+</div>
+{% endfor %}

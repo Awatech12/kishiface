@@ -1,0 +1,129 @@
+<!-- snippet/comment_list.html -->
+{% load humanize %}
+{% load static %}
+{% load time %}
+{% load text_filters %}
+
+<div class="kvibe-comment" id="kvibe-comment-{{ comment.comment_id }}" data-created="{{ comment.created_at|date:'c' }}">
+
+    <!-- Avatar column -->
+    <div class="kvibe-cmt-avatar-wrap">
+        {% if comment.author.profile.picture.url %}
+            <img src="{{ comment.author.profile.picture.url }}" alt="Profile" class="kvibe-cmt-avatar">
+        {% else %}
+            <div class="kvibe-cmt-avatar kvibe-cmt-avatar-letter">
+                {{ comment.author.first_name|default:"?"|slice:"1" }}
+            </div>
+        {% endif %}
+        <!-- Thread line — visible when replies are expanded -->
+        <div class="kvibe-cmt-thread-line" id="thread-line-{{ comment.comment_id }}"></div>
+    </div>
+
+    <!-- Body -->
+    <div class="kvibe-cmt-body">
+
+        <!-- Username · verify · timestamp -->
+        <div class="kvibe-cmt-meta-row">
+            <a href="{% url 'profile' comment.author.username %}" class="kvibe-cmt-username">
+                {{ comment.author.first_name }} {{ comment.author.last_name }}
+            </a>
+            {% if comment.author.profile.is_verify and comment.author.first_name %}
+                <img src="{% static 'images/verify1.jpg' %}" height="13" width="13" alt="" class="kvibe-cmt-verify">
+            {% endif %}
+            <span class="kvibe-cmt-time">{{ comment.created_at|insta_timesince }}</span>
+        </div>
+
+        <!-- Comment text -->
+        <p class="kvibe-cmt-text">{{ comment.comment|format_post_text }}</p>
+
+        <!-- Attached image -->
+        {% if comment.image %}
+            <img src="{{ comment.image.url }}" alt="Comment Image" class="kvibe-cmt-image">
+        {% endif %}
+
+        <!-- Audio message (message.html waveform style) -->
+        {% if comment.file %}
+        <div class="kvibe-audio-container" data-audio-id="{{ comment.comment_id }}">
+            <div class="kvibe-audio-content">
+                <button class="kvibe-play-pause-btn"
+                        onclick="kvCmtToggleAudio(this, '{{ comment.comment_id }}')"
+                        title="Play / Pause">
+                    <i class="fas fa-play"></i>
+                </button>
+                <div class="kvibe-audio-info">
+                    <div class="kvibe-audio-waveform"
+                         onclick="kvCmtWaveformClick(event, '{{ comment.comment_id }}')">
+                        <div class="kvibe-wave-container" id="kvibe-wave-container-{{ comment.comment_id }}"></div>
+                    </div>
+                    <div class="kvibe-audio-duration" id="kvibe-cmt-duration-{{ comment.comment_id }}">0:00</div>
+                </div>
+            </div>
+            <audio preload="metadata" id="audio-{{ comment.comment_id }}" style="display:none!important;">
+                <source src="{{ comment.file.url }}">
+            </audio>
+        </div>
+        {% endif %}
+
+        <!-- Actions: Reply · View replies -->
+        <div class="kvibe-cmt-actions-row">
+            <button class="kvibe-cmt-action-link"
+                    onclick="kvibeStartReply(
+                        '{{ comment.comment_id }}',
+                        '{{ comment.author.username|escapejs }}',
+                        '{{ comment.author.first_name|escapejs }} {{ comment.author.last_name|escapejs }}',
+                        '{% url "add_comment_reply" comment.comment_id %}'
+                    )">Reply</button>
+
+            {% if comment.replies.exists %}
+            <button class="kvibe-cmt-view-replies" id="view-replies-{{ comment.comment_id }}"
+                    onclick="toggleReplies('{{ comment.comment_id }}')">
+                <span class="kvibe-cmt-line-dash"></span>
+                View {{ comment.replies.count }} repl{{ comment.replies.count|pluralize:"y,ies" }}
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Replies container (hidden by default) -->
+        <div class="kvibe-replies-container" id="kvibe-replies-{{ comment.comment_id }}" style="display:none;">
+            {% include 'snippet/comment_replies.html' with replies=comment.replies.all %}
+        </div>
+
+    </div><!-- /kvibe-cmt-body -->
+
+    <!-- Like button — right column, vertical -->
+    <div class="kvibe-cmt-like-wrap">
+        <span id="comment_like-{{ comment.comment_id }}">
+            {% include 'snippet/comment_like.html' %}
+        </span>
+    </div>
+
+</div><!-- /kvibe-comment -->
+
+
+<script>
+function toggleReplies(commentId) {
+    const container  = document.getElementById(`kvibe-replies-${commentId}`);
+    const btn        = document.getElementById(`view-replies-${commentId}`);
+    const threadLine = document.getElementById(`thread-line-${commentId}`);
+    if (!container || !btn) return;
+    const isHidden = container.style.display === 'none' || container.style.display === '';
+    container.style.display = isHidden ? 'block' : 'none';
+    if (threadLine) threadLine.classList.toggle('visible', isHidden);
+    if (isHidden) {
+        btn.innerHTML = `<span class="kvibe-cmt-line-dash"></span> Hide replies`;
+    } else {
+        const count = container.querySelectorAll('.kvibe-reply-item').length;
+        btn.innerHTML = `<span class="kvibe-cmt-line-dash"></span> View ${count} repl${count === 1 ? 'y' : 'ies'}`;
+    }
+}
+
+/* Init waveform for this comment's audio (called by postcomment.js kvibeInitAudioPlayers too) */
+(function() {
+    document.querySelectorAll('.kvibe-audio-container[data-audio-id]').forEach(container => {
+        if (container._kvWaveInited) return;
+        container._kvWaveInited = true;
+        const audioId = container.dataset.audioId;
+        if (typeof kvCmtGenerateWaveform === 'function') kvCmtGenerateWaveform(audioId);
+    });
+})();
+</script>

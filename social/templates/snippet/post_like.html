@@ -1,0 +1,858 @@
+{% comment %}
+  snippet/post_like.html
+  ──────────────────────────────────────────────────────────────────────────
+  KVibe Post Engagement — Vibe Reactions (🔥 💯 🎵 😂 😬 🧊 ❤️)
+  ──────────────────────────────────────────────────────────────────────────
+  USAGE (simple — home.html style):
+    {% include 'snippet/post_like.html' with post=item.data %}
+
+  USAGE (with pre-fetched context — faster, skips the REST hydration call):
+    {% include 'snippet/post_like.html' with post=post_obj
+       vibe_summary=vibe_summary vibe_total=vibe_total user_vibe=user_vibe %}
+
+  REAL-TIME:  WebSocket → ws/post_vibes/<post_id>/  (PostVibeConsumer)
+  FALLBACK:   REST GET  → /vibe/<post_id>/          (get_post_vibes view)
+  ──────────────────────────────────────────────────────────────────────────
+{% endcomment %}
+{% load humanize %}
+
+<!-- ─── One-time global styles (injected via JS, safe to include N times) ─── -->
+<script>
+(function(){
+  if (document.getElementById('kv-global-styles')) return;
+  var s = document.createElement('style');
+  s.id  = 'kv-global-styles';
+  s.textContent = `
+/* ── Keyframes ──────────────────────────────────────────────────────── */
+@keyframes kv-picker-in   { from{transform:translateY(10px) scale(.9);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
+@keyframes kv-item-pop    { from{transform:scale(.5) translateY(8px);opacity:0}  to{transform:scale(1) translateY(0);opacity:1} }
+@keyframes kv-particle    { 0%{transform:translate(0,0) scale(1);opacity:1} 100%{transform:translate(var(--tx),var(--ty)) scale(0);opacity:0} }
+@keyframes kv-count-tick  { 0%{transform:translateY(0);opacity:1} 30%{transform:translateY(-14px);opacity:0} 31%{transform:translateY(14px);opacity:0} 70%{transform:translateY(0);opacity:1} }
+@keyframes kv-bounce-in   { 0%{transform:scale(0);opacity:0} 60%{transform:scale(1.2);opacity:1} 100%{transform:scale(1);opacity:1} }
+@keyframes kv-label-pop   { 0%{transform:translate(-50%,-50%) scale(.7);opacity:0} 60%{transform:translate(-50%,-160%) scale(1.05);opacity:1} 80%{transform:translate(-50%,-150%) scale(.97);opacity:1} 100%{transform:translate(-50%,-150%) scale(1);opacity:0} }
+@keyframes kv-shimmer     { 0%{background-position:-200% center} 100%{background-position:200% center} }
+@keyframes kv-repost-spin { 0%{transform:rotate(0) scale(1)} 40%{transform:rotate(200deg) scale(.8)} 70%{transform:rotate(340deg) scale(1.1)} 100%{transform:rotate(360deg) scale(1)} }
+@keyframes kv-pulse-dot   { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.5)} 50%{box-shadow:0 0 0 5px rgba(16,185,129,0)} }
+@keyframes kv-share-up    { from{transform:translateY(100%)} to{transform:translateY(0)} }
+@keyframes kv-avatar-peek { 0%{transform:translateX(-6px) scale(.8);opacity:0} 60%{transform:translateX(2px) scale(1.05);opacity:1} 100%{transform:translateX(0) scale(1);opacity:1} }
+@keyframes kv-jelly       { 0%{transform:scale(1)} 25%{transform:scale(1.3,.75)} 50%{transform:scale(.85,1.2)} 75%{transform:scale(1.1,.9)} 100%{transform:scale(1)} }
+@keyframes kv-comment-bop { 0%{transform:translateY(0) scaleY(1)} 25%{transform:translateY(-6px) scaleY(.9)} 55%{transform:translateY(2px) scaleY(1.05)} 75%{transform:translateY(-2px) scaleY(.98)} 100%{transform:translateY(0) scaleY(1)} }
+
+/* ── Wrapper ─────────────────────────────────────────────────────────── */
+.kvibe-engagement-wrapper { position: relative; }
+
+/* ── Action bar ──────────────────────────────────────────────────────── */
+.kvibe-actions-container {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--kvibe-white, #fff);
+  border-top: 1px solid var(--kvibe-border, #efefef);
+  position: relative; z-index: 2;
+}
+.kvibe-action-item {
+  display: flex; align-items: center; justify-content: center;
+  gap: 7px; text-decoration: none;
+  color: var(--kvibe-text-light, #8e8e8e);
+  font-size: 13.5px; font-weight: 500;
+  padding: 10px 14px; border-radius: 999px;
+  transition: background .2s, color .2s;
+  position: relative; cursor: pointer;
+  background: none; border: none; font-family: inherit;
+  flex: 1; min-width: 0; overflow: visible;
+}
+.kvibe-action-item::after {
+  content: ''; position: absolute; inset: 0; border-radius: 999px;
+  background: currentColor; opacity: 0; transform: scale(.7);
+  transition: opacity .25s, transform .25s cubic-bezier(.34,1.56,.64,1);
+  pointer-events: none;
+}
+.kvibe-action-item:hover::after { opacity: .06; transform: scale(1); }
+.kvibe-action-item:hover         { color: var(--kvibe-text, #262626); }
+.kvibe-action-icon { font-size: 19px; transition: color .25s; display: inline-block; position: relative; }
+
+/* ── Vibe button face ────────────────────────────────────────────────── */
+.kv-vibe-btn.has-vibe .kv-active-emoji {
+  font-size: 20px;
+  animation: kv-bounce-in .4s cubic-bezier(.34,1.56,.64,1);
+}
+.kv-vibe-count { font-size: 13.5px; transition: all .25s; display: inline-block; }
+.kv-vibe-count.tick { animation: kv-count-tick .5s cubic-bezier(.4,0,.2,1); }
+
+/* ── Vibe Picker ─────────────────────────────────────────────────────── */
+.kv-picker {
+  /* Fixed to viewport — escapes any parent overflow:hidden */
+  position: fixed;
+  background: var(--kvibe-white, #fff);
+  border: 1px solid var(--kvibe-border, #efefef);
+  border-radius: 50px; padding: 8px 12px;
+  display: none; gap: 2px; overflow: visible;
+  box-shadow: 0 8px 30px rgba(0,0,0,.18), 0 2px 10px rgba(0,0,0,.10);
+  z-index: 99999; white-space: nowrap;
+  animation: kv-picker-in .25s cubic-bezier(.34,1.56,.64,1);
+  isolation: isolate;
+  /* top/left set dynamically by JS */
+}
+.kv-picker.open { display: flex; }
+.kv-picker::after {
+  content: ''; position: absolute; bottom: -6px;
+  left: var(--arrow-left, 50%);
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px; height: 10px;
+  background: var(--kvibe-white, #fff);
+  border-right: 1px solid var(--kvibe-border, #efefef);
+  border-bottom: 1px solid var(--kvibe-border, #efefef);
+}
+.kv-vibe-opt {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 3px; cursor: pointer;
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1);
+  padding: 4px 6px; border-radius: 12px;
+  animation: kv-item-pop .3s cubic-bezier(.34,1.56,.64,1) both;
+  position: relative; z-index: 1;
+  transform-origin: center bottom;
+}
+.kv-vibe-opt:nth-child(1){animation-delay:.03s}
+.kv-vibe-opt:nth-child(2){animation-delay:.06s}
+.kv-vibe-opt:nth-child(3){animation-delay:.09s}
+.kv-vibe-opt:nth-child(4){animation-delay:.12s}
+.kv-vibe-opt:nth-child(5){animation-delay:.15s}
+.kv-vibe-opt:nth-child(6){animation-delay:.18s}
+.kv-vibe-opt:nth-child(7){animation-delay:.21s}
+.kv-vibe-opt:hover        { transform: scale(1.35) translateY(-6px); z-index: 10; }
+.kv-vibe-opt.selected     { background: rgba(0,0,0,.07); }
+.kv-opt-emoji             { font-size: 26px; line-height: 1; }
+.kv-opt-label             { font-size: 9px; font-weight: 600; color: var(--kvibe-text-light,#8e8e8e); text-transform: uppercase; letter-spacing: .04em; }
+
+/* ── Engagement bar ──────────────────────────────────────────────────── */
+.kvibe-engagement {
+  display: flex; flex-wrap: wrap; align-items: center;
+  padding: 10px 16px 8px;
+  border-top: 1px solid var(--kvibe-border, #efefef);
+  gap: 10px; background: var(--kvibe-white, #fff);
+  position: relative; z-index: 1;
+}
+.kv-vibe-summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 24px; }
+.kv-vibe-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(0,0,0,.05); border-radius: 999px;
+  padding: 3px 9px; font-size: 13px; font-weight: 600;
+  cursor: default; transition: transform .2s, background .2s;
+}
+.kv-vibe-pill:hover        { transform: scale(1.07); background: rgba(0,0,0,.09); }
+.kv-vibe-pill.mine         {
+  background: var(--pill-bg, rgba(59,130,246,.15));
+  color:      var(--pill-fg, #1d4ed8);
+  box-shadow: 0 0 0 1.5px var(--pill-border, rgba(59,130,246,.3));
+}
+.kv-pill-emoji             { font-size: 15px; }
+.kv-pill-count             { font-size: 12px; font-weight: 700; }
+.kv-total-text             { font-size: 13px; color: var(--kvibe-text-light,#8e8e8e); font-weight: 500; }
+.kv-you-text {
+  font-weight: 600;
+  background: linear-gradient(90deg, var(--kvibe-text,#262626) 30%, var(--kvibe-text-light,#8e8e8e) 50%, var(--kvibe-text,#262626) 70%);
+  background-size: 200% auto;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  animation: kv-shimmer 1.8s ease once;
+}
+.kv-no-vibes  { color: var(--kvibe-text-light,#8e8e8e); font-size: 13px; }
+.kvibe-separator-dot { color: var(--kvibe-border,#efefef); font-size: 12px; margin: 0 2px; }
+.kvibe-view-text { font-size: 13px; color: var(--kvibe-text-light,#8e8e8e); }
+.kvibe-engagement-item { display: flex; align-items: center; gap: 4px; }
+
+/* ── Repost button ───────────────────────────────────────────────────── */
+.kvibe-repost-icon {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: var(--kvibe-text-light,#8e8e8e); font-size: 13.5px; font-weight: 500;
+  padding: 10px 14px; border-radius: 999px;
+  transition: background .2s, color .2s;
+  position: relative; cursor: pointer;
+  background: none; border: none; font-family: inherit; flex: 1; min-width: 0;
+}
+.kvibe-repost-icon::after { content:'';position:absolute;inset:0;border-radius:999px;background:currentColor;opacity:0;transform:scale(.7);transition:opacity .25s,transform .25s cubic-bezier(.34,1.56,.64,1);pointer-events:none }
+.kvibe-repost-icon:hover::after     { opacity:.06; transform:scale(1); }
+.kvibe-repost-icon:hover            { color: #10b981; }
+.kvibe-repost-icon:hover .fa-retweet{ animation:kv-repost-spin .55s cubic-bezier(.34,1.56,.64,1); color:#10b981; }
+.fa-retweet.reposted                { color: #10b981; }
+.kvibe-repost-count                 { font-size: 13.5px; display: none; transition: color .2s; }
+.kvibe-repost-count.kvibe-show      { display: inline; }
+.kvibe-repost-icon:hover .kvibe-repost-count { color: #10b981; }
+
+/* ── Comment / Share hover anim ─────────────────────────────────────── */
+/* Comment — blue */
+.kvibe-action-item:has(.fa-comment):hover        { color: #0095f6; }
+.kvibe-action-item:hover .fa-comment             { animation: kv-comment-bop .5s cubic-bezier(.34,1.56,.64,1); color: #0095f6; }
+.kvibe-action-item:has(.fa-comment):hover .kv-vibe-count { color: #0095f6; }
+/* Share — purple */
+.kvibe-action-item:has(.fa-paper-plane):hover    { color: #a855f7; }
+.kvibe-action-item:hover .fa-paper-plane         { animation: kv-jelly .45s cubic-bezier(.34,1.56,.64,1); color: #a855f7; }
+.kvibe-action-item:has(.fa-paper-plane):hover .kvibe-share-count { color: #a855f7; }
+.kvibe-share-count         { font-size: 13.5px; display: none; }
+.kvibe-share-count.kvibe-show { display: inline; }
+
+/* ── Live dot ────────────────────────────────────────────────────────── */
+.kv-live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #10b981; display: inline-block; flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(16,185,129,.6);
+  animation: kv-pulse-dot 1.8s ease infinite;
+}
+.kv-live-dot.offline { background: #d1d5db; animation: none; }
+
+/* ── Particles + float label ─────────────────────────────────────────── */
+.kv-pc  { position:absolute;top:50%;left:50%;width:0;height:0;pointer-events:none;z-index:20 }
+.kv-dot { position:absolute;width:6px;height:6px;border-radius:50%;animation:kv-particle .55s cubic-bezier(.4,0,.2,1) forwards }
+.kv-lbl { position:absolute;top:50%;left:50%;font-size:12px;font-weight:700;color:var(--kvibe-primary,#0095f6);pointer-events:none;white-space:nowrap;animation:kv-label-pop .7s cubic-bezier(.34,1.56,.64,1) forwards;z-index:30 }
+
+/* ── Share modal ─────────────────────────────────────────────────────── */
+.kvibe-share-modal { position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:flex-end;z-index:6000 }
+.kvibe-share-modal.active { display:flex }
+.kvibe-share-modal-content { background:var(--kvibe-white,#fff);width:100%;border-radius:20px 20px 0 0;padding:20px;animation:kv-share-up .3s ease-out;max-width:500px }
+.kvibe-share-header { display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:18px;margin-bottom:20px;color:var(--kvibe-text,#262626) }
+.kvibe-share-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:20px 10px;text-align:center;max-height:60vh;overflow-y:auto;padding-bottom:10px }
+.kvibe-share-item { display:flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none;color:var(--kvibe-text,#262626);font-size:11px;cursor:pointer }
+.kvibe-share-icon-wrap { width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;transition:transform .2s }
+.kvibe-share-icon-wrap:active { transform:scale(.9) }
+.si-whatsapp{background:#25D366}.si-facebook{background:#1877F2}.si-x{background:#000}.si-telegram{background:#0088cc}.si-snapchat{background:#FFFC00}.si-sms{background:#4cd964}.si-email{background:#8e8e8e}.si-copy{background:#8e8e8e}
+
+/* ── Mobile ──────────────────────────────────────────────────────────── */
+@media(max-width:767px){
+  .kvibe-actions-container{padding:2px 4px}
+  .kvibe-action-item{padding:8px 10px;font-size:13px;gap:6px}
+  .kvibe-action-icon{font-size:18px}
+  .kvibe-repost-icon{padding:8px 10px;font-size:13px}
+  .kv-picker{padding:6px 8px;gap:2px}
+  .kv-opt-emoji{font-size:23px}
+}
+  `;
+  document.head.appendChild(s);
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     HTML
+════════════════════════════════════════════════════════════════════════ -->
+<div id="kvibe-post-engagement-{{ post.post_id }}"
+     class="kvibe-engagement-wrapper"
+     data-post-id="{{ post.post_id }}">
+
+  <!-- ── ACTION BUTTONS BAR ──────────────────────────────────────────── -->
+  <div class="kvibe-actions-container">
+
+    <!-- ── VIBE BUTTON ─────────────────────────────────────────────── -->
+    <div class="kvibe-action-item kv-vibe-btn"
+         id="kv-vibe-btn-{{ post.post_id }}"
+         data-post-id="{{ post.post_id }}"
+         data-user-vibe=""
+         onmouseenter="kvOpenPicker('{{ post.post_id }}')"
+         onmouseleave="kvScheduleClose('{{ post.post_id }}')"
+         onclick="kvTogglePicker('{{ post.post_id }}')">
+
+      <!-- Picker popover -->
+      <div class="kv-picker"
+           id="kv-picker-{{ post.post_id }}"
+           onmouseenter="kvCancelClose('{{ post.post_id }}')"
+           onmouseleave="kvScheduleClose('{{ post.post_id }}')">
+
+        <div class="kv-vibe-opt" data-vibe="fire"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','fire')">
+          <span class="kv-opt-emoji">🔥</span>
+          <span class="kv-opt-label">Fire</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="real"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','real')">
+          <span class="kv-opt-emoji">💯</span>
+          <span class="kv-opt-label">Real</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="vibing"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','vibing')">
+          <span class="kv-opt-emoji">🎵</span>
+          <span class="kv-opt-label">Vibing</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="dead"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','dead')">
+          <span class="kv-opt-emoji">😂</span>
+          <span class="kv-opt-label">Dead</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="cringe"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','cringe')">
+          <span class="kv-opt-emoji">😬</span>
+          <span class="kv-opt-label">Cringe</span>
+        </div>
+        <div class="kv-vibe-opt" data-vibe="chill"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','chill')">
+          <span class="kv-opt-emoji">🧊</span>
+          <span class="kv-opt-label">Chill</span>
+        </div>
+        <!-- NEW: Love option -->
+        <div class="kv-vibe-opt" data-vibe="love"
+             onclick="kvSendVibe(event,'{{ post.post_id }}','love')">
+          <span class="kv-opt-emoji">❤️</span>
+          <span class="kv-opt-label">Love</span>
+        </div>
+      </div><!-- /picker -->
+
+      <!-- Button face: smiley until JS hydrates it with the active emoji -->
+      <span id="kv-active-emoji-{{ post.post_id }}" class="kvibe-action-icon">
+        <i class="fa-regular fa-face-smile"></i>
+      </span>
+      <span class="kv-vibe-count" id="kv-vibe-count-{{ post.post_id }}">0</span>
+      <span class="kv-live-dot offline"
+            id="kv-live-dot-{{ post.post_id }}"
+            title="Connecting…"></span>
+
+    </div><!-- /vibe btn -->
+
+    <!-- ── COMMENT BUTTON ──────────────────────────────────────────── -->
+    <button class="kvibe-action-item"
+            onclick="kvibeOpenCommentSheet('{{ post.post_id }}')"
+            style="border:none;background:none;font-family:inherit;cursor:pointer;">
+      <i class="fa-regular fa-comment kvibe-action-icon"></i>
+      <span class="kv-vibe-count"
+            id="kvibe-comment-count-{{ post.post_id }}">
+        {{ post.comments.count|intcomma }}
+      </span>
+    </button>
+
+    <!-- ── REPOST BUTTON ───────────────────────────────────────────── -->
+    <button class="kvibe-repost-icon"
+            onclick="kvibeToggleRepost('{% if post.is_repost and post.original_post %}{{ post.original_post.post_id }}{% else %}{{ post.post_id }}{% endif %}', this)"
+            data-reposted="{% if request.user in post.reposts.all %}true{% else %}false{% endif %}">
+      <i class="fas fa-retweet {% if request.user in post.reposts.all %}reposted{% endif %}"></i>
+      <span class="kvibe-repost-count {% if post.reposts.count > 0 %}kvibe-show{% endif %}"
+            id="kvibe-repost-count-{{ post.post_id }}">
+        {% if post.reposts.count > 0 %}{{ post.reposts.count|intcomma }}{% endif %}
+      </span>
+    </button>
+
+    <!-- ── SHARE BUTTON ────────────────────────────────────────────── -->
+    <button class="kvibe-action-item"
+            onclick="kvibeOpenShareModal('{{ post.post_id }}','{{ post.content|escapejs|truncatechars:100 }}')"
+            style="border:none;background:none;font-family:inherit;cursor:pointer;">
+      <i class="fa-regular fa-paper-plane kvibe-action-icon"></i>
+      <span class="kvibe-share-count {% if post.share > 0 %}kvibe-show{% endif %}"
+            id="kvibe-share-count-{{ post.post_id }}">
+        {% if post.share > 0 %}{{ post.share|intcomma }}{% endif %}
+      </span>
+    </button>
+
+  </div><!-- /actions -->
+
+  <!-- ── VIBE SUMMARY + META ─────────────────────────────────────────── -->
+  <div class="kvibe-engagement">
+
+    <!-- Pills — filled by JS after REST/WS hydration -->
+    <div class="kv-vibe-summary" id="kv-vibe-summary-{{ post.post_id }}">
+      <span class="kv-no-vibes">Be the first to vibe this ✨</span>
+    </div>
+
+    <!-- "You + N others" / "N vibes" -->
+    <span class="kv-total-text"
+          id="kv-vibe-total-{{ post.post_id }}"
+          style="display:none;"></span>
+
+    <!-- View count (updated live by kvRecordPostView) -->
+    <span class="kvibe-separator-dot">·</span>
+    <div class="kvibe-engagement-item">
+      <span class="kvibe-view-text">
+        <i class="fa-regular fa-chart-bar"></i>&nbsp;<span id="kvibe-view-count-{{ post.post_id }}">{{ post.view|intcomma }}</span>
+      </span>
+    </div>
+
+  </div><!-- /engagement -->
+
+</div><!-- /wrapper -->
+
+<!-- ── SHARE MODAL ─────────────────────────────────────────────────────── -->
+<div class="kvibe-share-modal"
+     id="kvibe-share-modal-{{ post.post_id }}"
+     onclick="kvibeCloseShareModal('{{ post.post_id }}')">
+  <div class="kvibe-share-modal-content" onclick="event.stopPropagation()">
+    <div class="kvibe-share-header">
+      Share to
+      <i class="fa-solid fa-xmark" style="cursor:pointer"
+         onclick="kvibeCloseShareModal('{{ post.post_id }}')"></i>
+    </div>
+    <div class="kvibe-share-grid">
+      <div class="kvibe-share-item" onclick="kvibeShareVia('whatsapp','{{ post.post_id }}')">
+        <div class="kvibe-share-icon-wrap si-whatsapp"><i class="fa-brands fa-whatsapp"></i></div>
+        <span>WhatsApp</span>
+      </div>
+      <div class="kvibe-share-item" onclick="kvibeShareVia('facebook','{{ post.post_id }}')">
+        <div class="kvibe-share-icon-wrap si-facebook"><i class="fa-brands fa-facebook-f"></i></div>
+        <span>Facebook</span>
+      </div>
+      <div class="kvibe-share-item" onclick="kvibeShareVia('telegram','{{ post.post_id }}')">
+        <div class="kvibe-share-icon-wrap si-telegram"><i class="fa-brands fa-telegram"></i></div>
+        <span>Telegram</span>
+      </div>
+      <div class="kvibe-share-item" onclick="kvibeShareVia('snapchat','{{ post.post_id }}')">
+        <div class="kvibe-share-icon-wrap si-snapchat" style="color:#000">
+          <i class="fa-brands fa-snapchat"></i>
+        </div>
+        <span>Snapchat</span>
+      </div>
+      <div class="kvibe-share-item" onclick="kvibeShareVia('sms','{{ post.post_id }}')">
+        <div class="kvibe-share-icon-wrap si-sms"><i class="fa-solid fa-comment-sms"></i></div>
+        <span>SMS</span>
+      </div>
+      <div class="kvibe-share-item" onclick="kvibeShareVia('email','{{ post.post_id }}')">
+        <div class="kvibe-share-icon-wrap si-email"><i class="fa-solid fa-envelope"></i></div>
+        <span>Email</span>
+      </div>
+      <div class="kvibe-share-item" onclick="kvibeShareVia('x','{{ post.post_id }}')">
+        <div class="kvibe-share-icon-wrap si-x"><i class="fa-brands fa-x-twitter"></i></div>
+        <span>X</span>
+      </div>
+      <div class="kvibe-share-item" onclick="kvibeShareVia('copy','{{ post.post_id }}')">
+        <div class="kvibe-share-icon-wrap si-copy"><i class="fa-solid fa-link"></i></div>
+        <span>Copy link</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     JAVASCRIPT  (one global namespace: window._kv)
+════════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+'use strict';
+
+/* ── Constants ──────────────────────────────────────────────────────── */
+const EMOJIS = { 
+  fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊',
+  love:'❤️'  // NEW: Love emoji
+};
+const COLORS = {
+  fire:'#ff4500', real:'#ff0080', vibing:'#3b82f6',
+  dead:'#f59e0b', cringe:'#8b5cf6', chill:'#06b6d4',
+  love:'#e11d48'  // NEW: Love color (deep pink/red)
+};
+const LABELS = {
+  fire:'Fire', real:'Real', vibing:'Vibing', 
+  dead:'Dead', cringe:'Cringe', chill:'Chill',
+  love:'Love'  // NEW: Love label
+};
+
+/* ── Per-post state ─────────────────────────────────────────────────── */
+window._kv = window._kv || {};
+function st(id) {
+  if (!window._kv[id]) window._kv[id] = { ws:null, userVibe:null, closeTimer:null, pickerOpen:false, hydrated:false };
+  return window._kv[id];
+}
+
+/* ── Helpers ────────────────────────────────────────────────────────── */
+function csrf() {
+  return document.querySelector('meta[name="csrf-token"]')?.content
+      || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+}
+function myId() {
+  return parseInt(document.querySelector('meta[name="user-id"]')?.content || '-1');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   WebSocket
+══════════════════════════════════════════════════════════════════════ */
+function kvConnect(id) {
+  const s = st(id);
+  if (s.ws && s.ws.readyState < 2) return;
+  const ws  = new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/post_vibes/${id}/`);
+  s.ws      = ws;
+  const dot = document.getElementById('kv-live-dot-' + id);
+
+  ws.onopen    = () => { if(dot){dot.classList.remove('offline');dot.title='Live';} };
+  ws.onclose   = () => { if(dot){dot.classList.add('offline');dot.title='Offline';} setTimeout(()=>kvConnect(id),4000); };
+  ws.onerror   = () => { if(dot){dot.classList.add('offline');dot.title='Error';} };
+  ws.onmessage = (e) => {
+    try { const d=JSON.parse(e.data); if(d.type==='vibe_update') kvApply(id,d); } catch(_){}
+  };
+}
+
+/* ── REST hydration (first load) ────────────────────────────────────── */
+function kvHydrate(id) {
+  const s = st(id);
+  if (s.hydrated) return;
+  s.hydrated = true;
+
+  fetch(`/vibe/${id}/`, { headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken':csrf()} })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (!d) return;
+      s.userVibe = d.user_vibe || null;
+      kvRender(id, d.summary||{}, s.userVibe, d.total||0);
+      kvFace(id, s.userVibe);
+    })
+    .catch(()=>{});
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Send vibe
+══════════════════════════════════════════════════════════════════════ */
+function kvSendVibe(evt, id, vibe) {
+  evt.stopPropagation();
+  kvOptimistic(id, vibe);  // instant feel
+  kvClosePicker(id);
+  kvParticles(id, vibe);
+
+  const s = st(id);
+  if (s.ws && s.ws.readyState === 1) {
+    s.ws.send(JSON.stringify({ action:'vibe', vibe_type:vibe }));
+  } else {
+    // REST fallback (WS not ready yet)
+    fetch(`/vibe/${id}/`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body: JSON.stringify({ vibe_type:vibe }),
+    })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (!d) return;
+      s.userVibe = d.user_vibe || null;
+      kvRender(id, d.summary||{}, s.userVibe, d.total||0);
+      kvFace(id, s.userVibe);
+    })
+    .catch(()=>{});
+  }
+}
+window.kvSendVibe = kvSendVibe;
+
+/* ── Optimistic local update ────────────────────────────────────────── */
+function kvOptimistic(id, vibe) {
+  const s    = st(id);
+  const same = s.userVibe === vibe;
+  s.userVibe = same ? null : vibe;
+  kvFace(id, s.userVibe);
+
+  // Update count optimistically
+  const countEl = document.getElementById('kv-vibe-count-' + id);
+  if (countEl) {
+    let current = parseInt(countEl.textContent.replace(/,/g, '')) || 0;
+    if (same) {
+      current = Math.max(0, current - 1);
+    } else {
+      current = current + 1;
+    }
+    countEl.textContent = current > 0 ? current.toLocaleString() : '0';
+    countEl.classList.remove('tick'); 
+    void countEl.offsetWidth; 
+    countEl.classList.add('tick');
+  }
+
+  document.querySelectorAll(`#kv-picker-${id} .kv-vibe-opt`).forEach(o =>
+    o.classList.toggle('selected', o.dataset.vibe === s.userVibe)
+  );
+
+  // Update summary pills optimistically
+  const summaryEl = document.getElementById('kv-vibe-summary-' + id);
+  const totalEl = document.getElementById('kv-vibe-total-' + id);
+  
+  if (summaryEl) {
+    // Get current summary from DOM
+    const pills = summaryEl.querySelectorAll('.kv-vibe-pill');
+    const summary = {};
+    pills.forEach(pill => {
+      const emoji = pill.querySelector('.kv-pill-emoji')?.textContent || '';
+      const count = parseInt(pill.querySelector('.kv-pill-count')?.textContent.replace(/,/g, '')) || 0;
+      // Find vibe type from emoji
+      for (let [vt, em] of Object.entries(EMOJIS)) {
+        if (em === emoji) {
+          summary[vt] = count;
+          break;
+        }
+      }
+    });
+
+    // Update summary with optimistic change
+    if (same) {
+      // Removing vibe
+      if (summary[vibe]) {
+        summary[vibe]--;
+        if (summary[vibe] <= 0) delete summary[vibe];
+      }
+    } else {
+      // Adding new vibe
+      if (s.userVibe) {
+        summary[s.userVibe] = (summary[s.userVibe] || 0) + 1;
+      }
+    }
+
+    kvRender(id, summary, s.userVibe, Object.values(summary).reduce((a,b)=>a+b,0));
+  }
+}
+
+/* ── Sync button face ───────────────────────────────────────────────── */
+function kvFace(id, vibe) {
+  const btn = document.getElementById('kv-vibe-btn-' + id);
+  const el  = document.getElementById('kv-active-emoji-' + id);
+  if (!btn) return;
+  if (vibe) {
+    btn.classList.add('has-vibe');
+    btn.dataset.userVibe = vibe;
+    if (el) { 
+      el.className = 'kv-active-emoji'; 
+      el.innerHTML = EMOJIS[vibe] || '✨'; 
+    }
+  } else {
+    btn.classList.remove('has-vibe');
+    btn.dataset.userVibe = '';
+    if (el) { 
+      el.className = 'kvibe-action-icon'; 
+      el.innerHTML = '<i class="fa-regular fa-face-smile"></i>'; 
+    }
+  }
+}
+
+/* ── Apply server broadcast ─────────────────────────────────────────── */
+function kvApply(id, data) {
+  const s = st(id);
+  if (data.actor_id === myId()) {
+    s.userVibe = data.user_vibe || null;
+    kvFace(id, s.userVibe);
+  }
+  const total   = data.total   || 0;
+  const summary = data.summary || {};
+
+  const c = document.getElementById('kv-vibe-count-' + id);
+  if (c) { 
+    c.textContent = total > 0 ? total.toLocaleString() : '0';
+    c.classList.remove('tick'); 
+    void c.offsetWidth; 
+    c.classList.add('tick'); 
+  }
+
+  kvRender(id, summary, s.userVibe, total);
+}
+
+/* ── Render summary pills ───────────────────────────────────────────── */
+function kvRender(id, summary, userVibe, total) {
+  const box     = document.getElementById('kv-vibe-summary-' + id);
+  const totalEl = document.getElementById('kv-vibe-total-'   + id);
+  const countEl = document.getElementById('kv-vibe-count-'   + id);
+
+  if (countEl) countEl.textContent = total > 0 ? total.toLocaleString() : '0';
+
+  const entries = Object.entries(summary).filter(([,v])=>v>0);
+  if (!box) return;
+
+  if (!entries.length) {
+    box.innerHTML = '<span class="kv-no-vibes">Be the first to vibe this ✨</span>';
+    if (totalEl) totalEl.style.display = 'none';
+    return;
+  }
+
+  // Sort entries by count descending, then by vibe type
+  entries.sort((a, b) => {
+    if (a[1] !== b[1]) return b[1] - a[1];
+    return (a[0] || '').localeCompare(b[0] || '');
+  });
+
+  box.innerHTML = entries.map(([vt, count]) => {
+    const mine  = userVibe === vt;
+    const color = COLORS[vt] || '#666';
+    const bgColor = mine ? `${color}22` : 'rgba(0,0,0,.05)';
+    const style = mine ? `style="--pill-bg:${color}22;--pill-fg:${color};--pill-border:${color}55"` : '';
+    return `<span class="kv-vibe-pill${mine ? ' mine' : ''}" ${style} data-vibe="${vt}">
+              <span class="kv-pill-emoji">${EMOJIS[vt] || '✨'}</span>
+              <span class="kv-pill-count">${count.toLocaleString()}</span>
+            </span>`;
+  }).join('');
+
+  if (totalEl) {
+    totalEl.style.display = '';
+    if (userVibe) {
+      const o = total - 1;
+      if (o > 0) {
+        totalEl.innerHTML = `<span class="kv-you-text">You</span> and ${o.toLocaleString()} other${o !== 1 ? 's' : ''} vibed this`;
+      } else {
+        totalEl.innerHTML = `<span class="kv-you-text">You</span> vibed this`;
+      }
+    } else {
+      totalEl.textContent = `${total.toLocaleString()} vibe${total !== 1 ? 's' : ''}`;
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Picker
+══════════════════════════════════════════════════════════════════════ */
+function kvPositionPicker(id) {
+  const btn = document.getElementById('kv-vibe-btn-' + id);
+  const p   = document.getElementById('kv-picker-' + id);
+  if (!btn || !p) return;
+
+  // Temporarily show off-screen to measure width
+  p.style.visibility = 'hidden';
+  p.style.display    = 'flex';
+  const pw = p.offsetWidth;
+  const ph = p.offsetHeight;
+  p.style.display    = '';
+  p.style.visibility = '';
+
+  const r   = btn.getBoundingClientRect();
+  const vw  = window.innerWidth;
+  const gap = 10; // px gap between button top and picker bottom
+
+  // Horizontally: centre over button, clamped within viewport with 8px margin
+  let left = r.left + r.width / 2 - pw / 2;
+  left = Math.max(8, Math.min(left, vw - pw - 8));
+
+  // Vertically: above the button
+  let top = r.top - ph - gap;
+
+  // If it would go off the top, flip below the button
+  if (top < 8) top = r.bottom + gap;
+
+  p.style.left = left + 'px';
+  p.style.top  = top  + 'px';
+
+  // Reposition the tail arrow to point at the button centre
+  const btnCentreX     = r.left + r.width / 2;
+  const arrowLeft      = Math.max(16, Math.min(btnCentreX - left, pw - 16));
+  p.style.setProperty('--arrow-left', arrowLeft + 'px');
+}
+
+function kvOpenPicker(id) {
+  kvCancelClose(id);
+  const p = document.getElementById('kv-picker-' + id);
+  const s = st(id);
+  if (p && !s.pickerOpen) {
+    kvPositionPicker(id);
+    p.classList.add('open');
+    s.pickerOpen = true;
+  }
+}
+function kvClosePicker(id) {
+  const p = document.getElementById('kv-picker-' + id);
+  const s = st(id);
+  if (p) { p.classList.remove('open'); s.pickerOpen = false; }
+}
+function kvScheduleClose(id) {
+  const s = st(id); s.closeTimer = setTimeout(() => kvClosePicker(id), 350);
+}
+function kvCancelClose(id) {
+  const s = st(id); if (s.closeTimer) { clearTimeout(s.closeTimer); s.closeTimer = null; }
+}
+function kvTogglePicker(id) {
+  st(id).pickerOpen ? kvClosePicker(id) : kvOpenPicker(id);
+}
+window.kvOpenPicker    = kvOpenPicker;
+window.kvScheduleClose = kvScheduleClose;
+window.kvCancelClose   = kvCancelClose;
+window.kvTogglePicker  = kvTogglePicker;
+
+// Reposition any open picker on scroll or resize
+function kvRepositionAll() {
+  Object.keys(window._kv || {}).forEach(id => {
+    if (window._kv[id].pickerOpen) kvPositionPicker(id);
+  });
+}
+window.addEventListener('scroll', kvRepositionAll, { passive: true, capture: true });
+window.addEventListener('resize', kvRepositionAll, { passive: true });
+
+/* ── Particles ──────────────────────────────────────────────────────── */
+function kvParticles(id, vibe) {
+  const btn = document.getElementById('kv-vibe-btn-'+id);
+  if (!btn) return;
+  const color = COLORS[vibe] || '#0095f6';
+  let pc = btn.querySelector('.kv-pc');
+  if (!pc){ pc=document.createElement('div'); pc.className='kv-pc'; btn.appendChild(pc); }
+
+  for (let i=0;i<8;i++) {
+    const p=document.createElement('span'); p.className='kv-dot';
+    const a=(i/8)*2*Math.PI, d=24+Math.random()*14;
+    p.style.setProperty('--tx',`${Math.cos(a)*d}px`);
+    p.style.setProperty('--ty',`${Math.sin(a)*d}px`);
+    p.style.background=color; p.style.left='50%'; p.style.top='50%';
+    p.style.marginLeft='-3px'; p.style.marginTop='-3px';
+    p.style.animationDelay=`${i*.025}s`;
+    pc.appendChild(p); p.addEventListener('animationend',()=>p.remove());
+  }
+
+  // Floating emoji burst
+  const lbl=document.createElement('span'); lbl.className='kv-lbl';
+  lbl.textContent=EMOJIS[vibe]||'+1'; 
+  btn.style.position='relative';
+  btn.appendChild(lbl); 
+  lbl.addEventListener('animationend',()=>lbl.remove());
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Init
+══════════════════════════════════════════════════════════════════════ */
+function kvInit() {
+  document.querySelectorAll('[id^="kv-vibe-btn-"]').forEach(btn => {
+    if (btn._kvi) return;
+    btn._kvi = true;
+    const id = btn.dataset.postId;
+    if (!id) return;
+    kvHydrate(id);
+    kvConnect(id);
+  });
+}
+document.addEventListener('DOMContentLoaded', kvInit);
+document.addEventListener('htmx:afterSwap',   kvInit);
+document.addEventListener('htmx:afterSettle', kvInit);
+
+// Close picker on outside click
+document.addEventListener('click', e => {
+  document.querySelectorAll('[id^="kv-picker-"]').forEach(p => {
+    const id = p.id.replace('kv-picker-','');
+    const b  = document.getElementById('kv-vibe-btn-'+id);
+    if (b && !b.contains(e.target)) kvClosePicker(id);
+  });
+});
+
+// Escape key
+document.addEventListener('keydown', e => {
+  if (e.key!=='Escape') return;
+  document.querySelectorAll('[id^="kv-picker-"]').forEach(p=>kvClosePicker(p.id.replace('kv-picker-','')));
+  document.querySelectorAll('.kvibe-share-modal.active').forEach(m=>m.classList.remove('active'));
+});
+
+kvInit(); // run immediately for posts already in DOM
+
+/* ══════════════════════════════════════════════════════════════════════
+   Share modal
+══════════════════════════════════════════════════════════════════════ */
+window._kvShare = window._kvShare || {};
+
+window.kvibeOpenShareModal = function(id, text) {
+  window._kvShare[id] = { text };
+  document.getElementById('kvibe-share-modal-'+id)?.classList.add('active');
+};
+window.kvibeCloseShareModal = function(id) {
+  document.getElementById('kvibe-share-modal-'+id)?.classList.remove('active');
+};
+window.kvibeShareVia = function(platform, id) {
+  const url  = `${location.origin}/comment/${id}`;
+  const text = (window._kvShare[id]||{}).text || '';
+  const fm   = encodeURIComponent(`${text} ${url}`);
+  const map  = {
+    whatsapp:`https://api.whatsapp.com/send?text=${fm}`,
+    facebook:`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+    telegram:`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
+    snapchat:`https://www.snapchat.com/scan?attachmentUrl=${encodeURIComponent(url)}`,
+    sms:     `sms:?body=${fm}`,
+    email:   `mailto:?subject=Check this out on KVibe&body=${fm}`,
+    x:       `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+  };
+  if (platform==='copy') {
+    navigator.clipboard.writeText(url).then(()=>kvTrackShare(id));
+    window.kvibeCloseShareModal(id); return;
+  }
+  if (map[platform]) { window.open(map[platform],'_blank'); kvTrackShare(id); window.kvibeCloseShareModal(id); }
+};
+
+function kvTrackShare(id) {
+  fetch(`/track_share/${id}/`,{method:'POST',headers:{'X-CSRFToken':csrf()}})
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.success){
+        const el=document.getElementById('kvibe-share-count-'+id);
+        if(el){el.textContent=d.new_count;el.classList.add('kvibe-show');}
+      }
+    }).catch(()=>{});
+}
+
+})();
+</script>

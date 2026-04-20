@@ -1,0 +1,1620 @@
+{% load static %}
+{% load post_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <title>KishiHub - Event Calendar</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    :root {
+      --kvibe-bg: #fafafa;
+      --kvibe-white: #ffffff;
+      --kvibe-text: #262626;
+      --kvibe-text-light: #8e8e8e;
+      --kvibe-primary: #0095f6;
+      --kvibe-border: #dbdbdb;
+
+      /* Event type colors */
+      --ev-town: #0095f6;
+      --ev-festival: #ff6b35;
+      --ev-wedding: #e91e8c;
+      --ev-other: #7c3aed;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kvibe-bg);
+      color: var(--kvibe-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout ── */
+    .kvibe-desktop-layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px 20px 0 20px;
+      gap: 20px;
+    }
+
+    .kvibe-left-sidebar {
+      width: 245px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+
+    .kvibe-desktop-nav {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 20px 0;
+      background: var(--kvibe-white);
+    }
+
+    .kvibe-desktop-nav-item {
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+      width: 100%;
+      padding: 12px;
+      position: relative;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border-radius: 8px;
+      background: none;
+      border: none;
+      text-align: left;
+    }
+
+    .kvibe-desktop-nav-item:hover { background: var(--kvibe-bg); }
+    .kvibe-desktop-nav-item.active { background: var(--kvibe-bg); }
+
+    .kvibe-desktop-nav-icon {
+      width: 24px;
+      height: 24px;
+      margin-right: 12px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kvibe-desktop-nav-icon svg {
+      width: 100%;
+      height: 100%;
+      stroke: var(--kvibe-text-light);
+      transition: all 0.2s ease;
+    }
+
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-icon svg,
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-icon svg { stroke: var(--kvibe-primary); }
+
+    .kvibe-desktop-nav-label {
+      font-size: 14px;
+      color: var(--kvibe-text-light);
+      font-weight: 400;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-label { color: var(--kvibe-text); }
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-label { color: var(--kvibe-text); font-weight: 600; }
+    .kvibe-desktop-nav-item.logout .kvibe-desktop-nav-icon svg { stroke: var(--kvibe-primary); }
+    .kvibe-desktop-nav-item.logout:hover .kvibe-desktop-nav-label { color: var(--kvibe-primary); }
+
+    .kvibe-main-feed {
+      flex: 1;
+      max-width: 720px;
+      margin: 0 auto;
+      padding-bottom: 60px;
+    }
+
+    .kvibe-right-sidebar {
+      width: 320px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-left: 10px;
+    }
+
+    @media (max-width: 767px) {
+      .kvibe-desktop-only { display: none !important; }
+      .kvibe-desktop-layout { padding: 12px 12px 0; gap: 0; }
+      .kvibe-main-feed { max-width: 100%; }
+      body { padding-bottom: 70px; }
+    }
+
+    @media (min-width: 768px) {
+      .kvibe-desktop-only { display: flex; }
+    }
+
+    /* ─── Right Sidebar Widgets ─── */
+    .kvcal-sidebar-widget {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .kvcal-sidebar-widget h3 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .kvcal-sidebar-widget h3 a {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--kvibe-primary);
+      text-decoration: none;
+    }
+
+    .kvcal-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--kvibe-border);
+      font-size: 13px;
+    }
+
+    .kvcal-legend-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .kvcal-legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .kvcal-legend-count {
+      margin-left: auto;
+      font-weight: 700;
+      color: var(--kvibe-text-light);
+      font-size: 12px;
+    }
+
+    /* ─── Calendar Page Header ─── */
+    .kvcal-header {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 16px;
+      padding: 24px 22px 20px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .kvcal-header-left h1 {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .kvcal-header-left p {
+      font-size: 13px;
+      color: var(--kvibe-text-light);
+      margin-top: 2px;
+    }
+
+    .kvcal-add-btn {
+      background: var(--kvibe-primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.18s;
+    }
+
+    .kvcal-add-btn:hover { background: #0077cc; }
+
+    /* ─── Category Filter Bar ─── */
+    .kvcal-filter-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .kvcal-filter-chip {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1.5px solid var(--kvibe-border);
+      background: var(--kvibe-white);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--kvibe-text-light);
+      cursor: pointer;
+      transition: all 0.18s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .kvcal-filter-chip:hover, .kvcal-filter-chip.active {
+      border-color: var(--chip-color, var(--kvibe-primary));
+      color: var(--chip-color, var(--kvibe-primary));
+      background: color-mix(in srgb, var(--chip-color, var(--kvibe-primary)) 8%, white);
+    }
+
+    /* ─── Month Navigation ─── */
+    .kvcal-month-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+    }
+
+    .kvcal-month-nav h2 {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .kvcal-nav-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1.5px solid var(--kvibe-border);
+      background: var(--kvibe-white);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: var(--kvibe-text);
+      transition: all 0.18s;
+    }
+
+    .kvcal-nav-btn:hover {
+      border-color: var(--kvibe-primary);
+      color: var(--kvibe-primary);
+    }
+
+    /* ─── Mini Calendar Grid ─── */
+    .kvcal-grid-wrap {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 20px;
+    }
+
+    .kvcal-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      margin-bottom: 8px;
+    }
+
+    .kvcal-weekday {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--kvibe-text-light);
+      text-transform: uppercase;
+      padding: 4px 0;
+    }
+
+    .kvcal-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+
+    .kvcal-day {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--kvibe-text);
+      position: relative;
+      transition: all 0.15s;
+      border: none;
+      background: none;
+    }
+
+    .kvcal-day:hover { background: var(--kvibe-bg); }
+    .kvcal-day.today { background: var(--kvibe-primary); color: #fff; font-weight: 700; }
+    .kvcal-day.today:hover { background: #0077cc; }
+    .kvcal-day.other-month { color: var(--kvibe-border); }
+    .kvcal-day.selected { outline: 2px solid var(--kvibe-primary); outline-offset: 1px; }
+
+    .kvcal-day-dot {
+      position: absolute;
+      bottom: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 2px;
+    }
+
+    .kvcal-day-dot span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      display: block;
+    }
+
+    /* ─── Event List ─── */
+    .kvcal-section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--kvibe-text-light);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+      padding: 0 2px;
+    }
+
+    .kvcal-event-card {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      transition: all 0.2s;
+      text-decoration: none;
+      color: var(--kvibe-text);
+      border-left: 4px solid var(--ev-color, var(--kvibe-border));
+    }
+
+    .kvcal-event-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+      transform: translateY(-1px);
+    }
+
+    .kvcal-event-card-date {
+      width: 50px;
+      flex-shrink: 0;
+      text-align: center;
+      background: var(--kvibe-bg);
+      border-radius: 10px;
+      padding: 8px 4px;
+      border: 1px solid var(--kvibe-border);
+    }
+
+    .kvcal-event-card-date .month {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--ev-color, var(--kvibe-primary));
+      display: block;
+    }
+
+    .kvcal-event-card-date .day {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--kvibe-text);
+      display: block;
+      line-height: 1;
+    }
+
+    .kvcal-event-card-body { flex: 1; min-width: 0; }
+
+    .kvcal-event-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .kvcal-event-card-meta {
+      font-size: 12px;
+      color: var(--kvibe-text-light);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .kvcal-event-card-meta span { display: flex; align-items: center; gap: 4px; }
+
+    .kvcal-event-type-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 6px;
+      background: color-mix(in srgb, var(--ev-color, var(--kvibe-primary)) 12%, white);
+      color: var(--ev-color, var(--kvibe-primary));
+    }
+
+    /* ─── Event card cover image (clickable) ─── */
+    .kvcal-event-card-img {
+      width: 100%;
+      max-height: 180px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin-top: 10px;
+      display: block;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .kvcal-event-card-img:hover {
+      opacity: 0.9;
+    }
+
+    /* ─── Full-size Image Modal ─── */
+    .kvcal-image-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .kvcal-image-modal-overlay.open {
+      display: flex;
+    }
+
+    .kvcal-image-modal {
+      max-width: 90vw;
+      max-height: 90vh;
+      text-align: center;
+    }
+
+    .kvcal-image-modal img {
+      max-width: 100%;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+    .kvcal-image-modal-close {
+      position: fixed;
+      top: 20px;
+      right: 30px;
+      font-size: 40px;
+      color: #fff;
+      cursor: pointer;
+      background: none;
+      border: none;
+      z-index: 10001;
+      transition: opacity 0.2s;
+    }
+
+    .kvcal-image-modal-close:hover {
+      opacity: 0.7;
+    }
+
+    /* ─── Event card action buttons (edit / delete) ─── */
+    .kvcal-event-card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .kvcal-event-action-btn {
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1.5px solid var(--kvibe-border);
+      background: var(--kvibe-white);
+      color: var(--kvibe-text-light);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.18s;
+    }
+
+    .kvcal-event-action-btn.edit:hover  { border-color: var(--kvibe-primary); color: var(--kvibe-primary); }
+    .kvcal-event-action-btn.delete:hover { border-color: #e74c3c; color: #e74c3c; }
+
+    /* ─── Image preview in modal ─── */
+    .kvcal-img-preview-wrap {
+      position: relative;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .kvcal-img-preview-wrap.visible { display: block; }
+
+    .kvcal-img-preview {
+      width: 100%;
+      max-height: 160px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1.5px solid var(--kvibe-border);
+    }
+
+    .kvcal-img-clear-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kvcal-img-upload-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border: 1.5px dashed var(--kvibe-border);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--kvibe-text-light);
+      transition: border-color 0.18s;
+    }
+
+    .kvcal-img-upload-label:hover { border-color: var(--kvibe-primary); color: var(--kvibe-primary); }
+
+    /* ─── Modal Overlay for Add/Edit ─── */
+    .kvcal-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(4px);
+      z-index: 9000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kvcal-modal-overlay.open { display: flex; }
+
+    .kvcal-modal {
+      background: var(--kvibe-white);
+      border-radius: 20px;
+      width: 460px;
+      max-width: calc(100vw - 32px);
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      padding: 28px 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      animation: kvcalSlideUp 0.25s ease;
+    }
+
+    @keyframes kvcalSlideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .kvcal-modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .kvcal-modal-close {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: var(--kvibe-text-light);
+      padding: 4px;
+      border-radius: 50%;
+    }
+
+    .kvcal-modal-close:hover { color: var(--kvibe-text); }
+
+    .kvcal-form-group { margin-bottom: 16px; }
+
+    .kvcal-form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--kvibe-text);
+    }
+
+    .kvcal-form-group input,
+    .kvcal-form-group select,
+    .kvcal-form-group textarea {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid var(--kvibe-border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--kvibe-text);
+      background: var(--kvibe-white);
+      transition: border-color 0.18s;
+      outline: none;
+    }
+
+    .kvcal-form-group input:focus,
+    .kvcal-form-group select:focus,
+    .kvcal-form-group textarea:focus { border-color: var(--kvibe-primary); }
+
+    .kvcal-form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .kvcal-form-submit {
+      width: 100%;
+      background: var(--kvibe-primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.18s;
+      margin-top: 4px;
+    }
+
+    .kvcal-form-submit:hover { background: #0077cc; }
+    .kvcal-form-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ─── Delete confirm modal ─── */
+    .kvcal-confirm-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(4px);
+      z-index: 9100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kvcal-confirm-overlay.open { display: flex; }
+
+    .kvcal-confirm-box {
+      background: var(--kvibe-white);
+      border-radius: 16px;
+      padding: 28px 24px;
+      width: 360px;
+      max-width: calc(100vw - 32px);
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      animation: kvcalSlideUp 0.2s ease;
+    }
+
+    .kvcal-confirm-box h3 { font-size: 17px; margin-bottom: 8px; }
+    .kvcal-confirm-box p  { font-size: 13px; color: var(--kvibe-text-light); margin-bottom: 20px; }
+
+    .kvcal-confirm-btns { display: flex; gap: 10px; }
+
+    .kvcal-confirm-btns button {
+      flex: 1;
+      padding: 11px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.18s;
+    }
+
+    .kvcal-confirm-btns button:hover { opacity: 0.85; }
+    .kvcal-confirm-btns .cancel-btn  { background: var(--kvibe-bg); color: var(--kvibe-text); border: 1.5px solid var(--kvibe-border); }
+    .kvcal-confirm-btns .delete-btn  { background: #e74c3c; color: #fff; }
+
+    /* ─── Empty state ─── */
+    .kvcal-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--kvibe-text-light);
+      font-size: 14px;
+    }
+
+    .kvcal-empty i { font-size: 40px; margin-bottom: 12px; display: block; }
+
+    /* ─── Verification banner ─── */
+    .kvcal-verify-banner {
+      background: #fff8e1;
+      border: 1.5px solid #ffc107;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 18px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .kvcal-verify-banner-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+    .kvcal-verify-banner-body { flex: 1; }
+    .kvcal-verify-banner-title { font-size: 14px; font-weight: 700; color: #7a5800; margin-bottom: 4px; }
+    .kvcal-verify-banner-desc  { font-size: 13px; color: #8a6800; line-height: 1.5; margin-bottom: 10px; }
+    .kvcal-verify-banner-desc ul { margin: 6px 0 0 18px; }
+    .kvcal-verify-banner-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffc107;
+      color: #3d2c00;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: opacity 0.18s;
+    }
+    .kvcal-verify-banner-link:hover { opacity: 0.85; }
+    .kvcal-add-btn-disabled {
+      background: #e0e0e0;
+      color: #9e9e9e;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: not-allowed;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Toast */
+    .kvcal-toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #262626;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 9999;
+      white-space: nowrap;
+    }
+
+    .kvcal-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Mobile footer spacer - ensures content doesn't hide behind footer */
+    .kvcal-mobile-footer-spacer {
+      display: none;
+      height: 70px;
+    }
+    
+    @media (max-width: 767px) {
+      .kvcal-mobile-footer-spacer {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+
+{% include 'header.html' %}
+
+<main style="padding-top: 60px;">
+  <div class="kvibe-desktop-layout">
+
+    <!-- Left Sidebar -->
+    <aside class="kvibe-left-sidebar kvibe-desktop-only" style="display: flex; flex-direction: column;">
+      <div class="kvibe-desktop-nav">
+
+        <a href="{% url 'home' %}" class="kvibe-desktop-nav-item" title="Home">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="kvibe-desktop-nav-label">Home</span>
+        </a>
+
+        <a href="{% url 'search' %}" class="kvibe-desktop-nav-item" title="Search">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="kvibe-desktop-nav-label">Search</span>
+        </a>
+
+        <a href="{% url 'post' %}" class="kvibe-desktop-nav-item" title="Create Post">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" stroke-width="2"/>
+              <line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/>
+              <line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/>
+            </svg>
+          </div>
+          <span class="kvibe-desktop-nav-label">Create</span>
+        </a>
+
+        <a href="{% url 'profile' request.user.username %}" class="kvibe-desktop-nav-item" title="Profile">
+          <div class="kvibe-desktop-nav-icon">
+            <i class="fa-regular fa-user" style="font-size: 20px; color: var(--kvibe-text-light);"></i>
+          </div>
+          <span class="kvibe-desktop-nav-label">Profile</span>
+        </a>
+
+        <a href="{% url 'channel_create' %}" class="kvibe-desktop-nav-item" title="Channels">
+          <div class="kvibe-desktop-nav-icon">
+            <i class="fa-regular fa-newspaper" style="font-size: 20px; color: var(--kvibe-text-light);"></i>
+          </div>
+          <span class="kvibe-desktop-nav-label">Channels</span>
+        </a>
+
+        <a href="{% url 'services' %}" class="kvibe-desktop-nav-item" title="Services">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <span class="kvibe-desktop-nav-label">Services</span>
+        </a>
+
+        <a href="#" class="kvibe-desktop-nav-item logout" id="calLogoutIcon" title="Log Out">
+          <div class="kvibe-desktop-nav-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+          </div>
+          <span class="kvibe-desktop-nav-label">Logout</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="kvibe-main-feed">
+
+      <!-- Page Header -->
+      <div class="kvcal-header">
+        <div class="kvcal-header-left">
+          <h1>📅 Event Calendar</h1>
+          <p>Community events — town meetings, festivals, weddings &amp; more</p>
+        </div>
+        {% if user_can_post %}
+          <button class="kvcal-add-btn" onclick="kvcalOpenModal()">
+            <i class="fas fa-plus"></i> Add Event
+          </button>
+        {% else %}
+          <button class="kvcal-add-btn-disabled" onclick="document.getElementById('kvcalVerifyBanner').scrollIntoView({behavior:'smooth'})">
+            <i class="fas fa-user-edit"></i> Complete Profile to Add
+          </button>
+        {% endif %}
+      </div>
+
+      <!-- Profile completion banner — shown only when required fields are missing -->
+      {% if not user_can_post %}
+      <div class="kvcal-verify-banner" id="kvcalVerifyBanner">
+        <div class="kvcal-verify-banner-icon">📝</div>
+        <div class="kvcal-verify-banner-body">
+          <div class="kvcal-verify-banner-title">Complete your profile to add events</div>
+          <div class="kvcal-verify-banner-desc">
+            To keep the community safe, you need a complete profile before adding events.
+            {% if missing_fields %}
+              <br>Your profile is missing the following required information:
+              <ul>
+                {% for field in missing_fields %}<li>{{ field }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+          <a href="{% url 'profile' request.user.username %}" class="kvcal-verify-banner-link">
+            <i class="fas fa-user-edit"></i> Complete My Profile
+          </a>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Category Filters -->
+      <div class="kvcal-filter-bar">
+        <button class="kvcal-filter-chip active" style="--chip-color: var(--kvibe-primary);" data-filter="all" onclick="kvcalFilter('all', this)">
+          🗓️ All Events
+        </button>
+        <button class="kvcal-filter-chip" style="--chip-color: var(--ev-town);" data-filter="town" onclick="kvcalFilter('town', this)">
+          🏛️ Town Meetings
+        </button>
+        <button class="kvcal-filter-chip" style="--chip-color: var(--ev-festival);" data-filter="festival" onclick="kvcalFilter('festival', this)">
+          🎪 Festivals
+        </button>
+        <button class="kvcal-filter-chip" style="--chip-color: var(--ev-wedding);" data-filter="wedding" onclick="kvcalFilter('wedding', this)">
+          💍 Weddings
+        </button>
+        <button class="kvcal-filter-chip" style="--chip-color: var(--ev-other);" data-filter="other" onclick="kvcalFilter('other', this)">
+          ✨ Other
+        </button>
+      </div>
+
+      <!-- Month Navigation -->
+      <div class="kvcal-month-nav">
+        <button class="kvcal-nav-btn" onclick="kvcalPrevMonth()">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        <h2 id="kvcalMonthLabel"></h2>
+        <button class="kvcal-nav-btn" onclick="kvcalNextMonth()">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+
+      <!-- Calendar Grid -->
+      <div class="kvcal-grid-wrap">
+        <div class="kvcal-weekdays">
+          <div class="kvcal-weekday">Sun</div>
+          <div class="kvcal-weekday">Mon</div>
+          <div class="kvcal-weekday">Tue</div>
+          <div class="kvcal-weekday">Wed</div>
+          <div class="kvcal-weekday">Thu</div>
+          <div class="kvcal-weekday">Fri</div>
+          <div class="kvcal-weekday">Sat</div>
+        </div>
+        <div class="kvcal-days" id="kvcalDaysGrid"></div>
+      </div>
+
+      <!-- Upcoming Events List -->
+      <div class="kvcal-section-title" id="kvcalListTitle">Upcoming Events</div>
+      <div id="kvcalEventList"></div>
+      
+      <!-- Mobile footer spacer - prevents content from hiding behind mobile footer -->
+      <div class="kvcal-mobile-footer-spacer"></div>
+
+    </div>
+
+    <!-- Right Sidebar -->
+    <aside class="kvibe-right-sidebar kvibe-desktop-only" style="display: flex; flex-direction: column;">
+
+      <div class="kvcal-sidebar-widget">
+        <h3>Event Types</h3>
+        <div class="kvcal-legend-item">
+          <span class="kvcal-legend-dot" style="background: var(--ev-town);"></span>
+          <span>🏛️ Town Meetings</span>
+          <span class="kvcal-legend-count" id="kvcal-count-town">{{ counts.town }}</span>
+        </div>
+        <div class="kvcal-legend-item">
+          <span class="kvcal-legend-dot" style="background: var(--ev-festival);"></span>
+          <span>🎪 Festivals</span>
+          <span class="kvcal-legend-count" id="kvcal-count-festival">{{ counts.festival }}</span>
+        </div>
+        <div class="kvcal-legend-item">
+          <span class="kvcal-legend-dot" style="background: var(--ev-wedding);"></span>
+          <span>💍 Weddings</span>
+          <span class="kvcal-legend-count" id="kvcal-count-wedding">{{ counts.wedding }}</span>
+        </div>
+        <div class="kvcal-legend-item">
+          <span class="kvcal-legend-dot" style="background: var(--ev-other);"></span>
+          <span>✨ Other</span>
+          <span class="kvcal-legend-count" id="kvcal-count-other">{{ counts.other }}</span>
+        </div>
+      </div>
+
+      <div class="kvcal-sidebar-widget">
+        <h3>📌 Quick Links</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <a href="{% url 'services' %}" style="font-size:13px; color: var(--kvibe-primary); text-decoration:none; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-th-large fa-fw" style="color:var(--kvibe-text-light);width:18px;"></i> All Services
+          </a>
+          <a href="{% url 'home' %}" style="font-size:13px; color: var(--kvibe-primary); text-decoration:none; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-home fa-fw" style="color:var(--kvibe-text-light);width:18px;"></i> Home Feed
+          </a>
+          <a href="{% url 'market' %}" style="font-size:13px; color: var(--kvibe-primary); text-decoration:none; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-store fa-fw" style="color:var(--kvibe-text-light);width:18px;"></i> Marketplace
+          </a>
+          <a href="{% url 'job_vacancy' %}" style="font-size:13px; color: var(--kvibe-primary); text-decoration:none; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-briefcase fa-fw" style="color:var(--kvibe-text-light);width:18px;"></i> Job Vacancies
+          </a>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+</main>
+
+<!-- Full-size Image Modal -->
+<div class="kvcal-image-modal-overlay" id="kvcalImageModalOverlay" onclick="kvcalCloseImageModal()">
+  <button class="kvcal-image-modal-close" onclick="kvcalCloseImageModal()">&times;</button>
+  <div class="kvcal-image-modal">
+    <img id="kvcalModalImage" src="" alt="Full size image">
+  </div>
+</div>
+
+<!-- Add / Edit Event Modal -->
+<div class="kvcal-modal-overlay" id="kvcalModalOverlay">
+  <div class="kvcal-modal">
+    <div class="kvcal-modal-title">
+      <span id="kvcalModalHeading">📅 Add New Event</span>
+      <button class="kvcal-modal-close" onclick="kvcalCloseModal()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="kvcal-form-group">
+      <label>Event Title *</label>
+      <input type="text" id="kvcalFormTitle" placeholder="e.g. Spring Festival 2026" maxlength="100">
+    </div>
+
+    <div class="kvcal-form-group">
+      <label>Event Type *</label>
+      <select id="kvcalFormType">
+        <option value="">Select type…</option>
+        <option value="town">🏛️ Town Meeting</option>
+        <option value="festival">🎪 Festival</option>
+        <option value="wedding">💍 Wedding</option>
+        <option value="other">✨ Other</option>
+      </select>
+    </div>
+
+    <div class="kvcal-form-row">
+      <div class="kvcal-form-group">
+        <label>Date *</label>
+        <input type="date" id="kvcalFormDate">
+      </div>
+      <div class="kvcal-form-group">
+        <label>Time</label>
+        <input type="time" id="kvcalFormTime">
+      </div>
+    </div>
+
+    <div class="kvcal-form-group">
+      <label>Location</label>
+      <input type="text" id="kvcalFormLocation" placeholder="e.g. City Park, Community Center">
+    </div>
+
+    <div class="kvcal-form-group">
+      <label>Description</label>
+      <textarea id="kvcalFormDesc" rows="3" placeholder="Brief event description…" style="resize: vertical;"></textarea>
+    </div>
+
+    <!-- Image upload (optional) -->
+    <div class="kvcal-form-group">
+      <label>Cover Image <span style="font-weight:400;color:var(--kvibe-text-light);">(optional)</span></label>
+      <label class="kvcal-img-upload-label" for="kvcalFormImage">
+        <i class="fas fa-image"></i> Choose photo…
+      </label>
+      <input type="file" id="kvcalFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;">
+      <div class="kvcal-img-preview-wrap" id="kvcalImgPreviewWrap">
+        <img id="kvcalImgPreview" class="kvcal-img-preview" src="" alt="preview">
+        <button class="kvcal-img-clear-btn" type="button" onclick="kvcalClearImage()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
+    <button class="kvcal-form-submit" id="kvcalFormSubmitBtn" onclick="kvcalSubmitEvent()">
+      <i class="fas fa-plus"></i> Add Event
+    </button>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="kvcal-confirm-overlay" id="kvcalConfirmOverlay">
+  <div class="kvcal-confirm-box">
+    <h3>🗑️ Delete Event?</h3>
+    <p id="kvcalConfirmMsg">This event will be permanently deleted.</p>
+    <div class="kvcal-confirm-btns">
+      <button class="cancel-btn" onclick="kvcalCloseConfirm()">Cancel</button>
+      <button class="delete-btn" id="kvcalConfirmDeleteBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="kvcal-toast" id="kvcalToast"></div>
+
+<!-- Mobile Footer - Only visible on mobile devices -->
+<div class="kvibe-mobile-footer" style="display: none;">
+  {% include 'footer.html' %}
+</div>
+
+<style>
+  /* Mobile footer visibility and styling */
+  @media (max-width: 767px) {
+    .kvibe-mobile-footer {
+      display: block !important;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+      background: var(--kvibe-white);
+      border-top: 1px solid var(--kvibe-border);
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .kvibe-mobile-footer {
+      display: none !important;
+    }
+  }
+</style>
+
+<script>
+// ── Event data — seeded from Django context, then extended client-side ──
+var KVCAL_EVENTS = [
+  {% for ev in events %}
+  {
+    id: {{ ev.id }},
+    title: "{{ ev.title|escapejs }}",
+    type: "{{ ev.event_type }}",
+    date: "{{ ev.date|date:'Y-m-d' }}",
+    time: "{% if ev.time %}{{ ev.time|time:'H:i' }}{% endif %}",
+    location: "{{ ev.location|escapejs }}",
+    desc: "{{ ev.description|escapejs }}",
+    coverImage: "{% if ev.cover_image %}{{ ev.cover_image.url }}{% endif %}",
+    isOwner: {% if ev.created_by == request.user %}true{% else %}false{% endif %}
+  }{% if not forloop.last %},{% endif %}
+  {% empty %}
+  /* no events yet — add some! */
+  {% endfor %}
+];
+
+var _kvcalCurrentFilter = '{{ event_type|default:"all" }}';
+var _kvcalViewDate = new Date();
+
+// ── Type config ──
+var KVCAL_TYPES = {
+  town:     { label: 'Town Meeting', emoji: '🏛️', color: '#0095f6' },
+  festival: { label: 'Festival',     emoji: '🎪', color: '#ff6b35' },
+  wedding:  { label: 'Wedding',      emoji: '💍', color: '#e91e8c' },
+  other:    { label: 'Other',        emoji: '✨', color: '#7c3aed' }
+};
+
+// ── Months ──
+var MONTHS = ['January','February','March','April','May','June',
+              'July','August','September','October','November','December'];
+var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ── Modal state ──
+var _kvcalEditId = null;   // null = create mode, number = edit mode
+var _kvcalClearImage = false;  // user clicked ✕ on existing image
+
+// ── Full-size image modal ──
+function kvcalOpenImageModal(imageUrl) {
+  if (!imageUrl) return;
+  var modalImg = document.getElementById('kvcalModalImage');
+  modalImg.src = imageUrl;
+  document.getElementById('kvcalImageModalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function kvcalCloseImageModal() {
+  document.getElementById('kvcalImageModalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Close image modal with Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    kvcalCloseImageModal();
+  }
+});
+
+// ── Render everything ──
+function kvcalRender() {
+  kvcalRenderGrid();
+  kvcalRenderList();
+}
+
+function kvcalRenderGrid() {
+  var y = _kvcalViewDate.getFullYear();
+  var m = _kvcalViewDate.getMonth();
+  document.getElementById('kvcalMonthLabel').textContent = MONTHS[m] + ' ' + y;
+
+  var firstDay = new Date(y, m, 1).getDay();
+  var daysInMonth = new Date(y, m + 1, 0).getDate();
+  var daysInPrev  = new Date(y, m, 0).getDate();
+  var today = new Date();
+  today.setHours(0,0,0,0);
+
+  var evMap = {};
+  KVCAL_EVENTS.forEach(function(ev) {
+    var d = new Date(ev.date + 'T00:00:00');
+    if (d.getFullYear() === y && d.getMonth() === m) {
+      var dd = d.getDate();
+      if (!evMap[dd]) evMap[dd] = [];
+      evMap[dd].push(KVCAL_TYPES[ev.type] ? KVCAL_TYPES[ev.type].color : '#0095f6');
+    }
+  });
+
+  var html = '';
+  for (var i = firstDay - 1; i >= 0; i--) {
+    html += '<button class="kvcal-day other-month" disabled>' + (daysInPrev - i) + '</button>';
+  }
+  for (var day = 1; day <= daysInMonth; day++) {
+    var dt = new Date(y, m, day);
+    var cls = 'kvcal-day';
+    if (dt.getTime() === today.getTime()) cls += ' today';
+    var dots = '';
+    if (evMap[day]) {
+      dots = '<div class="kvcal-day-dot">';
+      evMap[day].slice(0,3).forEach(function(c) { dots += '<span style="background:' + c + ';"></span>'; });
+      dots += '</div>';
+    }
+    html += '<button class="' + cls + '" onclick="kvcalSelectDay(' + y + ',' + m + ',' + day + ')">' + day + dots + '</button>';
+  }
+  var total = firstDay + daysInMonth;
+  var remainder = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (var n = 1; n <= remainder; n++) {
+    html += '<button class="kvcal-day other-month" disabled>' + n + '</button>';
+  }
+
+  document.getElementById('kvcalDaysGrid').innerHTML = html;
+}
+
+function kvcalSelectDay(y, m, day) {
+  var dateStr = y + '-' + String(m+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+  var dayEvs = KVCAL_EVENTS.filter(function(ev) { return ev.date === dateStr; });
+  var title = MONTHS[m] + ' ' + day + ', ' + y;
+  document.getElementById('kvcalListTitle').textContent =
+    dayEvs.length ? '📅 ' + title + ' — ' + dayEvs.length + ' event' + (dayEvs.length > 1 ? 's' : '') : '📅 ' + title + ' — No events';
+  kvcalRenderEventCards(dayEvs);
+  document.querySelectorAll('.kvcal-day.selected').forEach(function(b) { b.classList.remove('selected'); });
+  var allBtns = document.querySelectorAll('#kvcalDaysGrid .kvcal-day:not(.other-month)');
+  if (allBtns[day - 1]) allBtns[day - 1].classList.add('selected');
+}
+
+function kvcalRenderList() {
+  document.getElementById('kvcalListTitle').textContent = 'Upcoming Events';
+  var filtered = KVCAL_EVENTS.filter(function(ev) {
+    if (_kvcalCurrentFilter !== 'all' && ev.type !== _kvcalCurrentFilter) return false;
+    return new Date(ev.date + 'T00:00:00') >= new Date(new Date().toDateString());
+  });
+  filtered.sort(function(a, b) { return a.date.localeCompare(b.date); });
+  kvcalRenderEventCards(filtered);
+}
+
+function kvcalRenderEventCards(events) {
+  var list = document.getElementById('kvcalEventList');
+  if (!events.length) {
+    list.innerHTML = '<div class="kvcal-empty"><i class="far fa-calendar-times"></i>No events found</div>';
+    return;
+  }
+  list.innerHTML = events.map(function(ev) {
+    var d = new Date(ev.date + 'T00:00:00');
+    var tc = KVCAL_TYPES[ev.type] || { label: 'Event', emoji: '📌', color: '#0095f6' };
+    var timeStr = ev.time ? formatTime(ev.time) : 'All Day';
+
+    var imgHtml = ev.coverImage
+      ? '<img class="kvcal-event-card-img" src="' + htmlEsc(ev.coverImage) + '" alt="Event cover" loading="lazy" onclick="kvcalOpenImageModal(\'' + htmlEsc(ev.coverImage) + '\');event.stopPropagation();">'
+      : '';
+
+    var actionsHtml = ev.isOwner
+      ? '<div class="kvcal-event-card-actions">' +
+          '<button class="kvcal-event-action-btn edit" onclick="kvcalOpenEdit(' + ev.id + ');event.stopPropagation();">' +
+            '<i class="fas fa-pen"></i> Edit' +
+          '</button>' +
+          '<button class="kvcal-event-action-btn delete" onclick="kvcalOpenConfirmDelete(' + ev.id + ');event.stopPropagation();">' +
+            '<i class="fas fa-trash"></i> Delete' +
+          '</button>' +
+        '</div>'
+      : '';
+
+    return '<div class="kvcal-event-card" style="--ev-color:' + tc.color + ';">' +
+      '<div class="kvcal-event-card-date" style="--ev-color:' + tc.color + ';">' +
+        '<span class="month">' + MONTHS_SHORT[d.getMonth()] + '</span>' +
+        '<span class="day">' + d.getDate() + '</span>' +
+      '</div>' +
+      '<div class="kvcal-event-card-body">' +
+        '<div class="kvcal-event-card-title">' + htmlEsc(ev.title) + '</div>' +
+        '<div class="kvcal-event-card-meta">' +
+          (ev.location ? '<span><i class="fas fa-map-marker-alt"></i>' + htmlEsc(ev.location) + '</span>' : '') +
+          '<span><i class="far fa-clock"></i>' + timeStr + '</span>' +
+        '</div>' +
+        (ev.desc ? '<div style="font-size:12px;color:var(--kvibe-text-light);margin-top:6px;line-height:1.5;">' + htmlEsc(ev.desc) + '</div>' : '') +
+        '<div class="kvcal-event-type-badge" style="--ev-color:' + tc.color + ';">' + tc.emoji + ' ' + tc.label + '</div>' +
+        imgHtml +
+        actionsHtml +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function kvcalFilter(type, btn) {
+  _kvcalCurrentFilter = type;
+  document.querySelectorAll('.kvcal-filter-chip').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  kvcalRenderList();
+}
+
+function kvcalPrevMonth() {
+  _kvcalViewDate.setMonth(_kvcalViewDate.getMonth() - 1);
+  kvcalRender();
+}
+
+function kvcalNextMonth() {
+  _kvcalViewDate.setMonth(_kvcalViewDate.getMonth() + 1);
+  kvcalRender();
+}
+
+// ── Modal helpers ──
+function kvcalResetForm() {
+  ['kvcalFormTitle','kvcalFormType','kvcalFormDate','kvcalFormTime','kvcalFormLocation','kvcalFormDesc']
+    .forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('kvcalFormImage').value = '';
+  document.getElementById('kvcalImgPreviewWrap').classList.remove('visible');
+  document.getElementById('kvcalImgPreview').src = '';
+  _kvcalClearImage = false;
+}
+
+function kvcalOpenModal() {
+  _kvcalEditId = null;
+  kvcalResetForm();
+  var today = new Date();
+  document.getElementById('kvcalFormDate').value = today.toISOString().slice(0,10);
+  document.getElementById('kvcalModalHeading').textContent = '📅 Add New Event';
+  document.getElementById('kvcalFormSubmitBtn').innerHTML = '<i class="fas fa-plus"></i> Add Event';
+  document.getElementById('kvcalModalOverlay').classList.add('open');
+}
+
+function kvcalOpenEdit(evId) {
+  var ev = KVCAL_EVENTS.find(function(e) { return e.id === evId; });
+  if (!ev) return;
+  _kvcalEditId = evId;
+  kvcalResetForm();
+  document.getElementById('kvcalFormTitle').value    = ev.title;
+  document.getElementById('kvcalFormType').value     = ev.type;
+  document.getElementById('kvcalFormDate').value     = ev.date;
+  document.getElementById('kvcalFormTime').value     = ev.time || '';
+  document.getElementById('kvcalFormLocation').value = ev.location || '';
+  document.getElementById('kvcalFormDesc').value     = ev.desc || '';
+  if (ev.coverImage) {
+    document.getElementById('kvcalImgPreview').src = ev.coverImage;
+    document.getElementById('kvcalImgPreviewWrap').classList.add('visible');
+  }
+  document.getElementById('kvcalModalHeading').textContent = '✏️ Edit Event';
+  document.getElementById('kvcalFormSubmitBtn').innerHTML = '<i class="fas fa-save"></i> Save Changes';
+  document.getElementById('kvcalModalOverlay').classList.add('open');
+}
+
+function kvcalCloseModal() {
+  document.getElementById('kvcalModalOverlay').classList.remove('open');
+}
+
+// ── Image preview ──
+document.getElementById('kvcalFormImage').addEventListener('change', function() {
+  var file = this.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('kvcalImgPreview').src = e.target.result;
+    document.getElementById('kvcalImgPreviewWrap').classList.add('visible');
+    _kvcalClearImage = false;
+  };
+  reader.readAsDataURL(file);
+});
+
+function kvcalClearImage() {
+  document.getElementById('kvcalFormImage').value = '';
+  document.getElementById('kvcalImgPreview').src = '';
+  document.getElementById('kvcalImgPreviewWrap').classList.remove('visible');
+  _kvcalClearImage = true;
+}
+
+// ── Submit (create or edit) ──
+function kvcalSubmitEvent() {
+  var title    = document.getElementById('kvcalFormTitle').value.trim();
+  var type     = document.getElementById('kvcalFormType').value;
+  var date     = document.getElementById('kvcalFormDate').value;
+  var time     = document.getElementById('kvcalFormTime').value;
+  var location = document.getElementById('kvcalFormLocation').value.trim();
+  var desc     = document.getElementById('kvcalFormDesc').value.trim();
+  var imgFile  = document.getElementById('kvcalFormImage').files[0];
+
+  if (!title) { kvcalToast('Please enter an event title.'); return; }
+  if (!type)  { kvcalToast('Please select an event type.');  return; }
+  if (!date)  { kvcalToast('Please choose a date.');         return; }
+
+  var submitBtn = document.getElementById('kvcalFormSubmitBtn');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
+
+  var fd = new FormData();
+  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+  fd.append('title',       title);
+  fd.append('event_type',  type);
+  fd.append('date',        date);
+  fd.append('time',        time);
+  fd.append('location',    location);
+  fd.append('description', desc);
+  if (imgFile) {
+    fd.append('cover_image', imgFile);
+  }
+  if (_kvcalClearImage) {
+    fd.append('clear_image', '1');
+  }
+
+  var url = _kvcalEditId
+    ? '/events/' + _kvcalEditId + '/edit/'
+    : '{% url "event_calendar_create" %}';
+
+  fetch(url, {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: fd
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = _kvcalEditId
+        ? '<i class="fas fa-save"></i> Save Changes'
+        : '<i class="fas fa-plus"></i> Add Event';
+    }
+    if (data.success) {
+      var ev = data.event;
+      var evObj = {
+        id: ev.id, title: ev.title, type: ev.event_type,
+        date: ev.date, time: ev.time, location: ev.location,
+        desc: ev.description, coverImage: ev.cover_image || '',
+        isOwner: true
+      };
+      if (_kvcalEditId) {
+        // Replace in array
+        var idx = KVCAL_EVENTS.findIndex(function(e) { return e.id === _kvcalEditId; });
+        if (idx !== -1) KVCAL_EVENTS[idx] = evObj;
+        kvcalToast('✅ Event updated!');
+      } else {
+        KVCAL_EVENTS.push(evObj);
+        kvcalToast('✅ Event added!');
+      }
+      kvcalCloseModal();
+      kvcalRender();
+    } else {
+      kvcalToast(data.error || 'Could not save event.');
+    }
+  })
+  .catch(function() {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = _kvcalEditId
+        ? '<i class="fas fa-save"></i> Save Changes'
+        : '<i class="fas fa-plus"></i> Add Event';
+    }
+    kvcalToast('Network error — please try again.');
+  });
+}
+
+// ── Delete confirm ──
+var _kvcalDeleteTarget = null;
+
+function kvcalOpenConfirmDelete(evId) {
+  var ev = KVCAL_EVENTS.find(function(e) { return e.id === evId; });
+  _kvcalDeleteTarget = evId;
+  document.getElementById('kvcalConfirmMsg').textContent =
+    ev ? '"' + ev.title + '" will be permanently deleted.' : 'This event will be permanently deleted.';
+  document.getElementById('kvcalConfirmOverlay').classList.add('open');
+
+  document.getElementById('kvcalConfirmDeleteBtn').onclick = function() {
+    kvcalDoDelete(evId);
+  };
+}
+
+function kvcalCloseConfirm() {
+  document.getElementById('kvcalConfirmOverlay').classList.remove('open');
+  _kvcalDeleteTarget = null;
+}
+
+function kvcalDoDelete(evId) {
+  var btn = document.getElementById('kvcalConfirmDeleteBtn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  var fd = new FormData();
+  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+  fetch('/events/' + evId + '/delete/', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: fd
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+    if (data.success) {
+      KVCAL_EVENTS = KVCAL_EVENTS.filter(function(e) { return e.id !== evId; });
+      kvcalCloseConfirm();
+      kvcalRender();
+      kvcalToast('🗑️ Event deleted.');
+    } else {
+      kvcalToast(data.error || 'Could not delete event.');
+    }
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+    kvcalToast('Network error — please try again.');
+  });
+}
+
+document.getElementById('kvcalModalOverlay').addEventListener('click', function(e) {
+  if (e.target === this) kvcalCloseModal();
+});
+
+document.getElementById('kvcalConfirmOverlay').addEventListener('click', function(e) {
+  if (e.target === this) kvcalCloseConfirm();
+});
+
+// ── Helpers ──
+function formatTime(t) {
+  if (!t) return '';
+  var parts = t.split(':');
+  var h = parseInt(parts[0]), m = parts[1];
+  var ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return h + ':' + m + ' ' + ap;
+}
+
+function htmlEsc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function kvcalToast(msg) {
+  var t = document.getElementById('kvcalToast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+
+// Logout
+document.getElementById('calLogoutIcon').addEventListener('click', function(e) {
+  e.preventDefault();
+  var form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '{% url "logout" %}';
+  var csrf = document.createElement('input');
+  csrf.type = 'hidden';
+  csrf.name = 'csrfmiddlewaretoken';
+  csrf.value = '{{ csrf_token }}';
+  form.appendChild(csrf);
+  document.body.appendChild(form);
+  form.submit();
+});
+
+// ── Init ──
+kvcalRender();
+</script>
+
+</body>
+</html>

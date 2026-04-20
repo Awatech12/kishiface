@@ -1,0 +1,158 @@
+{% load static %}
+{% load humanize %}
+{% load time %}
+{% load text_filters %}
+
+{% for post in posts %}
+  {% with rp=post.original_post|default:post %}
+  <a href="{% url 'postcomment' post.post_id %}" class="ks-post-card" data-post-id="{{ post.post_id }}">
+
+    {# ── Thumbnail ── #}
+    <div class="ks-post-thumb-wrap">
+      {% if rp.images.exists %}
+        <img src="{{ rp.images.first.image.url }}" alt="post" class="ks-post-thumb" loading="lazy">
+        {% if rp.images.count > 1 %}
+          <span class="ks-thumb-badge"><i class="fa-solid fa-clone"></i></span>
+        {% endif %}
+      {% elif rp.video_file %}
+        <div class="ks-post-thumb-wrap" style="position:relative;">
+          <video src="{{ rp.video_file.url }}#t=0.5" preload="metadata" muted playsinline class="ks-post-thumb" style="object-fit:cover;display:block;"></video>
+          <span class="ks-thumb-badge"><i class="fa-solid fa-play"></i></span>
+        </div>
+      {% elif rp.file %}
+        <div class="ks-post-thumb ks-thumb-media">
+          <i class="fa-solid fa-music" style="font-size: 24px;"></i>
+        </div>
+      {% elif rp.content %}
+        <div class="ks-post-thumb ks-thumb-text">
+          <span>{{ rp.content|truncatechars:50 }}</span>
+        </div>
+      {% else %}
+        <div class="ks-post-thumb ks-thumb-media">
+          <i class="fa-regular fa-file" style="font-size: 24px;"></i>
+        </div>
+      {% endif %}
+    </div>
+
+    {# ── Body ── #}
+    <div class="ks-post-body">
+      <div class="ks-post-author-row">
+        <img
+          src="{{ rp.author.profile.get_picture_url }}"
+          class="ks-post-avatar"
+          loading="lazy"
+          onerror="this.src='https://placehold.co/28x28/dbdbdb/8e8e8e?text={{ rp.author.username|first|upper }}'"
+        >
+        <span class="ks-post-author-name">{{ rp.author.username }}</span>
+        {% if rp.author.profile.is_verify %}
+          <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:10px;"></i>
+        {% endif %}
+        {% if post.is_repost %}
+          <span class="ks-repost-tag"><i class="fa-solid fa-retweet"></i> repost</span>
+        {% endif %}
+      </div>
+
+      {% if rp.content %}
+        <div class="ks-post-text">{{ rp.content|truncatechars:100|safe|linebreaksbr }}</div>
+      {% endif %}
+
+      {# ── Link Preview (if available) ── #}
+      {% if rp.link_preview and rp.link_preview.title %}
+        <div class="kvibe-post-link-preview" style="margin: 8px 0 4px 0; text-decoration: none; display: block; border: 1px solid var(--kvibe-border); background: var(--kvibe-white); overflow: hidden;">
+          {% if rp.link_preview.image %}
+            <img src="{{ rp.link_preview.image }}" class="kvibe-plp-image" style="width: 100%; max-height: 140px; object-fit: cover; display: block;" alt="" onerror="this.style.display='none'">
+          {% endif %}
+          <div class="kvibe-plp-body" style="padding: 10px 12px;">
+            {% if rp.link_preview.domain %}
+              <div class="kvibe-plp-domain" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--kvibe-primary); margin-bottom: 4px; font-weight: 500;">{{ rp.link_preview.domain }}</div>
+            {% endif %}
+            {% if rp.link_preview.title %}
+              <div class="kvibe-plp-title" style="font-size: 13px; font-weight: 600; color: var(--kvibe-text); line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">{{ rp.link_preview.title }}</div>
+            {% endif %}
+            {% if rp.link_preview.description %}
+              <div class="kvibe-plp-desc" style="font-size: 11px; color: var(--kvibe-text-light); margin-top: 4px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4;">{{ rp.link_preview.description }}</div>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      {# ── Reaction bar ── #}
+      <div class="ks-reaction-bar">
+        {# Vibes summary #}
+        <span class="ks-react-chip">
+          {% if post.user_vibe_emoji %}
+            <span class="ks-react-active">{{ post.user_vibe_emoji }}</span>
+          {% else %}
+            <i class="fa-regular fa-face-smile"></i>
+          {% endif %}
+          {{ post.vibe_count }}
+        </span>
+
+        {# Comments #}
+        <span class="ks-react-chip">
+          <i class="fa-regular fa-comment"></i>
+          {{ post.comment_count }}
+        </span>
+
+        {# Reposts #}
+        <span class="ks-react-chip">
+          <i class="fa-solid fa-retweet"></i>
+          {{ post.repost_count }}
+        </span>
+
+        {# Shares #}
+        {% if rp.share %}
+        <span class="ks-react-chip">
+          <i class="fa-solid fa-share-nodes"></i>
+          {{ rp.share }}
+        </span>
+        {% endif %}
+
+        {# Views #}
+        {% if rp.view %}
+        <span class="ks-react-chip ks-chip-muted">
+          <i class="fa-regular fa-eye"></i>
+          {{ rp.view }}
+        </span>
+        {% endif %}
+
+        <span class="ks-react-chip ks-chip-muted" style="margin-left:auto;">
+          {{ post.created_at|insta_timesince }}
+        </span>
+      </div>
+
+      {# ── Mood tag ── #}
+      {% if rp.has_mood %}
+        <span class="ks-mood-tag" style="color:{{ rp.get_mood_color }}; background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; margin-top: 6px; display: inline-block;">
+          {% if rp.mood_emoji %}{{ rp.mood_emoji }} {% endif %}{{ rp.get_mood_display|default:rp.custom_mood }}
+        </span>
+      {% endif %}
+    </div>
+  </a>
+  {% endwith %}
+{% empty %}
+<div class="ks-empty" style="padding: 48px 20px; text-align: center;">
+  <i class="fa-regular fa-newspaper" style="font-size: 38px; color: var(--kvibe-border); margin-bottom: 12px; display: block;"></i>
+  <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 6px;">No posts found</h3>
+  <p style="font-size: 14px; color: var(--kvibe-muted);">Try different keywords or check spelling.</p>
+</div>
+{% endfor %}
+
+{% if has_more %}
+<div
+  id="posts-sentinel"
+  hx-get="{% url 'search_posts_partial' %}?q={{ query|urlencode }}&page={{ page }}"
+  hx-trigger="intersect once"
+  hx-target="#posts-sentinel"
+  hx-swap="outerHTML"
+  class="ks-load-sentinel"
+  style="display: flex; align-items: center; justify-content: center; padding: 20px; color: var(--kvibe-muted); font-size: 13px;"
+>
+  <span class="ks-spinner" style="display: inline-block; width: 22px; height: 22px; border: 3px solid var(--kvibe-border); border-top-color: var(--kvibe-primary); border-radius: 50%; animation: ks-spin 0.7s linear infinite;"></span>
+  <span style="margin-left: 10px;">Loading more posts...</span>
+</div>
+{% endif %}
+
+<style>
+  @keyframes ks-spin { to { transform: rotate(360deg); } }
+</style>

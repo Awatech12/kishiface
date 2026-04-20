@@ -1,0 +1,1508 @@
+{% load static %}
+{% load post_tags %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <title>KishiHub – Job Vacancies</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    :root {
+      --kvibe-bg:         #fafafa;
+      --kvibe-white:      #ffffff;
+      --kvibe-text:       #262626;
+      --kvibe-text-light: #8e8e8e;
+      --kvibe-primary:    #0095f6;
+      --kvibe-border:     #dbdbdb;
+      --job-gig:          #ff6b35;
+      --job-fulltime:     #0095f6;
+      --job-apprentice:   #7c3aed;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--kvibe-bg);
+      color: var(--kvibe-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout ── */
+    .kvibe-desktop-layout {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px 20px 0 20px;
+      gap: 20px;
+    }
+
+    .kvibe-left-sidebar {
+      width: 245px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+
+    .kvibe-desktop-nav {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 20px 0;
+      background: var(--kvibe-white);
+    }
+
+    .kvibe-desktop-nav-item {
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+      width: 100%;
+      padding: 12px;
+      position: relative;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border-radius: 8px;
+      background: none;
+      border: none;
+      text-align: left;
+    }
+
+    .kvibe-desktop-nav-item:hover  { background: var(--kvibe-bg); }
+    .kvibe-desktop-nav-item.active { background: var(--kvibe-bg); }
+
+    .kvibe-desktop-nav-icon {
+      width: 24px; height: 24px;
+      margin-right: 12px;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .kvibe-desktop-nav-icon svg {
+      width: 100%; height: 100%;
+      stroke: var(--kvibe-text-light);
+      transition: stroke 0.2s ease;
+    }
+
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-icon svg,
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-icon svg { stroke: var(--kvibe-primary); }
+
+    .kvibe-desktop-nav-label {
+      font-size: 14px;
+      color: var(--kvibe-text-light);
+      font-weight: 400;
+      transition: color 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .kvibe-desktop-nav-item:hover .kvibe-desktop-nav-label  { color: var(--kvibe-text); }
+    .kvibe-desktop-nav-item.active .kvibe-desktop-nav-label { color: var(--kvibe-text); font-weight: 600; }
+
+    .kvibe-desktop-nav-item.logout .kvibe-desktop-nav-icon svg       { stroke: var(--kvibe-primary); }
+    .kvibe-desktop-nav-item.logout:hover .kvibe-desktop-nav-icon svg { stroke: var(--kvibe-primary); }
+    .kvibe-desktop-nav-item.logout:hover .kvibe-desktop-nav-label    { color: var(--kvibe-primary); }
+
+    .kvibe-main-feed {
+      flex: 1;
+      max-width: 700px;
+      margin: 0 auto;
+      padding-bottom: 80px;
+    }
+
+    .kvibe-right-sidebar {
+      width: 320px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 50px;
+      height: calc(100vh - 104px);
+      overflow-y: auto;
+      padding-left: 10px;
+    }
+
+    @media (max-width: 767px) {
+      .kvibe-desktop-only { display: none !important; }
+      .kvibe-desktop-layout { padding: 12px 12px 0; gap: 0; }
+      .kvibe-main-feed { max-width: 100%; padding-bottom: 20px; }
+    }
+
+    @media (min-width: 768px) {
+      .kvibe-desktop-only { display: flex !important; }
+    }
+
+    /* Mobile footer spacing */
+    .mobile-footer-spacing {
+      display: none;
+    }
+    
+    @media (max-width: 767px) {
+      .mobile-footer-spacing {
+        display: block;
+        height: 70px;
+      }
+    }
+
+    /* ── Hero ── */
+    .kvj-hero {
+      background: linear-gradient(135deg, #0095f6 0%, #0077cc 100%);
+      border-radius: 16px;
+      padding: 28px 24px 22px;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+
+    .kvj-hero h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .kvj-hero p  { font-size: 14px; color: rgba(255,255,255,0.85); }
+
+    .kvj-hero-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .kvj-post-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #fff;
+      color: var(--kvibe-primary);
+      font-size: 13px; font-weight: 700;
+      padding: 9px 18px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .kvj-post-btn:hover { opacity: 0.88; }
+
+    /* ── Category filter tabs ── */
+    .kvj-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .kvj-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 15px;
+      border-radius: 20px;
+      border: 1px solid var(--kvibe-border);
+      background: var(--kvibe-white);
+      font-size: 13px; font-weight: 600;
+      color: var(--kvibe-text-light);
+      text-decoration: none;
+      transition: all 0.18s;
+      cursor: pointer;
+    }
+
+    .kvj-tab:hover,
+    .kvj-tab.active {
+      border-color: var(--tab-color, var(--kvibe-primary));
+      color: var(--tab-color, var(--kvibe-primary));
+      background: color-mix(in srgb, var(--tab-color, var(--kvibe-primary)) 8%, white);
+    }
+
+    .kvj-tab-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--tab-color, var(--kvibe-primary));
+      flex-shrink: 0;
+    }
+
+    /* ── Job cards ── */
+    .kvj-card {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+
+    .kvj-card:hover {
+      box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+      transform: translateY(-1px);
+    }
+
+    .kvj-card-cover {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      display: block;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .kvj-card-cover:hover {
+      opacity: 0.95;
+    }
+
+    .kvj-card-body { padding: 16px; }
+
+    .kvj-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .kvj-category-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px; font-weight: 700;
+      background: color-mix(in srgb, var(--badge-color) 12%, white);
+      color: var(--badge-color);
+      flex-shrink: 0;
+    }
+
+    .kvj-card-title {
+      font-size: 16px; font-weight: 700;
+      margin-bottom: 3px;
+      line-height: 1.3;
+    }
+
+    .kvj-card-company {
+      font-size: 13px;
+      color: var(--kvibe-text-light);
+      margin-bottom: 8px;
+    }
+
+    .kvj-card-company i { margin-right: 4px; }
+
+    .kvj-card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .kvj-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--kvibe-text-light);
+    }
+
+    .kvj-meta-item i { font-size: 11px; }
+
+    .kvj-card-desc {
+      font-size: 13px;
+      color: var(--kvibe-text);
+      line-height: 1.55;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .kvj-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .kvj-poster {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--kvibe-text-light);
+      text-decoration: none;
+    }
+
+    .kvj-poster:hover { color: var(--kvibe-text); }
+
+    .kvj-poster-avatar {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .kvj-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .kvj-owner-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+      border: 1px solid var(--kvibe-border);
+      background: var(--kvibe-bg);
+      color: var(--kvibe-text-light);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .kvj-owner-btn:hover { border-color: var(--kvibe-primary); color: var(--kvibe-primary); }
+    .kvj-owner-btn.del:hover { border-color: #ef4444; color: #ef4444; }
+
+    .kvj-closed-badge {
+      font-size: 11px; font-weight: 700;
+      color: #ef4444;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      padding: 2px 9px;
+    }
+
+    /* ── Empty state ── */
+    .kvj-empty {
+      text-align: center;
+      padding: 60px 20px;
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 14px;
+    }
+
+    .kvj-empty i { font-size: 40px; color: var(--kvibe-border); margin-bottom: 14px; display: block; }
+    .kvj-empty h3 { font-size: 16px; margin-bottom: 6px; }
+    .kvj-empty p  { font-size: 13px; color: var(--kvibe-text-light); }
+
+    /* ── Verification banner ── */
+    .kvj-verify-banner {
+      background: #fff8e1;
+      border: 1.5px solid #ffc107;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 18px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .kvj-verify-banner-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+    .kvj-verify-banner-body { flex: 1; }
+    .kvj-verify-banner-title { font-size: 14px; font-weight: 700; color: #7a5800; margin-bottom: 4px; }
+    .kvj-verify-banner-desc  { font-size: 13px; color: #8a6800; line-height: 1.5; margin-bottom: 10px; }
+    .kvj-verify-banner-desc ul { margin: 6px 0 0 18px; }
+    .kvj-verify-banner-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffc107;
+      color: #3d2c00;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: opacity 0.18s;
+    }
+    .kvj-verify-banner-link:hover { opacity: 0.85; }
+    .kvj-post-btn-disabled {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(255,255,255,0.35);
+      color: rgba(255,255,255,0.55);
+      font-size: 13px; font-weight: 700;
+      padding: 9px 18px;
+      border-radius: 20px;
+      border: 1.5px solid rgba(255,255,255,0.3);
+      cursor: not-allowed;
+    }
+
+    /* ── Pagination ── */
+    .kvj-pagination {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .kvj-page-btn {
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--kvibe-border);
+      background: var(--kvibe-white);
+      font-size: 13px; font-weight: 600;
+      color: var(--kvibe-text-light);
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+
+    .kvj-page-btn:hover,
+    .kvj-page-btn.current {
+      border-color: var(--kvibe-primary);
+      color: var(--kvibe-primary);
+    }
+
+    /* ── Right sidebar ── */
+    .kvj-sidebar-widget {
+      background: var(--kvibe-white);
+      border: 1px solid var(--kvibe-border);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .kvj-sidebar-widget h3 {
+      font-size: 14px; font-weight: 700;
+      margin-bottom: 14px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .kvj-sidebar-widget h3 a {
+      font-size: 12px; font-weight: 600;
+      color: var(--kvibe-primary); text-decoration: none;
+    }
+
+    .kvj-stat-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--kvibe-border);
+      font-size: 13px;
+      text-decoration: none;
+      color: var(--kvibe-text);
+      transition: color 0.15s;
+    }
+
+    .kvj-stat-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .kvj-stat-row:hover { color: var(--kvibe-primary); }
+
+    .kvj-stat-left { display: flex; align-items: center; gap: 8px; }
+
+    .kvj-swatch {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .kvj-stat-count {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--kvibe-text-light);
+    }
+
+    /* ── Full-size Image Modal ── */
+    .kvj-image-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .kvj-image-modal-overlay.open {
+      display: flex;
+    }
+
+    .kvj-image-modal {
+      max-width: 90vw;
+      max-height: 90vh;
+      text-align: center;
+    }
+
+    .kvj-image-modal img {
+      max-width: 100%;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+    .kvj-image-modal-close {
+      position: fixed;
+      top: 20px;
+      right: 30px;
+      font-size: 40px;
+      color: #fff;
+      cursor: pointer;
+      background: none;
+      border: none;
+      z-index: 10001;
+      transition: opacity 0.2s;
+    }
+
+    .kvj-image-modal-close:hover {
+      opacity: 0.7;
+    }
+
+    /* ── Modal overlay ── */
+    .kvj-modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 9000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .kvj-modal-overlay.open { opacity: 1; pointer-events: all; }
+
+    .kvj-modal {
+      background: var(--kvibe-white);
+      border-radius: 18px;
+      width: 100%;
+      max-width: 540px;
+      max-height: 92vh;
+      overflow-y: auto;
+      padding: 24px;
+      transform: translateY(20px);
+      transition: transform 0.2s;
+    }
+
+    .kvj-modal-overlay.open .kvj-modal { transform: translateY(0); }
+
+    .kvj-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .kvj-modal-header h2 { font-size: 17px; font-weight: 700; }
+
+    .kvj-modal-close {
+      background: none; border: none;
+      font-size: 20px; cursor: pointer;
+      color: var(--kvibe-text-light);
+      padding: 4px 8px;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+
+    .kvj-modal-close:hover { background: var(--kvibe-bg); }
+
+    .kvj-form-group { margin-bottom: 14px; }
+
+    .kvj-form-group label {
+      display: block;
+      font-size: 12px; font-weight: 700;
+      color: var(--kvibe-text-light);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 6px;
+    }
+
+    .kvj-form-group label .kvj-optional {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--kvibe-border);
+    }
+
+    .kvj-form-group input,
+    .kvj-form-group select,
+    .kvj-form-group textarea {
+      width: 100%;
+      padding: 10px 13px;
+      border: 1px solid var(--kvibe-border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--kvibe-text);
+      background: var(--kvibe-white);
+      transition: border-color 0.15s;
+      outline: none;
+    }
+
+    .kvj-form-group input:focus,
+    .kvj-form-group select:focus,
+    .kvj-form-group textarea:focus { border-color: var(--kvibe-primary); }
+
+    .kvj-form-group textarea { resize: vertical; min-height: 90px; }
+
+    .kvj-image-preview-wrap {
+      position: relative;
+      margin-top: 8px;
+    }
+
+    .kvj-image-preview {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid var(--kvibe-border);
+      display: none;
+    }
+
+    .kvj-image-preview.show { display: block; }
+
+    .kvj-image-remove {
+      position: absolute;
+      top: 6px; right: 6px;
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 28px; height: 28px;
+      font-size: 14px;
+      cursor: pointer;
+      display: none;
+      align-items: center; justify-content: center;
+    }
+
+    .kvj-image-preview.show + .kvj-image-remove { display: flex; }
+
+    .kvj-form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 480px) { .kvj-form-row { grid-template-columns: 1fr; } }
+
+    .kvj-status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 13px;
+      border: 1px solid var(--kvibe-border);
+      border-radius: 10px;
+    }
+
+    .kvj-status-label { font-size: 13px; font-weight: 600; }
+
+    .kvj-toggle {
+      position: relative;
+      width: 42px; height: 24px;
+      flex-shrink: 0;
+    }
+
+    .kvj-toggle input { opacity: 0; width: 0; height: 0; }
+
+    .kvj-toggle-slider {
+      position: absolute; inset: 0;
+      background: var(--kvibe-border);
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .kvj-toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 3px; top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .kvj-toggle input:checked + .kvj-toggle-slider { background: var(--kvibe-primary); }
+    .kvj-toggle input:checked + .kvj-toggle-slider::before { transform: translateX(18px); }
+
+    .kvj-submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--kvibe-primary);
+      color: #fff;
+      font-size: 15px; font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      margin-top: 6px;
+    }
+
+    .kvj-submit-btn:hover { opacity: 0.88; }
+    .kvj-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .kvj-form-error {
+      font-size: 12px;
+      color: #ef4444;
+      margin-top: 10px;
+      display: none;
+    }
+
+    /* ── Delete confirm modal ── */
+    .kvj-confirm-btns {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .kvj-confirm-btns button {
+      flex: 1;
+      padding: 11px;
+      border-radius: 10px;
+      font-size: 14px; font-weight: 700;
+      border: none; cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .kvj-confirm-btns button:hover { opacity: 0.85; }
+
+    .kvj-confirm-btns .cancel-btn {
+      background: var(--kvibe-bg);
+      color: var(--kvibe-text);
+      border: 1px solid var(--kvibe-border);
+    }
+
+    .kvj-confirm-btns .delete-btn {
+      background: #ef4444;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+{% include 'header.html' %}
+
+<main style="padding-top: 60px;">
+<div class="kvibe-desktop-layout">
+
+  <!-- ── Left Sidebar ── -->
+  <aside class="kvibe-left-sidebar kvibe-desktop-only" style="flex-direction: column;">
+    <div class="kvibe-desktop-nav">
+
+      <a href="{% url 'home' %}" class="kvibe-desktop-nav-item" title="Home">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Home</span>
+      </a>
+
+      <a href="{% url 'search' %}" class="kvibe-desktop-nav-item" title="Search">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Search</span>
+      </a>
+
+      <a href="{% url 'post' %}" class="kvibe-desktop-nav-item" title="Create Post">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" stroke-width="2"/>
+            <line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/>
+            <line x1="8" y1="12" x2="16" y2="12" stroke-width="2"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Create</span>
+      </a>
+
+      <a href="{% url 'notification_list' %}" class="kvibe-desktop-nav-item" title="Alerts">
+        <div class="kvibe-desktop-nav-icon">
+          <i class="fa-regular fa-bell" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+        </div>
+        <span class="kvibe-desktop-nav-label">Alerts</span>
+      </a>
+
+      <a href="{% url 'profile' request.user.username %}" class="kvibe-desktop-nav-item" title="Profile">
+        <div class="kvibe-desktop-nav-icon">
+          <i class="fa-regular fa-user" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+        </div>
+        <span class="kvibe-desktop-nav-label">Profile</span>
+      </a>
+
+      <a href="{% url 'channel_create' %}" class="kvibe-desktop-nav-item" title="Channels">
+        <div class="kvibe-desktop-nav-icon">
+          <i class="fa-regular fa-newspaper" style="font-size:20px;color:var(--kvibe-text-light);"></i>
+        </div>
+        <span class="kvibe-desktop-nav-label">Channels</span>
+      </a>
+
+      <a href="{% url 'services' %}" class="kvibe-desktop-nav-item" title="Services">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Services</span>
+      </a>
+
+      <!-- Jobs — active -->
+      <a href="{% url 'job_vacancy' %}" class="kvibe-desktop-nav-item active" title="Jobs">
+        <div class="kvibe-desktop-nav-icon">
+          <i class="fa-solid fa-briefcase" style="font-size:18px;color:var(--kvibe-primary);"></i>
+        </div>
+        <span class="kvibe-desktop-nav-label">Jobs</span>
+      </a>
+
+      <button class="kvibe-desktop-nav-item logout" id="kvjLogoutBtn" title="Log Out">
+        <div class="kvibe-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </div>
+        <span class="kvibe-desktop-nav-label">Logout</span>
+      </button>
+
+    </div>
+  </aside>
+
+  <!-- ── Main Content ── -->
+  <div class="kvibe-main-feed">
+
+    <!-- Hero -->
+    <div class="kvj-hero">
+      <h1>💼 Job Vacancies</h1>
+      <p>Find gigs, full-time roles and apprenticeships posted by your community.</p>
+      <div class="kvj-hero-actions">
+        <span style="font-size:13px;color:rgba(255,255,255,0.8);">
+          {{ counts.total }} open listing{{ counts.total|pluralize }}
+        </span>
+        {% if user_can_post %}
+          <button class="kvj-post-btn" id="kvjOpenCreateBtn">
+            <i class="fas fa-plus"></i> Post a Job
+          </button>
+        {% else %}
+          <button class="kvj-post-btn-disabled" id="kvjOpenCreateBtn"
+                  onclick="document.getElementById('kvjVerifyBanner').scrollIntoView({behavior:'smooth'});return false;">
+            <i class="fas fa-user-edit"></i> Complete Profile to Post
+          </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Profile completion banner — shown only when required fields are missing -->
+    {% if not user_can_post %}
+    <div class="kvj-verify-banner" id="kvjVerifyBanner">
+      <div class="kvj-verify-banner-icon">📝</div>
+      <div class="kvj-verify-banner-body">
+        <div class="kvj-verify-banner-title">Complete your profile to post jobs</div>
+        <div class="kvj-verify-banner-desc">
+          To keep the community safe, you need a complete profile before posting job vacancies.
+          {% if missing_fields %}
+            <br>Your profile is missing the following required information:
+            <ul>
+              {% for field in missing_fields %}<li>{{ field }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+        <a href="{% url 'profile' request.user.username %}" class="kvj-verify-banner-link">
+          <i class="fas fa-user-edit"></i> Complete My Profile
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Category Tabs -->
+    <div class="kvj-tabs">
+      <a href="{% url 'job_vacancy' %}"
+         class="kvj-tab {% if not category %}active{% endif %}"
+         style="--tab-color: var(--kvibe-primary);">
+        All
+        <span style="font-size:11px;color:inherit;">({{ counts.total }})</span>
+      </a>
+      <a href="{% url 'job_vacancy' %}?category=fulltime"
+         class="kvj-tab {% if category == 'fulltime' %}active{% endif %}"
+         style="--tab-color: var(--job-fulltime);">
+        <span class="kvj-tab-dot" style="background:var(--job-fulltime);"></span>
+        💼 Full-time
+        <span style="font-size:11px;color:inherit;">({{ counts.fulltime }})</span>
+      </a>
+      <a href="{% url 'job_vacancy' %}?category=gig"
+         class="kvj-tab {% if category == 'gig' %}active{% endif %}"
+         style="--tab-color: var(--job-gig);">
+        <span class="kvj-tab-dot" style="background:var(--job-gig);"></span>
+        🛠️ Gigs
+        <span style="font-size:11px;color:inherit;">({{ counts.gig }})</span>
+      </a>
+      <a href="{% url 'job_vacancy' %}?category=apprenticeship"
+         class="kvj-tab {% if category == 'apprenticeship' %}active{% endif %}"
+         style="--tab-color: var(--job-apprentice);">
+        <span class="kvj-tab-dot" style="background:var(--job-apprentice);"></span>
+        🎓 Apprenticeships
+        <span style="font-size:11px;color:inherit;">({{ counts.apprenticeship }})</span>
+      </a>
+    </div>
+
+    <!-- Job listings -->
+    {% if jobs %}
+      {% for job in jobs %}
+      <div class="kvj-card" id="kvj-card-{{ job.id }}">
+
+        {% if job.cover_image %}
+        <img class="kvj-card-cover"
+             src="{{ job.cover_image.url }}"
+             alt="{{ job.title }} cover"
+             onclick="kvjOpenImageModal('{{ job.cover_image.url|escapejs }}')">
+        {% endif %}
+
+        <div class="kvj-card-body">
+
+          <div class="kvj-card-header">
+            <div>
+              <div class="kvj-card-title">{{ job.title }}</div>
+              {% if job.company %}
+              <div class="kvj-card-company">
+                <i class="fas fa-building"></i>{{ job.company }}
+              </div>
+              {% endif %}
+            </div>
+            <span class="kvj-category-badge"
+                  style="--badge-color: {{ job.category_color }};">
+              {{ job.category_emoji }} {{ job.get_category_display }}
+            </span>
+          </div>
+
+          <div class="kvj-card-meta">
+            {% if job.location %}
+            <span class="kvj-meta-item">
+              <i class="fas fa-map-marker-alt"></i> {{ job.location }}
+            </span>
+            {% endif %}
+            {% if job.salary_range %}
+            <span class="kvj-meta-item">
+              <i class="fas fa-money-bill-wave"></i> {{ job.salary_range }}
+            </span>
+            {% endif %}
+            <span class="kvj-meta-item">
+              <i class="far fa-clock"></i> {{ job.created_at|naturaltime }}
+            </span>
+            {% if not job.is_open %}
+            <span class="kvj-closed-badge">Closed</span>
+            {% endif %}
+          </div>
+
+          <div class="kvj-card-desc">{{ job.description }}</div>
+
+          {% if job.requirements %}
+          <div style="margin-bottom:12px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--kvibe-text-light);margin-bottom:5px;">Requirements</div>
+            <div style="font-size:13px;line-height:1.55;color:var(--kvibe-text);">{{ job.requirements|linebreaksbr }}</div>
+          </div>
+          {% endif %}
+
+          {% if job.contact_info %}
+          <div style="margin-bottom:14px;padding:10px 13px;background:var(--kvibe-bg);border-radius:10px;border:1px solid var(--kvibe-border);">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--kvibe-text-light);margin-bottom:4px;">How to Apply</div>
+            <div style="font-size:13px;color:var(--kvibe-text);word-break:break-all;">{{ job.contact_info }}</div>
+          </div>
+          {% endif %}
+
+          <div class="kvj-card-footer">
+            <a href="{% url 'profile' job.posted_by.username %}" class="kvj-poster">
+              <img class="kvj-poster-avatar"
+                   src="{{ job.posted_by|safe_pic_url }}"
+                   alt="{{ job.posted_by.username }}">
+              {{ job.posted_by.username }}
+            </a>
+
+            {% if job.posted_by == request.user %}
+            <div class="kvj-actions">
+              <button class="kvj-owner-btn"
+                      onclick="kvjOpenEdit('{{ job.id }}')">
+                <i class="fas fa-pen"></i> Edit
+              </button>
+              <button class="kvj-owner-btn del"
+                      onclick="kvjOpenDelete('{{ job.id }}', '{{ job.title|escapejs }}')">
+                <i class="fas fa-trash"></i> Delete
+              </button>
+            </div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Hidden data blob for edit pre-fill -->
+      {% if job.posted_by == request.user %}
+      <script type="application/json" id="kvj-data-{{ job.id }}">
+      {
+        "title":        "{{ job.title|escapejs }}",
+        "category":     "{{ job.category }}",
+        "company":      "{{ job.company|escapejs }}",
+        "location":     "{{ job.location|escapejs }}",
+        "description":  "{{ job.description|escapejs }}",
+        "requirements": "{{ job.requirements|escapejs }}",
+        "contact_info": "{{ job.contact_info|escapejs }}",
+        "salary_range": "{{ job.salary_range|escapejs }}",
+        "is_open":      {{ job.is_open|yesno:"true,false" }}
+      }
+      </script>
+      {% endif %}
+
+      {% endfor %}
+
+      <!-- Pagination -->
+      {% if jobs.has_other_pages %}
+      <div class="kvj-pagination">
+        {% if jobs.has_previous %}
+        <a href="?{% if category %}category={{ category }}&{% endif %}page={{ jobs.previous_page_number }}"
+           class="kvj-page-btn">← Prev</a>
+        {% endif %}
+        {% for num in jobs.paginator.page_range %}
+        <a href="?{% if category %}category={{ category }}&{% endif %}page={{ num }}"
+           class="kvj-page-btn {% if num == jobs.number %}current{% endif %}">{{ num }}</a>
+        {% endfor %}
+        {% if jobs.has_next %}
+        <a href="?{% if category %}category={{ category }}&{% endif %}page={{ jobs.next_page_number }}"
+           class="kvj-page-btn">Next →</a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+    {% else %}
+      <div class="kvj-empty">
+        <i class="fas fa-briefcase"></i>
+        <h3>No vacancies yet{% if category %} in this category{% endif %}</h3>
+        <p>Be the first to post a job listing for the Kishi community.</p>
+      </div>
+    {% endif %}
+
+  </div>
+
+  <!-- ── Right Sidebar ── -->
+  <aside class="kvibe-right-sidebar kvibe-desktop-only" style="flex-direction: column;">
+
+    <div class="kvj-sidebar-widget">
+      <h3>📊 Listings Breakdown</h3>
+
+      <a href="{% url 'job_vacancy' %}?category=fulltime" class="kvj-stat-row">
+        <span class="kvj-stat-left">
+          <span class="kvj-swatch" style="background:var(--job-fulltime);"></span>
+          💼 Full-time
+        </span>
+        <span class="kvj-stat-count">{{ counts.fulltime }}</span>
+      </a>
+
+      <a href="{% url 'job_vacancy' %}?category=gig" class="kvj-stat-row">
+        <span class="kvj-stat-left">
+          <span class="kvj-swatch" style="background:var(--job-gig);"></span>
+          🛠️ Gigs
+        </span>
+        <span class="kvj-stat-count">{{ counts.gig }}</span>
+      </a>
+
+      <a href="{% url 'job_vacancy' %}?category=apprenticeship" class="kvj-stat-row">
+        <span class="kvj-stat-left">
+          <span class="kvj-swatch" style="background:var(--job-apprentice);"></span>
+          🎓 Apprenticeships
+        </span>
+        <span class="kvj-stat-count">{{ counts.apprenticeship }}</span>
+      </a>
+    </div>
+
+    <div class="kvj-sidebar-widget">
+      <h3>🔗 Quick Links</h3>
+      <a href="{% url 'services' %}" class="kvj-stat-row" style="text-decoration:none;">
+        <span class="kvj-stat-left"><i class="fas fa-th" style="color:var(--kvibe-text-light);width:16px;text-align:center;"></i> All Services</span>
+      </a>
+      <a href="{% url 'market' %}" class="kvj-stat-row" style="text-decoration:none;">
+        <span class="kvj-stat-left"><i class="fas fa-store" style="color:var(--kvibe-text-light);width:16px;text-align:center;"></i> Marketplace</span>
+      </a>
+      <a href="{% url 'event_calendar' %}" class="kvj-stat-row" style="text-decoration:none;">
+        <span class="kvj-stat-left"><i class="far fa-calendar" style="color:var(--kvibe-text-light);width:16px;text-align:center;"></i> Event Calendar</span>
+      </a>
+      <a href="{% url 'home' %}" class="kvj-stat-row" style="text-decoration:none;">
+        <span class="kvj-stat-left"><i class="fas fa-home" style="color:var(--kvibe-text-light);width:16px;text-align:center;"></i> Home Feed</span>
+      </a>
+    </div>
+
+    <div class="kvj-sidebar-widget" style="background:linear-gradient(135deg,#0095f6,#0077cc);border-color:transparent;">
+      <div style="color:#fff;">
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px;">📢 Hiring?</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:14px;line-height:1.5;">
+          Post your vacancy and reach the entire Kishi community for free.
+        </div>
+        <button {% if user_can_post %}class="kvj-post-btn" id="kvjOpenCreateBtn2"{% else %}class="kvj-post-btn-disabled" onclick="document.getElementById('kvjVerifyBanner').scrollIntoView({behavior:'smooth'});return false;"{% endif %} style="background:#fff;color:var(--kvibe-primary);width:100%;justify-content:center;">
+          <i class="fas fa-{% if user_can_post %}plus{% else %}lock{% endif %}"></i> Post a Job Now
+        </button>
+      </div>
+    </div>
+
+  </aside>
+
+</div>
+<div class="mobile-footer-spacing"></div>
+</main>
+
+<!-- Mobile Footer -->
+{% include 'footer.html' %}
+
+<!-- Full-size Image Modal -->
+<div class="kvj-image-modal-overlay" id="kvjImageModalOverlay" onclick="kvjCloseImageModal()">
+  <button class="kvj-image-modal-close" onclick="kvjCloseImageModal()">&times;</button>
+  <div class="kvj-image-modal">
+    <img id="kvjModalImage" src="" alt="Full size image">
+  </div>
+</div>
+
+<!-- ══ Create / Edit Modal ══ -->
+<div class="kvj-modal-overlay" id="kvjCreateModal">
+  <div class="kvj-modal">
+    <div class="kvj-modal-header">
+      <h2 id="kvjModalTitle">📢 Post a Vacancy</h2>
+      <button class="kvj-modal-close" id="kvjCloseModalBtn">✕</button>
+    </div>
+
+    <div class="kvj-form-group">
+      <label>Job Title *</label>
+      <input type="text" id="kvjFTitle" placeholder="e.g. Classroom Teacher/ Subject Teacher, Electrician…" maxlength="200">
+    </div>
+
+    <div class="kvj-form-row">
+      <div class="kvj-form-group">
+        <label>Category *</label>
+        <select id="kvjFCategory">
+          <option value="">Select…</option>
+          <option value="fulltime">💼 Full-time</option>
+          <option value="gig">🛠️ Gig</option>
+          <option value="apprenticeship">🎓 Apprenticeship</option>
+        </select>
+      </div>
+      <div class="kvj-form-group">
+        <label>Company / Organisation <span class="kvj-optional">(optional)</span></label>
+        <input type="text" id="kvjFCompany" placeholder="e.g. Kishi Farms Ltd" maxlength="150">
+      </div>
+    </div>
+
+    <div class="kvj-form-row">
+      <div class="kvj-form-group">
+        <label>Location <span class="kvj-optional">(optional)</span></label>
+        <input type="text" id="kvjFLocation" placeholder="e.g. Kishi, Oyo State" maxlength="300">
+      </div>
+      <div class="kvj-form-group">
+        <label>Salary / Pay Range <span class="kvj-optional">(optional)</span></label>
+        <input type="text" id="kvjFSalary" placeholder='e.g. ₦50,000/month or "Negotiable"' maxlength="100">
+      </div>
+    </div>
+
+    <div class="kvj-form-group">
+      <label>Description *</label>
+      <textarea id="kvjFDesc" rows="4" placeholder="Describe the role, responsibilities, work hours…"></textarea>
+    </div>
+
+    <div class="kvj-form-group">
+      <label>Requirements <span class="kvj-optional">(optional)</span></label>
+      <textarea id="kvjFReqs" rows="3" placeholder="Skills, qualifications, experience needed…"></textarea>
+    </div>
+
+    <div class="kvj-form-group">
+      <label>How to Apply / Contact Info *</label>
+      <input type="text" id="kvjFContact" placeholder="e.g. Call 0801234567 or email jobs@example.com" maxlength="300">
+    </div>
+
+    <!-- Cover image -->
+    <div class="kvj-form-group">
+      <label>Cover Image <span class="kvj-optional">(optional)</span></label>
+      <input type="file" id="kvjFImage" accept="image/jpeg,image/png,image/webp,image/gif">
+      <div class="kvj-image-preview-wrap" id="kvjImagePreviewWrap">
+        <img id="kvjImagePreview" class="kvj-image-preview" alt="Preview">
+        <button type="button" class="kvj-image-remove" id="kvjImageRemoveBtn">✕</button>
+      </div>
+    </div>
+
+    <!-- Status toggle (only shown in edit mode) -->
+    <div class="kvj-form-group" id="kvjStatusRow" style="display:none;">
+      <div class="kvj-status-row">
+        <span class="kvj-status-label">Vacancy is open</span>
+        <label class="kvj-toggle">
+          <input type="checkbox" id="kvjFIsOpen" checked>
+          <span class="kvj-toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="kvj-form-error" id="kvjFormError"></div>
+
+    <button class="kvj-submit-btn" id="kvjSubmitBtn">Post Vacancy</button>
+  </div>
+</div>
+
+<!-- ══ Delete Confirm Modal ══ -->
+<div class="kvj-modal-overlay" id="kvjDeleteModal">
+  <div class="kvj-modal" style="max-width:400px;">
+    <div class="kvj-modal-header">
+      <h2>🗑️ Delete Vacancy</h2>
+      <button class="kvj-modal-close" id="kvjCloseDeleteBtn">✕</button>
+    </div>
+    <p style="font-size:14px;color:var(--kvibe-text-light);line-height:1.5;">
+      Are you sure you want to delete
+      <strong id="kvjDeleteTitle" style="color:var(--kvibe-text);"></strong>?
+      This cannot be undone.
+    </p>
+    <div class="kvj-confirm-btns">
+      <button class="cancel-btn" id="kvjCancelDeleteBtn">Cancel</button>
+      <button class="delete-btn" id="kvjConfirmDeleteBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden logout form -->
+<form id="kvjLogoutForm" method="POST" action="{% url 'logout' %}" style="display:none;">
+  {% csrf_token %}
+</form>
+
+<script>
+(function () {
+  const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+
+  /* ── Full-size image modal ── */
+  function kvjOpenImageModal(imageUrl) {
+    if (!imageUrl) return;
+    var modalImg = document.getElementById('kvjModalImage');
+    modalImg.src = imageUrl;
+    document.getElementById('kvjImageModalOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function kvjCloseImageModal() {
+    document.getElementById('kvjImageModalOverlay').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // Close image modal with Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      kvjCloseImageModal();
+    }
+  });
+
+  // Expose globally
+  window.kvjOpenImageModal = kvjOpenImageModal;
+  window.kvjCloseImageModal = kvjCloseImageModal;
+
+  /* ── Modal helpers ── */
+  function showModal(overlay) {
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function hideModal(overlay) {
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  /* ── Create Modal ── */
+  const createOverlay = document.getElementById('kvjCreateModal');
+  const modalTitle    = document.getElementById('kvjModalTitle');
+  const submitBtn     = document.getElementById('kvjSubmitBtn');
+  const formError     = document.getElementById('kvjFormError');
+  const statusRow     = document.getElementById('kvjStatusRow');
+
+  const fTitle    = document.getElementById('kvjFTitle');
+  const fCategory = document.getElementById('kvjFCategory');
+  const fCompany  = document.getElementById('kvjFCompany');
+  const fLocation = document.getElementById('kvjFLocation');
+  const fSalary   = document.getElementById('kvjFSalary');
+  const fDesc     = document.getElementById('kvjFDesc');
+  const fReqs     = document.getElementById('kvjFReqs');
+  const fContact  = document.getElementById('kvjFContact');
+  const fImage    = document.getElementById('kvjFImage');
+  const fIsOpen   = document.getElementById('kvjFIsOpen');
+
+  const imgPreview   = document.getElementById('kvjImagePreview');
+  const imgRemoveBtn = document.getElementById('kvjImageRemoveBtn');
+
+  let currentMode   = 'create'; // 'create' | 'edit'
+  let currentEditId = null;
+  let removeCover   = false;
+
+  function resetForm() {
+    [fTitle, fCompany, fLocation, fSalary, fDesc, fReqs, fContact].forEach(el => el.value = '');
+    fCategory.value   = '';
+    fIsOpen.checked   = true;
+    fImage.value      = '';
+    imgPreview.classList.remove('show');
+    formError.style.display = 'none';
+    removeCover = false;
+    statusRow.style.display = 'none';
+  }
+
+  function openCreate() {
+    currentMode   = 'create';
+    currentEditId = null;
+    resetForm();
+    modalTitle.textContent = '📢 Post a Vacancy';
+    submitBtn.textContent  = 'Post Vacancy';
+    showModal(createOverlay);
+  }
+
+  window.kvjOpenEdit = function (jobId) {
+    const dataEl = document.getElementById('kvj-data-' + jobId);
+    if (!dataEl) return;
+    const d = JSON.parse(dataEl.textContent);
+
+    currentMode   = 'edit';
+    currentEditId = jobId;
+    resetForm();
+
+    fTitle.value    = d.title;
+    fCategory.value = d.category;
+    fCompany.value  = d.company;
+    fLocation.value = d.location;
+    fSalary.value   = d.salary_range;
+    fDesc.value     = d.description;
+    fReqs.value     = d.requirements;
+    fContact.value  = d.contact_info;
+    fIsOpen.checked = d.is_open;
+
+    statusRow.style.display = 'block';
+    modalTitle.textContent  = '✏️ Edit Vacancy';
+    submitBtn.textContent   = 'Save Changes';
+    showModal(createOverlay);
+  };
+
+  /* Image preview */
+  fImage.addEventListener('change', function () {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      imgPreview.src = e.target.result;
+      imgPreview.classList.add('show');
+    };
+    reader.readAsDataURL(file);
+    removeCover = false;
+  });
+
+  imgRemoveBtn.addEventListener('click', function () {
+    fImage.value = '';
+    imgPreview.src = '';
+    imgPreview.classList.remove('show');
+    removeCover = true;
+  });
+
+  /* Open buttons */
+  const openBtn1 = document.getElementById('kvjOpenCreateBtn');
+  const openBtn2 = document.getElementById('kvjOpenCreateBtn2');
+  {% if user_can_post %}
+  if (openBtn1) openBtn1.addEventListener('click', openCreate);
+  if (openBtn2) openBtn2.addEventListener('click', openCreate);
+  {% endif %}
+
+  /* Close */
+  document.getElementById('kvjCloseModalBtn').addEventListener('click', () => hideModal(createOverlay));
+  createOverlay.addEventListener('click', e => { if (e.target === createOverlay) hideModal(createOverlay); });
+
+  /* Submit */
+  submitBtn.addEventListener('click', async function () {
+    formError.style.display = 'none';
+
+    const title    = fTitle.value.trim();
+    const category = fCategory.value.trim();
+    const desc     = fDesc.value.trim();
+    const contact  = fContact.value.trim();
+
+    if (!title)    { showError('Job title is required.'); return; }
+    if (!category) { showError('Please select a category.'); return; }
+    if (!desc)     { showError('Description is required.'); return; }
+
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', CSRF);
+    fd.append('title',        title);
+    fd.append('category',     category);
+    fd.append('company',      fCompany.value.trim());
+    fd.append('location',     fLocation.value.trim());
+    fd.append('salary_range', fSalary.value.trim());
+    fd.append('description',  desc);
+    fd.append('requirements', fReqs.value.trim());
+    fd.append('contact_info', contact);
+    if (currentMode === 'edit') fd.append('is_open', fIsOpen.checked ? '1' : '0');
+    if (fImage.files[0]) fd.append('cover_image', fImage.files[0]);
+
+    submitBtn.disabled    = true;
+    submitBtn.textContent = currentMode === 'edit' ? 'Saving…' : 'Posting…';
+
+    const url = currentMode === 'create'
+      ? '{% url "job_vacancy_create" %}'
+      : `/jobs/${currentEditId}/edit/`;
+
+    try {
+      const res  = await fetch(url, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.success) {
+        hideModal(createOverlay);
+        window.location.reload();
+      } else {
+        showError(data.error || 'Something went wrong.');
+        submitBtn.disabled    = false;
+        submitBtn.textContent = currentMode === 'edit' ? 'Save Changes' : 'Post Vacancy';
+      }
+    } catch {
+      showError('Network error. Please try again.');
+      submitBtn.disabled    = false;
+      submitBtn.textContent = currentMode === 'edit' ? 'Save Changes' : 'Post Vacancy';
+    }
+  });
+
+  function showError(msg) {
+    formError.textContent    = msg;
+    formError.style.display  = 'block';
+  }
+
+  /* ── Delete Modal ── */
+  const deleteOverlay  = document.getElementById('kvjDeleteModal');
+  const deleteTitleEl  = document.getElementById('kvjDeleteTitle');
+  let   deleteTargetId = null;
+
+  window.kvjOpenDelete = function (jobId, jobTitle) {
+    deleteTargetId          = jobId;
+    deleteTitleEl.textContent = '"' + jobTitle + '"';
+    showModal(deleteOverlay);
+  };
+
+  document.getElementById('kvjCloseDeleteBtn').addEventListener('click',  () => hideModal(deleteOverlay));
+  document.getElementById('kvjCancelDeleteBtn').addEventListener('click', () => hideModal(deleteOverlay));
+  deleteOverlay.addEventListener('click', e => { if (e.target === deleteOverlay) hideModal(deleteOverlay); });
+
+  document.getElementById('kvjConfirmDeleteBtn').addEventListener('click', async function () {
+    if (!deleteTargetId) return;
+    this.disabled = true;
+    this.textContent = 'Deleting…';
+
+    try {
+      const res  = await fetch(`/jobs/${deleteTargetId}/delete/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `csrfmiddlewaretoken=${encodeURIComponent(CSRF)}`,
+      });
+      const data = await res.json();
+      if (data.success) {
+        hideModal(deleteOverlay);
+        const card = document.getElementById('kvj-card-' + deleteTargetId);
+        if (card) card.remove();
+      } else {
+        alert(data.error || 'Could not delete. Please try again.');
+        this.disabled = false;
+        this.textContent = 'Delete';
+      }
+    } catch {
+      alert('Network error. Please try again.');
+      this.disabled = false;
+      this.textContent = 'Delete';
+    }
+  });
+
+  /* ── Logout ── */
+  document.getElementById('kvjLogoutBtn').addEventListener('click', function () {
+    document.getElementById('kvjLogoutForm').submit();
+  });
+
+})();
+</script>
+
+</body>
+</html>

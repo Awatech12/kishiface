@@ -1,0 +1,294 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Activity · KishiHub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #fafafa;
+            color: #262626;
+        }
+        a { text-decoration: none; color: inherit; }
+
+        .kishiface-activity-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            min-height: 100vh;
+            border-left: 1px solid #efefef;
+            border-right: 1px solid #efefef;
+            padding-bottom: 80px;
+        }
+
+        .kishiface-header {
+            position: sticky;
+            top: 0;
+            background: rgba(255,255,255,0.97);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 14px 16px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #efefef;
+            z-index: 100;
+        }
+        .kishiface-header-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+
+        .kishiface-mark-all-btn {
+            background: none; border: none; color: #0095f6;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            padding: 4px 0; transition: opacity .15s;
+        }
+        .kishiface-mark-all-btn:hover { opacity: .7; }
+
+        .kishiface-section-title {
+            padding: 16px 16px 8px;
+            font-size: 14px; font-weight: 600; color: #262626;
+        }
+
+        .kishiface-list { display: flex; flex-direction: column; }
+
+        .kishiface-notification-wrapper {
+            position: relative;
+            transition: opacity .25s, transform .25s;
+        }
+        .kishiface-notification-wrapper:hover { background: #fafafa; }
+
+        .kishiface-remove-btn {
+            position: absolute;
+            right: 16px; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,.9);
+            border: 1px solid #efefef; color: #8e8e8e;
+            cursor: pointer; width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; opacity: 0;
+            transition: opacity .2s, background .15s, color .15s;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08);
+            z-index: 10; font-size: 11px;
+        }
+        .kishiface-notification-wrapper:hover .kishiface-remove-btn { opacity: 1; }
+        .kishiface-remove-btn:hover { background: #ffe5e5; color: #ed4956; border-color: #ed4956; }
+        .kishiface-notification-wrapper .kishiface-notif-item { padding-right: 50px !important; }
+
+        .kishiface-empty-notifications {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 72px 24px 40px; text-align: center;
+        }
+        .kishiface-empty-icon { font-size: 64px; color: #dbdbdb; margin-bottom: 20px; }
+        .kishiface-empty-title { font-size: 24px; font-weight: 600; margin-bottom: 8px; color: #262626; }
+        .kishiface-empty-text { font-size: 14px; color: #8e8e8e; max-width: 300px; line-height: 1.4; }
+
+        @keyframes kishiface-spin { to { transform: rotate(360deg); } }
+        .kishiface-spin { animation: kishiface-spin .8s linear infinite; }
+
+        @keyframes kishiface-slideout {
+            to { opacity: 0; transform: translateX(30px); max-height: 0; }
+        }
+        .kishiface-removing { animation: kishiface-slideout .25s ease forwards; overflow: hidden; }
+
+        @media (max-width: 600px) {
+            .kishiface-activity-container { border: none; }
+            .kishiface-remove-btn { opacity: .7; }
+        }
+    </style>
+</head>
+<body>
+
+{% csrf_token %}
+
+<div class="kishiface-activity-container">
+
+    <div class="kishiface-header">
+        <span class="kishiface-header-title">Notifications</span>
+        {% if today_notifications or week_notifications or earlier_notifications %}
+            <button class="kishiface-mark-all-btn" onclick="kishifaceMarkAllRead()">Mark all read</button>
+        {% endif %}
+    </div>
+
+    <div class="kishiface-list" id="kishiface-notif-list">
+
+        {% if today_notifications or week_notifications or earlier_notifications %}
+
+            {% if today_notifications %}
+                <div class="kishiface-section-title" data-section="today">Today</div>
+                {% for n in today_notifications %}
+                    <div class="kishiface-notification-wrapper"
+                         id="kishiface-notif-{{ n.group_id }}"
+                         data-group-id="{{ n.group_id }}"
+                         data-type="{{ n.type }}"
+                         data-actor-id="{{ n.latest_actor.id }}"
+                         {% if n.post %}data-post-id="{{ n.post.post_id }}"{% endif %}
+                         {% if n.follow_id %}data-follow-id="{{ n.follow_id }}"{% endif %}>
+                        {% include "snippet/activity_item.html" with n=n %}
+                        <button class="kishiface-remove-btn" aria-label="Dismiss" onclick="kishifaceRemove(this)">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            {% if week_notifications %}
+                <div class="kishiface-section-title" data-section="week">This Week</div>
+                {% for n in week_notifications %}
+                    <div class="kishiface-notification-wrapper"
+                         id="kishiface-notif-{{ n.group_id }}"
+                         data-group-id="{{ n.group_id }}"
+                         data-type="{{ n.type }}"
+                         data-actor-id="{{ n.latest_actor.id }}"
+                         {% if n.post %}data-post-id="{{ n.post.post_id }}"{% endif %}
+                         {% if n.follow_id %}data-follow-id="{{ n.follow_id }}"{% endif %}>
+                        {% include "snippet/activity_item.html" with n=n %}
+                        <button class="kishiface-remove-btn" aria-label="Dismiss" onclick="kishifaceRemove(this)">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            {% if earlier_notifications %}
+                <div class="kishiface-section-title" data-section="earlier">Earlier</div>
+                {% for n in earlier_notifications %}
+                    <div class="kishiface-notification-wrapper"
+                         id="kishiface-notif-{{ n.group_id }}"
+                         data-group-id="{{ n.group_id }}"
+                         data-type="{{ n.type }}"
+                         data-actor-id="{{ n.latest_actor.id }}"
+                         {% if n.post %}data-post-id="{{ n.post.post_id }}"{% endif %}
+                         {% if n.follow_id %}data-follow-id="{{ n.follow_id }}"{% endif %}>
+                        {% include "snippet/activity_item.html" with n=n %}
+                        <button class="kishiface-remove-btn" aria-label="Dismiss" onclick="kishifaceRemove(this)">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+        {% else %}
+            <div class="kishiface-empty-notifications" id="kishiface-empty-state">
+                <div class="kishiface-empty-icon"><i class="far fa-bell"></i></div>
+                <div class="kishiface-empty-title">No notifications yet</div>
+                <div class="kishiface-empty-text">
+                    When you get notifications, they'll show up here.
+                    Follow people or interact with posts to see notifications.
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    function getCsrf() {
+        var el = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (el) return el.value;
+        var m = document.cookie.match(/csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+    }
+
+    function doPost(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+            body: JSON.stringify(body),
+        }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+    }
+
+    function slideOut(wrapper) {
+        wrapper.classList.add('kishiface-removing');
+        wrapper.addEventListener('animationend', function () {
+            wrapper.remove();
+            cleanupEmptySections();
+        }, { once: true });
+    }
+
+    function cleanupEmptySections() {
+        var list = document.getElementById('kishiface-notif-list');
+        if (!list) return;
+        list.querySelectorAll('.kishiface-section-title').forEach(function (title) {
+            var next = title.nextElementSibling;
+            var hasItem = false;
+            while (next) {
+                if (next.classList.contains('kishiface-section-title')) break;
+                if (next.classList.contains('kishiface-notification-wrapper')) { hasItem = true; break; }
+                next = next.nextElementSibling;
+            }
+            if (!hasItem) title.remove();
+        });
+        if (!list.querySelector('.kishiface-notification-wrapper')) {
+            list.innerHTML =
+                '<div class="kishiface-empty-notifications" id="kishiface-empty-state">' +
+                '<div class="kishiface-empty-icon"><i class="far fa-bell"></i></div>' +
+                '<div class="kishiface-empty-title">No notifications yet</div>' +
+                '<div class="kishiface-empty-text">When you get notifications, they\'ll show up here.</div>' +
+                '</div>';
+            var btn = document.querySelector('.kishiface-mark-all-btn');
+            if (btn) btn.remove();
+        }
+    }
+
+    /* ── Dismiss button — handles all notification types ─────────────── */
+    window.kishifaceRemove = function (btn) {
+        var wrapper  = btn.closest('.kishiface-notification-wrapper');
+        var type     = wrapper.dataset.type;
+        var postId   = wrapper.dataset.postId;
+        var followId = wrapper.dataset.followId;
+        var actorId  = wrapper.dataset.actorId;
+        var origHtml = btn.innerHTML;
+
+        btn.innerHTML = '<i class="fas fa-circle-notch kishiface-spin"></i>';
+        btn.disabled  = true;
+
+        var payload = {};
+
+        if (type === 'follow' && followId) {
+            payload.follow_id = followId;
+        } else if (type === 'mention') {
+            // Mentions are grouped per actor — send actor_id so only that
+            // actor's mention rows for this post get deleted.
+            payload.post_id           = postId;
+            payload.notification_type = 'mention';
+            payload.actor_id          = actorId;
+        } else {
+            payload.post_id           = postId;
+            payload.notification_type = type;
+        }
+
+        doPost('/notifications/delete-group/', payload)
+            .then(function (data) {
+                if (data.status === 'success') { slideOut(wrapper); }
+                else { btn.innerHTML = origHtml; btn.disabled = false; }
+            })
+            .catch(function () { btn.innerHTML = origHtml; btn.disabled = false; });
+    };
+
+    /* ── Mark all read ───────────────────────────────────────────────── */
+    window.kishifaceMarkAllRead = function () {
+        doPost('/notifications/mark-all-read/', {}).then(function () {
+            document.querySelectorAll('.kishiface-unread')
+                    .forEach(function (el) { el.classList.remove('kishiface-unread'); });
+            document.querySelectorAll('.kishiface-unread-dot')
+                    .forEach(function (d) { d.remove(); });
+        });
+    };
+
+}());
+</script>
+
+</body>
+</html>
+{% include 'footer.html' %}
