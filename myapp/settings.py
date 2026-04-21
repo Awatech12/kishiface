@@ -8,15 +8,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 #load_dotenv(BASE_DIR / '.env')
 
 SECRET_KEY = os.getenv("SECRET_KEY") 
-DEBUG = os.getenv("DEBUG") 
+DEBUG = os.getenv("DEBUG", 'False') == 'True'
 USE_CLOUDINARY = True
 ALLOWED_HOSTS = [
+    'kishihub.com'
     '127.0.0.1', 
     'localhost',
-    'kishihub.onrender.com', 
+    'kishihub.onrender.com',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
+    'https://kishihub.com',
     'https://kishihub.onrender.com',
 ]
 
