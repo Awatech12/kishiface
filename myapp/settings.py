@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 #load_dotenv(BASE_DIR / '.env')
 
 SECRET_KEY = os.getenv("SECRET_KEY") 
-DEBUG = os.getenv("DEBUG", 'False') == 'True'
+DEBUG = os.getenv("DEBUG")
 USE_CLOUDINARY = True
 ALLOWED_HOSTS = [
     'kishihub.com',
@@ -176,7 +176,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # PWA Settings
-PWA_APP_NAME            = 'KishiHub'
+PWA_APP_NAME            = 'kishihub.com'
 PWA_APP_DESCRIPTION     = "Let Connect Globally"
 PWA_APP_THEME_COLOR     = '#ffffff'
 PWA_APP_BACKGROUND_COLOR= '#ffffff'
@@ -230,8 +230,7 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
-    CSRF_COOKIE_DOMAIN = True
-    SESSION_COOKIE_DOMAIN = True
+    
 
     # Browser protections
     SECURE_CONTENT_TYPE_NOSNIFF = True
