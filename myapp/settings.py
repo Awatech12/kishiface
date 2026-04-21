@@ -13,8 +13,7 @@ USE_CLOUDINARY = True
 ALLOWED_HOSTS = [
     'kishihub.com',
     'www.kishihub.com',
-    '127.0.0.1', 
-    'localhost',
+    '127.0.0.1',
     'kishihub.onrender.com',
 ]
 
@@ -231,8 +230,8 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
-    CSRF_COOKIE_DOMAIN = None
-    SESSION_COOKIE_DOMAIN = None
+    CSRF_COOKIE_DOMAIN = True
+    SESSION_COOKIE_DOMAIN = True
 
     # Browser protections
     SECURE_CONTENT_TYPE_NOSNIFF = True
