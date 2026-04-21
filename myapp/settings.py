@@ -11,7 +11,8 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG", 'False') == 'True'
 USE_CLOUDINARY = True
 ALLOWED_HOSTS = [
-    'kishihub.com'
+    'kishihub.com',
+    'www.kishihub.com',
     '127.0.0.1', 
     'localhost',
     'kishihub.onrender.com',
