@@ -105,6 +105,7 @@ _ALLOWED_ORIGINS = (
     'http://127.0.0.1',
     'https://kishihub.com',
     'https://kishihub.onrender.com',
+    'www.kishihub.com'
 )
 
 def _safe_next(request, fallback='/home'):
@@ -466,6 +467,7 @@ def _safe_redirect_back(request, fallback='home'):
         'http://127.0.0.1',
         'https://kishihub.com',
         'https://kishihub.onrender.com',
+        'www.kishihub.com',
     )
     if referer and any(referer.startswith(origin) for origin in allowed_origins):
         return redirect(referer)

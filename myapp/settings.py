@@ -19,6 +19,7 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
     'https://kishihub.com',
+    'https://www.kishihub.com',
     'https://kishihub.onrender.com',
 ]
 
