@@ -5610,19 +5610,20 @@
       });
 
       // ── Check sessionStorage on page load ─────────────────────────
+      // 'kvibe_uploading' is intentionally skipped here — the IndexedDB
+      // runner below owns that state and calls showBanner('uploading').
+      // We only surface success/error flags left over from a prior run.
       let uploadState = null;
       try {
         if      (sessionStorage.getItem('kvibe_just_posted') === '1') uploadState = 'success';
         else if (sessionStorage.getItem('kvibe_post_failed') === '1') uploadState = 'error';
-        else if (sessionStorage.getItem('kvibe_uploading')   === '1') uploadState = 'uploading';
       } catch(e) {}
 
       if (uploadState) {
-        // Clear flags immediately so they don't persist on refresh
         try {
           sessionStorage.removeItem('kvibe_just_posted');
           sessionStorage.removeItem('kvibe_post_failed');
-          // Leave 'kvibe_uploading' — it will be cleared by BroadcastChannel or on next load
+          sessionStorage.removeItem('kvibe_uploading');
         } catch(e) {}
         showBanner(uploadState);
       }
@@ -5641,6 +5642,123 @@
         });
       } catch(e) { /* BroadcastChannel not supported — silent fallback */ }
     })();
+
+    // ── Background upload runner ──────────────────────────────────────────
+    // post.html stores the FormData blobs in IndexedDB then redirects here
+    // immediately. This function reads the pending job, fires the XHR
+    // silently in the background, and updates the banner when done.
+    (function runPendingUpload() {
+      var DB_NAME    = 'kvibe_pending_db';
+      var STORE_NAME = 'pending_posts';
+      var JOB_KEY    = 'current_job';
+
+      var openReq = indexedDB.open(DB_NAME, 1);
+
+      openReq.onupgradeneeded = function(e) {
+        e.target.result.createObjectStore(STORE_NAME);
+      };
+
+      openReq.onerror = function() { /* IndexedDB unavailable — nothing to do */ };
+
+      openReq.onsuccess = function(e) {
+        var db = e.target.result;
+
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.close();
+          return;
+        }
+
+        var readTx  = db.transaction(STORE_NAME, 'readonly');
+        var getReq  = readTx.objectStore(STORE_NAME).get(JOB_KEY);
+
+        getReq.onerror = function() { db.close(); };
+
+        getReq.onsuccess = function(ev) {
+          var job = ev.target.result;
+
+          // Delete the job immediately so refresh doesn't re-fire it
+          var delTx = db.transaction(STORE_NAME, 'readwrite');
+          delTx.objectStore(STORE_NAME).delete(JOB_KEY);
+          delTx.oncomplete = function() { db.close(); };
+
+          if (!job || !job.url || !job.entries) { return; }
+
+          // Re-assemble FormData from the stored entries
+          var fd = new FormData();
+          for (var i = 0; i < job.entries.length; i++) {
+            var entry = job.entries[i];
+            if (entry.blob !== undefined) {
+              fd.append(entry.key, entry.blob, entry.name);
+            } else {
+              fd.append(entry.key, entry.value);
+            }
+          }
+
+          // Show the uploading banner
+          var bannerEl = document.getElementById('kvibe-upload-banner');
+          var iconEl   = document.getElementById('kvibe-upl-banner-icon');
+          var titleEl  = document.getElementById('kvibe-upl-banner-title');
+          var subEl    = document.getElementById('kvibe-upl-banner-sub');
+          var barEl    = document.getElementById('kvibe-upl-banner-bar');
+
+          function _showBanner(state) {
+            if (!bannerEl) { return; }
+            bannerEl.classList.add('show');
+            document.body.classList.add('kvibe-banner-active');
+            if (state === 'uploading') {
+              if (iconEl)  { iconEl.textContent = '🚀'; iconEl.className = 'kvibe-upload-banner-icon'; }
+              if (titleEl) { titleEl.textContent = 'uploading your vibe... ✨'; }
+              if (subEl)   { subEl.textContent   = 'this won\'t take long'; }
+              if (barEl)   { barEl.className = 'kvibe-upload-banner-bar indeterminate'; }
+            } else if (state === 'success') {
+              if (iconEl)  { iconEl.textContent = '✅'; iconEl.className = 'kvibe-upload-banner-icon success'; }
+              if (titleEl) { titleEl.textContent = 'vibe posted! it\'s live 🔥'; }
+              if (subEl)   { subEl.textContent   = 'your post is on the feed'; }
+              if (barEl)   { barEl.className = 'kvibe-upload-banner-bar'; barEl.style.width = '100%'; barEl.style.background = '#00c96f'; }
+              setTimeout(function() {
+                bannerEl.classList.remove('show');
+                document.body.classList.remove('kvibe-banner-active');
+              }, 4000);
+            } else if (state === 'error') {
+              if (iconEl)  { iconEl.textContent = '❌'; iconEl.className = 'kvibe-upload-banner-icon error'; }
+              if (titleEl) { titleEl.textContent = 'upload failed — try again'; }
+              if (subEl)   { subEl.textContent   = 'something went wrong 😅'; }
+              if (barEl)   { barEl.className = 'kvibe-upload-banner-bar'; barEl.style.width = '100%'; barEl.style.background = '#ed4956'; }
+              setTimeout(function() {
+                bannerEl.classList.remove('show');
+                document.body.classList.remove('kvibe-banner-active');
+              }, 5000);
+            }
+          }
+
+          _showBanner('uploading');
+
+          // Fire the actual upload XHR silently
+          var xhr = new XMLHttpRequest();
+
+          xhr.addEventListener('load', function() {
+            try { sessionStorage.removeItem('kvibe_uploading'); } catch(ex) {}
+            if (xhr.status >= 200 && xhr.status < 400) {
+              _showBanner('success');
+              try { new BroadcastChannel('kvibe_upload_status').postMessage('success'); } catch(ex) {}
+            } else {
+              _showBanner('error');
+              try { new BroadcastChannel('kvibe_upload_status').postMessage('error'); } catch(ex) {}
+            }
+          });
+
+          xhr.addEventListener('error', function() {
+            try { sessionStorage.removeItem('kvibe_uploading'); } catch(ex) {}
+            _showBanner('error');
+            try { new BroadcastChannel('kvibe_upload_status').postMessage('error'); } catch(ex) {}
+          });
+
+          xhr.open('POST', job.url);
+          xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+          xhr.send(fd);
+        };
+      };
+    }());
 
     
 

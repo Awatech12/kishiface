@@ -8993,69 +8993,68 @@
             }
             // ─────────────────────────────────────────────────────────────
 
-            // ── XHR with upload progress ──────────────────────────────────
-            // Signal home page to show the uploading banner as soon as we land
+            // ── Store job in IndexedDB then redirect HOME INSTANTLY ─────
+            // home.html picks up the job and does the actual upload in the
+            // background — the user never watches a progress overlay.
             try { sessionStorage.setItem('kvibe_uploading', '1'); } catch(e) {}
 
-            const uplBar = document.getElementById('kvUplBar');
-            const uplPct = document.getElementById('kvUplPct');
-            const uplIcon = document.getElementById('kvUplIcon');
+            (function storeAndGo(formData, postUrl) {
+                var DB_NAME    = 'kvibe_pending_db';
+                var STORE_NAME = 'pending_posts';
+                var JOB_KEY    = 'current_job';
 
-            const xhr = new XMLHttpRequest();
-
-            // ── Progress tracking ─────────────────────────────────────────
-            xhr.upload.addEventListener('progress', function(e) {
-                if (e.lengthComputable) {
-                    const pct = Math.round((e.loaded / e.total) * 100);
-                    if (uplBar) uplBar.style.width = pct + '%';
-                    if (uplPct) uplPct.textContent = pct + '%';
-                    // Once upload bytes are sent, redirect immediately
-                    if (pct >= 100) {
-                        if (uplPct) uplPct.textContent = 'processing...';
-                        loadingSubtext.textContent = 'finishing up on the server 🔧';
+                // Serialise FormData into a plain array IndexedDB can store
+                var entries = [];
+                formData.forEach(function(val, key) {
+                    if (val instanceof Blob) {
+                        entries.push({ key: key, blob: val, name: val.name || key });
+                    } else {
+                        entries.push({ key: key, value: val });
                     }
-                }
-            });
+                });
 
-            // ── On upload bytes fully sent → navigate to home instantly ──
-            // The server will continue processing; sessionStorage flag tells
-            // home.html to show the "uploading..." banner.
-            xhr.upload.addEventListener('load', function() {
-                // Navigate immediately — server still processing, that's fine
-                try { sessionStorage.setItem('kvibe_uploading', '1'); } catch(e) {}
-                window.location.href = '/home';
-            });
+                var job = { url: postUrl, entries: entries, ts: Date.now() };
 
-            // ── On full response received (fallback if upload.load fired late) ──
-            xhr.addEventListener('load', function() {
-                try { sessionStorage.removeItem('kvibe_uploading'); } catch(e) {}
-                try { sessionStorage.setItem('kvibe_just_posted', '1'); } catch(e) {}
-                // Broadcast to home tab (if already open in same browser)
-                try { new BroadcastChannel('kvibe_upload_status').postMessage('success'); } catch(e) {}
-                // Only redirect if still on this page
-                if (window.location.pathname !== '/home') {
-                    window.location.href = '/home';
-                }
-            });
+                var req = indexedDB.open(DB_NAME, 1);
 
-            xhr.addEventListener('error', function() {
-                try { sessionStorage.removeItem('kvibe_uploading'); } catch(e) {}
-                try { sessionStorage.setItem('kvibe_post_failed', '1'); } catch(e) {}
-                // Broadcast failure
-                try { new BroadcastChannel('kvibe_upload_status').postMessage('error'); } catch(e) {}
-                if (window.location.pathname !== '/home') {
-                    loadingOverlay.classList.remove('active');
-                    sharePostBtn.disabled = false;
-                    sharePostBtn.innerHTML = 'Share ✨';
-                    showAlert('oops!', 'post failed, try again 😅', '❌', [{text: 'ok', type: 'primary'}]);
-                } else {
-                    window.location.href = '/home';
-                }
-            });
+                req.onupgradeneeded = function(e) {
+                    e.target.result.createObjectStore(STORE_NAME);
+                };
 
-            xhr.open('POST', this.action);
-            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-            xhr.send(fd);
+                // Fallback: IndexedDB unavailable — do XHR directly then redirect
+                req.onerror = function() {
+                    var xhr = new XMLHttpRequest();
+                    xhr.addEventListener('load', function() {
+                        try { sessionStorage.removeItem('kvibe_uploading'); } catch(ex) {}
+                        try { sessionStorage.setItem('kvibe_just_posted', '1'); } catch(ex) {}
+                        window.location.href = '/home';
+                    });
+                    xhr.addEventListener('error', function() {
+                        try { sessionStorage.removeItem('kvibe_uploading'); } catch(ex) {}
+                        loadingOverlay.classList.remove('active');
+                        sharePostBtn.disabled = false;
+                        sharePostBtn.innerHTML = 'Share ✨';
+                        showAlert('oops!', 'post failed, try again 😅', '❌', [{text: 'ok', type: 'primary'}]);
+                    });
+                    xhr.open('POST', postUrl);
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                    xhr.send(formData);
+                };
+
+                req.onsuccess = function(e) {
+                    var db  = e.target.result;
+                    var tx  = db.transaction(STORE_NAME, 'readwrite');
+                    tx.objectStore(STORE_NAME).put(job, JOB_KEY);
+                    tx.oncomplete = function() {
+                        db.close();
+                        window.location.href = '/home'; // ← instant redirect
+                    };
+                    tx.onerror = function() {
+                        db.close();
+                        window.location.href = '/home';
+                    };
+                };
+            }(fd, this.action));
         });
 
         // Initialize
