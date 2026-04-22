@@ -20,6 +20,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 
+handler404 = 'social.views.handler404'
+handler500 = 'social.views.handler500'
 
 urlpatterns = [
     path('kishiHubADMPannel/', admin.site.urls),

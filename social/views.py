@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt, UserFeedProfile, SocialEvent, JobVacancy, MarketVibe, MarketComment, JobVibe, JobComment, EventVibe, EventComment
+from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, UserFeedProfile, SocialEvent, JobVacancy, MarketVibe, MarketComment, JobVibe, JobComment, EventVibe, EventComment
 from django.db.models import Q
 from django.db.models import Count, Max, Min, OuterRef, Subquery
 from django.core.paginator import Paginator
@@ -171,23 +171,6 @@ def index(request):
             messages.error(request, 'Please fill in all fields.')
             return redirect('/')
 
-        # ── Layer 1: django-axes (settings.py) ───────────────────────────────
-        # Handled automatically by AxesMiddleware + AxesStandaloneBackend.
-        # Locks after AXES_FAILURE_LIMIT=5 attempts for 1 hour by username+IP.
-
-        # ── Layer 2: LoginAttempt DB (username-only, any device/IP) ──────────
-        # Catches attackers who rotate IPs/VPNs to bypass axes.
-        # Locks after 10 failed attempts within 15 minutes per username.
-        blocked, seconds_left = LoginAttempt.is_blocked(user_check)
-        if blocked:
-            mins = max(1, round(seconds_left / 60))
-            messages.error(
-                request,
-                f'Too many failed attempts on this account. '
-                f'Please wait {mins} minute(s) before trying again.'
-            )
-            return redirect('/')
-
         # Allow login by email OR username
         try:
             user_obj = User.objects.get(email__iexact=user_check)
@@ -200,13 +183,8 @@ def index(request):
         if user is not None:
             login(request, user)
             request.session.set_expiry(None)
-            # Clear Layer 2 failed attempts on successful login
-            LoginAttempt.clear(user_check)
             return redirect(_safe_next(request, '/home'))
         else:
-            # Record failed attempt for Layer 2
-            LoginAttempt.record(user_check, succeeded=False)
-            # Deliberately vague — don't reveal whether the username exists
             messages.error(request, 'Invalid username or password. Please try again.')
             return redirect('/')
 
@@ -243,37 +221,29 @@ def register(request):
             return redirect('register')
 
         gender        = html_escape(request.POST.get('gender', '').strip())
-        dob_raw       = request.POST.get('date_of_birth', '').strip()
+        community_raw = html_escape(request.POST.get('community_area', '').strip())
 
         # Validate gender
         valid_genders = ['male', 'female', 'non_binary', 'prefer_not_to_say']
         if gender and gender not in valid_genders:
             gender = ''
 
-        # Parse and validate date of birth
-        from datetime import date as date_type
-        import datetime
-        date_of_birth = None
-        if dob_raw:
-            try:
-                date_of_birth = datetime.date.fromisoformat(dob_raw)
-                min_age_date  = date_type.today().replace(year=date_type.today().year - 13)
-                if date_of_birth > min_age_date:
-                    messages.error(request, 'You must be at least 13 years old to register.')
-                    return redirect('register')
-                if date_of_birth.year < 1900:
-                    messages.error(request, 'Please enter a valid date of birth.')
-                    return redirect('register')
-            except ValueError:
-                messages.error(request, 'Please enter a valid date of birth.')
-                return redirect('register')
+        # Validate community_area against known choices
+        valid_communities = [v for v, _ in Profile.KISHI_COMMUNITIES]
+        community_area = community_raw if community_raw in valid_communities else ''
 
         user = User.objects.create_user(username=username, email=email, password=password)
-        Profile.objects.create(
+        profile = Profile.objects.create(
             user=user,
             gender=gender,
-            date_of_birth=date_of_birth,
+            community_area=community_area,
         )
+
+        # Handle optional profile picture upload
+        pic = request.FILES.get('profile_picture')
+        if pic:
+            profile.picture = pic
+            profile.save(update_fields=['picture'])
 
         sq = SecretQuestion(user=user, question=secret_question)
         sq.set_answer(secret_answer)
@@ -383,8 +353,6 @@ def forgot_password_reset(request):
     user_obj.set_password(new_password)
     user_obj.save()
 
-    # Clear any brute-force locks for this user
-    LoginAttempt.clear(username)
     cache.delete(key)
 
     return JsonResponse({'ok': True, 'message': 'Password reset successfully! You can now log in.'})
@@ -621,9 +589,135 @@ def _build_user_interest_profile(user):
     return result
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Session-level intent learning
+# ─────────────────────────────────────────────────────────────────────────────
+# The long-term interest profile (30 days, 7-day half-life) tells us what the
+# user *generally* likes.  But it can't answer: "what do they want RIGHT NOW?"
+#
+# Session intent captures the last N interactions (default 20) that happened
+# in the current browsing session — stored as a compact list in Redis with a
+# short TTL.  Each interaction is a dict:
+#   { 'author_id': int, 'vibe_type': str|None, 'ts': float }
+#
+# From this we derive two real-time signals:
+#   session_author_affinity  — how much the user has engaged with each author
+#                              THIS session (not today, THIS scroll session).
+#   session_vibe_weights     — which vibe types the user has reacted with
+#                              most in this session.
+#
+# Both are applied as an ADDITIVE bonus on top of the long-term score, so the
+# feed smoothly shifts toward what the user is in the mood for right now.
+# The bonus decays to nothing once the session cache expires (30 min TTL).
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SESSION_MAX_INTERACTIONS = 20    # rolling window kept in cache
+_SESSION_TTL_SECONDS      = 1800  # 30-minute session window
+
+
+def _session_cache_key(user_id: int) -> str:
+    return f'kvibe_session_intent_v1_{user_id}'
+
+
+def _session_record_interaction(user_id: int, author_id: int,
+                                 vibe_type: str | None = None) -> None:
+    """
+    Append one interaction to the rolling session window.
+    Called by every _feed_record_* helper so the session updates instantly
+    after every like / vibe / comment — zero extra DB queries.
+
+    The list is capped at _SESSION_MAX_INTERACTIONS (FIFO) so it never grows
+    unbounded.  We use a simple list rather than a deque because Redis stores
+    it as JSON and we need cheap serialisation.
+    """
+    try:
+        from django.core.cache import cache
+        import time as _time
+
+        key      = _session_cache_key(user_id)
+        existing = cache.get(key) or []
+
+        existing.append({
+            'author_id': author_id,
+            'vibe_type': vibe_type,
+            'ts':        _time.time(),
+        })
+
+        # Keep only the most recent N interactions (drop oldest from front)
+        if len(existing) > _SESSION_MAX_INTERACTIONS:
+            existing = existing[-_SESSION_MAX_INTERACTIONS:]
+
+        # Refresh TTL on every write so an active session stays alive
+        cache.set(key, existing, timeout=_SESSION_TTL_SECONDS)
+    except Exception:
+        pass   # session learning is best-effort — never block the feed
+
+
+def _build_session_intent(user_id: int):
+    """
+    Read the rolling session window from cache and derive:
+
+        session_author_affinity : dict { author_id → float }
+            Recency-weighted count of how many times the user engaged with
+            each author this session.  Most-recent interactions count more.
+
+        session_vibe_weights : dict { vibe_type → float }
+            Normalised share of each vibe type in this session so the feed
+            can tilt toward the mood the user is currently expressing.
+
+    Returns (session_author_affinity, session_vibe_weights).
+    Both dicts are empty when there is no session data (first visit, cache
+    miss, or TTL expired) — callers must handle empty dicts gracefully.
+
+    Recency weight: linear decay over the window so the most recent
+    interaction (rank 1) is weighted N× more than the oldest (rank N).
+        weight(rank) = (N - rank + 1) / sum(1..N)
+    This is O(N) with N ≤ 20 — essentially free.
+    """
+    try:
+        from django.core.cache import cache
+        interactions = cache.get(_session_cache_key(user_id)) or []
+    except Exception:
+        return {}, {}
+
+    if not interactions:
+        return {}, {}
+
+    n = len(interactions)
+    # Assign recency weights: newest interaction gets weight n, oldest gets 1
+    author_aff:  dict = {}
+    vibe_counts: dict = {}
+    weight_total = n * (n + 1) / 2   # sum of 1..n
+
+    for rank, event in enumerate(reversed(interactions), start=1):
+        w = rank / weight_total   # normalised so all weights sum to 1.0
+
+        aid = event.get('author_id')
+        if aid:
+            author_aff[aid] = author_aff.get(aid, 0.0) + w
+
+        vt = event.get('vibe_type')
+        if vt:
+            vibe_counts[vt] = vibe_counts.get(vt, 0.0) + w
+
+    return author_aff, vibe_counts
+
+
 def _score_post(post, now, vibe_weights, interacted_post_ids,
-                author_affinity, fof_ids, adaptive_author_ids):
- 
+                author_affinity, fof_ids, adaptive_author_ids,
+                new_user_author_ids=None,
+                session_author_affinity=None,
+                session_vibe_weights=None):
+    """
+    new_user_author_ids     : set of author IDs whose ALL posts currently have
+                              zero engagement. Posts from these authors receive a
+                              guaranteed visibility boost so they surface
+                              immediately in existing users' feeds.
+    session_author_affinity : dict {author_id → float} — recency-weighted
+                              engagement with each author in THIS session.
+    session_vibe_weights    : dict {vibe_type → float} — normalised share of
+                              each vibe type reacted to this session.
+    """
     # ── Resolve the "real" post for engagement/vibe signals ──────────────────
     # For a repost we count the ORIGINAL post's engagement (its full social
     # proof) but use THIS post row's created_at for recency (the repost is a
@@ -768,7 +862,51 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     if actual_author_id in adaptive_author_ids:
         score += 2.0
 
-    # ── 4. Vibe-Based taste match ─────────────────────────────────────────────
+    # ── 3b. Session intent — "what does the user want RIGHT NOW?" ────────────
+    # The long-term profile (section 3 above) reflects 30-day habits.
+    # This section boosts posts that match what the user has been engaging
+    # with in the CURRENT session (last ≤20 interactions, 30-min TTL).
+    #
+    # Two sub-signals:
+    #
+    #   i.  Session author affinity — if the user just liked two posts from
+    #       author X this session, their next post scores higher immediately.
+    #       Weight: up to +3.0 (capped to prevent one author dominating).
+    #       Complements long-term affinity without replacing it.
+    #
+    #   ii. Session vibe mood — if the user has been hitting 'fire' on
+    #       everything, posts tagged with 'fire' vibes by others score higher.
+    #       Weight: up to +1.5, scaled by how dominant that vibe is this session.
+    #       Lets the feed shift toward "funny mode" or "deep mode" in real time.
+    #
+    # Both signals are zero when no session data exists (first load, cache miss)
+    # so the fallback is pure long-term scoring — no regressions.
+    _SESSION_AUTHOR_CAP = 3.0
+    _SESSION_VIBE_CAP   = 1.5
+
+    if session_author_affinity and actual_author_id in session_author_affinity:
+        # Normalise: max possible value in the dict is 1.0 (all interactions
+        # with one author), so we scale directly to the cap.
+        raw_sa = session_author_affinity[actual_author_id]
+        score += min(raw_sa * _SESSION_AUTHOR_CAP, _SESSION_AUTHOR_CAP)
+
+    if session_vibe_weights:
+        # Sum the session vibe weight for each vibe type present on this post,
+        # scaled by the actual vibe count so a post with 10 'fire' vibes and
+        # a user in a 'fire' mood scores higher than one with 1 'fire' vibe.
+        session_vibe_score = 0.0
+        _VIBE_TYPES = ['fire', 'real', 'vibing', 'dead', 'cringe', 'chill', 'love']
+        for vt in _VIBE_TYPES:
+            s_weight  = session_vibe_weights.get(vt, 0.0)
+            post_vibes = getattr(post, f'_vb_{vt}', 0)
+            if s_weight > 0 and post_vibes > 0:
+                # log-compress post vibe count so viral posts don't dominate
+                session_vibe_score += s_weight * math.log2(1 + post_vibes)
+        # Normalise and cap
+        if session_vibe_score > 0:
+            score += min(session_vibe_score, _SESSION_VIBE_CAP)
+
+    # ── 4. Vibe-Based taste match (long-term) ─────────────────────────────────
     # For reposts use the vibe breakdown of the original post (attached as
     # _vb_<type> attributes — the pipeline sets these on signal_post via
     # the same post_id used when building vb_lookup).
@@ -781,6 +919,36 @@ def _score_post(post, now, vibe_weights, interacted_post_ids,
     # ── 5. Network — friend-of-friend ─────────────────────────────────────────
     if actual_author_id in fof_ids:
         score += 2.5
+
+    # ── 6. New-user author visibility guarantee ──────────────────────────────
+    # Posts from authors who have NEVER received a single reaction, view, or
+    # comment on any of their posts score near zero on every engagement signal.
+    # Without this bonus they permanently stay buried below posts with even one
+    # interaction — existing users would never see them.
+    #
+    # We apply a smooth time-decayed bonus that:
+    #   • Peaks at +4.0 immediately after posting (strong enough to surface
+    #     the post above most zero-engagement older content).
+    #   • Decays with a 3-hour half-life so it fades naturally once the post
+    #     has had time to collect its first reactions.
+    #   • Is capped in age: after 24 hours a new-user post that still has no
+    #     engagement falls back to organic ranking — we don't force-surface
+    #     genuinely low-quality content forever.
+    #
+    # Score curve (peak 4.0, half-life 3 h):
+    #   age 0 h  → +4.00   (just posted — guaranteed top-of-feed visibility)
+    #   age 1 h  → +3.17   (still very prominent)
+    #   age 3 h  → +2.00   (half-life reached)
+    #   age 6 h  → +1.00   (fading — reactions take over)
+    #   age 12 h → +0.25   (nearly organic)
+    #   age 24 h → +0.00   (cap — pure engagement from here)
+    _NEW_AUTHOR_PEAK      = 4.0
+    _NEW_AUTHOR_HALF_LIFE = 3.0   # hours
+    _NEW_AUTHOR_AGE_CAP   = 24.0  # hours — bonus expires after 1 day
+    if (new_user_author_ids and actual_author_id in new_user_author_ids
+            and age_hours < _NEW_AUTHOR_AGE_CAP):
+        _new_author_decay = math.log(2) / _NEW_AUTHOR_HALF_LIFE
+        score += _NEW_AUTHOR_PEAK * math.exp(-_new_author_decay * age_hours)
 
     return score
 
@@ -924,11 +1092,14 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     _blocked_ids.discard(user.id)   # never exclude the viewer themselves
 
     # ── Dynamic candidate pool size ───────────────────────────────────────────
-    # Scale the candidate pool with the number of accounts the user follows so
-    # that power users and large networks always get enough variety to find the
-    # best top-10. Formula: clamp(len(following) * multiplier, min, max).
+    # KishiHub is a community feed — ALL users' posts are eligible regardless
+    # of follow status.  We therefore base the pool size on a community-wide
+    # baseline rather than the number of followings, so users with zero
+    # followings still get a rich 80-post candidate pool to rank from.
+    # Formula: clamp(max(80, len(following) * multiplier), min, max).
+    _community_baseline = 80   # minimum pool for community-wide visibility
     _feed_sample = max(
-        _FEED_SAMPLE_MIN,
+        _community_baseline,
         min(_FEED_SAMPLE_MAX, len(following_ids_set) * _FEED_SAMPLE_MULTIPLIER),
     )
 
@@ -939,6 +1110,11 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
 
     interacted_post_ids, author_affinity = _build_user_interest_profile(user)
     fof_ids, fof_via_map = _build_fof(following_ids_set, user.id)
+
+    # Session-level intent: what is this user engaging with RIGHT NOW?
+    # Zero extra DB queries — reads a compact list from Redis (or returns
+    # empty dicts on cache miss so scoring degrades gracefully to long-term only).
+    session_author_affinity, session_vibe_weights = _build_session_intent(user.id)
 
     # ── 1. Candidate pool ─────────────────────────────────────────────────────
     # New-post visibility guarantee: always include ALL posts from the last
@@ -981,18 +1157,17 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         .order_by('-created_at')[:_feed_sample]
     )
 
-    # ── FIX 1b: Unseen posts from followings since last visit ────────────────
-    # Fetch posts from followed accounts created after _unseen_since that are
-    # NOT already in the main pool (i.e. fell outside the _feed_sample cap).
-    # This runs only on the first page (no cursor) to avoid duplication.
-    if cursor_dt is None and following_ids:
+    # ── FIX 1b: Unseen community posts since last visit ───────────────────────
+    # Fetch ALL posts created after _unseen_since that are NOT already in the
+    # main pool (i.e. fell outside the _feed_sample cap).  This runs only on
+    # the first page (no cursor) to avoid duplication.
+    # Community-wide: not filtered to followings — any member's post that the
+    # viewer hasn't seen yet gets a chance to surface on re-open.
+    if cursor_dt is None:
         _existing_pool_ids = {p.post_id for p in posts}
         _unseen_extras = list(
             Post.objects
-            .filter(
-                Q(author__in=following_ids) | Q(author=user),
-                created_at__gt=_unseen_since,
-            )
+            .filter(created_at__gt=_unseen_since)
             .exclude(post_id__in=_existing_pool_ids)
             .exclude(author__in=_blocked_ids)
             .select_related(
@@ -1059,6 +1234,34 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # Single bulk query via shared helper — handles repost → original resolution.
     _annotate_vibe_breakdown(posts)
 
+    # ── 2b. New-user author detection ─────────────────────────────────────────
+    # Identify authors whose posts collectively have zero engagement so the
+    # scoring function can apply the visibility guarantee (section 6 in
+    # _score_post).  We count from the already-fetched pool — no extra DB query.
+    #
+    # An author qualifies as "new" if every post in the current candidate pool
+    # attributed to them has: vibe_count=0, comment_count=0, repost_count=0,
+    # share=0, and view=0.  Once any post of theirs receives even one reaction
+    # the author is removed from the set and organic scoring takes over.
+    _author_engagement: dict = {}   # author_id → cumulative engagement count
+    for _p in posts:
+        _aid = (
+            _p.original_post.author_id
+            if _p.is_repost and _p.original_post
+            else _p.author_id
+        )
+        _total = (
+            getattr(_p, 'vibe_count',    0) +
+            getattr(_p, 'comment_count', 0) +
+            getattr(_p, 'repost_count',  0) +
+            (getattr(_p, 'share', None) or 0) +
+            (getattr(_p, 'view',  None) or 0)
+        )
+        _author_engagement[_aid] = _author_engagement.get(_aid, 0) + _total
+    _new_user_author_ids = {
+        aid for aid, total in _author_engagement.items() if total == 0
+    }
+
     # ── 3. Score & rank — compute once, cache on object ───────────────────────
     # _score_post is called only once per post here; the cached value is reused
     # in the merge sort below so we never compute it twice.
@@ -1067,6 +1270,9 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             p._feed_score = _score_post(
                 p, now, vibe_weights, interacted_post_ids,
                 author_affinity, fof_ids, adaptive_author_ids,
+                new_user_author_ids=_new_user_author_ids,
+                session_author_affinity=session_author_affinity,
+                session_vibe_weights=session_vibe_weights,
             )
         return p._feed_score
 
@@ -1102,6 +1308,25 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
                                          blocked_ids=_blocked_ids,
                                          seen_post_ids=seen_post_ids)
     _annotate_vibe_breakdown(explore_posts)
+    # Extend new-user detection to explore posts (zero extra DB queries —
+    # purely from the already-fetched explore pool).
+    for _ep in explore_posts:
+        _aid = (
+            _ep.original_post.author_id
+            if _ep.is_repost and _ep.original_post
+            else _ep.author_id
+        )
+        _total = (
+            getattr(_ep, 'vibe_count',    0) +
+            getattr(_ep, 'comment_count', 0) +
+            getattr(_ep, 'repost_count',  0) +
+            (getattr(_ep, 'share', None) or 0) +
+            (getattr(_ep, 'view',  None) or 0)
+        )
+        if _total == 0:
+            _new_user_author_ids.add(_aid)
+        elif _aid in _new_user_author_ids:
+            _new_user_author_ids.discard(_aid)
 
     # ── 6. Merge, jitter, re-sort, slice ──────────────────────────────────────
     # Take top (page_size - n_explore) scored posts + explore posts, then
@@ -1121,7 +1346,84 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         key=lambda p: _cached_score(p) + _rng.uniform(0, 1.5),
         reverse=True,
     )
-    final_posts = merged[:page_size]
+
+    # ── 6b. Author frequency penalty — diversity enforcement ──────────────────
+    # Without this, the same prolific creator (or someone who just posted 5
+    # times today) can fill 4–5 of the 10 feed slots, crowding out every other
+    # voice in the community.
+    #
+    # Algorithm: greedy ranked-selection with an exponentially decaying penalty
+    # applied to each author's score every time one of their posts is already
+    # selected for this page.
+    #
+    #   effective_score(post) = raw_score × penalty_factor ^ appearances_so_far
+    #
+    # Constants:
+    #   _MAX_PER_AUTHOR   — hard cap: no author can appear more than this many
+    #                       times per page regardless of score.  Set to 2 so a
+    #                       very active creator still gets two slots but can't
+    #                       monopolise the feed.
+    #   _PENALTY_FACTOR   — multiplier applied per appearance (0 < f < 1).
+    #                       0.40 means a 2nd post from the same author is scored
+    #                       at 40 % of its raw value, a 3rd at 16 %, etc.
+    #                       Tune upward (e.g. 0.55) if community is small and
+    #                       there aren't enough unique authors to fill a page.
+    #
+    # The viewer's OWN posts are exempt from the penalty — we never suppress
+    # your own content in your own feed.
+    #
+    # Score curve examples (_PENALTY_FACTOR = 0.40):
+    #   1st post from author A  → score × 1.00  (no penalty)
+    #   2nd post from author A  → score × 0.40  (strong demotion)
+    #   3rd post from author A  → score × 0.16  (effectively buried)
+    _MAX_PER_AUTHOR = 2
+    _PENALTY_FACTOR = 0.40
+
+    _author_appearances: dict = {}   # author_id → count of posts already selected
+    final_posts = []
+
+    # We iterate the already-sorted merged list and re-evaluate effective score
+    # dynamically so each selection updates the penalty for subsequent picks.
+    # Because the list is already roughly sorted by descending score, a single
+    # greedy pass is O(n) and produces near-optimal diversity without needing
+    # a costly re-sort on every step.
+    _remaining = list(merged)
+    while len(final_posts) < page_size and _remaining:
+        # Recompute effective scores for all remaining candidates
+        best_idx   = -1
+        best_score = -1.0
+        for idx, p in enumerate(_remaining):
+            _aid = (
+                p.original_post.author_id
+                if p.is_repost and p.original_post
+                else p.author_id
+            )
+            _appearances = _author_appearances.get(_aid, 0)
+
+            # Hard cap — skip entirely once limit reached (own posts exempt)
+            if _aid != user.id and _appearances >= _MAX_PER_AUTHOR:
+                continue
+
+            # Effective score: penalise repeat appearances exponentially
+            _eff = _cached_score(p) * (_PENALTY_FACTOR ** _appearances)
+            if _eff > best_score:
+                best_score = _eff
+                best_idx   = idx
+
+        if best_idx == -1:
+            # All remaining authors are at cap — relax and take the next best
+            # post by raw score so the page always fills to page_size.
+            _remaining.sort(key=_cached_score, reverse=True)
+            final_posts.append(_remaining.pop(0))
+        else:
+            chosen = _remaining.pop(best_idx)
+            _c_aid = (
+                chosen.original_post.author_id
+                if chosen.is_repost and chosen.original_post
+                else chosen.author_id
+            )
+            _author_appearances[_c_aid] = _author_appearances.get(_c_aid, 0) + 1
+            final_posts.append(chosen)
 
     # ── 6b. Own-post pinning — only on the FIRST page load (no cursor) ─────────
     # After jitter and explore injection the user's own brand-new posts can be
@@ -1294,34 +1596,40 @@ def _feed_record_vibe(user, vibe_type, post_author_id):
     """
     Call when a user ADDS or SWITCHES a vibe reaction.
     Bumps the vibe taste weight for `vibe_type` in the user's UserFeedProfile,
-    records author affinity, and busts the interest cache so the next feed load
-    reflects this interaction immediately.
+    records long-term author affinity, updates the short-term session window,
+    and busts the interest cache so the next feed load reflects this interaction.
     Already wired into PostVibeConsumer.toggle_vibe().
     """
     try:
         from django.core.cache import cache
         _get_or_create_feed_profile(user).record_vibe(vibe_type, post_author_id)
         cache.delete(f'kvibe_interest_v2_{user.id}')
+        # Session: record author + vibe type so the feed tilts toward this mood now
+        _session_record_interaction(user.id, post_author_id, vibe_type)
     except Exception:
         pass
 
 
 def _feed_record_like(user, post_author_id):
-    """Call when a user LIKES a post.  Updates author affinity + busts interest cache."""
+    """Call when a user LIKES a post. Updates long-term author affinity,
+    session window, and busts interest cache."""
     try:
         from django.core.cache import cache
         _get_or_create_feed_profile(user).record_like(post_author_id)
         cache.delete(f'kvibe_interest_v2_{user.id}')
+        _session_record_interaction(user.id, post_author_id, vibe_type=None)
     except Exception:
         pass
 
 
 def _feed_record_comment(user, post_author_id):
-    """Call when a user submits a COMMENT.  Updates author affinity + busts interest cache."""
+    """Call when a user submits a COMMENT. Updates long-term author affinity,
+    session window, and busts interest cache."""
     try:
         from django.core.cache import cache
         _get_or_create_feed_profile(user).record_comment(post_author_id)
         cache.delete(f'kvibe_interest_v2_{user.id}')
+        _session_record_interaction(user.id, post_author_id, vibe_type=None)
     except Exception:
         pass
 
@@ -1557,17 +1865,18 @@ def feed_load_more(request):
         except (ValueError, TypeError):
             return HttpResponse(status=204)
 
-        profile       = Profile.objects.get(user=request.user)
-        following_ids = list(profile.followings.values_list('user', flat=True))
-
-        if not following_ids:
-            new_qs = Post.objects.all()
-        else:
-            new_qs = Post.objects.filter(
-                Q(author__in=following_ids) |
-                Q(author=request.user) |
-                Q(is_repost=True, author__in=following_ids)
-            )
+        # KishiHub community feed: check for new posts from ALL users
+        # (not just followings) so the banner fires whenever anyone in the
+        # community posts — consistent with the community-wide candidate pool.
+        _banner_blocked_qs  = BlockedUser.objects.filter(
+            Q(blocker=request.user) | Q(blocked=request.user)
+        )
+        _banner_blocked_ids = set(
+            list(_banner_blocked_qs.values_list('blocked_id', flat=True)) +
+            list(_banner_blocked_qs.values_list('blocker_id', flat=True))
+        )
+        _banner_blocked_ids.discard(request.user.id)
+        new_qs = Post.objects.exclude(author__in=_banner_blocked_ids)
 
         if new_qs.filter(created_at__gt=anchor_dt).exists():
             return HttpResponse(status=200)   # new posts exist → show banner
@@ -5548,7 +5857,7 @@ from django.contrib.auth.models import User
 from django.db.models import Count
 from social.models import (
     Profile, Post, PostComment, UserReport, BlockedUser,
-    LoginAttempt, Message, Channel, Market, SocialEvent, JobVacancy,
+    Message, Channel, Market, SocialEvent, JobVacancy,
 )
 
 
@@ -5604,9 +5913,6 @@ def admin_dashboard(request):
         'upcoming_events': SocialEvent.objects.filter(date__gte=date.today()).count(),
         'pending_reports': UserReport.objects.filter(status='pending').count(),
         'total_reports':   UserReport.objects.count(),
-        # LoginAttempt field is `succeeded` (not successful)
-        'failed_logins':   LoginAttempt.objects.filter(succeeded=False).count(),
-
         # ── Community breakdown ───────────────────────────────────────────
         'community_stats': _community_stats(),
 
@@ -5685,13 +5991,6 @@ def admin_dashboard(request):
             JobVacancy.objects
             .select_related('posted_by__profile')
             .order_by('-created_at')
-        ),
-
-        # ── Login attempts
-        # LoginAttempt fields: username, attempted_at, succeeded
-        'login_attempts': (
-            LoginAttempt.objects
-            .order_by('-attempted_at')[:200]
         ),
 
         # ── Recent messages
@@ -5967,3 +6266,17 @@ def delete_product(request, product_id):
         )
         return JsonResponse({'success': False, 'error': 'Something went wrong. Please try again.'}, status=500)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Custom error handlers — must be registered in root urls.py as:
+#   handler404 = 'social.views.handler404'
+#   handler500 = 'social.views.handler500'
+# These only activate when DEBUG = False.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def handler404(request, exception=None):
+    return render(request, '404.html', status=404)
+
+
+def handler500(request):
+    return render(request, '500.html', status=500)
