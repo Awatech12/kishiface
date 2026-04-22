@@ -7,9 +7,11 @@ import cloudinary
 BASE_DIR = Path(__file__).resolve().parent.parent
 #load_dotenv(BASE_DIR / '.env')
 
-SECRET_KEY = os.getenv("SECRET_KEY") 
-DEBUG = os.getenv("DEBUG")
+SECRET_KEY = os.getenv("SECRET_KEY")
+# Fix: os.getenv() returns a string, not a bool. "False" is truthy in Python.
+DEBUG = os.getenv("DEBUG", "False").strip().lower() == "true"
 USE_CLOUDINARY = True
+
 ALLOWED_HOSTS = [
     'kishihub.com',
     'www.kishihub.com',
@@ -33,7 +35,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
-    'axes',    # Brute-force protection
+    #'axes',    # Brute-force protection
     'social.apps.SocialConfig',
     'pwa',
 ]
@@ -86,7 +88,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'axes.middleware.AxesMiddleware',   
+    #'axes.middleware.AxesMiddleware',
 ]
 
 ROOT_URLCONF = 'myapp.urls'
@@ -106,7 +108,7 @@ TEMPLATES = [
                 'social.context_processors.user_notifications',
                 'social.context_processors.follow_notifications_context',
                 'social.context_processors.channel_unread_processor',
-            ], 
+            ],
         },
     },
 ]
@@ -130,29 +132,22 @@ else:
         },
     }
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv("DATABASE"),  
-        conn_max_age=600,
-        env='DATABASE_URL'
-    )
-}
 if USE_CLOUDINARY:
     DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv("DATABASE_URL"),  
-        conn_max_age=600,
-        conn_health_checks=True,
-        ssl_require=True
-    )
+        'default': dj_database_url.config(
+            default=os.getenv("DATABASE_URL"),
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=True
+        )
     }
 else:
     DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv("DATABASE"),  
-        conn_max_age=600,
-        env='DATABASE_URL'
-    )
+        'default': dj_database_url.config(
+            default=os.getenv("DATABASE"),
+            conn_max_age=600,
+            env='DATABASE_URL'
+        )
     }
 
 
@@ -205,33 +200,36 @@ PWA_SERVICE_WORKER_PATH = BASE_DIR / 'social' / 'static' / 'js' / 'serviceworker
 PWA_APP_FETCH_URL = '/offline/'
 
 
-
 # ==============================================================================
 # AUTHENTICATION & SECURITY (AXES)
 # ==============================================================================
 
 AUTHENTICATION_BACKENDS = [
-    'axes.backends.AxesStandaloneBackend',  # Axes must be first
-    'django.contrib.auth.backends.ModelBackend',
+    #'axes.backends.AxesStandaloneBackend',  # Axes must be first
+    #'django.contrib.auth.backends.ModelBackend',
 ]
 
 # Axes Configuration
-AXES_FAILURE_LIMIT = 5
-AXES_COOLDOWN = 1
-AXES_LOCKOUT_BY_COMBINATION_USER_AND_IP = True
-AXES_LOCKOUT_TEMPLATE = 'lockout.html'
+#AXES_FAILURE_LIMIT = 15
+#AXES_COOLDOWN = 1
+#AXES_LOCKOUT_BY_COMBINATION_USER_AND_IP = True
+#AXES_LOCKOUT_TEMPLATE = 'lockout.html'
+
+# Fix: Render always proxies through HTTPS, so Django must always be told
+# to trust the X-Forwarded-Proto header — regardless of DEBUG mode.
+# Without this, Django can't set/read the CSRF cookie correctly on Render.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 
 if not DEBUG:
-    # SSL/HTTPS Logic
+    # Redirect all HTTP → HTTPS
     SECURE_SSL_REDIRECT = True
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    USE_X_FORWARDED_HOST = True
 
+    # Secure cookies (HTTPS-only)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = True
-    
 
     # Browser protections
     SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -241,3 +239,4 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+
