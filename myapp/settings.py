@@ -35,7 +35,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
-    #'axes',    # Brute-force protection
     'social.apps.SocialConfig',
     'pwa',
 ]
@@ -88,7 +87,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    #'axes.middleware.AxesMiddleware',
 ]
 
 ROOT_URLCONF = 'myapp.urls'
@@ -201,19 +199,12 @@ PWA_APP_FETCH_URL = '/offline/'
 
 
 # ==============================================================================
-# AUTHENTICATION & SECURITY (AXES)
+# AUTHENTICATION
 # ==============================================================================
 
 AUTHENTICATION_BACKENDS = [
-    #'axes.backends.AxesStandaloneBackend',  # Axes must be first
-    #'django.contrib.auth.backends.ModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
 ]
-
-# Axes Configuration
-#AXES_FAILURE_LIMIT = 15
-#AXES_COOLDOWN = 1
-#AXES_LOCKOUT_BY_COMBINATION_USER_AND_IP = True
-#AXES_LOCKOUT_TEMPLATE = 'lockout.html'
 
 # Fix: Render always proxies through HTTPS, so Django must always be told
 # to trust the X-Forwarded-Proto header — regardless of DEBUG mode.
@@ -239,4 +230,5 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+
 
