@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, LoginAttempt, UserFeedProfile, SocialEvent, JobVacancy, MarketVibe, MarketComment, JobVibe, JobComment, EventVibe, EventComment
+from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, UserFeedProfile, SocialEvent, JobVacancy, MarketVibe, MarketComment, JobVibe, JobComment, EventVibe, EventComment
 from django.db.models import Q
 from django.db.models import Count, Max, Min, OuterRef, Subquery
 from django.core.paginator import Paginator
@@ -171,23 +171,6 @@ def index(request):
             messages.error(request, 'Please fill in all fields.')
             return redirect('/')
 
-        # ── Layer 1: django-axes (settings.py) ───────────────────────────────
-        # Handled automatically by AxesMiddleware + AxesStandaloneBackend.
-        # Locks after AXES_FAILURE_LIMIT=5 attempts for 1 hour by username+IP.
-
-        # ── Layer 2: LoginAttempt DB (username-only, any device/IP) ──────────
-        # Catches attackers who rotate IPs/VPNs to bypass axes.
-        # Locks after 10 failed attempts within 15 minutes per username.
-        blocked, seconds_left = LoginAttempt.is_blocked(user_check)
-        if blocked:
-            mins = max(1, round(seconds_left / 60))
-            messages.error(
-                request,
-                f'Too many failed attempts on this account. '
-                f'Please wait {mins} minute(s) before trying again.'
-            )
-            return redirect('/')
-
         # Allow login by email OR username
         try:
             user_obj = User.objects.get(email__iexact=user_check)
@@ -200,13 +183,8 @@ def index(request):
         if user is not None:
             login(request, user)
             request.session.set_expiry(None)
-            # Clear Layer 2 failed attempts on successful login
-            LoginAttempt.clear(user_check)
             return redirect(_safe_next(request, '/home'))
         else:
-            # Record failed attempt for Layer 2
-            LoginAttempt.record(user_check, succeeded=False)
-            # Deliberately vague — don't reveal whether the username exists
             messages.error(request, 'Invalid username or password. Please try again.')
             return redirect('/')
 
@@ -243,37 +221,29 @@ def register(request):
             return redirect('register')
 
         gender        = html_escape(request.POST.get('gender', '').strip())
-        dob_raw       = request.POST.get('date_of_birth', '').strip()
+        community_raw = html_escape(request.POST.get('community_area', '').strip())
 
         # Validate gender
         valid_genders = ['male', 'female', 'non_binary', 'prefer_not_to_say']
         if gender and gender not in valid_genders:
             gender = ''
 
-        # Parse and validate date of birth
-        from datetime import date as date_type
-        import datetime
-        date_of_birth = None
-        if dob_raw:
-            try:
-                date_of_birth = datetime.date.fromisoformat(dob_raw)
-                min_age_date  = date_type.today().replace(year=date_type.today().year - 13)
-                if date_of_birth > min_age_date:
-                    messages.error(request, 'You must be at least 13 years old to register.')
-                    return redirect('register')
-                if date_of_birth.year < 1900:
-                    messages.error(request, 'Please enter a valid date of birth.')
-                    return redirect('register')
-            except ValueError:
-                messages.error(request, 'Please enter a valid date of birth.')
-                return redirect('register')
+        # Validate community_area against known choices
+        valid_communities = [v for v, _ in Profile.KISHI_COMMUNITIES]
+        community_area = community_raw if community_raw in valid_communities else ''
 
         user = User.objects.create_user(username=username, email=email, password=password)
-        Profile.objects.create(
+        profile = Profile.objects.create(
             user=user,
             gender=gender,
-            date_of_birth=date_of_birth,
+            community_area=community_area,
         )
+
+        # Handle optional profile picture upload
+        pic = request.FILES.get('profile_picture')
+        if pic:
+            profile.picture = pic
+            profile.save(update_fields=['picture'])
 
         sq = SecretQuestion(user=user, question=secret_question)
         sq.set_answer(secret_answer)
@@ -383,8 +353,6 @@ def forgot_password_reset(request):
     user_obj.set_password(new_password)
     user_obj.save()
 
-    # Clear any brute-force locks for this user
-    LoginAttempt.clear(username)
     cache.delete(key)
 
     return JsonResponse({'ok': True, 'message': 'Password reset successfully! You can now log in.'})
@@ -5548,7 +5516,7 @@ from django.contrib.auth.models import User
 from django.db.models import Count
 from social.models import (
     Profile, Post, PostComment, UserReport, BlockedUser,
-    LoginAttempt, Message, Channel, Market, SocialEvent, JobVacancy,
+    Message, Channel, Market, SocialEvent, JobVacancy,
 )
 
 
@@ -5604,9 +5572,6 @@ def admin_dashboard(request):
         'upcoming_events': SocialEvent.objects.filter(date__gte=date.today()).count(),
         'pending_reports': UserReport.objects.filter(status='pending').count(),
         'total_reports':   UserReport.objects.count(),
-        # LoginAttempt field is `succeeded` (not successful)
-        'failed_logins':   LoginAttempt.objects.filter(succeeded=False).count(),
-
         # ── Community breakdown ───────────────────────────────────────────
         'community_stats': _community_stats(),
 
@@ -5685,13 +5650,6 @@ def admin_dashboard(request):
             JobVacancy.objects
             .select_related('posted_by__profile')
             .order_by('-created_at')
-        ),
-
-        # ── Login attempts
-        # LoginAttempt fields: username, attempted_at, succeeded
-        'login_attempts': (
-            LoginAttempt.objects
-            .order_by('-attempted_at')[:200]
         ),
 
         # ── Recent messages
@@ -5966,4 +5924,5 @@ def delete_product(request, product_id):
             'delete_product failed for user %s product %s', request.user.id, product_id
         )
         return JsonResponse({'success': False, 'error': 'Something went wrong. Please try again.'}, status=500)
+
 
