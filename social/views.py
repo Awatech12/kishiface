@@ -12,7 +12,6 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, UserFeedProfile, SocialEvent, JobVacancy, MarketVibe, MarketComment, JobVibe, JobComment, EventVibe, EventComment
-from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, UserFeedProfile, SocialEvent, JobVacancy, MarketVibe, MarketComment, JobVibe, JobComment, EventVibe, EventComment
 from django.db.models import Q
 from django.db.models import Count, Max, Min, OuterRef, Subquery
 from django.core.paginator import Paginator
@@ -223,7 +222,6 @@ def register(request):
 
         gender        = html_escape(request.POST.get('gender', '').strip())
         community_raw = html_escape(request.POST.get('community_area', '').strip())
-        community_raw = html_escape(request.POST.get('community_area', '').strip())
 
         # Validate gender
         valid_genders = ['male', 'female', 'non_binary', 'prefer_not_to_say']
@@ -233,24 +231,13 @@ def register(request):
         # Validate community_area against known choices
         valid_communities = [v for v, _ in Profile.KISHI_COMMUNITIES]
         community_area = community_raw if community_raw in valid_communities else ''
-        # Validate community_area against known choices
-        valid_communities = [v for v, _ in Profile.KISHI_COMMUNITIES]
-        community_area = community_raw if community_raw in valid_communities else ''
 
         user = User.objects.create_user(username=username, email=email, password=password)
-        profile = Profile.objects.create(
         profile = Profile.objects.create(
             user=user,
             gender=gender,
             community_area=community_area,
-            community_area=community_area,
         )
-
-        # Handle optional profile picture upload
-        pic = request.FILES.get('profile_picture')
-        if pic:
-            profile.picture = pic
-            profile.save(update_fields=['picture'])
 
         # Handle optional profile picture upload
         pic = request.FILES.get('profile_picture')
@@ -5871,7 +5858,6 @@ from django.db.models import Count
 from social.models import (
     Profile, Post, PostComment, UserReport, BlockedUser,
     Message, Channel, Market, SocialEvent, JobVacancy,
-    Message, Channel, Market, SocialEvent, JobVacancy,
 )
 
 
@@ -6294,4 +6280,3 @@ def handler404(request, exception=None):
 
 def handler500(request):
     return render(request, '500.html', status=500)
-
