@@ -2,10 +2,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-<link rel="preconnect" href="https://cdn.jsdelivr.net">
-<link rel="preconnect" href="https://res.cloudinary.com">
-<link rel="dns-prefetch" href="https://placehold.co">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
@@ -298,6 +294,76 @@
     input[type="date"].kh-input:not([value])::-webkit-datetime-edit,
     input[type="date"].kh-input[value=""]::-webkit-datetime-edit { color: var(--kh-muted); }
 
+    /* ---- Profile picture upload modal ---- */
+    .kh-modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 8000;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; visibility: hidden;
+      transition: opacity .3s ease, visibility .3s ease;
+      padding: 16px;
+    }
+    .kh-modal-overlay.kh-open { opacity: 1; visibility: visible; }
+    .kh-modal-card {
+      background: #fff; border-radius: 18px;
+      width: 100%; max-width: 340px;
+      padding: 28px 24px 24px; text-align: center;
+      transform: translateY(24px) scale(.97);
+      transition: transform .32s cubic-bezier(.34,1.56,.64,1);
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+    }
+    .kh-modal-overlay.kh-open .kh-modal-card { transform: translateY(0) scale(1); }
+    .kh-modal-icon {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: rgba(0,149,246,.08);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 28px; color: var(--kh-primary);
+    }
+    .kh-modal-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; letter-spacing: -.3px; }
+    .kh-modal-sub { font-size: 13px; color: var(--kh-muted); margin-bottom: 20px; line-height: 1.5; }
+    .kh-avatar-preview {
+      width: 100px; height: 100px; border-radius: 50%;
+      border: 3px dashed var(--kh-border);
+      margin: 0 auto 18px; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; position: relative;
+      transition: border-color .2s; background: #f8f8f8;
+    }
+    .kh-avatar-preview:hover { border-color: var(--kh-primary); }
+    .kh-avatar-preview img { width: 100%; height: 100%; object-fit: cover; display: none; }
+    .kh-avatar-preview img.kh-visible { display: block; }
+    .kh-avatar-placeholder { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--kh-muted); font-size: 12px; }
+    .kh-avatar-placeholder i { font-size: 26px; }
+    .kh-avatar-placeholder.kh-hidden { display: none; }
+    .kh-file-input { display: none; }
+    .kh-upload-area {
+      border: 1.5px dashed var(--kh-border); border-radius: var(--kh-radius);
+      padding: 13px; margin-bottom: 16px; cursor: pointer;
+      transition: border-color .2s, background .2s;
+      font-size: 13px; color: var(--kh-muted);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .kh-upload-area:hover { border-color: var(--kh-primary); background: rgba(0,149,246,.04); color: var(--kh-primary); }
+    .kh-upload-area.kh-has-file { border-color: var(--kh-success); background: rgba(34,197,94,.04); color: var(--kh-success); }
+    .kh-modal-actions { display: flex; gap: 10px; }
+    .kh-modal-actions .kh-btn-skip {
+      flex: 1; padding: 12px; background: transparent; color: var(--kh-muted);
+      border: 1px solid var(--kh-border); border-radius: var(--kh-radius);
+      font-size: 14px; font-weight: 500; cursor: pointer; transition: background .2s, color .2s;
+    }
+    .kh-modal-actions .kh-btn-skip:hover { background: #f5f5f5; color: var(--kh-text); }
+    .kh-modal-actions .kh-btn-upload {
+      flex: 2; padding: 12px; background: var(--kh-primary); color: #fff;
+      border: none; border-radius: var(--kh-radius);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      transition: opacity .2s;
+    }
+    .kh-modal-actions .kh-btn-upload:hover { opacity: .9; }
+    .kh-modal-actions .kh-btn-upload:disabled { opacity: .5; cursor: not-allowed; }
+
     /* ---- Responsive ---- */
     @media (max-width: 360px) {
       body { padding: 12px; }
@@ -410,7 +476,7 @@
     </div>
     {% endif %}
 
-    <form method="post" autocomplete="on" class="kh-form" id="kh-form" novalidate>
+    <form method="post" enctype="multipart/form-data" autocomplete="on" class="kh-form" id="kh-form" novalidate>
       {% csrf_token %}
 
       <!-- ── Username ──────────────────────────────────────────── -->
@@ -504,12 +570,12 @@
         </div>
       </div>
 
-      <!-- ── Gender + Date of Birth (inline) ─────────────────── -->
+      <!-- ── Gender + Community Area (inline) ────────────────── -->
       <div class="kh-row">
         <div class="kh-group">
           <div class="kh-field">
             <i class="fas fa-venus-mars kh-icon" aria-hidden="true"></i>
-            <select id="kh-gender" name="gender" class="kh-input kh-select" style="cursor:pointer;" required>
+            <select id="kh-gender" name="gender" class="kh-input kh-select" style="cursor:pointer;">
               <option value="" disabled selected>Gender</option>
               <option value="male">Male</option>
               <option value="female">Female</option>
@@ -520,19 +586,27 @@
         </div>
         <div class="kh-group">
           <div class="kh-field">
-            <i class="fas fa-calendar-alt kh-icon" aria-hidden="true"></i>
-            <input
-              type="date" id="kh-dob" name="date_of_birth"
-              class="kh-input kh-dob-input"
-              max="" min="1900-01-01"
-            />
-            <span class="kh-status-icon" id="kh-dob-si"></span>
+            <i class="fas fa-map-marker-alt kh-icon" aria-hidden="true"></i>
+            <select id="kh-community" name="community_area" class="kh-input kh-select" style="cursor:pointer;">
+              <option value="" disabled selected>Community</option>
+              <option value="ajangba">Ajangba</option>
+              <option value="ajana">Ajana</option>
+              <option value="atipa">Atipa</option>
+              <option value="agede">Agede</option>
+              <option value="ehinke">Ehinke</option>
+              <option value="mapo">Mapo</option>
+              <option value="koso">Koso</option>
+              <option value="oke_tege">Oke Tege</option>
+              <option value="laha">Laha</option>
+              <option value="ojupopo">Ojupopo</option>
+              <option value="isale_odo">Isale Odo</option>
+              <option value="fulani">Fulani</option>
+            </select>
           </div>
         </div>
       </div>
       <div style="margin-top:-10px; margin-bottom:14px;">
-        <div class="kh-hint"><i class="fas fa-info-circle" aria-hidden="true"></i> Must be at least 13 years old</div>
-        <div class="kh-feedback" id="kh-dob-fb"></div>
+        <div class="kh-hint"><i class="fas fa-info-circle" aria-hidden="true"></i> Select your Kishi community area</div>
       </div>
 
       <!-- ── Secret Question ─────────────────────────────────── -->
@@ -591,6 +665,45 @@
 </div><!-- /kh-wrap -->
   </div><!-- /kh-panel-form -->
 </div><!-- /kh-outer -->
+
+<!-- Profile Picture Upload Modal -->
+<div class="kh-modal-overlay" id="kh-pic-modal" role="dialog" aria-modal="true" aria-labelledby="kh-modal-title-text">
+  <div class="kh-modal-card">
+    <div class="kh-modal-icon">
+      <i class="fas fa-camera" aria-hidden="true"></i>
+    </div>
+    <h2 class="kh-modal-title" id="kh-modal-title-text">Add a Profile Photo</h2>
+    <p class="kh-modal-sub">Give your account a face! You can always change this later from your profile settings.</p>
+
+    <!-- Avatar circle preview -->
+    <div class="kh-avatar-preview" id="kh-avatar-preview" role="button" tabindex="0" aria-label="Click to select photo">
+      <img src="" alt="Preview" id="kh-avatar-img">
+      <div class="kh-avatar-placeholder" id="kh-avatar-placeholder">
+        <i class="fas fa-user" aria-hidden="true"></i>
+        <span>Tap to choose</span>
+      </div>
+    </div>
+
+    <!-- Hidden upload area for drag feel -->
+    <div class="kh-upload-area" id="kh-upload-area" role="button" tabindex="0">
+      <i class="fas fa-image" aria-hidden="true"></i>
+      <span id="kh-upload-label">Choose photo from your device</span>
+    </div>
+
+    <!-- Hidden file input (bound to profile_picture field) -->
+    <input type="file" id="kh-pic-file" name="profile_picture" class="kh-file-input" accept="image/jpeg,image/png,image/webp,image/gif">
+
+    <div class="kh-modal-actions">
+      <button type="button" class="kh-btn-skip" id="kh-pic-skip">
+        Skip for now
+      </button>
+      <button type="button" class="kh-btn-upload" id="kh-pic-upload" disabled>
+        <i class="fas fa-check" aria-hidden="true"></i>
+        Save &amp; Continue
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- Font Awesome async -->
 <link rel="stylesheet"
@@ -710,34 +823,7 @@
     setTimeout(function () { el.style.animation = ''; }, 400);
   }
 
-  /* ── Set DOB max date (today - 13 years) ── */
-  (function () {
-    var dobInp = document.getElementById('kh-dob');
-    if (!dobInp) return;
-    var today = new Date();
-    var minAge = new Date(today.getFullYear() - 13, today.getMonth(), today.getDate());
-    dobInp.max = minAge.toISOString().split('T')[0];
-  })();
-
-  /* ── DOB validation ── */
-  var dobInp = document.getElementById('kh-dob');
-  var dobSi  = document.getElementById('kh-dob-si');
-  var dobFb  = document.getElementById('kh-dob-fb');
-
-  if (dobInp) {
-    dobInp.addEventListener('change', function () {
-      var val = dobInp.value;
-      if (!val) { setState(dobInp, dobSi, dobFb, 'idle'); return; }
-      var chosen = new Date(val);
-      var today  = new Date();
-      var minAge = new Date(today.getFullYear() - 13, today.getMonth(), today.getDate());
-      if (chosen > minAge) {
-        setState(dobInp, dobSi, dobFb, 'err', 'You must be at least 13 years old');
-      } else {
-        setState(dobInp, dobSi, dobFb, 'ok', '');
-      }
-    });
-  }
+  /* ── DOB field removed — community area needs no JS validation ── */
 
   /* ── Toggle password visibility ── */
   function bindToggle(inputId, btnId) {
@@ -989,10 +1075,11 @@
   });
 
   /* ============================================================
-     FORM SUBMIT — final guard before POST
+     FORM SUBMIT — show profile-pic modal when valid, then POST
   ============================================================ */
   var form   = document.getElementById('kh-form');
   var submitBtn = document.getElementById('kh-submit');
+  var picModal  = document.getElementById('kh-pic-modal');
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -1040,12 +1127,95 @@
 
     if (!valid) { shake(form); return; }
 
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Creating Account…';
-    submitBtn.disabled = true;
-
-    /* small delay for the spinner to render, then native POST */
-    setTimeout(function () { form.submit(); }, 350);
+    /* All good — show the profile picture modal */
+    picModal.classList.add('kh-open');
+    document.body.style.overflow = 'hidden';
   });
+
+  /* ============================================================
+     PROFILE PICTURE MODAL — file selection + submit
+  ============================================================ */
+  (function () {
+    var overlay     = document.getElementById('kh-pic-modal');
+    var fileInput   = document.getElementById('kh-pic-file');
+    var avatarPrev  = document.getElementById('kh-avatar-preview');
+    var avatarImg   = document.getElementById('kh-avatar-img');
+    var placeholder = document.getElementById('kh-avatar-placeholder');
+    var uploadArea  = document.getElementById('kh-upload-area');
+    var uploadLabel = document.getElementById('kh-upload-label');
+    var skipBtn     = document.getElementById('kh-pic-skip');
+    var saveBtn     = document.getElementById('kh-pic-upload');
+
+    function openFilePicker() { fileInput.click(); }
+
+    /* Clicking the avatar circle or the upload area both trigger file picker */
+    avatarPrev.addEventListener('click', openFilePicker);
+    avatarPrev.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' ') openFilePicker(); });
+    uploadArea.addEventListener('click', openFilePicker);
+    uploadArea.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' ') openFilePicker(); });
+
+    fileInput.addEventListener('change', function () {
+      var file = fileInput.files[0];
+      if (!file) return;
+
+      /* Validate type + size (5 MB) */
+      if (!file.type.startsWith('image/')) {
+        uploadLabel.textContent = 'Please choose an image file (JPG, PNG, WEBP)';
+        uploadArea.classList.remove('kh-has-file');
+        saveBtn.disabled = true;
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        uploadLabel.textContent = 'Image must be under 5 MB';
+        uploadArea.classList.remove('kh-has-file');
+        saveBtn.disabled = true;
+        return;
+      }
+
+      /* Preview in avatar circle */
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        avatarImg.src = ev.target.result;
+        avatarImg.classList.add('kh-visible');
+        placeholder.classList.add('kh-hidden');
+      };
+      reader.readAsDataURL(file);
+
+      /* Update upload area label */
+      uploadArea.classList.add('kh-has-file');
+      uploadLabel.textContent = '\u2713 ' + file.name;
+      saveBtn.disabled = false;
+    });
+
+    /* Move the hidden file input INTO the form so it's included on submit */
+    var mainForm = document.getElementById('kh-form');
+    mainForm.appendChild(fileInput);
+
+    function doSubmit() {
+      document.body.style.overflow = '';
+      overlay.classList.remove('kh-open');
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Creating Account…';
+      submitBtn.disabled = true;
+      setTimeout(function () { mainForm.submit(); }, 350);
+    }
+
+    /* Save & Continue */
+    saveBtn.addEventListener('click', doSubmit);
+
+    /* Skip — just submit without a photo */
+    skipBtn.addEventListener('click', function () {
+      fileInput.value = '';           /* clear any partial selection */
+      doSubmit();
+    });
+
+    /* Close on overlay backdrop click */
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        overlay.classList.remove('kh-open');
+        document.body.style.overflow = '';
+      }
+    });
+  })();
 
   /* ============================================================
      Focus / blur border feedback for inputs without state
@@ -1068,4 +1238,5 @@
 
 </body>
 </html>
+
 
