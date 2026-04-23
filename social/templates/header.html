@@ -78,6 +78,22 @@
         }
         
         .icon-badge:empty, .icon-badge[data-count="0"] { display: none; }
+        .hidden-badge { display: none !important; }
+
+        @keyframes kvibe-bell-ring {
+          0%  { transform: rotate(0deg); }
+          10% { transform: rotate(15deg); }
+          20% { transform: rotate(-12deg); }
+          30% { transform: rotate(10deg); }
+          40% { transform: rotate(-8deg); }
+          50% { transform: rotate(5deg); }
+          60% { transform: rotate(0deg); }
+          100%{ transform: rotate(0deg); }
+        }
+        .bell-ringing {
+          animation: kvibe-bell-ring 0.6s ease forwards;
+          display: inline-block;
+        }
         .message-badge { background-color: #007aff; }
         .icon-link { text-decoration: none; color: inherit; display: flex; align-items: center; }
         
@@ -110,14 +126,26 @@
 <header>
     <h1>Kishihub.com</h1>
     <div class="icon-group">
-        <a href="{% url 'channel_create' %}" class="icon-link">
+        <a href="{% url 'notification_list' %}" class="icon-link notification-link">
             <div class="icon-badge-container">
-                <img src="{% static 'images/chat.png' %}" class="channel-icon-header">
-               {% if total_followed_unread > 0 %}
-                <div class="icon-badge" id="header-channel-badge">
-                    {{ total_followed_unread }}
+                <i class="far fa-bell" id="headerBellIcon" style="font-size:26px; color:#666;"></i>
+                {% with total_unread=unread_notifications_count|add:unread_follow_count %}
+                <div class="icon-badge {% if total_unread == 0 %}hidden-badge{% endif %}"
+                     id="headerNotificationBadge"
+                     data-count="{{ total_unread|default:0 }}"
+                     style="{% if total_unread == 0 %}display:none;{% endif %}">
+                    <span id="headerNotificationCount">
+                        {% if total_unread > 99 %}99+{% else %}{{ total_unread|default:0 }}{% endif %}
+                    </span>
+                    <span
+                      hx-get="{% url 'notification_partial' %}"
+                      hx-trigger="every 10s"
+                      hx-target="#headerNotificationCount"
+                      hx-swap="innerHTML"
+                      style="display:none;"
+                    ></span>
                 </div>
-                {% endif %}
+                {% endwith %}
             </div>
         </a>
         
@@ -175,7 +203,56 @@
         }
     });
 
-    // 3. WebSocket Real-time updates (channels)
+    // 3. Notification badge update (header bell)
+    document.addEventListener('DOMContentLoaded', function() {
+        var bellIcon   = document.getElementById('headerBellIcon');
+
+        function updateNotificationBadge() {
+            var badge   = document.getElementById('headerNotificationBadge');
+            var countEl = document.getElementById('headerNotificationCount');
+            if (!badge || !countEl) return;
+
+            var raw   = countEl.innerText.trim().replace('+', '');
+            var count = parseInt(raw) || 0;
+
+            if (count > 0) {
+                badge.classList.remove('hidden-badge');
+                badge.style.display = 'flex';
+                badge.dataset.count = count;
+
+                if (bellIcon && !bellIcon.classList.contains('bell-ringing')) {
+                    bellIcon.classList.add('bell-ringing');
+                    bellIcon.addEventListener('animationend', function () {
+                        bellIcon.classList.remove('bell-ringing');
+                    }, { once: true });
+                }
+            } else {
+                badge.classList.add('hidden-badge');
+                badge.style.display = 'none';
+                badge.dataset.count = 0;
+            }
+        }
+
+        setTimeout(updateNotificationBadge, 300);
+
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            if (e.target && e.target.id === 'headerNotificationCount') {
+                setTimeout(updateNotificationBadge, 100);
+            }
+        });
+
+        var notifLink = document.querySelector('.notification-link');
+        if (notifLink) {
+            notifLink.addEventListener('click', function () {
+                var badge   = document.getElementById('headerNotificationBadge');
+                var countEl = document.getElementById('headerNotificationCount');
+                if (badge)   { badge.classList.add('hidden-badge'); badge.style.display = 'none'; }
+                if (countEl) { countEl.innerText = '0'; }
+            });
+        }
+    });
+
+    // 4. WebSocket Real-time updates (channels)
     document.addEventListener('DOMContentLoaded', function() {
         if ("{{ request.user.is_authenticated }}" === "True") {
             const userId = "{{ request.user.id }}";
@@ -184,20 +261,13 @@
 
             ws.onmessage = function(event) {
                 const data = JSON.parse(event.data);
-                
-                if (data.type === 'unread_update') {
-                    // Update Global Header Badge
-                    const globalBadge = document.getElementById('header-channel-badge');
-                    if (globalBadge) {
-                        globalBadge.textContent = data.total_followed_unread;
-                        globalBadge.style.display = data.total_followed_unread > 0 ? 'flex' : 'none';
-                    }
 
+                if (data.type === 'unread_update') {
                     // Update Channel Item in List
                     const previewElement = document.getElementById(`last-msg-${data.channel_id}`);
                     if (previewElement) {
                         const channelItem = previewElement.closest('.channel-item');
-                        
+
                         // Move to top
                         const list = document.querySelector('.channels-list');
                         if (list) {
@@ -210,12 +280,9 @@
                             previewElement.innerHTML = '<i class="fas fa-microphone"></i> Audio message';
                         } else if (data.message_type === 'video') {
                             previewElement.innerHTML = '<i class="fas fa-video"></i> Video message';
-                        }
-                        else if (data.message_type === 'image') {
+                        } else if (data.message_type === 'image') {
                             previewElement.innerHTML = '<i class="fas fa-image"></i> Image message';
-                        }
-                        
-                        else {
+                        } else {
                             previewElement.textContent = data.message_preview;
                         }
 

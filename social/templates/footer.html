@@ -173,32 +173,24 @@
         <span class="nav-label">Market</span>
     </a>
     
-    <!-- 5. Notifications — unified badge (likes + comments + reposts + mentions + follows) -->
-    <a href="{% url 'notification_list' %}" 
-       class="nav-item notification-link {% if '/list' in request.path %}active{% endif %}" 
-       title="Activity">
+    <!-- 5. Channels -->
+    <a href="{% url 'channel_create' %}" 
+       class="nav-item {% if '/channel' in request.path %}active{% endif %}" 
+       title="Channels">
 
-        <i class="far fa-bell" id="footerBellIcon"></i>
-        <span class="nav-label">Activity</span>
+        <i class="fas fa-layer-group"></i>
+        <span class="nav-label">Channels</span>
 
-        {# Compute combined unread count: post-based + follow notifications #}
-        {% with total_unread=unread_notifications_count|add:unread_follow_count %}
-        <div class="nav-badge-count {% if total_unread == 0 %}hidden-badge{% endif %}"
-             id="footerNotificationBadge"
-             data-count="{{ total_unread|default:0 }}">
-            <span id="footerNotificationCount">
-                {% if total_unread > 99 %}99+{% else %}{{ total_unread|default:0 }}{% endif %}
-            </span>
-            {# Silent HTMX poller — refreshes only the count text every 10s #}
-            <span
-              hx-get="{% url 'notification_partial' %}"
-              hx-trigger="every 10s"
-              hx-target="#footerNotificationCount"
-              hx-swap="innerHTML"
-              style="display:none;"
-            ></span>
+        {% if total_followed_unread > 0 %}
+        <div class="nav-badge-count" id="footerChannelBadge" data-count="{{ total_followed_unread }}">
+            <span id="footerChannelCount">{{ total_followed_unread }}</span>
         </div>
-        {% endwith %}
+        {% else %}
+        <div class="nav-badge-count hidden-badge" id="footerChannelBadge" data-count="0">
+            <span id="footerChannelCount">0</span>
+        </div>
+        {% endif %}
+
     </a>
 
 </nav>  
@@ -207,7 +199,6 @@
   document.addEventListener('DOMContentLoaded', function () {
 
     var bottomNav  = document.getElementById('bottomNav');
-    var bellIcon   = document.getElementById('footerBellIcon');
 
     // ── Scroll hide / show ────────────────────────────────────────────────
     var lastScrollTop  = 0;
@@ -252,54 +243,36 @@
     document.addEventListener('touchstart', showNav);
     document.addEventListener('mousedown', showNav);
 
-    // ── Badge update helper ───────────────────────────────────────────────
-    function updateNotificationBadge() {
-      var badge   = document.getElementById('footerNotificationBadge');
-      var countEl = document.getElementById('footerNotificationCount');
-      if (!badge || !countEl) return;
+    // ── Channel badge via WebSocket ───────────────────────────────────────
+    {% if user.is_authenticated %}
+    (function() {
+      var userId   = "{{ request.user.id }}";
+      var protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      var ws       = new WebSocket(protocol + window.location.host + '/ws/user/' + userId + '/');
 
-      var raw   = countEl.innerText.trim().replace('+', '');
-      var count = parseInt(raw) || 0;
+      ws.onmessage = function(event) {
+        var data = JSON.parse(event.data);
 
-      if (count > 0) {
-        badge.classList.remove('hidden-badge');
-        badge.style.display = 'flex';
-        badge.dataset.count = count;
+        if (data.type === 'unread_update') {
+          var badge   = document.getElementById('footerChannelBadge');
+          var countEl = document.getElementById('footerChannelCount');
 
-        // Ring the bell once if it wasn't ringing already
-        if (bellIcon && !bellIcon.classList.contains('bell-ringing')) {
-          bellIcon.classList.add('bell-ringing');
-          bellIcon.addEventListener('animationend', function () {
-            bellIcon.classList.remove('bell-ringing');
-          }, { once: true });
+          if (badge && countEl) {
+            if (data.total_followed_unread > 0) {
+              countEl.textContent = data.total_followed_unread;
+              badge.dataset.count = data.total_followed_unread;
+              badge.classList.remove('hidden-badge');
+              badge.style.display = 'flex';
+            } else {
+              badge.classList.add('hidden-badge');
+              badge.style.display = 'none';
+              badge.dataset.count = 0;
+            }
+          }
         }
-      } else {
-        badge.classList.add('hidden-badge');
-        badge.style.display = 'none';
-        badge.dataset.count = 0;
-      }
-    }
-
-    // Run once on load
-    setTimeout(updateNotificationBadge, 300);
-
-    // Re-run every time HTMX swaps in new count
-    document.body.addEventListener('htmx:afterSwap', function (e) {
-      if (e.target && e.target.id === 'footerNotificationCount') {
-        setTimeout(updateNotificationBadge, 100);
-      }
-    });
-
-    // Clear badge visually when user taps the notification link
-    var notifLink = document.querySelector('.notification-link');
-    if (notifLink) {
-      notifLink.addEventListener('click', function () {
-        var badge   = document.getElementById('footerNotificationBadge');
-        var countEl = document.getElementById('footerNotificationCount');
-        if (badge)   { badge.classList.add('hidden-badge'); badge.style.display = 'none'; }
-        if (countEl) { countEl.innerText = '0'; }
-      });
-    }
+      };
+    })();
+    {% endif %}
 
   });
 </script>
