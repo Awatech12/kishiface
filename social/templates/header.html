@@ -119,6 +119,170 @@
         .profile-icon-link:hover {
             background: #f5f5f5;
         }
+
+        /* ── Profile Completion Pop-up ─────────────────────────────────── */
+        #kh-profile-nudge-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.38);
+            z-index: 9000;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 0;
+            animation: kh-overlay-in 0.25s ease;
+        }
+
+        @keyframes kh-overlay-in {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+        #kh-profile-nudge-card {
+            background: #fff;
+            width: 100%;
+            max-width: 480px;
+            border-radius: 20px 20px 0 0;
+            padding: 28px 24px 32px;
+            box-shadow: 0 -4px 30px rgba(0,0,0,0.12);
+            animation: kh-card-up 0.32s cubic-bezier(0.34,1.2,0.64,1);
+            position: relative;
+        }
+
+        @keyframes kh-card-up {
+            from { transform: translateY(100%); }
+            to   { transform: translateY(0); }
+        }
+
+        #kh-profile-nudge-card .kh-nudge-close {
+            position: absolute;
+            top: 14px; right: 16px;
+            background: #f0f2f5;
+            border: none;
+            width: 30px; height: 30px;
+            border-radius: 50%;
+            font-size: 15px;
+            color: #555;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s;
+        }
+        #kh-profile-nudge-card .kh-nudge-close:hover { background: #e4e6ea; }
+
+        .kh-nudge-icon-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #e8f4ff 0%, #dbeafe 100%);
+            margin: 0 auto 16px;
+        }
+        .kh-nudge-icon-wrap i {
+            font-size: 24px;
+            color: #0095f6;
+        }
+
+        .kh-nudge-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: #1f1f1f;
+            text-align: center;
+            margin: 0 0 8px;
+        }
+
+        .kh-nudge-body {
+            font-size: 14px;
+            color: #555;
+            text-align: center;
+            line-height: 1.5;
+            margin: 0 0 20px;
+        }
+
+        .kh-nudge-progress-wrap {
+            margin-bottom: 20px;
+        }
+        .kh-nudge-progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+        .kh-nudge-progress-bar {
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 99px;
+            overflow: hidden;
+        }
+        .kh-nudge-progress-fill {
+            height: 100%;
+            border-radius: 99px;
+            background: linear-gradient(90deg, #0095f6, #00c6ff);
+            transition: width 0.6s ease;
+        }
+
+        .kh-nudge-missing {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin-bottom: 22px;
+        }
+        .kh-nudge-missing span {
+            background: #fff3e0;
+            color: #e65100;
+            font-size: 11.5px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid #ffe0b2;
+        }
+
+        .kh-nudge-btn-primary {
+            display: block;
+            width: 100%;
+            padding: 13px;
+            background: #0095f6;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+            margin-bottom: 10px;
+        }
+        .kh-nudge-btn-primary:hover { background: #007dd6; }
+        .kh-nudge-btn-primary:active { transform: scale(0.98); }
+
+        .kh-nudge-btn-later {
+            display: block;
+            width: 100%;
+            padding: 11px;
+            background: none;
+            color: #888;
+            border: none;
+            font-size: 14px;
+            text-align: center;
+            cursor: pointer;
+        }
+        .kh-nudge-btn-later:hover { color: #555; }
+
+        /* Desktop centering tweak */
+        @media (min-width: 480px) {
+            #kh-profile-nudge-overlay {
+                align-items: center;
+                padding-bottom: 0;
+            }
+            #kh-profile-nudge-card {
+                border-radius: 20px;
+                max-width: 400px;
+                margin: 16px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -162,6 +326,108 @@
         </a>
     </div>
 </header>
+
+<!-- ── Profile Completion Pop-up ─────────────────────────────── -->
+{% if request.user.is_authenticated %}
+{% with p=request.user.profile %}
+{% with missing_bio=p.bio|default:'' missing_name=p.full_name|default:'' missing_loc=p.location|default:'' missing_gender=p.gender|default:'' missing_dob=p.date_of_birth missing_community=p.community_area|default:'' missing_profession=p.profession|default:'' %}
+
+{# Build the missing-fields list as a comma-joined string we check in JS #}
+<script>
+(function() {
+    var DISMISS_KEY = 'kh_profile_nudge_dismissed_{{ request.user.id }}';
+
+    // Don't show if already dismissed today
+    var dismissed = localStorage.getItem(DISMISS_KEY);
+    if (dismissed) {
+        var dismissedDate = new Date(parseInt(dismissed));
+        var now = new Date();
+        // Re-show after 3 days so user is periodically reminded
+        var daysDiff = (now - dismissedDate) / (1000 * 60 * 60 * 24);
+        if (daysDiff < 3) return;
+    }
+
+    // Collect missing fields from Django context
+    var missingFields = [];
+    {% if not p.bio %}        missingFields.push('Bio'); {% endif %}
+    {% if not p.full_name %}  missingFields.push('Full name'); {% endif %}
+    {% if not p.location %}   missingFields.push('Location'); {% endif %}
+    {% if not p.gender %}     missingFields.push('Gender'); {% endif %}
+    {% if not p.date_of_birth %} missingFields.push('Date of birth'); {% endif %}
+    {% if not p.community_area %} missingFields.push('Community area'); {% endif %}
+    {% if not p.profession %} missingFields.push('Profession'); {% endif %}
+
+    // Only show if something is missing
+    if (missingFields.length === 0) return;
+
+    var totalFields = 7;
+    var filledFields = totalFields - missingFields.length;
+    var pct = Math.round((filledFields / totalFields) * 100);
+
+    // Build overlay HTML
+    var missingHTML = missingFields.map(function(f) {
+        return '<span>' + f + '</span>';
+    }).join('');
+
+    var html = '<div id="kh-profile-nudge-overlay">' +
+        '<div id="kh-profile-nudge-card">' +
+            '<button class="kh-nudge-close" id="kh-nudge-close-btn" aria-label="Dismiss">&#10005;</button>' +
+            '<div class="kh-nudge-icon-wrap"><i class="fas fa-user-circle"></i></div>' +
+            '<p class="kh-nudge-title">Complete your profile</p>' +
+            '<p class="kh-nudge-body">Help the Kishi community know who you are. A complete profile builds trust and connections.</p>' +
+            '<div class="kh-nudge-progress-wrap">' +
+                '<div class="kh-nudge-progress-label">' +
+                    '<span>Profile completion</span>' +
+                    '<span>' + pct + '%</span>' +
+                '</div>' +
+                '<div class="kh-nudge-progress-bar">' +
+                    '<div class="kh-nudge-progress-fill" style="width:' + pct + '%"></div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="kh-nudge-missing">' + missingHTML + '</div>' +
+            '<a href="{% url 'profile' request.user.username %}" class="kh-nudge-btn-primary">Update Profile</a>' +
+            '<button class="kh-nudge-btn-later" id="kh-nudge-later-btn">Maybe later</button>' +
+        '</div>' +
+    '</div>';
+
+    // Inject after DOM is ready
+    function injectNudge() {
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = html;
+        document.body.appendChild(wrapper.firstChild);
+
+        function dismiss() {
+            localStorage.setItem(DISMISS_KEY, Date.now().toString());
+            var overlay = document.getElementById('kh-profile-nudge-overlay');
+            if (overlay) {
+                overlay.style.opacity = '0';
+                overlay.style.transition = 'opacity 0.2s ease';
+                setTimeout(function() { overlay.remove(); }, 220);
+            }
+        }
+
+        document.getElementById('kh-nudge-close-btn').addEventListener('click', dismiss);
+        document.getElementById('kh-nudge-later-btn').addEventListener('click', dismiss);
+
+        // Tap outside card also dismisses
+        document.getElementById('kh-profile-nudge-overlay').addEventListener('click', function(e) {
+            if (e.target === this) dismiss();
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', injectNudge);
+    } else {
+        // Small delay so it doesn't pop instantly on load
+        setTimeout(injectNudge, 800);
+    }
+})();
+</script>
+
+{% endwith %}
+{% endwith %}
+{% endif %}
+<!-- ── End Profile Completion Pop-up ─────────────────────────── -->
 
 <script>
     // 1. Back button refresh logic
