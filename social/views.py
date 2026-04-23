@@ -1064,7 +1064,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
       5. Re-sort + jitter— per-user seeded RNG so different users see
          different orderings of the same scored pool
       6. Slice           — take page_size items
-      6b. Own-post pinning — first page only
+      6b. Own-post soft boost — first page only
       7. FoF metadata + suggestion cards → feed_items list
 
     Args:
@@ -1400,8 +1400,8 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             )
             _appearances = _author_appearances.get(_aid, 0)
 
-            # Hard cap — skip entirely once limit reached (own posts exempt)
-            if _aid != user.id and _appearances >= _MAX_PER_AUTHOR:
+            # Hard cap — skip entirely once limit reached (own posts included)
+            if _appearances >= _MAX_PER_AUTHOR:
                 continue
 
             # Effective score: penalise repeat appearances exponentially
@@ -1425,26 +1425,23 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             _author_appearances[_c_aid] = _author_appearances.get(_c_aid, 0) + 1
             final_posts.append(chosen)
 
-    # ── 6b. Own-post pinning — only on the FIRST page load (no cursor) ─────────
-    # After jitter and explore injection the user's own brand-new posts can be
-    # displaced from the visible page.  We guarantee visibility on first load by:
-    #   • Only activating when cursor_dt is None (i.e. fresh feed, not scroll).
-    #   • Separating own posts (author == user) posted in the last 2 h.
-    #   • Sorting own posts newest-first so the most recent appears at the top.
-    #   • Prepending them to final_posts and trimming back to page_size.
-    # Skipping on subsequent pages prevents the same post from re-appearing
-    # at the top on every scroll load.
-    # Zero extra DB queries — purely a reorder of the already-fetched pool.
+    # ── 6b. Own-post soft boost — only on the FIRST page load (no cursor) ──────
+    # Rather than hard-pinning own posts to the very top (which caused them to
+    # over-dominate the feed), we apply a modest score nudge to very recent own
+    # posts so they surface naturally among top content without forcing them
+    # above better-engaged posts from the community.
+    #
+    # Boost: +1.5 points for own posts created in the last 2 h.
+    # Enough to keep a freshly-posted piece visible on first load, but not
+    # enough to override a post from someone else with real engagement.
     if cursor_dt is None:
-        _OWN_PIN_WINDOW = timezone.now() - timedelta(hours=2)
-        own_posts   = [p for p in final_posts
-                       if p.author_id == user.id and p.created_at >= _OWN_PIN_WINDOW]
-        other_posts = [p for p in final_posts if p not in own_posts]
-
-        if own_posts:
-            own_posts.sort(key=lambda p: p.created_at, reverse=True)
-            final_posts = own_posts + other_posts
-            final_posts = final_posts[:page_size]
+        _OWN_BOOST_WINDOW = timezone.now() - timedelta(hours=2)
+        _OWN_BOOST        = 1.5
+        for _p in final_posts:
+            if _p.author_id == user.id and _p.created_at >= _OWN_BOOST_WINDOW:
+                _p._feed_score = getattr(_p, '_feed_score', 0) + _OWN_BOOST
+        # Re-sort so the boost is reflected in the final order
+        final_posts.sort(key=lambda p: getattr(p, '_feed_score', 0), reverse=True)
 
     # ── FIX 1c: Stamp last_feed_visit so next load knows where to resume ────────
     # Only update on the first page (cursor_dt is None) so mid-scroll loads
