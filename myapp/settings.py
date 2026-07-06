@@ -9,10 +9,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 # Fix: os.getenv() returns a string, not a bool. "False" is truthy in Python.
-DEBUG = os.getenv("DEBUG", "False").strip().lower() == "true"
+DEBUG = os.getenv("DEBUG", "True").strip().lower() == "true"
 USE_CLOUDINARY = True
 
-ALLOWED_HOSTS = [
+ALLOWED_HOSTS = [ 
     'kishihub.com',
     'www.kishihub.com',
     '127.0.0.1',
