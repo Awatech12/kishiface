@@ -22,16 +22,13 @@ ALLOWED_ATTRIBUTES = {}  # Empty dict means no attributes allowed
 MAX_TEXT_LENGTHS = {
     'bio': 300,
     'location': 200,
-    'content': 10000,  # For posts and messages
     'comment': 5000,
     'conversation': 5000,
     'about': 1000,
     'product_description': 5000,
     'product_name': 100,
     'channel_name': 200,
-    'family_house': 200,
     'profession': 150,
-    'secondary_school': 200,
 }
 
 def sanitize_text(text, field_name=None):
@@ -193,31 +190,7 @@ class Profile(models.Model):
     show_gender       = models.BooleanField(default=True,  help_text='Show gender on public profile')
     show_dob          = models.BooleanField(default=False, help_text='Show date of birth on public profile')
 
-    # ── Kishi community fields ───────────────────────────────────
-    KISHI_COMMUNITIES = [
-        ('ajangba',   'Ajangba Community'),
-        ('ajana',     'Ajana Community'),
-        ('atipa',     'Atipa Community'),
-        ('agede',     'Agede Community'),
-        ('ehinke',    'Ehinke Community'),
-        ('mapo',      'Mapo Community'),
-        ('koso',      'Koso Community'),
-        ('oke_tege',  'Oke Tege Community'),
-        ('laha',      'Laha Community'),
-        ('ojupopo',   'Ojupopo Community'),
-        ('isale_odo', 'Isale Odo Community'),
-        ('fulani',    'Fulani Community'),
-    ]
-    RESIDENCY_CHOICES = [
-        ('resident', 'Living in Kishi'),
-        ('diaspora', 'Living Outside / Diaspora'),
-    ]
-
-    community_area   = models.CharField(max_length=50,  choices=KISHI_COMMUNITIES, blank=True, default='')
-    family_house     = models.CharField(max_length=200, blank=True, default='')
     profession       = models.CharField(max_length=150, blank=True, default='')
-    residency_status = models.CharField(max_length=20,  choices=RESIDENCY_CHOICES, blank=True, default='')
-    secondary_school = models.CharField(max_length=200, blank=True, default='')
 
     created_at = models.DateTimeField(auto_now_add=True)
     online = models.BooleanField(default=False)
@@ -234,18 +207,7 @@ class Profile(models.Model):
         self.location     = sanitize_text(self.location, 'location')
         self.full_name    = sanitize_text(self.full_name)
         self.address      = sanitize_text(self.address)
-        self.family_house    = sanitize_text(self.family_house,    'family_house')
         self.profession      = sanitize_text(self.profession,      'profession')
-        self.secondary_school = sanitize_text(self.secondary_school, 'secondary_school')
-
-        # Validate choices fields — silently clear invalid values
-        valid_communities = {v for v, _ in self.KISHI_COMMUNITIES}
-        if self.community_area and self.community_area not in valid_communities:
-            self.community_area = ''
-        valid_residency = {v for v, _ in self.RESIDENCY_CHOICES}
-        if self.residency_status and self.residency_status not in valid_residency:
-            self.residency_status = ''
-        
         if self.website:
             try:
                 self.website = validate_url(self.website)
@@ -427,7 +389,8 @@ class Profile(models.Model):
         if len(display_url) > 30:
             return display_url[:27] + '...'
         return display_url
-        
+
+
 class UserReport(models.Model):
     REASON_CHOICES = [
         ('spam',          'Spam or fake account'),
@@ -474,486 +437,6 @@ class BlockedUser(models.Model):
             models.Index(fields=['blocked'], name='blockeduser_blocked_idx'),
         ]
 
-class Post(models.Model):
-    post_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
-    likes = models.ManyToManyField(User, related_name='like_post', blank=True)
-    reposts = models.ManyToManyField(User, related_name='repost_post', blank=True)  
-    view = models.IntegerField(default=0, null=True, blank=True)
-    share = models.IntegerField(default=0, null=True, blank=True)
-    content = models.TextField(blank=True, null=True)
-    
-    mood = models.CharField(max_length=50, blank=True, null=True)
-    custom_mood = models.CharField(max_length=50, blank=True, null=True)
-    mood_emoji = models.CharField(max_length=10, blank=True, null=True)
-    
-    is_repost = models.BooleanField(default=False)
-    original_post = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='reposts_made')
-    repost_content = models.TextField(blank=True, null=True)  
-    
-    if settings.USE_CLOUDINARY:
-        video_file = CloudinaryField('video', resource_type='video', folder='post_files', blank=True)
-    else:
-        video_file = models.FileField(upload_to='post_file', blank=True)
-    
-    if settings.USE_CLOUDINARY:
-        file = CloudinaryField('audio', resource_type='video', folder='post_files', blank=True)
-    else:
-        file = models.FileField(upload_to='post_file', blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    link_preview = models.JSONField(null=True, blank=True)
-
-    def __str__(self):
-        return self.author.username
-    
-    def clean(self):
-        """Validate post data"""
-        super().clean()
-        
-        self.content = sanitize_text(self.content, 'content')
-        if self.repost_content:
-            self.repost_content = sanitize_text(self.repost_content, 'content')
-        
-        if self.video_file and hasattr(self.video_file, 'name'):
-            validate_file_extension(self.video_file)
-            validate_file_size(self.video_file, max_size_mb=100)
-        
-        if self.file and hasattr(self.file, 'name'):
-            validate_file_extension(self.file)
-            validate_file_size(self.file, max_size_mb=50)
-        
-        if self.view and self.view < 0:
-            self.view = 0
-        if self.share and self.share < 0:
-            self.share = 0
-        
-        valid_moods = ['slay', 'vibing', 'sheesh', 'periodt', 'no-cap', 'bussin', 'mid', 'cringe']
-        if self.mood and self.mood not in valid_moods:
-            self.mood = None
-        
-        if self.custom_mood and len(self.custom_mood) > 50:
-            self.custom_mood = self.custom_mood[:50]
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-    
-    def preview_type(self):
-        if self.is_repost and self.original_post:
-            return self.original_post.preview_type()
-        if self.images.exists():
-            return 'image'
-        if self.video_file:
-            return 'video'
-        if self.file:
-            return 'audio'
-        if self.content:
-            return 'text'
-        if self.mood or self.custom_mood:
-            return 'mood'
-        return 'empty'
-    
-    def preview_url(self):
-        if self.is_repost and self.original_post:
-            return self.original_post.preview_url()
-        if self.images.exists():
-            return self.images.first().image.url
-        if self.video_file:
-            return self.video_file.url
-        if self.file:
-            return self.file.url
-        return None
-    
-    def get_original_author(self):
-        if self.is_repost and self.original_post:
-            return self.original_post.author
-        return self.author
-    
-    def get_original_post_id(self):
-        if self.is_repost and self.original_post:
-            return self.original_post.post_id
-        return self.post_id
-    
-    def get_republished_content(self):
-        if self.is_repost and self.original_post:
-            return self.original_post.content
-        return self.content
-    
-    def get_mood_display(self):
-        mood_emojis = {
-            'slay': '💅', 'vibing': '🎵', 'sheesh': '🥶', 'periodt': '⏸️',
-            'no-cap': '🎯', 'bussin': '🔥', 'mid': '😐', 'cringe': '😬'
-        }
-        if self.custom_mood:
-            import re
-            emoji_pattern = re.compile("["
-                u"\U0001F300-\U0001F6FF"
-                u"\U0001F1E0-\U0001F1FF"
-                u"\U00002700-\U000027BF"
-                u"\U0001F900-\U0001F9FF"
-                u"\U0001FA70-\U0001FAFF"
-                u"\U00002600-\U000026FF"
-                u"\U00002B50-\U00002B50"
-                u"\U0001F004-\U0001F0CF"
-                "]+", flags=re.UNICODE)
-            if emoji_pattern.search(self.custom_mood):
-                return self.custom_mood
-            else:
-                return f"{self.mood_emoji or '✨'} {self.custom_mood}"
-        elif self.mood:
-            emoji = mood_emojis.get(self.mood, '✨')
-            return f"{emoji} {self.mood}"
-        return None
-    
-    def get_mood_color(self):
-        mood_colors = {
-            'slay': '#ff1493', 'vibing': '#9933ff', 'sheesh': '#00cc66',
-            'periodt': '#ff6b00', 'no-cap': '#ff4444', 'bussin': '#ffd700',
-            'mid': '#808080', 'cringe': '#8b4513'
-        }
-        if self.custom_mood:
-            return '#0095f6'
-        return mood_colors.get(self.mood, '#0095f6')
-    
-    def get_mood_hashtag(self):
-        if self.custom_mood:
-            import re
-            clean_mood = re.sub(r'[^\w\s]', '', self.custom_mood)
-            clean_mood = clean_mood.replace(' ', '')
-            return f"#{clean_mood}"
-        elif self.mood:
-            return f"#{self.mood}"
-        return None
-    
-    def get_mood_emoji_only(self):
-        mood_emojis = {
-            'slay': '💅', 'vibing': '🎵', 'sheesh': '🥶', 'periodt': '⏸️',
-            'no-cap': '🎯', 'bussin': '🔥', 'mid': '😐', 'cringe': '😬'
-        }
-        if self.mood_emoji:
-            return self.mood_emoji
-        elif self.mood:
-            return mood_emojis.get(self.mood, '✨')
-        return '✨'
-    
-    def has_mood(self):
-        return bool(self.mood or self.custom_mood)
-    
-    def get_mood_type(self):
-        if self.custom_mood:
-            return 'custom'
-        elif self.mood:
-            return 'predefined'
-        return None
-    
-    def get_mood_data(self):
-        return {
-            'has_mood': self.has_mood(),
-            'mood': self.mood,
-            'custom_mood': self.custom_mood,
-            'emoji': self.get_mood_emoji_only(),
-            'display': self.get_mood_display(),
-            'color': self.get_mood_color(),
-            'hashtag': self.get_mood_hashtag(),
-            'type': self.get_mood_type()
-        }
-    
-    def get_engagement_rate(self):
-        total_engagement = self.likes.count() + self.reposts.count() + (self.comments.count() if hasattr(self, 'comments') else 0)
-        if self.view and self.view > 0:
-            return (total_engagement / self.view) * 100
-        return 0
-    
-    def get_vibe_score(self):
-        """
-        Calculate an engagement score based on all vibe types with different weights.
-        Higher weight for more intense/positive reactions.
-        """
-        # Get all vibes for this post
-        vibes = self.vibes.all()
-        
-        if not vibes.exists():
-            return 0
-        
-        # Weight mapping for different vibe types
-        vibe_weights = {
-            'fire':   4,  # 🔥 Most intense positive
-            'love':   4,  # ❤️ Strong positive (NEW)
-            'real':   3,  # 💯 Strong approval
-            'vibing': 2,  # 🎵 Moderate engagement
-            'chill':  1,  # 🧊 Light positive
-            'dead':   1,  # 😂 Laughter (can be positive)
-            'cringe': 1,  # 😬 Negative reaction (still engagement)
-        }
-        
-        # Calculate weighted score
-        total_score = 0
-        vibe_counts = {}
-        
-        for vibe in vibes:
-            weight = vibe_weights.get(vibe.vibe_type, 1)
-            total_score += weight
-            vibe_counts[vibe.vibe_type] = vibe_counts.get(vibe.vibe_type, 0) + 1
-        
-        # Apply mood boost if post has mood
-        if self.has_mood():
-            total_score = int(total_score * 1.2)
-        
-        # Add bonus for variety (posts with multiple different vibe types get extra points)
-        variety_bonus = len(vibe_counts) * 0.5
-        total_score = round(total_score + variety_bonus, 1)
-        
-        return total_score
-    
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['-created_at']),
-            models.Index(fields=['author', '-created_at']),
-            models.Index(fields=['mood']),
-            models.Index(fields=['custom_mood']),
-            # ── Feed algorithm indexes ──────────────────────────────────────
-            # Covers the engagement-score query:
-            #   WHERE author_id IN (...) AND created_at >= cutoff
-            #   ORDER BY db_score DESC, created_at DESC
-            models.Index(fields=['author', 'created_at'], name='post_author_created_idx'),
-            # Partial-style workaround: index is_repost + created_at so the
-            # "repost fan-out" branch of the OR filter uses an index seek
-            models.Index(fields=['is_repost', 'created_at'], name='post_repost_created_idx'),
-        ]
-
-
-class PostImage(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to='post_images/')
-    
-    def clean(self):
-        super().clean()
-        if self.image:
-            validate_file_extension(self.image)
-            validate_file_size(self.image, max_size_mb=10)
-    
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-
-# =============================================================================
-# PostVibe — replaces simple Like with 7 mood-based reactions (added LOVE)
-# Real-time updates via PostVibeConsumer (WebSocket)
-# =============================================================================
-
-class PostVibe(models.Model):
-    """Stores vibe reactions on posts. One vibe per user per post (toggle/switch)."""
-
-    FIRE    = 'fire'
-    REAL    = 'real'
-    VIBING  = 'vibing'
-    DEAD    = 'dead'
-    CRINGE  = 'cringe'
-    CHILL   = 'chill'
-    LOVE    = 'love'  # NEW: Love reaction
-
-    VIBE_CHOICES = [
-        (FIRE,   '🔥 Fire'),
-        (REAL,   '💯 Real'),
-        (VIBING, '🎵 Vibing'),
-        (DEAD,   '😂 Dead'),
-        (CRINGE, '😬 Cringe'),
-        (CHILL,  '🧊 Chill'),
-        (LOVE,   '❤️ Love'),  # NEW: Love option
-    ]
-
-    # Lookup maps used by the consumer and views
-    VIBE_EMOJIS = {
-        FIRE:   '🔥',
-        REAL:   '💯',
-        VIBING: '🎵',
-        DEAD:   '😂',
-        CRINGE: '😬',
-        CHILL:  '🧊',
-        LOVE:   '❤️',  # NEW
-    }
-
-    VIBE_LABELS = {
-        FIRE:   'Fire',
-        REAL:   'Real',
-        VIBING: 'Vibing',
-        DEAD:   'Dead',
-        CRINGE: 'Cringe',
-        CHILL:  'Chill',
-        LOVE:   'Love',  # NEW
-    }
-
-    VIBE_COLORS = {
-        FIRE:   '#ff4500',
-        REAL:   '#ff0080',
-        VIBING: '#3b82f6',
-        DEAD:   '#f59e0b',
-        CRINGE: '#8b5cf6',
-        CHILL:  '#06b6d4',
-        LOVE:   '#e11d48',  # NEW: Deep pink/red for love
-    }
-
-    post       = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='vibes')
-    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='post_vibes')
-    vibe_type  = models.CharField(max_length=10, choices=VIBE_CHOICES)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('post', 'user')   # one vibe per user per post
-        ordering = ['created_at']
-        indexes = [
-            models.Index(fields=['post', 'vibe_type']),
-            # Interest-profile query: WHERE user_id=? AND created_at >= cutoff
-            models.Index(fields=['user', 'created_at'], name='postvibe_user_created_idx'),
-        ]
-
-    def __str__(self):
-        return f"{self.user.username} vibed {self.vibe_type} on post {self.post_id}"
-
-
-class PostComment(models.Model):
-    comment_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
-    comment = models.TextField(blank=True, null=True)
-    image = models.ImageField(upload_to='comment_image/', blank=True)
-    
-    if settings.USE_CLOUDINARY:
-        file = CloudinaryField('audio', resource_type='video', folder='comment_files', blank=True)
-    else:
-        file = models.FileField(upload_to='comment_file', blank=True)
-    
-    like = models.ManyToManyField(User, related_name='comment_likes', blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def clean(self):
-        super().clean()
-        self.comment = sanitize_text(self.comment, 'comment')
-        if self.image and hasattr(self.image, 'name'):
-            validate_file_extension(self.image)
-            validate_file_size(self.image, max_size_mb=10)
-        if self.file and hasattr(self.file, 'name'):
-            validate_file_extension(self.file)
-            validate_file_size(self.file, max_size_mb=20)
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-    class Meta:
-        indexes = [
-            # Feed algorithm: WHERE author_id=? AND created_at >= cutoff
-            models.Index(fields=['author', 'created_at'], name='postcomment_author_created_idx'),
-        ]
-
-
-class CommentReply(models.Model):
-    reply_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    comment = models.ForeignKey(PostComment, on_delete=models.CASCADE, related_name='replies')
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
-    reply_text = models.TextField(blank=True, null=True)
-    image = models.ImageField(upload_to='reply_image/', blank=True)
-    
-    if settings.USE_CLOUDINARY:
-        file = CloudinaryField('audio', resource_type='video', folder='reply_files', blank=True)
-    else:
-        file = models.FileField(upload_to='reply_file', blank=True)
-    
-    like = models.ManyToManyField(User, related_name='reply_likes', blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    is_edited = models.BooleanField(default=False)
-    
-    def clean(self):
-        super().clean()
-        self.reply_text = sanitize_text(self.reply_text, 'reply')
-        if self.image and hasattr(self.image, 'name'):
-            validate_file_extension(self.image)
-            validate_file_size(self.image, max_size_mb=10)
-        if self.file and hasattr(self.file, 'name'):
-            validate_file_extension(self.file)
-            validate_file_size(self.file, max_size_mb=20)
-    
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-    
-    def __str__(self):
-        return f'Reply by {self.author.username} on {self.created_at}'
-    
-    class Meta:
-        ordering = ['-created_at']
-
-
-# =============================================================================
-# Notification — covers like / comment / repost / mention
-# =============================================================================
-
-class Notification(models.Model):
-    LIKE    = 'like'
-    COMMENT = 'comment'
-    REPOST  = 'repost'
-    MENTION = 'mention'
-    REPLY   = 'reply'
-
-    TYPES = (
-        (LIKE,    'Like'),
-        (COMMENT, 'Comment'),
-        (REPOST,  'Repost'),
-        (MENTION, 'Mention'),
-        (REPLY,   'Reply'),
-    )
-
-    recipient = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='notifications'
-    )
-    actor = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='sent_notifications'
-    )
-    post = models.ForeignKey(
-        Post,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True
-    )
-    # Populated only for 'mention' notifications — links directly to the comment
-    comment = models.ForeignKey(
-        'PostComment',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='mention_notifications'
-    )
-    notification_type = models.CharField(
-        max_length=20,
-        choices=TYPES,
-        blank=True,
-        null=True
-    )
-    is_read = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['recipient', '-created_at']),
-            models.Index(fields=['recipient', 'is_read']),
-        ]
-
-    def __str__(self):
-        return f'{self.actor} → {self.recipient} [{self.notification_type}]'
-
-
-# =============================================================================
-# FollowNotification — fires when someone follows you
-# =============================================================================
 
 class FollowNotification(models.Model):
     from_user = models.ForeignKey(
@@ -1231,6 +714,85 @@ class ChannelMessageReaction(models.Model):
 
 
 class Market(models.Model):
+
+    # ── Jumia-style product categories ───────────────────────────────────────
+    CATEGORY_CHOICES = [
+        # Electronics & Tech
+        ('phones',          'Phones & Tablets'),
+        ('computers',       'Computers & Laptops'),
+        ('electronics',     'Electronics & Gadgets'),
+        ('accessories',     'Phone Accessories'),
+        ('tv_audio',        'TVs & Audio'),
+        ('cameras',         'Cameras & Photography'),
+        ('gaming',          'Gaming'),
+        # Fashion & Lifestyle
+        ('fashion_men',     "Men's Fashion"),
+        ('fashion_women',   "Women's Fashion"),
+        ('fashion_kids',    "Kids' Fashion"),
+        ('watches',         'Watches & Jewelry'),
+        ('shoes',           'Shoes & Sneakers'),
+        ('bags',            'Bags & Luggage'),
+        # Home & Living
+        ('home_appliances', 'Home Appliances'),
+        ('furniture',       'Furniture & Décor'),
+        ('kitchen',         'Kitchen & Dining'),
+        ('garden',          'Garden & Outdoor'),
+        # Health & Beauty
+        ('beauty',          'Beauty & Skincare'),
+        ('health',          'Health & Wellness'),
+        # Food & Groceries
+        ('food',            'Food & Groceries'),
+        ('drinks',          'Drinks & Beverages'),
+        # Vehicles & Property
+        ('vehicles',        'Vehicles & Parts'),
+        ('properties',      'Properties & Real Estate'),
+        # Business & Services
+        ('office',          'Office & Stationery'),
+        ('agriculture',     'Agriculture & Farming'),
+        ('services',        'Services & Gigs'),
+        # Sports & Leisure
+        ('sports',          'Sports & Fitness'),
+        ('books',           'Books & Education'),
+        ('toys',            'Toys & Baby Items'),
+        # Other
+        ('others',          'Others'),
+    ]
+
+    CATEGORY_ICONS = {
+        'phones':          '📱',
+        'computers':       '💻',
+        'electronics':     '⚡',
+        'accessories':     '🎧',
+        'tv_audio':        '📺',
+        'cameras':         '📷',
+        'gaming':          '🎮',
+        'fashion_men':     '👔',
+        'fashion_women':   '👗',
+        'fashion_kids':    '🧒',
+        'watches':         '⌚',
+        'shoes':           '👟',
+        'bags':            '👜',
+        'home_appliances': '🏠',
+        'furniture':       '🛋️',
+        'kitchen':         '🍳',
+        'garden':          '🌿',
+        'beauty':          '💄',
+        'health':          '💊',
+        'food':            '🛒',
+        'drinks':          '🥤',
+        'vehicles':        '🚗',
+        'properties':      '🏡',
+        'office':          '🖊️',
+        'agriculture':     '🌾',
+        'services':        '🛠️',
+        'sports':          '⚽',
+        'books':           '📚',
+        'toys':            '🧸',
+        'others':          '📦',
+    }
+
+    VALID_CATEGORIES = {c[0] for c in CATEGORY_CHOICES}
+
     product_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     product_owner = models.ForeignKey(User, related_name='products', on_delete=models.CASCADE)
     product_name = models.CharField(max_length=100)
@@ -1241,12 +803,22 @@ class Market(models.Model):
     product_condition = models.CharField(max_length=50, choices=[('New', 'New'), ('Used', 'Used - Like New'), ('Fair', 'Used - Fair Condition')], default='New')
     views_count = models.PositiveIntegerField(default=0)
     is_promoted = models.BooleanField(default=False)
-    product_category = models.CharField(max_length=100)
+    product_category = models.CharField(
+        max_length=100,
+        choices=CATEGORY_CHOICES,
+        default='others',
+        db_index=True,
+    )
     whatsapp_number = models.CharField(max_length=15, blank=True, null=True)
     ad_url          = models.URLField(max_length=500, blank=True, null=True)
     email           = models.EmailField(max_length=254, blank=True, null=True)
     instagram_handle= models.CharField(max_length=50, blank=True, null=True)
     twitter_handle  = models.CharField(max_length=50, blank=True, null=True)
+    # FK to BusinessPage — set when a market listing is posted via a business page
+    business_page   = models.ForeignKey(
+        'BusinessPage', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='market_listings',
+    )
     posted_on = models.DateTimeField(auto_now_add=True)
     
     def clean(self):
@@ -1289,6 +861,14 @@ class Market(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+    @property
+    def category_icon(self):
+        return self.CATEGORY_ICONS.get(self.product_category, '📦')
+
+    @property
+    def category_label(self):
+        return dict(self.CATEGORY_CHOICES).get(self.product_category, self.product_category)
+
 
 class MarketImage(models.Model):
     image_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
@@ -1304,6 +884,28 @@ class MarketImage(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class Wishlist(models.Model):
+    """
+    Saved-for-later products. One row per (user, product) pair —
+    a simple "heart/bookmark" join table on top of the existing Market model.
+    """
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='wishlist_items')
+    product    = models.ForeignKey(Market, on_delete=models.CASCADE, related_name='wishlisted_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Wishlist_Table'
+        ordering = ['-created_at']
+        unique_together = ('user', 'product')
+        indexes = [
+            models.Index(fields=['user', 'created_at'], name='wishlist_user_time_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username} saved {self.product.product_name}'
 
 
 class SearchHistory(models.Model):
@@ -1452,158 +1054,6 @@ class SecretQuestion(models.Model):
         return dict(cls.QUESTION_CHOICES).get(key, key)
 
 
-# =============================================================================
-# UserFeedProfile — adaptive vibe-taste profile for the Kvibe feed algorithm.
-#
-# After adding this class run:
-#   python manage.py makemigrations
-#   python manage.py migrate
-# =============================================================================
-
-class UserFeedProfile(models.Model):
-    """
-    One row per user.  Stores the evolving taste signals used by the feed
-    ranking algorithm (_get_feed_page in views.py).
-
-    vibe_weights
-        JSON dict mapping each vibe type to a float weight (default 0.5).
-        Incremented +0.1 each time the user reacts with that vibe (cap 3.0).
-        Gives heavier ranking weight to posts whose vibe distribution matches
-        what the user actually reacts to.  Example after a week of use:
-            {"fire": 1.8, "love": 1.2, "real": 0.7, "chill": 0.5, ...}
-
-    interacted_authors
-        Ordered list (newest first) of up to 50 author user-ids this user
-        has liked, vibed, or commented on.  Used for long-term author affinity
-        scoring that survives beyond the 30-day rolling DB query window.
-
-    last_updated
-        Auto-timestamp of the last weight mutation — available for future
-        periodic decay jobs if you want to slowly return unused weights to 0.5.
-
-    last_feed_visit
-        Datetime of the last home feed page-1 load for this user.
-        Written by _get_feed_page() in views.py.  Used on the next visit
-        to inject all posts from followed accounts since that timestamp,
-        ensuring no post is invisible due to the _FEED_SAMPLE pool cap.
-    """
-
-    user = models.OneToOneField(
-        User,
-        on_delete=models.CASCADE,
-        related_name='feed_profile',
-    )
-    vibe_weights       = models.JSONField(default=dict,  blank=True)
-    interacted_authors = models.JSONField(default=list,  blank=True)
-    last_updated       = models.DateTimeField(auto_now=True)
-
-    # ── Fix 1: last_feed_visit ────────────────────────────────────────────────
-    # Stamped by _get_feed_page() on every first-page load (cursor_dt=None).
-    # The feed algorithm reads this to inject unseen posts from followed
-    # accounts posted since the user's last visit, preventing posts from
-    # being permanently buried by the _FEED_SAMPLE cap when the user has
-    # been away for a day or more.
-    last_feed_visit = models.DateTimeField(
-        null=True, blank=True,
-        help_text='Timestamp of the last time this user loaded the home feed. '
-                  'Used by the feed algorithm to surface missed posts.',
-    )
-
-    class Meta:
-        db_table = 'UserFeedProfile_Table'
-
-    def __str__(self):
-        return f'FeedProfile({self.user.username})'
-
-    # ── Constants ────────────────────────────────────────────────────────────
-    _DEFAULT_WEIGHT = 0.5
-    _MAX_WEIGHT     = 3.0
-    _BUMP           = 0.1
-    _MAX_AUTHORS    = 50
-    _VIBE_TYPES     = ['fire', 'real', 'vibing', 'dead', 'cringe', 'chill', 'love']
-
-    # ── Read helpers ─────────────────────────────────────────────────────────
-
-    def get_weights(self) -> dict:
-        """Return full weight dict with defaults filled in for any missing type."""
-        base = {v: self._DEFAULT_WEIGHT for v in self._VIBE_TYPES}
-        base.update(self.vibe_weights or {})
-        return base
-
-    # ── Write helpers (called from views._feed_record_* and consumer) ────────
-
-    def record_vibe(self, vibe_type: str, author_id: int):
-        """
-        Bump the weight for `vibe_type` by _BUMP (capped at _MAX_WEIGHT) and
-        prepend `author_id` to interacted_authors (capped at _MAX_AUTHORS).
-        Called every time the user toggles a vibe ON or switches vibe types.
-        """
-        weights = self.get_weights()
-        weights[vibe_type] = min(
-            self._MAX_WEIGHT,
-            weights.get(vibe_type, self._DEFAULT_WEIGHT) + self._BUMP,
-        )
-        self.vibe_weights = weights
-        self._prepend_author(author_id)
-        self.save(update_fields=['vibe_weights', 'interacted_authors', 'last_updated'])
-
-    def record_like(self, author_id: int):
-        """
-        Record that the user liked a post by `author_id`.
-        Only updates author affinity — no vibe weight change.
-        """
-        self._prepend_author(author_id)
-        self.save(update_fields=['interacted_authors', 'last_updated'])
-
-    def record_comment(self, author_id: int):
-        """
-        Record that the user commented on a post by `author_id`.
-        Only updates author affinity — no vibe weight change.
-        """
-        self._prepend_author(author_id)
-        self.save(update_fields=['interacted_authors', 'last_updated'])
-
-    def record_view(self, author_id: int):
-        """
-        Record that the user viewed (played or opened) a post by `author_id`.
-
-        Views are a PASSIVE signal — lighter than likes/vibes/comments — so we
-        only prepend the author when they are NOT already near the top of the
-        interacted_authors list (within the first 10 positions).  This prevents
-        a single creator whose videos auto-play from monopolising the affinity
-        list and crowding out creators the user actually engages with actively.
-
-        No vibe weight change — viewing has no bearing on content-type taste.
-        No direct DB save for every view (high-volume endpoint).  Instead we
-        only write when the author genuinely moves in the list, keeping the
-        write amplification low even during heavy scrolling sessions.
-        """
-        authors = list(self.interacted_authors or [])
-        # If already in the top-10 "recent" window, skip the write entirely.
-        top_slice = authors[:10]
-        if author_id in top_slice:
-            return
-        # Otherwise nudge them into the list (deduplicate + cap as usual).
-        if author_id in authors:
-            authors.remove(author_id)
-        authors.insert(0, author_id)
-        self.interacted_authors = authors[: self._MAX_AUTHORS]
-        self.save(update_fields=['interacted_authors', 'last_updated'])
-
-    # ── Internal ─────────────────────────────────────────────────────────────
-
-    def _prepend_author(self, author_id: int):
-        """Insert author_id at position 0, deduplicate, cap at _MAX_AUTHORS."""
-        authors = list(self.interacted_authors or [])
-        if author_id in authors:
-            authors.remove(author_id)
-        authors.insert(0, author_id)
-        self.interacted_authors = authors[: self._MAX_AUTHORS]
-
-
-
-# SocialEvent — community event calendar entries.
-
 
 class SocialEvent(models.Model):
     TYPE_TOWN     = 'town'
@@ -1727,72 +1177,6 @@ class JobVacancy(models.Model):
             self.CAT_FULLTIME:   '#0095f6',
             self.CAT_APPRENTICE: '#7c3aed',
         }.get(self.category, '#0095f6')
-
-
-# =============================================================================
-# MarketVibe / MarketComment — reactions on Market ad feed cards
-# =============================================================================
-
-class MarketVibe(models.Model):
-    """Vibe reactions on Market (ad) cards in the feed. One per user per product."""
-
-    FIRE   = 'fire'
-    REAL   = 'real'
-    VIBING = 'vibing'
-    DEAD   = 'dead'
-    CRINGE = 'cringe'
-    CHILL  = 'chill'
-    LOVE   = 'love'
-
-    VIBE_CHOICES = [
-        (FIRE,   '🔥 Fire'),
-        (REAL,   '💯 Real'),
-        (VIBING, '🎵 Vibing'),
-        (DEAD,   '😂 Dead'),
-        (CRINGE, '😬 Cringe'),
-        (CHILL,  '🧊 Chill'),
-        (LOVE,   '❤️ Love'),
-    ]
-
-    VIBE_EMOJIS = {FIRE:'🔥', REAL:'💯', VIBING:'🎵', DEAD:'😂', CRINGE:'😬', CHILL:'🧊', LOVE:'❤️'}
-    VIBE_COLORS = {FIRE:'#ff4500', REAL:'#ff0080', VIBING:'#3b82f6', DEAD:'#f59e0b', CRINGE:'#8b5cf6', CHILL:'#06b6d4', LOVE:'#e11d48'}
-
-    product    = models.ForeignKey(Market, on_delete=models.CASCADE, related_name='vibes')
-    user       = models.ForeignKey(User,   on_delete=models.CASCADE, related_name='market_vibes')
-    vibe_type  = models.CharField(max_length=10, choices=VIBE_CHOICES)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('product', 'user')
-        ordering = ['created_at']
-        db_table = 'MarketVibe_Table'
-
-    def __str__(self):
-        return f"{self.user.username} vibed {self.vibe_type} on product {self.product_id}"
-
-
-class MarketComment(models.Model):
-    """Comments on Market ad feed cards."""
-    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product    = models.ForeignKey(Market, on_delete=models.CASCADE, related_name='comments')
-    author     = models.ForeignKey(User,   on_delete=models.CASCADE, related_name='market_comments')
-    text       = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def clean(self):
-        super().clean()
-        self.text = sanitize_text(self.text, 'comment')
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-    class Meta:
-        ordering = ['-created_at']
-        db_table = 'MarketComment_Table'
-
-    def __str__(self):
-        return f"{self.author.username} on {self.product.product_name}: {self.text[:50]}"
 
 
 # =============================================================================
@@ -1925,3 +1309,160 @@ class EventComment(models.Model):
 
     def __str__(self):
         return f"{self.author.username} on {self.event.title}: {self.text[:50]}"
+
+# =============================================================================
+# BusinessPage — business pages with follow system
+# Listings/products for a page use the existing Market model with
+# the business_page FK.  No separate product model is needed.
+# Run: python manage.py makemigrations && python manage.py migrate
+# =============================================================================
+
+class BusinessPage(models.Model):
+
+    CATEGORY_CHOICES = [
+        ('retail',       'Retail & Shopping'),
+        ('food',         'Food & Beverage'),
+        ('fashion',      'Fashion & Apparel'),
+        ('electronics',  'Electronics & Tech'),
+        ('beauty',       'Beauty & Wellness'),
+        ('education',    'Education & Training'),
+        ('services',     'Professional Services'),
+        ('agriculture',  'Agriculture & Farming'),
+        ('real_estate',  'Real Estate & Property'),
+        ('logistics',    'Logistics & Delivery'),
+        ('auto',         'Automobiles & Vehicles'),
+        ('others',       'Others'),
+    ]
+
+    page_id     = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='business_pages')
+    name        = models.CharField(max_length=150)
+    slug        = models.SlugField(max_length=160, unique=True)
+    category    = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='others')
+    tagline     = models.CharField(max_length=200, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    location    = models.CharField(max_length=200, blank=True, default='')
+    website     = models.URLField(max_length=500, blank=True, default='')
+    whatsapp    = models.CharField(max_length=20,  blank=True, default='')
+    phone       = models.CharField(max_length=20,  blank=True, default='')
+    email       = models.EmailField(max_length=254, blank=True, default='')
+    # ── Social media ──────────────────────────────────────────────────────────
+    instagram   = models.CharField(max_length=100, blank=True, default='',
+                                   help_text='Username or @handle')
+    youtube     = models.URLField(max_length=300,  blank=True, default='',
+                                   help_text='Full channel URL')
+    facebook    = models.URLField(max_length=300,  blank=True, default='',
+                                   help_text='Full page URL')
+    twitter     = models.CharField(max_length=100, blank=True, default='',
+                                   help_text='Username or @handle')
+    tiktok      = models.CharField(max_length=100, blank=True, default='',
+                                   help_text='Username or @handle')
+    followers   = models.ManyToManyField(User, blank=True, related_name='followed_business_pages')
+    is_verified = models.BooleanField(default=False)
+    is_active   = models.BooleanField(default=True)
+
+    if settings.USE_CLOUDINARY:
+        logo        = CloudinaryField('logo',        folder='business_logos',  blank=True, null=True)
+        cover_photo = CloudinaryField('cover_photo', folder='business_covers', blank=True, null=True)
+    else:
+        logo        = models.ImageField(upload_to='business_logos/',  blank=True, null=True)
+        cover_photo = models.ImageField(upload_to='business_covers/', blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'BusinessPage_Table'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.name} (@{self.slug})'
+
+    def clean(self):
+        super().clean()
+        self.name        = sanitize_text(self.name)
+        self.tagline     = sanitize_text(self.tagline)
+        self.description = sanitize_text(self.description, 'about')
+        self.location    = sanitize_text(self.location, 'location')
+        if self.website:
+            try:
+                self.website = validate_url(self.website)
+            except ValidationError:
+                self.website = ''
+        if self.youtube:
+            try:
+                self.youtube = validate_url(self.youtube)
+            except ValidationError:
+                self.youtube = ''
+        if self.facebook:
+            try:
+                self.facebook = validate_url(self.facebook)
+            except ValidationError:
+                self.facebook = ''
+        if self.whatsapp:
+            try:
+                self.whatsapp = validate_phone_number(self.whatsapp)
+            except ValidationError:
+                self.whatsapp = ''
+        if self.phone:
+            try:
+                self.phone = validate_phone_number(self.phone)
+            except ValidationError:
+                self.phone = ''
+        # Strip leading @ and non-safe chars from handle-style fields
+        if self.instagram:
+            self.instagram = re.sub(r'[^a-zA-Z0-9._]', '', self.instagram.lstrip('@').strip())[:100]
+        if self.twitter:
+            self.twitter = re.sub(r'[^a-zA-Z0-9._]', '', self.twitter.lstrip('@').strip())[:100]
+        if self.tiktok:
+            self.tiktok = re.sub(r'[^a-zA-Z0-9._]', '', self.tiktok.lstrip('@').strip())[:100]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            base = slugify(self.name)[:140] or 'page'
+            slug, n = base, 1
+            while BusinessPage.objects.filter(slug=slug).exclude(page_id=self.page_id).exists():
+                slug = f'{base}-{n}'
+                n += 1
+            self.slug = slug
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def follower_count(self):
+        return self.followers.count()
+
+    @property
+    def listing_count(self):
+        return self.market_listings.count()
+
+    @property
+    def get_logo_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.logo:
+                    pid = str(getattr(self.logo, 'public_id', None) or self.logo).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return 'https://placehold.co/120x120/f97316/ffffff?text=B'
+            else:
+                return self.logo.url if self.logo else ''
+        except Exception:
+            return 'https://placehold.co/120x120/f97316/ffffff?text=B'
+
+    @property
+    def get_cover_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.cover_photo:
+                    pid = str(getattr(self.cover_photo, 'public_id', None) or self.cover_photo).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            else:
+                return self.cover_photo.url if self.cover_photo else ''
+        except Exception:
+            return ''

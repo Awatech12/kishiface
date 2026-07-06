@@ -1,404 +1,56 @@
+
 {% load static %}
 {% load post_tags %}
 {% load humanize %}
 {% load time %}
 {% load text_filters %}
 
+{% if empty_category %}
+<div id="mfy-cat-empty" style="grid-column:1/-1;text-align:center;padding:48px 16px;color:var(--mfy-text-light,#8e8e8e);">
+  <i class="fas fa-box-open" style="font-size:32px;margin-bottom:12px;display:block;opacity:0.35;"></i>
+  No products found in this category yet.
+</div>
+{% endif %}
+
 {% for item in posts_with_ads %}
 
-  {# ── Regular Post ────────────────────────────────────────────────────── #}
-  {% if item.type == 'post' %}
-  <article class="kvibe-post"
-    data-post-id="{{ item.data.post_id }}"
-    data-mood="{{ item.data.mood|default:'' }}"
-    data-custom-mood="{% if item.data.mood == 'custom' or not item.data.mood %}{{ item.data.custom_mood|default:'' }}{% endif %}"
-    {% if not item.data.is_repost and not item.data.link_preview and not item.data.file and not item.data.video_file and not item.data.images.all %}
-      {% if item.data.content %}data-lp-url="{{ item.data.content|truncatechars:2048 }}"{% endif %}
-    {% elif item.data.is_repost and item.data.original_post and not item.data.original_post.link_preview and not item.data.original_post.file and not item.data.original_post.video_file and not item.data.original_post.images.all %}
-      {% if item.data.original_post.content %}data-lp-url="{{ item.data.original_post.content|truncatechars:2048 }}"{% endif %}
-    {% endif %}
-  >
-
-    {# Repost header #}
-    {% if item.data.is_repost %}
-    <div class="kvibe-repost-header">
-      <i class="fas fa-retweet"></i>
-      <span>
-        <a href="{% url 'profile' item.data.author.username %}">{{ item.data.author.first_name }} {{ item.data.author.last_name }}</a>
-        reposted
-      </span>
-    </div>
-    {% endif %}
-
-    {# Post header #}
-    <div class="kvibe-post-header">
-      <img
-        src="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author|safe_pic_url }}{% else %}{{ item.data.author|safe_pic_url }}{% endif %}"
-        class="kvibe-profile-pic"
-        alt="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}"
-        onerror="this.onerror=null;this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';"
-      >
-      <div style="flex:1;">
-        <div style="display:flex;align-items:center;flex-wrap:wrap;">
-          <a href="{% url 'profile' username=item.data.get_original_author.username %}"
-             class="kvibe-username"
-             data-user="{% if item.data.is_repost and item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}">
-            {% if item.data.is_repost and item.data.original_post %}
-              {{ item.data.original_post.author.first_name }} {{ item.data.original_post.author.last_name }}
-            {% else %}
-              {{ item.data.author.first_name }} {{ item.data.author.last_name }}
-            {% endif %}
-            {% if item.data.is_repost and item.data.original_post %}
-              {% if item.data.original_post.author.profile.is_verify %}
-                <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;">
-              {% endif %}
-            {% else %}
-              {% if item.data.author.profile.is_verify and item.data.author.first_name %}
-                <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;">
-              {% endif %}
-            {% endif %}
-          </a>
-          {% if item.data.has_mood %}
-            {% with mood_data=item.data.get_mood_data %}
-              <span class="kvibe-mood-badge kvibe-mood-{{ item.data.mood|default:'custom' }}"
-                    style="{% if mood_data.color %}--mood-color:{{ mood_data.color }};{% endif %}">
-                <i class="fa-regular fa-face-smile"></i>
-                {{ mood_data.display }}
-              </span>
-            {% endwith %}
-          {% endif %}
-        </div>
-        <div class="kvibe-post-time">
-          {% if item.data.is_repost %}
-            @{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}
-            · Original post: {{ item.data.original_post.created_at|insta_timesince }}
-            · Reposted: {{ item.data.created_at|insta_timesince }}
-          {% else %}
-            @{{ item.data.author.username }} · {{ item.data.created_at|insta_timesince }}
-          {% endif %}
-        </div>
-      </div>
-      <div class="kvibe-post-actions">
-        {% with post_author=item.data.get_original_author %}
-        {% if request.user != post_author %}
-          {% if post_author.id in following_ids %}
-            <button class="kvibe-follow-btn kvibe-follow-btn--following"
-                    data-user-id="{{ post_author.id }}"
-                    data-username="{{ post_author.username }}"
-                    onclick="kvibeToggleFollow(this)"
-                    title="Unfollow {{ post_author.username }}">
-              <i class="fas fa-user-check"></i><span>Following</span>
-            </button>
-          {% else %}
-            <button class="kvibe-follow-btn"
-                    data-user-id="{{ post_author.id }}"
-                    data-username="{{ post_author.username }}"
-                    onclick="kvibeToggleFollow(this)"
-                    title="Follow {{ post_author.username }}">
-              <i class="fas fa-user-plus"></i><span>Follow</span>
-            </button>
-          {% endif %}
-        {% endif %}
-        {% endwith %}
-        {% if request.user == item.data.author and not item.data.is_repost %}
-          <div class="kvibe-post-menu" style="position:relative;">
-            <button class="kvibe-post-menu-btn"
-                    onclick="kvibeTogglePostMenu(this, event)"
-                    title="More options"
-                    aria-label="Post options">
-              <i class="fas fa-ellipsis-h"></i>
-            </button>
-            <div class="kvibe-post-menu-dropdown" style="display:none;">
-              <a href="{% url 'editpost' item.data.post_id %}" class="kvibe-post-menu-item">
-                <i class="fas fa-edit"></i> Edit
-              </a>
-              <button class="kvibe-post-menu-item kvibe-post-menu-delete"
-                      onclick="kvibeDeletePost('{{ item.data.post_id }}', this, event)">
-                <i class="fas fa-trash-alt"></i> Delete
-              </button>
-            </div>
-          </div>
-        {% endif %}
-      </div>
-    </div>
-
-    {# Friend-of-Friend strip — sits under the author row as social proof #}
-    {% if item.is_fof and item.fof_via %}
-    <div class="kvibe-fof-header">
-      <div class="kvibe-fof-avatars">
-        {% for via_user in item.fof_via %}
-          <a href="{% url 'profile' via_user.username %}" title="{{ via_user.first_name }} {{ via_user.last_name }}">
-            <img
-              src="{{ via_user|safe_pic_url }}"
-              class="kvibe-fof-avatar"
-              alt="{{ via_user.username }}"
-              onerror="this.onerror=null;this.src='https://placehold.co/22x22/dbdbdb/8e8e8e?text=U';"
-            >
-          </a>
-        {% endfor %}
-      </div>
-      <span class="kvibe-fof-label">
-        <i class="fas fa-user-check"></i>
-        Followed by
-        <a href="{% url 'profile' item.fof_via.0.username %}" style="color:var(--kvibe-text);text-decoration:none;font-weight:600;">{{ item.fof_via.0.first_name }} {{ item.fof_via.0.last_name }}</a>{% if item.fof_via|length > 1 %}&nbsp;and {{ item.fof_via|length|add:"-1" }} other{% if item.fof_via|length > 2 %}s{% endif %}{% endif %}
-      </span>
-    </div>
-    {% endif %}
-
-    {# Repost caption #}
-    {% if item.data.is_repost and item.data.repost_content %}
-    <div class="kvibe-repost-caption-container">
-      <div class="kvibe-repost-caption">
-        <span class="kvibe-repost-caption-author">
-          {{ item.data.author.first_name }} {{ item.data.author.last_name }}
-          {% if item.data.author.profile.is_verify %}
-            <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align:middle;">
-          {% endif %}
-        </span>
-        <div class="kvibe-repost-caption-text">{{ item.data.repost_content|format_post_text|safe }}</div>
-      </div>
-    </div>
-    {% endif %}
-
-    {# Post text content #}
-    {% if item.data.content or item.data.is_repost %}
-    <div class="kvibe-post-content">
-      <div class="kvibe-post-text collapsed" id="kvibe-text-{{ item.data.post_id }}">
-        {% if item.data.is_repost and item.data.original_post %}
-          {{ item.data.original_post.content|format_post_text|safe }}
-        {% else %}
-          {{ item.data.content|format_post_text|safe }}
-        {% endif %}
-      </div>
-      <div class="kvibe-lp-slot">
-        {% if item.data.link_preview %}
-          <a class="kvibe-post-link-preview" href="{{ item.data.link_preview.url|default:'#' }}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">
-            {% if item.data.link_preview.image %}
-              <img class="kvibe-plp-image" src="{{ item.data.link_preview.image }}" alt="" onerror="this.style.display='none'">
-            {% endif %}
-            <div class="kvibe-plp-body">
-              {% if item.data.link_preview.domain %}<div class="kvibe-plp-domain">{{ item.data.link_preview.domain }}</div>{% endif %}
-              {% if item.data.link_preview.title %}<div class="kvibe-plp-title">{{ item.data.link_preview.title }}</div>{% endif %}
-              {% if item.data.link_preview.description %}<div class="kvibe-plp-desc">{{ item.data.link_preview.description }}</div>{% endif %}
-            </div>
-          </a>
-        {% endif %}
-      </div>
-    </div>
-    {% endif %}
-
-    {# ── Media (video / audio / images) ────────────────────────────────── #}
-    {% with orig=item.data.original_post %}
-    {% if item.data.video_file or item.data.file or item.data.images.all or orig and orig.video_file or orig and orig.file or orig and orig.images.all %}
-    <div class="kvibe-media-container">
-
-      {% if item.data.is_repost and orig %}
-
-        {# ── Repost: audio (always standalone) ── #}
-        {% if orig.file %}
-          <div style="padding:12px 16px;">
-            <audio controls preload="none" style="width:100%;border-radius:8px;">
-              <source src="{{ orig.file.url }}">
-            </audio>
-          </div>
-        {% endif %}
-
-        {# ── Repost: video + images unified grid ── #}
-        {% if orig.video_file or orig.images.all %}
-          {% with orig_imgs=orig.images.all orig_img_cnt=orig.images.all|length orig_has_video=orig.video_file %}
-          {% if orig_has_video and orig_imgs %}
-            {# Mixed: video slot 1, images fill remaining slots #}
-            {% with orig_total=orig_img_cnt|add:"1" %}
-            <div class="kvibe-x-media-grid kvibe-x-media-count-{{ orig_total|default:'1' }}{% if orig_total > 4 %} kvibe-x-media-count-4{% endif %}"
-                 data-all-images="[{% for image in orig_imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
-              {# Slot 1: video #}
-              <div class="kvibe-x-media-cell"
-                   onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ orig.video_file.url }}', null, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-                <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
-                  <source src="{{ orig.video_file.url }}" type="video/mp4">
-                </video>
-                <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
-              </div>
-              {# Slots 2–4: images #}
-              {% for image in orig_imgs %}
-                {% if forloop.counter <= 3 %}
-                <div class="kvibe-x-media-cell"
-                     onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-                  <img src="{{ image.image.url }}"
-                       alt="Post image {{ forloop.counter }}"
-                       class="kvibe-x-media-thumb"
-                       loading="lazy"
-                       onload="this.classList.add('loaded')">
-                  {% if forloop.counter == 3 and orig_img_cnt > 3 %}
-                  <div class="kvibe-x-media-more">+{{ orig_img_cnt|add:"-3" }}</div>
-                  {% endif %}
-                </div>
-                {% endif %}
-              {% endfor %}
-            </div>
-            {% endwith %}
-          {% elif orig_has_video %}
-            {# Video only #}
-            <div class="kvibe-x-media-grid kvibe-x-media-single"
-                 onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ orig.video_file.url }}', null, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-              <div class="kvibe-x-media-cell">
-                <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
-                  <source src="{{ orig.video_file.url }}" type="video/mp4">
-                </video>
-                <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
-              </div>
-            </div>
-          {% else %}
-            {# Images only #}
-            <div class="kvibe-x-media-grid kvibe-x-media-count-{{ orig_img_cnt|default:'1' }}{% if orig_img_cnt > 4 %} kvibe-x-media-count-4{% endif %}"
-                 data-all-images="[{% for image in orig_imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
-              {% for image in orig_imgs %}
-                {% if forloop.counter <= 4 %}
-                <div class="kvibe-x-media-cell"
-                     onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{% if item.data.original_post %}{{ item.data.original_post.author.get_full_name|escapejs }}{% else %}{{ item.data.author.get_full_name|escapejs }}{% endif %}', '{% if item.data.original_post %}{{ item.data.original_post.author.username }}{% else %}{{ item.data.author.username }}{% endif %}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-                  <img src="{{ image.image.url }}"
-                       alt="Post image {{ forloop.counter }}"
-                       class="kvibe-x-media-thumb"
-                       loading="lazy"
-                       onload="this.classList.add('loaded')">
-                  {% if forloop.counter == 4 and orig_img_cnt > 4 %}
-                  <div class="kvibe-x-media-more">+{{ orig_img_cnt|add:"-4" }}</div>
-                  {% endif %}
-                </div>
-                {% endif %}
-              {% endfor %}
-            </div>
-          {% endif %}
-          {% endwith %}
-        {% endif %}
-
-      {% else %}
-
-        {# ── Own post: audio (always standalone) ── #}
-        {% if item.data.file %}
-          <div style="padding:12px 16px;">
-            <audio controls preload="none" style="width:100%;border-radius:8px;">
-              <source src="{{ item.data.file.url }}">
-            </audio>
-          </div>
-        {% endif %}
-
-        {# ── Own post: video + images unified grid ── #}
-        {% if item.data.video_file or item.data.images.all %}
-          {% with imgs=item.data.images.all img_cnt=item.data.images.all|length has_video=item.data.video_file %}
-          {# total = 1 video (if any) + image count; grid class based on total, capped at 4 #}
-          {% if has_video and imgs %}
-            {# Mixed: video occupies slot 1, images fill remaining slots #}
-            {% with total=img_cnt|add:"1" %}
-            <div class="kvibe-x-media-grid kvibe-x-media-count-{{ total|default:'1' }}{% if total > 4 %} kvibe-x-media-count-4{% endif %}"
-                 data-all-images="[{% for image in imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
-              {# Slot 1: video #}
-              <div class="kvibe-x-media-cell"
-                   onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ item.data.video_file.url }}', null, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-                <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
-                  <source src="{{ item.data.video_file.url }}" type="video/mp4">
-                </video>
-                <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
-              </div>
-              {# Slots 2–4: images #}
-              {% for image in imgs %}
-                {% if forloop.counter <= 3 %}
-                <div class="kvibe-x-media-cell"
-                     onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-                  <img src="{{ image.image.url }}"
-                       alt="Post image {{ forloop.counter }}"
-                       class="kvibe-x-media-thumb"
-                       loading="lazy"
-                       onload="this.classList.add('loaded')">
-                  {% if forloop.counter == 3 and img_cnt > 3 %}
-                  <div class="kvibe-x-media-more">+{{ img_cnt|add:"-3" }}</div>
-                  {% endif %}
-                </div>
-                {% endif %}
-              {% endfor %}
-            </div>
-            {% endwith %}
-          {% elif has_video %}
-            {# Video only — single cell #}
-            <div class="kvibe-x-media-grid kvibe-x-media-single"
-                 onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'video', '{{ item.data.video_file.url }}', null, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-              <div class="kvibe-x-media-cell">
-                <video class="kvibe-x-media-thumb" preload="metadata" muted playsinline>
-                  <source src="{{ item.data.video_file.url }}" type="video/mp4">
-                </video>
-                <div class="kvibe-x-media-play-badge"><i class="fas fa-play"></i></div>
-              </div>
-            </div>
-          {% else %}
-            {# Images only — standard grid #}
-            <div class="kvibe-x-media-grid kvibe-x-media-count-{{ img_cnt|default:'1' }}{% if img_cnt > 4 %} kvibe-x-media-count-4{% endif %}"
-                 data-all-images="[{% for image in imgs %}&quot;{{ image.image.url }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]">
-              {% for image in imgs %}
-                {% if forloop.counter <= 4 %}
-                <div class="kvibe-x-media-cell"
-                     onclick="kvibePostModalOpen('{{ item.data.post_id }}', 'images', null, {{ forloop.counter0 }}, '{{ item.data.author.get_full_name|escapejs }}', '{{ item.data.author.username }}', '{{ item.data.created_at|insta_timesince }}', '{{ item.data.content|escapejs }}')">
-                  <img src="{{ image.image.url }}"
-                       alt="Post image {{ forloop.counter }}"
-                       class="kvibe-x-media-thumb"
-                       loading="lazy"
-                       onload="this.classList.add('loaded')">
-                  {% if forloop.counter == 4 and img_cnt > 4 %}
-                  <div class="kvibe-x-media-more">+{{ img_cnt|add:"-4" }}</div>
-                  {% endif %}
-                </div>
-                {% endif %}
-              {% endfor %}
-            </div>
-          {% endif %}
-          {% endwith %}
-        {% endif %}
-
-      {% endif %}
-    </div>
-    {% endif %}
-    {% endwith %}
-
-    {% include 'snippet/post_like.html' with post=item.data %}
-
-  </article>
-
-  {% elif item.type == 'user_suggestion' %}
-  <div class="kvibe-user-suggestion" data-user-id="{{ item.data.id }}">
-    <div class="kvibe-user-suggestion-header">
-      <div class="kvibe-user-suggestion-badge">
+  {% if item.type == 'user_suggestion' %}
+  <div class="mfy-user-suggestion" data-user-id="{{ item.data.id }}">
+    <div class="mfy-user-suggestion-header">
+      <div class="mfy-user-suggestion-badge">
         <i class="fas fa-user-plus"></i> Suggested for you
       </div>
     </div>
-    <div class="kvibe-user-suggestion-content">
-      <div class="kvibe-user-suggestion-profile">
+    <div class="mfy-user-suggestion-content">
+      <div class="mfy-user-suggestion-profile">
         <img src="{{ item.data|safe_pic_url }}"
              alt="{{ item.data.username }}"
-             class="kvibe-user-suggestion-picture">
-        <div class="kvibe-user-suggestion-details">
-          <div class="kvibe-user-suggestion-name">
+             class="mfy-user-suggestion-picture">
+        <div class="mfy-user-suggestion-details">
+          <div class="mfy-user-suggestion-name">
             {{ item.data.first_name }} {{ item.data.last_name }}
             {% if item.data.profile.is_verify %}
               <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;" loading="lazy">
             {% endif %}
           </div>
-          <div class="kvibe-user-suggestion-username">@{{ item.data.username }}</div>
+          <div class="mfy-user-suggestion-username">@{{ item.data.username }}</div>
           {% if item.data.profile.bio %}
-          <div class="kvibe-user-suggestion-bio">{{ item.data.profile.bio|truncatechars:80 }}</div>
+          <div class="mfy-user-suggestion-bio">{{ item.data.profile.bio|truncatechars:80 }}</div>
           {% endif %}
           {% if item.data.profile.community_area or item.data.profile.family_house or item.data.profile.secondary_school %}
-          <div class="kvibe-user-suggestion-meta">
+          <div class="mfy-user-suggestion-meta">
             {% if item.data.profile.community_area %}
-            <span class="kvibe-user-suggestion-meta-pill">
+            <span class="mfy-user-suggestion-meta-pill">
               <i class="fas fa-home"></i>{{ item.data.profile.get_community_area_display }}
             </span>
             {% endif %}
             {% if item.data.profile.family_house %}
-            <span class="kvibe-user-suggestion-meta-pill">
+            <span class="mfy-user-suggestion-meta-pill">
               <i class="fas fa-door-open"></i>{{ item.data.profile.family_house|truncatechars:22 }}
             </span>
             {% endif %}
             {% if item.data.profile.secondary_school %}
-            <span class="kvibe-user-suggestion-meta-pill">
+            <span class="mfy-user-suggestion-meta-pill">
               <i class="fas fa-graduation-cap"></i>{{ item.data.profile.secondary_school|truncatechars:26 }}
             </span>
             {% endif %}
@@ -407,165 +59,225 @@
         </div>
       </div>
     </div>
-    <div class="kvibe-user-suggestion-actions">
-      <button class="kvibe-user-suggestion-btn-primary"
-              onclick="kvibeFollowUser('{{ item.data.id }}','{{ item.data.username }}')">
+    <div class="mfy-user-suggestion-actions">
+      <button class="mfy-user-suggestion-btn-primary"
+              onclick="mfyFollowUser('{{ item.data.id }}','{{ item.data.username }}')">
         <i class="fas fa-user-plus"></i> Follow
       </button>
-      <a href="{% url 'profile' item.data.username %}" class="kvibe-user-suggestion-btn-secondary">
+      <a href="{% url 'profile' item.data.username %}" class="mfy-user-suggestion-btn-secondary">
         <i class="fas fa-user"></i> View Profile
       </a>
     </div>
   </div>
 
-  {% elif item.type == 'market' %}
-  {# ── KishiHub Ads card — feed post style ─────────────── #}
-  <article class="kvibe-post kvibe-market-post" data-market-id="{{ item.data.product_id }}">
-
-    {# Feed-style header: KishiHub Ads label #}
-    <div class="kvibe-repost-header kvibe-market-feed-label">
-      <i class="fas fa-store"></i>
-      <span>KishiHub Ads 🛒</span>
+  {% elif item.type == 'business_suggestion' %}
+  <div class="mfy-user-suggestion mfy-business-suggestion" data-business-id="{{ item.data.page_id }}">
+    <div class="mfy-user-suggestion-header">
+      <div class="mfy-user-suggestion-badge">
+        <i class="fas fa-store"></i> Business to follow
+      </div>
     </div>
-
-    {# Post-style header: seller avatar + name + meta #}
-    <div class="kvibe-post-header">
-      <img
-        src="{{ item.data.product_owner|safe_pic_url }}"
-        class="kvibe-profile-pic"
-        alt="{{ item.data.product_owner.username }}"
-        onerror="this.onerror=null;this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';"
-      >
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <a href="{% url 'profile' item.data.product_owner.username %}" class="kvibe-username">
-            {{ item.data.product_owner.first_name }} {{ item.data.product_owner.last_name }}
-            {% if item.data.product_owner.profile.is_verify %}
-              <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align:middle;">
+    <div class="mfy-user-suggestion-content">
+      <div class="mfy-user-suggestion-profile">
+        {% if item.data.logo %}
+        <img src="{{ item.data.logo.url }}"
+             alt="{{ item.data.name }}"
+             class="mfy-user-suggestion-picture"
+             style="border-radius:12px;">
+        {% else %}
+        <img src="https://placehold.co/120x120/f0f0f0/aaa?text={{ item.data.name|slice:':1' }}"
+             alt="{{ item.data.name }}"
+             class="mfy-user-suggestion-picture"
+             style="border-radius:12px;">
+        {% endif %}
+        <div class="mfy-user-suggestion-details">
+          <div class="mfy-user-suggestion-name">
+            {{ item.data.name }}
+            {% if item.data.is_verified %}
+              <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;" loading="lazy">
             {% endif %}
-          </a>
-          {% if item.data.product_condition %}
-          <span class="kvibe-market-condition-inline kvibe-market-condition--{{ item.data.product_condition|lower }}">
-            {{ item.data.product_condition }}
-          </span>
+          </div>
+          <div class="mfy-user-suggestion-username">{{ item.data.get_category_display }}</div>
+          {% if item.data.tagline %}
+          <div class="mfy-user-suggestion-bio">{{ item.data.tagline|truncatechars:80 }}</div>
           {% endif %}
-        </div>
-        <div class="kvibe-post-time">
-          <i class="fas fa-tag" style="font-size:10px;margin-right:3px;opacity:.7;"></i>{{ item.data.product_category }}
-          {% if item.data.product_location %}
-          &nbsp;·&nbsp;<i class="fas fa-map-marker-alt" style="font-size:10px;margin-right:2px;opacity:.7;"></i>{{ item.data.product_location }}
-          {% endif %}
-          &nbsp;·&nbsp;<i class="fas fa-clock" style="font-size:10px;margin-right:2px;opacity:.7;"></i>{{ item.data.posted_on|naturaltime }}
+          <div class="mfy-user-suggestion-meta">
+            {% if item.data.location %}
+            <span class="mfy-user-suggestion-meta-pill">
+              <i class="fas fa-map-marker-alt"></i>{{ item.data.location|truncatechars:26 }}
+            </span>
+            {% endif %}
+            <span class="mfy-user-suggestion-meta-pill">
+              <i class="fas fa-users"></i>{{ item.data.follower_count }} followers
+            </span>
+          </div>
         </div>
       </div>
-      <a href="{% url 'product_detail' item.data.product_id %}" class="kvibe-market-view-btn" title="View product">
-        View <i class="fas fa-arrow-right"></i>
+    </div>
+    <div class="mfy-user-suggestion-actions">
+      <button class="mfy-user-suggestion-btn-primary"
+              onclick="mfyFollowBusiness('{{ item.data.slug }}','{{ item.data.name|escapejs }}')">
+        <i class="fas fa-store"></i> Follow
+      </button>
+      <a href="{% url 'business_page_detail' item.data.slug %}" class="mfy-user-suggestion-btn-secondary">
+        <i class="fas fa-store-alt"></i> View Page
       </a>
     </div>
+  </div>
 
-    {# Product image — full-width with price + views overlay #}
+  {% elif item.type == 'market' %}
+  {# ── Marketfy Ads card — Jumia-style product card ─────── #}
+  <article class="mfy-post mfy-jcard" data-market-id="{{ item.data.product_id }}">
+
+    {# Product image — square crop, white background like Jumia #}
     {% with first_img=item.data.images.first %}
-    {% if first_img %}
-    <a href="{% url 'product_detail' item.data.product_id %}" style="display:block;text-decoration:none;position:relative;">
-      <div class="kvibe-image-slide kvibe-market-img-slide">
+    <a href="{% url 'product_detail' item.data.product_id %}" class="mfy-jcard-img-link">
+      <div class="mfy-jcard-img-wrap">
+        {% if first_img %}
         <img
           src="{{ first_img.product_image.url }}"
           alt="{{ item.data.product_name }}"
           loading="lazy"
           onload="this.classList.add('loaded')"
-          onerror="this.onerror=null;this.src='https://placehold.co/600x360/f4f4f4/aaa?text=Product';"
+          onerror="this.onerror=null;this.src='https://placehold.co/600x600/f8f8f8/aaa?text=Product';"
+          class="mfy-jcard-img"
         >
-        <span class="kvibe-market-img-price">₦{{ item.data.product_price|floatformat:"0"|intcomma }}</span>
-        <span class="kvibe-market-img-views"><i class="fas fa-eye"></i> {{ item.data.views_count }}</span>
+        {% else %}
+        <img
+          src="https://placehold.co/600x600/f8f8f8/aaa?text=Product"
+          alt="{{ item.data.product_name }}"
+          class="mfy-jcard-img loaded"
+        >
+        {% endif %}
+
+        {# Views badge — top-right (replaces discount %) #}
+        <span class="mfy-jcard-views"><i class="fas fa-eye"></i> {{ item.data.views_count|default:0 }}</span>
+
+        {# Category badge — top-left #}
+        <span class="mfy-jcard-category-badge">{{ item.data.category_icon }} {{ item.data.category_label }}</span>
+
+        {# Wishlist toggle — bottom-left, sits above the link so clicks don't navigate #}
+        {% if request.user != item.data.product_owner %}
+        <button type="button"
+                class="mfy-jcard-wish-btn {% if item.data.in_wishlist %}saved{% endif %}"
+                data-product-id="{{ item.data.product_id }}"
+                onclick="mfyToggleWishlist(this, event)"
+                aria-pressed="{% if item.data.in_wishlist %}true{% else %}false{% endif %}"
+                aria-label="Toggle wishlist">
+          <i class="fa-heart {% if item.data.in_wishlist %}fas{% else %}far{% endif %}"></i>
+        </button>
+        {% endif %}
       </div>
     </a>
-    {% endif %}
     {% endwith %}
 
-    {# Product name + description #}
-    <a href="{% url 'product_detail' item.data.product_id %}" style="text-decoration:none;color:inherit;">
-      <div class="kvibe-post-content kvibe-market-post-content">
-        <div class="kvibe-market-feed-name">{{ item.data.product_name }}</div>
-        {% if item.data.product_description %}
-        <div class="kvibe-market-feed-desc">{{ item.data.product_description|truncatechars:120 }}</div>
-        {% endif %}
-        {% if item.data.product_availability %}
-        <div style="margin-top:6px;">
-          <span class="kvibe-market-avail-badge">
-            <i class="fas fa-boxes"></i> {{ item.data.product_availability }}
-          </span>
+    {# Product info body #}
+    <a href="{% url 'product_detail' item.data.product_id %}" class="mfy-jcard-body-link">
+      <div class="mfy-jcard-body">
+
+        {# Price — big and bold like Jumia #}
+        <div class="mfy-jcard-price">₦{{ item.data.product_price|floatformat:"0"|intcomma }}</div>
+
+        {# Business page name — shown when this listing was posted via a business page #}
+        {% if item.data.business_page %}
+        <div class="mfy-jcard-business">
+          <i class="fas fa-store"></i>
+          <span class="mfy-jcard-business-name">{{ item.data.business_page.name }}</span>
+          {% if item.data.business_page.is_verified %}
+          <i class="fas fa-circle-check mfy-jcard-business-verified" title="Verified business"></i>
+          {% endif %}
         </div>
         {% endif %}
+
+        {# Product name — clean and simple #}
+        <div class="mfy-jcard-name">{{ item.data.product_name|truncatechars:60 }}</div>
+
+        {# Condition badge — subtle inline #}
+        {% if item.data.product_condition %}
+        <div class="mfy-jcard-condition-inline">
+          <span class="mfy-market-condition--{{ item.data.product_condition|lower }}">{{ item.data.product_condition }}</span>
+        </div>
+        {% endif %}
+
+        {# Meta pills row — location, availability #}
+        <div class="mfy-jcard-meta">
+          {% if item.data.product_location %}
+          <span class="mfy-jcard-meta-pill">
+            <i class="fas fa-map-marker-alt"></i> {{ item.data.product_location }}
+          </span>
+          {% endif %}
+          {% if item.data.product_availability %}
+          <span class="mfy-jcard-meta-pill mfy-jcard-avail">
+            <i class="fas fa-boxes"></i> {{ item.data.product_availability }}
+          </span>
+          {% endif %}
+        </div>
+
       </div>
     </a>
 
-    {# Seller contact buttons #}
-    {% if request.user != item.data.product_owner %}
-    <div class="kvibe-market-contact-row">
-      {% if item.data.whatsapp_number %}
-      <a href="https://wa.me/{{ item.data.whatsapp_number }}?text=Hi%2C%20I%20saw%20your%20ad%20for%20%22{{ item.data.product_name|urlencode }}%22%20on%20KishiHub%20and%20I%27m%20interested!"
-         target="_blank" rel="noopener noreferrer"
-         class="kvibe-market-contact-btn kvibe-market-contact-wa"
-         onclick="event.stopPropagation();">
-        <i class="fab fa-whatsapp"></i> WhatsApp
-      </a>
-      {% endif %}
-      <a href="{% url 'contact_seller' item.data.product_id %}"
-         class="kvibe-market-contact-btn kvibe-market-contact-msg"
-         onclick="event.stopPropagation();">
-        <i class="fas fa-paper-plane"></i> Message
-      </a>
-      {% if item.data.instagram_handle %}
-      <a href="https://instagram.com/{{ item.data.instagram_handle }}"
-         target="_blank" rel="noopener noreferrer"
-         class="kvibe-market-contact-btn kvibe-market-contact-ig"
-         onclick="event.stopPropagation();">
-        <i class="fab fa-instagram"></i>
-      </a>
-      {% endif %}
-      {% if item.data.twitter_handle %}
-      <a href="https://x.com/{{ item.data.twitter_handle }}"
-         target="_blank" rel="noopener noreferrer"
-         class="kvibe-market-contact-btn kvibe-market-contact-tw"
-         onclick="event.stopPropagation();">
-        <i class="fab fa-x-twitter"></i>
-      </a>
-      {% endif %}
-      {% if item.data.email %}
-      <a href="mailto:{{ item.data.email }}?subject=Enquiry: {{ item.data.product_name }}"
-         class="kvibe-market-contact-btn kvibe-market-contact-email"
-         onclick="event.stopPropagation();">
-        <i class="fas fa-envelope"></i>
-      </a>
+    {# Action buttons — separate row below #}
+    <div class="mfy-jcard-actions-row">
+      {% if request.user != item.data.product_owner %}
+        {% if item.data.whatsapp_number %}
+        <a href="https://wa.me/{{ item.data.whatsapp_number }}?text=Hi%2C%20I%20saw%20your%20ad%20for%20%22{{ item.data.product_name|urlencode }}%22%20on%20Marketfy%20and%20I%27m%20interested!"
+           target="_blank" rel="noopener noreferrer"
+           class="mfy-jcard-btn mfy-jcard-btn--wa">
+          <i class="fab fa-whatsapp"></i> WhatsApp
+        </a>
+        {% endif %}
+        <a href="{% url 'contact_seller' item.data.product_id %}"
+           class="mfy-jcard-btn mfy-jcard-btn--msg">
+          <i class="fas fa-paper-plane"></i> Message
+        </a>
+        {% if item.data.instagram_handle %}
+        <a href="https://instagram.com/{{ item.data.instagram_handle }}"
+           target="_blank" rel="noopener noreferrer"
+           class="mfy-jcard-btn mfy-jcard-btn--icon mfy-market-contact-ig"
+           title="Instagram">
+          <i class="fab fa-instagram"></i>
+        </a>
+        {% endif %}
+        {% if item.data.twitter_handle %}
+        <a href="https://x.com/{{ item.data.twitter_handle }}"
+           target="_blank" rel="noopener noreferrer"
+           class="mfy-jcard-btn mfy-jcard-btn--icon mfy-market-contact-tw"
+           title="X / Twitter">
+          <i class="fab fa-x-twitter"></i>
+        </a>
+        {% endif %}
+        {% if item.data.email %}
+        <a href="mailto:{{ item.data.email }}?subject=Enquiry: {{ item.data.product_name }}"
+           class="mfy-jcard-btn mfy-jcard-btn--icon mfy-market-contact-email"
+           title="Email">
+          <i class="fas fa-envelope"></i>
+        </a>
+        {% endif %}
       {% endif %}
     </div>
-    {% endif %}
-
-    {# ── Reactions (vibes · comments · share) ─────────────────────────── #}
-    {% include 'snippet/card_engagement.html' with card_type="market" card_id=item.data.product_id|stringformat:"s" comment_count=item.data.comments.count card_title=item.data.product_name %}
 
   </article>
 
   {% elif item.type == 'job' %}
   {# ── Job Vacancy card ─────────────────────────────────── #}
-  <article class="kvibe-post kvibe-market-post" data-job-id="{{ item.data.id }}">
+  <article class="mfy-post mfy-market-post" data-job-id="{{ item.data.id }}">
 
-    <div class="kvibe-repost-header kvibe-market-feed-label"
+    <div class="mfy-repost-header mfy-market-feed-label"
          style="background:linear-gradient(90deg,#1a1a2e 0%,#16213e 100%);">
       <i class="fas fa-briefcase"></i>
-      <span>KishiHub Jobs 💼</span>
+      <span>Marketfy Jobs 💼</span>
     </div>
 
-    <div class="kvibe-post-header">
+    <div class="mfy-post-header">
       <img
         src="{{ item.data.posted_by|safe_pic_url }}"
-        class="kvibe-profile-pic"
+        class="mfy-profile-pic"
         alt="{{ item.data.posted_by.username }}"
         onerror="this.onerror=null;this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';"
       >
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <a href="{% url 'profile' item.data.posted_by.username %}" class="kvibe-username">
+          <a href="{% url 'profile' item.data.posted_by.username %}" class="mfy-username">
             {{ item.data.posted_by.first_name }} {{ item.data.posted_by.last_name }}
             {% if item.data.posted_by.profile.is_verify %}
               <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" style="vertical-align:middle;">
@@ -578,20 +290,20 @@
             {{ item.data.category_emoji }} {{ item.data.get_category_display }}
           </span>
         </div>
-        <div class="kvibe-post-time">
+        <div class="mfy-post-time">
           {% if item.data.company %}<i class="fas fa-building" style="font-size:10px;margin-right:3px;opacity:.7;"></i>{{ item.data.company }}&nbsp;·&nbsp;{% endif %}
           {% if item.data.location %}<i class="fas fa-map-marker-alt" style="font-size:10px;margin-right:2px;opacity:.7;"></i>{{ item.data.location }}&nbsp;·&nbsp;{% endif %}
           <i class="fas fa-clock" style="font-size:10px;margin-right:2px;opacity:.7;"></i>{{ item.data.created_at|naturaltime }}
         </div>
       </div>
-      <a href="{% url 'job_vacancy' %}" class="kvibe-market-view-btn" title="View all jobs">
+      <a href="{% url 'job_vacancy' %}" class="mfy-market-view-btn" title="View all jobs">
         Jobs <i class="fas fa-arrow-right"></i>
       </a>
     </div>
 
     {% if item.data.cover_image %}
     <a href="{% url 'job_vacancy' %}" style="display:block;text-decoration:none;position:relative;">
-      <div class="kvibe-image-slide kvibe-market-img-slide" style="max-height:220px;overflow:hidden;">
+      <div class="mfy-image-slide mfy-market-img-slide" style="max-height:220px;overflow:hidden;">
         <img
           src="{{ item.data.cover_image.url }}"
           alt="{{ item.data.title }}"
@@ -601,26 +313,26 @@
           onerror="this.onerror=null;this.src='https://placehold.co/600x220/1a1a2e/ffffff?text=Job+Opening';"
         >
         {% if item.data.salary_range %}
-        <span class="kvibe-market-img-price" style="background:rgba(0,0,0,.65);">{{ item.data.salary_range }}</span>
+        <span class="mfy-market-img-price" style="background:rgba(0,0,0,.65);">{{ item.data.salary_range }}</span>
         {% endif %}
       </div>
     </a>
     {% endif %}
 
     <a href="{% url 'job_vacancy' %}" style="text-decoration:none;color:inherit;">
-      <div class="kvibe-post-content kvibe-market-post-content">
-        <div class="kvibe-market-feed-name" style="font-size:16px;">{{ item.data.title }}</div>
+      <div class="mfy-post-content mfy-market-post-content">
+        <div class="mfy-market-feed-name" style="font-size:16px;">{{ item.data.title }}</div>
         {% if item.data.description %}
-        <div class="kvibe-market-feed-desc">{{ item.data.description|truncatechars:140 }}</div>
+        <div class="mfy-market-feed-desc">{{ item.data.description|truncatechars:140 }}</div>
         {% endif %}
         {% if item.data.requirements %}
-        <div style="margin-top:6px;font-size:12px;color:var(--kvibe-text-secondary,#8e8e8e);">
+        <div style="margin-top:6px;font-size:12px;color:var(--mfy-text-secondary,#8e8e8e);">
           <i class="fas fa-list-check" style="margin-right:4px;"></i>{{ item.data.requirements|truncatechars:100 }}
         </div>
         {% endif %}
         {% if not item.data.cover_image and item.data.salary_range %}
         <div style="margin-top:8px;">
-          <span class="kvibe-market-avail-badge">
+          <span class="mfy-market-avail-badge">
             <i class="fas fa-money-bill-wave"></i> {{ item.data.salary_range }}
           </span>
         </div>
@@ -628,10 +340,10 @@
       </div>
     </a>
 
-    <div class="kvibe-market-contact-row">
+    <div class="mfy-market-contact-row">
       {% if request.user != item.data.posted_by %}
       <a href="{% url 'message' item.data.posted_by.username %}"
-         class="kvibe-market-contact-btn kvibe-market-contact-msg kvibe-dm-feed-msg"
+         class="mfy-market-contact-btn mfy-market-contact-msg mfy-dm-feed-msg"
          data-username="{{ item.data.posted_by.username }}"
          data-avatar="{{ item.data.posted_by|safe_pic_url }}"
          onclick="event.stopPropagation();">
@@ -639,8 +351,8 @@
       </a>
       {% endif %}
       <a href="{% url 'job_vacancy' %}"
-         class="kvibe-market-contact-btn"
-         style="background:var(--kvibe-border,#dbdbdb);color:var(--kvibe-text,#262626);"
+         class="mfy-market-contact-btn"
+         style="background:var(--mfy-border,#dbdbdb);color:var(--mfy-text,#262626);"
          onclick="event.stopPropagation();">
         <i class="fas fa-briefcase"></i> All Jobs
       </a>
@@ -653,9 +365,9 @@
 
   {% elif item.type == 'event' %}
   {# ── Social Event card ────────────────────────────────── #}
-  <article class="kvibe-post kvibe-market-post" data-event-id="{{ item.data.id }}">
+  <article class="mfy-post mfy-market-post" data-event-id="{{ item.data.id }}">
 
-    <div class="kvibe-repost-header kvibe-market-feed-label"
+    <div class="mfy-repost-header mfy-market-feed-label"
          style="background:linear-gradient(90deg,{{ item.data.type_color }},{{ item.data.type_color }}cc);">
       <i class="fas fa-calendar-star"></i>
       <span>Upcoming Event {{ item.data.type_emoji }}</span>
@@ -663,9 +375,9 @@
 
     {% if item.data.cover_image %}
     <div style="display:block;text-decoration:none;position:relative;cursor:zoom-in;"
-         onclick="event.stopPropagation(); kvibeDmLbOpen('{{ item.data.cover_image.url }}', 'image', '{{ item.data.date|date:"D, d M" }}{% if item.data.time %} · {{ item.data.time_display }}{% endif %}', '{{ item.data.title|escapejs }}', '{{ item.data.title|escapejs }}', '');"
+         onclick="event.stopPropagation(); mfyDmLbOpen('{{ item.data.cover_image.url }}', 'image', '{{ item.data.date|date:"D, d M" }}{% if item.data.time %} · {{ item.data.time_display }}{% endif %}', '{{ item.data.title|escapejs }}', '{{ item.data.title|escapejs }}', '');"
          title="View full image">
-      <div class="kvibe-image-slide kvibe-market-img-slide" style="max-height:220px;overflow:hidden;">
+      <div class="mfy-image-slide mfy-market-img-slide" style="max-height:220px;overflow:hidden;">
         <img
           src="{{ item.data.cover_image.url }}"
           alt="{{ item.data.title }}"
@@ -674,7 +386,7 @@
           style="width:100%;height:220px;object-fit:cover;transition:opacity 0.15s;"
           onerror="this.onerror=null;this.src='https://placehold.co/600x220/7c3aed/ffffff?text=Event';"
         >
-        <span class="kvibe-market-img-price"
+        <span class="mfy-market-img-price"
               style="background:{{ item.data.type_color }}dd;left:12px;right:auto;border-radius:8px;padding:4px 10px;">
           {{ item.data.date|date:"D, d M" }}{% if item.data.time %} · {{ item.data.time_display }}{% endif %}
         </span>
@@ -687,8 +399,8 @@
     {% endif %}
 
     <a href="{% url 'event_calendar' %}" style="text-decoration:none;color:inherit;">
-      <div class="kvibe-post-content kvibe-market-post-content">
-        <div class="kvibe-market-feed-name" style="font-size:16px;">{{ item.data.title }}</div>
+      <div class="mfy-post-content mfy-market-post-content">
+        <div class="mfy-market-feed-name" style="font-size:16px;">{{ item.data.title }}</div>
         {% if not item.data.cover_image %}
         <div style="margin-top:6px;font-size:13px;font-weight:600;color:{{ item.data.type_color }};">
           <i class="fas fa-calendar-day" style="margin-right:4px;"></i>
@@ -696,20 +408,20 @@
         </div>
         {% endif %}
         {% if item.data.location %}
-        <div style="font-size:12px;color:var(--kvibe-text-secondary,#8e8e8e);margin-top:4px;">
+        <div style="font-size:12px;color:var(--mfy-text-secondary,#8e8e8e);margin-top:4px;">
           <i class="fas fa-map-marker-alt" style="margin-right:4px;color:{{ item.data.type_color }};"></i>{{ item.data.location }}
         </div>
         {% endif %}
         {% if item.data.description %}
-        <div class="kvibe-market-feed-desc" style="margin-top:6px;">{{ item.data.description|truncatechars:140 }}</div>
+        <div class="mfy-market-feed-desc" style="margin-top:6px;">{{ item.data.description|truncatechars:140 }}</div>
         {% endif %}
       </div>
     </a>
 
-    <div class="kvibe-market-contact-row">
+    <div class="mfy-market-contact-row">
       {% if item.data.created_by and request.user != item.data.created_by %}
       <a href="{% url 'message' item.data.created_by.username %}"
-         class="kvibe-market-contact-btn kvibe-market-contact-msg kvibe-dm-feed-msg"
+         class="mfy-market-contact-btn mfy-market-contact-msg mfy-dm-feed-msg"
          style="background:{{ item.data.type_color }};"
          data-username="{{ item.data.created_by.username }}"
          data-avatar="{{ item.data.created_by|safe_pic_url }}"
@@ -718,8 +430,8 @@
       </a>
       {% endif %}
       <a href="{% url 'event_calendar' %}"
-         class="kvibe-market-contact-btn"
-         style="background:var(--kvibe-border,#dbdbdb);color:var(--kvibe-text,#262626);"
+         class="mfy-market-contact-btn"
+         style="background:var(--mfy-border,#dbdbdb);color:var(--mfy-text,#262626);"
          onclick="event.stopPropagation();">
         <i class="fas fa-calendar-check"></i> All Events
       </a>
@@ -735,17 +447,17 @@
 {% endfor %}
 
 {% if next_cursor %}
-<div id="kvibe-feed-sentinel"
+<div id="mfy-feed-sentinel"
      data-cursor="{{ next_cursor }}"
-     hx-get="{% url 'feed_load_more' %}?cursor={{ next_cursor }}"
+     hx-get="{% url 'feed_load_more' %}?cursor={{ next_cursor }}&market_category={{ selected_market_category|default:'all' }}"
      hx-trigger="intersect once threshold:0.1"
      hx-swap="outerHTML"
-     hx-indicator="#kvibe-feed-loader"
+     hx-indicator="#mfy-feed-loader"
      hx-push-url="false"
      style="height:20px;width:100%;display:block;">
 </div>
 {% else %}
-<div id="kvibe-feed-end" style="text-align:center;padding:32px 16px 48px;color:var(--kvibe-text-light);font-size:13px;">
+<div id="mfy-feed-end" style="text-align:center;padding:32px 16px 48px;color:var(--mfy-text-light);font-size:13px;">
   <i class="fas fa-check-circle" style="font-size:22px;margin-bottom:8px;display:block;opacity:0.4;"></i>
   You're all caught up ✨
 </div>

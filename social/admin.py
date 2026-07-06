@@ -1,14 +1,12 @@
 from django.contrib import admin
-from social.models import Profile, Post, PostImage,UserReport, PostComment,BlockedUser,LoginAttempt, Message, Notification, Channel, ChannelMessage, Market, MarketImage
+from social.models import Profile,UserReport, BlockedUser,LoginAttempt, Message, Channel, ChannelMessage, Market, MarketImage
 
 # Register your models here.
 
 admin.site.register(Profile)
-admin.site.register(Post)
-admin.site.register(PostImage)
-admin.site.register(PostComment)
+
+
 admin.site.register(Message)
-admin.site.register(Notification)
 admin.site.register(Channel)
 admin.site.register(ChannelMessage)
 admin.site.register(Market)

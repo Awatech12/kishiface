@@ -1,0 +1,465 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Edit {{ page.name }} | Marketfy</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        :root {
+            --mfy-primary: #0095f6;
+            --mfy-primary-dark: #0077d4;
+            --mfy-bg: #fafafa;
+            --mfy-white: #ffffff;
+            --mfy-text: #262626;
+            --mfy-text-light: #8e8e8e;
+            --mfy-border: #dbdbdb;
+            --mfy-error: #ed4956;
+            --mfy-success: #25d366;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--mfy-bg);
+            color: var(--mfy-text);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Sticky header ── */
+        .kbiz-header {
+            position: sticky; top: 0; z-index: 100;
+            height: 52px;
+            background: var(--mfy-white);
+            border-bottom: 1px solid var(--mfy-border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px;
+        }
+        .kbiz-header-title { font-size: 16px; font-weight: 700; }
+        .kbiz-header-back {
+            background: none; border: none; cursor: pointer;
+            font-size: 14px; color: var(--mfy-text); font-family: inherit;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .kbiz-header-save {
+            background: none; border: none; cursor: pointer;
+            font-size: 14px; font-weight: 700; color: var(--mfy-primary);
+            font-family: inherit;
+        }
+
+        /* ── Cover photo ── */
+        .kbiz-cover-area {
+            position: relative;
+            height: 160px;
+            background: linear-gradient(135deg, #0095f6 0%, #33aaff 100%);
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .kbiz-cover-area img { width: 100%; height: 100%; object-fit: cover; }
+        .kbiz-cover-overlay {
+            position: absolute; inset: 0;
+            background: rgba(0,0,0,0.30);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            color: #fff; gap: 6px;
+            font-size: 13px; font-weight: 600;
+        }
+
+        /* ── Logo ── */
+        .kbiz-logo-wrap {
+            position: absolute;
+            bottom: -36px; left: 20px;
+            width: 72px; height: 72px;
+            border-radius: 14px;
+            border: 3px solid var(--mfy-white);
+            background: #e5e5e5;
+            cursor: pointer; overflow: hidden;
+        }
+        .kbiz-logo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .kbiz-logo-placeholder {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px; color: var(--mfy-text-light);
+            background: var(--mfy-primary); border-radius: 11px;
+        }
+        .kbiz-logo-placeholder i { color: #fff; }
+
+        /* ── Form body ── */
+        .kbiz-form-body { padding: 52px 16px 40px; max-width: 600px; margin: 0 auto; }
+
+        .kbiz-field { margin-bottom: 16px; }
+        .kbiz-label {
+            display: block; font-size: 12px; font-weight: 600;
+            color: var(--mfy-text-light); text-transform: uppercase;
+            letter-spacing: .04em; margin-bottom: 6px;
+        }
+        .kbiz-label i { margin-right: 4px; }
+        .kbiz-input, .kbiz-select, .kbiz-textarea {
+            width: 100%;
+            border: 1.5px solid var(--mfy-border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 15px;
+            font-family: inherit;
+            color: var(--mfy-text);
+            background: var(--mfy-white);
+            outline: none;
+            transition: border-color .2s;
+        }
+        .kbiz-input:focus, .kbiz-select:focus, .kbiz-textarea:focus {
+            border-color: var(--mfy-primary);
+        }
+        .kbiz-textarea { min-height: 90px; resize: vertical; }
+        .kbiz-field-hint { font-size: 11px; color: var(--mfy-text-light); margin-top: 4px; }
+        .kbiz-field-error { font-size: 12px; color: var(--mfy-error); margin-top: 4px; }
+
+        .kbiz-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        /* ── Section divider ── */
+        .kbiz-section-title {
+            font-size: 13px; font-weight: 700; color: var(--mfy-text-light);
+            text-transform: uppercase; letter-spacing: .05em;
+            margin: 24px 0 14px;
+            border-top: 1px solid var(--mfy-border);
+            padding-top: 16px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .kbiz-section-title i { font-size: 14px; }
+
+        /* ── Danger zone ── */
+        .kbiz-danger-zone {
+            margin-top: 32px;
+            border: 1.5px solid #fca5a5;
+            border-radius: 12px;
+            padding: 16px;
+            background: #fff5f5;
+        }
+        .kbiz-danger-title {
+            font-size: 13px; font-weight: 700; color: var(--mfy-error);
+            text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px;
+        }
+        .kbiz-danger-desc { font-size: 13px; color: var(--mfy-text-light); margin-bottom: 12px; line-height: 1.5; }
+        .kbiz-danger-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 9px 16px; background: none;
+            border: 1.5px solid var(--mfy-error); border-radius: 8px;
+            color: var(--mfy-error); font-size: 13px; font-weight: 700;
+            font-family: inherit; cursor: pointer;
+        }
+
+        /* ── Submit button ── */
+        .kbiz-submit-btn {
+            width: 100%; margin-top: 24px;
+            padding: 15px;
+            background: var(--mfy-primary);
+            color: #fff;
+            border: none; border-radius: 12px;
+            font-size: 16px; font-weight: 700; font-family: inherit;
+            cursor: pointer; transition: background .2s;
+        }
+        .kbiz-submit-btn:hover { background: var(--mfy-primary-dark); }
+        .kbiz-submit-btn:disabled { background: #fbbf84; cursor: not-allowed; }
+
+        /* ── Toast ── */
+        .kbiz-toast {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            background: #1a1a1a; color: #fff; padding: 10px 18px;
+            border-radius: 20px; font-size: 13px; font-weight: 600;
+            opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 999;
+            white-space: nowrap;
+        }
+        .kbiz-toast.show { opacity: 1; }
+
+        /* ── Django messages banner ── */
+        .kbiz-alert {
+            margin: 12px 16px 0;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 14px; font-weight: 600;
+        }
+        .kbiz-alert.success { background: #ecfdf5; color: #065f46; border: 1px solid #6ee7b7; }
+        .kbiz-alert.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+    </style>
+</head>
+<body>
+
+<form id="bizEditForm" method="post" enctype="multipart/form-data"
+      action="{% url 'business_page_edit' slug=page.slug %}">
+{% csrf_token %}
+
+<!-- ── Header ── -->
+<header class="kbiz-header">
+    <button type="button" class="kbiz-header-back"
+            onclick="window.location.href='{% url 'business_page_detail' slug=page.slug %}'">
+        <i class="fas fa-arrow-left"></i> Back
+    </button>
+    <span class="kbiz-header-title">Edit Page</span>
+    <button type="submit" class="kbiz-header-save" id="headerSaveBtn">Save</button>
+</header>
+
+<!-- ── Django messages ── -->
+{% if messages %}
+    {% for msg in messages %}
+    <div class="kbiz-alert {{ msg.tags }}">{{ msg }}</div>
+    {% endfor %}
+{% endif %}
+
+<!-- ── Cover photo (click to change) ── -->
+<div class="kbiz-cover-area" onclick="document.getElementById('coverInput').click()" id="coverArea">
+    {% if page.get_cover_url %}
+    <img id="coverPreview" src="{{ page.get_cover_url }}" alt="Cover photo">
+    {% else %}
+    <img id="coverPreview" src="" style="display:none;">
+    {% endif %}
+    <div class="kbiz-cover-overlay" id="coverOverlay">
+        <i class="fas fa-camera fa-lg"></i>
+        <span>Change Cover Photo</span>
+    </div>
+
+    <!-- Logo overlapping cover (click separately) -->
+    <div class="kbiz-logo-wrap"
+         onclick="event.stopPropagation(); document.getElementById('logoInput').click();">
+        {% if page.get_logo_url %}
+        <img id="logoPreview" src="{{ page.get_logo_url }}" alt="Logo">
+        <div class="kbiz-logo-placeholder" id="logoPlaceholder" style="display:none;">
+            <i class="fas fa-store"></i>
+        </div>
+        {% else %}
+        <img id="logoPreview" src="" style="display:none;">
+        <div class="kbiz-logo-placeholder" id="logoPlaceholder">
+            <i class="fas fa-store"></i>
+        </div>
+        {% endif %}
+    </div>
+</div>
+<input type="file" id="coverInput" name="cover_photo" accept="image/*" style="display:none;">
+<input type="file" id="logoInput"  name="logo"        accept="image/*" style="display:none;">
+
+<!-- ── Form fields ── -->
+<div class="kbiz-form-body">
+
+    <!-- Basic info -->
+    <div class="kbiz-field">
+        <label class="kbiz-label">Business Name *</label>
+        <input class="kbiz-input" name="name" type="text"
+               placeholder="e.g. Remi's Boutique"
+               value="{{ page.name }}" maxlength="150" required>
+    </div>
+
+    <div class="kbiz-field">
+        <label class="kbiz-label">Category *</label>
+        <select class="kbiz-select" name="category">
+            {% for val, label in categories %}
+            <option value="{{ val }}" {% if page.category == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="kbiz-field">
+        <label class="kbiz-label">Tagline</label>
+        <input class="kbiz-input" name="tagline" type="text"
+               placeholder="Short catchy description…"
+               value="{{ page.tagline }}" maxlength="200">
+    </div>
+
+    <div class="kbiz-field">
+        <label class="kbiz-label">About Your Business</label>
+        <textarea class="kbiz-textarea" name="description"
+                  placeholder="Tell people what your business does…">{{ page.description }}</textarea>
+    </div>
+
+    <!-- Contact & Location -->
+    <p class="kbiz-section-title">
+        <i class="fas fa-map-marker-alt" style="color:var(--mfy-primary)"></i>
+        Contact &amp; Location
+    </p>
+
+    <div class="kbiz-field">
+        <label class="kbiz-label">Location</label>
+        <input class="kbiz-input" name="location" type="text"
+               placeholder="e.g. Kishi, Oyo State"
+               value="{{ page.location }}" maxlength="200">
+    </div>
+
+    <div class="kbiz-row-2">
+        <div class="kbiz-field">
+            <label class="kbiz-label">
+                <i class="fab fa-whatsapp" style="color:#25d366"></i> WhatsApp
+            </label>
+            <input class="kbiz-input" name="whatsapp" type="tel"
+                   placeholder="e.g. 08123456789"
+                   value="{{ page.whatsapp }}">
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">
+                <i class="fas fa-phone" style="color:#059669"></i> Phone
+            </label>
+            <input class="kbiz-input" name="phone" type="tel"
+                   placeholder="e.g. 08012345678"
+                   value="{{ page.phone }}">
+        </div>
+    </div>
+
+    <div class="kbiz-row-2">
+        <div class="kbiz-field">
+            <label class="kbiz-label">
+                <i class="fas fa-envelope" style="color:#6366f1"></i> Email
+            </label>
+            <input class="kbiz-input" name="email" type="email"
+                   placeholder="contact@mybiz.com"
+                   value="{{ page.email }}">
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">
+                <i class="fas fa-globe" style="color:#0ea5e9"></i> Website
+            </label>
+            <input class="kbiz-input" name="website" type="url"
+                   placeholder="https://yourbusiness.com"
+                   value="{{ page.website }}">
+        </div>
+    </div>
+
+    <!-- Social Media -->
+    <p class="kbiz-section-title">
+        <i class="fas fa-share-alt" style="color:var(--mfy-primary)"></i>
+        Social Media
+    </p>
+
+    <div class="kbiz-row-2">
+        <div class="kbiz-field">
+            <label class="kbiz-label">
+                <i class="fab fa-instagram" style="color:#e1306c"></i> Instagram
+            </label>
+            <input class="kbiz-input" name="instagram" type="text"
+                   placeholder="@yourbusiness"
+                   value="{{ page.instagram }}" maxlength="100">
+            <div class="kbiz-field-hint">Handle only, e.g. mybusiness</div>
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">
+                <i class="fab fa-x-twitter" style="color:#1da1f2"></i> X / Twitter
+            </label>
+            <input class="kbiz-input" name="twitter" type="text"
+                   placeholder="@handle"
+                   value="{{ page.twitter }}" maxlength="100">
+            <div class="kbiz-field-hint">Handle only, e.g. mybusiness</div>
+        </div>
+    </div>
+
+    <div class="kbiz-row-2">
+        <div class="kbiz-field">
+            <label class="kbiz-label">
+                <i class="fab fa-facebook" style="color:#1877f2"></i> Facebook
+            </label>
+            <input class="kbiz-input" name="facebook" type="url"
+                   placeholder="https://facebook.com/yourpage"
+                   value="{{ page.facebook }}" maxlength="300">
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">
+                <i class="fab fa-tiktok"></i> TikTok
+            </label>
+            <input class="kbiz-input" name="tiktok" type="text"
+                   placeholder="@username"
+                   value="{{ page.tiktok }}" maxlength="100">
+            <div class="kbiz-field-hint">Handle only, e.g. mybusiness</div>
+        </div>
+    </div>
+
+    <div class="kbiz-field">
+        <label class="kbiz-label">
+            <i class="fab fa-youtube" style="color:#ff0000"></i> YouTube Channel
+        </label>
+        <input class="kbiz-input" name="youtube" type="url"
+               placeholder="https://youtube.com/@yourchannel"
+               value="{{ page.youtube }}" maxlength="300">
+    </div>
+
+    <!-- Save button -->
+    <button type="submit" class="kbiz-submit-btn" id="bizSubmitBtn">
+        <i class="fas fa-check"></i> Save Changes
+    </button>
+
+    <!-- Danger zone -->
+    <div class="kbiz-danger-zone">
+        <div class="kbiz-danger-title"><i class="fas fa-exclamation-triangle"></i> Danger Zone</div>
+        <div class="kbiz-danger-desc">
+            Deactivating your page will hide it from everyone. You can reactivate it later by contacting support.
+        </div>
+        <button type="button" class="kbiz-danger-btn" onclick="confirmDeactivate()">
+            <i class="fas fa-eye-slash"></i> Deactivate Page
+        </button>
+    </div>
+
+</div><!-- /kbiz-form-body -->
+</form>
+
+<div class="kbiz-toast" id="toast"></div>
+ {% include 'footer.html' %}
+<script>
+// ── Toast helper ──────────────────────────────────────────────────────────────
+function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── Cover photo preview ───────────────────────────────────────────────────────
+document.getElementById('coverInput').addEventListener('change', function () {
+    if (!this.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = document.getElementById('coverPreview');
+        img.src = e.target.result;
+        img.style.display = 'block';
+        // Keep overlay visible but darken it slightly
+        document.getElementById('coverOverlay').style.background = 'rgba(0,0,0,0.38)';
+    };
+    reader.readAsDataURL(this.files[0]);
+    toast('Cover photo selected — save to apply.');
+});
+
+// ── Logo preview ──────────────────────────────────────────────────────────────
+document.getElementById('logoInput').addEventListener('change', function () {
+    if (!this.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = document.getElementById('logoPreview');
+        img.src = e.target.result;
+        img.style.display = 'block';
+        document.getElementById('logoPlaceholder').style.display = 'none';
+    };
+    reader.readAsDataURL(this.files[0]);
+    toast('Logo selected — save to apply.');
+});
+
+// ── Prevent double submit ─────────────────────────────────────────────────────
+document.getElementById('bizEditForm').addEventListener('submit', function () {
+    const btn  = document.getElementById('bizSubmitBtn');
+    const hBtn = document.getElementById('headerSaveBtn');
+    btn.disabled  = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+    hBtn.disabled = true;
+    hBtn.textContent = 'Saving…';
+});
+
+// ── Deactivate confirmation ───────────────────────────────────────────────────
+function confirmDeactivate() {
+    if (confirm('Are you sure you want to deactivate "{{ page.name }}"?\nIt will be hidden from all users.')) {
+        // POST to the deactivate endpoint if you have one, or just show a toast for now
+        toast('Contact support to deactivate this page.');
+    }
+}
+
+// ── Auto-dismiss Django messages after 4 s ────────────────────────────────────
+document.querySelectorAll('.kbiz-alert').forEach(el => {
+    setTimeout(() => {
+        el.style.transition = 'opacity .4s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 400);
+    }, 4000);
+});
+</script>
+</body>
+</html>

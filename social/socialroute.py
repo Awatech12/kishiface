@@ -2,14 +2,12 @@
 from django.urls import re_path
 from .consumers.channelConsumer import ChannelConsumer, UserConsumer
 from .consumers.message import DirectMessageConsumer
-from .consumers.notification import NotificationConsumer
 from .consumers.onlineConsumer import OnlineStatusConsumer
 from .consumers.inbox_consumer import InboxConsumer
 from .consumers.postvibe_consumer import PostVibeConsumer
 
 websocket_urlpatterns = [
     re_path(r'ws/message/(?P<username>[\w.@+-]+)/$', DirectMessageConsumer.as_asgi()),
-    re_path(r'ws/notification/$', NotificationConsumer.as_asgi()),
     re_path(r'ws/online-status/$', OnlineStatusConsumer.as_asgi()),
     re_path(r'ws/inbox/$', InboxConsumer.as_asgi()),
     re_path(r'ws/post_vibes/(?P<post_id>[0-9a-f-]+)/$', PostVibeConsumer.as_asgi()),

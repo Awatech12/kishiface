@@ -50,6 +50,74 @@
             margin-bottom: 16px;
         }
 
+        /* ── Business Page banner ── */
+        .kf-biz-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--kf-text);
+            background: #f8faff;
+            border: 1px solid #dbeafe;
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .kf-biz-banner:hover { background: #eff6ff; border-color: #bfdbfe; }
+
+        .kf-biz-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            object-fit: cover;
+            border: 1px solid var(--kf-border);
+            flex-shrink: 0;
+            background: #fff;
+        }
+
+        .kf-biz-banner-info { flex: 1; min-width: 0; }
+
+        .kf-biz-banner-name {
+            font-size: 15px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .kf-biz-banner-sub {
+            font-size: 12px;
+            color: var(--kf-muted);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .kf-biz-visit-btn {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--kf-primary);
+            background: #fff;
+            border: 1px solid #bfdbfe;
+            border-radius: 20px;
+            padding: 6px 12px;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 480px) {
+            .kf-biz-visit-btn span { display: none; }
+            .kf-biz-banner-sub { font-size: 11px; }
+        }
+
         /* ── Main card ── */
         .kf-product-card {
             display: flex;
@@ -191,6 +259,13 @@
         .kf-badge-avail     { background: var(--kf-secondary-bg); color: var(--kf-muted); border: 1px solid var(--kf-border); }
 
         /* Title & price */
+        .kf-title-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
         .kf-product-title {
             font-size: 20px;
             font-weight: 700;
@@ -203,6 +278,37 @@
             font-weight: 800;
             color: var(--kf-primary);
             margin-bottom: 14px;
+        }
+
+        /* Wishlist / save button */
+        .kf-wishlist-btn {
+            flex-shrink: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid var(--kf-border);
+            background: var(--kf-bg);
+            color: var(--kf-muted);
+            font-size: 17px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+        .kf-wishlist-btn:hover  { border-color: var(--kf-danger); color: var(--kf-danger); }
+        .kf-wishlist-btn:active { transform: scale(0.9); }
+        .kf-wishlist-btn.saved  {
+            background: var(--kf-danger);
+            border-color: var(--kf-danger);
+            color: #fff;
+        }
+        .kf-wishlist-btn.saved i { font-weight: 900; }
+        .kf-wishlist-btn.pulse  { animation: kfHeartPulse 0.35s ease; }
+        @keyframes kfHeartPulse {
+            0%   { transform: scale(1); }
+            40%  { transform: scale(1.25); }
+            100% { transform: scale(1); }
         }
 
         /* Description */
@@ -890,9 +996,34 @@
 {% include 'header.html' %}
 
 <div class="kf-container">
-    <a href="{% url 'market' %}" class="kf-back-link">
-        <i class="fas fa-chevron-left"></i> Back to Ads
-    </a>
+    {% if business_page %}
+        <a href="{% url 'business_page_detail' business_page.slug %}" class="kf-back-link" style="margin-bottom:12px;">
+            <i class="fas fa-chevron-left"></i> Back to {{ business_page.name }}
+        </a>
+
+        <!-- ══ Business Page Banner ══ -->
+        <a href="{% url 'business_page_detail' business_page.slug %}" class="kf-biz-banner">
+            <img src="{% if business_page.get_logo_url %}{{ business_page.get_logo_url }}{% else %}https://placehold.co/56x56/f97316/ffffff?text=B{% endif %}"
+                 class="kf-biz-logo" alt="{{ business_page.name }} logo">
+            <div class="kf-biz-banner-info">
+                <div class="kf-biz-banner-name">
+                    {{ business_page.name }}
+                    {% if business_page.is_verified %}
+                        <i class="fas fa-circle-check" style="color: var(--kf-primary); font-size: 13px;"></i>
+                    {% endif %}
+                </div>
+                <div class="kf-biz-banner-sub">
+                    {% if business_page.tagline %}{{ business_page.tagline }}{% else %}{{ business_page.get_category_display }}{% endif %}
+                    &nbsp;·&nbsp; {{ business_page.follower_count }} follower{{ business_page.follower_count|pluralize }}
+                </div>
+            </div>
+            <span class="kf-biz-visit-btn"><span>Visit Page</span> <i class="fas fa-chevron-right" style="font-size:10px;"></i></span>
+        </a>
+    {% else %}
+        <a href="{% url 'market' %}" class="kf-back-link">
+            <i class="fas fa-chevron-left"></i> Back to Ads
+        </a>
+    {% endif %}
 
     <div class="kf-product-card">
 
@@ -945,6 +1076,13 @@
                         <i class="fas fa-store" style="font-size:10px;"></i>
                         {{ product.product_owner.products.count }} listing{{ product.product_owner.products.count|pluralize }}
                     </div>
+                    {% if business_page %}
+                        <div class="kf-seller-sub" style="margin-top:2px;">
+                            <i class="fas fa-shop" style="font-size:10px;"></i>
+                            Listed by
+                            <a href="{% url 'business_page_detail' business_page.slug %}" style="color: var(--kf-primary); font-weight:600; text-decoration:none;">{{ business_page.name }}</a>
+                        </div>
+                    {% endif %}
                 </div>
                 {% if request.user == product.product_owner %}
                     <!-- Owner options trigger -->
@@ -972,7 +1110,7 @@
                     {% endif %}
 
                     {% if product.product_category %}
-                        <span class="kf-badge kf-badge-category"><i class="fas fa-tag"></i> {{ product.product_category }}</span>
+                        <span class="kf-badge kf-badge-category">{{ product.category_icon }} {{ product.category_label }}</span>
                     {% endif %}
 
                     {% if product.product_availability %}
@@ -981,7 +1119,20 @@
                 </div>
 
                 <!-- Title & Price -->
-                <h1 class="kf-product-title" id="kfPageTitle">{{ product.product_name }}</h1>
+                <div class="kf-title-row">
+                    <h1 class="kf-product-title" id="kfPageTitle">{{ product.product_name }}</h1>
+                    {% if request.user != product.product_owner %}
+                        <button type="button"
+                                class="kf-wishlist-btn {% if in_wishlist %}saved{% endif %}"
+                                id="kfWishlistBtn"
+                                data-product-id="{{ product.product_id }}"
+                                onclick="toggleKfWishlist(this)"
+                                aria-pressed="{% if in_wishlist %}true{% else %}false{% endif %}"
+                                aria-label="Save for later">
+                            <i class="fa-heart {% if in_wishlist %}fas{% else %}far{% endif %}"></i>
+                        </button>
+                    {% endif %}
+                </div>
                 <div class="kf-price-tag" id="kfPagePrice">₦{{ product.product_price|intcomma }}</div>
 
                 <!-- Description -->
@@ -1030,10 +1181,11 @@
                             </a>
                         {% endif %}
 
-                        <a href="{% url 'message' product.product_owner.username %}"
-                           class="kf-contact-btn kf-contact-btn-msg">
+                        <button type="button"
+                                onclick="kfOpenDmModal()"
+                                class="kf-contact-btn kf-contact-btn-msg">
                             <i class="fas fa-paper-plane"></i> Send Message on KishiHub
-                        </a>
+                        </button>
 
                         {% if product.email %}
                             <a href="mailto:{{ product.email }}?subject=Enquiry: {{ product.product_name }}"
@@ -1205,10 +1357,11 @@
                 <i class="fab fa-whatsapp"></i> WhatsApp
             </a>
         {% endif %}
-        <a href="{% url 'message' product.product_owner.username %}"
-           class="kf-contact-btn kf-contact-btn-msg" style="flex:1; margin-bottom:0;">
+        <button type="button"
+                onclick="kfOpenDmModal()"
+                class="kf-contact-btn kf-contact-btn-msg" style="flex:1; margin-bottom:0;">
             <i class="fas fa-paper-plane"></i> Message
-        </a>
+        </button>
     {% else %}
         <!-- Owner mobile bar: Edit + Delete -->
         <button onclick="openEditModal()" class="kf-contact-btn kf-contact-btn-msg" style="flex:1; margin-bottom:0;">
@@ -1326,11 +1479,9 @@
             <div class="kf-edit-row">
                 <label class="kf-edit-label">Category</label>
                 <select id="kfEditCategory" class="kf-edit-select">
-                    <option value="Phones"      {% if product.product_category == 'Phones' %}selected{% endif %}>Phones & Tablets</option>
-                    <option value="Electronics" {% if product.product_category == 'Electronics' %}selected{% endif %}>Electronics</option>
-                    <option value="Fashion"     {% if product.product_category == 'Fashion' %}selected{% endif %}>Clothing & Fashion</option>
-                    <option value="Properties"  {% if product.product_category == 'Properties' %}selected{% endif %}>Properties</option>
-                    <option value="Others"      {% if product.product_category == 'Others' %}selected{% endif %}>Others</option>
+                    {% for cat_key, cat_label in all_categories %}
+                    <option value="{{ cat_key }}" {% if product.product_category == cat_key %}selected{% endif %}>{{ cat_label }}</option>
+                    {% endfor %}
                 </select>
                 <i class="fas fa-chevron-right" style="color:#c7c7c7;font-size:12px;margin-left:6px;flex-shrink:0;"></i>
             </div>
@@ -1417,6 +1568,35 @@
             .map(c => c.trim())
             .find(c => c.startsWith('csrftoken='))
             ?.split('=')[1] || '';
+    }
+
+    // ── Wishlist toggle (save for later) ──
+    async function toggleKfWishlist(btn) {
+        if (btn.disabled) return;
+        const productId = btn.dataset.productId;
+        btn.disabled = true;
+        try {
+            const res = await fetch(`/product/${productId}/wishlist/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrf(), 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!res.ok) throw new Error('Request failed');
+            const data = await res.json();
+
+            const icon = btn.querySelector('i');
+            btn.classList.toggle('saved', data.saved);
+            btn.setAttribute('aria-pressed', data.saved ? 'true' : 'false');
+            if (icon) icon.classList.toggle('fas', data.saved);
+            if (icon) icon.classList.toggle('far', !data.saved);
+
+            btn.classList.remove('pulse');
+            void btn.offsetWidth; // restart animation
+            btn.classList.add('pulse');
+        } catch (err) {
+            console.error('Wishlist toggle failed:', err);
+        } finally {
+            btn.disabled = false;
+        }
     }
 
     // ── Safety tips toggle ──
@@ -1649,6 +1829,336 @@
             btn.textContent = 'Yes, Delete Listing';
         }
     }
+</script>
+
+<!-- ══════════════════════════════════════
+     DM COMPOSER MODAL  (KishiHub-style)
+══════════════════════════════════════ -->
+<style>
+    /* ── DM modal backdrop ── */
+    #kfDmModal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.62);
+        z-index: 6000;
+        align-items: flex-end;
+        justify-content: center;
+    }
+    @media (min-width: 600px) {
+        #kfDmModal { align-items: center; }
+    }
+
+    /* ── sheet ── */
+    .kf-dm-sheet {
+        background: #fff;
+        border-radius: 20px 20px 0 0;
+        width: 100%;
+        max-width: 520px;
+        display: flex;
+        flex-direction: column;
+        animation: kfSheetUp 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+        overflow: hidden;
+        max-height: 92dvh;
+    }
+    @media (min-width: 600px) {
+        .kf-dm-sheet { border-radius: 16px; max-height: 82vh; }
+    }
+
+    /* ── header ── */
+    .kf-dm-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--kf-border);
+        flex-shrink: 0;
+    }
+    .kf-dm-avatar {
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid var(--kf-border);
+        flex-shrink: 0;
+    }
+    .kf-dm-to-info { flex: 1; min-width: 0; }
+    .kf-dm-to-label {
+        font-size: 11px; font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--kf-muted);
+    }
+    .kf-dm-to-name {
+        font-size: 14px; font-weight: 700;
+        color: var(--kf-text);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kf-dm-close {
+        background: none; border: none;
+        font-size: 18px; color: var(--kf-muted);
+        cursor: pointer; padding: 4px 8px;
+        border-radius: 6px;
+        transition: background 0.15s;
+        flex-shrink: 0;
+    }
+    .kf-dm-close:hover { background: var(--kf-secondary-bg); }
+
+    /* ── product tag card ── */
+    .kf-dm-product-tag {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 12px 14px 4px;
+        background: #f0f9ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        padding: 9px 12px;
+        flex-shrink: 0;
+    }
+    .kf-dm-product-thumb {
+        width: 44px; height: 44px;
+        border-radius: 7px;
+        object-fit: cover;
+        flex-shrink: 0;
+        border: 1px solid #e0f0ff;
+        background: #e8f4ff;
+    }
+    .kf-dm-product-meta { flex: 1; min-width: 0; }
+    .kf-dm-product-name {
+        font-size: 13px; font-weight: 700;
+        color: var(--kf-text);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kf-dm-product-price {
+        font-size: 12px; font-weight: 600;
+        color: var(--kf-primary);
+        margin-top: 1px;
+    }
+    .kf-dm-product-label {
+        font-size: 10px; color: var(--kf-muted); margin-top: 1px;
+        display: flex; align-items: center; gap: 4px;
+    }
+
+    /* ── textarea ── */
+    .kf-dm-body { flex: 1; overflow-y: auto; padding: 10px 14px; }
+    .kf-dm-textarea {
+        width: 100%; min-height: 110px;
+        border: 1.5px solid var(--kf-border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 14px; line-height: 1.55;
+        font-family: inherit;
+        color: var(--kf-text);
+        resize: none;
+        outline: none;
+        transition: border-color 0.2s;
+        background: var(--kf-secondary-bg);
+    }
+    .kf-dm-textarea:focus { border-color: var(--kf-primary); background: #fff; }
+    .kf-dm-char-count {
+        font-size: 11px; color: var(--kf-muted);
+        text-align: right; margin-top: 4px;
+    }
+    .kf-dm-char-count.over { color: var(--kf-danger); }
+
+    /* ── footer ── */
+    .kf-dm-footer {
+        padding: 12px 14px;
+        border-top: 1px solid var(--kf-border);
+        display: flex; gap: 10px; align-items: center;
+        flex-shrink: 0;
+    }
+    .kf-dm-hint {
+        flex: 1; font-size: 11px; color: var(--kf-muted); line-height: 1.4;
+        display: flex; align-items: center; gap: 5px;
+    }
+    .kf-dm-send-btn {
+        padding: 10px 20px;
+        border-radius: 10px;
+        background: var(--kf-primary);
+        color: #fff; font-size: 14px; font-weight: 700;
+        border: none; cursor: pointer;
+        display: flex; align-items: center; gap: 7px;
+        transition: opacity 0.15s;
+        flex-shrink: 0;
+    }
+    .kf-dm-send-btn:hover { opacity: 0.88; }
+    .kf-dm-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+
+<div id="kfDmModal" onclick="kfCloseDmModal()">
+    <div class="kf-dm-sheet" onclick="event.stopPropagation()">
+
+        <!-- Header: To: seller -->
+        <div class="kf-dm-header">
+            <img id="kfDmAvatar"
+                 src="{{ seller.picture.url }}"
+                 class="kf-dm-avatar"
+                 alt="{{ product.product_owner.username }}"
+                 onerror="this.src='https://placehold.co/36x36/dbdbdb/8e8e8e?text=U';">
+            <div class="kf-dm-to-info">
+                <div class="kf-dm-to-label">Send message to</div>
+                <div class="kf-dm-to-name">
+                    {{ product.product_owner.get_full_name|default:product.product_owner.username }}
+                    {% if seller.is_verify %}<i class="fas fa-circle-check" style="color:var(--kf-primary);font-size:12px;"></i>{% endif %}
+                </div>
+            </div>
+            <button class="kf-dm-close" onclick="kfCloseDmModal()" aria-label="Close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Product tag card -->
+        <div class="kf-dm-product-tag">
+            {% with first=product.images.first %}
+            <img class="kf-dm-product-thumb"
+                 src="{% if first %}{{ first.product_image.url }}{% else %}https://placehold.co/44x44/f4f4f4/aaa?text=Ad{% endif %}"
+                 alt="{{ product.product_name }}"
+                 onerror="this.src='https://placehold.co/44x44/f4f4f4/aaa?text=Ad';">
+            {% endwith %}
+            <div class="kf-dm-product-meta">
+                <div class="kf-dm-product-name">{{ product.product_name }}</div>
+                <div class="kf-dm-product-price">₦{{ product.product_price|intcomma }}</div>
+                <div class="kf-dm-product-label">
+                    <i class="fas fa-tag"></i> {{ product.category_label }}
+                    {% if product.product_condition %}&nbsp;·&nbsp;{{ product.product_condition }}{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Message body -->
+        <div class="kf-dm-body">
+            <textarea id="kfDmText"
+                      class="kf-dm-textarea"
+                      maxlength="1000"
+                      placeholder="Write your message… e.g. asking about availability, price, or to arrange viewing."
+                      oninput="kfDmCharCount(this)"></textarea>
+            <div class="kf-dm-char-count" id="kfDmCharCount">0 / 1000</div>
+        </div>
+
+        <!-- Footer -->
+        <div class="kf-dm-footer">
+            <div class="kf-dm-hint">
+                <i class="fas fa-shield-alt" style="color:var(--kf-primary);flex-shrink:0;"></i>
+                Messages are kept on KishiHub for your safety.
+            </div>
+            <button class="kf-dm-send-btn" id="kfDmSendBtn" onclick="kfSendDm()">
+                <i class="fas fa-paper-plane"></i> Send
+                <span class="kf-spinner" id="kfDmSpinner"></span>
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // ── DM MODAL ──────────────────────────────────────────────────────────────
+
+    const _kfDmProductName  = '{{ product.product_name|escapejs }}';
+    const _kfDmProductPrice = '₦{{ product.product_price|intcomma }}';
+    const _kfDmProductUrl   = '{{ request.build_absolute_uri }}';
+    const _kfDmProductId    = '{{ product.product_id }}';
+
+    function kfOpenDmModal() {
+        const modal = document.getElementById('kfDmModal');
+        if (!modal) return;
+
+        // Pre-fill textarea with product context
+        const ta = document.getElementById('kfDmText');
+        if (ta && !ta.value.trim()) {
+            ta.value =
+                'Hi! I\'m interested in your listing:\n' +
+                '📦 ' + _kfDmProductName + '\n' +
+                '💰 ' + _kfDmProductPrice + '\n' +
+                '🔗 ' + _kfDmProductUrl + '\n\n' +
+                'Is this still available?';
+            kfDmCharCount(ta);
+            // Move cursor to end so user can type after the tag
+            setTimeout(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; }, 80);
+        }
+
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function kfCloseDmModal() {
+        const modal = document.getElementById('kfDmModal');
+        if (!modal) return;
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    function kfDmCharCount(ta) {
+        const count = ta.value.length;
+        const el = document.getElementById('kfDmCharCount');
+        if (!el) return;
+        el.textContent = count + ' / 1000';
+        el.classList.toggle('over', count >= 950);
+    }
+
+    async function kfSendDm() {
+        const ta  = document.getElementById('kfDmText');
+        const btn = document.getElementById('kfDmSendBtn');
+        const sp  = document.getElementById('kfDmSpinner');
+        const msg = ta ? ta.value.trim() : '';
+
+        if (!msg) {
+            showToast('⚠️ Please write a message first.', '#e03131');
+            ta && ta.focus();
+            return;
+        }
+
+        btn.disabled = true;
+        if (sp) sp.style.display = 'inline-block';
+
+        try {
+            const fd = new FormData();
+            fd.append('message',     msg);
+            fd.append('product_id',  _kfDmProductId);
+            fd.append('product_tag', '1');  // signals this came from product page
+
+            const res = await fetch('{% url "contact_seller" product.product_id %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken':     getCsrf(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: fd,
+            });
+
+            // contact_seller may redirect (302) or return JSON
+            if (res.redirected) {
+                // Success — follow through to conversation
+                kfCloseDmModal();
+                showToast('✅ Message sent! Opening conversation…', '#0095f6');
+                setTimeout(() => { window.location.href = res.url; }, 900);
+                return;
+            }
+
+            let data = {};
+            try { data = await res.json(); } catch (_) {}
+
+            if (res.ok || data.success) {
+                kfCloseDmModal();
+                showToast('✅ Message sent!', '#0095f6');
+                if (data.redirect_url) {
+                    setTimeout(() => { window.location.href = data.redirect_url; }, 900);
+                }
+            } else {
+                showToast('⚠️ ' + (data.error || 'Could not send. Try again.'), '#e03131');
+            }
+        } catch (_) {
+            showToast('⚠️ Network error. Please try again.', '#e03131');
+        } finally {
+            btn.disabled = false;
+            if (sp) sp.style.display = 'none';
+        }
+    }
+
+    // Close on Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') kfCloseDmModal();
+    });
 </script>
 </body>
 </html>

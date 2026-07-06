@@ -1,5 +1,6 @@
 {% load pwa %}
 {% load static %}
+{% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,23 +13,25 @@
   {% progressive_web_app_meta %}
   <script src="{% static 'js/pwa-install.js' %}" defer></script>
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
-  <title>KishiHub</title>
-
+  <title>Marketfy — Buy &amp; Sell Anything</title>
 
   <style>
 
-
   :root {
-    --kishivibe-bg:         #ffffff;
-    --kishivibe-white:      #ffffff;
-    --kishivibe-text:       #262626;
-    --kishivibe-text-light: #8e8e8e;
-    --kishivibe-primary:    #0095f6;
-    --kishivibe-border:     #dbdbdb;
-    --kishivibe-error:      #ed4956;
-    --kishivibe-success:    #22c55e;
-    --kishivibe-warn:       #f59e0b;
-    --kishivibe-radius:     10px;
+    --mfy-bg:         #ffffff;
+    --mfy-white:      #ffffff;
+    --mfy-text:       #262626;
+    --mfy-text-light: #8e8e8e;
+    --mfy-primary:    #0095f6;
+    --mfy-border:     #dbdbdb;
+    --mfy-error:      #ed4956;
+    --mfy-success:    #22c55e;
+    --mfy-warn:       #f59e0b;
+    --mfy-radius:     10px;
+    /* derived tints of the existing brand color — no new hues */
+    --mfy-primary-04: rgba(0,149,246,.04);
+    --mfy-primary-08: rgba(0,149,246,.08);
+    --mfy-primary-16: rgba(0,149,246,.16);
   }
 
   /* ── Reset ── */
@@ -41,8 +44,8 @@
   /* ── Body ── */
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background-color: var(--kishivibe-bg);
-    color: var(--kishivibe-text);
+    background-color: var(--mfy-bg);
+    color: var(--mfy-text);
     line-height: 1.4;
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
@@ -55,223 +58,283 @@
   }
 
   /* ── Splash ── */
-  #kishivibe-splash {
+  #mfy-splash {
     position: fixed; inset: 0;
-    background: var(--kishivibe-bg);
+    background: var(--mfy-bg);
     display: flex; align-items: center; justify-content: center;
     z-index: 9999;
     opacity: 1; visibility: visible;
     transition: opacity 0.35s ease, visibility 0.35s ease;
     will-change: opacity;
   }
-  #kishivibe-splash.kishivibe-hidden { opacity: 0; visibility: hidden; }
-  #kishivibe-splash img {
+  #mfy-splash.mfy-hidden { opacity: 0; visibility: hidden; }
+  #mfy-splash img {
     width: 80px; height: 80px;
     border-radius: 18px; object-fit: cover;
     will-change: transform, opacity;
-    animation: kishivibeBreath 1.4s ease-in-out infinite;
+    animation: mfyBreath 1.4s ease-in-out infinite;
   }
-  @keyframes kishivibeBreath {
+  @keyframes mfyBreath {
     0%, 100% { opacity: 0.8; transform: scale(0.95); }
     50%       { opacity: 1;   transform: scale(1.05); }
   }
 
   /* ── Container ── */
-  .kishivibe-container {
+  .mfy-container {
     width: 100%;
     max-width: 320px;
     margin: 0 auto;
   }
 
   /* ── Panels — mobile defaults ── */
-  .kishivibe-panel-image { display: none; }
-  .kishivibe-panel-login { width: 100%; }
+  .mfy-panel-image { display: none; }
+  .mfy-panel-login { width: 100%; }
 
-  /* ── Desktop two-panel layout ── */
+  /* ══════════════════════════════════════════════════════════
+     Desktop two-panel layout
+     ══════════════════════════════════════════════════════════ */
   @media (min-width: 960px) {
     body { padding: 0; background: #fff; }
-    .kishivibe-container {
-      max-width: 860px; width: 100%;
-      display: flex; flex-direction: row;
-      align-items: stretch; gap: 0;
+    .mfy-container {
+      max-width: 1040px; width: 100%;
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      align-items: stretch;
       padding: 0; overflow: hidden;
       min-height: 100vh;
     }
-    .kishivibe-panel-image {
-      flex: 1 1 0; min-width: 0;
-      display: flex; align-items: center; justify-content: center;
-      position: relative;
-      overflow: hidden;
-      background: #ffffff;
-    }
 
-    /* ── Slideshow wrapper ── */
-    .kv-slideshow {
-      width: 260px;
-      position: relative;
-      user-select: none;
-    }
-
-    /* Phone frame */
-    .kv-phone-frame {
-      width: 260px;
-      height: 520px;
-      border-radius: 36px;
-      border: 8px solid #1a1a1a;
-      background: #fff;
-      overflow: hidden;
-      position: relative;
-     
-    }
-    /* notch */
-    .kv-phone-frame::before {
-      content: '';
-      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-      width: 90px; height: 24px;
-      background: #1a1a1a; border-radius: 0 0 16px 16px;
-      z-index: 10;
-    }
-
-    /* Slides track */
-    .kv-slides-track {
+    /* ── Marketing panel ── */
+    .mfy-panel-image {
       display: flex;
-      width: 100%; height: 100%;
-      transition: transform 0.5s cubic-bezier(0.4,0,0.2,1);
-    }
-    .kv-slide {
-      min-width: 100%; height: 100%;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: flex-end;
-      position: relative; overflow: hidden;
-    }
-
-    /* Slide background colour fills */
-    .kv-slide:nth-child(1) { background: linear-gradient(160deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%); }
-    .kv-slide:nth-child(2) { background: linear-gradient(160deg, #0d1117 0%, #161b22 60%, #1a2332 100%); }
-    .kv-slide:nth-child(3) { background: linear-gradient(160deg, #1a0a2e 0%, #2d1b69 60%, #11998e 100%); }
-    .kv-slide:nth-child(4) { background: linear-gradient(160deg, #0a0a0a 0%, #1a1a1a 60%, #2d2d2d 100%); }
-
-    /* Mock UI inside each slide */
-    .kv-slide-inner {
-      width: 100%; height: 100%;
-      display: flex; flex-direction: column;
-      padding: 36px 14px 0;
       position: relative;
+      overflow: hidden;
+      flex-direction: column;
+      justify-content: center;
+      gap: 34px;
+      padding: 56px 48px;
+      background:
+        radial-gradient(560px 420px at 14% 8%,  var(--mfy-primary-08), transparent 60%),
+        radial-gradient(480px 380px at 100% 100%, var(--mfy-primary-04), transparent 55%),
+        var(--mfy-white);
+      border-right: 1px solid var(--mfy-border);
     }
-
-    /* Mock story/post header */
-    .kv-mock-header {
-      display: flex; align-items: center; gap: 8px;
-      margin-bottom: 12px;
-    }
-    .kv-mock-avatar {
-      width: 30px; height: 30px; border-radius: 50%;
-      background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
-      flex-shrink: 0; border: 2px solid #fff;
-    }
-    .kv-mock-name {
-      font-size: 11px; font-weight: 600; color: #fff;
-      line-height: 1.2;
-    }
-    .kv-mock-time { font-size: 9px; color: rgba(255,255,255,0.55); }
-    .kv-mock-dots { margin-left: auto; color: rgba(255,255,255,0.7); font-size: 14px; letter-spacing: 1px; }
-
-    /* Mock image block */
-    .kv-mock-img-block {
-      width: 100%; border-radius: 12px; overflow: hidden;
-      flex-shrink: 0; background: rgba(255,255,255,0.07);
-      display: flex; align-items: center; justify-content: center;
-      margin-bottom: 10px;
-    }
-    .kv-mock-img-block svg { opacity: 0.25; }
-
-    /* Mock text lines */
-    .kv-mock-lines { width: 100%; }
-    .kv-mock-line {
-      height: 7px; border-radius: 4px;
-      background: rgba(255,255,255,0.12);
-      margin-bottom: 6px;
-    }
-    .kv-mock-line.w80 { width: 80%; }
-    .kv-mock-line.w60 { width: 60%; }
-    .kv-mock-line.w90 { width: 90%; }
-
-    /* Mock reactions bar */
-    .kv-mock-reactions {
-      display: flex; gap: 12px; align-items: center;
-      padding: 8px 0;
-      border-top: 1px solid rgba(255,255,255,0.08);
-      margin-top: 4px;
-    }
-    .kv-mock-react-btn {
-      font-size: 16px; cursor: default; opacity: 0.75;
-    }
-    .kv-mock-react-count {
-      font-size: 9px; color: rgba(255,255,255,0.5); margin-left: -6px;
-    }
-
-    /* Gradient overlay at bottom of phone */
-    .kv-slide-overlay {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      height: 100px;
-      background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%);
+    .mfy-panel-image::before {
+      content: "";
+      position: absolute; inset: 0;
+      background-image: radial-gradient(var(--mfy-border) 1px, transparent 1px);
+      background-size: 22px 22px;
+      opacity: .35;
+      -webkit-mask-image: radial-gradient(560px 480px at 20% 15%, #000 30%, transparent 75%);
+      mask-image: radial-gradient(560px 480px at 20% 15%, #000 30%, transparent 75%);
       pointer-events: none;
     }
 
-    /* ── Caption bar below phone ── */
-    .kv-caption-bar {
-      margin-top: 20px;
-      text-align: center;
-      min-height: 44px;
+    /* ── Wordmark block ── */
+    .mfy-brand-block { position: relative; z-index: 1; }
+    .mfy-brand-wordmark {
+      font-size: 40px; font-weight: 800; letter-spacing: -1px;
+      color: var(--mfy-text); line-height: 1.05;
     }
-    .kv-caption {
-      display: none; flex-direction: column; align-items: center; gap: 4px;
-      animation: kvCapIn 0.4s ease;
-    }
-    .kv-caption.active { display: flex; }
-    @keyframes kvCapIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .kv-caption-title {
-      font-size: 14px; font-weight: 600;
-      color: var(--kishivibe-text);
-    }
-    .kv-caption-sub {
-      font-size: 12px; color: var(--kishivibe-text-light);
+    .mfy-brand-wordmark span { color: var(--mfy-primary); }
+    .mfy-brand-tagline {
+      margin-top: 10px; font-size: 15.5px; color: var(--mfy-text-light);
+      max-width: 380px; line-height: 1.5;
     }
 
-    /* ── Dot indicators ── */
-    .kv-dots {
-      display: flex; justify-content: center; gap: 6px;
-      margin-top: 14px;
+    /* ── Feature chips ── */
+    .mfy-chip-row {
+      position: relative; z-index: 1;
+      display: flex; flex-wrap: wrap; gap: 8px;
     }
-    .kv-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--kishivibe-border);
-      transition: background 0.3s, transform 0.3s;
-      cursor: pointer;
+    .mfy-chip {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--mfy-white); border: 1px solid var(--mfy-border);
+      border-radius: 999px; padding: 7px 13px 7px 10px;
+      font-size: 12.5px; font-weight: 500; color: var(--mfy-text);
+      box-shadow: 0 1px 2px rgba(0,0,0,.03);
     }
-    .kv-dot.active {
-      background: var(--kishivibe-primary);
-      transform: scale(1.3);
+    .mfy-chip i { color: var(--mfy-primary); font-size: 12px; }
+
+    /* ── Category marquee (signature element) ── */
+    .mfy-marquee {
+      position: relative; z-index: 1;
+      height: 380px;
+      display: flex; gap: 14px;
+      -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+      mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
     }
-    .kishivibe-panel-login {
-      flex: 0 0 360px; width: 360px;
+    .mfy-marquee-col {
+      flex: 1; display: flex; flex-direction: column; gap: 12px;
+      animation: mfyMarqueeUp 34s linear infinite;
+    }
+    .mfy-marquee-col.mfy-col-b { animation-duration: 42s; animation-direction: reverse; }
+    .mfy-marquee-col.mfy-col-c { animation-duration: 38s; }
+    @keyframes mfyMarqueeUp {
+      from { transform: translateY(0); }
+      to   { transform: translateY(-50%); }
+    }
+    /* ── Fallback category card (used only when there are no real listings yet) ── */
+    .mfy-cat-card {
+      background: var(--mfy-white); border: 1px solid var(--mfy-border);
+      border-radius: var(--mfy-radius); padding: 13px 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .mfy-cat-icon { font-size: 20px; line-height: 1; }
+    .mfy-cat-label {
+      margin-top: 8px; font-size: 12.5px; font-weight: 600;
+      color: var(--mfy-text);
+    }
+    .mfy-cat-price {
+      margin-top: 3px; font-size: 14px; font-weight: 700;
+      color: var(--mfy-primary);
+    }
+    .mfy-cat-loc {
+      margin-top: 2px; font-size: 11px; color: var(--mfy-text-light);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       JUMIA-STYLE PRODUCT CARD — identical to the home feed card,
+       reused here for the marquee so real listings look the same
+       wherever they appear.
+       ═══════════════════════════════════════════════════════════ */
+    .mfy-jcard {
+      background: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e8e8e8;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .mfy-jcard-img-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #f8f8f8;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mfy-jcard-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      background: #f8f8f8;
+      padding: 8px;
+    }
+    .mfy-jcard-views {
+      position: absolute;
+      top: 8px; right: 8px;
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      letter-spacing: 0.3px;
+    }
+    .mfy-jcard-views i { font-size: 9px; opacity: 0.8; }
+    .mfy-jcard-category-badge {
+      position: absolute;
+      top: 8px; left: 8px;
+      background: rgba(255,255,255,0.92);
+      color: #262626;
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.2px;
+      max-width: calc(100% - 60px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .mfy-jcard-body { padding: 8px 10px 10px; }
+    .mfy-jcard-price {
+      font-size: 15px;
+      font-weight: 800;
+      color: #f97316;
+      line-height: 1.2;
+      margin-bottom: 4px;
+      letter-spacing: -0.3px;
+    }
+    .mfy-jcard-business {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 10.5px; font-weight: 600; color: #0095f6;
+      line-height: 1.3; margin-bottom: 4px;
+    }
+    .mfy-jcard-business i.fa-store { font-size: 9px; color: #8e8e8e; }
+    .mfy-jcard-business-name {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+    }
+    .mfy-jcard-business-verified { font-size: 10px; color: #0095f6; flex-shrink: 0; }
+    .mfy-jcard-name {
+      font-size: 12px; font-weight: 400; color: #262626;
+      line-height: 1.4; margin-bottom: 6px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .mfy-jcard-condition-inline { margin-bottom: 6px; }
+    .mfy-jcard-condition-inline span {
+      display: inline-block; padding: 2px 9px; border-radius: 4px;
+      font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .mfy-jcard-meta {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 2px;
+    }
+    .mfy-jcard-meta-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10.5px; color: #8e8e8e; background: #f5f5f5;
+      border: 1px solid #e8e8e8; border-radius: 4px; padding: 3px 8px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+    }
+    .mfy-jcard-meta-pill i { font-size: 9px; color: #b0b0b0; }
+    .mfy-jcard-avail { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+    .mfy-jcard-avail i { color: #22c55e; }
+    .mfy-market-condition--new         { background: #d1fae5; color: #065f46; }
+    .mfy-market-condition--used        { background: #fef3c7; color: #92400e; }
+    .mfy-market-condition--used-fair   { background: #fef3c7; color: #92400e; }
+    .mfy-market-condition--refurbished { background: #dbeafe; color: #1e40af; }
+
+    /* Marquee-specific sizing for the reused product card */
+    .mfy-marquee .mfy-jcard-body { padding: 7px 9px 9px; }
+    .mfy-mobile-marquee .mfy-jcard {
+      flex: 0 0 auto; scroll-snap-align: start;
+      min-width: 124px; max-width: 124px;
+    }
+    .mfy-mobile-marquee .mfy-jcard-body { padding: 6px 7px 7px; }
+    .mfy-mobile-marquee .mfy-jcard-name { font-size: 10px; margin-bottom: 4px; -webkit-line-clamp: 2; }
+    .mfy-mobile-marquee .mfy-jcard-price { font-size: 12px; margin-bottom: 2px; }
+    .mfy-mobile-marquee .mfy-jcard-business { font-size: 8.5px; margin-bottom: 2px; }
+    .mfy-mobile-marquee .mfy-jcard-condition-inline { margin-bottom: 4px; }
+    .mfy-mobile-marquee .mfy-jcard-condition-inline span { font-size: 8px; padding: 1px 6px; }
+    .mfy-mobile-marquee .mfy-jcard-meta { gap: 3px; }
+    .mfy-mobile-marquee .mfy-jcard-meta-pill { font-size: 8.5px; padding: 2px 5px; gap: 2px; }
+    .mfy-mobile-marquee .mfy-jcard-views { font-size: 8px; padding: 1px 5px; top: 5px; right: 5px; }
+    .mfy-mobile-marquee .mfy-jcard-category-badge { font-size: 7.5px; padding: 1px 5px; top: 5px; left: 5px; max-width: calc(100% - 40px); }
+    .mfy-mobile-marquee .mfy-jcard-img { padding: 5px; }
+
+    /* ── Login panel ── */
+    .mfy-panel-login {
       display: flex; align-items: center; justify-content: center;
-      background: #fff;
+      background: #fff; padding: 40px;
     }
-    #kishivibe-skeleton { max-width: 320px; width: 100%; }
-    .kishivibe-login-container {
-      padding: 36px 28px 28px;
-      border: none;
-      border-radius: 0;
-      background: transparent;
+    .mfy-container-inner { max-width: 340px; width: 100%; }
+    #mfy-skeleton { max-width: 340px; width: 100%; }
+    .mfy-login-container {
+      padding: 0; border: none; border-radius: 0; background: transparent;
     }
   }
 
   /* ── Login Card ── */
-  .kishivibe-login-container {
+  .mfy-login-container {
     width: 100%; background: transparent;
     border-radius: 0;
     padding: 28px 20px 20px; text-align: center;
@@ -279,23 +342,24 @@
     transition: opacity 0.38s ease, transform 0.38s ease;
     will-change: opacity, transform;
   }
-  .kishivibe-login-container.kishivibe-show { opacity: 1; transform: translateY(0); }
+  .mfy-login-container.mfy-show { opacity: 1; transform: translateY(0); }
 
   /* ── Logo ── */
-  .kishivibe-logo {
+  .mfy-logo {
     width: 70px; height: 70px;
     border-radius: 18px; object-fit: cover;
     margin: 0 auto 20px; display: block;
+    box-shadow: 0 6px 18px var(--mfy-primary-16);
   }
 
   /* ── Title & Subtitle ── */
-  .kishivibe-title {
+  .mfy-title {
     font-size: 26px; font-weight: 400;
-    margin-bottom: 6px; color: var(--kishivibe-text);
+    margin-bottom: 6px; color: var(--mfy-text);
     letter-spacing: -0.5px;
   }
-  .kishivibe-subtitle {
-    font-size: 14px; color: var(--kishivibe-text-light);
+  .mfy-subtitle {
+    font-size: 14px; color: var(--mfy-text-light);
     margin-bottom: 24px; font-weight: 300;
     line-height: 1.4; padding: 0 10px; font-style: italic;
   }
@@ -303,341 +367,359 @@
   /* ── Server messages ── */
   .kv-messages { margin-bottom: 16px; }
   .kv-msg {
-    padding: 10px 12px; border-radius: var(--kishivibe-radius);
+    padding: 10px 12px; border-radius: var(--mfy-radius);
     margin-bottom: 8px; font-size: 13px;
     display: flex; align-items: center; gap: 8px;
     text-align: left; animation: kvMsgIn .25s ease;
   }
   @keyframes kvMsgIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
-  .kv-msg-error   { background:rgba(237,73,86,.08); color:var(--kishivibe-error); border:1px solid rgba(237,73,86,.2); }
+  .kv-msg-error   { background:rgba(237,73,86,.08); color:var(--mfy-error); border:1px solid rgba(237,73,86,.2); }
   .kv-msg-success { background:rgba(34,197,94,.08);  color:#16a34a; border:1px solid rgba(34,197,94,.2); }
-  .kv-msg-info    { background:rgba(0,149,246,.07);  color:var(--kishivibe-text); border:1px solid rgba(0,149,246,.15); }
-
-  /* ── AJAX Alert Banner ── */
-  .kv-alert {
-    margin-bottom: 16px; padding: 10px 12px;
-    border-radius: var(--kishivibe-radius); font-size: 13px;
-    display: flex; align-items: center; gap: 8px;
-    text-align: left; animation: kvAlertIn 0.25s ease;
-  }
-  @keyframes kvAlertIn {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .kv-alert-error   { background:rgba(237,73,86,.08); color:var(--kishivibe-error); border:1px solid rgba(237,73,86,.2); }
-  .kv-alert-success { background:rgba(34,197,94,.08); color:var(--kishivibe-success); border:1px solid rgba(34,197,94,.2); }
-  .kv-alert-info    { background:rgba(0,149,246,.07); color:var(--kishivibe-text); border:1px solid rgba(0,149,246,.15); }
+  .kv-msg-info    { background:rgba(0,149,246,.07);  color:var(--mfy-text); border:1px solid rgba(0,149,246,.15); }
 
   /* ── Field errors ── */
   .kv-field-error {
-    font-size: 12px; color: var(--kishivibe-error);
+    font-size: 12px; color: var(--mfy-error);
     margin-top: 4px; display: flex; align-items: center;
-    gap: 5px; animation: kvAlertIn 0.2s ease;
+    gap: 5px; animation: kvMsgIn 0.2s ease;
   }
 
   /* ── Form ── */
-  .kishivibe-form { width: 100%; }
-  .kishivibe-form-group { margin-bottom: 14px; text-align: left; }
-  .kishivibe-input-wrapper { position: relative; }
-  .kishivibe-input-icon {
+  .mfy-form { width: 100%; }
+  .mfy-form-group { margin-bottom: 14px; text-align: left; }
+  .mfy-input-wrapper { position: relative; }
+  .mfy-input-icon {
     position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-    color: var(--kishivibe-text-light); font-size: 14px;
+    color: var(--mfy-text-light); font-size: 14px;
     width: 38px; text-align: center; pointer-events: none; z-index: 1;
   }
   .kv-pass-toggle {
     position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-    background: none; border: none; color: var(--kishivibe-text-light);
+    background: none; border: none; color: var(--mfy-text-light);
     cursor: pointer; padding: 6px; font-size: 14px; z-index: 2; transition: color 0.2s;
   }
-  .kv-pass-toggle:hover { color: var(--kishivibe-text); }
-  .kishivibe-input {
+  .kv-pass-toggle:hover { color: var(--mfy-text); }
+  .mfy-input {
     width: 100%; padding: 13px 38px 13px 38px; font-size: 14px;
-    background: var(--kishivibe-bg); border: 1px solid var(--kishivibe-border);
-    border-radius: var(--kishivibe-radius); color: var(--kishivibe-text);
-    transition: border-color 0.2s ease, background 0.2s ease;
+    background: var(--mfy-bg); border: 1px solid var(--mfy-border);
+    border-radius: var(--mfy-radius); color: var(--mfy-text);
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow .2s ease;
   }
-  .kishivibe-input:focus { outline: none; border-color: var(--kishivibe-primary); background: var(--kishivibe-white); }
-  .kishivibe-input::placeholder { color: var(--kishivibe-text-light); font-weight: 300; font-size: 14px; }
-  .kishivibe-input.kv-input-error { border-color: var(--kishivibe-error); background: #fff5f5; }
+  .mfy-input:focus { outline: none; border-color: var(--mfy-primary); background: var(--mfy-white); box-shadow: 0 0 0 3px var(--mfy-primary-08); }
+  .mfy-input::placeholder { color: var(--mfy-text-light); font-weight: 300; font-size: 14px; }
+  .mfy-input.kv-input-error { border-color: var(--mfy-error); background: #fff5f5; }
 
   /* ── Login Button ── */
-  .kishivibe-login-btn {
-    width: 100%; padding: 13px; background: var(--kishivibe-primary);
-    color: #fff; border: none; border-radius: var(--kishivibe-radius);
+  .mfy-login-btn {
+    width: 100%; padding: 13px; background: var(--mfy-primary);
+    color: #fff; border: none; border-radius: var(--mfy-radius);
     font-size: 15px; font-weight: 600; cursor: pointer;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.2s ease, transform .15s ease;
     display: flex; align-items: center; justify-content: center;
     gap: 8px; margin-top: 8px;
   }
-  .kishivibe-login-btn:hover   { opacity: 0.9; }
-  .kishivibe-login-btn:active  { opacity: 0.8; }
-  .kishivibe-login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .mfy-login-btn:hover   { opacity: 0.9; }
+  .mfy-login-btn:active  { opacity: 0.8; transform: scale(.99); }
+  .mfy-login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── Forgot password link ── */
+  .kv-forgot-link {
+    background: none; border: none; padding: 0;
+    color: var(--mfy-primary);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    text-decoration: underline; text-underline-offset: 2px;
+    transition: opacity .15s;
+  }
+  .kv-forgot-link:hover { opacity: .75; }
 
   /* ── Divider ── */
-  .kishivibe-divider {
+  .mfy-divider {
     display: flex; align-items: center;
-    margin: 20px 0; color: var(--kishivibe-text-light); font-size: 13px;
+    margin: 20px 0; color: var(--mfy-text-light); font-size: 13px;
   }
-  .kishivibe-divider::before,
-  .kishivibe-divider::after { content: ""; flex: 1; height: 1px; background: var(--kishivibe-border); }
-  .kishivibe-divider span { padding: 0 16px; }
+  .mfy-divider::before,
+  .mfy-divider::after { content: ""; flex: 1; height: 1px; background: var(--mfy-border); }
+  .mfy-divider span { padding: 0 16px; }
 
   /* ── Sign-Up Link ── */
-  .kishivibe-signup-link { margin-top: 8px; }
-  .kishivibe-signup-text { font-size: 14px; color: var(--kishivibe-text); margin-bottom: 10px; font-weight: 400; }
-  .kishivibe-signup-btn {
+  .mfy-signup-link { margin-top: 8px; }
+  .mfy-signup-text { font-size: 14px; color: var(--mfy-text); margin-bottom: 10px; font-weight: 400; }
+  .mfy-signup-btn {
     display: flex; align-items: center; justify-content: center;
     gap: 8px; width: 100%; padding: 13px;
-    background: transparent; color: var(--kishivibe-primary);
-    border: 1px solid var(--kishivibe-primary);
-    border-radius: var(--kishivibe-radius);
+    background: transparent; color: var(--mfy-primary);
+    border: 1px solid var(--mfy-primary);
+    border-radius: var(--mfy-radius);
     font-size: 15px; font-weight: 500;
     text-decoration: none; text-align: center; transition: background 0.2s ease;
   }
-  .kishivibe-signup-btn:hover { background: rgba(0,149,246,0.06); }
+  .mfy-signup-btn:hover { background: var(--mfy-primary-08); }
 
   /* ── Skeleton Loader ── */
-  #kishivibe-skeleton {
+  #mfy-skeleton {
     width: 100%; max-width: 320px;
     display: flex; flex-direction: column; gap: 14px;
     margin: 0 auto; background: transparent;
     border-radius: 0; padding: 28px 20px 20px;
   }
-  .kishivibe-skel {
+  .mfy-skel {
     background: linear-gradient(90deg, #ececec 25%, #f5f5f5 50%, #ececec 75%);
     background-size: 200% 100%;
-    animation: kishivibeShimmer 1.4s ease-in-out infinite;
-    border-radius: var(--kishivibe-radius);
+    animation: mfyShimmer 1.4s ease-in-out infinite;
+    border-radius: var(--mfy-radius);
   }
-  @keyframes kishivibeShimmer {
+  @keyframes mfyShimmer {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
   }
-  .kishivibe-skel-logo    { width: 70px; height: 70px; border-radius: 18px; margin: 0 auto; }
-  .kishivibe-skel-title   { width: 55%; height: 26px; margin: 0 auto; }
-  .kishivibe-skel-sub     { width: 78%; height: 14px; margin: 0 auto 10px; }
-  .kishivibe-skel-input   { height: 44px; }
-  .kishivibe-skel-btn     { height: 44px; margin-top: 6px; }
-  .kishivibe-skel-divider { height: 1px; margin: 6px 0; }
-  .kishivibe-skel-signup  { height: 44px; margin-top: 6px; }
+  .mfy-skel-logo    { width: 70px; height: 70px; border-radius: 18px; margin: 0 auto; }
+  .mfy-skel-title   { width: 55%; height: 26px; margin: 0 auto; }
+  .mfy-skel-sub     { width: 78%; height: 14px; margin: 0 auto 10px; }
+  .mfy-skel-input   { height: 44px; }
+  .mfy-skel-btn     { height: 44px; margin-top: 6px; }
+  .mfy-skel-divider { height: 1px; margin: 6px 0; }
+  .mfy-skel-signup  { height: 44px; margin-top: 6px; }
 
   /* ── Small phones ── */
   @media (max-width: 360px) {
     body { padding: 12px; }
-    .kishivibe-container { max-width: 280px; }
-    .kishivibe-title { font-size: 22px; }
-    .kishivibe-subtitle { font-size: 13px; margin-bottom: 20px; }
-    .kishivibe-logo { width: 60px; height: 60px; border-radius: 15px; margin-bottom: 16px; }
-    .kishivibe-input { padding: 11px 36px; font-size: 13px; }
-    .kishivibe-input-icon { font-size: 13px; width: 36px; }
-    .kishivibe-login-btn, .kishivibe-signup-btn { padding: 11px; font-size: 14px; }
+    .mfy-container { max-width: 280px; }
+    .mfy-title { font-size: 22px; }
+    .mfy-subtitle { font-size: 13px; margin-bottom: 20px; }
+    .mfy-logo { width: 60px; height: 60px; border-radius: 15px; margin-bottom: 16px; }
+    .mfy-input { padding: 11px 36px; font-size: 13px; }
+    .mfy-input-icon { font-size: 13px; width: 36px; }
+    .mfy-login-btn, .mfy-signup-btn { padding: 11px; font-size: 14px; }
   }
 
   /* ── Short screens ── */
   @media (max-height: 600px) {
     body { justify-content: flex-start; padding-top: 30px; }
-    .kishivibe-login-container { padding: 20px 16px; }
-    .kishivibe-subtitle { margin-bottom: 18px; }
+    .mfy-login-container { padding: 20px 16px; }
+    .mfy-subtitle { margin-bottom: 18px; }
   }
 
   /* ── Tablets ── */
   @media (min-width: 768px) and (max-width: 959px) {
-    .kishivibe-container { max-width: 380px; }
-    .kishivibe-panel-image { display: none; }
-    .kishivibe-panel-login { width: 100%; }
-    .kishivibe-logo { width: 80px; height: 80px; }
-    .kishivibe-title { font-size: 28px; }
-    .kishivibe-subtitle { font-size: 15px; }
-    .kishivibe-input { padding: 14px 40px; font-size: 15px; }
-    .kishivibe-input-icon { font-size: 15px; }
-    .kishivibe-login-container { border: none; }
+    .mfy-container { max-width: 380px; }
+    .mfy-panel-image { display: none; }
+    .mfy-panel-login { width: 100%; }
+    .mfy-logo { width: 80px; height: 80px; }
+    .mfy-title { font-size: 28px; }
+    .mfy-subtitle { font-size: 15px; }
+    .mfy-input { padding: 14px 40px; font-size: 15px; }
+    .mfy-input-icon { font-size: 15px; }
+    .mfy-login-container { border: none; }
+  }
+
+  /* ── Mobile product strip (hidden once the desktop marketing panel takes over) ── */
+  .mfy-mobile-marquee {
+    display: flex; gap: 8px;
+    overflow-x: auto; scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 2px 12px;
+    margin-bottom: 14px;
+    scrollbar-width: none;
+  }
+  .mfy-mobile-marquee::-webkit-scrollbar { display: none; }
+  .mfy-mobile-cat-card {
+    flex: 0 0 auto; scroll-snap-align: start;
+    min-width: 124px; max-width: 124px;
+    background: var(--mfy-white); border: 1px solid var(--mfy-border);
+    border-radius: var(--mfy-radius); padding: 8px 9px;
+    text-align: left;
+  }
+  .mfy-mobile-cat-card .mfy-cat-icon  { font-size: 15px; }
+  .mfy-mobile-cat-card .mfy-cat-label {
+    margin-top: 5px; font-size: 10px; font-weight: 600; color: var(--mfy-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mfy-mobile-cat-card .mfy-cat-price {
+    margin-top: 2px; font-size: 11px; font-weight: 700; color: var(--mfy-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mfy-mobile-cat-card .mfy-cat-loc {
+    margin-top: 1px; font-size: 9px; color: var(--mfy-text-light);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Real-listing product card sits alongside the fallback card in the same strip */
+  .mfy-mobile-marquee .mfy-jcard { text-align: left; }
+  @media (min-width: 960px) {
+    .mfy-mobile-marquee { display: none; }
+  }
+
+  /* ── Reduced motion ── */
+  @media (prefers-reduced-motion: reduce) {
+    #mfy-splash img, .mfy-marquee-col { animation: none !important; }
   }
   </style>
 </head>
 <body>
 
-  <div id="kishivibe-splash">
-    <img src="{% static 'images/logo.jpg' %}" alt="KishiHub Logo" fetchpriority="high">
+  <div id="mfy-splash">
+    <img src="{% static 'images/logo.jpg' %}" alt="Marketfy Logo" fetchpriority="high">
   </div>
 
-  <div class="kishivibe-container">
+  <div class="mfy-container">
 
-    <div class="kishivibe-panel-image" aria-hidden="true">
-      <div class="kv-slideshow">
+    <!-- ═══════ Marketing panel (desktop only) ═══════ -->
+    <div class="mfy-panel-image" aria-hidden="true">
 
-        <!-- Phone frame -->
-        <div class="kv-phone-frame">
-          <div class="kv-slides-track" id="kvSlidesTrack">
+      <div class="mfy-brand-block">
+        <div class="mfy-brand-wordmark">Market<span>fy</span></div>
+        <p class="mfy-brand-tagline">Nigeria's marketplace for everything — phones, fashion, cars, property and more, from sellers near you.</p>
+      </div>
 
-            <!-- Slide 1 -->
-            <div class="kv-slide">
-              <div class="kv-slide-inner">
-                <div class="kv-mock-header">
-                  <div class="kv-mock-avatar"></div>
-                  <div>
-                    <div class="kv-mock-name">@kishihub</div>
-                    <div class="kv-mock-time">2 min ago</div>
-                  </div>
-                  <div class="kv-mock-dots">···</div>
-                </div>
-                <div class="kv-mock-img-block" style="height:220px;">
-                 <img src="{% static 'images/logo.jpg' %}" height="200" width="200" alt="">
-                </div>
-                <div class="kv-mock-lines">
-                  <div class="kv-mock-line w90"></div>
-                  <div class="kv-mock-line w60"></div>
-                </div>
-                <div class="kv-mock-reactions">
-                  <span class="kv-mock-react-btn">🔥</span><span class="kv-mock-react-count">142</span>
-                  <span class="kv-mock-react-btn">💬</span><span class="kv-mock-react-count">38</span>
-                  <span class="kv-mock-react-btn">🔁</span><span class="kv-mock-react-count">21</span>
-                </div>
-              </div>
-              <div class="kv-slide-overlay"></div>
+      <div class="mfy-chip-row">
+        <span class="mfy-chip"><i class="fas fa-truck"></i> Cash on delivery</span>
+        <span class="mfy-chip"><i class="fas fa-comments"></i> Chat with sellers</span>
+        <span class="mfy-chip"><i class="fas fa-heart"></i> Save to wishlist</span>
+      </div>
+
+      <div class="mfy-marquee">
+        {% for column in marquee_columns %}
+        <div class="mfy-marquee-col{% if forloop.counter == 2 %} mfy-col-b{% elif forloop.counter == 3 %} mfy-col-c{% endif %}">
+          {% for item in column %}
+          {% if item.product_name %}
+          {# Real listing — same Jumia-style product card as the home feed #}
+          <article class="mfy-jcard">
+            {% with first_img=item.images.first %}
+            <a href="{% url 'product_detail' item.product_id %}" class="mfy-jcard-img-link">
+            <div class="mfy-jcard-img-wrap">
+              {% if first_img %}
+              <img src="{{ first_img.product_image.url }}" alt="{{ item.product_name }}" loading="lazy" class="mfy-jcard-img">
+              {% else %}
+              <img src="https://placehold.co/600x600/f8f8f8/aaa?text=Product" alt="{{ item.product_name }}" class="mfy-jcard-img">
+              {% endif %}
+              <span class="mfy-jcard-views"><i class="fas fa-eye"></i> {{ item.views_count|default:0 }}</span>
+              <span class="mfy-jcard-category-badge">{{ item.category_icon }} {{ item.category_label }}</span>
             </div>
-
-            <!-- Slide 2 -->
-            <div class="kv-slide">
-              <div class="kv-slide-inner">
-                <div class="kv-mock-header">
-                  <div class="kv-mock-avatar" style="background:linear-gradient(135deg,#0095f6,#00c6ff);"></div>
-                  <div>
-                    <div class="kv-mock-name">@study_hub</div>
-                    <div class="kv-mock-time">Just now</div>
-                  </div>
-                  <div class="kv-mock-dots">···</div>
-                </div>
-                <div class="kv-mock-img-block" style="height:200px;">
-                  <img src="{% static 'images/classroom.png' %}" height="200" width="200" alt="">
-                </div>
-                <div class="kv-mock-lines">
-                  <div class="kv-mock-line w80"></div>
-                  <div class="kv-mock-line w60"></div>
-                  <div class="kv-mock-line w90"></div>
-                </div>
-                <div class="kv-mock-reactions">
-                  <span class="kv-mock-react-btn">✨</span><span class="kv-mock-react-count">89</span>
-                  <span class="kv-mock-react-btn">💬</span><span class="kv-mock-react-count">14</span>
-                  <span class="kv-mock-react-btn">❤️</span><span class="kv-mock-react-count">203</span>
-                </div>
+            </a>
+            {% endwith %}
+            <a href="{% url 'product_detail' item.product_id %}" class="mfy-jcard-body-link">
+            <div class="mfy-jcard-body">
+              <div class="mfy-jcard-price">₦{{ item.product_price|intcomma }}</div>
+              {% if item.business_page %}
+              <div class="mfy-jcard-business">
+                <i class="fas fa-store"></i>
+                <span class="mfy-jcard-business-name">{{ item.business_page.name }}</span>
+                {% if item.business_page.is_verified %}
+                <i class="fas fa-circle-check mfy-jcard-business-verified"></i>
+                {% endif %}
               </div>
-              <div class="kv-slide-overlay"></div>
-            </div>
-
-            <!-- Slide 3 -->
-            <div class="kv-slide">
-              <div class="kv-slide-inner">
-                <div class="kv-mock-header">
-                  <div class="kv-mock-avatar" style="background:linear-gradient(135deg,#11998e,#38ef7d);"></div>
-                  <div>
-                    <div class="kv-mock-name">@vibes_only</div>
-                    <div class="kv-mock-time">5 min ago</div>
-                  </div>
-                  <div class="kv-mock-dots">···</div>
-                </div>
-                <div class="kv-mock-img-block" style="height:210px;">
-                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polygon points="10,8 16,12 10,16"/>
-                  </svg>
-                </div>
-                <div class="kv-mock-lines">
-                  <div class="kv-mock-line w60"></div>
-                  <div class="kv-mock-line w80"></div>
-                </div>
-                <div class="kv-mock-reactions">
-                  <span class="kv-mock-react-btn">😍</span><span class="kv-mock-react-count">317</span>
-                  <span class="kv-mock-react-btn">💬</span><span class="kv-mock-react-count">55</span>
-                  <span class="kv-mock-react-btn">🔁</span><span class="kv-mock-react-count">40</span>
-                </div>
+              {% endif %}
+              <div class="mfy-jcard-name">{{ item.product_name|truncatechars:24 }}</div>
+              {% if item.product_condition %}
+              <div class="mfy-jcard-condition-inline">
+                <span class="mfy-market-condition--{{ item.product_condition|lower }}">{{ item.product_condition }}</span>
               </div>
-              <div class="kv-slide-overlay"></div>
-            </div>
-
-            <!-- Slide 4 -->
-            <div class="kv-slide">
-              <div class="kv-slide-inner">
-                <div class="kv-mock-header">
-                  <div class="kv-mock-avatar" style="background:linear-gradient(135deg,#f7971e,#ffd200);"></div>
-                  <div>
-                    <div class="kv-mock-name">@kishi_market</div>
-                    <div class="kv-mock-time">10 min ago</div>
-                  </div>
-                  <div class="kv-mock-dots">···</div>
-                </div>
-                <div class="kv-mock-img-block" style="height:205px;">
-                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5">
-                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-                    <line x1="3" y1="6" x2="21" y2="6"/>
-                    <path d="M16 10a4 4 0 01-8 0"/>
-                  </svg>
-                </div>
-                <div class="kv-mock-lines">
-                  <div class="kv-mock-line w90"></div>
-                  <div class="kv-mock-line w60"></div>
-                  <div class="kv-mock-line w80"></div>
-                </div>
-                <div class="kv-mock-reactions">
-                  <span class="kv-mock-react-btn">🛒</span><span class="kv-mock-react-count">64</span>
-                  <span class="kv-mock-react-btn">💬</span><span class="kv-mock-react-count">27</span>
-                  <span class="kv-mock-react-btn">❤️</span><span class="kv-mock-react-count">111</span>
-                </div>
+              {% endif %}
+              {% if item.product_location or item.product_availability %}
+              <div class="mfy-jcard-meta">
+                {% if item.product_location %}
+                <span class="mfy-jcard-meta-pill"><i class="fas fa-map-marker-alt"></i> {{ item.product_location|truncatechars:20 }}</span>
+                {% endif %}
+                {% if item.product_availability %}
+                <span class="mfy-jcard-meta-pill mfy-jcard-avail"><i class="fas fa-boxes"></i> {{ item.product_availability }}</span>
+                {% endif %}
               </div>
-              <div class="kv-slide-overlay"></div>
+              {% endif %}
             </div>
-
-          </div><!-- /kv-slides-track -->
-        </div><!-- /kv-phone-frame -->
-
-        <!-- Dot indicators -->
-        <div class="kv-dots" id="kvDots">
-          <div class="kv-dot active" data-idx="0"></div>
-          <div class="kv-dot" data-idx="1"></div>
-          <div class="kv-dot" data-idx="2"></div>
-          <div class="kv-dot" data-idx="3"></div>
+            </a>
+          </article>
+          {% else %}
+          {# Fallback category preview — shown only on a fresh install with no listings #}
+          <div class="mfy-cat-card">
+            <div class="mfy-cat-icon">{{ item.category_icon }}</div>
+            <div class="mfy-cat-label">{{ item.category_label|truncatechars:24 }}</div>
+          </div>
+          {% endif %}
+          {% endfor %}
         </div>
+        {% endfor %}
+      </div>
 
-        <!-- Captions -->
-        <div class="kv-caption-bar">
-          <div class="kv-caption active" id="kvCap0">
-            <span class="kv-caption-title">Share your vibe</span>
-            <span class="kv-caption-sub">Post moments that matter to your community</span>
-          </div>
-          <div class="kv-caption" id="kvCap1">
-            <span class="kv-caption-title">Learn together</span>
-            <span class="kv-caption-sub">Connect with classmates and study groups</span>
-          </div>
-          <div class="kv-caption" id="kvCap2">
-            <span class="kv-caption-title">Drop fire content</span>
-            <span class="kv-caption-sub">Videos, reels and audio all in one place</span>
-          </div>
-          <div class="kv-caption" id="kvCap3">
-            <span class="kv-caption-title">Kishi Market</span>
-            <span class="kv-caption-sub">Buy & sell within your local community</span>
-          </div>
-        </div>
+    </div><!-- /mfy-panel-image -->
 
-      </div><!-- /kv-slideshow -->
+    <!-- ═══════ Login panel ═══════ -->
+    <div class="mfy-panel-login">
+    <div class="mfy-container-inner">
+
+    <div id="mfy-skeleton" aria-hidden="true">
+      <div class="mfy-skel mfy-skel-logo"></div>
+      <div class="mfy-skel mfy-skel-title"></div>
+      <div class="mfy-skel mfy-skel-sub"></div>
+      <div class="mfy-skel mfy-skel-input"></div>
+      <div class="mfy-skel mfy-skel-input"></div>
+      <div class="mfy-skel mfy-skel-btn"></div>
+      <div class="mfy-skel mfy-skel-divider"></div>
+      <div class="mfy-skel mfy-skel-signup"></div>
     </div>
 
-    <div class="kishivibe-panel-login">
+    <div class="mfy-login-container" id="mfy-content" aria-live="polite">
 
-    <div id="kishivibe-skeleton" aria-hidden="true">
-      <div class="kishivibe-skel kishivibe-skel-logo"></div>
-      <div class="kishivibe-skel kishivibe-skel-title"></div>
-      <div class="kishivibe-skel kishivibe-skel-sub"></div>
-      <div class="kishivibe-skel kishivibe-skel-input"></div>
-      <div class="kishivibe-skel kishivibe-skel-input"></div>
-      <div class="kishivibe-skel kishivibe-skel-btn"></div>
-      <div class="kishivibe-skel kishivibe-skel-divider"></div>
-      <div class="kishivibe-skel kishivibe-skel-signup"></div>
-    </div>
+      <img src="{% static 'images/logo.jpg' %}" alt="Marketfy" class="mfy-logo" fetchpriority="high">
+      <h1 class="mfy-title">Marketfy.com</h1>
+      <p class="mfy-subtitle"><em>Buy &amp; sell anything — fast, easy, trusted.</em></p>
 
-    <div class="kishivibe-login-container" id="kishivibe-content" aria-live="polite">
-
-      <img src="{% static 'images/logo.jpg' %}" alt="KishiHub" class="kishivibe-logo" fetchpriority="high">
-      <h1 class="kishivibe-title">Kishihub.com</h1>
-      <p class="kishivibe-subtitle"><em>The central digital platform for everything in Kishi.</em></p>
+      <div class="mfy-mobile-marquee" aria-label="Featured listings">
+        {% for item in marquee_flat %}
+        {% if item.product_name %}
+        {# Real listing — same Jumia-style product card as the home feed, full details #}
+        <article class="mfy-jcard">
+          {% with first_img=item.images.first %}
+          <a href="{% url 'product_detail' item.product_id %}" class="mfy-jcard-img-link">
+          <div class="mfy-jcard-img-wrap">
+            {% if first_img %}
+            <img src="{{ first_img.product_image.url }}" alt="{{ item.product_name }}" loading="lazy" class="mfy-jcard-img">
+            {% else %}
+            <img src="https://placehold.co/600x600/f8f8f8/aaa?text=Product" alt="{{ item.product_name }}" class="mfy-jcard-img">
+            {% endif %}
+            <span class="mfy-jcard-views"><i class="fas fa-eye"></i> {{ item.views_count|default:0 }}</span>
+            <span class="mfy-jcard-category-badge">{{ item.category_icon }} {{ item.category_label }}</span>
+          </div>
+          </a>
+          {% endwith %}
+          <a href="{% url 'product_detail' item.product_id %}" class="mfy-jcard-body-link">
+          <div class="mfy-jcard-body">
+            <div class="mfy-jcard-price">₦{{ item.product_price|intcomma }}</div>
+            {% if item.business_page %}
+            <div class="mfy-jcard-business">
+              <i class="fas fa-store"></i>
+              <span class="mfy-jcard-business-name">{{ item.business_page.name }}</span>
+              {% if item.business_page.is_verified %}
+              <i class="fas fa-circle-check mfy-jcard-business-verified"></i>
+              {% endif %}
+            </div>
+            {% endif %}
+            <div class="mfy-jcard-name">{{ item.product_name|truncatechars:28 }}</div>
+            {% if item.product_condition %}
+            <div class="mfy-jcard-condition-inline">
+              <span class="mfy-market-condition--{{ item.product_condition|lower }}">{{ item.product_condition }}</span>
+            </div>
+            {% endif %}
+            {% if item.product_location or item.product_availability %}
+            <div class="mfy-jcard-meta">
+              {% if item.product_location %}
+              <span class="mfy-jcard-meta-pill"><i class="fas fa-map-marker-alt"></i> {{ item.product_location|truncatechars:16 }}</span>
+              {% endif %}
+              {% if item.product_availability %}
+              <span class="mfy-jcard-meta-pill mfy-jcard-avail"><i class="fas fa-boxes"></i> {{ item.product_availability }}</span>
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+          </a>
+        </article>
+        {% else %}
+        {# Fallback category preview — shown only on a fresh install with no listings #}
+        <div class="mfy-mobile-cat-card">
+          <div class="mfy-cat-icon">{{ item.category_icon }}</div>
+          <div class="mfy-cat-label">{{ item.category_label|truncatechars:16 }}</div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
 
       {% if messages %}
       <div class="kv-messages">
@@ -650,24 +732,24 @@
       </div>
       {% endif %}
 
-      <form method="post" class="kishivibe-form" id="kishivibe-form" novalidate autocomplete="on">
+      <form method="post" class="mfy-form" id="mfy-form" novalidate autocomplete="on">
         {% csrf_token %}
 
-        <div class="kishivibe-form-group">
-          <div class="kishivibe-input-wrapper">
-            <i class="fas fa-user kishivibe-input-icon" aria-hidden="true"></i>
-            <input type="text" name="user_check" id="kishivibe-username"
-              class="kishivibe-input" placeholder="Username or email"
+        <div class="mfy-form-group">
+          <div class="mfy-input-wrapper">
+            <i class="fas fa-user mfy-input-icon" aria-hidden="true"></i>
+            <input type="text" name="user_check" id="mfy-username"
+              class="mfy-input" placeholder="Username or email"
               autocomplete="username" autocorrect="off" autocapitalize="none"
               spellcheck="false" value="{{ request.POST.user_check|default:'' }}" required>
           </div>
         </div>
 
-        <div class="kishivibe-form-group">
-          <div class="kishivibe-input-wrapper">
-            <i class="fas fa-lock kishivibe-input-icon" aria-hidden="true"></i>
-            <input type="password" name="password" id="kishivibe-password"
-              class="kishivibe-input" placeholder="Password"
+        <div class="mfy-form-group">
+          <div class="mfy-input-wrapper">
+            <i class="fas fa-lock mfy-input-icon" aria-hidden="true"></i>
+            <input type="password" name="password" id="mfy-password"
+              class="mfy-input" placeholder="Password"
               autocomplete="current-password" required>
             <button type="button" class="kv-pass-toggle" id="kv-pass-toggle" aria-label="Toggle password visibility">
               <i class="fas fa-eye" aria-hidden="true"></i>
@@ -675,7 +757,7 @@
           </div>
         </div>
 
-        <button type="submit" class="kishivibe-login-btn" id="kishivibe-login-btn">
+        <button type="submit" class="mfy-login-btn" id="mfy-login-btn">
           <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
           Log In
         </button>
@@ -687,20 +769,22 @@
         </div>
       </form>
 
-      <div class="kishivibe-divider"><span>or</span></div>
+      <div class="mfy-divider"><span>or</span></div>
 
-      <div class="kishivibe-signup-link">
-        <p class="kishivibe-signup-text">Don't have an account?</p>
-        <a href="{% url 'register' %}" class="kishivibe-signup-btn">
+      <div class="mfy-signup-link">
+        <p class="mfy-signup-text">Don't have an account?</p>
+        <a href="{% url 'register' %}" class="mfy-signup-btn">
           <i class="fas fa-user-plus" aria-hidden="true"></i>
           Sign Up
         </a>
       </div>
 
-    </div>
+    </div><!-- /mfy-login-container -->
 
-    </div>
-  </div>
+    </div><!-- /mfy-container-inner -->
+    </div><!-- /mfy-panel-login -->
+
+  </div><!-- /mfy-container -->
 
   <link rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
@@ -802,16 +886,6 @@
   </div>
 
   <style>
-  /* ── Forgot password link ── */
-  .kv-forgot-link {
-    background: none; border: none; padding: 0;
-    color: var(--kv-primary, #0095f6);
-    font-size: 13px; font-weight: 500; cursor: pointer;
-    text-decoration: underline; text-underline-offset: 2px;
-    transition: opacity .15s;
-  }
-  .kv-forgot-link:hover { opacity: .75; }
-
   /* ── Modal overlay ── */
   .kv-fpw-overlay {
     position: fixed; inset: 0;
@@ -1125,12 +1199,7 @@
       answerInp.classList.remove('kv-fpw-err');
       setLoading(verifyBtn, true);
 
-      var body = new URLSearchParams();
-      body.append('username', currentUsername);
-      body.append('secret_answer', ans);
-      /* We do a mini-reset with a dummy password to verify the answer only.
-         Instead, we pass a sentinel to a dedicated verify step — actually we
-         just proceed to step 3 client-side and send everything on final submit. */
+      /* We proceed to step 3 client-side and send everything on final submit. */
       setLoading(verifyBtn, false);
       step2.style.display='none';
       step3.style.display='block';
@@ -1201,65 +1270,108 @@
   </script>
 
   <script>
-  /* ── KishiHub Desktop Slideshow ── */
-  (function () {
-    var track  = document.getElementById('kvSlidesTrack');
-    var dots   = document.querySelectorAll('.kv-dot');
-    var caps   = document.querySelectorAll('.kv-caption');
-    var total  = dots.length;
-    var current = 0;
-    var timer;
+/* MARKETFY LOGIN PAGE — inline */
+(function () {
+  'use strict';
 
-    function goTo(idx) {
-      caps[current].classList.remove('active');
-      dots[current].classList.remove('active');
-      current = (idx + total) % total;
-      track.style.transform = 'translateX(-' + (current * 100) + '%)';
-      dots[current].classList.add('active');
-      /* re-trigger caption animation */
-      caps[current].classList.remove('active');
-      void caps[current].offsetWidth; /* reflow */
-      caps[current].classList.add('active');
-    }
+  /* ── Shake keyframe ── */
+  var shakeStyle = document.createElement('style');
+  shakeStyle.textContent =
+    '@keyframes mfyShake{0%,100%{transform:translateX(0)}' +
+    '25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}';
+  document.head.appendChild(shakeStyle);
 
-    function startAuto() {
-      timer = setInterval(function () { goTo(current + 1); }, 3200);
-    }
+  /* ── Splash → skeleton → card ── */
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var splash = document.getElementById('mfy-splash');
+      if (splash) splash.classList.add('mfy-hidden');
 
-    function resetAuto() {
-      clearInterval(timer);
-      startAuto();
-    }
+      setTimeout(function () {
+        var skel    = document.getElementById('mfy-skeleton');
+        var content = document.getElementById('mfy-content');
 
-    /* Dot click */
-    dots.forEach(function (dot) {
-      dot.addEventListener('click', function () {
-        goTo(parseInt(dot.dataset.idx, 10));
-        resetAuto();
+        if (skel) {
+          skel.style.transition = 'opacity 0.25s ease';
+          skel.style.opacity    = '0';
+        }
+
+        setTimeout(function () {
+          if (skel)    skel.style.display = 'none';
+          if (content) {
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                content.classList.add('mfy-show');
+              });
+            });
+          }
+          var uInp = document.getElementById('mfy-username');
+          if (uInp) setTimeout(function () { uInp.focus(); }, 400);
+        }, 260);
+      }, 120);
+    }, 700);
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+
+    var form     = document.getElementById('mfy-form');
+    var loginBtn = document.getElementById('mfy-login-btn');
+    var uInp     = document.getElementById('mfy-username');
+    var pInp     = document.getElementById('mfy-password');
+    var toggle   = document.getElementById('kv-pass-toggle');
+
+    /* ── Focus / blur border feedback ── */
+    document.querySelectorAll('.mfy-input').forEach(function (inp) {
+      inp.addEventListener('focus', function () {
+        this.style.borderColor = 'var(--mfy-primary)';
+        this.style.background  = 'var(--mfy-white)';
+      });
+      inp.addEventListener('blur', function () {
+        this.style.borderColor = '';
+        this.style.background  = '';
       });
     });
 
-    /* Touch/swipe on phone frame */
-    var startX = 0;
-    var phone  = document.querySelector('.kv-phone-frame');
-    if (phone) {
-      phone.addEventListener('touchstart', function (e) {
-        startX = e.touches[0].clientX;
-      }, { passive: true });
-      phone.addEventListener('touchend', function (e) {
-        var dx = e.changedTouches[0].clientX - startX;
-        if (Math.abs(dx) > 30) {
-          goTo(dx < 0 ? current + 1 : current - 1);
-          resetAuto();
-        }
-      }, { passive: true });
+    /* ── Password visibility toggle ── */
+    if (toggle && pInp) {
+      toggle.addEventListener('click', function () {
+        var hidden = pInp.type === 'password';
+        pInp.type = hidden ? 'text' : 'password';
+        toggle.querySelector('i').className = hidden ? 'fas fa-eye-slash' : 'fas fa-eye';
+      });
     }
 
-    startAuto();
-  })();
-  </script>
+    if (!form) return;
 
-  <script src="{% static 'js/index.js' %}"></script>
+    /* ── Submit: validate empty fields then show spinner ── */
+    form.addEventListener('submit', function (e) {
+      var userVal = uInp ? uInp.value.trim() : '';
+      var passVal = pInp ? pInp.value : '';
+
+      if (!userVal || !passVal) {
+        e.preventDefault();
+        form.style.animation = 'none';
+        void form.offsetWidth;
+        form.style.animation = 'mfyShake 0.4s ease';
+        setTimeout(function () { form.style.animation = ''; }, 400);
+        if (!userVal && uInp) uInp.classList.add('kv-input-error');
+        if (!passVal && pInp) pInp.classList.add('kv-input-error');
+        return false;
+      }
+
+      if (loginBtn) {
+        loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Logging in\u2026';
+        loginBtn.disabled = true;
+      }
+    });
+
+    if (uInp) uInp.addEventListener('input', function () { this.classList.remove('kv-input-error'); });
+    if (pInp) pInp.addEventListener('input', function () { this.classList.remove('kv-input-error'); });
+
+  });
+
+})();
+  </script>
 
 </body>
 </html>

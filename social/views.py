@@ -2,7 +2,7 @@ import os
 import re
 import uuid as uuid_module
 import socket
-import threading
+
 from html import escape as html_escape, unescape as html_unescape
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
 from .models import FollowNotification
@@ -11,15 +11,15 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, Post, PostImage, PostVibe, UserReport, BlockedUser, CommentReply, ChannelUserLastSeen, PostComment, Message, Notification, ChannelMessage, Channel, Market, MarketImage, SearchHistory, UserFeedProfile, SocialEvent, JobVacancy, MarketVibe, MarketComment, JobVibe, JobComment, EventVibe, EventComment
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist
 from django.db.models import Q
-from django.db.models import Count, Max, Min, OuterRef, Subquery
+from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from itertools import groupby
 from django.contrib.humanize.templatetags.humanize import naturaltime
-import time, json, logging, re, requests, ipaddress, math
+import time, json, logging, re, requests, ipaddress
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, quote as url_quote
 from django.http import JsonResponse, Http404
@@ -131,8 +131,6 @@ def _safe_next(request, fallback='/home'):
 _REQUIRED_PROFILE_FIELDS = [
     ('full_name',        'Full name'),
     ('phone',            'Phone number'),
-    ('community_area',   'Community area'),
-    ('residency_status', 'Residency status'),
 ]
 
 def _profile_post_status(user):
@@ -188,8 +186,42 @@ def index(request):
             messages.error(request, 'Invalid username or password. Please try again.')
             return redirect('/')
 
-    # ── GET ───────────────────────────────────────────────────────────────────
-    return render(request, 'index.html')
+    # ── GET — pull real listings for the marketing marquee ─────────────────────
+    _marquee_products = list(
+        Market.objects
+        .order_by('-is_promoted', '-posted_on')[:24]
+    )
+
+    if _marquee_products:
+        marquee_flat = _marquee_products[:12]  # for the mobile horizontal strip
+
+        # Split into (up to) 3 columns for the desktop scrolling marquee.
+        _col_size = max(1, -(-len(_marquee_products) // 3))  # ceil division
+        marquee_columns = [
+            _marquee_products[i:i + _col_size]
+            for i in range(0, len(_marquee_products), _col_size)
+        ][:3]
+        # Duplicate each column's items so the CSS scroll loop is seamless.
+        marquee_columns = [col + col for col in marquee_columns if col]
+    else:
+        # Fresh install with no listings yet — fall back to category previews.
+        _fallback_categories = [
+            {'category_icon': Market.CATEGORY_ICONS[key], 'category_label': label}
+            for key, label in Market.CATEGORY_CHOICES
+        ]
+        marquee_flat = _fallback_categories[:12]
+
+        _col_size = max(1, -(-len(_fallback_categories) // 3))
+        marquee_columns = [
+            _fallback_categories[i:i + _col_size]
+            for i in range(0, len(_fallback_categories), _col_size)
+        ][:3]
+        marquee_columns = [col + col for col in marquee_columns if col]
+
+    return render(request, 'index.html', {
+        'marquee_columns': marquee_columns,
+        'marquee_flat':    marquee_flat,
+    })
 
 @csrf_protect
 def register(request):
@@ -221,22 +253,16 @@ def register(request):
             return redirect('register')
 
         gender        = html_escape(request.POST.get('gender', '').strip())
-        community_raw = html_escape(request.POST.get('community_area', '').strip())
 
         # Validate gender
         valid_genders = ['male', 'female', 'non_binary', 'prefer_not_to_say']
         if gender and gender not in valid_genders:
             gender = ''
 
-        # Validate community_area against known choices
-        valid_communities = [v for v, _ in Profile.KISHI_COMMUNITIES]
-        community_area = community_raw if community_raw in valid_communities else ''
-
         user = User.objects.create_user(username=username, email=email, password=password)
         profile = Profile.objects.create(
             user=user,
             gender=gender,
-            community_area=community_area,
         )
 
         # Handle optional profile picture upload
@@ -421,12 +447,6 @@ def validate_password_strength(request):
 
 
 
-def extract_hashtags(content):
-    """Extract hashtags from post content"""
-    import re
-    hashtags = re.findall(r'#(\w+)', content)
-    return hashtags
-
 
 def _safe_redirect_back(request, fallback='home'):
    
@@ -444,1022 +464,46 @@ def _safe_redirect_back(request, fallback='home'):
 
 
 
-FEED_PAGE_SIZE = 10          # posts returned per page
-_EXPLORE_RATIO = 0.15        # 15 % of each page is random exploration
+FEED_PAGE_SIZE = 10          # items returned per page
 
 
-_FEED_SAMPLE_MIN = 40
-_FEED_SAMPLE_MAX = 400
-_FEED_SAMPLE_MULTIPLIER = 4   # posts per followed account in the candidate pool
-
-# ── View-signal tuning knobs ──────────────────────────────────────────────────
-# These three constants control exactly how much influence view data has on
-# the final score.  Keep them well below the engagement/recency floor so that
-# pure view-farming never outcompetes genuine interaction.
-#
-#   _VIEW_VELOCITY_CAP   — log2-compressed velocity ceiling (views/hour).
-#                          log2(1 + 200) ≈ 7.65, so a post doing 200 views/h
-#                          earns the full cap.  Beyond that: diminishing returns.
-#   _VIEW_VELOCITY_WEIGHT — how many score points a maximally-fast post earns.
-#                           Kept at 1.5 so velocity never dominates recency (max ~2).
-#   _VER_QUALITY_CAP     — view-to-engagement ratio cap before quality multiplier
-#                           is clamped.  5 % VER → multiplier ≈ 1.10 (10 % boost).
-#                           This rewards content that actually makes people react.
-#   _VIEW_VOLUME_WEIGHT  — compressed raw-view bonus (diminishing returns).
-#                           log2(1 + 10000) ≈ 13.3 → 0.5-pt bonus at viral scale.
-#                           Intentionally tiny — this is a tiebreaker, not a driver.
-_VIEW_VELOCITY_CAP    = 200.0   # views / hour ceiling before log compression
-_VIEW_VELOCITY_WEIGHT = 1.5     # max score contribution from velocity
-_VER_QUALITY_CAP      = 0.10    # 10 % VER → maximum quality multiplier
-_VIEW_VOLUME_WEIGHT   = 0.5     # weight on log2-compressed raw view count
 
 
-def _build_fof(following_ids_set, current_user_id):
-    """
-    Resolve friend-of-friend data in 2 bulk DB queries.
-    Returns (fof_ids: set, fof_via_map: dict {uid: [User, ...]}).
-    """
-    fof_pairs = list(
-        Profile.objects
-        .filter(user__in=following_ids_set)
-        .values_list('user_id', 'followings__user')
-    )
-    fof_ids     = set()
-    fof_via_map = {}
-    for follower_id, fof_uid in fof_pairs:
-        if fof_uid and fof_uid not in following_ids_set and fof_uid != current_user_id:
-            fof_ids.add(fof_uid)
-            fof_via_map.setdefault(fof_uid, set()).add(follower_id)
-
-    connector_users = {u.id: u for u in User.objects.filter(id__in=following_ids_set)}
-    fof_via_resolved = {
-        fof_uid: [connector_users[cid] for cid in cids if cid in connector_users]
-        for fof_uid, cids in fof_via_map.items()
-    }
-    return fof_ids, fof_via_resolved
 
 
-def _get_or_create_feed_profile(user):
-    """Lazily fetch/create the UserFeedProfile for this user."""
-    profile, _ = UserFeedProfile.objects.get_or_create(user=user)
-    return profile
-
-
-def _build_user_interest_profile(user):
-   
-    from django.core.cache import cache
-
-    cache_key = f'kishiface_interest_v2_{user.id}'
-    cached    = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    now    = timezone.now()
-    cutoff = now - timedelta(days=30)
-
-    # Affinity decay: half-life 7 days.
-    # weight(age_days) = base * exp(-age_days * ln2 / 7)
-    _AFFINITY_HALF_LIFE = 7.0   # days
-    _AFFINITY_DECAY     = math.log(2) / _AFFINITY_HALF_LIFE
-
-    def _affinity_weight(base, interacted_at):
-        age_days = max(0.0, (now - interacted_at).total_seconds() / 86400)
-        return base * math.exp(-_AFFINITY_DECAY * age_days)
-
-    interacted_post_ids = set()
-    author_affinity: dict = {}   # author_id → cumulative decayed score
-
-    def _accum(aid, weight):
-        if aid:
-            author_affinity[aid] = author_affinity.get(aid, 0.0) + weight
-
-    # ── Likes (base weight 4.0, same as the old flat bonus) ──────────────────
-    liked_rows = Post.objects.filter(
-        likes=user, created_at__gte=cutoff
-    ).values_list('post_id', 'author_id', 'created_at')
-    for pid, aid, created_at in liked_rows:
-        interacted_post_ids.add(str(pid))
-        _accum(aid, _affinity_weight(4.0, created_at))
-
-    # ── Vibes (base weight 4.0) ───────────────────────────────────────────────
-    vibed_rows = PostVibe.objects.filter(
-        user=user, created_at__gte=cutoff
-    ).select_related('post').values_list('post_id', 'post__author_id', 'created_at')
-    for pid, aid, created_at in vibed_rows:
-        interacted_post_ids.add(str(pid))
-        _accum(aid, _affinity_weight(4.0, created_at))
-
-    # ── Comments (base weight 4.0) ────────────────────────────────────────────
-    cmt_rows = PostComment.objects.filter(
-        author=user, created_at__gte=cutoff
-    ).select_related('post').values_list('post_id', 'post__author_id', 'created_at')
-    for pid, aid, created_at in cmt_rows:
-        interacted_post_ids.add(str(pid))
-        _accum(aid, _affinity_weight(4.0, created_at))
-
-    # ── Views (base weight 1.0) ───────────────────────────────────────────────
-    # Views are a passive signal — lower base weight than likes/vibes/comments
-    # so that merely scrolling past a post doesn't create the same affinity as
-    # actively engaging with it.  We still include it because repeated views of
-    # a creator's work (e.g. watching a video twice) is a meaningful intent
-    # signal that the other three actions won't capture.
-    # We proxy "viewed posts" via the Post.view field increment: any post the
-    # user explicitly played or opened the comment sheet for will have had its
-    # view count bumped via /record-view/, and the post appears in the pool if
-    # the author is followed or the post surfaced via explore.  Rather than a
-    # separate ViewLog table, we read the recent Post pool filtered by author
-    # and infer passive affinity from the author set — a conservative but
-    # zero-migration approach that stays consistent with the existing system.
-    viewed_rows = Post.objects.filter(
-        author__in=list(author_affinity.keys()) or [user.id],  # use author IDs not post IDs
-        created_at__gte=cutoff,
-        view__gt=0,
-    ).exclude(
-        post_id__in=[pid for pid in interacted_post_ids]  # already counted above
-    ).values_list('post_id', 'author_id', 'created_at', 'view')
-
-    # We weight by view count (log-compressed) so a post with 100 views earns
-    # slightly more affinity than one with 1 view, but with diminishing returns.
-    for pid, aid, created_at, view_count in viewed_rows:
-        view_weight = 1.0 * math.log2(1 + (view_count or 0))
-        _accum(aid, _affinity_weight(min(view_weight, 2.0), created_at))
-
-    result = (interacted_post_ids, author_affinity)
-    cache.set(cache_key, result, timeout=300)   # 5-minute TTL
-    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Session-level intent learning
+# Feed page builder — market / job / event / suggestion cards only.
+# Post fetching, scoring, and media pipelines have been removed because
+# feed_posts_partial.html does not render post items.
 # ─────────────────────────────────────────────────────────────────────────────
-# The long-term interest profile (30 days, 7-day half-life) tells us what the
-# user *generally* likes.  But it can't answer: "what do they want RIGHT NOW?"
-#
-# Session intent captures the last N interactions (default 20) that happened
-# in the current browsing session — stored as a compact list in Redis with a
-# short TTL.  Each interaction is a dict:
-#   { 'author_id': int, 'vibe_type': str|None, 'ts': float }
-#
-# From this we derive two real-time signals:
-#   session_author_affinity  — how much the user has engaged with each author
-#                              THIS session (not today, THIS scroll session).
-#   session_vibe_weights     — which vibe types the user has reacted with
-#                              most in this session.
-#
-# Both are applied as an ADDITIVE bonus on top of the long-term score, so the
-# feed smoothly shifts toward what the user is in the mood for right now.
-# The bonus decays to nothing once the session cache expires (30 min TTL).
-# ─────────────────────────────────────────────────────────────────────────────
-
-_SESSION_MAX_INTERACTIONS = 20    # rolling window kept in cache
-_SESSION_TTL_SECONDS      = 1800  # 30-minute session window
-
-
-def _session_cache_key(user_id: int) -> str:
-    return f'kvibe_session_intent_v1_{user_id}'
-
-
-def _session_record_interaction(user_id: int, author_id: int,
-                                 vibe_type: str | None = None) -> None:
-    """
-    Append one interaction to the rolling session window.
-    Called by every _feed_record_* helper so the session updates instantly
-    after every like / vibe / comment — zero extra DB queries.
-
-    The list is capped at _SESSION_MAX_INTERACTIONS (FIFO) so it never grows
-    unbounded.  We use a simple list rather than a deque because Redis stores
-    it as JSON and we need cheap serialisation.
-    """
-    try:
-        from django.core.cache import cache
-        import time as _time
-
-        key      = _session_cache_key(user_id)
-        existing = cache.get(key) or []
-
-        existing.append({
-            'author_id': author_id,
-            'vibe_type': vibe_type,
-            'ts':        _time.time(),
-        })
-
-        # Keep only the most recent N interactions (drop oldest from front)
-        if len(existing) > _SESSION_MAX_INTERACTIONS:
-            existing = existing[-_SESSION_MAX_INTERACTIONS:]
-
-        # Refresh TTL on every write so an active session stays alive
-        cache.set(key, existing, timeout=_SESSION_TTL_SECONDS)
-    except Exception:
-        pass   # session learning is best-effort — never block the feed
-
-
-def _build_session_intent(user_id: int):
-    """
-    Read the rolling session window from cache and derive:
-
-        session_author_affinity : dict { author_id → float }
-            Recency-weighted count of how many times the user engaged with
-            each author this session.  Most-recent interactions count more.
-
-        session_vibe_weights : dict { vibe_type → float }
-            Normalised share of each vibe type in this session so the feed
-            can tilt toward the mood the user is currently expressing.
-
-    Returns (session_author_affinity, session_vibe_weights).
-    Both dicts are empty when there is no session data (first visit, cache
-    miss, or TTL expired) — callers must handle empty dicts gracefully.
-
-    Recency weight: linear decay over the window so the most recent
-    interaction (rank 1) is weighted N× more than the oldest (rank N).
-        weight(rank) = (N - rank + 1) / sum(1..N)
-    This is O(N) with N ≤ 20 — essentially free.
-    """
-    try:
-        from django.core.cache import cache
-        interactions = cache.get(_session_cache_key(user_id)) or []
-    except Exception:
-        return {}, {}
-
-    if not interactions:
-        return {}, {}
-
-    n = len(interactions)
-    # Assign recency weights: newest interaction gets weight n, oldest gets 1
-    author_aff:  dict = {}
-    vibe_counts: dict = {}
-    weight_total = n * (n + 1) / 2   # sum of 1..n
-
-    for rank, event in enumerate(reversed(interactions), start=1):
-        w = rank / weight_total   # normalised so all weights sum to 1.0
-
-        aid = event.get('author_id')
-        if aid:
-            author_aff[aid] = author_aff.get(aid, 0.0) + w
-
-        vt = event.get('vibe_type')
-        if vt:
-            vibe_counts[vt] = vibe_counts.get(vt, 0.0) + w
-
-    return author_aff, vibe_counts
-
-
-def _score_post(post, now, vibe_weights, interacted_post_ids,
-                author_affinity, fof_ids, adaptive_author_ids,
-                new_user_author_ids=None,
-                session_author_affinity=None,
-                session_vibe_weights=None):
-    """
-    new_user_author_ids     : set of author IDs whose ALL posts currently have
-                              zero engagement. Posts from these authors receive a
-                              guaranteed visibility boost so they surface
-                              immediately in existing users' feeds.
-    session_author_affinity : dict {author_id → float} — recency-weighted
-                              engagement with each author in THIS session.
-    session_vibe_weights    : dict {vibe_type → float} — normalised share of
-                              each vibe type reacted to this session.
-    """
-    # ── Resolve the "real" post for engagement/vibe signals ──────────────────
-    # For a repost we count the ORIGINAL post's engagement (its full social
-    # proof) but use THIS post row's created_at for recency (the repost is a
-    # fresh share event and should be treated as new content in the feed).
-    signal_post = (
-        post.original_post
-        if post.is_repost and post.original_post
-        else post
-    )
-
-    # ── 1a. Raw weighted engagement ───────────────────────────────────────────
-    # Always read annotations from `post` (the feed row) — it carries the DB
-    # annotations (vibe_count, comment_count, repost_count). For reposts, the
-    # vibe breakdown of the original is already merged into _vb_<type> attrs
-    # by _annotate_vibe_breakdown(), so signal_post is only used for share count
-    # (a plain IntegerField, not an annotation).
-    raw_vibe_count    = getattr(post, 'vibe_count',    0)
-    raw_comment_count = getattr(post, 'comment_count', 0)
-    raw_repost_count  = getattr(post, 'repost_count',  0)
-    raw_share_count   = (getattr(signal_post, 'share', None) or getattr(post, 'share', 0) or 0)
-
-    raw_engagement = (
-        raw_vibe_count    * 4 +
-        raw_comment_count * 3 +
-        raw_repost_count  * 2 +
-        raw_share_count   * 1
-    )
-    # Log-compress: viral posts face diminishing returns.
-    # log2(1+x): 0→0  10→3.46  100→6.66  1000→9.97
-    engagement = math.log2(1 + raw_engagement)
-
-    # ── 1b. Recency (always from THIS post row) ──────────────────────────────
-    #   Phase 1 (0–72 h): exponential decay, half-life = 24 h
-    #   Phase 2 (72 h+):  hard ceiling — old viral posts can never lock the feed
-    _HALF_LIFE_HOURS    = 24
-    _AGE_HARD_CAP_HOURS = 72
-    _RECENCY_FLOOR      = 2 ** (-_AGE_HARD_CAP_HOURS / _HALF_LIFE_HOURS)  # 0.125
-
-    age_hours = max(0.0, (now - post.created_at).total_seconds() / 3600)
-    recency   = 2 ** (-age_hours / _HALF_LIFE_HOURS)
-    if age_hours >= _AGE_HARD_CAP_HOURS:
-        recency = _RECENCY_FLOOR
-
-    score = engagement * recency
-
-    # ── 1c. Newness bonus — guarantee fresh posts always surface ─────────────
-    # A brand-new post with zero engagement scores log2(1)*1.0 = 0.0, which
-    # means it gets buried under everything with even 1 interaction.
-    # The newness bonus gives it a fighting chance in its early hours.
-    #
-    # OLD design: stepped (+2.0 → +1.0 → +0.0) caused a hard "ranking cliff"
-    # exactly at the 2-hour mark — a post could suddenly vanish from the feed.
-    #
-    # NEW design: smooth exponential decay with half-life of 1.5 hours.
-    #   bonus = 2.0 * exp(-age_hours * ln(2) / 1.5)
-    #   age 0 h  → +2.00   (just posted)
-    #   age 1 h  → +1.26   (still very fresh)
-    #   age 2 h  → +0.79   (fading naturally)
-    #   age 4 h  → +0.31   (fading further)
-    #   age 6 h  → +0.13   (nearly gone)
-    #   age 8 h+ → <0.06   (negligible — engagement drives ranking)
-    _NEWNESS_PEAK      = 2.0
-    _NEWNESS_HALF_LIFE = 1.5   # hours
-    _NEWNESS_DECAY     = math.log(2) / _NEWNESS_HALF_LIFE
-    score += _NEWNESS_PEAK * math.exp(-_NEWNESS_DECAY * age_hours)
-
-    # ── 2. View Signals ───────────────────────────────────────────────────────
-    # Read view count from the signal post (original for reposts) so we
-    # always reflect the true accumulated audience of the content.
-    raw_views = max(0, getattr(signal_post, 'view', None) or 0)
-
-    # ── 2a. View velocity — surface fast-rising content ──────────────────────
-    # views/hour gives a momentum signal independent of age.  A post with
-    # 500 views in 2 hours outranks a week-old post with 2,000 views because
-    # the audience is still actively discovering it RIGHT NOW.
-    # We use max(age, 0.5) so a brand-new post (age < 30 min) doesn't get an
-    # artificially infinite velocity that floods the feed with zero-engagement posts.
-    #
-    # Velocity curve (with _VIEW_VELOCITY_WEIGHT = 1.5):
-    #   10  views/h → log2(11)  / log2(201) * 1.5 ≈ 0.55
-    #   50  views/h → log2(51)  / log2(201) * 1.5 ≈ 1.06
-    #   200 views/h → log2(201) / log2(201) * 1.5 = 1.50  (cap)
-    views_per_hour   = raw_views / max(age_hours, 0.5)
-    capped_velocity  = min(views_per_hour, _VIEW_VELOCITY_CAP)
-    velocity_score   = (math.log2(1 + capped_velocity) /
-                        math.log2(1 + _VIEW_VELOCITY_CAP)) * _VIEW_VELOCITY_WEIGHT
-    score += velocity_score
-
-    # ── 2b. View-to-engagement ratio (VER) — quality multiplier ─────────────
-    # VER = (vibes + comments + reposts + shares) / views
-    # A high VER means viewers are not just watching — they're reacting.
-    # We apply this as a multiplier on the already-computed engagement score
-    # so that high-quality viral content is amplified, while passive/skip-heavy
-    # content (high views, almost no reactions) gets no boost at all.
-    #
-    # Multiplier design: 1.0 (neutral) at VER=0, rising linearly to 1.10 at VER=_VER_QUALITY_CAP.
-    # So at most 10 % amplification — keeps VER as a tiebreaker, not a primary driver.
-    #   VER 0 %  → ×1.00  (no boost — people scrolled past without reacting)
-    #   VER 2 %  → ×1.02  (slightly above average)
-    #   VER 5 %  → ×1.05  (good conversion rate)
-    #   VER 10%+ → ×1.10  (excellent — almost every viewer reacted)
-    if raw_views > 0:
-        total_engagements = raw_vibe_count + raw_comment_count + raw_repost_count + raw_share_count
-        ver               = min(total_engagements / raw_views, _VER_QUALITY_CAP)
-        quality_mult      = 1.0 + (ver / _VER_QUALITY_CAP) * 0.10   # maps [0, cap] → [1.0, 1.10]
-        score *= quality_mult
-
-    # ── 2c. View volume — tiny popularity tiebreaker ─────────────────────────
-    # Pure view count with strong log compression so a post with 10,000 views
-    # earns only 0.5 extra points vs a post with 1,000 views earning 0.33.
-    # This intentionally tiny bonus stops view farms from gaming the ranking
-    # while still letting genuinely popular content hold a marginal edge over
-    # equally-engaging but less-seen posts.
-    #
-    # Volume curve (with _VIEW_VOLUME_WEIGHT = 0.5):
-    #   100   views → log2(101)  / log2(10001) * 0.5 ≈ 0.24
-    #   1,000 views → log2(1001) / log2(10001) * 0.5 ≈ 0.37
-    #  10,000 views → log2(10001)/ log2(10001) * 0.5 = 0.50  (cap)
-    _VIEW_VOLUME_CAP = 10_000
-    volume_score = (math.log2(1 + min(raw_views, _VIEW_VOLUME_CAP)) /
-                    math.log2(1 + _VIEW_VOLUME_CAP)) * _VIEW_VOLUME_WEIGHT
-    score += volume_score
-
-    # ── 3. Behavior-Based ────────────────────────────────────────────────────
-    actual_author_id = (
-        post.original_post.author_id
-        if post.is_repost and post.original_post
-        else post.author_id
-    )
-    # Check interaction against both the repost row and its original
-    post_ids_to_check = {str(post.post_id)}
-    if post.is_repost and post.original_post:
-        post_ids_to_check.add(str(post.original_post.post_id))
-
-    if post_ids_to_check & interacted_post_ids:
-        score += 3.0
-    # Author affinity: time-decayed cumulative score (7-day half-life).
-    # A like from 1 day ago (~3.7) outweighs one from 20 days ago (~0.9).
-    # Capped at 6.0 so a single hyper-active author can't dominate the feed.
-    if actual_author_id in author_affinity:
-        score += min(author_affinity[actual_author_id], 6.0)
-    if actual_author_id in adaptive_author_ids:
-        score += 2.0
-
-    # ── 3b. Session intent — "what does the user want RIGHT NOW?" ────────────
-    # The long-term profile (section 3 above) reflects 30-day habits.
-    # This section boosts posts that match what the user has been engaging
-    # with in the CURRENT session (last ≤20 interactions, 30-min TTL).
-    #
-    # Two sub-signals:
-    #
-    #   i.  Session author affinity — if the user just liked two posts from
-    #       author X this session, their next post scores higher immediately.
-    #       Weight: up to +3.0 (capped to prevent one author dominating).
-    #       Complements long-term affinity without replacing it.
-    #
-    #   ii. Session vibe mood — if the user has been hitting 'fire' on
-    #       everything, posts tagged with 'fire' vibes by others score higher.
-    #       Weight: up to +1.5, scaled by how dominant that vibe is this session.
-    #       Lets the feed shift toward "funny mode" or "deep mode" in real time.
-    #
-    # Both signals are zero when no session data exists (first load, cache miss)
-    # so the fallback is pure long-term scoring — no regressions.
-    _SESSION_AUTHOR_CAP = 3.0
-    _SESSION_VIBE_CAP   = 1.5
-
-    if session_author_affinity and actual_author_id in session_author_affinity:
-        # Normalise: max possible value in the dict is 1.0 (all interactions
-        # with one author), so we scale directly to the cap.
-        raw_sa = session_author_affinity[actual_author_id]
-        score += min(raw_sa * _SESSION_AUTHOR_CAP, _SESSION_AUTHOR_CAP)
-
-    if session_vibe_weights:
-        # Sum the session vibe weight for each vibe type present on this post,
-        # scaled by the actual vibe count so a post with 10 'fire' vibes and
-        # a user in a 'fire' mood scores higher than one with 1 'fire' vibe.
-        session_vibe_score = 0.0
-        _VIBE_TYPES = ['fire', 'real', 'vibing', 'dead', 'cringe', 'chill', 'love']
-        for vt in _VIBE_TYPES:
-            s_weight  = session_vibe_weights.get(vt, 0.0)
-            post_vibes = getattr(post, f'_vb_{vt}', 0)
-            if s_weight > 0 and post_vibes > 0:
-                # log-compress post vibe count so viral posts don't dominate
-                session_vibe_score += s_weight * math.log2(1 + post_vibes)
-        # Normalise and cap
-        if session_vibe_score > 0:
-            score += min(session_vibe_score, _SESSION_VIBE_CAP)
-
-    # ── 4. Vibe-Based taste match (long-term) ─────────────────────────────────
-    # For reposts use the vibe breakdown of the original post (attached as
-    # _vb_<type> attributes — the pipeline sets these on signal_post via
-    # the same post_id used when building vb_lookup).
-    vibe_score = sum(
-        getattr(post, f'_vb_{vt}', 0) * w
-        for vt, w in vibe_weights.items()
-    )
-    score += vibe_score * 0.5
-
-    # ── 5. Network — friend-of-friend ─────────────────────────────────────────
-    if actual_author_id in fof_ids:
-        score += 2.5
-
-    # ── 6. New-user author visibility guarantee ──────────────────────────────
-    # Posts from authors who have NEVER received a single reaction, view, or
-    # comment on any of their posts score near zero on every engagement signal.
-    # Without this bonus they permanently stay buried below posts with even one
-    # interaction — existing users would never see them.
-    #
-    # We apply a smooth time-decayed bonus that:
-    #   • Peaks at +4.0 immediately after posting (strong enough to surface
-    #     the post above most zero-engagement older content).
-    #   • Decays with a 3-hour half-life so it fades naturally once the post
-    #     has had time to collect its first reactions.
-    #   • Is capped in age: after 24 hours a new-user post that still has no
-    #     engagement falls back to organic ranking — we don't force-surface
-    #     genuinely low-quality content forever.
-    #
-    # Score curve (peak 4.0, half-life 3 h):
-    #   age 0 h  → +4.00   (just posted — guaranteed top-of-feed visibility)
-    #   age 1 h  → +3.17   (still very prominent)
-    #   age 3 h  → +2.00   (half-life reached)
-    #   age 6 h  → +1.00   (fading — reactions take over)
-    #   age 12 h → +0.25   (nearly organic)
-    #   age 24 h → +0.00   (cap — pure engagement from here)
-    _NEW_AUTHOR_PEAK      = 4.0
-    _NEW_AUTHOR_HALF_LIFE = 3.0   # hours
-    _NEW_AUTHOR_AGE_CAP   = 24.0  # hours — bonus expires after 1 day
-    if (new_user_author_ids and actual_author_id in new_user_author_ids
-            and age_hours < _NEW_AUTHOR_AGE_CAP):
-        _new_author_decay = math.log(2) / _NEW_AUTHOR_HALF_LIFE
-        score += _NEW_AUTHOR_PEAK * math.exp(-_new_author_decay * age_hours)
-
-    return score
-
-
-def _random_posts_sample(exclude_ids, cursor_dt, n,
-                          blocked_ids=None, seen_post_ids=None):
-    """
-    Return n random Post rows WITHOUT ORDER BY RANDOM().
-
-    Strategy: pick a random offset within the recent-post window
-    (last 7 days) so Postgres never has to score the full table.
-    Falls back to a small offset scan if the window is thin.
-
-    This replaces .order_by('?') which does a full-table random sort
-    and is catastrophically slow on large datasets in PostgreSQL.
-
-    blocked_ids   : set of user IDs — posts from blocked/blocking users
-                    are excluded so they never surface through explore.
-    seen_post_ids : set of post_ids already rendered in earlier pages —
-                    prevents the same post re-appearing via explore on
-                    subsequent scroll loads.
-    """
-    import random as _random
-
-    all_exclude = set(exclude_ids or [])
-    if seen_post_ids:
-        all_exclude |= set(seen_post_ids)
-
-    base_qs = Post.objects.exclude(post_id__in=all_exclude)
-    if blocked_ids:
-        base_qs = base_qs.exclude(author__in=blocked_ids)
-    if cursor_dt:
-        base_qs = base_qs.filter(created_at__lt=cursor_dt)
-
-    # Restrict to a 7-day window to keep the offset range small.
-    # We avoid COUNT() entirely — instead we try a random offset and fall back
-    # to a smaller offset if the slice returns nothing (empty window).
-    window_start = timezone.now() - timedelta(days=7)
-    window_qs    = base_qs.filter(created_at__gte=window_start)
-
-    def _fetch(qs, max_offset_hint=500):
-        offset = _random.randint(0, max_offset_hint)
-        rows = list(
-            qs
-            .select_related('author', 'author__profile',
-                            'original_post', 'original_post__author',
-                            'original_post__author__profile')
-            .prefetch_related('likes', 'reposts', 'images')
-            .annotate(
-                vibe_count    = Count('vibes',    distinct=True),
-                comment_count = Count('comments', distinct=True),
-                repost_count  = Count('reposts',  distinct=True),
-            )
-            .order_by('created_at')[offset: offset + n]
-        )
-        return rows
-
-    # Try 7-day window first; if empty fall back to all posts
-    rows = _fetch(window_qs, max_offset_hint=500)
-    if not rows:
-        rows = _fetch(base_qs, max_offset_hint=200)
-    return rows
-
-
-def _annotate_vibe_breakdown(posts):
-    """
-    Attach _vb_<vibe_type> integer attributes to each post in-place.
-    For reposts the breakdown is pulled from the original post's vibes.
-    Single bulk query regardless of list size — no N+1.
-    """
-    if not posts:
-        return
-
-    all_ids      = set()
-    orig_id_map  = {}
-    for p in posts:
-        all_ids.add(p.post_id)
-        if p.is_repost and p.original_post:
-            all_ids.add(p.original_post.post_id)
-            orig_id_map[p.post_id] = p.original_post.post_id
-
-    rows = (
-        PostVibe.objects
-        .filter(post_id__in=all_ids)
-        .values('post_id', 'vibe_type')
-        .annotate(cnt=Count('id'))
-    )
-    vb_lookup: dict = {}
-    for row in rows:
-        vb_lookup.setdefault(row['post_id'], {})[row['vibe_type']] = row['cnt']
-
-    _VIBE_TYPES = ['fire', 'real', 'vibing', 'dead', 'cringe', 'chill', 'love']
-    for post in posts:
-        lookup_id = orig_id_map.get(post.post_id, post.post_id)
-        bd = vb_lookup.get(lookup_id, {})
-        for vt in _VIBE_TYPES:
-            setattr(post, f'_vb_{vt}', bd.get(vt, 0))
-
 
 def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
-                   seen_post_ids=None, seen_suggestion_ids=None,
-                   seen_market_ids=None, seen_job_ids=None, seen_event_ids=None):
+                   seen_suggestion_ids=None,
+                   seen_market_ids=None, seen_job_ids=None, seen_event_ids=None,
+                   seen_business_ids=None,
+                   market_category=None,
+                   **_kwargs):
     """
-    Full scored/ranked feed page.
+    Build one page of the feed containing market ads, job cards, event cards,
+    and user-suggestion cards.  Post items are not included.
 
-    Pipeline:
-      1. Candidate pool  — _FEED_SAMPLE posts newest-first (cursor-aware)
-         + unseen posts from followed accounts since last visit
-      2. Per-vibe annotate — attach _vb_<type> count to each post object
-      3. Score & rank    — _score_post() with all 5 signal families
-      4. Exploration     — inject dynamic % random posts to prevent boredom
-         (30 % for new users, 15 % for established users)
-      5. Re-sort + jitter— per-user seeded RNG so different users see
-         different orderings of the same scored pool
-      6. Slice           — take page_size items
-      6b. Own-post soft boost — first page only
-      7. FoF metadata + suggestion cards → feed_items list
+    market_category: optional category key (Market.CATEGORY_CHOICES) to
+    restrict market ads to a single category. 'all' or None means no filter.
 
-    Args:
-        seen_post_ids : set/list of post_ids already shown to this user
-                        in earlier scroll pages — excluded from explore
-                        slot so the same post never re-surfaces via explore.
-
-    Returns (feed_items list, next_cursor float|None).
+    Returns (feed_items list, next_cursor None).
+    next_cursor is always None because pagination is item-count-driven by the
+    injected cards, not post timestamps.
     """
     if page_size is None:
         page_size = FEED_PAGE_SIZE
 
     following_ids_set = set(following_ids)
-    now               = timezone.now()
-    seen_post_ids     = set(seen_post_ids or [])
+    next_cursor = None
 
-    # ── Blocked users — fetch once, apply everywhere ──────────────────────────
-    # Posts from blocked/blocking users must be invisible in BOTH the main
-    # candidate pool AND the explore slot.
-    _blocked_qs  = BlockedUser.objects.filter(Q(blocker=user) | Q(blocked=user))
-    _blocked_ids = set(
-        list(_blocked_qs.values_list('blocked_id', flat=True)) +
-        list(_blocked_qs.values_list('blocker_id', flat=True))
-    )
-    _blocked_ids.discard(user.id)   # never exclude the viewer themselves
-
-    # ── Dynamic candidate pool size ───────────────────────────────────────────
-    # KishiHub is a community feed — ALL users' posts are eligible regardless
-    # of follow status.  We therefore base the pool size on a community-wide
-    # baseline rather than the number of followings, so users with zero
-    # followings still get a rich 80-post candidate pool to rank from.
-    # Formula: clamp(max(80, len(following) * multiplier), min, max).
-    _community_baseline = 80   # minimum pool for community-wide visibility
-    _feed_sample = max(
-        _community_baseline,
-        min(_FEED_SAMPLE_MAX, len(following_ids_set) * _FEED_SAMPLE_MULTIPLIER),
-    )
-
-    # ── Signals setup ─────────────────────────────────────────────────────────
-    feed_prof           = _get_or_create_feed_profile(user)
-    vibe_weights        = feed_prof.get_weights()
-    adaptive_author_ids = set(feed_prof.interacted_authors or [])
-
-    interacted_post_ids, author_affinity = _build_user_interest_profile(user)
-    fof_ids, fof_via_map = _build_fof(following_ids_set, user.id)
-
-    # Session-level intent: what is this user engaging with RIGHT NOW?
-    # Zero extra DB queries — reads a compact list from Redis (or returns
-    # empty dicts on cache miss so scoring degrades gracefully to long-term only).
-    session_author_affinity, session_vibe_weights = _build_session_intent(user.id)
-
-    # ── 1. Candidate pool ─────────────────────────────────────────────────────
-    # New-post visibility guarantee: always include ALL posts from the last
-    # 2 h regardless of author, so a brand-new post from anyone can collect
-    # its first engagement and not be invisible to the algorithm.
-    _NEW_POST_WINDOW = timezone.now() - timedelta(hours=2)
-
-    # FIX 1 — Last-visit unseen posts: always pull ALL posts from followed
-    # accounts posted since the user's last feed visit, regardless of the
-    # _FEED_SAMPLE cap.  This prevents posts from being permanently buried
-    # when the user hasn't opened the app for a day or two.
-    _last_visit = getattr(feed_prof, 'last_feed_visit', None)
-    _unseen_since = _last_visit if _last_visit else (now - timedelta(hours=48))
-
-    # KishiVibe community feed: ALL posts are visible to ALL users.
-    # Since this is a community platform for the Kishi community, every post
-    # should surface in every member's feed regardless of follow status.
-    # Blocked users are still excluded below.
-    base_qs = Post.objects.all()
-
-    # Exclude blocked users from the main pool
-    if _blocked_ids:
-        base_qs = base_qs.exclude(author__in=_blocked_ids)
-
-    if cursor_dt:
-        base_qs = base_qs.filter(created_at__lt=cursor_dt)
-
-    posts = list(
-        base_qs
-        .select_related(
-            'author', 'author__profile',
-            'original_post', 'original_post__author', 'original_post__author__profile',
-        )
-        .prefetch_related('likes', 'reposts', 'images')
-        .annotate(
-            vibe_count    = Count('vibes',    distinct=True),
-            comment_count = Count('comments', distinct=True),
-            repost_count  = Count('reposts',  distinct=True),
-        )
-        .order_by('-created_at')[:_feed_sample]
-    )
-
-    # ── FIX 1b: Unseen community posts since last visit ───────────────────────
-    # Fetch ALL posts created after _unseen_since that are NOT already in the
-    # main pool (i.e. fell outside the _feed_sample cap).  This runs only on
-    # the first page (no cursor) to avoid duplication.
-    # Community-wide: not filtered to followings — any member's post that the
-    # viewer hasn't seen yet gets a chance to surface on re-open.
-    if cursor_dt is None:
-        _existing_pool_ids = {p.post_id for p in posts}
-        _unseen_extras = list(
-            Post.objects
-            .filter(created_at__gt=_unseen_since)
-            .exclude(post_id__in=_existing_pool_ids)
-            .exclude(author__in=_blocked_ids)
-            .select_related(
-                'author', 'author__profile',
-                'original_post', 'original_post__author', 'original_post__author__profile',
-            )
-            .prefetch_related('likes', 'reposts', 'images')
-            .annotate(
-                vibe_count    = Count('vibes',    distinct=True),
-                comment_count = Count('comments', distinct=True),
-                repost_count  = Count('reposts',  distinct=True),
-            )
-            .order_by('-created_at')[:50]   # cap at 50 to avoid memory blowout
-        )
-        if _unseen_extras:
-            posts = posts + _unseen_extras
-
-    # ── FIX 4: Inject original posts of reposts as independent candidates ──────
-    # When a followed user reposts a 3-day-old post, that original post never
-    # enters the candidate pool on its own and stays invisible.  We collect the
-    # original_post ids from all repost rows already fetched, then bulk-fetch
-    # any originals not already present — they compete on their own score.
-    _repost_orig_ids = {
-        p.original_post.post_id
-        for p in posts
-        if p.is_repost and p.original_post
-    }
-    _existing_ids = {p.post_id for p in posts}
-    _missing_orig_ids = _repost_orig_ids - _existing_ids
-    if _missing_orig_ids:
-        _orig_extras = list(
-            Post.objects
-            .filter(post_id__in=_missing_orig_ids)
-            .exclude(author__in=_blocked_ids)
-            .select_related(
-                'author', 'author__profile',
-                'original_post', 'original_post__author', 'original_post__author__profile',
-            )
-            .prefetch_related('likes', 'reposts', 'images')
-            .annotate(
-                vibe_count    = Count('vibes',    distinct=True),
-                comment_count = Count('comments', distinct=True),
-                repost_count  = Count('reposts',  distinct=True),
-            )
-        )
-        posts = posts + _orig_extras
-
-    # ── Deduplicate combined post pool ───────────────────────────────────────
-    # Merging base_qs + _unseen_extras + _orig_extras can introduce the same
-    # post_id multiple times. Remove duplicates while preserving order.
-    _seen_pool_ids: set = set()
-    _deduped_posts = []
-    for _p in posts:
-        if _p.post_id not in _seen_pool_ids:
-            _seen_pool_ids.add(_p.post_id)
-            _deduped_posts.append(_p)
-    posts = _deduped_posts
-
-    # next_cursor is computed AFTER slicing to final_posts (step 6 below)
-    # so it always points to the oldest post that was actually rendered.
-    # Do NOT calculate it here from the raw 40-post pool — that skips posts.
-
-    # ── 2. Per-vibe breakdown annotation ──────────────────────────────────────
-    # Single bulk query via shared helper — handles repost → original resolution.
-    _annotate_vibe_breakdown(posts)
-
-    # ── 2b. New-user author detection ─────────────────────────────────────────
-    # Identify authors whose posts collectively have zero engagement so the
-    # scoring function can apply the visibility guarantee (section 6 in
-    # _score_post).  We count from the already-fetched pool — no extra DB query.
-    #
-    # An author qualifies as "new" if every post in the current candidate pool
-    # attributed to them has: vibe_count=0, comment_count=0, repost_count=0,
-    # share=0, and view=0.  Once any post of theirs receives even one reaction
-    # the author is removed from the set and organic scoring takes over.
-    _author_engagement: dict = {}   # author_id → cumulative engagement count
-    for _p in posts:
-        _aid = (
-            _p.original_post.author_id
-            if _p.is_repost and _p.original_post
-            else _p.author_id
-        )
-        _total = (
-            getattr(_p, 'vibe_count',    0) +
-            getattr(_p, 'comment_count', 0) +
-            getattr(_p, 'repost_count',  0) +
-            (getattr(_p, 'share', None) or 0) +
-            (getattr(_p, 'view',  None) or 0)
-        )
-        _author_engagement[_aid] = _author_engagement.get(_aid, 0) + _total
-    _new_user_author_ids = {
-        aid for aid, total in _author_engagement.items() if total == 0
-    }
-
-    # ── 3. Score & rank — compute once, cache on object ───────────────────────
-    # _score_post is called only once per post here; the cached value is reused
-    # in the merge sort below so we never compute it twice.
-    def _cached_score(p):
-        if not hasattr(p, '_feed_score'):
-            p._feed_score = _score_post(
-                p, now, vibe_weights, interacted_post_ids,
-                author_affinity, fof_ids, adaptive_author_ids,
-                new_user_author_ids=_new_user_author_ids,
-                session_author_affinity=session_author_affinity,
-                session_vibe_weights=session_vibe_weights,
-            )
-        return p._feed_score
-
-    scored = sorted(posts, key=_cached_score, reverse=True)
-
-    # ── 4. Cursor — derived from the SCORED pool before any explore mixing ────
-    # We take the Nth post in the scored list (where N = page_size) as the
-    # cursor anchor. This guarantees:
-    #   a) The cursor always advances exactly page_size posts per scroll.
-    #   b) Explore posts (which may be random-offset older posts) never drag
-    #      the cursor backwards and cause duplicate posts on the next load.
-    #   c) next_cursor is None only when the scored pool itself has fewer
-    #      than page_size posts — meaning genuine exhaustion.
-    if len(scored) >= page_size:
-        # Use the page_size-th scored post's timestamp as the cursor boundary.
-        # On the next call, base_qs will filter created_at < this timestamp.
-        next_cursor = scored[page_size - 1].created_at.timestamp()
-    else:
-        next_cursor = None
-
-    # ── 5. Exploration injection ─────────────────────────────────────────────
-    # Explore posts add novelty but are EXCLUDED from cursor calculation above.
-    # Uses _random_posts_sample() — random offset scan, no ORDER BY RANDOM().
-    #
-    # Dynamic explore ratio: users with few followings get a larger explore
-    # slice (30 %) so new/unseen content from outside their network still
-    # reaches them.  Power users keep the default 15 %.
-    _effective_explore_ratio = 0.30 if len(following_ids_set) < 10 else _EXPLORE_RATIO
-    n_explore  = max(1, int(page_size * _effective_explore_ratio))
-    scored_ids = {p.post_id for p in scored}
-
-    explore_posts = _random_posts_sample(scored_ids, cursor_dt, n_explore,
-                                         blocked_ids=_blocked_ids,
-                                         seen_post_ids=seen_post_ids)
-    _annotate_vibe_breakdown(explore_posts)
-    # Extend new-user detection to explore posts (zero extra DB queries —
-    # purely from the already-fetched explore pool).
-    for _ep in explore_posts:
-        _aid = (
-            _ep.original_post.author_id
-            if _ep.is_repost and _ep.original_post
-            else _ep.author_id
-        )
-        _total = (
-            getattr(_ep, 'vibe_count',    0) +
-            getattr(_ep, 'comment_count', 0) +
-            getattr(_ep, 'repost_count',  0) +
-            (getattr(_ep, 'share', None) or 0) +
-            (getattr(_ep, 'view',  None) or 0)
-        )
-        if _total == 0:
-            _new_user_author_ids.add(_aid)
-        elif _aid in _new_user_author_ids:
-            _new_user_author_ids.discard(_aid)
-
-    # ── 6. Merge, jitter, re-sort, slice ──────────────────────────────────────
-    # Take top (page_size - n_explore) scored posts + explore posts, then
-    # re-sort with jitter so explore posts land naturally in the feed.
-    # If explore returned 0 posts (thin window), fall back to full page_size
-    # from scored so the user always sees a complete page.
-    #
-    # Per-user jitter seed: combining user.id with the current hour means:
-    #   - Two different users always get a different ordering for the same posts.
-    #   - The same user gets a fresh shuffle each hour (not on every reload),
-    #     so the feed feels stable within a session but evolves over time.
-    _rng = random.Random(user.id ^ hash(now.strftime('%Y%m%d%H')))
-
-    n_from_scored = page_size - len(explore_posts)
-    merged = scored[:n_from_scored] + explore_posts
-    merged.sort(
-        key=lambda p: _cached_score(p) + _rng.uniform(0, 1.5),
-        reverse=True,
-    )
-
-    # ── 6b. Author frequency penalty — diversity enforcement ──────────────────
-    # Without this, the same prolific creator (or someone who just posted 5
-    # times today) can fill 4–5 of the 10 feed slots, crowding out every other
-    # voice in the community.
-    #
-    # Algorithm: greedy ranked-selection with an exponentially decaying penalty
-    # applied to each author's score every time one of their posts is already
-    # selected for this page.
-    #
-    #   effective_score(post) = raw_score × penalty_factor ^ appearances_so_far
-    #
-    # Constants:
-    #   _MAX_PER_AUTHOR   — hard cap: no author can appear more than this many
-    #                       times per page regardless of score.  Set to 2 so a
-    #                       very active creator still gets two slots but can't
-    #                       monopolise the feed.
-    #   _PENALTY_FACTOR   — multiplier applied per appearance (0 < f < 1).
-    #                       0.40 means a 2nd post from the same author is scored
-    #                       at 40 % of its raw value, a 3rd at 16 %, etc.
-    #                       Tune upward (e.g. 0.55) if community is small and
-    #                       there aren't enough unique authors to fill a page.
-    #
-    # The viewer's OWN posts are exempt from the penalty — we never suppress
-    # your own content in your own feed.
-    #
-    # Score curve examples (_PENALTY_FACTOR = 0.40):
-    #   1st post from author A  → score × 1.00  (no penalty)
-    #   2nd post from author A  → score × 0.40  (strong demotion)
-    #   3rd post from author A  → score × 0.16  (effectively buried)
-    _MAX_PER_AUTHOR = 2
-    _PENALTY_FACTOR = 0.40
-
-    _author_appearances: dict = {}   # author_id → count of posts already selected
-    final_posts = []
-
-    # We iterate the already-sorted merged list and re-evaluate effective score
-    # dynamically so each selection updates the penalty for subsequent picks.
-    # Because the list is already roughly sorted by descending score, a single
-    # greedy pass is O(n) and produces near-optimal diversity without needing
-    # a costly re-sort on every step.
-    _remaining = list(merged)
-    while len(final_posts) < page_size and _remaining:
-        # Recompute effective scores for all remaining candidates
-        best_idx   = -1
-        best_score = -1.0
-        for idx, p in enumerate(_remaining):
-            _aid = (
-                p.original_post.author_id
-                if p.is_repost and p.original_post
-                else p.author_id
-            )
-            _appearances = _author_appearances.get(_aid, 0)
-
-            # Hard cap — skip entirely once limit reached (own posts included)
-            if _appearances >= _MAX_PER_AUTHOR:
-                continue
-
-            # Effective score: penalise repeat appearances exponentially
-            _eff = _cached_score(p) * (_PENALTY_FACTOR ** _appearances)
-            if _eff > best_score:
-                best_score = _eff
-                best_idx   = idx
-
-        if best_idx == -1:
-            # All remaining authors are at cap — relax and take the next best
-            # post by raw score so the page always fills to page_size.
-            _remaining.sort(key=_cached_score, reverse=True)
-            final_posts.append(_remaining.pop(0))
-        else:
-            chosen = _remaining.pop(best_idx)
-            _c_aid = (
-                chosen.original_post.author_id
-                if chosen.is_repost and chosen.original_post
-                else chosen.author_id
-            )
-            _author_appearances[_c_aid] = _author_appearances.get(_c_aid, 0) + 1
-            final_posts.append(chosen)
-
-    # ── 6b. Own-post soft boost — only on the FIRST page load (no cursor) ──────
-    # Rather than hard-pinning own posts to the very top (which caused them to
-    # over-dominate the feed), we apply a modest score nudge to very recent own
-    # posts so they surface naturally among top content without forcing them
-    # above better-engaged posts from the community.
-    #
-    # Boost: +1.5 points for own posts created in the last 2 h.
-    # Enough to keep a freshly-posted piece visible on first load, but not
-    # enough to override a post from someone else with real engagement.
-    if cursor_dt is None:
-        _OWN_BOOST_WINDOW = timezone.now() - timedelta(hours=2)
-        _OWN_BOOST        = 1.5
-        for _p in final_posts:
-            if _p.author_id == user.id and _p.created_at >= _OWN_BOOST_WINDOW:
-                _p._feed_score = getattr(_p, '_feed_score', 0) + _OWN_BOOST
-        # Re-sort so the boost is reflected in the final order
-        final_posts.sort(key=lambda p: getattr(p, '_feed_score', 0), reverse=True)
-
-    # ── FIX 1c: Stamp last_feed_visit so next load knows where to resume ────────
-    # Only update on the first page (cursor_dt is None) so mid-scroll loads
-    # don't advance the cursor prematurely.
-    if cursor_dt is None:
-        try:
-            feed_prof.last_feed_visit = now
-            feed_prof.save(update_fields=['last_feed_visit'])
-        except Exception:
-            pass
-
-    # ── 7. Build feed_items ───────────────────────────────────────────────────
-    # Suggestion users: random offset instead of ORDER BY RANDOM().
-    # seen_suggestion_ids — user IDs already shown as suggestion cards on
-    # earlier scroll pages — are excluded so the same person is never
-    # recommended twice across a session.
+    # ── User suggestions ──────────────────────────────────────────────────────
     _seen_sugg_ids = set(int(i) for i in (seen_suggestion_ids or []) if str(i).isdigit())
-
     user_pool_count = (
         User.objects
         .exclude(id__in=following_ids)
@@ -1479,34 +523,58 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             .order_by('id')[su_offset: su_offset + 5]
         )
 
-    feed_items = []
-    _suggestion_injected = 0
-    # FIX 7: Only inject suggestion cards for users with < 20 followings
-    # (genuinely new / small accounts who benefit from discovery).
-    # Cap at 1 card per page so post density is never starved.
-    _max_suggestions_this_page = 1 if len(following_ids_set) < 20 else 0
+    # ── Business page suggestions ───────────────────────────────────────────────
+    _seen_biz_ids = set(str(i) for i in (seen_business_ids or []) if i)
+    followed_business_ids = set(
+        BusinessPage.objects.filter(followers=user).values_list('page_id', flat=True)
+    )
+    business_pool_qs = (
+        BusinessPage.objects
+        .filter(is_active=True)
+        .exclude(owner=user)
+        .exclude(page_id__in=followed_business_ids)
+    )
+    if _seen_biz_ids:
+        business_pool_qs = business_pool_qs.exclude(page_id__in=_seen_biz_ids)
+    business_pool_count = business_pool_qs.count()
+    suggestion_businesses = []
+    if business_pool_count > 0:
+        sb_offset = random.randint(0, max(0, business_pool_count - 3))
+        suggestion_businesses = list(
+            business_pool_qs
+            .select_related('owner')
+            .order_by('page_id')[sb_offset: sb_offset + 3]
+        )
 
-    # ── Market product injection ───────────────────────────────────────────────
-    # Fetch a small pool of random products to sprinkle into the feed.
-    # We use a random offset scan (no ORDER BY RANDOM()) to stay fast.
+    # ── Market product pool ───────────────────────────────────────────────────
     _seen_market_ids = set(str(i) for i in (seen_market_ids or []))
+    # Exclude products the user has already saved to their wishlist so they
+    # don't keep re-appearing in the feed.
+    _wishlisted_ids = set(
+        Wishlist.objects.filter(user=user).values_list('product_id', flat=True)
+    )
     _market_pool = []
-    _market_qs = Market.objects.exclude(product_id__in=_seen_market_ids) if _seen_market_ids else Market.objects
+    _market_qs = Market.objects.all()
+    if _seen_market_ids:
+        _market_qs = _market_qs.exclude(product_id__in=_seen_market_ids)
+    if _wishlisted_ids:
+        _market_qs = _market_qs.exclude(product_id__in=_wishlisted_ids)
+    if market_category and market_category != 'all' and market_category in Market.VALID_CATEGORIES:
+        _market_qs = _market_qs.filter(product_category=market_category)
     _market_count = _market_qs.count()
+    _market_fetch_n = page_size if (market_category and market_category != 'all') else 8
     if _market_count > 0:
-        _market_offset = random.randint(0, max(0, _market_count - 6))
+        _market_offset = random.randint(0, max(0, _market_count - _market_fetch_n))
         _market_pool = list(
             _market_qs
             .select_related('product_owner', 'product_owner__profile')
             .prefetch_related('images')
-            [_market_offset: _market_offset + 6]
+            [_market_offset: _market_offset + _market_fetch_n]
         )
         random.shuffle(_market_pool)
     _market_injected = 0
-    _MAX_MARKET_PER_PAGE = 2   # at most 2 product cards per feed page
-
-    # ── Job Vacancy injection ──────────────────────────────────────────────────
-    # Inject 1 open job card per feed page, at post position i % 7 == 5.
+    _MAX_MARKET_PER_PAGE = 6
+    # ── Job vacancy pool ──────────────────────────────────────────────────────
     import datetime as _dt_feed
     _seen_job_ids = set(str(i) for i in (seen_job_ids or []))
     _job_pool = []
@@ -1523,10 +591,9 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         )
         random.shuffle(_job_pool)
     _job_injected = 0
-    _MAX_JOB_PER_PAGE = 1   # at most 1 job card per feed page
+    _MAX_JOB_PER_PAGE = 1
 
-    # ── Social Event injection ─────────────────────────────────────────────────
-    # Inject 1 upcoming event card per feed page, at post position i % 9 == 7.
+    # ── Social event pool ─────────────────────────────────────────────────────
     _today = _dt_feed.date.today()
     _seen_event_ids = set(str(i) for i in (seen_event_ids or []))
     _event_pool = []
@@ -1543,37 +610,56 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             [_event_offset: _event_offset + 4]
         )
     _event_injected = 0
-    _MAX_EVENT_PER_PAGE = 1  # at most 1 event card per feed page
+    _MAX_EVENT_PER_PAGE = 1
 
-    for i, post in enumerate(final_posts, 1):
-        actual_author_id = (
-            post.original_post.author_id
-            if post.is_repost and post.original_post
-            else post.author_id
-        )
-        is_fof  = actual_author_id in fof_ids
-        fof_via = fof_via_map.get(actual_author_id, []) if is_fof else []
-        feed_items.append({'type': 'post', 'data': post, 'is_fof': is_fof, 'fof_via': fof_via})
+    # ── Build feed_items ──────────────────────────────────────────────────────
+    # Inject cards at fixed intervals across page_size virtual slots so the
+    # partial always has content to render even with no posts.
+    _is_market_filtered = bool(market_category and market_category != 'all')
+    _max_suggestions_this_page = (1 if len(following_ids_set) < 20 else 0) if not _is_market_filtered else 0
+    _suggestion_injected = 0
+    _max_business_this_page = 1 if not _is_market_filtered else 0
+    _business_injected = 0
+
+    if _is_market_filtered:
+        # Category filter is active — fill the page with market cards only,
+        # ignoring jobs/events/suggestions so the grid is pure product results.
+        _MAX_MARKET_PER_PAGE = page_size
+        _job_pool, _event_pool = [], []
+
+    feed_items = []
+    for i in range(1, page_size + 1):
+        # User suggestion at slot 2
         if (i % 4 == 2
                 and suggestion_users
                 and _suggestion_injected < _max_suggestions_this_page):
             feed_items.append({'type': 'user_suggestion', 'data': suggestion_users.pop(0)})
             _suggestion_injected += 1
-        # Inject an ad card every 5 posts (offset by 3 so it never overlaps
-        # the suggestion card at position 6).
-        if (i % 5 == 3
+
+        # Business page suggestion at slot 6 (every 8 slots), distinct from user suggestion slot
+        if (i % 8 == 6
+                and suggestion_businesses
+                and _business_injected < _max_business_this_page):
+            feed_items.append({'type': 'business_suggestion', 'data': suggestion_businesses.pop(0)})
+            _business_injected += 1
+
+        # Market ad — fills most slots (1,2,3,4,5,6 of every 10) normally,
+        # or every slot when a category filter is active.
+        _market_slot_match = True if _is_market_filtered else (i % 10 in (1, 2, 3, 4, 5, 6))
+        if (_market_slot_match
                 and _market_pool
                 and _market_injected < _MAX_MARKET_PER_PAGE):
             feed_items.append({'type': 'market', 'data': _market_pool.pop(0)})
             _market_injected += 1
-            _suggestion_injected += 1
-        # Inject a job card every 7 posts (offset by 5 to avoid collisions).
+
+        # Job card at slot 5, 12 …
         if (i % 7 == 5
                 and _job_pool
                 and _job_injected < _MAX_JOB_PER_PAGE):
             feed_items.append({'type': 'job', 'data': _job_pool.pop(0)})
             _job_injected += 1
-        # Inject an upcoming event card every 9 posts (offset by 7).
+
+        # Event card at slot 7, 16 …
         if (i % 9 == 7
                 and _event_pool
                 and _event_injected < _MAX_EVENT_PER_PAGE):
@@ -1584,86 +670,23 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Feed profile update helpers
-# Call these from your like_post / vibe_post / comment views so the
-# algorithm adapts over time to each user's actual behaviour.
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _feed_record_vibe(user, vibe_type, post_author_id):
-    """
-    Call when a user ADDS or SWITCHES a vibe reaction.
-    Bumps the vibe taste weight for `vibe_type` in the user's UserFeedProfile,
-    records long-term author affinity, updates the short-term session window,
-    and busts the interest cache so the next feed load reflects this interaction.
-    Already wired into PostVibeConsumer.toggle_vibe().
-    """
-    try:
-        from django.core.cache import cache
-        _get_or_create_feed_profile(user).record_vibe(vibe_type, post_author_id)
-        cache.delete(f'kvibe_interest_v2_{user.id}')
-        # Session: record author + vibe type so the feed tilts toward this mood now
-        _session_record_interaction(user.id, post_author_id, vibe_type)
-    except Exception:
-        pass
-
-
-def _feed_record_like(user, post_author_id):
-    """Call when a user LIKES a post. Updates long-term author affinity,
-    session window, and busts interest cache."""
-    try:
-        from django.core.cache import cache
-        _get_or_create_feed_profile(user).record_like(post_author_id)
-        cache.delete(f'kvibe_interest_v2_{user.id}')
-        _session_record_interaction(user.id, post_author_id, vibe_type=None)
-    except Exception:
-        pass
-
-
-def _feed_record_comment(user, post_author_id):
-    """Call when a user submits a COMMENT. Updates long-term author affinity,
-    session window, and busts interest cache."""
-    try:
-        from django.core.cache import cache
-        _get_or_create_feed_profile(user).record_comment(post_author_id)
-        cache.delete(f'kvibe_interest_v2_{user.id}')
-        _session_record_interaction(user.id, post_author_id, vibe_type=None)
-    except Exception:
-        pass
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 
 @login_required(login_url='/')
 def home(request):
     profile = Profile.objects.get(user=request.user)
-    following = profile.followings.values_list('user', flat=True)
-
-    following_ids = list(following)
+    following_ids = list(profile.followings.values_list('user', flat=True))
 
     unread_follow_count = FollowNotification.objects.filter(
         to_user=request.user, is_read=False
     ).count()
-    unread_notifications_count = Notification.objects.filter(
-        recipient=request.user, is_read=False
-    ).count()
 
-    # Trending hashtags — community-wide (all posts, not just followings)
-    hashtag_counts = {}
-    for post in (Post.objects
-                 .only('content')
-                 .order_by('-created_at')[:200]):
-        if post.content:
-            for tag in extract_hashtags(post.content):
-                hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
-    trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+    # Optional market category filter (?market_category=phones, etc.)
+    market_category = request.GET.get('market_category', 'all')
 
-    # First page of the feed
-    feed, next_cursor = _get_feed_page(request.user, following_ids)
-
-    # Store page-load timestamp in session — used by "New posts" banner polling
-    import datetime as _dt
-    feed_anchor_ts = _dt.datetime.now(_dt.timezone.utc).timestamp()
-    request.session['feed_anchor'] = feed_anchor_ts
+    # First page of the feed (market ads, jobs, events, user suggestions)
+    feed, next_cursor = _get_feed_page(
+        request.user, following_ids, market_category=market_category
+    )
 
     # Only pass counts — lists are loaded lazily via HTMX
     sidebar_following_count = profile.followings.count()
@@ -1676,7 +699,6 @@ def home(request):
     )
 
     # ── Recent DM conversation partners (home-page bubble row) ───────────────
-    # Pull unique conversation partners ordered by most-recent message.
     from django.db.models import Max
     _dm_qs = (
         Message.objects
@@ -1702,15 +724,17 @@ def home(request):
     return render(request, 'home.html', {
         'posts_with_ads':             feed,
         'next_cursor':                next_cursor,
-        'feed_anchor':                feed_anchor_ts,
         'unread_follow_count':        unread_follow_count,
-        'unread_notifications_count': unread_notifications_count,
         'users':                      users,
-        'trending_hashtags':          trending_hashtags,
         'following_ids':              following_ids,
         'sidebar_following_count':    sidebar_following_count,
         'sidebar_follower_count':     sidebar_follower_count,
         'recent_dm_users':            recent_dm_users,
+        'all_categories':             [
+            {'key': k, 'label': l, 'icon': Market.CATEGORY_ICONS.get(k, '📦')}
+            for k, l in Market.CATEGORY_CHOICES
+        ],
+        'selected_market_category':   market_category,
     })
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1850,84 +874,45 @@ def feed_load_more(request):
     if not request.headers.get('HX-Request'):
         return JsonResponse({'error': 'HTMX only'}, status=400)
 
-    import datetime as _dt
-
-    # ── New-posts banner check ────────────────────────────────────────────────
-    # The banner JS calls ?cursor=<anchor_ts>&check_new=1
-    # We just check if any posts exist newer than the anchor.
-    if request.GET.get('check_new') == '1':
-        try:
-            anchor_ts = float(request.GET.get('cursor', 0))
-            anchor_dt = _dt.datetime.fromtimestamp(anchor_ts, tz=_dt.timezone.utc)
-        except (ValueError, TypeError):
-            return HttpResponse(status=204)
-
-        # KishiHub community feed: check for new posts from ALL users
-        # (not just followings) so the banner fires whenever anyone in the
-        # community posts — consistent with the community-wide candidate pool.
-        _banner_blocked_qs  = BlockedUser.objects.filter(
-            Q(blocker=request.user) | Q(blocked=request.user)
-        )
-        _banner_blocked_ids = set(
-            list(_banner_blocked_qs.values_list('blocked_id', flat=True)) +
-            list(_banner_blocked_qs.values_list('blocker_id', flat=True))
-        )
-        _banner_blocked_ids.discard(request.user.id)
-        new_qs = Post.objects.exclude(author__in=_banner_blocked_ids)
-
-        if new_qs.filter(created_at__gt=anchor_dt).exists():
-            return HttpResponse(status=200)   # new posts exist → show banner
-        return HttpResponse(status=204)        # nothing new
-
-    # ── Normal infinite scroll ────────────────────────────────────────────────
-    try:
-        cursor_ts = float(request.GET.get('cursor', 0))
-    except (ValueError, TypeError):
-        cursor_ts = 0
-
-    cursor_dt = (
-        _dt.datetime.fromtimestamp(cursor_ts, tz=_dt.timezone.utc)
-        if cursor_ts else None
-    )
-
     profile       = Profile.objects.get(user=request.user)
     following_ids = list(profile.followings.values_list('user', flat=True))
 
-    # FIX 6: Pass seen post IDs so explore slot never resurfaces a post the
-    # user already scrolled past.  The client sends them as a comma-separated
-    # query param ?seen=<id1>,<id2>,...
-    seen_raw      = request.GET.get('seen', '')
-    seen_post_ids = set(seen_raw.split(',')) if seen_raw else set()
-
-    # Pass seen suggestion user IDs so the same user is never recommended
-    # twice across scroll pages.  Client sends ?seen_users=<id1>,<id2>,...
-    seen_users_raw      = request.GET.get('seen_users', '')
-    seen_suggestion_ids = set(seen_users_raw.split(',')) if seen_users_raw else set()
-
-    # Pass seen market/job/event IDs so the same card is never injected twice.
-    seen_markets_raw  = request.GET.get('seen_markets', '')
-    seen_market_ids   = set(seen_markets_raw.split(',')) if seen_markets_raw else set()
-
-    seen_jobs_raw  = request.GET.get('seen_jobs', '')
-    seen_job_ids   = set(seen_jobs_raw.split(',')) if seen_jobs_raw else set()
-
+    # Dedup tracking — clients send comma-separated IDs of already-seen cards
+    seen_users_raw   = request.GET.get('seen_users', '')
+    seen_markets_raw = request.GET.get('seen_markets', '')
+    seen_jobs_raw    = request.GET.get('seen_jobs', '')
     seen_events_raw  = request.GET.get('seen_events', '')
-    seen_event_ids   = set(seen_events_raw.split(',')) if seen_events_raw else set()
+    seen_business_raw = request.GET.get('seen_businesses', '')
+    market_category  = request.GET.get('market_category', 'all')
+
+    seen_suggestion_ids = set(seen_users_raw.split(','))   if seen_users_raw   else set()
+    seen_market_ids     = set(seen_markets_raw.split(',')) if seen_markets_raw else set()
+    seen_job_ids        = set(seen_jobs_raw.split(','))    if seen_jobs_raw    else set()
+    seen_event_ids      = set(seen_events_raw.split(','))  if seen_events_raw  else set()
+    seen_business_ids   = set(seen_business_raw.split(',')) if seen_business_raw else set()
 
     feed, next_cursor = _get_feed_page(
         request.user, following_ids,
-        cursor_dt=cursor_dt,
-        seen_post_ids=seen_post_ids,
         seen_suggestion_ids=seen_suggestion_ids,
         seen_market_ids=seen_market_ids,
         seen_job_ids=seen_job_ids,
         seen_event_ids=seen_event_ids,
+        seen_business_ids=seen_business_ids,
+        market_category=market_category,
     )
 
-    # Only return 204 when there are genuinely no post items in the feed.
-    # Suggestion cards count as items too — check specifically for post type.
-    post_items = [item for item in feed if item.get('type') == 'post']
-    if not post_items:
+    _is_fresh = request.GET.get('fresh') == '1'
+
+    if not feed:
+        if _is_fresh:
+            # Category switch with zero matching products — show a friendly
+            # empty state instead of silently leaving the grid blank.
+            return render(request, 'snippet/feed_posts_partial.html', {
+                'posts_with_ads': [],
+                'next_cursor':    None,
+                'following_ids':  following_ids,
+                'empty_category': True,
+            })
         return HttpResponse(status=204)
 
     return render(request, 'snippet/feed_posts_partial.html', {
@@ -1957,496 +942,7 @@ def _safe_pic_url(user_obj):
     return ''
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Vibe helpers — shared by like_post and get_post_vibes
-# ─────────────────────────────────────────────────────────────────────────────
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Vibe helpers — shared by like_post and get_post_vibes
-# ─────────────────────────────────────────────────────────────────────────────
-
-_VIBE_EMOJIS = {
-    'fire':   '🔥',
-    'real':   '💯',
-    'vibing': '🎵',
-    'dead':   '😂',
-    'cringe': '😬',
-    'chill':  '🧊',
-    'love':   '❤️',  # NEW: Love reaction
-}
-
-_VIBE_COLORS = {
-    'fire':   '#ff4500',
-    'real':   '#ff0080',
-    'vibing': '#3b82f6',
-    'dead':   '#f59e0b',
-    'cringe': '#8b5cf6',
-    'chill':  '#06b6d4',
-    'love':   '#e11d48',  # NEW: Deep pink/red for love
-}
-
-
-def _get_vibe_context(post_obj, user):
-    """
-    Returns vibe_summary, vibe_total, user_vibe, user_vibe_emoji,
-    vibe_emojis, and vibe_colors for a given post and user.
-    Used by both like_post (HTMX) and get_post_vibes (JSON).
-    """
-    vibe_rows = (
-        PostVibe.objects
-        .filter(post=post_obj)
-        .values('vibe_type')
-        .annotate(count=Count('id'))
-    )
-    vibe_summary = {row['vibe_type']: row['count'] for row in vibe_rows}
-    vibe_total   = sum(vibe_summary.values())
-
-    user_vibe_obj = PostVibe.objects.filter(post=post_obj, user=user).first()
-    user_vibe     = user_vibe_obj.vibe_type if user_vibe_obj else None
-
-    return {
-        'vibe_summary':    vibe_summary,
-        'vibe_total':      vibe_total,
-        'user_vibe':       user_vibe,
-        'user_vibe_emoji': _VIBE_EMOJIS.get(user_vibe, ''),
-        'vibe_emojis':     _VIBE_EMOJIS,
-        'vibe_colors':     _VIBE_COLORS,
-    }
-
-@login_required(login_url='/')
-def repost_post(request, post_id):
-    """Handle reposting a post and notify the original author."""
-    try:
-        original_post = get_object_or_404(Post, post_id=post_id)
-        user = request.user
-
-        data    = json.loads(request.body)
-        caption = data.get('caption', '').strip()[:500]
-        undo    = data.get('undo', False)
-
-        existing_repost = Post.objects.filter(
-            author=user,
-            is_repost=True,
-            original_post=original_post,
-        ).first()
-
-        if undo and existing_repost:
-            existing_repost.delete()
-            original_post.reposts.remove(user)
-
-            # Remove repost notification
-            Notification.objects.filter(
-                recipient=original_post.author,
-                actor=user,
-                post=original_post,
-                notification_type=Notification.REPOST,
-            ).delete()
-
-            reposted = False
-            message  = 'Repost removed'
-
-        elif not undo and not existing_repost:
-            repost = Post.objects.create(
-                author=user,
-                is_repost=True,
-                original_post=original_post,
-                repost_content=caption,
-                content='',
-            )
-            original_post.reposts.add(user)
-
-            # Notify original author (not for self-reposts)
-            if original_post.author != user:
-                Notification.objects.get_or_create(
-                    recipient=original_post.author,
-                    actor=user,
-                    post=original_post,
-                    notification_type=Notification.REPOST,
-                )
-
-            reposted = True
-            message  = 'Post reposted successfully!'
-
-        elif not undo and existing_repost:
-            existing_repost.repost_content = caption
-            existing_repost.save()
-            reposted = True
-            message  = 'Repost updated!'
-
-        else:
-            return JsonResponse({'success': False, 'error': 'Invalid operation'})
-
-        return JsonResponse({
-            'success':      True,
-            'reposted':     reposted,
-            'repost_count': original_post.reposts.count(),
-            'message':      message,
-            'caption':      caption,
-        })
-
-    except Post.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Post not found'})
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({'success': False, 'error': 'Invalid data'}, status=400)
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': 'Something went wrong.'}, status=500)
-
-
-@login_required(login_url='/')
-def follow_user(request, user_id):
-    if request.method == 'POST':
-        try:
-            user_to_follow = User.objects.get(id=user_id)
-            current_profile = Profile.objects.get(user=request.user)
-            target_profile = Profile.objects.get(user=user_to_follow)
-
-            if target_profile in current_profile.followings.all():
-                current_profile.followings.remove(target_profile)
-                followed = False
-                FollowNotification.objects.filter(
-                    from_user=request.user,
-                    to_user=user_to_follow
-                ).delete()
-            else:
-                current_profile.followings.add(target_profile)
-                followed = True
-                if request.user != user_to_follow:
-                    FollowNotification.objects.get_or_create(
-                        from_user=request.user,
-                        to_user=user_to_follow
-                    )
-            
-            current_profile.save()
-            
-            return JsonResponse({
-                'success': True,
-                'followed': followed,
-                'follower_count': target_profile.followers.count(),
-                'following_count': current_profile.followings.count()
-            })
-            
-        except User.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'User not found'})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': 'Something went wrong.'})
-    
-    return JsonResponse({'success': False, 'error': 'Invalid request method'})
-
-
-@login_required(login_url='/')
-def post(request):
-    if request.method =='POST':
-        content = request.POST.get('content','').strip()
-        images = request.FILES.getlist('images')
-        audio = request.FILES.get('audio_file')
-        video = request.FILES.get('video_file')
-        
-        mood = request.POST.get('mood', '')
-        custom_mood = request.POST.get('custom_mood', '').strip()
-        
-        mood_emojis = {
-            'slay': '💅', 'vibing': '🎵', 'sheesh': '🥶', 'periodt': '⏸️',
-            'no-cap': '🎯', 'bussin': '🔥', 'mid': '😐', 'cringe': '😬'
-        }
-        
-        final_mood = custom_mood if custom_mood else mood
-        emoji = mood_emojis.get(mood, '✨') if not custom_mood else '✨'
-        
-        if not content and not images and not audio and not video and final_mood:
-            content = f"{emoji} feeling {final_mood}"
-        
-        if not content and not images and not audio and not video:
-            messages.error(request, 'Add something to your post bestie ✨')
-            return redirect('post')
-        
-        new_post = Post.objects.create(
-            author=request.user,
-            content=content if content else '',
-            file=audio if audio else None,
-            video_file=video if video else None,
-            mood=mood if mood else None,
-            custom_mood=custom_mood if custom_mood else None,
-            mood_emoji=emoji
-        )
-        
-        for image in images:
-            PostImage.objects.create(post=new_post, image=image)
-        
-        # ── Auto-fetch link preview from post content (background thread) ─
-        _url_match = re.search(r'https?://[^\s]{4,}', content or '')
-        if _url_match and not images and not audio and not video:
-            _url_for_preview = html_unescape(_url_match.group(0))
-
-            def _bg_fetch_preview(post_pk, fetch_url):
-                try:
-                    if not _is_safe_url_for_preview(fetch_url):
-                        return
-                    _headers = {
-                        'User-Agent': 'Mozilla/5.0 (compatible; KvibeBot/1.0)',
-                        'Accept':     'text/html,application/xhtml+xml',
-                    }
-                    _resp = requests.get(fetch_url, headers=_headers, timeout=5, allow_redirects=True, stream=True)
-                    _raw = b''
-                    for _chunk in _resp.iter_content(8192):
-                        _raw += _chunk
-                        if len(_raw) > 500_000:
-                            break
-                    _soup = BeautifulSoup(_raw, 'html.parser')
-
-                    def _og(p):
-                        t = (
-                            _soup.find('meta', property=f'og:{p}')
-                            or _soup.find('meta', attrs={'name': f'twitter:{p}'})
-                            or _soup.find('meta', attrs={'name': p})
-                        )
-                        return t['content'].strip() if t and t.get('content') else ''
-
-                    _title       = _og('title') or (_soup.title.string.strip() if _soup.title else '')
-                    _description = _og('description')
-                    _image       = _og('image')
-                    _domain      = urlparse(_resp.url).netloc.replace('www.', '')
-
-                    if _image and not _image.startswith(('http://', 'https://')):
-                        _image = ''
-
-                    _lp = {
-                        'title':       html_escape(_title[:200]),
-                        'description': html_escape(_description[:400]),
-                        'image':       _image[:500],
-                        'domain':      html_escape(_domain[:100]),
-                        'url':         fetch_url,
-                    }
-                    if _lp['title'] or _lp['image']:
-                        Post.objects.filter(pk=post_pk).update(link_preview=_lp)
-                except Exception:
-                    pass
-
-            threading.Thread(
-                target=_bg_fetch_preview,
-                args=(new_post.pk, _url_for_preview),
-                daemon=True,
-            ).start()
-        
-        # ── Feed: bust interest cache so the new post surfaces immediately ──
-        try:
-            from django.core.cache import cache
-            cache.delete(f'kvibe_interest_v2_{request.user.id}')
-        except Exception:
-            pass
-
-        messages.success(request, 'Post dropped successfully! ✨')
-        
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'success': True, 'redirect': '/home'})
-        return redirect('home')
-    
-    return render(request, 'post.html')
-
-
-@login_required(login_url='/')
-def editpost(request, post_id):
-    post_obj = get_object_or_404(Post, post_id=post_id, author=request.user)
-    image = PostImage.objects.filter(post=post_obj)
-    if request.method =='POST':
-        content = request.POST.get('comment')
-        images = request.FILES.getlist('images')
-        if not content and not images:
-            return
-        post_obj.content=content
-        post_obj.save()
-        if images:
-            for m in images:
-                if image:
-                   for n in image:
-                        n.image=m
-                        n.save()
-                else:
-                    PostImage.objects.create(post=post_obj, image=m)
-        return _safe_redirect_back(request, fallback='home')
-    context = {
-        'post': post_obj,
-        'post_id': post_id
-    }
-    return render(request, 'editpost.html', context)
-
-
-@login_required(login_url='/')
-@require_POST
-def delete_post(request, post_id):
-    """Delete the author's own post (non-repost only)."""
-    post_obj = get_object_or_404(Post, post_id=post_id, author=request.user)
-    if post_obj.is_repost:
-        return JsonResponse({'status': 'error', 'message': 'Cannot delete a repost this way.'}, status=403)
-    post_obj.delete()
-    cache.delete(f'kvibe_interest_v2_{request.user.id}')
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({'status': 'ok'})
-    return redirect('home')
-
-
-@login_required(login_url='/')
-def like_post(request, post_id):
-    """
-    Legacy HTMX like endpoint — kept for backwards compatibility.
-    The new vibe system runs through WebSocket (PostVibeConsumer).
-    This view now renders post_like.html with full vibe context so
-    the snippet displays correctly when it falls back to HTMX.
-    NOTE: Notifications are fired by PostVibeConsumer.toggle_vibe()
-    — we do NOT create them here to avoid duplicates.
-    """
-    post_obj = get_object_or_404(Post, post_id=post_id)
-
-    # Keep the old likes M2M in sync (used by older parts of the UI)
-    if request.user in post_obj.likes.all():
-        post_obj.likes.remove(request.user)
-    else:
-        post_obj.likes.add(request.user)
-        # ── Feed profile: record author affinity signal ───────────────────
-        _feed_record_like(request.user, post_obj.author_id)
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        likers      = list(post_obj.likes.all()[:3])
-        like_count  = post_obj.likes.count()
-        is_liked    = request.user in post_obj.likes.all()
-        liker_pics  = [_safe_pic_url(u) for u in likers]
-        liker_names = [u.username for u in likers]
-        return JsonResponse({
-            'success':     True,
-            'like_count':  like_count,
-            'is_liked':    is_liked,
-            'liker_pics':  liker_pics,
-            'liker_names': liker_names,
-        })
-
-    vibe_ctx = _get_vibe_context(post_obj, request.user)
-    return render(request, 'snippet/post_like.html', {
-        'post':    post_obj,
-        'post_id': post_id,
-        **vibe_ctx,
-    })
-
-
-@login_required(login_url='/')
-def get_post_vibes(request, post_id):
-    """
-    REST endpoint — returns current vibe snapshot for a post as JSON.
-    Called on initial page load so the UI is hydrated before WS connects.
-    Also used as a fallback if the WebSocket is unavailable.
-    """
-    post_obj  = get_object_or_404(Post, post_id=post_id)
-    vibe_ctx  = _get_vibe_context(post_obj, request.user)
-
-    return JsonResponse({
-        'summary':   vibe_ctx['vibe_summary'],
-        'total':     vibe_ctx['vibe_total'],
-        'user_vibe': vibe_ctx['user_vibe'],
-    })
-
-
-@login_required(login_url='/')
-def post_comment(request, post_id):
-    post_obj = get_object_or_404(Post, post_id=post_id)
-    # View increment is now handled client-side via /record-view/<post_id>/
-    # (fired when the comment sheet opens or play is clicked), so we no
-    # longer double-count here.
-    comments = PostComment.objects.filter(post=post_obj).order_by('-created_at')
-    following_ids = []
-    if request.user.is_authenticated:
-        following_ids = list(Profile.objects.get(user=request.user).followings.values_list('user', flat=True))
-    return render(request, 'postcomment.html', {'post': post_obj, 'comments': comments, 'following_ids': following_ids})
-
-
-@login_required(login_url='/')
-def postcomment(request, post_id):
-    post_obj = get_object_or_404(Post, post_id=post_id)
-
-    if request.method == 'POST':
-        content = request.POST.get('comment')
-        image   = request.FILES.get('image')
-        audio   = request.FILES.get('audio_file')
-
-        if not content and not image and not audio:
-            return HttpResponse(status=204)
-
-        comment = PostComment.objects.create(
-            post=post_obj,
-            author=request.user,
-            comment=content or '',
-            image=image,
-            file=audio,
-        )
-        # ── Feed profile: record author affinity signal ───────────────────
-        _feed_record_comment(request.user, post_obj.author_id)
-
-        # ── Comment notification ──────────────────────────────────────────
-        if post_obj.author != request.user:
-            Notification.objects.create(
-                recipient=post_obj.author, 
-                actor=request.user,
-                post=post_obj,
-                notification_type=Notification.COMMENT,
-            )
-
-        # ── Mention notifications (@username in comment text) ─────────────
-        if content:
-            mentioned_usernames = set(re.findall(r'@(\w+)', content))
-            for username in mentioned_usernames:
-                try:
-                    mentioned_user = User.objects.get(username=username)
-                except User.DoesNotExist:
-                    continue
-
-                if mentioned_user == request.user:
-                    continue
-
-                already_exists = Notification.objects.filter(
-                    recipient=mentioned_user,
-                    actor=request.user,
-                    post=post_obj,
-                    comment=comment,
-                    notification_type=Notification.MENTION,
-                ).exists()
-
-                if not already_exists:
-                    Notification.objects.create(
-                        recipient=mentioned_user,
-                        actor=request.user,
-                        post=post_obj,
-                        comment=comment,
-                        notification_type=Notification.MENTION,
-                    )
-
-        return render(
-            request,
-            'snippet/comment_list.html',
-            {'post': post_obj, 'comment': comment}
-        )
-
-    # GET — load comments for modal
-    comments = post_obj.comments.all().order_by('-created_at')
-    following_ids = list(Profile.objects.get(user=request.user).followings.values_list('user', flat=True))
-    return render(
-        request,
-        'postcomment.html',
-        {'post': post_obj, 'comments': comments, 'following_ids': following_ids}
-    )
-
-
-@login_required(login_url='/')
-def comment_like(request, comment_id):
-    comment = get_object_or_404(PostComment, comment_id=comment_id)
-    if request.user in comment.like.all():
-        comment.like.remove(request.user)
-    else:
-        comment.like.add(request.user)
-    return render(request, 'snippet/comment_like.html', {'comment': comment, 'comment_id': comment_id})
-
-
-@login_required(login_url='/')
-def comment_reply(request, comment_id):
-    comment = get_object_or_404(PostComment, comment_id=comment_id)
-    context = {'comment': comment, 'comment_id': comment_id}
-    return render(request, 'comment_reply.html', context)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2481,15 +977,13 @@ def profile(request, username):
             'mutual_count': 0, 'is_blocked': True,
             'can_view_details': False,
             'is_own_profile': False,
+            'business_pages': BusinessPage.objects.none(),
+            'business_page_count': 0,
         }
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return render(request, 'profile_posts_partial.html', context)
+            return render(request, 'profile.html', context)
         return render(request, 'profile.html', context)
 
-    user_posts = Post.objects.filter(author=user)
-    total_view = sum(p.view for p in user_posts)
-    total_like_recieved      = user_posts.aggregate(total=Count('vibes'))['total'] or 0
-    total_comments_received  = PostComment.objects.filter(post__author=user).count()
 
     mutual_followings = None
     mutual_count      = 0
@@ -2497,16 +991,6 @@ def profile(request, username):
         my_following      = request.user.profile.followings.all()
         mutual_followings = my_following.filter(followings=profile)[:3]
         mutual_count      = my_following.filter(followings=profile).count()
-
-    vibe_subquery = PostVibe.objects.filter(
-        post=OuterRef('pk')
-    ).values('post').annotate(c=Count('pk')).values('c')
-
-    posts = Post.objects.filter(
-        author=user, images__isnull=False
-    ).prefetch_related('images').annotate(
-        vibe_count=Subquery(vibe_subquery)
-    ).distinct()[:30]
 
     # ── Privacy: determine if viewer can see personal details ───────────────
     can_view_details = profile.can_view_details(request.user)
@@ -2516,21 +1000,34 @@ def profile(request, username):
     sidebar_following_count = profile.followings.count()
     sidebar_follower_count  = profile.followers.count()
 
+    is_own_profile = request.user.is_authenticated and request.user == user
+    is_following   = False
+    if request.user.is_authenticated and not is_own_profile:
+        is_following = current_profile_qs_exists = request.user.profile.followings.filter(pk=profile.pk).exists()
+
+    # ── Business pages owned by this user, shown with full details on the profile ──
+    business_pages = (
+        BusinessPage.objects.filter(owner=user, is_active=True)
+        .order_by('-created_at')
+    )
+    business_page_count = business_pages.count()
+
     context = {
-        'user': user, 'posts': posts, 'profile': profile,
+        'user': user, 'profile': profile,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
-        'total_view': total_view, 'total_like_recieved': total_like_recieved,
-        'total_comments_received': total_comments_received,
         'mutual_followings': mutual_followings, 'mutual_count': mutual_count,
         'is_blocked': False,
         'can_view_details': can_view_details,
-        'is_own_profile': request.user.is_authenticated and request.user == user,
+        'is_own_profile': is_own_profile,
+        'is_following': is_following,
         'sidebar_following_count': sidebar_following_count,
         'sidebar_follower_count':  sidebar_follower_count,
+        'business_pages': business_pages,
+        'business_page_count': business_page_count,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return render(request, 'profile_posts_partial.html', context)
+        return render(request, 'profile.html', context)
     return render(request, 'profile.html', context)
 
 
@@ -2560,11 +1057,7 @@ def update_profile(request, username):
         show_gender      = 'show_gender' in request.POST
         show_dob         = 'show_dob'    in request.POST
         # Kishi community fields
-        community_area   = request.POST.get('community_area',   '').strip()
-        family_house     = request.POST.get('family_house',     '').strip()
         profession       = request.POST.get('profession',       '').strip()
-        residency_status = request.POST.get('residency_status', '').strip()
-        secondary_school = request.POST.get('secondary_school', '').strip()
 
         # ── Whitelist validation ─────────────────────────────────
         VALID_PRIVACY = {'public', 'followers_only', 'private'}
@@ -2574,14 +1067,6 @@ def update_profile(request, username):
         VALID_GENDERS = {'male', 'female', 'non_binary', 'prefer_not_to_say', ''}
         if gender not in VALID_GENDERS:
             gender = None
-
-        VALID_COMMUNITIES = {v for v, _ in Profile.KISHI_COMMUNITIES}
-        if community_area and community_area not in VALID_COMMUNITIES:
-            community_area = ''
-
-        VALID_RESIDENCY = {v for v, _ in Profile.RESIDENCY_CHOICES}
-        if residency_status and residency_status not in VALID_RESIDENCY:
-            residency_status = ''
 
         import datetime
         date_of_birth = None
@@ -2594,18 +1079,23 @@ def update_profile(request, username):
                 pass  # ignore invalid date silently
 
         try:
-            if fname and lname:
-                user.first_name = fname
-                user.last_name  = lname
-                user.save()
-
             profile_dirty = False
 
-            if phone:              profile.phone          = phone;            profile_dirty = True
-            if address:            profile.address        = address;          profile_dirty = True
-            if location:           profile.location       = location;         profile_dirty = True
-            if bio is not None:    profile.bio            = bio;              profile_dirty = True
-            if website:            profile.website        = website;          profile_dirty = True
+            # Save name fields independently (don't require both)
+            if fname is not None:
+                user.first_name = fname
+                profile_dirty = True  # triggers full_name sync via profile.save()
+            if lname is not None:
+                user.last_name = lname
+                profile_dirty = True
+            if fname is not None or lname is not None:
+                user.save()
+
+            profile.phone    = phone;            profile_dirty = True
+            profile.address  = address;          profile_dirty = True
+            profile.location = location;         profile_dirty = True
+            profile.bio      = bio;              profile_dirty = True
+            profile.website  = website;          profile_dirty = True
             if privacy_level:      profile.privacy_level  = privacy_level;    profile_dirty = True
             if gender is not None: profile.gender         = gender;           profile_dirty = True
             if dob_changed:        profile.date_of_birth  = date_of_birth;    profile_dirty = True
@@ -2616,11 +1106,7 @@ def update_profile(request, username):
             profile_dirty = True
 
             # Kishi community fields — always write (empty string clears the field)
-            profile.community_area   = community_area
-            profile.family_house     = family_house
             profile.profession       = profession
-            profile.residency_status = residency_status
-            profile.secondary_school = secondary_school
             profile_dirty = True
 
             if profile_dirty:
@@ -2647,11 +1133,7 @@ def update_profile(request, username):
                         'date_of_birth':   profile.date_of_birth.isoformat() if profile.date_of_birth else '',
                         'show_gender':     profile.show_gender,
                         'show_dob':        profile.show_dob,
-                        'community_area':  profile.community_area,
-                        'family_house':    profile.family_house,
                         'profession':      profile.profession,
-                        'residency_status': profile.residency_status,
-                        'secondary_school': profile.secondary_school,
                     },
                     'message': 'Profile updated successfully!'
                 })
@@ -2739,120 +1221,8 @@ def report_user(request, username):
     return JsonResponse({'success': True})
 
 
-@login_required(login_url='/')
-def profile_videos(request, username):
-    user = get_object_or_404(User, username=username)
-    profile = user.profile
-
-    is_blocked = False
-    if request.user.is_authenticated and request.user != user:
-        viewer_is_blocked = BlockedUser.objects.filter(
-            blocker=user, blocked=request.user
-        ).exists()
-        if viewer_is_blocked:
-            return render(request, 'blocked.html', {'blocked_by': user})
-        is_blocked = BlockedUser.objects.filter(
-            blocker=request.user, blocked=user
-        ).exists()
-
-    vibe_subquery = PostVibe.objects.filter(
-        post=OuterRef('pk')
-    ).values('post').annotate(c=Count('pk')).values('c')
-
-    video_posts = Post.objects.filter(
-        author=user, video_file__isnull=False
-    ).prefetch_related('images').annotate(
-        vibe_count=Subquery(vibe_subquery)
-    )[:30]
-
-    user_posts = Post.objects.filter(author=user)
-    total_view = sum(p.view for p in user_posts)
-    total_like_recieved = user_posts.aggregate(total=Count('vibes'))['total'] or 0
-    total_comments_received = PostComment.objects.filter(post__author=user).count()
-
-    mutual_followings = None
-    mutual_count = 0
-    if request.user.is_authenticated and request.user != user:
-        my_following = request.user.profile.followings.all()
-        mutual_followings = my_following.filter(followings=profile)[:3]
-        mutual_count = my_following.filter(followings=profile).count()
-
-    context = {
-        'user': user, 'profile': profile, 'posts': video_posts,
-        'current_profile': request.user.profile if request.user.is_authenticated else None,
-        'total_view': total_view, 'total_like_recieved': total_like_recieved,
-        'total_comments_received': total_comments_received,
-        'mutual_followings': mutual_followings, 'mutual_count': mutual_count,
-        'is_blocked': is_blocked, 'active_tab': 'videos',
-        'can_view_details': profile.can_view_details(request.user),
-        'is_own_profile': request.user.is_authenticated and request.user == user,
-    }
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
-        return render(request, 'profile_videos_partial.html', context)
-    return render(request, 'profile.html', context)
 
 
-def profile_text_posts(request, username):
-    user = get_object_or_404(User, username=username)
-    profile = user.profile
-
-    is_blocked = False
-    if request.user.is_authenticated and request.user != user:
-        viewer_is_blocked = BlockedUser.objects.filter(
-            blocker=user, blocked=request.user
-        ).exists()
-        if viewer_is_blocked:
-            return render(request, 'blocked.html', {'blocked_by': user})
-        is_blocked = BlockedUser.objects.filter(
-            blocker=request.user, blocked=user
-        ).exists()
-
-    text_posts = (
-        Post.objects.filter(author=user)
-        .annotate(image_count=Count('images'))
-        .filter(image_count=0)
-        .filter(Q(video_file__isnull=True) | Q(video_file=''))
-        .filter(Q(file__isnull=True) | Q(file=''))
-        .filter(content__isnull=False)
-        .exclude(content__exact='')
-        .select_related('author', 'author__profile')
-        .prefetch_related('likes', 'comments')
-        .order_by('-created_at')[:30]
-    )
-
-    user_posts = Post.objects.filter(author=user)
-    total_view = sum(p.view for p in user_posts)
-    total_like_recieved = user_posts.aggregate(total=Count('likes'))['total'] or 0
-    total_comments_received = PostComment.objects.filter(post__author=user).count()
-
-    mutual_followings = None
-    mutual_count = 0
-    if request.user.is_authenticated and request.user != user:
-        my_following = request.user.profile.followings.all()
-        mutual_followings = my_following.filter(followings=profile)[:3]
-        mutual_count = my_following.filter(followings=profile).count()
-
-    for p in text_posts:
-        p.liker_data = [
-            {'url': _safe_pic_url(u), 'username': u.username}
-            for u in p.likes.all()[:3]
-        ]
-
-    context = {
-        'user': user, 'profile': profile, 'posts': text_posts,
-        'current_profile': request.user.profile if request.user.is_authenticated else None,
-        'total_view': total_view, 'total_like_recieved': total_like_recieved,
-        'total_comments_received': total_comments_received,
-        'mutual_followings': mutual_followings, 'mutual_count': mutual_count,
-        'is_blocked': is_blocked, 'active_tab': 'text',
-        'can_view_details': profile.can_view_details(request.user),
-        'is_own_profile': request.user.is_authenticated and request.user == user,
-    }
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax'):
-        return render(request, 'profile_text_posts_partial.html', context)
-    return render(request, 'profile.html', context)
 
 
 @login_required
@@ -2906,14 +1276,6 @@ def search(request):
 
     query = request.GET.get('q', '').strip()[:100]
 
-    # ── Trending hashtags — always needed ──────────────────────────────────────
-    hashtag_counts: dict = {}
-    for _p in Post.objects.filter(content__isnull=False).order_by('-created_at')[:300]:
-        if _p.content:
-            for _tag in extract_hashtags(_p.content):
-                hashtag_counts[_tag] = hashtag_counts.get(_tag, 0) + 1
-    trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
-
     if query:
         SearchHistory.objects.create(user=request.user, query=query)
 
@@ -2932,77 +1294,22 @@ def search(request):
         users_total = users_qs.count()
         users = users_qs[:_PAGE]
 
-        # ── First page of posts ────────────────────────────────────────────────
-        posts_qs = (
-            Post.objects.filter(
-                Q(content__icontains=query) |
-                Q(author__username__icontains=query)
-            )
-            .select_related(
-                'author', 'author__profile',
-                'original_post', 'original_post__author',
-                'original_post__author__profile',
-            )
-            .prefetch_related('images', 'likes', 'vibes', 'reposts')
-            .annotate(
-                vibe_count=Count('vibes', distinct=True),
-                comment_count=Count('comments', distinct=True),
-                repost_count=Count('reposts', distinct=True),
-            )
-            .order_by('-created_at')
-        )
-        posts_total = posts_qs.count()
-        posts = posts_qs[:_PAGE]
-
-        # Attach per-user vibe on each post
-        _VIBE_EMOJIS = {
-            'fire': '🔥', 'real': '💯', 'vibing': '🎵',
-            'dead': '😂', 'cringe': '😬', 'chill': '🧊', 'love': '❤️',
-        }
-        _user_vibes = {
-            v.post_id: v.vibe_type
-            for v in PostVibe.objects.filter(user=request.user, post__in=posts)
-        }
-        for p in posts:
-            p.user_vibe = _user_vibes.get(p.post_id)
-            p.user_vibe_emoji = _VIBE_EMOJIS.get(p.user_vibe, '') if p.user_vibe else ''
-
-        # ── Matching hashtags ──────────────────────────────────────────────────
-        clean_query = query.lstrip('#').lower()
-        matching_hashtags = sorted(
-            [(tag, cnt) for tag, cnt in hashtag_counts.items() if clean_query in tag.lower()],
-            key=lambda x: x[1], reverse=True,
-        )[:30]
-        hashtags_total = len(matching_hashtags)
-        hashtags_page = matching_hashtags[:_PAGE]
-
         recent_searches = (
             SearchHistory.objects.filter(user=request.user)
             .exclude(query=query).order_by('-created_at')[:8]
         )
 
-        # ── Sidebar context (simplified - no follow lists) ─────────────────────
+        # ── Sidebar context ────────────────────────────────────────────────────
         _unread_follow_count = FollowNotification.objects.filter(to_user=request.user, is_read=False).count()
-        _unread_notif_count  = Notification.objects.filter(recipient=request.user, is_read=False).count()
 
         return render(request, 'search.html', {
             'query':             query,
             'users':             users,
             'users_total':       users_total,
             'users_has_more':    users_total > _PAGE,
-            'posts':             posts,
-            'posts_total':       posts_total,
-            'posts_has_more':    posts_total > _PAGE,
-            'hashtags_page':     hashtags_page,
-            'hashtags_total':    hashtags_total,
-            'hashtags_has_more': hashtags_total > _PAGE,
-            'matching_hashtags': matching_hashtags,
             'recent_searches':   recent_searches,
-            'trending_hashtags': trending_hashtags,
             'page_size':         _PAGE,
-            # sidebar (simplified)
             'unread_follow_count':        _unread_follow_count,
-            'unread_notifications_count': _unread_notif_count,
         })
 
     # ── Explore (no query) ─────────────────────────────────────────────────────
@@ -3020,109 +1327,13 @@ def search(request):
         .order_by('-follower_count')[:12]
     )
 
-    # ── Personalised Explore grid ──────────────────────────────────────────────
-    # Strategy:
-    #   1. Pull a large candidate pool (last 7 days, has media or content)
-    #   2. Score each post using the user's interest profile (author affinity,
-    #      liked hashtags, vibe taste) + a small engagement bonus
-    #   3. Apply a per-user daily seed shuffle so every user and every day
-    #      yields a different ordering even for equal-scored posts
-    #   4. Skip posts the user already clicked (stored in session)
-    #   5. Return top 60 after scoring
-
-    # -- session-based seen set (persisted in session)
-    _seen_ids = set(request.session.get('explore_seen_ids', []))
-
-    # -- candidate pool: last 7 days, must have something to show
-    _pool = (
-        Post.objects
-        .filter(
-            Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False),
-            created_at__gte=timezone.now() - timedelta(days=7),
-        )
-        .select_related('author', 'author__profile', 'original_post', 'original_post__author')
-        .prefetch_related('images', 'likes', 'vibes')
-        .annotate(
-            vibe_count=Count('vibes', distinct=True),
-            like_count=Count('likes', distinct=True),
-        )
-        .distinct()
-    )
-    # Fallback: if fewer than 30 posts in 7 days widen to 30 days
-    if _pool.count() < 30:
-        _pool = (
-            Post.objects
-            .filter(Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False))
-            .select_related('author', 'author__profile', 'original_post', 'original_post__author')
-            .prefetch_related('images', 'likes', 'vibes')
-            .annotate(
-                vibe_count=Count('vibes', distinct=True),
-                like_count=Count('likes', distinct=True),
-            )
-            .distinct()
-        )
-
-    _pool_list = list(_pool[:200])  # cap DB work
-
-    # -- interest profile for scoring
-    try:
-        _interest = _build_user_interest_profile(request.user)
-        _author_affinity = _interest.get('author_affinity', {}) if _interest else {}
-        _liked_tags = set(_interest.get('liked_hashtags', [])) if _interest else set()
-    except Exception:
-        _author_affinity = {}
-        _liked_tags = set()
-
-    # -- per-user daily seed: same user sees the same shuffle today but
-    #    different from yesterday and different from every other user
-    _today_str = timezone.now().strftime('%Y%m%d')
-    _seed = hash(f"{request.user.id}_{_today_str}") & 0xFFFFFFFF
-    _rng = random.Random(_seed)
-
-    def _score_explore_post(p):
-        score = 0.0
-        rp = p.original_post if p.original_post else p
-        # engagement signal
-        score += min(p.vibe_count * 0.4, 6.0)
-        score += min(p.like_count * 0.2, 4.0)
-        # author affinity
-        score += float(_author_affinity.get(p.author_id, 0)) * 2.0
-        # hashtag interest
-        if rp.content and _liked_tags:
-            post_tags = set(extract_hashtags(rp.content))
-            score += len(post_tags & _liked_tags) * 1.5
-        # freshness bonus: posts from the last 24 h get a +2 boost
-        age_hours = (timezone.now() - p.created_at).total_seconds() / 3600
-        if age_hours < 24:
-            score += 2.0
-        elif age_hours < 72:
-            score += 0.5
-        # seen penalty: push already-viewed posts to the bottom
-        if p.post_id in _seen_ids:
-            score -= 20.0
-        # small random jitter so equal-scored posts shuffle differently per user/day
-        score += _rng.uniform(0, 1.5)
-        return score
-
-    _pool_list.sort(key=_score_explore_post, reverse=True)
-    # First page: 18 posts (divisible by 2 and 3 — fits both grid layouts cleanly)
-    _EXPLORE_PAGE = 18
-    explore_posts    = _pool_list[:_EXPLORE_PAGE]
-    explore_has_more = len(_pool_list) > _EXPLORE_PAGE
-
-    # ── Sidebar context (simplified - no follow lists) ────────────────────────
+    # ── Sidebar context ────────────────────────────────────────────────────────
     _unread_follow_count = FollowNotification.objects.filter(to_user=request.user, is_read=False).count()
-    _unread_notif_count  = Notification.objects.filter(recipient=request.user, is_read=False).count()
 
     return render(request, 'search.html', {
         'search_history':    search_history,
-        'trending_hashtags': trending_hashtags,
         'suggested_users':   suggested_users,
-        'explore_posts':     explore_posts,
-        'explore_has_more':  explore_has_more,
-        # sidebar (simplified)
         'unread_follow_count':        _unread_follow_count,
-        'unread_notifications_count': _unread_notif_count,
     })
 
 
@@ -3163,95 +1374,8 @@ def search_users_partial(request):
     })
 
 
-@login_required(login_url='/')
-@require_GET
-def search_posts_partial(request):
-    """GET /search/posts/?q=…&page=N  — HTMX paginated post cards."""
-    if not request.headers.get('HX-Request'):
-        return JsonResponse({'error': 'HTMX only'}, status=400)
-
-    _PAGE = 10
-    query = request.GET.get('q', '').strip()[:100]
-    page  = max(1, int(request.GET.get('page', 1) or 1))
-    offset = (page - 1) * _PAGE
-
-    from social.models import PostVibe as _PV
-
-    posts_qs = (
-        Post.objects.filter(
-            Q(content__icontains=query) |
-            Q(author__username__icontains=query)
-        )
-        .select_related(
-            'author', 'author__profile',
-            'original_post', 'original_post__author',
-            'original_post__author__profile',
-        )
-        .prefetch_related('images', 'likes', 'vibes', 'reposts')
-        .annotate(
-            vibe_count=Count('vibes', distinct=True),
-            comment_count=Count('comments', distinct=True),
-            repost_count=Count('reposts', distinct=True),
-        )
-        .order_by('-created_at')
-    )
-    total = posts_qs.count()
-    posts = list(posts_qs[offset: offset + _PAGE])
-    has_more = (offset + _PAGE) < total
-
-    _VIBE_EMOJIS = {
-        'fire': '🔥', 'real': '💯', 'vibing': '🎵',
-        'dead': '😂', 'cringe': '😬', 'chill': '🧊', 'love': '❤️',
-    }
-    _user_vibes = {
-        v.post_id: v.vibe_type
-        for v in _PV.objects.filter(user=request.user, post__in=posts)
-    }
-    for p in posts:
-        p.user_vibe = _user_vibes.get(p.post_id)
-        p.user_vibe_emoji = _VIBE_EMOJIS.get(p.user_vibe, '') if p.user_vibe else ''
-
-    return render(request, 'snippet/search_posts_partial.html', {
-        'posts':    posts,
-        'query':    query,
-        'page':     page + 1,
-        'has_more': has_more,
-    })
 
 
-@login_required(login_url='/')
-@require_GET
-def search_hashtags_partial(request):
-    """GET /search/tags/?q=…&page=N  — HTMX paginated hashtag rows."""
-    if not request.headers.get('HX-Request'):
-        return JsonResponse({'error': 'HTMX only'}, status=400)
-
-    _PAGE = 10
-    query = request.GET.get('q', '').strip()[:100]
-    page  = max(1, int(request.GET.get('page', 1) or 1))
-    offset = (page - 1) * _PAGE
-
-    hashtag_counts: dict = {}
-    for _p in Post.objects.filter(content__isnull=False).order_by('-created_at')[:300]:
-        if _p.content:
-            for _tag in extract_hashtags(_p.content):
-                hashtag_counts[_tag] = hashtag_counts.get(_tag, 0) + 1
-
-    clean_query = query.lstrip('#').lower()
-    all_matches = sorted(
-        [(tag, cnt) for tag, cnt in hashtag_counts.items() if clean_query in tag.lower()],
-        key=lambda x: x[1], reverse=True,
-    )
-    total = len(all_matches)
-    hashtags_page = all_matches[offset: offset + _PAGE]
-    has_more = (offset + _PAGE) < total
-
-    return render(request, 'snippet/search_hashtags_partial.html', {
-        'hashtags_page': hashtags_page,
-        'query':         query,
-        'page':          page + 1,
-        'has_more':      has_more,
-    })
 
 
 @login_required
@@ -3266,92 +1390,6 @@ def clear_history(request):
     return redirect('search')
 
 
-@login_required(login_url='/')
-@require_GET
-def explore_partial(request):
-   
-    if not request.headers.get('HX-Request'):
-        return JsonResponse({'error': 'HTMX only'}, status=400)
-
-    _EXPLORE_PAGE = 18   # must match the page size in search()
-    page   = max(2, int(request.GET.get('page', 2) or 2))
-    offset = (page - 1) * _EXPLORE_PAGE
-
-    # ── Candidate pool (mirrors search() logic exactly) ────────────────────────
-    _seen_ids = set(request.session.get('explore_seen_ids', []))
-
-    _pool = (
-        Post.objects
-        .filter(
-            Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False),
-            created_at__gte=timezone.now() - timedelta(days=7),
-        )
-        .select_related('author', 'author__profile', 'original_post', 'original_post__author')
-        .prefetch_related('images', 'likes', 'vibes')
-        .annotate(
-            vibe_count=Count('vibes', distinct=True),
-            like_count=Count('likes', distinct=True),
-        )
-        .distinct()
-    )
-    if _pool.count() < 30:
-        _pool = (
-            Post.objects
-            .filter(Q(images__isnull=False) | Q(video_file__isnull=False) | Q(content__isnull=False))
-            .select_related('author', 'author__profile', 'original_post', 'original_post__author')
-            .prefetch_related('images', 'likes', 'vibes')
-            .annotate(
-                vibe_count=Count('vibes', distinct=True),
-                like_count=Count('likes', distinct=True),
-            )
-            .distinct()
-        )
-
-    _pool_list = list(_pool[:200])
-
-    # ── Scoring (mirrors search() logic) ──────────────────────────────────────
-    try:
-        _interest        = _build_user_interest_profile(request.user)
-        _author_affinity = _interest.get('author_affinity', {}) if _interest else {}
-        _liked_tags      = set(_interest.get('liked_hashtags', [])) if _interest else set()
-    except Exception:
-        _author_affinity = {}
-        _liked_tags      = set()
-
-    # Same deterministic daily seed as the main view so ordering is consistent
-    _today_str = timezone.now().strftime('%Y%m%d')
-    _seed      = hash(f"{request.user.id}_{_today_str}") & 0xFFFFFFFF
-    _rng       = random.Random(_seed)
-
-    def _score(p):
-        score = 0.0
-        rp    = p.original_post if p.original_post else p
-        score += min(p.vibe_count * 0.4, 6.0)
-        score += min(p.like_count * 0.2, 4.0)
-        score += float(_author_affinity.get(p.author_id, 0)) * 2.0
-        if rp.content and _liked_tags:
-            score += len(set(extract_hashtags(rp.content)) & _liked_tags) * 1.5
-        age_hours = (timezone.now() - p.created_at).total_seconds() / 3600
-        if age_hours < 24:
-            score += 2.0
-        elif age_hours < 72:
-            score += 0.5
-        if p.post_id in _seen_ids:
-            score -= 20.0
-        score += _rng.uniform(0, 1.5)
-        return score
-
-    _pool_list.sort(key=_score, reverse=True)
-
-    total         = len(_pool_list)
-    explore_posts = _pool_list[offset: offset + _EXPLORE_PAGE]
-    has_more      = (offset + _EXPLORE_PAGE) < total
-
-    return render(request, 'snippet/explore_partial.html', {
-        'explore_posts': explore_posts,
-        'next_page':     page + 1,
-        'has_more':      has_more,
-    })
 
 
 @login_required(login_url='/')
@@ -3901,28 +1939,14 @@ def fetch_link_preview(request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Notification Views
+# Notification Views (removed - only FollowNotification remains)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@login_required(login_url='/')
-def open_notification(request, post_id, notification_type):
-    post_obj = get_object_or_404(Post, post_id=post_id)
-    Notification.objects.filter(
-        recipient=request.user,
-        post=post_obj,
-        notification_type=notification_type,
-        is_read=False
-    ).update(is_read=True)
-    return redirect('post_comment', post_id=post_obj.post_id)
 
 
-@login_required(login_url='/')
 @login_required(login_url='/')
 def notification_list(request):
-  
-    Notification.objects.filter(
-        recipient=request.user, is_read=False
-    ).update(is_read=True)
+    # Only FollowNotification is used now
     from .models import FollowNotification as _FN
     _FN.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
 
@@ -3934,17 +1958,12 @@ def notification_list(request):
 
 def notification_partial(request):
     if request.user.is_authenticated:
-        unread_count = Notification.objects.filter(
-            recipient=request.user, is_read=False
-        ).count()
         unread_follow_count = FollowNotification.objects.filter(
             to_user=request.user, is_read=False
         ).count()
     else:
-        unread_count = 0
         unread_follow_count = 0
     return render(request, 'snippet/notification_count.html', {
-        'unread_notifications_count': unread_count,
         'unread_follow_count': unread_follow_count,
     })
 
@@ -3976,53 +1995,12 @@ def delete_notification_group(request):
 
         return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
 
-    # ── Post-based notification group ─────────────────────────────────────────
-    post_id           = data.get('post_id')
-    notification_type = data.get('notification_type')
-    actor_id          = data.get('actor_id')
-
-    if not post_id or not notification_type:
-        return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
-
-    try:
-        post_uuid = uuid_module.UUID(str(post_id))
-    except (ValueError, AttributeError):
-        return JsonResponse({'status': 'error', 'message': 'Invalid post_id'}, status=400)
-
-    VALID_TYPES = {'like', 'vibe', 'comment', 'repost', 'mention'}
-    if notification_type not in VALID_TYPES:
-        return JsonResponse({'status': 'error', 'message': 'Invalid notification_type'}, status=400)
-
-    # 'vibe' is the frontend alias for 'like' stored in the DB
-    db_type = 'like' if notification_type == 'vibe' else notification_type
-
-    qs = Notification.objects.filter(
-        recipient=request.user,
-        post_id=post_uuid,
-        notification_type=db_type,
-    )
-
-    if db_type == 'mention' and actor_id:
-        try:
-            qs = qs.filter(actor_id=int(actor_id))
-        except (TypeError, ValueError):
-            return JsonResponse({'status': 'error', 'message': 'Invalid actor_id'}, status=400)
-
-    deleted_count, _ = qs.delete()
-
-    return JsonResponse({
-        'status': 'success',
-        'deleted_count': deleted_count,
-        'message': f'Deleted {deleted_count} notification(s)',
-    })
+    return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
 
 
 @login_required
 @require_POST
 def mark_all_notifications_read(request):
-    Notification.objects.filter(
-        recipient=request.user, is_read=False
-    ).update(is_read=True)
     FollowNotification.objects.filter(
         to_user=request.user, is_read=False
     ).update(is_read=True)
@@ -4323,14 +2301,11 @@ def channel(request, channel_id):
     subscribed_channels = Channel.objects.filter(subscriber=request.user)
     total_unread = sum(ch.unread_count_for_user(request.user) for ch in subscribed_channels)
 
-    notifications = request.user.notifications.filter(is_read=False)
-
     context = {
         'channel': channel_obj,
         'grouped_messages': grouped_messages,
         'channel_id': str(channel_id),
         'total_unread': total_unread,
-        'notifications': notifications,
         'is_admin': channel_obj.is_user_admin(request.user),
         'is_owner': channel_obj.channel_owner == request.user
     }
@@ -4675,6 +2650,29 @@ def market(request):
     highest_price = products.aggregate(Max('product_price'))['product_price__max']
     lowest_price  = products.aggregate(Min('product_price'))['product_price__min']
 
+    # ── Jumia-style category grouping ──────────────────────────────────────
+    # When browsing "all" categories, group products into per-category rows
+    # (each capped at a handful of items) so the template can render
+    # horizontal-scroll sections per category, like Jumia's homepage.
+    categories_with_products = []
+    if category == 'all':
+        products = products.prefetch_related('images').select_related('product_owner')
+        _by_cat = {}
+        for p in products:
+            _by_cat.setdefault(p.product_category, []).append(p)
+        # Preserve the canonical category order from CATEGORY_CHOICES,
+        # only including categories that actually have listings.
+        for cat_key, cat_label in Market.CATEGORY_CHOICES:
+            items = _by_cat.get(cat_key)
+            if items:
+                categories_with_products.append({
+                    'key':      cat_key,
+                    'label':    cat_label,
+                    'icon':     Market.CATEGORY_ICONS.get(cat_key, '📦'),
+                    'products': items[:12],
+                    'has_more': len(items) > 12,
+                })
+
     if request.method == 'POST' and 'form_type' in request.POST:
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
@@ -4702,7 +2700,8 @@ def market(request):
             cache.set(_rl_key, _rl_hits + 1, timeout=3600)
 
             # ── FIX 2: Allowlists for enum fields ──────────────────────────────
-            _VALID_CATEGORIES   = {'Phones', 'Electronics', 'Fashion', 'Properties', 'Others'}
+            from social.models import Market as _MarketModel
+            _VALID_CATEGORIES   = _MarketModel.VALID_CATEGORIES
             _VALID_CONDITIONS   = {'New', 'Used', 'Used-Fair'}
             _VALID_AVAILABILITY = {'Single Item', 'In Stock'}
 
@@ -4825,11 +2824,14 @@ def market(request):
 
     user_can_post, missing_fields = _profile_post_status(request.user)
     context = {
-        'products':       products,
-        'highest_price':  highest_price or 0,
-        'lowest_price':   lowest_price  or 0,
-        'user_can_post':  user_can_post,
-        'missing_fields': missing_fields,
+        'products':                 products,
+        'highest_price':            highest_price or 0,
+        'lowest_price':             lowest_price  or 0,
+        'user_can_post':            user_can_post,
+        'missing_fields':           missing_fields,
+        'selected_category':        category,
+        'categories_with_products': categories_with_products,
+        'all_categories':           Market.CATEGORY_CHOICES,
     }
     return render(request, 'marketplace.html', context)
 
@@ -4862,11 +2864,70 @@ def product_detail(request, product_id):
     ).exclude(product_id=product_id)[:4]
     seller_profile = get_object_or_404(Profile, user=product.product_owner)
 
+    in_wishlist = False
+    if request.user.is_authenticated:
+        in_wishlist = Wishlist.objects.filter(user=request.user, product=product).exists()
+
     context = {
         'product': product, 'images': images,
         'related_products': related_products, 'seller': seller_profile,
+        'all_categories': Market.CATEGORY_CHOICES,
+        'business_page': product.business_page,
+        'in_wishlist': in_wishlist,
     }
     return render(request, 'product_details.html', context)
+
+
+@login_required(login_url='/')
+@require_POST
+def toggle_wishlist(request, product_id):
+    """
+    AJAX toggle — save/unsave a product for later.
+    Returns JSON so the heart icon can update instantly on any page
+    (product detail, marketplace grid, business page listings, etc.)
+    """
+    import uuid as _uuid_mod
+    try:
+        _pid = _uuid_mod.UUID(str(product_id))
+        product = get_object_or_404(Market, product_id=_pid)
+    except Exception:
+        return JsonResponse({'error': 'Product not found.'}, status=404)
+
+    existing = Wishlist.objects.filter(user=request.user, product=product).first()
+    if existing:
+        existing.delete()
+        saved = False
+    else:
+        Wishlist.objects.create(user=request.user, product=product)
+        saved = True
+
+    return JsonResponse({
+        'saved': saved,
+        'wishlist_count': Wishlist.objects.filter(user=request.user).count(),
+    })
+
+
+@login_required(login_url='/')
+def wishlist_view(request):
+    """
+    Products the current user has saved for later.
+    Reuses the Market model + the shared 'mfy-jcard' product card markup.
+    """
+    saved_items = (
+        Wishlist.objects.filter(user=request.user)
+        .select_related('product')
+        .prefetch_related('product__images')
+        .order_by('-created_at')
+    )
+    products = [item.product for item in saved_items]
+
+    paginator = Paginator(products, 24)
+    page_obj  = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'wishlist.html', {
+        'products':      page_obj,
+        'wishlist_count': len(products),
+    })
 
 
 @login_required(login_url='/')
@@ -4898,46 +2959,10 @@ def contact_seller(request, product_id):
     return redirect(f"{base_url}?product={product_id}")
 
 
-def spotlight_view(request):
-    spotlight_posts = Post.objects.filter(
-        Q(video_file__isnull=False) & ~Q(video_file='') |
-        Q(is_repost=True, original_post__video_file__isnull=False) & ~Q(original_post__video_file='')
-    ).order_by('?').select_related('author', 'original_post')
-    return render(request, 'spotlight.html', {'posts': spotlight_posts})
 
 
-@login_required(login_url='/')
-@require_POST
-def track_share(request, post_id):
-    post_obj = get_object_or_404(Post, post_id=post_id)
-    if post_obj.share is None:
-        post_obj.share = 0
-    post_obj.share += 1
-    post_obj.save()
-    return JsonResponse({'success': True, 'new_count': post_obj.share})
 
 
-@require_POST
-@login_required(login_url='/')
-def increment_post_view(request, post_id):
-    from django.db.models import F
-    post_obj = get_object_or_404(Post, post_id=post_id)
-    # Atomic increment — no read-modify-write race
-    Post.objects.filter(pk=post_obj.pk).update(view=F('view') + 1)
-    post_obj.refresh_from_db(fields=['view'])
-
-    # ── Feed signal: record passive view affinity ─────────────────────────────
-    # Weight is intentionally low (base 1.0 in _build_user_interest_profile)
-    # so passive scrolling/watching doesn't dilute active engagement signals.
-    # We bust the interest cache so the next feed load reflects this view.
-    try:
-        from django.core.cache import cache
-        _get_or_create_feed_profile(request.user).record_view(post_obj.author_id)
-        cache.delete(f'kvibe_interest_v2_{request.user.id}')
-    except Exception:
-        pass
-
-    return JsonResponse({'success': True, 'new_count': post_obj.view})
 
 
 def get_location(request, username):
@@ -4996,195 +3021,16 @@ def set_offline(request):
     return HttpResponse(status=204)
 
 
-@login_required
-@require_POST
-def add_comment_reply(request, comment_id):
-    comment    = get_object_or_404(PostComment, comment_id=comment_id)
-    reply_text = request.POST.get('comment', '').strip()
-    image      = request.FILES.get('image')
-    audio      = request.FILES.get('audio_file')
-
-    # Require at least one of: text, image, or audio
-    if not reply_text and not image and not audio:
-        return HttpResponse(status=204)
-
-    reply = CommentReply.objects.create(
-        comment    = comment,
-        author     = request.user,
-        reply_text = reply_text or '',
-        image      = image,
-        file       = audio,
-    )
-
-    post_obj = comment.post
-
-    # Notify the comment author that someone replied
-    if comment.author != request.user:
-        Notification.objects.create(
-            recipient         = comment.author,
-            actor             = request.user,
-            post              = post_obj,
-            comment           = comment,
-            notification_type = Notification.REPLY,
-        )
-
-    # Notify any @mentioned users in the reply text
-    if reply_text:
-        mentioned_usernames = set(re.findall(r"@(\w+)", reply_text))
-        for username in mentioned_usernames:
-            try:
-                mentioned_user = User.objects.get(username=username)
-            except User.DoesNotExist:
-                continue
-            if mentioned_user == request.user:
-                continue
-            if mentioned_user == comment.author:
-                continue
-            already_exists = Notification.objects.filter(
-                recipient         = mentioned_user,
-                actor             = request.user,
-                post              = post_obj,
-                comment           = comment,
-                notification_type = Notification.MENTION,
-            ).exists()
-            if not already_exists:
-                Notification.objects.create(
-                    recipient         = mentioned_user,
-                    actor             = request.user,
-                    post              = post_obj,
-                    comment           = comment,
-                    notification_type = Notification.MENTION,
-                )
-
-    return render(request, 'snippet/comment_replies.html', {'replies': [reply]})
 
 
-@login_required
-@require_POST
-def like_reply(request, reply_id):
-    reply = get_object_or_404(CommentReply, reply_id=reply_id)
-    if request.user in reply.like.all():
-        reply.like.remove(request.user)
-        liked = False
-    else:
-        reply.like.add(request.user)
-        liked = True
-    return JsonResponse({'liked': liked, 'likes_count': reply.like.count()})
 
 
-@login_required
-@require_POST
-def edit_reply(request, reply_id):
-    reply = get_object_or_404(CommentReply, reply_id=reply_id, author=request.user)
-    new_text = request.POST.get('reply_text', '').strip()
-    if new_text:
-        reply.reply_text = new_text
-        reply.is_edited = True
-        reply.save()
-        return render(request, 'snippet/reply_content.html', {'reply': reply})
-    return JsonResponse({'success': False, 'error': 'Reply text is required'}, status=400)
 
 
-@login_required
-@require_POST
-def delete_reply(request, reply_id):
-    reply = get_object_or_404(CommentReply, reply_id=reply_id, author=request.user)
-    reply.delete()
-    return JsonResponse({'success': True})
 
 
-@login_required(login_url='/')
-def comments_poll(request, post_id):
-    post_obj = get_object_or_404(Post, post_id=post_id)
-    after_str = request.GET.get('after', '')
-    after_dt = None
-    if after_str:
-        from django.utils.dateparse import parse_datetime
-        after_dt = parse_datetime(after_str)
-        if after_dt is None:
-            try:
-                from dateutil.parser import parse as du_parse
-                after_dt = du_parse(after_str)
-            except Exception:
-                after_dt = None
-
-    qs = PostComment.objects.filter(post=post_obj)
-    if after_dt:
-        qs = qs.filter(created_at__gt=after_dt)
-
-    new_comments = (
-        qs.select_related('author', 'author__profile')
-        .prefetch_related('like', 'replies', 'replies__author', 'replies__author__profile')
-        .order_by('-created_at')
-    )
-
-    if not new_comments.exists():
-        return HttpResponse(status=204)
-
-    html_parts = []
-    for comment in new_comments:
-        html_parts.append(
-            render_to_string(
-                'snippet/comment_list.html',
-                {'comment': comment, 'request': request, 'user': request.user},
-                request=request,
-            )
-        )
-    return HttpResponse(''.join(html_parts))
 
 
-@login_required(login_url='/')
-@login_required(login_url='login')
-def hashtag_view(request, tag_name):
-    from django.db.models import Q
-
-    profile = request.user.profile
-
-    posts = Post.objects.filter(
-        Q(content__icontains=f'#{tag_name}') |
-        Q(original_post__content__icontains=f'#{tag_name}')
-    ).order_by('-created_at').select_related(
-        'author', 'author__profile',
-        'original_post', 'original_post__author', 'original_post__author__profile'
-    ).prefetch_related('likes', 'reposts', 'images')
-
-    post_count = posts.count()
-
-    all_hashtags = {}
-    for p in posts[:200]:
-        content = p.original_post.content if p.is_repost and p.original_post else p.content
-        if content:
-            for tag in extract_hashtags(content):
-                if tag.lower() != tag_name.lower():
-                    all_hashtags[tag] = all_hashtags.get(tag, 0) + 1
-
-    related_hashtags = sorted(all_hashtags.items(), key=lambda x: x[1], reverse=True)[:10]
-
-
-    hashtag_counts = {}
-    recent_posts = Post.objects.filter(content__isnull=False).order_by('-created_at')[:200]
-    for p in recent_posts:
-        if p.content:
-            for tag in extract_hashtags(p.content):
-                hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
-    trending_hashtags = sorted(hashtag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-
-    unread_follow_count = FollowNotification.objects.filter(
-        to_user=request.user, is_read=False
-    ).count()
-    unread_notifications_count = Notification.objects.filter(
-        recipient=request.user, is_read=False
-    ).count()
-
-    return render(request, 'hashtag_view.html', {
-        'tag_name': tag_name,
-        'posts': posts,
-        'post_count': post_count,
-        'related_hashtags': related_hashtags,
-        'trending_hashtags': trending_hashtags,
-        'unread_follow_count': unread_follow_count,
-        'unread_notifications_count': unread_notifications_count,
-    })
 
 
 # ─── Online Status API ────────────────────────────────────────────────────────
@@ -5784,31 +3630,6 @@ def _card_comments_post(request, obj, CommentCls, fk_field):
     })
 
 
-# ── Market ad reactions ────────────────────────────────────────────────────────
-
-@login_required(login_url='/')
-def market_vibe(request, product_id):
-    product = get_object_or_404(Market, product_id=product_id)
-    if request.method == 'GET':
-        return _card_vibe_get(request, product, MarketVibe, 'product')
-    return _card_vibe_toggle(request, product, MarketVibe, 'product')
-
-
-@login_required(login_url='/')
-def market_comments(request, product_id):
-    product = get_object_or_404(Market, product_id=product_id)
-    if request.method == 'POST':
-        return _card_comments_post(request, product, MarketComment, 'product')
-    return _card_comments_get(request, product, MarketComment, 'product')
-
-
-@login_required(login_url='/')
-def market_share(request, product_id):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'method not allowed'}, status=405)
-    return JsonResponse({'success': True})
-
-
 # ── Job vacancy reactions ──────────────────────────────────────────────────────
 
 @login_required(login_url='/')
@@ -5853,38 +3674,14 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.models import User
 from django.db.models import Count
 from social.models import (
-    Profile, Post, PostComment, UserReport, BlockedUser,
-    Message, Channel, Market, SocialEvent, JobVacancy,
+    Profile, UserReport, BlockedUser,
+    Message, Channel, Market, SocialEvent, JobVacancy, BusinessPage,
 )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
-
-def _community_stats():
-    """
-    Returns a list of dicts with community area name, count, and percentage,
-    sorted descending by count, excluding blank values.
-    """
-    qs = (
-        Profile.objects
-        .exclude(community_area='')
-        .values('community_area')
-        .annotate(count=Count('id'))
-        .order_by('-count')
-    )
-    label_map = dict(Profile.KISHI_COMMUNITIES)
-    total = sum(r['count'] for r in qs) or 1
-    return [
-        {
-            'name':  label_map.get(r['community_area'], r['community_area'].replace('_', ' ').title()),
-            'count': r['count'],
-            'pct':   round(r['count'] / total * 100),
-        }
-        for r in qs
-    ]
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main admin dashboard
@@ -5902,17 +3699,12 @@ def admin_dashboard(request):
         # ── Overview counts ───────────────────────────────────────────────
         'total_users':     User.objects.count(),
         'online_users':    Profile.objects.filter(online=True).count(),
-        'total_posts':     Post.objects.count(),
-        'total_comments':  PostComment.objects.count(),
         'total_products':  Market.objects.count(),
         'total_channels':  Channel.objects.count(),
         # SocialEvent field is `date` (not event_date)
         'upcoming_events': SocialEvent.objects.filter(date__gte=date.today()).count(),
         'pending_reports': UserReport.objects.filter(status='pending').count(),
         'total_reports':   UserReport.objects.count(),
-        # ── Community breakdown ───────────────────────────────────────────
-        'community_stats': _community_stats(),
-
         # ── Recent users ──────────────────────────────────────────────────
         'recent_users': (
             User.objects
@@ -5932,14 +3724,6 @@ def admin_dashboard(request):
             User.objects
             .select_related('profile')
             .order_by('-date_joined')
-        ),
-
-        # ── All posts ─────────────────────────────────────────────────────
-        'all_posts': (
-            Post.objects
-            .select_related('author__profile')
-            .prefetch_related('likes')
-            .order_by('-created_at')[:200]
         ),
 
         # ── All reports ───────────────────────────────────────────────────
@@ -6037,16 +3821,6 @@ def admin_delete_user(request, user_id):
     return redirect('/admin-dashboard/#users')
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Admin action: Delete a post
-# ─────────────────────────────────────────────────────────────────────────────
-
-@staff_member_required
-def admin_delete_post(request, post_id):
-    post = get_object_or_404(Post, post_id=post_id)
-    post.delete()
-    messages.success(request, 'Post deleted successfully.')
-    return redirect('/admin-dashboard/#posts')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -6143,7 +3917,8 @@ def edit_product(request, product_id):
         return JsonResponse({'success': False, 'error': 'Method not allowed.'}, status=405)
 
     # ── Allowlists ──────────────────────────────────────────────────────────
-    _VALID_CATEGORIES   = {'Phones', 'Electronics', 'Fashion', 'Properties', 'Others'}
+    from social.models import Market as _MarketModel
+    _VALID_CATEGORIES   = _MarketModel.VALID_CATEGORIES
     _VALID_CONDITIONS   = {'New', 'Used', 'Used-Fair'}
     _VALID_AVAILABILITY = {'Single Item', 'In Stock'}
 
@@ -6277,3 +4052,277 @@ def handler404(request, exception=None):
 
 def handler500(request):
     return render(request, '500.html', status=500)
+
+# =============================================================================
+# BUSINESS PAGE VIEWS
+# Products/listings use the existing Market + MarketImage models.
+# =============================================================================
+
+@login_required(login_url='/')
+def business_page_create(request):
+    from social.models import BusinessPage
+    if BusinessPage.objects.filter(owner=request.user).count() >= 3:
+        messages.error(request, 'You can create up to 3 business pages.')
+        return redirect('business_pages_mine')
+
+    if request.method == 'POST':
+        name        = request.POST.get('name', '').strip()
+        category    = request.POST.get('category', 'others').strip()
+        tagline     = request.POST.get('tagline', '').strip()
+        description = request.POST.get('description', '').strip()
+        location    = request.POST.get('location', '').strip()
+        website     = request.POST.get('website', '').strip()
+        whatsapp    = request.POST.get('whatsapp', '').strip()
+        phone       = request.POST.get('phone', '').strip()
+        email_val   = request.POST.get('email', '').strip()
+        instagram   = request.POST.get('instagram', '').strip()
+        youtube     = request.POST.get('youtube', '').strip()
+        facebook    = request.POST.get('facebook', '').strip()
+        twitter     = request.POST.get('twitter', '').strip()
+        tiktok      = request.POST.get('tiktok', '').strip()
+
+        errors = {}
+        if not name:
+            errors['name'] = 'Business name is required.'
+        elif len(name) > 150:
+            errors['name'] = 'Name must be 150 characters or fewer.'
+        if category not in {c[0] for c in BusinessPage.CATEGORY_CHOICES}:
+            category = 'others'
+
+        if errors:
+            return render(request, 'business_page_create.html', {
+                'errors': errors, 'form_data': request.POST,
+                'categories': BusinessPage.CATEGORY_CHOICES,
+            })
+
+        page = BusinessPage(
+            owner=request.user, name=name, category=category,
+            tagline=tagline, description=description, location=location,
+            website=website, whatsapp=whatsapp, phone=phone, email=email_val,
+            instagram=instagram, youtube=youtube, facebook=facebook,
+            twitter=twitter, tiktok=tiktok,
+        )
+        if request.FILES.get('logo'):        page.logo        = request.FILES['logo']
+        if request.FILES.get('cover_photo'): page.cover_photo = request.FILES['cover_photo']
+
+        try:
+            page.save()
+        except Exception as exc:
+            messages.error(request, f'Could not create page: {exc}')
+            return render(request, 'business_page_create.html', {
+                'errors': {}, 'form_data': request.POST,
+                'categories': BusinessPage.CATEGORY_CHOICES,
+            })
+
+        messages.success(request, f'"{page.name}" is live! 🎉')
+        return redirect('business_page_detail', slug=page.slug)
+
+    return render(request, 'business_page_create.html', {
+        'categories': BusinessPage.CATEGORY_CHOICES,
+    })
+
+
+@login_required(login_url='/')
+def business_page_detail(request, slug):
+    """
+    Public page view.
+    Listings are Market objects tagged with this page via Market.business_page FK.
+    Clicking a product goes to the existing product_detail view.
+    """
+    from social.models import BusinessPage
+    page        = get_object_or_404(BusinessPage, slug=slug, is_active=True)
+    listings    = Market.objects.filter(business_page=page).order_by('-posted_on').prefetch_related('images')
+    is_owner    = request.user == page.owner
+    is_follower = page.followers.filter(pk=request.user.pk).exists()
+
+    wishlist_ids = set(
+        Wishlist.objects.filter(user=request.user, product__business_page=page)
+        .values_list('product_id', flat=True)
+    ) if request.user.is_authenticated else set()
+
+    # Products the user has already saved to their wishlist shouldn't be
+    # shown again in the page's listing grid — but the owner should still
+    # see their own full catalog when managing the page.
+    if request.user.is_authenticated and not is_owner and wishlist_ids:
+        listings = listings.exclude(product_id__in=wishlist_ids)
+
+    return render(request, 'business_page_detail.html', {
+        'page':              page,
+        'listings':          listings,
+        'is_owner':          is_owner,
+        'is_follower':       is_follower,
+        'follower_count':    page.follower_count,
+        'listing_count':     listings.count(),
+        'market_categories': Market.CATEGORY_CHOICES,
+        'wishlist_ids':      wishlist_ids,
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_page_follow(request, slug):
+    from social.models import BusinessPage
+    page = get_object_or_404(BusinessPage, slug=slug, is_active=True)
+    if request.user == page.owner:
+        return JsonResponse({'error': 'You cannot follow your own page.'}, status=400)
+    if page.followers.filter(pk=request.user.pk).exists():
+        page.followers.remove(request.user)
+        following = False
+    else:
+        page.followers.add(request.user)
+        following = True
+    return JsonResponse({'following': following, 'follower_count': page.follower_count})
+
+
+@login_required(login_url='/')
+def business_page_edit(request, slug):
+    from social.models import BusinessPage
+    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user)
+
+    if request.method == 'POST':
+        page.name        = request.POST.get('name', page.name).strip()
+        page.category    = request.POST.get('category', page.category).strip()
+        page.tagline     = request.POST.get('tagline', '').strip()
+        page.description = request.POST.get('description', '').strip()
+        page.location    = request.POST.get('location', '').strip()
+        page.website     = request.POST.get('website', '').strip()
+        page.whatsapp    = request.POST.get('whatsapp', '').strip()
+        page.phone       = request.POST.get('phone', '').strip()
+        page.email       = request.POST.get('email', '').strip()
+        page.instagram   = request.POST.get('instagram', '').strip()
+        page.youtube     = request.POST.get('youtube', '').strip()
+        page.facebook    = request.POST.get('facebook', '').strip()
+        page.twitter     = request.POST.get('twitter', '').strip()
+        page.tiktok      = request.POST.get('tiktok', '').strip()
+        if request.FILES.get('logo'):        page.logo        = request.FILES['logo']
+        if request.FILES.get('cover_photo'): page.cover_photo = request.FILES['cover_photo']
+        try:
+            page.save()
+            messages.success(request, 'Page updated.')
+        except Exception as exc:
+            messages.error(request, f'Update failed: {exc}')
+        return redirect('business_page_detail', slug=page.slug)
+
+    return render(request, 'business_page_edit.html', {
+        'page': page, 'categories': BusinessPage.CATEGORY_CHOICES,
+    })
+
+
+@login_required(login_url='/')
+def business_pages_mine(request):
+    from social.models import BusinessPage
+    pages = BusinessPage.objects.filter(owner=request.user).order_by('-created_at')
+    return render(request, 'business_pages_mine.html', {'pages': pages})
+
+
+@login_required(login_url='/')
+def business_pages_list(request):
+    from social.models import BusinessPage
+    category = request.GET.get('category', '').strip()
+    qs = BusinessPage.objects.filter(is_active=True).order_by('-created_at')
+    if category:
+        qs = qs.filter(category=category)
+    paginator = Paginator(qs, 24)
+    page_obj  = paginator.get_page(request.GET.get('page'))
+    return render(request, 'business_pages_list.html', {
+        'pages':      page_obj,
+        'categories': BusinessPage.CATEGORY_CHOICES,
+        'active_cat': category,
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_product_upload(request, slug):
+    """
+    Owner posts a new Market listing tagged to their business page.
+    Uses the existing Market + MarketImage models — no separate product model.
+    Returns JSON for inline page update; product links to product_detail view.
+    """
+    from social.models import BusinessPage
+
+    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
+
+    # ── Rate limit: max 10 listings per hour (reuse market rate-limit key) ──
+    _rl_key  = f'ad_post:{request.user.id}'
+    _rl_hits = cache.get(_rl_key, 0)
+    if _rl_hits >= 10:
+        return JsonResponse({'success': False, 'errors': {'__all__': 'Too many listings posted. Please wait.'}}, status=429)
+    cache.set(_rl_key, _rl_hits + 1, timeout=3600)
+
+    # ── Field extraction ──────────────────────────────────────────────────────
+    name         = request.POST.get('product_name', '').strip()
+    price_raw    = request.POST.get('product_price', '').strip()
+    description  = request.POST.get('description', '').strip()
+    location     = request.POST.get('location', page.location or 'Kishi, Oyo State').strip()
+    category     = request.POST.get('category', 'others').strip()
+    condition    = request.POST.get('product_condition', 'New').strip()
+    availability = request.POST.get('availability', 'Single Item').strip()
+    whatsapp     = request.POST.get('whatsapp_number', page.whatsapp or '').strip()
+
+    # ── Allowlists ────────────────────────────────────────────────────────────
+    _VALID_CATEGORIES   = Market.VALID_CATEGORIES
+    _VALID_CONDITIONS   = {'New', 'Used', 'Used-Fair'}
+    _VALID_AVAILABILITY = {'Single Item', 'In Stock'}
+    if category     not in _VALID_CATEGORIES:   category     = 'others'
+    if condition    not in _VALID_CONDITIONS:   condition    = 'New'
+    if availability not in _VALID_AVAILABILITY: availability = 'Single Item'
+
+    # ── Validation ────────────────────────────────────────────────────────────
+    errors = {}
+    if not name:
+        errors['product_name'] = 'Product name is required.'
+    if not price_raw:
+        errors['product_price'] = 'Price is required.'
+    else:
+        try:
+            price_val = int(float(price_raw))
+            if price_val < 0:
+                errors['product_price'] = 'Price cannot be negative.'
+        except (ValueError, TypeError):
+            errors['product_price'] = 'Enter a valid price.'
+    if not description:
+        errors['description'] = 'Description is required.'
+    if not whatsapp:
+        errors['whatsapp_number'] = 'WhatsApp number is required.'
+    if not request.FILES.getlist('images'):
+        errors['images'] = 'At least one image is required.'
+    if errors:
+        return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+    price_val = int(float(price_raw))
+
+    # ── Create Market listing tagged to this page ─────────────────────────────
+    from social.models import sanitize_text as _sanitize
+    try:
+        product = Market.objects.create(
+            product_owner=request.user,
+            product_name=_sanitize(name, 'product_name'),
+            product_price=price_val,
+            product_location=_sanitize(location),
+            product_description=_sanitize(description, 'product_description'),
+            product_availability=availability,
+            product_category=category,
+            product_condition=condition,
+            whatsapp_number=whatsapp,
+            business_page=page,
+        )
+        for img_file in request.FILES.getlist('images')[:5]:
+            MarketImage.objects.create(product=product, product_image=img_file)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception('business_product_upload failed for user %s', request.user.id)
+        return JsonResponse({'success': False, 'errors': {'__all__': 'Something went wrong. Please try again.'}}, status=500)
+
+    first_img = product.images.first()
+    img_url   = first_img.product_image.url if first_img else 'https://placehold.co/400x400?text=No+Image'
+
+    return JsonResponse({
+        'success':    True,
+        'product_id': str(product.product_id),
+        'name':       product.product_name,
+        'price':      product.product_price,
+        'image_url':  img_url,
+        'detail_url': f'/product/{product.product_id}/',
+        'message':    'Listing uploaded successfully! 🔥',
+    })
