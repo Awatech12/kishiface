@@ -84,7 +84,6 @@ def follow_notifications_context(request):
             'has_unread_follows': False,
         }
 
-
 def channel_unread_processor(request):
     if not request.user.is_authenticated:
         return {'total_followed_unread': 0}
