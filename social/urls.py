@@ -132,8 +132,9 @@ urlpatterns = [
     path('business/<slug:slug>/upload/',                views.business_product_upload,   name='business_product_upload'),
 
     # ── Profiles (catch-alls — must stay at the bottom) ───────────────────────
-    path('block/<str:username>/',         views.block_user,        name='block_user'),
-    path('report/<str:username>/',        views.report_user,       name='report_user'),
-    path('<str:username>/edit/',          views.update_profile,    name='update_profile'),
-    path('<str:username>/',               views.profile,           name='profile'),
+    path('block/<str:username>/',                    views.block_user,          name='block_user'),
+    path('report/<str:username>/',                   views.report_user,         name='report_user'),
+    path('<str:username>/edit/',                     views.update_profile,      name='update_profile'),
+    path('<str:username>/toggle-privacy/',           views.toggle_privacy_lock, name='toggle_privacy_lock'),
+    path('<str:username>/',                          views.profile,             name='profile'),
 ]

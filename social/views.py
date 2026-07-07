@@ -1241,15 +1241,55 @@ def follow(request, username):
     other_user = get_object_or_404(User, username=username)
     current_profile = request.user.profile
     other_profile = other_user.profile
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    if other_user == request.user:
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': "You can't follow yourself."}, status=400)
+        return _safe_redirect_back(request, fallback='home')
 
     if other_profile not in current_profile.followings.all():
         current_profile.followings.add(other_profile)
+        action = 'followed'
         messages.info(request, 'Following')
-        return _safe_redirect_back(request, fallback='home')
     else:
         current_profile.followings.remove(other_profile)
+        action = 'unfollowed'
         messages.info(request, 'unFollowing')
-        return _safe_redirect_back(request, fallback='home')
+
+    if is_ajax:
+        return JsonResponse({
+            'success': True,
+            'action': action,
+            'follower_count': other_profile.followers.count(),
+        })
+    return _safe_redirect_back(request, fallback='home')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Toggle Privacy Lock View — quick public/private toggle for own profile
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def toggle_privacy_lock(request, username):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed.'}, status=405)
+
+    if request.user.username != username:
+        return JsonResponse({'success': False, 'error': "You can't change another user's privacy."}, status=403)
+
+    profile = request.user.profile
+    profile.privacy_level = (
+        Profile.PRIVACY_PUBLIC if profile.privacy_level == Profile.PRIVACY_PRIVATE
+        else Profile.PRIVACY_PRIVATE
+    )
+    profile.save()
+
+    return JsonResponse({
+        'success': True,
+        'privacy_level': profile.privacy_level,
+        'is_private': profile.privacy_level == Profile.PRIVACY_PRIVATE,
+    })
 
 
 @login_required(login_url='/')
