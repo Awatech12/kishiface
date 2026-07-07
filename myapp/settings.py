@@ -103,6 +103,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'social.context_processors.unread_count_processor',
                 'social.context_processors.information',
+                
                 'social.context_processors.follow_notifications_context',
                 'social.context_processors.channel_unread_processor',
             ],
