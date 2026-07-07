@@ -1,16 +1,16 @@
 from pathlib import Path
 import os
 import dj_database_url
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 import cloudinary
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / '.env')
+#load_dotenv(BASE_DIR / '.env')
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 # Fix: os.getenv() returns a string, not a bool. "False" is truthy in Python.
 DEBUG = os.getenv("DEBUG", "True").strip().lower() == "true"
-USE_CLOUDINARY = False
+USE_CLOUDINARY = True
 
 ALLOWED_HOSTS = [ 
     'kishihub.com',
