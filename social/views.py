@@ -979,6 +979,8 @@ def profile(request, username):
             'is_own_profile': False,
             'business_pages': BusinessPage.objects.none(),
             'business_page_count': 0,
+            'business_page_previews': [],
+            'wishlist_ids': set(),
         }
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, 'profile.html', context)
@@ -1005,12 +1007,30 @@ def profile(request, username):
     if request.user.is_authenticated and not is_own_profile:
         is_following = current_profile_qs_exists = request.user.profile.followings.filter(pk=profile.pk).exists()
 
-    # ── Business pages owned by this user, shown with full details on the profile ──
+    # ── Business pages owned by this user ────────────────────────────────────
+    # Instead of rendering each page's full details on the profile, we show a
+    # lightweight preview: that page's featured product/market card plus a
+    # link through to the full business page.
     business_pages = (
         BusinessPage.objects.filter(owner=user, is_active=True)
         .order_by('-created_at')
+        .prefetch_related('market_listings__images')
     )
     business_page_count = business_pages.count()
+
+    business_page_previews = []
+    for page in business_pages:
+        featured_listing = page.market_listings.order_by('-posted_on').first()
+        business_page_previews.append({
+            'page': page,
+            'listing': featured_listing,
+        })
+
+    wishlist_ids = set()
+    if request.user.is_authenticated:
+        wishlist_ids = set(
+            Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
+        )
 
     context = {
         'user': user, 'profile': profile,
@@ -1024,6 +1044,8 @@ def profile(request, username):
         'sidebar_follower_count':  sidebar_follower_count,
         'business_pages': business_pages,
         'business_page_count': business_page_count,
+        'business_page_previews': business_page_previews,
+        'wishlist_ids': wishlist_ids,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
