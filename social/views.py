@@ -154,6 +154,18 @@ def _profile_post_status(user):
     return can_post, missing
 
 
+def _format_count(n):
+    """12345 -> '12.3K', 1250000 -> '1.3M', 842 -> '842'."""
+    n = n or 0
+    if n >= 1_000_000:
+        val = n / 1_000_000
+        return f"{val:.1f}".rstrip('0').rstrip('.') + 'M+'
+    if n >= 1_000:
+        val = n / 1_000
+        return f"{val:.1f}".rstrip('0').rstrip('.') + 'K+'
+    return str(n)
+
+
 def index(request):
     # ── Already logged in ─────────────────────────────────────────────────────
     if request.user.is_authenticated:
@@ -218,13 +230,32 @@ def index(request):
         ][:3]
         marquee_columns = [col + col for col in marquee_columns if col]
 
+    stats = {
+        'active_users':    _format_count(User.objects.filter(is_active=True).count()),
+        'business_pages':  _format_count(BusinessPage.objects.count()),
+        'listings':        _format_count(Market.objects.count()),
+        'communities':     _format_count(Channel.objects.count()),
+    }
+
     return render(request, 'index.html', {
-        'marquee_columns': marquee_columns,
-        'marquee_flat':    marquee_flat,
+        'marquee_columns':     marquee_columns,
+        'marquee_flat':        marquee_flat,
+        'stats':               stats,
+        # Tells index.html to auto-open the Register modal instead of the
+        # Login modal (set by register() when it bounces validation errors
+        # back to '/', or when someone hits /register/ directly).
+        'open_register_modal': request.session.pop('mfy_open_register', False),
     })
 
 @csrf_protect
 def register(request):
+    """
+    Registration is now handled entirely as a modal on the index ('/') page —
+    there is no standalone register page anymore. This view only processes
+    the POST from that modal (and the legacy AJAX check-* endpoints below
+    still work the same way). Any GET here (e.g. an old bookmark/link to
+    /register/) just bounces to '/' with the modal flagged to auto-open.
+    """
     if request.user.is_authenticated:
         return redirect('home')
 
@@ -237,8 +268,9 @@ def register(request):
         errors = _validate_registration(username, email, password, password2)
         if errors:
             for err in errors:
-                messages.error(request, err)
-            return redirect('register')
+                messages.error(request, err, extra_tags='register')
+            request.session['mfy_open_register'] = True
+            return redirect('/')
 
         secret_question = html_escape(request.POST.get('secret_question', '').strip())
         secret_answer   = request.POST.get('secret_answer', '').strip()
@@ -246,11 +278,13 @@ def register(request):
         from .models import SecretQuestion
         valid_keys = [k for k, _ in SecretQuestion.QUESTION_CHOICES]
         if not secret_question or secret_question not in valid_keys:
-            messages.error(request, 'Please choose a valid security question.')
-            return redirect('register')
+            messages.error(request, 'Please choose a valid security question.', extra_tags='register')
+            request.session['mfy_open_register'] = True
+            return redirect('/')
         if not secret_answer or len(secret_answer) < 2:
-            messages.error(request, 'Security answer must be at least 2 characters.')
-            return redirect('register')
+            messages.error(request, 'Security answer must be at least 2 characters.', extra_tags='register')
+            request.session['mfy_open_register'] = True
+            return redirect('/')
 
         gender        = html_escape(request.POST.get('gender', '').strip())
 
@@ -278,7 +312,10 @@ def register(request):
         messages.success(request, f'Welcome {username}! You can now log in.')
         return redirect('/')
 
-    return render(request, 'register.html')
+    # GET /register/ — no more standalone page, send them home with the
+    # register modal open.
+    request.session['mfy_open_register'] = True
+    return redirect('/')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3467,6 +3504,7 @@ def job_vacancy_create(request):
     contact_info = html_escape(request.POST.get('contact_info', '').strip())
     salary_range = html_escape(request.POST.get('salary_range', '').strip())
     cover_image  = request.FILES.get('cover_image')
+    page_slug    = request.POST.get('business_page', '').strip()
 
     if not title:
         return JsonResponse({'success': False, 'error': 'Job title is required.'}, status=400)
@@ -3475,16 +3513,26 @@ def job_vacancy_create(request):
     if not description:
         return JsonResponse({'success': False, 'error': 'Description is required.'}, status=400)
 
+    # Optional — post this job vacancy under one of the user's own business pages
+    business_page = None
+    if page_slug:
+        business_page = get_object_or_404(BusinessPage, slug=page_slug)
+        if business_page.owner != request.user:
+            return JsonResponse({'success': False, 'error': 'Not authorised for that business page.'}, status=403)
+        if not company:
+            company = business_page.name
+
     job = JobVacancy(
-        posted_by   = request.user,
-        title       = title,
-        category    = category,
-        company     = company,
-        location    = location,
-        description = description,
-        requirements= requirements,
-        contact_info= contact_info,
-        salary_range= salary_range,
+        posted_by     = request.user,
+        title         = title,
+        category      = category,
+        company       = company,
+        location      = location,
+        description   = description,
+        requirements  = requirements,
+        contact_info  = contact_info,
+        salary_range  = salary_range,
+        business_page = business_page,
     )
 
     if cover_image:
@@ -3531,6 +3579,7 @@ def job_vacancy_edit(request, job_id):
     salary_range = html_escape(request.POST.get('salary_range', '').strip())
     is_open      = request.POST.get('is_open', '1').strip() == '1'
     cover_image  = request.FILES.get('cover_image')
+    page_slug    = request.POST.get('business_page', None)
 
     if not title:
         return JsonResponse({'success': False, 'error': 'Job title is required.'}, status=400)
@@ -3538,6 +3587,16 @@ def job_vacancy_edit(request, job_id):
         return JsonResponse({'success': False, 'error': 'Invalid category.'}, status=400)
     if not description:
         return JsonResponse({'success': False, 'error': 'Description is required.'}, status=400)
+
+    # Optional — reassign the business page this job is posted under (owner only)
+    if page_slug is not None:
+        if page_slug.strip() == '':
+            job.business_page = None
+        else:
+            business_page = get_object_or_404(BusinessPage, slug=page_slug.strip())
+            if business_page.owner != request.user:
+                return JsonResponse({'success': False, 'error': 'Not authorised for that business page.'}, status=403)
+            job.business_page = business_page
 
     job.title        = title
     job.category     = category
@@ -4197,6 +4256,13 @@ def business_page_detail(request, slug):
     is_owner    = request.user == page.owner
     is_follower = page.followers.filter(pk=request.user.pk).exists()
 
+    # Jobs tagged with this page via JobVacancy.business_page FK — owner sees
+    # closed listings too, everyone else only sees open ones.
+    jobs = JobVacancy.objects.filter(business_page=page)
+    if not is_owner:
+        jobs = jobs.filter(is_open=True)
+    jobs = jobs.order_by('-created_at')
+
     wishlist_ids = set(
         Wishlist.objects.filter(user=request.user, product__business_page=page)
         .values_list('product_id', flat=True)
@@ -4211,11 +4277,14 @@ def business_page_detail(request, slug):
     return render(request, 'business_page_detail.html', {
         'page':              page,
         'listings':          listings,
+        'jobs':              jobs,
+        'job_count':         jobs.count(),
         'is_owner':          is_owner,
         'is_follower':       is_follower,
         'follower_count':    page.follower_count,
         'listing_count':     listings.count(),
         'market_categories': Market.CATEGORY_CHOICES,
+        'job_categories':    JobVacancy.CATEGORY_CHOICES,
         'wishlist_ids':      wishlist_ids,
     })
 
@@ -4387,4 +4456,86 @@ def business_product_upload(request, slug):
         'image_url':  img_url,
         'detail_url': f'/product/{product.product_id}/',
         'message':    'Listing uploaded successfully! 🔥',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_job_upload(request, slug):
+    """
+    Owner posts a new JobVacancy tagged to their business page — the
+    'post a job vacancy from your Page' flow, mirroring Facebook Jobs.
+    Uses the existing JobVacancy model via its business_page FK.
+    """
+    from social.models import BusinessPage
+
+    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
+
+    can_post, missing = _profile_post_status(request.user)
+    if not can_post:
+        msg = 'Please complete your profile before posting jobs. Missing: ' + ', '.join(missing) + '.'
+        return JsonResponse({'success': False, 'errors': {'__all__': msg}}, status=403)
+
+    # ── Rate limit: max 10 job posts per hour, per user ────────────────────────
+    _rl_key  = f'job_post:{request.user.id}'
+    _rl_hits = cache.get(_rl_key, 0)
+    if _rl_hits >= 10:
+        return JsonResponse({'success': False, 'errors': {'__all__': 'Too many jobs posted. Please wait.'}}, status=429)
+    cache.set(_rl_key, _rl_hits + 1, timeout=3600)
+
+    # ── Field extraction ────────────────────────────────────────────────────────
+    title        = html_escape(request.POST.get('title', '').strip())
+    category     = request.POST.get('category', '').strip()
+    company      = html_escape(request.POST.get('company', page.name).strip() or page.name)
+    location     = html_escape(request.POST.get('location', page.location or '').strip())
+    description  = html_escape(request.POST.get('description', '').strip())
+    requirements = html_escape(request.POST.get('requirements', '').strip())
+    contact_info = html_escape(request.POST.get('contact_info', page.whatsapp or '').strip())
+    salary_range = html_escape(request.POST.get('salary_range', '').strip())
+    cover_image  = request.FILES.get('cover_image')
+
+    # ── Validation ───────────────────────────────────────────────────────────────
+    errors = {}
+    if not title:
+        errors['title'] = 'Job title is required.'
+    if category not in dict(JobVacancy.CATEGORY_CHOICES):
+        errors['category'] = 'Please choose a valid category.'
+    if not description:
+        errors['description'] = 'Description is required.'
+    if cover_image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if cover_image.content_type not in allowed_types:
+            errors['cover_image'] = 'Only JPEG, PNG, WebP or GIF images are allowed.'
+        elif cover_image.size > 10 * 1024 * 1024:
+            errors['cover_image'] = 'Image must be under 10 MB.'
+    if errors:
+        return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+    try:
+        job = JobVacancy.objects.create(
+            posted_by     = request.user,
+            business_page = page,
+            title         = title,
+            category      = category,
+            company       = company,
+            location      = location,
+            description   = description,
+            requirements  = requirements,
+            contact_info  = contact_info,
+            salary_range  = salary_range,
+            cover_image   = cover_image if cover_image else None,
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('business_job_upload failed for user %s', request.user.id)
+        return JsonResponse({'success': False, 'errors': {'__all__': 'Something went wrong. Please try again.'}}, status=500)
+
+    return JsonResponse({
+        'success':    True,
+        'job_id':     str(job.id),
+        'title':      job.title,
+        'category':   job.category,
+        'cover_url':  job.cover_image.url if job.cover_image else '',
+        'detail_url': f"/jobs/#khj-card-{job.id}",
+        'message':    'Job vacancy posted successfully! 💼',
     })

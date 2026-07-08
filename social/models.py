@@ -1151,6 +1151,11 @@ class JobVacancy(models.Model):
         cover_image = CloudinaryField('image', folder='job_covers', blank=True, null=True)
     else:
         cover_image = models.ImageField(upload_to='job_covers/', blank=True, null=True)
+    # FK to BusinessPage — set when a job vacancy is posted via a business page
+    business_page = models.ForeignKey(
+        'BusinessPage', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='job_vacancies',
+    )
     is_open      = models.BooleanField(default=True, db_index=True)
     created_at   = models.DateTimeField(auto_now_add=True)
     updated_at   = models.DateTimeField(auto_now=True)

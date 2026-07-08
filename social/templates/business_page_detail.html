@@ -145,6 +145,35 @@
         @media (min-width: 600px) { .kbiz-jgrid { grid-template-columns: repeat(3, 1fr); } }
         @media (min-width: 900px) { .kbiz-jgrid { grid-template-columns: repeat(4, 1fr); } }
 
+        /* ===== JOB VACANCY CARDS (business page) ===== */
+        .kbiz-jobs-list { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .kbiz-job-card {
+            border: 1px solid var(--mfy-border); border-radius: 10px; padding: 14px;
+            background: var(--mfy-white);
+        }
+        .kbiz-job-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+        .kbiz-job-title { font-size: 15px; font-weight: 700; color: var(--mfy-text); }
+        .kbiz-job-company { font-size: 12px; color: var(--mfy-text-light); margin-top: 2px; }
+        .kbiz-job-company i { margin-right: 4px; }
+        .kbiz-job-badge {
+            flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 4px 10px;
+            border-radius: 20px; color: #fff; white-space: nowrap;
+        }
+        .kbiz-job-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; font-size: 12px; color: var(--mfy-text-light); }
+        .kbiz-job-meta span i { margin-right: 3px; color: var(--mfy-primary); }
+        .kbiz-job-desc { font-size: 13px; color: var(--mfy-text); line-height: 1.5; margin-bottom: 8px; }
+        .kbiz-job-closed {
+            display: inline-block; font-size: 11px; font-weight: 700; color: var(--mfy-error);
+            background: #fdeaec; padding: 3px 9px; border-radius: 20px; margin-left: 8px;
+        }
+        .kbiz-job-actions { display: flex; gap: 8px; margin-top: 8px; }
+        .kbiz-job-actions button {
+            flex: 1; border: 1.5px solid var(--mfy-border); background: var(--mfy-white);
+            border-radius: 8px; padding: 7px; font-size: 12px; font-weight: 700;
+            color: var(--mfy-text); cursor: pointer; font-family: inherit;
+        }
+        .kbiz-job-actions button.del { color: var(--mfy-error); border-color: #f5c6cb; }
+
         .mfy-jcard {
             background: #ffffff;
             border-radius: 8px;
@@ -578,6 +607,75 @@
     {% endif %}
 </div>
 
+<!-- Jobs Section -->
+<div class="kbiz-section">
+    <div class="kbiz-section-header">
+        <h2>Job Vacancies</h2>
+        {% if is_owner %}
+        <button class="kbiz-upload-btn" onclick="openJobModal()">
+            <i class="fas fa-plus"></i> Post a Job
+        </button>
+        {% endif %}
+    </div>
+
+    {% if jobs %}
+    <div class="kbiz-jobs-list" id="jobsList">
+        {% for job in jobs %}
+        <article class="kbiz-job-card" id="kbiz-job-{{ job.id }}">
+            <div class="kbiz-job-top">
+                <div>
+                    <div class="kbiz-job-title">
+                        {{ job.title }}
+                        {% if not job.is_open %}<span class="kbiz-job-closed">Closed</span>{% endif %}
+                    </div>
+                    {% if job.company %}
+                    <div class="kbiz-job-company"><i class="fas fa-building"></i>{{ job.company }}</div>
+                    {% endif %}
+                </div>
+                <span class="kbiz-job-badge" style="background:{{ job.category_color }};">
+                    {{ job.category_emoji }} {{ job.get_category_display }}
+                </span>
+            </div>
+
+            <div class="kbiz-job-meta">
+                {% if job.location %}<span><i class="fas fa-map-marker-alt"></i>{{ job.location }}</span>{% endif %}
+                {% if job.salary_range %}<span><i class="fas fa-money-bill-wave"></i>{{ job.salary_range }}</span>{% endif %}
+                <span><i class="far fa-clock"></i>{{ job.created_at|timesince }} ago</span>
+            </div>
+
+            <div class="kbiz-job-desc">{{ job.description|truncatechars:180 }}</div>
+
+            <a href="{% url 'job_vacancy' %}#khj-card-{{ job.id }}" style="font-size:12px;font-weight:700;color:var(--mfy-primary);text-decoration:none;">
+                View full listing <i class="fas fa-arrow-right"></i>
+            </a>
+
+            {% if is_owner %}
+            <div class="kbiz-job-actions">
+                <button onclick="location.href='{% url 'job_vacancy' %}#khj-card-{{ job.id }}'">
+                    <i class="fas fa-pen"></i> Manage
+                </button>
+                <button class="del" onclick="deleteBusinessJob('{{ job.id }}', '{{ job.title|escapejs }}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="kbiz-empty">
+        <i class="fas fa-briefcase"></i>
+        {% if is_owner %}
+        <strong>No jobs posted yet</strong><br>
+        <small>Tap "Post a Job" to advertise your first vacancy.</small>
+        {% else %}
+        <strong>No open vacancies right now</strong><br>
+        <small>Check back soon!</small>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
 <!-- ── Upload modal (owner only) ── -->
 {% if is_owner %}
 <div class="kbiz-overlay" id="uploadOverlay">
@@ -655,6 +753,70 @@
             <i class="fas fa-upload"></i> Upload Listing
         </button>
         <button class="kbiz-modal-cancel" onclick="closeModal()">Cancel</button>
+    </div>
+</div>
+{% endif %}
+
+<!-- ── Job vacancy modal (owner only) ── -->
+{% if is_owner %}
+<div class="kbiz-overlay" id="jobOverlay">
+    <div class="kbiz-modal">
+        <div class="kbiz-modal-handle"></div>
+        <div class="kbiz-modal-title">Post a Job Vacancy</div>
+
+        <div class="kbiz-field">
+            <label class="kbiz-label">Job Title *</label>
+            <input class="kbiz-input" id="jobTitle" type="text" placeholder="e.g. Sales Associate">
+        </div>
+
+        <div class="kbiz-row2">
+            <div class="kbiz-field">
+                <label class="kbiz-label">Category</label>
+                <select class="kbiz-select" id="jobCategory">
+                    {% for cat_key, cat_label in job_categories %}
+                    <option value="{{ cat_key }}" {% if cat_key == 'fulltime' %}selected{% endif %}>{{ cat_label }}</option>
+                    {% empty %}
+                    <option value="fulltime" selected>⚠️ Categories not loaded — contact admin</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="kbiz-field">
+                <label class="kbiz-label">Location</label>
+                <input class="kbiz-input" id="jobLocation" type="text" placeholder="{{ page.location|default:'City, State' }}">
+            </div>
+        </div>
+
+        <div class="kbiz-field">
+            <label class="kbiz-label">Description *</label>
+            <textarea class="kbiz-textarea" id="jobDescription" placeholder="Describe the role…"></textarea>
+        </div>
+
+        <div class="kbiz-field">
+            <label class="kbiz-label">Requirements</label>
+            <textarea class="kbiz-textarea" id="jobRequirements" placeholder="Skills, experience, qualifications…"></textarea>
+        </div>
+
+        <div class="kbiz-row2">
+            <div class="kbiz-field">
+                <label class="kbiz-label">Salary Range</label>
+                <input class="kbiz-input" id="jobSalary" type="text" placeholder="e.g. ₦80,000–₦120,000/month">
+            </div>
+            <div class="kbiz-field">
+                <label class="kbiz-label">How to Apply</label>
+                <input class="kbiz-input" id="jobContact" type="text" placeholder="Email, phone or link"
+                       value="{{ page.whatsapp|default:'' }}">
+            </div>
+        </div>
+
+        <div class="kbiz-field">
+            <label class="kbiz-label">Cover Image (optional)</label>
+            <input type="file" id="jobCoverImage" accept="image/*" class="kbiz-input" style="padding:8px;">
+        </div>
+
+        <button class="kbiz-modal-submit" id="jobUploadBtn" onclick="submitJob()">
+            <i class="fas fa-briefcase"></i> Post Job Vacancy
+        </button>
+        <button class="kbiz-modal-cancel" onclick="closeJobModal()">Cancel</button>
     </div>
 </div>
 {% endif %}
@@ -884,6 +1046,119 @@ async function submitListing() {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-upload"></i> Upload Listing';
     }
+}
+
+// ── Job vacancy modal ─────────────────────────────────────────────────────────
+function openJobModal()  { document.getElementById('jobOverlay')?.classList.add('open'); }
+function closeJobModal() { document.getElementById('jobOverlay')?.classList.remove('open'); }
+document.getElementById('jobOverlay')?.addEventListener('click', e => {
+    if (e.target.id === 'jobOverlay') closeJobModal();
+});
+
+async function submitJob() {
+    const title       = document.getElementById('jobTitle').value.trim();
+    const description = document.getElementById('jobDescription').value.trim();
+
+    if (!title)       return toast('⚠️ Job title is required.');
+    if (!description) return toast('⚠️ Description is required.');
+
+    const btn = document.getElementById('jobUploadBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting…';
+
+    const fd = new FormData();
+    fd.append('title',        title);
+    fd.append('category',     document.getElementById('jobCategory').value);
+    fd.append('location',     document.getElementById('jobLocation').value.trim());
+    fd.append('description',  description);
+    fd.append('requirements', document.getElementById('jobRequirements').value.trim());
+    fd.append('salary_range', document.getElementById('jobSalary').value.trim());
+    fd.append('contact_info', document.getElementById('jobContact').value.trim());
+    const coverFile = document.getElementById('jobCoverImage').files[0];
+    if (coverFile) fd.append('cover_image', coverFile);
+
+    try {
+        const res  = await fetch(`/business/${PAGE_SLUG}/jobs/upload/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN },
+            body: fd,
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            toast(data.message || 'Job vacancy posted! 💼');
+            closeJobModal();
+
+            const list = document.getElementById('jobsList');
+            const categoryTxt = document.getElementById('jobCategory').options[document.getElementById('jobCategory').selectedIndex]?.text || '';
+            const locationTxt = document.getElementById('jobLocation').value.trim();
+            const salaryTxt   = document.getElementById('jobSalary').value.trim();
+
+            let container = list;
+            if (!container) {
+                const empty = document.querySelector('#jobsList')?.parentElement.querySelector('.kbiz-empty') || document.querySelectorAll('.kbiz-empty')[1];
+                if (empty) empty.remove();
+                container = document.createElement('div');
+                container.className = 'kbiz-jobs-list';
+                container.id = 'jobsList';
+                document.querySelectorAll('.kbiz-section')[1].appendChild(container);
+            }
+
+            const card = document.createElement('article');
+            card.className = 'kbiz-job-card';
+            card.id = `kbiz-job-${data.job_id}`;
+            card.innerHTML = `
+                <div class="kbiz-job-top">
+                    <div>
+                        <div class="kbiz-job-title">${data.title}</div>
+                    </div>
+                    <span class="kbiz-job-badge" style="background:#0095f6;">${categoryTxt}</span>
+                </div>
+                <div class="kbiz-job-meta">
+                    ${locationTxt ? `<span><i class="fas fa-map-marker-alt"></i>${locationTxt}</span>` : ''}
+                    ${salaryTxt ? `<span><i class="fas fa-money-bill-wave"></i>${salaryTxt}</span>` : ''}
+                    <span><i class="far fa-clock"></i>just now</span>
+                </div>
+                <div class="kbiz-job-desc">${description}</div>
+                <a href="/jobs/#khj-card-${data.job_id}" style="font-size:12px;font-weight:700;color:var(--mfy-primary);text-decoration:none;">
+                    View full listing <i class="fas fa-arrow-right"></i>
+                </a>
+                <div class="kbiz-job-actions">
+                    <button onclick="location.href='/jobs/#khj-card-${data.job_id}'"><i class="fas fa-pen"></i> Manage</button>
+                    <button class="del" onclick="deleteBusinessJob('${data.job_id}', '${data.title}')"><i class="fas fa-trash"></i> Delete</button>
+                </div>`;
+            container.insertBefore(card, container.firstChild);
+
+            ['jobTitle','jobLocation','jobDescription','jobRequirements','jobSalary','jobCoverImage'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+        } else {
+            const firstErr = Object.values(data.errors || {})[0] || 'Posting failed.';
+            toast('⚠️ ' + firstErr);
+        }
+    } catch (_) { toast('⚠️ Network error. Please try again.'); }
+    finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-briefcase"></i> Post Job Vacancy';
+    }
+}
+
+// ── Job delete (reuses the existing job_vacancy_delete endpoint) ─────────────
+async function deleteBusinessJob(jobId, jobTitle) {
+    if (!confirm(`Delete "${jobTitle}"? This cannot be undone.`)) return;
+    try {
+        const res  = await fetch(`/jobs/${jobId}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById(`kbiz-job-${jobId}`)?.remove();
+            toast('Job vacancy deleted.');
+        } else {
+            toast(data.error || 'Delete failed.');
+        }
+    } catch (_) { toast('⚠️ Network error. Please try again.'); }
 }
 </script>
 </body>
