@@ -3171,6 +3171,19 @@ def market(request):
                 messages.error(request, 'Something went wrong on our end. Please try again.')
                 return redirect('market')
 
+    # ── Full category list (with icons) for filter chips & the post-ad form ──
+    filter_categories = [
+        {'key': k, 'label': l, 'icon': Market.CATEGORY_ICONS.get(k, '📦')}
+        for k, l in Market.CATEGORY_CHOICES
+    ]
+
+    # ── Wishlist state — so the shared mfy-jcard card can show saved hearts ──
+    wishlist_ids = set()
+    if request.user.is_authenticated:
+        wishlist_ids = set(
+            Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
+        )
+
     user_can_post, missing_fields = _profile_post_status(request.user)
     context = {
         'products':                 products,
@@ -3181,6 +3194,8 @@ def market(request):
         'selected_category':        category,
         'categories_with_products': categories_with_products,
         'all_categories':           Market.CATEGORY_CHOICES,
+        'filter_categories':        filter_categories,
+        'wishlist_ids':             wishlist_ids,
     }
     return render(request, 'marketplace.html', context)
 
