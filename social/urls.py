@@ -37,6 +37,10 @@ urlpatterns = [
     # ── Search ─────────────────────────────────────────────────────────────────
     path('search',                           views.search,                   name='search'),
     path('search/users/',                    views.search_users_partial,     name='search_users_partial'),
+    path('search/products/',                 views.search_products_partial,  name='search_products_partial'),
+    path('search/pages/',                    views.search_pages_partial,     name='search_pages_partial'),
+    path('search/jobs/',                     views.search_jobs_partial,      name='search_jobs_partial'),
+    path('search/explore/products/',         views.explore_products_partial, name='explore_products_partial'),
     path('search/delete/<int:history_id>/',  views.delete_history,           name='delete_history'),
     path('search/clear/',                    views.clear_history,            name='clear_history'),
 
@@ -84,7 +88,6 @@ urlpatterns = [
 
     # ── Ads ────────────────────────────────────────────────────────────
     path('market',                             views.market,          name='market'),
-    path('market/new/',                        views.marketform,      name='marketform'),
     path('product/<uuid:product_id>/',         views.product_detail,  name='product_detail'),
     path('product/<uuid:product_id>/contact/', views.contact_seller,  name='contact_seller'),
     path('product/<uuid:product_id>/edit/',    views.edit_product,    name='edit_product'),

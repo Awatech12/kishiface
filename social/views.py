@@ -193,7 +193,7 @@ def index(request):
         if user is not None:
             login(request, user)
             request.session.set_expiry(None)
-            return redirect(_safe_next(request, '/home'))
+            return redirect(_safe_next(request, '/market'))
         else:
             messages.error(request, 'Invalid username or password. Please try again.')
             return redirect('/')
@@ -2996,6 +2996,8 @@ def market(request):
     else:
         products = Market.objects.filter(product_category=category).order_by('-posted_on')
 
+    products = products.select_related('business_page', 'product_owner', 'product_owner__profile')
+
     highest_price = products.aggregate(Max('product_price'))['product_price__max']
     lowest_price  = products.aggregate(Min('product_price'))['product_price__min']
 
@@ -3022,156 +3024,6 @@ def market(request):
                     'has_more': len(items) > 12,
                 })
 
-    if request.method == 'POST' and 'form_type' in request.POST:
-        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-
-        if request.POST['form_type'] == 'marketplace':
-            from django.http import JsonResponse
-            from urllib.parse import urlparse as _urlparse
-
-            # ── Profile-completion gate ────────────────────────────────────────
-            _can_post, _missing = _profile_post_status(request.user)
-            if not _can_post:
-                _msg = 'Please complete your profile before posting ads. Missing: ' + ', '.join(_missing) + '.'
-                if is_ajax:
-                    return JsonResponse({'success': False, 'errors': {'__all__': _msg}, 'error_code': 'incomplete_profile'}, status=403)
-                messages.error(request, _msg)
-                return redirect('marketform')
-
-            # ── FIX 5: Rate limit ad creation — max 10 ads per user per hour ──
-            _rl_key = f'ad_post:{request.user.id}'
-            _rl_hits = cache.get(_rl_key, 0)
-            if _rl_hits >= 10:
-                if is_ajax:
-                    return JsonResponse({'success': False, 'errors': {'__all__': 'Too many ads posted. Please wait before posting again.'}}, status=429)
-                messages.error(request, 'Too many ads posted. Please wait before posting again.')
-                return redirect('market')
-            cache.set(_rl_key, _rl_hits + 1, timeout=3600)
-
-            # ── FIX 2: Allowlists for enum fields ──────────────────────────────
-            from social.models import Market as _MarketModel
-            _VALID_CATEGORIES   = _MarketModel.VALID_CATEGORIES
-            _VALID_CONDITIONS   = {'New', 'Used', 'Used-Fair'}
-            _VALID_AVAILABILITY = {'Single Item', 'In Stock'}
-
-            product_owner        = request.user
-            product_name         = request.POST.get('product_name', '').strip()
-            product_price        = request.POST.get('product_price', '').strip()
-            product_location     = request.POST.get('location', 'Ilorin, Nigeria').strip()
-            product_description  = request.POST.get('description', '').strip()
-            product_availability = request.POST.get('availability', 'Single Item')
-            product_category     = request.POST.get('category', '').strip()
-            product_condition    = request.POST.get('product_condition', 'New')
-            whatsapp_number      = request.POST.get('whatsapp_number', '').strip()
-            ad_url               = request.POST.get('ad_url', '').strip() or None
-            email                = request.POST.get('email', '').strip() or None
-            instagram_handle     = request.POST.get('instagram_handle', '').strip() or None
-            twitter_handle       = request.POST.get('twitter_handle', '').strip() or None
-
-            # FIX 2: Clamp enum fields to allowlist values
-            if product_availability not in _VALID_AVAILABILITY:
-                product_availability = 'Single Item'
-            if product_condition not in _VALID_CONDITIONS:
-                product_condition = 'New'
-
-            errors = {}
-            if not product_name:
-                errors['product_name'] = 'Ad title is required.'
-            if not product_price:
-                errors['product_price'] = 'Price is required.'
-            else:
-                try:
-                    price_val = int(float(product_price))
-                    if price_val < 0:
-                        errors['product_price'] = 'Price cannot be negative.'
-                    elif price_val > 1_000_000_000:
-                        errors['product_price'] = 'Price is too high.'
-                except (ValueError, TypeError):
-                    errors['product_price'] = 'Enter a valid price.'
-
-            # FIX 2: Category must be in allowlist
-            if not product_category or product_category not in _VALID_CATEGORIES:
-                errors['product_category'] = 'Please select a valid category.'
-
-            if not product_description:
-                errors['product_description'] = 'Description is required.'
-            if not whatsapp_number:
-                errors['whatsapp_number'] = 'WhatsApp number is required.'
-
-            # FIX 3: SSRF check on ad_url using existing helper
-            if ad_url:
-                try:
-                    _parsed_url = _urlparse(ad_url)
-                    if _parsed_url.scheme not in ('http', 'https'):
-                        errors['ad_url'] = 'Only http:// and https:// URLs are allowed.'
-                    elif not _is_safe_url_for_preview(ad_url):
-                        errors['ad_url'] = 'That URL is not allowed (private or reserved address).'
-                except Exception:
-                    errors['ad_url'] = 'Invalid URL format.'
-
-            product_images = request.FILES.getlist('images')
-            if len(product_images) == 0:
-                errors['images'] = 'Please upload at least one image.'
-
-            if errors:
-                if is_ajax:
-                    return JsonResponse({'success': False, 'errors': errors}, status=400)
-                messages.error(request, 'Please fix the errors below.')
-                return redirect('market')
-
-            # FIX 4: Sanitize free-text fields through existing sanitize_text helper
-            from social.models import sanitize_text as _sanitize
-            product_name        = _sanitize(product_name, 'product_name')
-            product_description = _sanitize(product_description, 'product_description')
-            product_location    = _sanitize(product_location)
-
-            try:
-                product = Market.objects.create(
-                    product_owner=product_owner,
-                    product_name=product_name,
-                    product_price=int(float(product_price)),
-                    product_location=product_location,
-                    product_description=product_description,
-                    product_availability=product_availability,
-                    product_category=product_category,
-                    product_condition=product_condition,
-                    whatsapp_number=whatsapp_number,
-                    ad_url=ad_url,
-                    email=email,
-                    instagram_handle=instagram_handle,
-                    twitter_handle=twitter_handle,
-                )
-                for image in product_images[:5]:
-                    MarketImage.objects.create(product=product, product_image=image)
-
-                if is_ajax:
-                    return JsonResponse({
-                        'success': True,
-                        'message': 'Ad posted successfully! 🔥',
-                        'product_id': str(product.product_id),
-                    })
-                messages.success(request, 'Ad Posted Successfully', extra_tags='ads_success')
-                return redirect('market')
-
-            # FIX 1 & 6: Never leak raw exception details to clients
-            except ValidationError as ve:
-                _ve_msg = '; '.join(
-                    f'{k}: {", ".join(v) if isinstance(v, list) else v}'
-                    for k, v in (ve.message_dict.items() if hasattr(ve, 'message_dict') else {'error': [str(ve)]}.items())
-                )
-                if is_ajax:
-                    return JsonResponse({'success': False, 'errors': {'__all__': _ve_msg}}, status=400)
-                messages.error(request, _ve_msg)
-                return redirect('market')
-            except Exception:
-                import logging
-                logging.getLogger(__name__).exception('Ad creation failed for user %s', request.user.id)
-                if is_ajax:
-                    return JsonResponse({'success': False, 'errors': {'__all__': 'Something went wrong on our end. Please try again.'}}, status=500)
-                messages.error(request, 'Something went wrong on our end. Please try again.')
-                return redirect('market')
-
-    # ── Full category list (with icons) for filter chips & the post-ad form ──
     filter_categories = [
         {'key': k, 'label': l, 'icon': Market.CATEGORY_ICONS.get(k, '📦')}
         for k, l in Market.CATEGORY_CHOICES
@@ -3184,13 +3036,10 @@ def market(request):
             Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
         )
 
-    user_can_post, missing_fields = _profile_post_status(request.user)
     context = {
         'products':                 products,
         'highest_price':            highest_price or 0,
         'lowest_price':             lowest_price  or 0,
-        'user_can_post':            user_can_post,
-        'missing_fields':           missing_fields,
         'selected_category':        category,
         'categories_with_products': categories_with_products,
         'all_categories':           Market.CATEGORY_CHOICES,
@@ -3198,20 +3047,6 @@ def market(request):
         'wishlist_ids':             wishlist_ids,
     }
     return render(request, 'marketplace.html', context)
-
-
-@login_required(login_url='/')
-def marketform(request):
-    """
-    Renders the New Ad form page.
-    Passes user_can_post and missing_fields so the template can show
-    the profile-completion banner and lock the form when needed.
-    """
-    user_can_post, missing_fields = _profile_post_status(request.user)
-    return render(request, 'marketform.html', {
-        'user_can_post':  user_can_post,
-        'missing_fields': missing_fields,
-    })
 
 
 @login_required(login_url='/')
