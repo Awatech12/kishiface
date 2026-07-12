@@ -1018,6 +1018,11 @@ def profile(request, username):
             'business_page_count': 0,
             'business_page_previews': [],
             'wishlist_ids': set(),
+            'user_listings': [],
+            'user_listings_count': 0,
+            'suggested_pages': [],
+            'saved_products': [],
+            'saved_products_count': 0,
         }
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, 'profile.html', context)
@@ -1069,6 +1074,56 @@ def profile(request, username):
             Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
         )
 
+    # ── Right-sidebar "Suggestions for you" — business pages, not users ──────────
+    suggested_pages = []
+    if request.user.is_authenticated:
+        followed_business_ids = set(
+            BusinessPage.objects.filter(followers=request.user).values_list('page_id', flat=True)
+        )
+        suggested_pages = list(
+            BusinessPage.objects
+            .filter(is_active=True)
+            .exclude(owner=request.user)
+            .exclude(page_id__in=followed_business_ids)
+            .select_related('owner')
+            .order_by('-created_at')[:5]
+        )
+
+    # ── Listings owned by this user (for the "My Listings" grid on the profile) ──
+    user_listings_qs = (
+        Market.objects.filter(product_owner=user)
+        .order_by('-posted_on')
+        .prefetch_related('images')
+    )
+    user_listings_count = user_listings_qs.count()
+    user_listings = list(user_listings_qs[:8])
+
+    # ── Saved items for the "Saved" tab (owner only — wishlist is private) ──────
+    saved_products = []
+    saved_products_count = 0
+    if is_own_profile:
+        saved_qs = (
+            Wishlist.objects.filter(user=request.user)
+            .select_related('product')
+            .prefetch_related('product__images')
+            .order_by('-created_at')
+        )
+        saved_products_count = saved_qs.count()
+        saved_products = [item.product for item in saved_qs[:8] if item.product_id]
+
+    # Wishlist ("likes") counts per listing — queried separately so we don't
+    # depend on a specific reverse-relation name from the Wishlist model.
+    listing_ids = [listing.product_id for listing in user_listings] + [p.product_id for p in saved_products]
+    wishlist_counts = {}
+    if listing_ids:
+        for row in (Wishlist.objects.filter(product_id__in=listing_ids)
+                    .values('product_id').annotate(c=Count('id'))):
+            wishlist_counts[row['product_id']] = row['c']
+    for listing in user_listings:
+        listing.like_count = wishlist_counts.get(listing.product_id, 0)
+    for product in saved_products:
+        product.like_count = wishlist_counts.get(product.product_id, 0)
+
     context = {
         'user': user, 'profile': profile,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
@@ -1083,6 +1138,11 @@ def profile(request, username):
         'business_page_count': business_page_count,
         'business_page_previews': business_page_previews,
         'wishlist_ids': wishlist_ids,
+        'user_listings': user_listings,
+        'user_listings_count': user_listings_count,
+        'suggested_pages': suggested_pages,
+        'saved_products': saved_products,
+        'saved_products_count': saved_products_count,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1369,6 +1429,66 @@ def following_list(request, username):
     return render(request, 'following_list.html', context)
 
 
+def _search_users_qs(query):
+    return (
+        User.objects.filter(
+            Q(username__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(profile__bio__icontains=query)
+        )
+        .select_related('profile')
+        .annotate(follower_count=Count('profile__followers', distinct=True))
+        .distinct()
+    )
+
+
+def _search_products_qs(query):
+    return (
+        Market.objects.filter(
+            Q(product_name__icontains=query) |
+            Q(product_description__icontains=query) |
+            Q(product_category__icontains=query) |
+            Q(product_location__icontains=query)
+        )
+        .select_related('product_owner', 'product_owner__profile', 'business_page')
+        .prefetch_related('images')
+        .distinct()
+        .order_by('-posted_on')
+    )
+
+
+def _search_pages_qs(query):
+    return (
+        BusinessPage.objects.filter(
+            Q(name__icontains=query) |
+            Q(tagline__icontains=query) |
+            Q(description__icontains=query) |
+            Q(category__icontains=query) |
+            Q(location__icontains=query),
+            is_active=True,
+        )
+        .annotate(follower_count=Count('followers', distinct=True))
+        .distinct()
+        .order_by('-follower_count')
+    )
+
+
+def _search_jobs_qs(query):
+    return (
+        JobVacancy.objects.filter(
+            Q(title__icontains=query) |
+            Q(company__icontains=query) |
+            Q(description__icontains=query) |
+            Q(location__icontains=query),
+            is_open=True,
+        )
+        .select_related('business_page', 'posted_by')
+        .distinct()
+        .order_by('-created_at')
+    )
+
+
 @login_required(login_url='/')
 def search(request):
     _PAGE = 10   # items per HTMX page
@@ -1378,20 +1498,21 @@ def search(request):
     if query:
         SearchHistory.objects.create(user=request.user, query=query)
 
-        # ── First page of users ────────────────────────────────────────────────
-        users_qs = (
-            User.objects.filter(
-                Q(username__icontains=query) |
-                Q(first_name__icontains=query) |
-                Q(last_name__icontains=query) |
-                Q(profile__bio__icontains=query)
-            )
-            .select_related('profile')
-            .annotate(follower_count=Count('profile__followers', distinct=True))
-            .distinct()
-        )
-        users_total = users_qs.count()
-        users = users_qs[:_PAGE]
+        # ── First page of each result type ─────────────────────────────────────
+        users_qs    = _search_users_qs(query)
+        products_qs = _search_products_qs(query)
+        pages_qs    = _search_pages_qs(query)
+        jobs_qs     = _search_jobs_qs(query)
+
+        users_total    = users_qs.count()
+        products_total = products_qs.count()
+        pages_total    = pages_qs.count()
+        jobs_total     = jobs_qs.count()
+
+        users    = users_qs[:_PAGE]
+        products = products_qs[:_PAGE]
+        pages    = pages_qs[:_PAGE]
+        jobs     = jobs_qs[:_PAGE]
 
         recent_searches = (
             SearchHistory.objects.filter(user=request.user)
@@ -1406,12 +1527,22 @@ def search(request):
             'users':             users,
             'users_total':       users_total,
             'users_has_more':    users_total > _PAGE,
+            'products':          products,
+            'products_total':    products_total,
+            'products_has_more': products_total > _PAGE,
+            'pages':             pages,
+            'pages_total':       pages_total,
+            'pages_has_more':    pages_total > _PAGE,
+            'jobs':              jobs,
+            'jobs_total':        jobs_total,
+            'jobs_has_more':     jobs_total > _PAGE,
             'recent_searches':   recent_searches,
             'page_size':         _PAGE,
             'unread_follow_count':        _unread_follow_count,
         })
 
     # ── Explore (no query) ─────────────────────────────────────────────────────
+    _EXPLORE_PAGE = 12
     search_history = (
         SearchHistory.objects.filter(user=request.user).order_by('-created_at')[:20]
     )
@@ -1426,13 +1557,31 @@ def search(request):
         .order_by('-follower_count')[:12]
     )
 
+    explore_products_qs = (
+        Market.objects
+        .select_related('product_owner', 'product_owner__profile', 'business_page')
+        .prefetch_related('images')
+        .order_by('-is_promoted', '-posted_on')
+    )
+    explore_products_total = explore_products_qs.count()
+    explore_products = explore_products_qs[:_EXPLORE_PAGE]
+
+    trending_pages = (
+        BusinessPage.objects.filter(is_active=True)
+        .annotate(follower_count=Count('followers', distinct=True))
+        .order_by('-follower_count')[:10]
+    )
+
     # ── Sidebar context ────────────────────────────────────────────────────────
     _unread_follow_count = FollowNotification.objects.filter(to_user=request.user, is_read=False).count()
 
     return render(request, 'search.html', {
-        'search_history':    search_history,
-        'suggested_users':   suggested_users,
-        'unread_follow_count':        _unread_follow_count,
+        'search_history':        search_history,
+        'suggested_users':       suggested_users,
+        'explore_products':      explore_products,
+        'explore_has_more':      explore_products_total > _EXPLORE_PAGE,
+        'trending_pages':        trending_pages,
+        'unread_follow_count':   _unread_follow_count,
     })
 
 
@@ -1473,6 +1622,107 @@ def search_users_partial(request):
     })
 
 
+@login_required(login_url='/')
+@require_GET
+def search_products_partial(request):
+    """GET /search/products/?q=…&page=N  — HTMX paginated product rows."""
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    _PAGE = 10
+    query = request.GET.get('q', '').strip()[:100]
+    page  = max(1, int(request.GET.get('page', 1) or 1))
+    offset = (page - 1) * _PAGE
+
+    products_qs = _search_products_qs(query)
+    total = products_qs.count()
+    products = products_qs[offset: offset + _PAGE]
+    has_more = (offset + _PAGE) < total
+
+    return render(request, 'snippet/search_products_partial.html', {
+        'products': products,
+        'query':    query,
+        'page':     page + 1,
+        'has_more': has_more,
+    })
+
+
+@login_required(login_url='/')
+@require_GET
+def search_pages_partial(request):
+    """GET /search/pages/?q=…&page=N  — HTMX paginated business page rows."""
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    _PAGE = 10
+    query = request.GET.get('q', '').strip()[:100]
+    page  = max(1, int(request.GET.get('page', 1) or 1))
+    offset = (page - 1) * _PAGE
+
+    pages_qs = _search_pages_qs(query)
+    total = pages_qs.count()
+    pages = pages_qs[offset: offset + _PAGE]
+    has_more = (offset + _PAGE) < total
+
+    return render(request, 'snippet/search_pages_partial.html', {
+        'pages':    pages,
+        'query':    query,
+        'page':     page + 1,
+        'has_more': has_more,
+    })
+
+
+@login_required(login_url='/')
+@require_GET
+def search_jobs_partial(request):
+    """GET /search/jobs/?q=…&page=N  — HTMX paginated job rows."""
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    _PAGE = 10
+    query = request.GET.get('q', '').strip()[:100]
+    page  = max(1, int(request.GET.get('page', 1) or 1))
+    offset = (page - 1) * _PAGE
+
+    jobs_qs = _search_jobs_qs(query)
+    total = jobs_qs.count()
+    jobs = jobs_qs[offset: offset + _PAGE]
+    has_more = (offset + _PAGE) < total
+
+    return render(request, 'snippet/search_jobs_partial.html', {
+        'jobs':     jobs,
+        'query':    query,
+        'page':     page + 1,
+        'has_more': has_more,
+    })
+
+
+@login_required(login_url='/')
+@require_GET
+def explore_products_partial(request):
+    """GET /search/explore/products/?page=N — HTMX paginated explore grid (no query)."""
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    _PAGE = 12
+    page  = max(1, int(request.GET.get('page', 1) or 1))
+    offset = (page - 1) * _PAGE
+
+    products_qs = (
+        Market.objects
+        .select_related('product_owner', 'product_owner__profile', 'business_page')
+        .prefetch_related('images')
+        .order_by('-is_promoted', '-posted_on')
+    )
+    total = products_qs.count()
+    products = products_qs[offset: offset + _PAGE]
+    has_more = (offset + _PAGE) < total
+
+    return render(request, 'snippet/explore_products_partial.html', {
+        'products': products,
+        'page':     page + 1,
+        'has_more': has_more,
+    })
 
 
 
