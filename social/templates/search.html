@@ -10,7 +10,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
-  <title>{% if query %}{{ query }} · Search{% else %}Explore · Marketfy{% endif %}</title>
+  <title>{% if query %}{{ query }} · Search · Marketfy{% else %}Explore · Marketfy{% endif %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js"></script>
   <style>
@@ -326,6 +326,26 @@
     /* POST CARD (flat, no shadow, no radius) */
     .ks-post-card { display:flex; gap:12px; padding:12px 16px; border-bottom:1px solid var(--kvibe-border); text-decoration:none; color:inherit; transition:background .12s; }
     .ks-post-card:hover { background:var(--kvibe-hover); }
+
+    /* ── Product rows (search results) ── */
+    .ks-product-row { display:flex; align-items:center; gap:12px; padding:10px 16px; text-decoration:none; color:inherit; border-bottom:1px solid var(--kvibe-border); transition:background .12s; }
+    .ks-product-row:hover { background:var(--kvibe-hover); }
+    .ks-product-thumb { width:56px; height:56px; object-fit:cover; border-radius:6px; flex-shrink:0; background:var(--kvibe-border); }
+    .ks-product-info { flex:1; min-width:0; }
+    .ks-product-name { font-size:14px; font-weight:600; color:var(--kvibe-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ks-product-price { font-size:14px; font-weight:700; color:var(--kvibe-primary); margin-top:1px; }
+    .ks-product-meta { font-size:12px; color:var(--kvibe-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ks-product-page { font-size:12px; color:var(--kvibe-muted); margin-top:1px; display:flex; align-items:center; gap:4px; }
+
+    /* ── Job rows (search results) ── */
+    .ks-job-row { display:flex; align-items:center; gap:12px; padding:12px 16px; text-decoration:none; color:inherit; border-bottom:1px solid var(--kvibe-border); transition:background .12s; }
+    .ks-job-row:hover { background:var(--kvibe-hover); }
+    .ks-job-emoji { width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; background:rgba(0,149,246,.1); }
+    .ks-job-info { flex:1; min-width:0; }
+    .ks-job-title { font-size:14px; font-weight:600; color:var(--kvibe-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ks-job-meta { font-size:12px; color:var(--kvibe-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ks-job-salary { font-size:12px; font-weight:600; color:#16a34a; margin-top:2px; }
+    .ks-job-badge { flex-shrink:0; font-size:11px; font-weight:700; padding:4px 9px; border-radius:20px; white-space:nowrap; }
     .ks-post-thumb-wrap { position:relative; flex-shrink:0; }
     .ks-post-thumb { width:80px; height:80px; object-fit:cover; display:block; background:var(--kvibe-border); }
     .ks-thumb-media { width:80px; height:80px; background:linear-gradient(135deg,#e8e8e8,#d4d4d4); display:flex; align-items:center; justify-content:center; font-size:24px; color:var(--kvibe-muted); }
@@ -760,7 +780,7 @@
   <form action="{% url 'search' %}" method="GET" class="ks-search-wrap" id="ksForm">
     <i class="fa-solid fa-magnifying-glass ks-search-icon"></i>
     <input type="text" name="q" id="ksQ" class="ks-search-input"
-      placeholder="Search users, posts, hashtags…"
+      placeholder="Search people, products, pages, jobs…"
       value="{{ query|default:'' }}"
       autocomplete="off" autocapitalize="none" spellcheck="false">
     <button type="button" class="ks-clear-btn {% if query %}show{% endif %}" id="ksClear">
@@ -775,8 +795,9 @@
 <nav class="ks-tabs show" id="ksTabs">
   <button class="ks-tab active" data-panel="all"      onclick="ksTab('all',this)">All</button>
   <button class="ks-tab" data-panel="people"   onclick="ksTab('people',this)">People <span class="ks-tab-count">{{ users_total }}</span></button>
-  <button class="ks-tab" data-panel="posts"    onclick="ksTab('posts',this)">Posts <span class="ks-tab-count">{{ posts_total }}</span></button>
-  <button class="ks-tab" data-panel="hashtags" onclick="ksTab('hashtags',this)">Tags <span class="ks-tab-count">{{ hashtags_total }}</span></button>
+  <button class="ks-tab" data-panel="products" onclick="ksTab('products',this)">Products <span class="ks-tab-count">{{ products_total }}</span></button>
+  <button class="ks-tab" data-panel="pages"    onclick="ksTab('pages',this)">Pages <span class="ks-tab-count">{{ pages_total }}</span></button>
+  <button class="ks-tab" data-panel="jobs"     onclick="ksTab('jobs',this)">Jobs <span class="ks-tab-count">{{ jobs_total }}</span></button>
 </nav>
 {% endif %}
 
@@ -911,85 +932,67 @@
         {% endif %}
         {% endif %}
 
-        {% if posts %}
-        <div class="ks-section-label" style="margin-top:4px;">Posts</div>
-        <div class="ks-grid">
-          {% for post in posts|slice:":9" %}{% with rp=post.original_post|default:post %}
-          <a href="{% url 'postcomment' post.post_id %}" class="ks-grid-cell" onclick="ksRecordExploreView('{{ post.post_id }}')">
-
-            {# ── Thumbnail ── #}
-            {% if rp.images.exists %}
-              <img src="{{ rp.images.first.image.url }}" loading="lazy" alt="post">
-              {% if rp.images.count > 1 %}
-                <span class="ks-grid-type-badge"><i class="fa-solid fa-clone"></i></span>
-              {% endif %}
-            {% elif rp.video_file %}
-              <div class="ks-grid-text">
-                <div class="ks-grid-text-inner"><i class="fa-solid fa-play" style="font-size:28px;opacity:.8;"></i></div>
-              </div>
-              <span class="ks-grid-type-badge"><i class="fa-solid fa-video"></i></span>
-            {% elif rp.file %}
-              <div class="ks-grid-text">
-                <div class="ks-grid-text-inner"><i class="fa-solid fa-music" style="font-size:28px;opacity:.8;"></i></div>
-              </div>
-              <span class="ks-grid-type-badge"><i class="fa-solid fa-music"></i></span>
-            {% elif rp.content %}
-              <div class="ks-grid-text">
-                <div class="ks-grid-text-quote">"</div>
-                <div class="ks-grid-text-inner{% if rp.content|length < 60 %} large{% elif rp.content|length < 120 %} medium{% endif %}">{{ rp.content|truncatechars:80 }}</div>
-              </div>
-            {% else %}
-              <div class="ks-grid-text">
-                <div class="ks-grid-text-inner"><i class="fa-solid fa-file" style="font-size:24px;opacity:.6;"></i></div>
-              </div>
-            {% endif %}
-
-            {# ── Repost badge ── #}
-            {% if post.is_repost %}
-              <span class="ks-grid-type-badge" style="right:auto;left:5px;top:5px;"><i class="fa-solid fa-retweet" style="color:var(--kvibe-primary);"></i></span>
-            {% endif %}
-
-            {# ── Always-on info bar ── #}
-            <div class="ks-grid-info">
-              <img src="{{ rp.author.profile.get_picture_url }}" class="ks-grid-info-avatar" loading="lazy"
-                onerror="this.src='https://placehold.co/20x20/dbdbdb/8e8e8e?text={{ rp.author.username|first|upper }}'">
-              <span class="ks-grid-info-name">{{ rp.author.username }}</span>
-              <span class="ks-grid-info-time">{{ rp.created_at|insta_timesince }}</span>
+        {% if products %}
+        <div class="ks-section-label" style="margin-top:4px;">Products</div>
+        {% for product in products|slice:":4" %}
+          <a href="{% url 'product_detail' product.product_id %}" class="ks-product-row">
+            <img src="{% if product.images.first %}{{ product.images.first.product_image.url }}{% else %}https://placehold.co/64x64/dbdbdb/8e8e8e?text=No+Image{% endif %}"
+              alt="{{ product.product_name }}" class="ks-product-thumb" loading="lazy">
+            <div class="ks-product-info">
+              <div class="ks-product-name">{{ product.product_name }}</div>
+              <div class="ks-product-price">₦{{ product.product_price|intcomma }}</div>
+              <div class="ks-product-meta">{{ product.category_icon }} {{ product.category_label }}{% if product.product_location %} · {{ product.product_location|truncatechars:24 }}{% endif %}</div>
             </div>
-
-            {# ── Hover overlay ── #}
-            <div class="ks-grid-overlay">
-              <i class="fa-solid fa-heart"></i><span>{{ rp.total_likes }}</span>
-              <i class="fa-solid fa-comment" style="margin-left:6px;"></i><span>{{ rp.comments.count }}</span>
-            </div>
-
-          </a>
-          {% endwith %}{% endfor %}
-        </div>
-        {% if posts_has_more %}
-          <div style="padding:8px 16px 12px;">
-            <button class="ks-section-action" onclick="ksTab('posts',document.querySelector('[data-panel=posts]'))">See all {{ posts_total }} posts →</button>
-          </div>
-        {% endif %}
-        {% endif %}
-
-        {% if hashtags_page %}
-        <div class="ks-section-label" style="margin-top:4px;">Hashtags</div>
-        {% for tag, count in hashtags_page|slice:":5" %}
-          <a href="{% url 'hashtag_view' tag %}" class="ks-hashtag-row">
-            <div class="ks-hashtag-icon">#</div>
-            <div class="ks-hashtag-info"><div class="ks-hashtag-name">#{{ tag }}</div><div class="ks-hashtag-count">{{ count }} post{{ count|pluralize }}</div></div>
-            <i class="fa-solid fa-chevron-right ks-hashtag-arrow"></i>
           </a>
         {% endfor %}
-        {% if hashtags_has_more %}
+        {% if products_has_more %}
           <div style="padding:6px 16px 14px;">
-            <button class="ks-section-action" onclick="ksTab('hashtags',document.querySelector('[data-panel=hashtags]'))">See all {{ hashtags_total }} tags →</button>
+            <button class="ks-section-action" onclick="ksTab('products',document.querySelector('[data-panel=products]'))">See all {{ products_total }} products →</button>
           </div>
         {% endif %}
         {% endif %}
 
-        {% if not users and not posts and not hashtags_page %}
+        {% if pages %}
+        <div class="ks-section-label" style="margin-top:4px;">Business Pages</div>
+        {% for bpage in pages|slice:":4" %}
+          <a href="{% url 'business_page_detail' bpage.slug %}" class="ks-user-row">
+            <img src="{{ bpage.get_logo_url }}" alt="{{ bpage.name }}" class="ks-user-avatar" loading="lazy"
+              onerror="this.src='https://placehold.co/48x48/f97316/ffffff?text={{ bpage.name|first|upper }}'">
+            <div class="ks-user-info">
+              <div class="ks-user-name">{{ bpage.name }}{% if bpage.is_verified %} <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:11px;"></i>{% endif %}</div>
+              <div class="ks-user-handle">{{ bpage.get_category_display }}</div>
+              {% if bpage.tagline %}<div class="ks-user-bio">{{ bpage.tagline|truncatechars:60 }}</div>{% endif %}
+            </div>
+            <div class="ks-user-meta-right"><span class="ks-follow-count"><i class="fa-solid fa-user-group"></i> {{ bpage.follower_count }}</span></div>
+          </a>
+        {% endfor %}
+        {% if pages_has_more %}
+          <div style="padding:6px 16px 14px;">
+            <button class="ks-section-action" onclick="ksTab('pages',document.querySelector('[data-panel=pages]'))">See all {{ pages_total }} pages →</button>
+          </div>
+        {% endif %}
+        {% endif %}
+
+        {% if jobs %}
+        <div class="ks-section-label" style="margin-top:4px;">Jobs</div>
+        {% for job in jobs|slice:":3" %}
+          <a href="{% url 'job_vacancy' %}#khj-card-{{ job.id }}" class="ks-job-row">
+            <div class="ks-job-emoji">{{ job.category_emoji }}</div>
+            <div class="ks-job-info">
+              <div class="ks-job-title">{{ job.title }}</div>
+              <div class="ks-job-meta">{{ job.company }}{% if job.location %} · {{ job.location|truncatechars:24 }}{% endif %}</div>
+              {% if job.salary_range %}<div class="ks-job-salary">{{ job.salary_range }}</div>{% endif %}
+            </div>
+          </a>
+        {% endfor %}
+        {% if jobs_has_more %}
+          <div style="padding:6px 16px 14px;">
+            <button class="ks-section-action" onclick="ksTab('jobs',document.querySelector('[data-panel=jobs]'))">See all {{ jobs_total }} jobs →</button>
+          </div>
+        {% endif %}
+        {% endif %}
+
+        {% if not users and not products and not pages and not jobs %}
           <div class="ks-empty"><i class="fa-solid fa-magnifying-glass"></i><h3>No results for "{{ query }}"</h3><p>Try different keywords or check spelling.</p></div>
         {% endif %}
       </div>
@@ -1015,96 +1018,70 @@
         {% endif %}
       </div>
 
-      <!-- POSTS TAB -->
-      <div class="ks-panel" id="panel-posts">
-        {% for post in posts %}
-          {% with rp=post.original_post|default:post %}
-          <a href="{% url 'postcomment' post.post_id %}" class="ks-post-card" data-post-id="{{ post.post_id }}">
-            <div class="ks-post-thumb-wrap">
-              {% if rp.images.exists %}
-                <img src="{{ rp.images.first.image.url }}" class="ks-post-thumb" loading="lazy">
-                {% if rp.images.count > 1 %}<span class="ks-thumb-badge"><i class="fa-solid fa-clone"></i></span>{% endif %}
-              {% elif rp.video_file %}
-                <div class="ks-thumb-media"><i class="fa-solid fa-play"></i></div>
-              {% elif rp.file %}
-                <div class="ks-thumb-media"><i class="fa-solid fa-music"></i></div>
-              {% elif rp.content %}
-                <div class="ks-thumb-text">
-                  <span>{{ rp.content|truncatechars:50 }}</span>
-                </div>
-              {% else %}
-                <div class="ks-thumb-media"><i class="fa-solid fa-file"></i></div>
-              {% endif %}
-            </div>
-            <div class="ks-post-body">
-              <div class="ks-post-author-row">
-                <img src="{{ rp.author.profile.get_picture_url }}" class="ks-post-avatar" loading="lazy"
-                  onerror="this.src='https://placehold.co/22x22/dbdbdb/8e8e8e?text={{ rp.author.username|first|upper }}'">
-                <span class="ks-post-author-name">{{ rp.author.username }}</span>
-                {% if rp.author.profile.is_verify %}<i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:10px;"></i>{% endif %}
-                {% if post.is_repost %}<span class="ks-repost-tag"><i class="fa-solid fa-retweet"></i> repost</span>{% endif %}
-              </div>
-              {% if rp.content %}
-                <div class="ks-post-text">{{ rp.content|truncatechars:100|safe|linebreaksbr }}</div>
-              {% endif %}
-
-              {# ── Link Preview (if available) ── #}
-              {% if rp.link_preview and rp.link_preview.title %}
-                <div class="kvibe-post-link-preview">
-                  {% if rp.link_preview.image %}
-                    <img src="{{ rp.link_preview.image }}" class="kvibe-plp-image" alt="" onerror="this.style.display='none'">
-                  {% endif %}
-                  <div class="kvibe-plp-body">
-                    {% if rp.link_preview.domain %}
-                      <div class="kvibe-plp-domain">{{ rp.link_preview.domain }}</div>
-                    {% endif %}
-                    {% if rp.link_preview.title %}
-                      <div class="kvibe-plp-title">{{ rp.link_preview.title }}</div>
-                    {% endif %}
-                    {% if rp.link_preview.description %}
-                      <div class="kvibe-plp-desc">{{ rp.link_preview.description }}</div>
-                    {% endif %}
-                  </div>
-                </div>
-              {% endif %}
-
-              <div class="ks-reaction-bar">
-                <span class="ks-react-chip">
-                  {% if post.user_vibe %}<span class="ks-react-active">{{ post.user_vibe_emoji }}</span>{% else %}<i class="fa-regular fa-face-smile"></i>{% endif %}
-                  {{ post.vibe_count }}
-                </span>
-                <span class="ks-react-chip"><i class="fa-regular fa-comment"></i> {{ post.comment_count }}</span>
-                <span class="ks-react-chip"><i class="fa-solid fa-retweet"></i> {{ post.repost_count }}</span>
-                {% if rp.share %}<span class="ks-react-chip"><i class="fa-solid fa-share-nodes"></i> {{ rp.share }}</span>{% endif %}
-                {% if rp.view %}<span class="ks-react-chip ks-chip-muted"><i class="fa-regular fa-eye"></i> {{ rp.view }}</span>{% endif %}
-                <span class="ks-react-chip ks-chip-muted" style="margin-left:auto;">{{ post.created_at|timesince }} ago</span>
-              </div>
-              {% if rp.has_mood %}<span class="ks-mood-tag" style="color:{{ rp.get_mood_color }};">{{ rp.get_mood_display }}</span>{% endif %}
+      <!-- PRODUCTS TAB -->
+      <div class="ks-panel" id="panel-products">
+        {% for product in products %}
+          <a href="{% url 'product_detail' product.product_id %}" class="ks-product-row" data-product-id="{{ product.product_id }}">
+            <img src="{% if product.images.first %}{{ product.images.first.product_image.url }}{% else %}https://placehold.co/64x64/dbdbdb/8e8e8e?text=No+Image{% endif %}"
+              alt="{{ product.product_name }}" class="ks-product-thumb" loading="lazy">
+            <div class="ks-product-info">
+              <div class="ks-product-name">{{ product.product_name }}</div>
+              <div class="ks-product-price">₦{{ product.product_price|intcomma }}</div>
+              <div class="ks-product-meta">{{ product.category_icon }} {{ product.category_label }}{% if product.product_location %} · {{ product.product_location|truncatechars:30 }}{% endif %}</div>
+              {% if product.business_page %}<div class="ks-product-page"><i class="fa-solid fa-shop"></i> {{ product.business_page.name }}</div>{% endif %}
             </div>
           </a>
-          {% endwith %}
         {% empty %}
-          <div class="ks-empty"><i class="fa-regular fa-newspaper"></i><h3>No posts found</h3></div>
+          <div class="ks-empty"><i class="fa-solid fa-basket-shopping"></i><h3>No products found</h3></div>
         {% endfor %}
-        {% if posts_has_more %}
-        <div id="posts-sentinel" hx-get="{% url 'search_posts_partial' %}?q={{ query|urlencode }}&page=2"
-          hx-trigger="intersect once" hx-target="#posts-sentinel" hx-swap="outerHTML"
+        {% if products_has_more %}
+        <div id="products-sentinel" hx-get="{% url 'search_products_partial' %}?q={{ query|urlencode }}&page=2"
+          hx-trigger="intersect once" hx-target="#products-sentinel" hx-swap="outerHTML"
           class="ks-load-sentinel"><span class="ks-spinner"></span></div>
         {% endif %}
       </div>
 
-      <!-- HASHTAGS TAB -->
-      <div class="ks-panel" id="panel-hashtags">
-        {% for tag, count in hashtags_page %}
-          <a href="{% url 'hashtag_view' tag %}" class="ks-hashtag-row">
-            <div class="ks-hashtag-icon">#</div>
-            <div class="ks-hashtag-info"><div class="ks-hashtag-name">#{{ tag }}</div><div class="ks-hashtag-count">{{ count }} post{{ count|pluralize }}</div></div>
-            <i class="fa-solid fa-chevron-right ks-hashtag-arrow"></i>
+      <!-- PAGES TAB -->
+      <div class="ks-panel" id="panel-pages">
+        {% for bpage in pages %}
+          <a href="{% url 'business_page_detail' bpage.slug %}" class="ks-user-row">
+            <img src="{{ bpage.get_logo_url }}" alt="{{ bpage.name }}" class="ks-user-avatar" loading="lazy"
+              onerror="this.src='https://placehold.co/48x48/f97316/ffffff?text={{ bpage.name|first|upper }}'">
+            <div class="ks-user-info">
+              <div class="ks-user-name">{{ bpage.name }}{% if bpage.is_verified %} <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:11px;"></i>{% endif %}</div>
+              <div class="ks-user-handle">{{ bpage.get_category_display }}{% if bpage.location %} · {{ bpage.location|truncatechars:24 }}{% endif %}</div>
+              {% if bpage.tagline %}<div class="ks-user-bio">{{ bpage.tagline|truncatechars:80 }}</div>{% endif %}
+            </div>
+            <div class="ks-user-meta-right"><span class="ks-follow-count"><i class="fa-solid fa-user-group"></i> {{ bpage.follower_count }}</span></div>
           </a>
-        {% empty %}<div class="ks-empty"><i class="fa-solid fa-hashtag"></i><h3>No tags found</h3></div>{% endfor %}
-        {% if hashtags_has_more %}
-        <div id="tags-sentinel" hx-get="{% url 'search_hashtags_partial' %}?q={{ query|urlencode }}&page=2"
-          hx-trigger="intersect once" hx-target="#tags-sentinel" hx-swap="outerHTML"
+        {% empty %}
+          <div class="ks-empty"><i class="fa-solid fa-shop-slash"></i><h3>No business pages found</h3></div>
+        {% endfor %}
+        {% if pages_has_more %}
+        <div id="pages-sentinel" hx-get="{% url 'search_pages_partial' %}?q={{ query|urlencode }}&page=2"
+          hx-trigger="intersect once" hx-target="#pages-sentinel" hx-swap="outerHTML"
+          class="ks-load-sentinel"><span class="ks-spinner"></span></div>
+        {% endif %}
+      </div>
+
+      <!-- JOBS TAB -->
+      <div class="ks-panel" id="panel-jobs">
+        {% for job in jobs %}
+          <a href="{% url 'job_vacancy' %}#khj-card-{{ job.id }}" class="ks-job-row">
+            <div class="ks-job-emoji" style="background:{{ job.category_color }}1a;color:{{ job.category_color }};">{{ job.category_emoji }}</div>
+            <div class="ks-job-info">
+              <div class="ks-job-title">{{ job.title }}</div>
+              <div class="ks-job-meta">{{ job.company }}{% if job.location %} · {{ job.location|truncatechars:30 }}{% endif %}</div>
+              {% if job.salary_range %}<div class="ks-job-salary">{{ job.salary_range }}</div>{% endif %}
+            </div>
+            <span class="ks-job-badge" style="background:{{ job.category_color }}1a;color:{{ job.category_color }};">{{ job.get_category_display }}</span>
+          </a>
+        {% empty %}
+          <div class="ks-empty"><i class="fa-solid fa-briefcase"></i><h3>No jobs found</h3></div>
+        {% endfor %}
+        {% if jobs_has_more %}
+        <div id="jobs-sentinel" hx-get="{% url 'search_jobs_partial' %}?q={{ query|urlencode }}&page=2"
+          hx-trigger="intersect once" hx-target="#jobs-sentinel" hx-swap="outerHTML"
           class="ks-load-sentinel"><span class="ks-spinner"></span></div>
         {% endif %}
       </div>
@@ -1127,115 +1104,34 @@
       <div class="ks-divider"></div>
       {% endif %}
 
-      {% if explore_posts %}
-      <div class="ks-section-row" style="padding-bottom:4px;"><span class="ks-section-title">Explore</span></div>
+      {% if explore_products %}
+      <div class="ks-section-row" style="padding-bottom:4px;"><span class="ks-section-title">Explore Products</span></div>
       <div class="ks-grid" id="ks-explore-grid">
 
-        {% for ep in explore_posts %}{% with rp=ep.original_post|default:ep %}
+        {% for product in explore_products %}
+          <a href="{% url 'product_detail' product.product_id %}" class="ks-grid-cell">
+            <img src="{% if product.images.first %}{{ product.images.first.product_image.url }}{% else %}https://placehold.co/400x400/dbdbdb/8e8e8e?text=No+Image{% endif %}"
+                 loading="lazy" alt="{{ product.product_name }}">
+            {% if product.is_promoted %}<span class="ks-grid-type-badge"><i class="fa-solid fa-bolt" style="color:#f59e0b;"></i></span>{% endif %}
 
-          <a href="{% url 'postcomment' ep.post_id %}" class="ks-grid-cell" onclick="ksRecordExploreView('{{ ep.post_id }}')">
-
-            {# ── Media thumbnail ─────────────────────────────────────────── #}
-            {% if rp.images.exists %}
-              <img src="{{ rp.images.first.image.url }}" loading="lazy" alt="post">
-              {% if rp.images.count > 1 %}<span class="ks-grid-type-badge"><i class="fa-solid fa-clone"></i></span>{% endif %}
-
-            {% elif rp.video_file %}
-              <video src="{{ rp.video_file.url }}#t=0.5" preload="metadata" muted playsinline
-                     style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;"></video>
-              <span class="ks-grid-type-badge"><i class="fa-solid fa-play"></i></span>
-
-            {% elif rp.file %}
-              <div class="ks-grid-text"><i class="fa-solid fa-music" style="font-size:28px;opacity:.6;"></i></div>
-
-            {% elif rp.content %}
-              {% with content_str=rp.content %}
-                {% if "youtube.com/watch" in content_str or "youtu.be/" in content_str %}
-                  <div class="ks-grid-yt-wrap" data-yt-src="{{ content_str|truncatechars:300 }}">
-                    <img src="" alt="YouTube" loading="lazy"
-                         onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-brands fa-youtube\' style=\'font-size:30px;color:#ff0000;\'></i></div>'">
-                    <div class="ks-grid-yt-play"><i class="fa-solid fa-play"></i></div>
-                  </div>
-                  <span class="ks-grid-type-badge"><i class="fa-brands fa-youtube" style="color:#ff0000;"></i></span>
-
-                {% elif "tiktok.com" in content_str %}
-                  {% if rp.link_preview and rp.link_preview.image %}
-                    <div class="ks-grid-yt-wrap">
-                      <img src="{{ rp.link_preview.image }}" loading="lazy" alt="TikTok"
-                           onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-brands fa-tiktok\' style=\'font-size:28px;\'></i></div>'">
-                      <div class="ks-grid-yt-play"><i class="fa-solid fa-play"></i></div>
-                    </div>
-                  {% else %}
-                    <div class="ks-grid-text"><i class="fa-brands fa-tiktok" style="font-size:28px;"></i></div>
-                  {% endif %}
-                  <span class="ks-grid-type-badge"><i class="fa-brands fa-tiktok"></i></span>
-
-                {% elif "twitter.com" in content_str or "x.com" in content_str %}
-                  {% if rp.link_preview and rp.link_preview.image %}
-                    <div class="ks-grid-yt-wrap">
-                      <img src="{{ rp.link_preview.image }}" loading="lazy" alt="X / Twitter"
-                           onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-brands fa-x-twitter\' style=\'font-size:28px;\'></i></div>'">
-                    </div>
-                  {% else %}
-                    <div class="ks-grid-text"><i class="fa-brands fa-x-twitter" style="font-size:28px;"></i></div>
-                  {% endif %}
-                  <span class="ks-grid-type-badge"><i class="fa-brands fa-x-twitter"></i></span>
-
-                {% elif rp.link_preview and rp.link_preview.image %}
-                  <div class="ks-grid-yt-wrap">
-                    <img src="{{ rp.link_preview.image }}" loading="lazy" alt="link preview"
-                         onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-solid fa-link\' style=\'font-size:24px;opacity:.6;\'></i></div>'">
-                  </div>
-                  <span class="ks-grid-type-badge"><i class="fa-solid fa-link"></i></span>
-
-                {% else %}
-                  <div class="ks-grid-text">
-                    <span class="ks-grid-text-quote">"</span>
-                    <div class="ks-grid-text-inner {% if rp.content|length < 60 %}large{% elif rp.content|length < 120 %}medium{% endif %}">
-                      {{ rp.content|truncatechars:100 }}
-                    </div>
-                  </div>
-                {% endif %}
-              {% endwith %}
-
-            {% elif rp.link_preview and rp.link_preview.image %}
-              <div class="ks-grid-yt-wrap">
-                <img src="{{ rp.link_preview.image }}" loading="lazy" alt="link preview"
-                     onerror="this.closest('.ks-grid-yt-wrap').innerHTML='<div class=\'ks-grid-text\'><i class=\'fa-solid fa-link\' style=\'font-size:24px;opacity:.6;\'></i></div>'">
-              </div>
-              <span class="ks-grid-type-badge"><i class="fa-solid fa-link"></i></span>
-
-            {% else %}
-              <div class="ks-grid-text"><i class="fa-solid fa-image" style="font-size:28px;opacity:.3;"></i></div>
-            {% endif %}
-
-            {# ── Vibe count (hover) ──────────────────────────────────────── #}
-            <div class="ks-grid-overlay">
-              <i class="fa-solid fa-fire" style="color:var(--vibe-fire);"></i>
-              <span>{{ ep.vibe_count }}</span>
-            </div>
-
-            {# ── Always-visible author + time bar ────────────────────────── #}
             <div class="ks-grid-info">
-              <img src="{{ rp.author.profile.get_picture_url }}" class="ks-grid-info-avatar"
-                   alt="{{ rp.author.username }}" loading="lazy"
-                   onerror="this.style.display='none'">
-              <span class="ks-grid-info-name">{{ rp.author.username }}</span>
-              <span class="ks-grid-info-time">{{ ep.created_at|insta_timesince }}</span>
+              <span class="ks-grid-info-name">{{ product.product_name|truncatechars:20 }}</span>
             </div>
 
+            <div class="ks-grid-overlay">
+              <span>₦{{ product.product_price|intcomma }}</span>
+            </div>
           </a>
-        {% endwith %}{% endfor %}
+        {% endfor %}
 
       {# ── HTMX infinite scroll sentinel — must be INSIDE .ks-grid so #}
       {# HTMX-injected batches remain grid children                     #}
       {% if explore_has_more %}
       <div id="explore-sentinel"
-           hx-get="{% url 'explore_partial' %}?page=2"
+           hx-get="{% url 'explore_products_partial' %}?page=2"
            hx-trigger="intersect once"
            hx-target="this"
            hx-swap="outerHTML"
-           hx-on::after-request="ksInitYtThumbnails()"
            class="ks-load-sentinel"
            style="grid-column: 1 / -1;">
         <span class="ks-spinner"></span>
@@ -1246,11 +1142,11 @@
 
       {% endif %}
 
-      {% if not search_history and not explore_posts %}
+      {% if not search_history and not explore_products %}
       <div class="ks-empty" style="margin-top:40px;">
         <i class="fa-solid fa-magnifying-glass"></i>
-        <h3>Search Kishiface</h3>
-        <p>Find people, posts, and hashtags.</p>
+        <h3>Search Marketfy</h3>
+        <p>Find people, products, business pages, and jobs.</p>
       </div>
       {% endif %}
 
@@ -1267,13 +1163,13 @@
       <!-- Following / Followers tabs - REMOVED -->
 
       <!-- Trending card -->
-      {% if trending_hashtags %}
+      {% if trending_pages %}
       <div class="ks-scard" style="margin-top:16px;border:none;">
-        <div class="ks-scard-title" style="border-bottom:none;">Trending on Kishiface</div>
-        {% for tag, count in trending_hashtags|slice:":10" %}
-        <a href="{% url 'hashtag_view' tag %}" class="ks-trend-chip" style="padding:10px 16px;">
+        <div class="ks-scard-title" style="border-bottom:none;">Trending Pages on Marketfy</div>
+        {% for bpage in trending_pages %}
+        <a href="{% url 'business_page_detail' bpage.slug %}" class="ks-trend-chip" style="padding:10px 16px;">
           <span class="ks-trend-rank">{{ forloop.counter }}</span>
-          <div style="flex:1;"><div class="ks-trend-name">#{{ tag }}</div><div class="ks-trend-count">{{ count }} post{{ count|pluralize }}</div></div>
+          <div style="flex:1;"><div class="ks-trend-name">{{ bpage.name }}</div><div class="ks-trend-count">{{ bpage.follower_count }} follower{{ bpage.follower_count|pluralize }}</div></div>
         </a>
         {% endfor %}
       </div>
@@ -1339,13 +1235,13 @@
 
     <!-- Following/Followers tabs removed from mobile sidebar -->
 
-    {% if trending_hashtags %}
+    {% if trending_pages %}
     <div class="ks-scard" style="margin-bottom: 20px;border:none;">
-      <div class="ks-scard-title" style="border-bottom:none;">Trending on Kishiface</div>
-      {% for tag, count in trending_hashtags|slice:":10" %}
-      <a href="{% url 'hashtag_view' tag %}" class="ks-trend-chip" style="padding:10px 16px;">
+      <div class="ks-scard-title" style="border-bottom:none;">Trending Pages on Marketfy</div>
+      {% for bpage in trending_pages %}
+      <a href="{% url 'business_page_detail' bpage.slug %}" class="ks-trend-chip" style="padding:10px 16px;">
         <span class="ks-trend-rank">{{ forloop.counter }}</span>
-        <div style="flex:1;"><div class="ks-trend-name">#{{ tag }}</div><div class="ks-trend-count">{{ count }} post{{ count|pluralize }}</div></div>
+        <div style="flex:1;"><div class="ks-trend-name">{{ bpage.name }}</div><div class="ks-trend-count">{{ bpage.follower_count }} follower{{ bpage.follower_count|pluralize }}</div></div>
       </a>
       {% endfor %}
     </div>
@@ -1569,49 +1465,6 @@ function kvibeCloseMobileSidebar() {
   window.addEventListener('resize', () => { if (window.innerWidth < 768 && isOpen) closePanel(); });
 })();
 
-// ── Explore grid: resolve YouTube thumbnails from raw content URLs ────────────
-function ksInitYtThumbnails(root) {
-  var scope = root || document;
-  function extractYtId(text) {
-    var m = text.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/))([A-Za-z0-9_-]{11})/);
-    return m ? m[1] : null;
-  }
-  scope.querySelectorAll('.ks-grid-yt-wrap[data-yt-src]').forEach(function (wrap) {
-    var src = wrap.getAttribute('data-yt-src') || '';
-    var ytId = extractYtId(src);
-    var img = wrap.querySelector('img');
-    if (ytId && img) {
-      img.src = 'https://i.ytimg.com/vi/' + ytId + '/hqdefault.jpg';
-      img.onerror = function () {
-        this.src = 'https://i.ytimg.com/vi/' + ytId + '/mqdefault.jpg';
-        this.onerror = function () {
-          wrap.innerHTML = '<div class="ks-grid-text"><i class="fa-brands fa-youtube" style="font-size:30px;color:#ff0000;"></i></div>';
-        };
-      };
-    } else if (img) {
-      wrap.innerHTML = '<div class="ks-grid-text"><i class="fa-brands fa-youtube" style="font-size:30px;color:#ff0000;"></i></div>';
-    }
-    wrap.removeAttribute('data-yt-src');
-  });
-}
-// Run on initial page load
-ksInitYtThumbnails();
-
-// ── Explore grid: record viewed post so algorithm deprioritises it next visit ─
-function ksRecordExploreView(postId) {
-  try {
-    const csrfToken = document.cookie.split(';')
-      .map(c => c.trim())
-      .find(c => c.startsWith('csrftoken='));
-    const token = csrfToken ? csrfToken.split('=')[1] : '';
-    fetch('/search/explore-view/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
-      body: JSON.stringify({ post_id: postId }),
-      keepalive: true,
-    }).catch(() => {});
-  } catch(e) {}
-}
 </script>
 </body>
 </html>
