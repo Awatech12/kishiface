@@ -126,16 +126,15 @@
   </div>
 
   {% elif item.type == 'market' %}
-  {# ── Marketfy Ads card — Jumia-style product card ─────── #}
+  {# ── Marketfy Ads card — exact parity with the marketplace grid card ─────── #}
   <article class="mfy-post mfy-jcard" data-market-id="{{ item.data.product_id }}">
 
-    {# Product image — square crop, white background like Jumia #}
-    {% with first_img=item.data.images.first %}
+    {% with imgs=item.data.images.all %}
     <a href="{% url 'product_detail' item.data.product_id %}" class="mfy-jcard-img-link">
       <div class="mfy-jcard-img-wrap">
-        {% if first_img %}
+        {% if imgs.0 %}
         <img
-          src="{{ first_img.product_image.url }}"
+          src="{{ imgs.0.product_image.url }}"
           alt="{{ item.data.product_name }}"
           loading="lazy"
           onload="this.classList.add('loaded')"
@@ -150,111 +149,90 @@
         >
         {% endif %}
 
-        {# Views badge — top-right (replaces discount %) #}
+        {# Views badge — top-right #}
         <span class="mfy-jcard-views"><i class="fas fa-eye"></i> {{ item.data.views_count|default:0 }}</span>
 
         {# Category badge — top-left #}
         <span class="mfy-jcard-category-badge">{{ item.data.category_icon }} {{ item.data.category_label }}</span>
 
-        {# Wishlist toggle — bottom-left, sits above the link so clicks don't navigate #}
-        {% if request.user != item.data.product_owner %}
-        <button type="button"
-                class="mfy-jcard-wish-btn {% if item.data.in_wishlist %}saved{% endif %}"
-                data-product-id="{{ item.data.product_id }}"
-                onclick="mfyToggleWishlist(this, event)"
-                aria-pressed="{% if item.data.in_wishlist %}true{% else %}false{% endif %}"
-                aria-label="Toggle wishlist">
-          <i class="fa-heart {% if item.data.in_wishlist %}fas{% else %}far{% endif %}"></i>
-        </button>
+        {# Image-count badge — bottom-right, only when there's more than one photo #}
+        {% if imgs|length > 1 %}
+        <span class="mfy-jcard-img-count"><i class="fas fa-images"></i> {{ imgs|length }}</span>
         {% endif %}
       </div>
     </a>
     {% endwith %}
 
+    {# Seller badge — business page avatar+name, else uploader's avatar #}
+    {% if item.data.business_page %}
+    <a href="{% url 'business_page_detail' item.data.business_page.slug %}" class="mfy-jcard-seller" onclick="event.stopPropagation()">
+      {% if item.data.business_page.logo %}
+        <img src="{{ item.data.business_page.logo.url }}" alt="{{ item.data.business_page.name }}" class="mfy-jcard-seller-avatar">
+      {% else %}
+        <img src="https://placehold.co/40x40/f8f8f8/aaa?text={{ item.data.business_page.name|first|upper }}" alt="{{ item.data.business_page.name }}" class="mfy-jcard-seller-avatar">
+      {% endif %}
+      <span class="mfy-jcard-seller-name">{{ item.data.business_page.name|truncatechars:26 }}</span>
+      <i class="fas fa-circle-check mfy-jcard-seller-badge" title="Business page"></i>
+    </a>
+    {% else %}
+    <a href="{% url 'profile' item.data.product_owner.username %}" class="mfy-jcard-seller" onclick="event.stopPropagation()">
+      {% if item.data.product_owner.profile.picture %}
+        <img src="{{ item.data.product_owner.profile.picture.url }}" alt="{{ item.data.product_owner.username }}" class="mfy-jcard-seller-avatar">
+      {% else %}
+        <img src="https://placehold.co/40x40/f8f8f8/aaa?text={{ item.data.product_owner.username|first|upper }}" alt="{{ item.data.product_owner.username }}" class="mfy-jcard-seller-avatar">
+      {% endif %}
+      <span class="mfy-jcard-seller-name">{{ item.data.product_owner.username|truncatechars:26 }}</span>
+    </a>
+    {% endif %}
+
     {# Product info body #}
     <a href="{% url 'product_detail' item.data.product_id %}" class="mfy-jcard-body-link">
       <div class="mfy-jcard-body">
-
-        {# Price — big and bold like Jumia #}
-        <div class="mfy-jcard-price">₦{{ item.data.product_price|floatformat:"0"|intcomma }}</div>
-
-        {# Business page name — shown when this listing was posted via a business page #}
-        {% if item.data.business_page %}
-        <div class="mfy-jcard-business">
-          <i class="fas fa-store"></i>
-          <span class="mfy-jcard-business-name">{{ item.data.business_page.name }}</span>
-          {% if item.data.business_page.is_verified %}
-          <i class="fas fa-circle-check mfy-jcard-business-verified" title="Verified business"></i>
-          {% endif %}
-        </div>
-        {% endif %}
-
-        {# Product name — clean and simple #}
+        {# Product name #}
         <div class="mfy-jcard-name">{{ item.data.product_name|truncatechars:60 }}</div>
 
-        {# Condition badge — subtle inline #}
-        {% if item.data.product_condition %}
-        <div class="mfy-jcard-condition-inline">
-          <span class="mfy-market-condition--{{ item.data.product_condition|lower }}">{{ item.data.product_condition }}</span>
-        </div>
-        {% endif %}
-
-        {# Meta pills row — location, availability #}
+        {# Meta line — condition / location / availability #}
         <div class="mfy-jcard-meta">
-          {% if item.data.product_location %}
-          <span class="mfy-jcard-meta-pill">
-            <i class="fas fa-map-marker-alt"></i> {{ item.data.product_location }}
-          </span>
-          {% endif %}
-          {% if item.data.product_availability %}
-          <span class="mfy-jcard-meta-pill mfy-jcard-avail">
-            <i class="fas fa-boxes"></i> {{ item.data.product_availability }}
-          </span>
-          {% endif %}
+          {% if item.data.product_condition %}<span class="mfy-jcard-meta-txt">{{ item.data.product_condition }}</span>{% endif %}
+          {% if item.data.product_location %}<span class="mfy-jcard-meta-txt">{{ item.data.product_location }}</span>{% endif %}
+          {% if item.data.product_availability %}<span class="mfy-jcard-meta-txt">{{ item.data.product_availability }}</span>{% endif %}
         </div>
-
       </div>
     </a>
 
-    {# Action buttons — separate row below #}
-    <div class="mfy-jcard-actions-row">
+    {# Price + wishlist row #}
+    <div class="mfy-jcard-price-row">
+      <span class="mfy-jcard-price">₦{{ item.data.product_price|floatformat:"0"|intcomma }}</span>
       {% if request.user != item.data.product_owner %}
-        {% if item.data.whatsapp_number %}
-        <a href="https://wa.me/{{ item.data.whatsapp_number }}?text=Hi%2C%20I%20saw%20your%20ad%20for%20%22{{ item.data.product_name|urlencode }}%22%20on%20Marketfy%20and%20I%27m%20interested!"
-           target="_blank" rel="noopener noreferrer"
-           class="mfy-jcard-btn mfy-jcard-btn--wa">
-          <i class="fab fa-whatsapp"></i> WhatsApp
-        </a>
-        {% endif %}
-        <a href="{% url 'contact_seller' item.data.product_id %}"
-           class="mfy-jcard-btn mfy-jcard-btn--msg">
-          <i class="fas fa-paper-plane"></i> Message
-        </a>
-        {% if item.data.instagram_handle %}
-        <a href="https://instagram.com/{{ item.data.instagram_handle }}"
-           target="_blank" rel="noopener noreferrer"
-           class="mfy-jcard-btn mfy-jcard-btn--icon mfy-market-contact-ig"
-           title="Instagram">
-          <i class="fab fa-instagram"></i>
-        </a>
-        {% endif %}
-        {% if item.data.twitter_handle %}
-        <a href="https://x.com/{{ item.data.twitter_handle }}"
-           target="_blank" rel="noopener noreferrer"
-           class="mfy-jcard-btn mfy-jcard-btn--icon mfy-market-contact-tw"
-           title="X / Twitter">
-          <i class="fab fa-x-twitter"></i>
-        </a>
-        {% endif %}
-        {% if item.data.email %}
-        <a href="mailto:{{ item.data.email }}?subject=Enquiry: {{ item.data.product_name }}"
-           class="mfy-jcard-btn mfy-jcard-btn--icon mfy-market-contact-email"
-           title="Email">
-          <i class="fas fa-envelope"></i>
-        </a>
-        {% endif %}
+      <button type="button"
+              class="mfy-jcard-wish-btn {% if item.data.in_wishlist %}saved{% endif %}"
+              data-product-id="{{ item.data.product_id }}"
+              onclick="mfyToggleWishlist(this, event)"
+              aria-pressed="{% if item.data.in_wishlist %}true{% else %}false{% endif %}"
+              aria-label="Save for later">
+        <i class="fa-heart {% if item.data.in_wishlist %}fas{% else %}far{% endif %}"></i>
+      </button>
       {% endif %}
     </div>
+
+    {# Action buttons — hidden for the owner viewing their own listing #}
+    {% if request.user != item.data.product_owner %}
+    <div class="mfy-jcard-actions-row">
+      {% if item.data.whatsapp_number %}
+      {% with wa_imgs=item.data.images.all %}
+      <a href="https://wa.me/{{ item.data.whatsapp_number }}?text=Hi%2C%20I%20saw%20your%20ad%20for%20%22{{ item.data.product_name|urlencode }}%22%20on%20Marketfy%20and%20I%27m%20interested!{% if wa_imgs.0 %}%20{{ request.scheme|urlencode }}%3A%2F%2F{{ request.get_host|urlencode }}{{ wa_imgs.0.product_image.url|urlencode }}{% endif %}"
+         target="_blank" rel="noopener noreferrer"
+         class="mfy-jcard-btn mfy-jcard-btn--wa">
+        <i class="fab fa-whatsapp"></i> WhatsApp
+      </a>
+      {% endwith %}
+      {% endif %}
+      <a href="{% url 'contact_seller' item.data.product_id %}"
+         class="mfy-jcard-btn mfy-jcard-btn--msg">
+        <i class="fas fa-paper-plane"></i> Message
+      </a>
+    </div>
+    {% endif %}
 
   </article>
 
