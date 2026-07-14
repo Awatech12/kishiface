@@ -1,4 +1,4 @@
-from .models import Message, FollowNotification, Channel
+from .models import Message, FollowNotification, BusinessNotification, Channel
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
@@ -40,8 +40,8 @@ def information(request):
 
 def follow_notifications_context(request):
     """
-    Lightweight context processor for follow notifications (header badge, etc.).
-    Returns counts + 10 most recent follows.
+    Lightweight context processor for follow + business-page notifications
+    (header badge, etc.). Returns counts + 10 most recent of each.
     """
     if not request.user.is_authenticated:
         return {
@@ -50,6 +50,10 @@ def follow_notifications_context(request):
             'total_follow_notifications': 0,
             'has_follow_notifications': False,
             'has_unread_follows': False,
+            'unread_business_count': 0,
+            'recent_business_notifications': [],
+            'has_unread_business_notifications': False,
+            'unread_notifications_total': 0,
         }
 
     try:
@@ -68,12 +72,27 @@ def follow_notifications_context(request):
             to_user=request.user
         ).count()
 
+        unread_business_count = BusinessNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
+
+        recent_business_notifications = (
+            BusinessNotification.objects
+            .filter(to_user=request.user)
+            .select_related('actor', 'actor__profile', 'business_page', 'product')
+            .order_by('-created_at')[:10]
+        )
+
         return {
             'unread_follow_count':        unread_follow_count,
             'recent_follows':             recent_follows,
             'total_follow_notifications': total_follow_notifications,
             'has_follow_notifications':   total_follow_notifications > 0,
             'has_unread_follows':         unread_follow_count > 0,
+            'unread_business_count':              unread_business_count,
+            'recent_business_notifications':      recent_business_notifications,
+            'has_unread_business_notifications':  unread_business_count > 0,
+            'unread_notifications_total':  unread_follow_count + unread_business_count,
         }
     except Exception:
         return {
@@ -82,7 +101,12 @@ def follow_notifications_context(request):
             'total_follow_notifications': 0,
             'has_follow_notifications': False,
             'has_unread_follows': False,
+            'unread_business_count': 0,
+            'recent_business_notifications': [],
+            'has_unread_business_notifications': False,
+            'unread_notifications_total': 0,
         }
+
 
 def channel_unread_processor(request):
     if not request.user.is_authenticated:

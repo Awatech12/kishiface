@@ -111,14 +111,48 @@
 
     <div class="kishiface-header">
         <span class="kishiface-header-title">Notifications</span>
-        {% if today_notifications or week_notifications or earlier_notifications %}
+        {% if today_notifications or week_notifications or earlier_notifications or business_notifications %}
             <button class="kishiface-mark-all-btn" onclick="kishifaceMarkAllRead()">Mark all read</button>
         {% endif %}
     </div>
 
     <div class="kishiface-list" id="kishiface-notif-list">
 
-        {% if today_notifications or week_notifications or earlier_notifications %}
+        {% if business_notifications %}
+            <div class="kishiface-section-title" data-section="business">Business Page Activity</div>
+            {% for bn in business_notifications %}
+                <div class="kishiface-notification-wrapper {% if not bn.is_read %}kishiface-unread{% endif %}"
+                     id="kishiface-business-notif-{{ bn.id }}"
+                     data-type="{{ bn.notif_type }}"
+                     data-business-notif-id="{{ bn.id }}">
+                    <a href="{% if bn.notif_type == 'new_follower' %}/business/{{ bn.business_page.slug }}/{% else %}/product/{{ bn.product.product_id }}/{% endif %}"
+                       style="display:flex;align-items:center;gap:12px;padding:12px 48px 12px 16px;">
+                        {% if bn.notif_type == 'new_follower' %}
+                            <img src="{{ bn.actor.profile.picture.url }}" alt="{{ bn.actor.username }}"
+                                 style="width:44px;height:44px;border-radius:50%;object-fit:cover;">
+                            <span>
+                                <strong>{{ bn.actor.username }}</strong> joined your page
+                                <strong>{{ bn.business_page.name }}</strong>
+                                <span style="display:block;font-size:12px;color:#8e8e8e;">{{ bn.created_at|naturaltime }}</span>
+                            </span>
+                        {% else %}
+                            <img src="{{ bn.business_page.get_logo_url }}" alt="{{ bn.business_page.name }}"
+                                 style="width:44px;height:44px;border-radius:8px;object-fit:cover;">
+                            <span>
+                                <strong>{{ bn.business_page.name }}</strong> just added a new product:
+                                <strong>{{ bn.product.product_name }}</strong>
+                                <span style="display:block;font-size:12px;color:#8e8e8e;">{{ bn.created_at|naturaltime }}</span>
+                            </span>
+                        {% endif %}
+                    </a>
+                    <button class="kishiface-remove-btn" aria-label="Dismiss" onclick="kishifaceRemoveBusiness(this)">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% if today_notifications or week_notifications or earlier_notifications or business_notifications %}
 
             {% if today_notifications %}
                 <div class="kishiface-section-title" data-section="today">Today</div>
@@ -269,6 +303,23 @@
         }
 
         doPost('/notifications/delete-group/', payload)
+            .then(function (data) {
+                if (data.status === 'success') { slideOut(wrapper); }
+                else { btn.innerHTML = origHtml; btn.disabled = false; }
+            })
+            .catch(function () { btn.innerHTML = origHtml; btn.disabled = false; });
+    };
+
+    /* ── Dismiss button — business page notifications ─────────────────── */
+    window.kishifaceRemoveBusiness = function (btn) {
+        var wrapper = btn.closest('.kishiface-notification-wrapper');
+        var id      = wrapper.dataset.businessNotifId;
+        var origHtml = btn.innerHTML;
+
+        btn.innerHTML = '<i class="fas fa-circle-notch kishiface-spin"></i>';
+        btn.disabled  = true;
+
+        doPost('/notifications/delete-group/', { business_notif_id: id })
             .then(function (data) {
                 if (data.status === 'success') { slideOut(wrapper); }
                 else { btn.innerHTML = origHtml; btn.disabled = false; }

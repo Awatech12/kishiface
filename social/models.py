@@ -460,6 +460,59 @@ class FollowNotification(models.Model):
         return f"{self.from_user.username} followed {self.to_user.username}"
 
 
+class BusinessNotification(models.Model):
+    """
+    Notifications tied to a BusinessPage:
+      - 'new_follower' → sent to the page owner when someone joins/follows the page.
+      - 'new_product'  → sent to every follower of the page when the owner
+                          uploads a new product/listing.
+    Kept separate from FollowNotification (which is strictly for personal
+    profile follows) since a BusinessPage can have many followers and many
+    products, and a single user can trigger many of these over time.
+    """
+    NEW_FOLLOWER = 'new_follower'
+    NEW_PRODUCT  = 'new_product'
+    NOTIF_TYPE_CHOICES = [
+        (NEW_FOLLOWER, 'New page follower'),
+        (NEW_PRODUCT,  'New product'),
+    ]
+
+    notif_type    = models.CharField(max_length=20, choices=NOTIF_TYPE_CHOICES, db_index=True)
+    business_page = models.ForeignKey(
+        'BusinessPage', on_delete=models.CASCADE, related_name='notifications'
+    )
+    # actor: the user who triggered the notification —
+    #   the follower for 'new_follower', the page owner for 'new_product'.
+    actor = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='sent_business_notifications'
+    )
+    # to_user: the recipient — the page owner for 'new_follower',
+    #   each follower for 'new_product'.
+    to_user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='business_notifications'
+    )
+    product = models.ForeignKey(
+        'Market', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='new_product_notifications',
+        help_text='Set for new_product notifications only.'
+    )
+    is_read    = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'BusinessNotification_Table'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['to_user', 'is_read']),
+            models.Index(fields=['business_page', 'notif_type']),
+        ]
+
+    def __str__(self):
+        if self.notif_type == self.NEW_FOLLOWER:
+            return f"{self.actor.username} joined {self.business_page.name}"
+        return f"{self.business_page.name} posted a new product: {self.product}"
+
+
 class Message(models.Model):
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sender')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver')

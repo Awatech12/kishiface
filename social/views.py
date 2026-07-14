@@ -5,7 +5,7 @@ import socket
 
 from html import escape as html_escape, unescape as html_unescape
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
-from .models import FollowNotification
+from .models import FollowNotification, BusinessNotification
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
@@ -2288,21 +2288,29 @@ def fetch_link_preview(request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Notification Views (removed - only FollowNotification remains)
+# Notification Views (FollowNotification + BusinessNotification)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 
 @login_required(login_url='/')
 def notification_list(request):
-    # Only FollowNotification is used now
     from .models import FollowNotification as _FN
     _FN.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
+    BusinessNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
+
+    business_notifications = (
+        BusinessNotification.objects
+        .filter(to_user=request.user)
+        .select_related('business_page', 'actor', 'product')[:30]
+    )
+
+    context = {'business_notifications': business_notifications}
 
     if request.GET.get('panel') == '1':
-        return render(request, 'snippet/notification_panel_partial.html')
+        return render(request, 'snippet/notification_panel_partial.html', context)
 
-    return render(request, 'notification.html')
+    return render(request, 'notification.html', context)
 
 
 def notification_partial(request):
@@ -2310,10 +2318,15 @@ def notification_partial(request):
         unread_follow_count = FollowNotification.objects.filter(
             to_user=request.user, is_read=False
         ).count()
+        unread_business_count = BusinessNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
     else:
         unread_follow_count = 0
+        unread_business_count = 0
     return render(request, 'snippet/notification_count.html', {
         'unread_follow_count': unread_follow_count,
+        'unread_business_count': unread_business_count,
     })
 
 
@@ -2344,6 +2357,21 @@ def delete_notification_group(request):
 
         return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
 
+    # ── Business page notification (new_follower / new_product) ────────────────
+    business_notif_id = data.get('business_notif_id')
+    if business_notif_id is not None:
+        try:
+            business_notif_id = int(business_notif_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid business_notif_id'}, status=400)
+
+        deleted_count, _ = BusinessNotification.objects.filter(
+            pk=business_notif_id,
+            to_user=request.user,
+        ).delete()
+
+        return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
+
     return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
 
 
@@ -2351,6 +2379,9 @@ def delete_notification_group(request):
 @require_POST
 def mark_all_notifications_read(request):
     FollowNotification.objects.filter(
+        to_user=request.user, is_read=False
+    ).update(is_read=True)
+    BusinessNotification.objects.filter(
         to_user=request.user, is_read=False
     ).update(is_read=True)
     return JsonResponse({'status': 'success'})
@@ -4402,6 +4433,19 @@ def business_page_follow(request, slug):
     else:
         page.followers.add(request.user)
         following = True
+        # ── Notify the page owner that someone joined the page ──────────────
+        try:
+            BusinessNotification.objects.create(
+                notif_type=BusinessNotification.NEW_FOLLOWER,
+                business_page=page,
+                actor=request.user,
+                to_user=page.owner,
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'Failed to create new_follower notification for page %s', page.slug
+            )
     return JsonResponse({'following': following, 'follower_count': page.follower_count})
 
 
@@ -4540,6 +4584,27 @@ def business_product_upload(request, slug):
         )
         for img_file in request.FILES.getlist('images')[:5]:
             MarketImage.objects.create(product=product, product_image=img_file)
+
+        # ── Notify every follower of this page about the new product ───────────
+        try:
+            follower_ids = list(
+                page.followers.exclude(pk=request.user.pk).values_list('pk', flat=True)
+            )
+            BusinessNotification.objects.bulk_create([
+                BusinessNotification(
+                    notif_type=BusinessNotification.NEW_PRODUCT,
+                    business_page=page,
+                    actor=request.user,
+                    to_user_id=follower_id,
+                    product=product,
+                )
+                for follower_id in follower_ids
+            ])
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'Failed to notify followers of new product for page %s', page.slug
+            )
     except Exception as exc:
         import logging
         logging.getLogger(__name__).exception('business_product_upload failed for user %s', request.user.id)
