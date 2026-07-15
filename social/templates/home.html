@@ -71,10 +71,16 @@
     .mfy-left-sidebar {
       width: 245px; 
       flex-shrink: 0;
+      min-height: 0;
+      align-self: flex-start;
       position: sticky;
       top: 50px;
       height: calc(100vh - 104px);
+      max-height: calc(100vh - 104px);
       overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       padding-right: 10px;
     }
     
@@ -777,11 +783,18 @@
     .mfy-right-sidebar {
       width: 380px; 
       flex-shrink: 0;
+      min-height: 0;
+      align-self: flex-start;
       position: sticky;
       top: 50px;
       height: calc(100vh - 104px);
+      max-height: calc(100vh - 104px);
       overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       padding-left: 10px;
+      padding-bottom: 24px;
     }
     
     /* Desktop-only components */
@@ -1516,8 +1529,18 @@
         border-radius: 3px;
       }
       
-      .mfy-left-sidebar::-webkit-scrollbar-thumb:hover {
+      .mfy-left-sidebar::-webkit-scrollbar-thumb:hover,
+      .mfy-right-sidebar::-webkit-scrollbar-thumb:hover {
         background: var(--mfy-text-light);
+      }
+
+      .mfy-right-sidebar::-webkit-scrollbar-track {
+        background: var(--mfy-bg);
+      }
+
+      .mfy-right-sidebar::-webkit-scrollbar-thumb {
+        background: var(--mfy-border);
+        border-radius: 3px;
       }
     }
 
@@ -1804,44 +1827,12 @@
             <span class="mfy-desktop-nav-label">Categories</span>
           </a>
 
-          <!-- Saved (Wishlist) -->
-          <a href="{% url 'wishlist' %}" class="mfy-desktop-nav-item {% if request.path == '/wishlist/' %}active{% endif %}" title="Saved">
-            <div class="mfy-desktop-nav-icon">
-              <i class="fa-regular fa-bookmark" style="font-size: 19px; color: var(--mfy-text-light);"></i>
-            </div>
-            <span class="mfy-desktop-nav-label">Saved</span>
-          </a>
-
-          <!-- Following -->
-          <a href="{% url 'following' request.user.username %}" class="mfy-desktop-nav-item" title="Following">
-            <div class="mfy-desktop-nav-icon">
-              <i class="fa-regular fa-user" style="font-size: 20px; color: var(--mfy-text-light);"></i>
-            </div>
-            <span class="mfy-desktop-nav-label">Following</span>
-          </a>
-
-          <!-- My Listings (own profile — shows the ads you've posted) -->
-          <a href="{% url 'profile' request.user.username %}" class="mfy-desktop-nav-item" title="My Listings">
-            <div class="mfy-desktop-nav-icon">
-              <i class="fa-solid fa-list-ul" style="font-size: 18px; color: var(--mfy-text-light);"></i>
-            </div>
-            <span class="mfy-desktop-nav-label">My Listings</span>
-          </a>
-
           <!-- Business Pages -->
           <a href="{% url 'business_pages_mine' %}" class="mfy-desktop-nav-item" title="Business Pages">
             <div class="mfy-desktop-nav-icon">
               <i class="fas fa-shop" style="font-size: 18px; color: var(--mfy-text-light);"></i>
             </div>
             <span class="mfy-desktop-nav-label">Business Pages</span>
-          </a>
-
-          <!-- Wallet -->
-          <a href="#" class="mfy-desktop-nav-item" title="Wallet">
-            <div class="mfy-desktop-nav-icon">
-              <i class="fa-solid fa-wallet" style="font-size: 18px; color: var(--mfy-text-light);"></i>
-            </div>
-            <span class="mfy-desktop-nav-label">Wallet</span>
           </a>
 
           <!-- Settings -->
@@ -2124,6 +2115,130 @@
     </div>
 
     <div class="mfy-mobile-sidebar-body">
+
+      <!-- ── Profile summary card ─────────────────────────────── -->
+      <div class="mfy-profile-card">
+        <div class="mfy-profile-card-top">
+          <img src="{{ request.user.profile.get_picture_url }}" alt="{{ request.user.username }}" class="mfy-profile-card-avatar">
+          <div class="mfy-profile-card-name-wrap">
+            <div class="mfy-profile-card-name">
+              {{ request.user.profile.full_name|default:request.user.username }}
+              {% if request.user.profile.is_verify %}
+              <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" loading="lazy">
+              {% endif %}
+            </div>
+            <div class="mfy-profile-card-username">@{{ request.user.username }}</div>
+          </div>
+        </div>
+
+        <div class="mfy-profile-card-stats">
+          <a href="{% url 'profile' request.user.username %}" class="mfy-profile-card-stat">
+            <span class="mfy-profile-card-stat-num">{{ request.user.products.count }}</span>
+            <span class="mfy-profile-card-stat-label">Listings</span>
+          </a>
+          <a href="{% url 'following' request.user.username %}" class="mfy-profile-card-stat">
+            <span class="mfy-profile-card-stat-num">{{ sidebar_following_count }}</span>
+            <span class="mfy-profile-card-stat-label">Following</span>
+          </a>
+          <a href="{% url 'followers' request.user.username %}" class="mfy-profile-card-stat">
+            <span class="mfy-profile-card-stat-num">{{ sidebar_follower_count }}</span>
+            <span class="mfy-profile-card-stat-label">Followers</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- ── Shortcuts ────────────────────────────────────────── -->
+      <div class="mfy-side-card">
+        <div class="mfy-side-card-header">
+          <span class="mfy-side-card-title">Shortcuts</span>
+          <a href="{% url 'profile' request.user.username %}" class="mfy-side-card-seeall">See all</a>
+        </div>
+
+        <a href="{% url 'profile' request.user.username %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-list-ul"></i></span>
+          <span class="mfy-shortcut-label">My Listings</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'wishlist' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-regular fa-bookmark"></i></span>
+          <span class="mfy-shortcut-label">Saved Items</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="#" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-file-invoice"></i></span>
+          <span class="mfy-shortcut-label">My Orders</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="#" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-wallet"></i></span>
+          <span class="mfy-shortcut-label">Wallet</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'following' request.user.username %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-user-plus"></i></span>
+          <span class="mfy-shortcut-label">Following</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'channel_create' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-regular fa-newspaper"></i></span>
+          <span class="mfy-shortcut-label">Channels</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'services' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-briefcase"></i></span>
+          <span class="mfy-shortcut-label">Services</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'business_pages_list' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fas fa-store"></i></span>
+          <span class="mfy-shortcut-label">Businesses Directory</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        {% if request.user.is_staff or request.user.is_superuser %}
+        <a href="{% url 'admin_dashboard' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fas fa-shield-alt"></i></span>
+          <span class="mfy-shortcut-label">Dashboard</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        {% endif %}
+      </div>
+
+      <!-- ── Suggested for you ───────────────────────────────────── -->
+      {% if users %}
+      <div class="mfy-side-card">
+        <div class="mfy-side-card-header">
+          <span class="mfy-side-card-title">Suggested for you</span>
+          <a href="{% url 'search' %}" class="mfy-side-card-seeall">See all</a>
+        </div>
+
+        {% for u in users %}
+        <div class="mfy-sugg-row mfy-user-suggestion" data-user-id="{{ u.id }}">
+          <a href="{% url 'profile' u.username %}"><img src="{{ u.profile.get_picture_url }}" alt="{{ u.username }}" class="mfy-sugg-avatar"></a>
+          <a href="{% url 'profile' u.username %}" class="mfy-sugg-info" style="text-decoration:none;">
+            <div class="mfy-sugg-name">
+              {{ u.profile.full_name|default:u.username }}
+              {% if u.profile.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+            </div>
+            <div class="mfy-sugg-handle">@{{ u.username }}</div>
+          </a>
+          <div class="mfy-sugg-actions">
+            <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.id }}','{{ u.username }}')">Follow</button>
+            <button class="mfy-sugg-dismiss" aria-label="Dismiss suggestion" onclick="this.closest('.mfy-sugg-row').style.opacity='0'; setTimeout(()=>this.closest('.mfy-sugg-row').remove(),250);">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- ── Grow your business ──────────────────────────────────── -->
+      <div class="mfy-grow-card">
+        <div class="mfy-grow-card-title">Grow your business</div>
+        <div class="mfy-grow-card-text">Create a Business Page and reach more customers.</div>
+        <a href="{% url 'business_page_create' %}" class="mfy-grow-card-btn">Create Page</a>
+        <span class="mfy-grow-card-illustration">🏪</span>
+      </div>
 
       <div class="mfy-sidebar-social" style="margin-bottom: 16px;">
         <div class="mfy-sidebar-tabs">

@@ -1005,6 +1005,20 @@ def profile(request, username):
     if viewer_is_blocked:
         return render(request, 'blocked.html', {'blocked_by': user})
 
+    # ── Logged-in viewer's own right-sidebar widget data ─────────────────────
+    # This mirrors the home page's right sidebar (profile card, suggested
+    # users, following/followers counts) and is always about request.user,
+    # regardless of which profile page is currently being viewed.
+    viewer_profile          = request.user.profile
+    viewer_following_ids    = list(viewer_profile.followings.values_list('user', flat=True))
+    viewer_following_count  = viewer_profile.followings.count()
+    viewer_follower_count   = viewer_profile.followers.count()
+    sidebar_suggested_users = list(
+        User.objects.exclude(id__in=viewer_following_ids)
+               .exclude(id=request.user.id)
+               .order_by('?')[:3]
+    )
+
     if is_blocked:
         context = {
             'user': user, 'profile': profile, 'posts': [],
@@ -1023,6 +1037,9 @@ def profile(request, username):
             'suggested_pages': [],
             'saved_products': [],
             'saved_products_count': 0,
+            'viewer_following_count':  viewer_following_count,
+            'viewer_follower_count':   viewer_follower_count,
+            'sidebar_suggested_users': sidebar_suggested_users,
         }
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, 'profile.html', context)
@@ -1143,6 +1160,9 @@ def profile(request, username):
         'suggested_pages': suggested_pages,
         'saved_products': saved_products,
         'saved_products_count': saved_products_count,
+        'viewer_following_count':  viewer_following_count,
+        'viewer_follower_count':   viewer_follower_count,
+        'sidebar_suggested_users': sidebar_suggested_users,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
