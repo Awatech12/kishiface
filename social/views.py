@@ -521,6 +521,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
                    seen_market_ids=None, seen_job_ids=None, seen_event_ids=None,
                    seen_business_ids=None,
                    market_category=None,
+                   market_offset=0,
                    **_kwargs):
     """
     Build one page of the feed containing market ads, job cards, event cards,
@@ -529,36 +530,21 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     market_category: optional category key (Market.CATEGORY_CHOICES) to
     restrict market ads to a single category. 'all' or None means no filter.
 
-    Returns (feed_items list, next_cursor None).
-    next_cursor is always None because pagination is item-count-driven by the
-    injected cards, not post timestamps.
+    market_offset: how many matching products have already been shown for the
+    active market_category filter. Used to deterministically page through the
+    full category result set (ignored when no category filter is active).
+
+    Returns (feed_items list, next_cursor).
+    next_cursor is None for the normal mixed feed (item-count-driven by the
+    injected cards, not post timestamps). When a market_category filter is
+    active, next_cursor is the next market_offset to request, or None once
+    every matching product has been shown.
     """
     if page_size is None:
         page_size = FEED_PAGE_SIZE
 
     following_ids_set = set(following_ids)
     next_cursor = None
-
-    # ── User suggestions ──────────────────────────────────────────────────────
-    _seen_sugg_ids = set(int(i) for i in (seen_suggestion_ids or []) if str(i).isdigit())
-    user_pool_count = (
-        User.objects
-        .exclude(id__in=following_ids)
-        .exclude(id=user.id)
-        .exclude(id__in=_seen_sugg_ids)
-        .count()
-    )
-    suggestion_users = []
-    if user_pool_count > 0:
-        su_offset = random.randint(0, max(0, user_pool_count - 5))
-        suggestion_users = list(
-            User.objects
-            .exclude(id__in=following_ids)
-            .exclude(id=user.id)
-            .exclude(id__in=_seen_sugg_ids)
-            .select_related('profile')
-            .order_by('id')[su_offset: su_offset + 5]
-        )
 
     # ── Business page suggestions ───────────────────────────────────────────────
     _seen_biz_ids = set(str(i) for i in (seen_business_ids or []) if i)
@@ -596,19 +582,39 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         _market_qs = _market_qs.exclude(product_id__in=_seen_market_ids)
     if _wishlisted_ids:
         _market_qs = _market_qs.exclude(product_id__in=_wishlisted_ids)
-    if market_category and market_category != 'all' and market_category in Market.VALID_CATEGORIES:
+    _is_market_filtered_pool = bool(
+        market_category and market_category != 'all' and market_category in Market.VALID_CATEGORIES
+    )
+    if _is_market_filtered_pool:
         _market_qs = _market_qs.filter(product_category=market_category)
     _market_count = _market_qs.count()
-    _market_fetch_n = page_size if (market_category and market_category != 'all') else 8
-    if _market_count > 0:
-        _market_offset = random.randint(0, max(0, _market_count - _market_fetch_n))
+
+    if _is_market_filtered_pool:
+        # Deterministic, offset-based paging so scrolling a filtered category
+        # walks through every matching product exactly once instead of
+        # re-randomizing a single page each time.
+        _safe_offset = max(0, market_offset)
         _market_pool = list(
             _market_qs
             .select_related('product_owner', 'product_owner__profile')
             .prefetch_related('images')
-            [_market_offset: _market_offset + _market_fetch_n]
+            .order_by('-product_id')
+            [_safe_offset: _safe_offset + page_size]
         )
-        random.shuffle(_market_pool)
+        _next_market_offset = _safe_offset + page_size
+        if _next_market_offset < _market_count:
+            next_cursor = _next_market_offset
+    else:
+        _market_fetch_n = 8
+        if _market_count > 0:
+            _rand_offset = random.randint(0, max(0, _market_count - _market_fetch_n))
+            _market_pool = list(
+                _market_qs
+                .select_related('product_owner', 'product_owner__profile')
+                .prefetch_related('images')
+                [_rand_offset: _rand_offset + _market_fetch_n]
+            )
+            random.shuffle(_market_pool)
     _market_injected = 0
     _MAX_MARKET_PER_PAGE = 6
     # ── Job vacancy pool ──────────────────────────────────────────────────────
@@ -653,8 +659,6 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # Inject cards at fixed intervals across page_size virtual slots so the
     # partial always has content to render even with no posts.
     _is_market_filtered = bool(market_category and market_category != 'all')
-    _max_suggestions_this_page = (1 if len(following_ids_set) < 20 else 0) if not _is_market_filtered else 0
-    _suggestion_injected = 0
     _max_business_this_page = 1 if not _is_market_filtered else 0
     _business_injected = 0
 
@@ -666,14 +670,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
 
     feed_items = []
     for i in range(1, page_size + 1):
-        # User suggestion at slot 2
-        if (i % 4 == 2
-                and suggestion_users
-                and _suggestion_injected < _max_suggestions_this_page):
-            feed_items.append({'type': 'user_suggestion', 'data': suggestion_users.pop(0)})
-            _suggestion_injected += 1
-
-        # Business page suggestion at slot 6 (every 8 slots), distinct from user suggestion slot
+        # Business page suggestion at slot 6 (every 8 slots)
         if (i % 8 == 6
                 and suggestion_businesses
                 and _business_injected < _max_business_this_page):
@@ -922,6 +919,13 @@ def feed_load_more(request):
     seen_business_raw = request.GET.get('seen_businesses', '')
     market_category  = request.GET.get('market_category', 'all')
 
+    # cursor doubles as the market_offset once a category filter is active
+    # (see _get_feed_page). Non-numeric / missing cursor just means page 1.
+    try:
+        market_offset = int(request.GET.get('cursor') or 0)
+    except (TypeError, ValueError):
+        market_offset = 0
+
     seen_suggestion_ids = set(seen_users_raw.split(','))   if seen_users_raw   else set()
     seen_market_ids     = set(seen_markets_raw.split(',')) if seen_markets_raw else set()
     seen_job_ids        = set(seen_jobs_raw.split(','))    if seen_jobs_raw    else set()
@@ -936,6 +940,7 @@ def feed_load_more(request):
         seen_event_ids=seen_event_ids,
         seen_business_ids=seen_business_ids,
         market_category=market_category,
+        market_offset=market_offset,
     )
 
     _is_fresh = request.GET.get('fresh') == '1'
@@ -949,6 +954,7 @@ def feed_load_more(request):
                 'next_cursor':    None,
                 'following_ids':  following_ids,
                 'empty_category': True,
+                'selected_market_category': market_category,
             })
         return HttpResponse(status=204)
 
@@ -956,6 +962,7 @@ def feed_load_more(request):
         'posts_with_ads': feed,
         'next_cursor':    next_cursor,
         'following_ids':  following_ids,
+        'selected_market_category': market_category,
     })
 
 

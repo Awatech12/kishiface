@@ -5,7 +5,7 @@ import dj_database_url
 import cloudinary
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-#oad_dotenv(BASE_DIR / '.env')
+#load_dotenv(BASE_DIR / '.env')
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 # Fix: os.getenv() returns a string, not a bool. "False" is truthy in Python.
