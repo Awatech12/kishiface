@@ -726,6 +726,17 @@ def home(request):
     sidebar_following_count = profile.followings.count()
     sidebar_follower_count  = profile.followers.count()
 
+    # ── Right-sidebar "Grow your business" card — only for users without one.
+    # If the user already owns a business page, show that page's stats
+    # instead of the "create a page" pitch. listing_count/follower_count are
+    # read-only @properties already defined on BusinessPage.
+    user_business_pages = (
+        BusinessPage.objects.filter(owner=request.user, is_active=True)
+        .order_by('-created_at')
+    )
+    user_business_page_count = user_business_pages.count()
+    primary_business_page = user_business_pages.first()
+
     users = list(
         User.objects.exclude(id__in=following_ids)
                .exclude(id=request.user.id)
@@ -763,6 +774,8 @@ def home(request):
         'following_ids':              following_ids,
         'sidebar_following_count':    sidebar_following_count,
         'sidebar_follower_count':     sidebar_follower_count,
+        'user_business_page_count':   user_business_page_count,
+        'primary_business_page':      primary_business_page,
         'recent_dm_users':            recent_dm_users,
         'all_categories':             [
             {'key': k, 'label': l, 'icon': Market.CATEGORY_ICONS.get(k, '📦')}
@@ -1026,6 +1039,17 @@ def profile(request, username):
                .order_by('?')[:3]
     )
 
+    # ── Viewer's own business page — for the "Grow your business" /
+    # "Your business page" sidebar widget (always about request.user).
+    # listing_count/follower_count are read-only @properties already
+    # defined on BusinessPage.
+    viewer_business_pages = (
+        BusinessPage.objects.filter(owner=request.user, is_active=True)
+        .order_by('-created_at')
+    )
+    viewer_business_page_count = viewer_business_pages.count()
+    viewer_primary_business_page = viewer_business_pages.first()
+
     if is_blocked:
         context = {
             'user': user, 'profile': profile, 'posts': [],
@@ -1047,6 +1071,8 @@ def profile(request, username):
             'viewer_following_count':  viewer_following_count,
             'viewer_follower_count':   viewer_follower_count,
             'sidebar_suggested_users': sidebar_suggested_users,
+            'viewer_business_page_count':   viewer_business_page_count,
+            'viewer_primary_business_page': viewer_primary_business_page,
         }
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, 'profile.html', context)
@@ -1170,6 +1196,8 @@ def profile(request, username):
         'viewer_following_count':  viewer_following_count,
         'viewer_follower_count':   viewer_follower_count,
         'sidebar_suggested_users': sidebar_suggested_users,
+        'viewer_business_page_count':   viewer_business_page_count,
+        'viewer_primary_business_page': viewer_primary_business_page,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':

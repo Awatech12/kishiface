@@ -1272,6 +1272,114 @@
       line-height: 1;
     }
 
+    /* ---- My business page card (shown instead of "Grow your business"
+       once the user already owns a page) ---- */
+    .mfy-mybiz-card {
+      background: var(--mfy-white);
+      border: 1px solid var(--mfy-border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .mfy-mybiz-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      margin-bottom: 14px;
+    }
+
+    .mfy-mybiz-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      flex-shrink: 0;
+      object-fit: cover;
+      background: var(--mfy-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--mfy-text-light);
+      font-size: 18px;
+    }
+
+    .mfy-mybiz-info {
+      min-width: 0;
+    }
+
+    .mfy-mybiz-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--mfy-text-light);
+      text-transform: uppercase;
+      letter-spacing: .3px;
+      margin-bottom: 2px;
+    }
+
+    .mfy-mybiz-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--mfy-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .mfy-mybiz-stats {
+      display: flex;
+      border-top: 1px solid var(--mfy-border);
+      padding-top: 12px;
+      margin-bottom: 12px;
+    }
+
+    .mfy-mybiz-stat {
+      flex: 1;
+      text-align: center;
+    }
+
+    .mfy-mybiz-stat-num {
+      display: block;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--mfy-text);
+    }
+
+    .mfy-mybiz-stat-label {
+      font-size: 11px;
+      color: var(--mfy-text-light);
+    }
+
+    .mfy-mybiz-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      background: var(--mfy-bg);
+      color: var(--mfy-primary);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 9px 16px;
+      border-radius: 8px;
+      text-decoration: none;
+    }
+
+    .mfy-mybiz-more {
+      display: block;
+      text-align: center;
+      font-size: 12px;
+      color: var(--mfy-text-light);
+      margin-top: 10px;
+      text-decoration: none;
+    }
+
+    .mfy-mybiz-more:hover {
+      color: var(--mfy-primary);
+    }
+
     
     .mfy-btn-secondary {
       flex: 1;
@@ -2013,7 +2121,7 @@
                 <div class="mfy-sugg-handle">@{{ u.username }}</div>
               </a>
               <div class="mfy-sugg-actions">
-                <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.id }}','{{ u.username }}')">Follow</button>
+                <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.username }}')">Follow</button>
                 <button class="mfy-sugg-dismiss" aria-label="Dismiss suggestion" onclick="this.closest('.mfy-sugg-row').style.opacity='0'; setTimeout(()=>this.closest('.mfy-sugg-row').remove(),250);">
                   <i class="fas fa-times"></i>
                 </button>
@@ -2023,6 +2131,43 @@
           </div>
           {% endif %}
 
+          {% if primary_business_page %}
+          <!-- ── Your business page ──────────────────────────────────── -->
+          <div class="mfy-mybiz-card">
+            <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-mybiz-header">
+              {% if primary_business_page.get_logo_url %}
+              <img src="{{ primary_business_page.get_logo_url }}" alt="{{ primary_business_page.name }}" class="mfy-mybiz-logo">
+              {% else %}
+              <span class="mfy-mybiz-logo"><i class="fas fa-store"></i></span>
+              {% endif %}
+              <div class="mfy-mybiz-info">
+                <div class="mfy-mybiz-label">Your business page</div>
+                <div class="mfy-mybiz-name">
+                  {{ primary_business_page.name }}
+                  {% if primary_business_page.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+                </div>
+              </div>
+            </a>
+            <div class="mfy-mybiz-stats">
+              <div class="mfy-mybiz-stat">
+                <span class="mfy-mybiz-stat-num">{{ primary_business_page.follower_count }}</span>
+                <span class="mfy-mybiz-stat-label">Followers</span>
+              </div>
+              <div class="mfy-mybiz-stat">
+                <span class="mfy-mybiz-stat-num">{{ primary_business_page.listing_count }}</span>
+                <span class="mfy-mybiz-stat-label">Products</span>
+              </div>
+            </div>
+            <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-mybiz-btn">
+              <i class="fas fa-store"></i> Manage Page
+            </a>
+            {% if user_business_page_count > 1 %}
+            {% with extra=user_business_page_count|add:"-1" %}
+            <a href="{% url 'business_pages_mine' %}" class="mfy-mybiz-more">+{{ extra }} more page{{ extra|pluralize }}</a>
+            {% endwith %}
+            {% endif %}
+          </div>
+          {% else %}
           <!-- ── Grow your business ──────────────────────────────────── -->
           <div class="mfy-grow-card">
             <div class="mfy-grow-card-title">Grow your business</div>
@@ -2030,6 +2175,7 @@
             <a href="{% url 'business_page_create' %}" class="mfy-grow-card-btn">Create Page</a>
             <span class="mfy-grow-card-illustration">🏪</span>
           </div>
+          {% endif %}
 
           <!-- ── Followers / Following Tab Panel (kept for full network browsing) ── -->
           <div class="mfy-sidebar-social">
@@ -2205,7 +2351,7 @@
             <div class="mfy-sugg-handle">@{{ u.username }}</div>
           </a>
           <div class="mfy-sugg-actions">
-            <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.id }}','{{ u.username }}')">Follow</button>
+            <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.username }}')">Follow</button>
             <button class="mfy-sugg-dismiss" aria-label="Dismiss suggestion" onclick="this.closest('.mfy-sugg-row').style.opacity='0'; setTimeout(()=>this.closest('.mfy-sugg-row').remove(),250);">
               <i class="fas fa-times"></i>
             </button>
@@ -2215,6 +2361,43 @@
       </div>
       {% endif %}
 
+      {% if primary_business_page %}
+      <!-- ── Your business page ──────────────────────────────────── -->
+      <div class="mfy-mybiz-card">
+        <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-mybiz-header">
+          {% if primary_business_page.get_logo_url %}
+          <img src="{{ primary_business_page.get_logo_url }}" alt="{{ primary_business_page.name }}" class="mfy-mybiz-logo">
+          {% else %}
+          <span class="mfy-mybiz-logo"><i class="fas fa-store"></i></span>
+          {% endif %}
+          <div class="mfy-mybiz-info">
+            <div class="mfy-mybiz-label">Your business page</div>
+            <div class="mfy-mybiz-name">
+              {{ primary_business_page.name }}
+              {% if primary_business_page.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+            </div>
+          </div>
+        </a>
+        <div class="mfy-mybiz-stats">
+          <div class="mfy-mybiz-stat">
+            <span class="mfy-mybiz-stat-num">{{ primary_business_page.follower_count }}</span>
+            <span class="mfy-mybiz-stat-label">Followers</span>
+          </div>
+          <div class="mfy-mybiz-stat">
+            <span class="mfy-mybiz-stat-num">{{ primary_business_page.listing_count }}</span>
+            <span class="mfy-mybiz-stat-label">Products</span>
+          </div>
+        </div>
+        <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-mybiz-btn">
+          <i class="fas fa-store"></i> Manage Page
+        </a>
+        {% if user_business_page_count > 1 %}
+        {% with extra=user_business_page_count|add:"-1" %}
+        <a href="{% url 'business_pages_mine' %}" class="mfy-mybiz-more">+{{ extra }} more page{{ extra|pluralize }}</a>
+        {% endwith %}
+        {% endif %}
+      </div>
+      {% else %}
       <!-- ── Grow your business ──────────────────────────────────── -->
       <div class="mfy-grow-card">
         <div class="mfy-grow-card-title">Grow your business</div>
@@ -2222,6 +2405,7 @@
         <a href="{% url 'business_page_create' %}" class="mfy-grow-card-btn">Create Page</a>
         <span class="mfy-grow-card-illustration">🏪</span>
       </div>
+      {% endif %}
 
       <div class="mfy-sidebar-social" style="margin-bottom: 16px;">
         <div class="mfy-sidebar-tabs">
@@ -2403,24 +2587,25 @@
     });
 
     // Follow function for user suggestions
-    function mfyFollowUser(userId, username) {
+    function mfyFollowUser(username) {
       const button = event.target.closest('button');
       const originalText = button.innerHTML;
       
       button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
       button.disabled = true;
       
-      fetch(`/follow/${userId}/`, {
+      fetch(`/follow/${username}`, {
         method: 'POST',
         headers: {
           'X-CSRFToken': getCsrfFromMeta(),
           'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
         },
       })
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          if (data.followed) {
+          if (data.action === 'followed') {
             showToast(`You are now following @${username}`, 'success');
             button.innerHTML = '<i class="fas fa-check"></i> Following';
             button.classList.remove('mfy-user-suggestion-btn-primary');
