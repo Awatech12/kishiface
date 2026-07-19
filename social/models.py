@@ -922,6 +922,27 @@ class Market(models.Model):
     def category_label(self):
         return dict(self.CATEGORY_CHOICES).get(self.product_category, self.product_category)
 
+    @property
+    def average_rating(self):
+        result = self.reviews.aggregate(avg=models.Avg('rating'))['avg']
+        return round(result, 1) if result else 0
+
+    @property
+    def review_count(self):
+        return self.reviews.count()
+
+    @property
+    def rating_breakdown(self):
+        """Returns [{'stars': 5, 'count': N, 'pct': 0-100}, ...] for the bar chart, 5→1."""
+        total = self.review_count
+        counts = {r: 0 for r in range(1, 6)}
+        for row in self.reviews.values('rating').annotate(c=models.Count('rating')):
+            counts[row['rating']] = row['c']
+        return [
+            {'stars': s, 'count': counts[s], 'pct': round((counts[s] / total) * 100) if total else 0}
+            for s in range(5, 0, -1)
+        ]
+
 
 class MarketImage(models.Model):
     image_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
@@ -937,6 +958,56 @@ class MarketImage(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class ProductReview(models.Model):
+    """
+    Star rating + written review left by a buyer on a Market listing.
+    One review per (product, user) — the user can edit/delete their own.
+    """
+    RATING_CHOICES = [
+        (1, '1 – Poor'),
+        (2, '2 – Fair'),
+        (3, '3 – Good'),
+        (4, '4 – Very Good'),
+        (5, '5 – Excellent'),
+    ]
+
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product    = models.ForeignKey(Market, on_delete=models.CASCADE, related_name='reviews')
+    user       = models.ForeignKey(User,   on_delete=models.CASCADE, related_name='product_reviews')
+    rating     = models.PositiveSmallIntegerField(choices=RATING_CHOICES)
+    comment    = models.TextField(max_length=2000, blank=True, default='')
+    is_edited  = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ProductReview_Table'
+        ordering = ['-created_at']
+        unique_together = ('product', 'user')
+        indexes = [
+            models.Index(fields=['product', '-created_at'], name='review_product_time_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username} rated {self.product.product_name} {self.rating}★'
+
+    def clean(self):
+        super().clean()
+        self.comment = sanitize_text(self.comment, 'comment')
+        if self.rating not in dict(self.RATING_CHOICES):
+            raise ValidationError({'rating': 'Rating must be between 1 and 5.'})
+        if self.product_id and self.product.product_owner_id == self.user_id:
+            raise ValidationError('You cannot review your own listing.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def star_range(self):
+        return range(1, 6)
 
 
 class Wishlist(models.Model):

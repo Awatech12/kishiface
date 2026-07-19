@@ -373,6 +373,40 @@
         }
         .kprof-listings-viewall a:hover { background: #e8f6ff; }
 
+        /* ── Reviews tab (reviews this user has written on products) ── */
+        .kprof-review-list { display: flex; flex-direction: column; }
+        .kprof-review-item {
+            display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--mfy-border);
+        }
+        .kprof-review-item:first-child { padding-top: 0; }
+        .kprof-review-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .kprof-review-thumb {
+            width: 52px; height: 52px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
+            display: block; background: var(--mfy-bg);
+        }
+        .kprof-review-body { flex: 1; min-width: 0; }
+        .kprof-review-head {
+            display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+        }
+        .kprof-review-product {
+            font-size: 13px; font-weight: 700; color: var(--mfy-text); text-decoration: none; line-height: 1.35;
+        }
+        .kprof-review-product:hover { color: var(--mfy-primary); }
+        .kprof-review-date { font-size: 11px; color: var(--mfy-text-light); flex-shrink: 0; white-space: nowrap; }
+        .kprof-review-stars { font-size: 11px; color: #f5a623; margin: 3px 0 5px; }
+        .kprof-review-comment {
+            font-size: 13px; color: var(--mfy-text); line-height: 1.5;
+            white-space: pre-wrap; word-break: break-word;
+        }
+        .kprof-review-actions { display: flex; gap: 14px; margin-top: 6px; }
+        .kprof-review-delete-btn {
+            background: none; border: none; padding: 0; cursor: pointer; font-family: inherit;
+            font-size: 11.5px; font-weight: 600; color: var(--mfy-text-light);
+            display: inline-flex; align-items: center; gap: 4px;
+        }
+        .kprof-review-delete-btn:hover:not(:disabled) { color: var(--mfy-error); }
+        .kprof-review-delete-btn:disabled { opacity: .5; cursor: default; }
+
         /* ── Business Pages section ── */
         .kprof-section { background: var(--mfy-white); border-radius: 12px; overflow: hidden; margin: 0 12px 12px; }
         .kprof-section-header {
@@ -1714,11 +1748,63 @@
 <!-- ── Reviews tab panel ── -->
 <div class="kprof-tab-panel" id="tab-reviews">
     <div class="kprof-listings-panel">
-        <div class="kprof-empty">
-            <i class="far fa-star"></i>
-            <strong>No reviews yet</strong><br>
-            <small>Reviews from buyers and sellers will show up here.</small>
+        <div class="kprof-listings-head">
+            <h2 id="reviewsCountHead">Reviews ({{ user_reviews_count }})</h2>
         </div>
+
+        {% if user_reviews %}
+        <div class="kprof-review-list" id="reviewsList">
+            {% for review in user_reviews %}
+            {% with rimgs=review.product.images.all %}
+            <div class="kprof-review-item" id="review-{{ review.id }}">
+                <a href="{% url 'product_detail' review.product.product_id %}" style="flex-shrink:0;">
+                    {% if rimgs.0 %}
+                    <img src="{{ rimgs.0.product_image.url }}" alt="{{ review.product.product_name }}"
+                         class="kprof-review-thumb"
+                         onerror="this.onerror=null;this.src='https://placehold.co/52x52/f8f8f8/aaa?text=Product';">
+                    {% else %}
+                    <img src="https://placehold.co/52x52/f8f8f8/aaa?text=Product" alt="{{ review.product.product_name }}" class="kprof-review-thumb">
+                    {% endif %}
+                </a>
+                <div class="kprof-review-body">
+                    <div class="kprof-review-head">
+                        <a href="{% url 'product_detail' review.product.product_id %}" class="kprof-review-product">{{ review.product.product_name|truncatechars:50 }}</a>
+                        <span class="kprof-review-date">{{ review.created_at|naturaltime }}{% if review.is_edited %} · edited{% endif %}</span>
+                    </div>
+                    <div class="kprof-review-stars">
+                        {% for i in "12345" %}<i class="fa-star {% if forloop.counter <= review.rating %}fas{% else %}far{% endif %}"></i>{% endfor %}
+                    </div>
+                    {% if review.comment %}<div class="kprof-review-comment">{{ review.comment }}</div>{% endif %}
+                    {% if is_own_profile %}
+                    <div class="kprof-review-actions">
+                        <button type="button" class="kprof-review-delete-btn"
+                                onclick="profileDeleteReview('{{ review.product.product_id }}', '{{ review.id }}', this)">
+                            <i class="fas fa-trash-alt"></i> Delete
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endwith %}
+            {% endfor %}
+        </div>
+        {% if user_reviews_count > user_reviews|length %}
+        <div class="kprof-listings-viewall">
+            <span style="color:var(--mfy-text-light);font-size:12.5px;">Showing your {{ user_reviews|length }} most recent reviews</span>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="kprof-empty" id="reviewsEmptyState">
+            <i class="far fa-star"></i>
+            {% if is_own_profile %}
+            <strong>No reviews yet</strong><br>
+            <small>Reviews you leave on products will show up here.</small>
+            {% else %}
+            <strong>No reviews yet</strong><br>
+            <small>Reviews from {{ user.username }} will show up here.</small>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -2836,6 +2922,48 @@ async function toggleSavedItem(btn, evt) {
         }
     } catch (err) {
         console.error('Wishlist toggle failed:', err);
+        toast('Something went wrong. Please try again.');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ── Reviews tab — delete one of your own reviews ──
+async function profileDeleteReview(productId, reviewId, btn) {
+    if (btn.disabled) return;
+    if (!confirm('Delete this review? This cannot be undone.')) return;
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/product/${productId}/review/${reviewId}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Request failed');
+
+        const item = document.getElementById(`review-${reviewId}`);
+        if (item) {
+            item.style.transition = 'opacity .2s ease';
+            item.style.opacity = '0';
+            setTimeout(() => {
+                item.remove();
+                const list = document.getElementById('reviewsList');
+                const head = document.getElementById('reviewsCountHead');
+                const remaining = list ? list.querySelectorAll('.kprof-review-item').length : 0;
+                if (head) head.textContent = `Reviews (${remaining})`;
+                if (list && remaining === 0) {
+                    list.closest('.kprof-listings-panel').innerHTML = `
+                        <div class="kprof-empty" id="reviewsEmptyState">
+                            <i class="far fa-star"></i>
+                            <strong>No reviews yet</strong><br>
+                            <small>Reviews you leave on products will show up here.</small>
+                        </div>`;
+                }
+            }, 200);
+        }
+        toast('Review deleted');
+    } catch (err) {
+        console.error('Delete review failed:', err);
         toast('Something went wrong. Please try again.');
     } finally {
         btn.disabled = false;

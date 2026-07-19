@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -1068,6 +1068,8 @@ def profile(request, username):
             'suggested_pages': [],
             'saved_products': [],
             'saved_products_count': 0,
+            'user_reviews': [],
+            'user_reviews_count': 0,
             'viewer_following_count':  viewer_following_count,
             'viewer_follower_count':   viewer_follower_count,
             'sidebar_suggested_users': sidebar_suggested_users,
@@ -1161,6 +1163,16 @@ def profile(request, username):
         saved_products_count = saved_qs.count()
         saved_products = [item.product for item in saved_qs[:8] if item.product_id]
 
+    # ── Reviews this user has written (for the "Reviews" tab) ───────────────────
+    user_reviews_qs = (
+        ProductReview.objects.filter(user=user)
+        .select_related('product')
+        .prefetch_related('product__images')
+        .order_by('-created_at')
+    )
+    user_reviews_count = user_reviews_qs.count()
+    user_reviews = list(user_reviews_qs[:10])
+
     # Wishlist ("likes") counts per listing — queried separately so we don't
     # depend on a specific reverse-relation name from the Wishlist model.
     listing_ids = [listing.product_id for listing in user_listings] + [p.product_id for p in saved_products]
@@ -1193,6 +1205,8 @@ def profile(request, username):
         'suggested_pages': suggested_pages,
         'saved_products': saved_products,
         'saved_products_count': saved_products_count,
+        'user_reviews': user_reviews,
+        'user_reviews_count': user_reviews_count,
         'viewer_following_count':  viewer_following_count,
         'viewer_follower_count':   viewer_follower_count,
         'sidebar_suggested_users': sidebar_suggested_users,
@@ -3153,14 +3167,122 @@ def product_detail(request, product_id):
     if request.user.is_authenticated:
         in_wishlist = Wishlist.objects.filter(user=request.user, product=product).exists()
 
+    # ── Reviews & Ratings ────────────────────────────────────────────────────
+    reviews = (
+        product.reviews
+        .select_related('user', 'user__profile')
+        .exclude(user=request.user)
+        if request.user.is_authenticated else product.reviews.select_related('user', 'user__profile')
+    )
+    user_review = None
+    if request.user.is_authenticated:
+        user_review = ProductReview.objects.filter(product=product, user=request.user).select_related('user').first()
+    can_review = (
+        request.user.is_authenticated
+        and request.user != product.product_owner
+        and user_review is None
+    )
+
     context = {
         'product': product, 'images': images,
         'related_products': related_products, 'seller': seller_profile,
         'all_categories': Market.CATEGORY_CHOICES,
         'business_page': product.business_page,
         'in_wishlist': in_wishlist,
+        'reviews': reviews,
+        'user_review': user_review,
+        'can_review': can_review,
+        'rating_breakdown': product.rating_breakdown,
     }
     return render(request, 'product_details.html', context)
+
+
+@login_required(login_url='/')
+@require_POST
+def submit_review(request, product_id):
+    """
+    AJAX create/update — a buyer leaves (or edits) a star rating + comment
+    on a Market listing. One review per (product, user); resubmitting
+    updates the existing row instead of creating a duplicate.
+    """
+    import uuid as _uuid_mod
+    try:
+        _pid = _uuid_mod.UUID(str(product_id))
+        product = get_object_or_404(Market, product_id=_pid)
+    except Exception:
+        return JsonResponse({'error': 'Product not found.'}, status=404)
+
+    if product.product_owner_id == request.user.id:
+        return JsonResponse({'error': 'You cannot review your own listing.'}, status=400)
+
+    try:
+        rating = int(request.POST.get('rating', 0))
+    except (TypeError, ValueError):
+        rating = 0
+    comment = (request.POST.get('comment') or '').strip()
+
+    if rating < 1 or rating > 5:
+        return JsonResponse({'error': 'Please select a rating between 1 and 5 stars.'}, status=400)
+
+    existing = ProductReview.objects.filter(product=product, user=request.user).first()
+    created = existing is None
+
+    if created:
+        review = ProductReview.objects.create(
+            product=product, user=request.user, rating=rating, comment=comment,
+        )
+    else:
+        existing.rating = rating
+        existing.comment = comment
+        existing.is_edited = True
+        existing.save()
+        review = existing
+
+    seller_profile = getattr(request.user, 'profile', None)
+
+    return JsonResponse({
+        'success': True,
+        'created': created,
+        'review': {
+            'id': str(review.id),
+            'rating': review.rating,
+            'comment': review.comment,
+            'reviewer_name': request.user.get_full_name() or request.user.username,
+            'reviewer_username': request.user.username,
+            'reviewer_picture': seller_profile.get_picture_url if seller_profile and hasattr(seller_profile, 'get_picture_url') else '',
+            'created_at': review.created_at.strftime('%b %d, %Y'),
+            'is_edited': review.is_edited,
+        },
+        'average_rating': product.average_rating,
+        'review_count': product.review_count,
+        'rating_breakdown': product.rating_breakdown,
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def delete_review(request, product_id, review_id):
+    """Delete the current user's own review on a listing."""
+    import uuid as _uuid_mod
+    try:
+        _pid = _uuid_mod.UUID(str(product_id))
+        _rid = _uuid_mod.UUID(str(review_id))
+        product = get_object_or_404(Market, product_id=_pid)
+        review = get_object_or_404(ProductReview, id=_rid, product=product)
+    except Exception:
+        return JsonResponse({'error': 'Review not found.'}, status=404)
+
+    if review.user_id != request.user.id and not request.user.is_staff:
+        return JsonResponse({'error': 'You can only delete your own review.'}, status=403)
+
+    review.delete()
+
+    return JsonResponse({
+        'success': True,
+        'average_rating': product.average_rating,
+        'review_count': product.review_count,
+        'rating_breakdown': product.rating_breakdown,
+    })
 
 
 @login_required(login_url='/')

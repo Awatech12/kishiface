@@ -97,6 +97,10 @@ urlpatterns = [
     path('wishlist/',                              views.wishlist_view,     name='wishlist'),
     path('product/<uuid:product_id>/wishlist/',     views.toggle_wishlist,   name='toggle_wishlist'),
 
+    # ── Reviews & Ratings ─────────────────────────────────────────────────
+    path('product/<uuid:product_id>/review/',                     views.submit_review, name='submit_review'),
+    path('product/<uuid:product_id>/review/<uuid:review_id>/delete/', views.delete_review, name='delete_review'),
+
     # ── Utilities ──────────────────────────────────────────────────────────────
     path('fetch_link_preview/',            views.fetch_link_preview,    name='fetch_link_preview'),
     path('get-location/<str:username>/',   views.get_location,          name='get_location'),
