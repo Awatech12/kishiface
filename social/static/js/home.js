@@ -641,6 +641,22 @@ document.addEventListener('DOMContentLoaded', kvibeInit);
 // htmx:afterSettle fires after every partial swap (infinite scroll, etc.)
 document.addEventListener('htmx:afterSettle', kvibeInitCarousels);
 
+// iOS Safari can drop `position: sticky` on an element after a nearby
+// AJAX/HTMX swap mutates the DOM, making the filter bar scroll away
+// instead of sticking. Nudging it (toggle off/on) forces Safari to
+// recompute the sticky layer after every swap.
+function kvibeRestickFilterBar() {
+    const bar = document.getElementById('mfy-cat-filter-bar');
+    if (!bar) return;
+    bar.style.position = 'static';
+    // Force a reflow so the browser actually registers the change
+    // before we switch it back.
+    void bar.offsetHeight;
+    bar.style.position = '';
+}
+document.addEventListener('htmx:afterSettle', kvibeRestickFilterBar);
+window.kvibeRestickFilterBar = kvibeRestickFilterBar;
+
 // Make available to HTML onclick attributes
 window.kvibeTogglePlayPause    = kvibeTogglePlayPause;
 window.kvibeSeekVideo          = kvibeSeekVideo;

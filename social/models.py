@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.conf import settings
 from django.templatetags.static import static
 from django.utils import timezone
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import calendar
 import uuid
 import os
@@ -915,6 +915,37 @@ class Market(models.Model):
         super().save(*args, **kwargs)
 
     @property
+    def time_posted(self):
+        """Human-friendly relative time, e.g. 'Just now', '2 hours ago', 'Yesterday', '3 days ago'."""
+        now = timezone.localtime()
+        posted = timezone.localtime(self.posted_on)
+        seconds = (now - posted).total_seconds()
+
+        if seconds < 60:
+            return "Just now"
+        if seconds < 3600:
+            mins = int(seconds // 60)
+            return f"{mins} minute{'s' if mins != 1 else ''} ago"
+
+        days_diff = (now.date() - posted.date()).days
+
+        if days_diff == 0:
+            hours = int(seconds // 3600)
+            return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        if days_diff == 1:
+            return "Yesterday"
+        if days_diff < 7:
+            return f"{days_diff} days ago"
+        if days_diff < 30:
+            weeks = days_diff // 7
+            return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+        if days_diff < 365:
+            months = days_diff // 30
+            return f"{months} month{'s' if months != 1 else ''} ago"
+        years = days_diff // 365
+        return f"{years} year{'s' if years != 1 else ''} ago"
+
+    @property
     def category_icon(self):
         return self.CATEGORY_ICONS.get(self.product_category, '📦')
 
@@ -1490,6 +1521,20 @@ class BusinessPage(models.Model):
     is_verified = models.BooleanField(default=False)
     is_active   = models.BooleanField(default=True)
 
+    # ── Business hours ───────────────────────────────────────────────────────
+    # Stored as {"mon": {"open": "09:00", "close": "18:00", "closed": false}, ...}
+    # A missing/empty dict means hours haven't been set for that page yet.
+    DAY_CHOICES = [
+        ('mon', 'Monday'), ('tue', 'Tuesday'), ('wed', 'Wednesday'),
+        ('thu', 'Thursday'), ('fri', 'Friday'), ('sat', 'Saturday'), ('sun', 'Sunday'),
+    ]
+    DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+
+    business_hours = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-day opening hours, e.g. {"mon": {"open": "09:00", "close": "18:00", "closed": false}}',
+    )
+
     if settings.USE_CLOUDINARY:
         logo        = CloudinaryField('logo',        folder='business_logos',  blank=True, null=True)
         cover_photo = CloudinaryField('cover_photo', folder='business_covers', blank=True, null=True)
@@ -1545,6 +1590,27 @@ class BusinessPage(models.Model):
             self.twitter = re.sub(r'[^a-zA-Z0-9._]', '', self.twitter.lstrip('@').strip())[:100]
         if self.tiktok:
             self.tiktok = re.sub(r'[^a-zA-Z0-9._]', '', self.tiktok.lstrip('@').strip())[:100]
+        self.business_hours = self._sanitize_business_hours(self.business_hours)
+
+    @classmethod
+    def _sanitize_business_hours(cls, raw):
+        """Keep only known day keys with valid HH:MM open/close values."""
+        if not isinstance(raw, dict):
+            return {}
+        time_re = re.compile(r'^([01]\d|2[0-3]):[0-5]\d$')
+        clean = {}
+        for day in cls.DAY_ORDER:
+            entry = raw.get(day)
+            if not isinstance(entry, dict):
+                continue
+            closed = bool(entry.get('closed'))
+            open_v = str(entry.get('open', '') or '').strip()
+            close_v = str(entry.get('close', '') or '').strip()
+            if closed or not time_re.match(open_v) or not time_re.match(close_v):
+                clean[day] = {'open': '', 'close': '', 'closed': True}
+            else:
+                clean[day] = {'open': open_v, 'close': close_v, 'closed': False}
+        return clean
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -1595,3 +1661,65 @@ class BusinessPage(models.Model):
                 return self.cover_photo.url if self.cover_photo else ''
         except Exception:
             return ''
+
+    # ── Business hours helpers ───────────────────────────────────────────────
+    @property
+    def has_business_hours(self):
+        return any(not v.get('closed') for v in (self.business_hours or {}).values())
+
+    def get_hours_for_day(self, day_key):
+        return (self.business_hours or {}).get(day_key, {'open': '', 'close': '', 'closed': True})
+
+    @property
+    def today_hours(self):
+        day_key = self.DAY_ORDER[timezone.localtime().weekday()]
+        return self.get_hours_for_day(day_key)
+
+    @property
+    def is_open_now(self):
+        """True = open, False = closed, None = no hours configured for today."""
+        hours = self.today_hours
+        if not hours or hours.get('closed') or not hours.get('open') or not hours.get('close'):
+            return False if self.has_business_hours else None
+        now_t = timezone.localtime().time()
+        try:
+            open_t  = datetime.strptime(hours['open'],  '%H:%M').time()
+            close_t = datetime.strptime(hours['close'], '%H:%M').time()
+        except (ValueError, TypeError):
+            return None
+        if open_t <= close_t:
+            return open_t <= now_t <= close_t
+        # Overnight hours, e.g. 18:00 → 02:00
+        return now_t >= open_t or now_t <= close_t
+
+    @property
+    def hours_display(self):
+        """Ordered list for template display: [{key, label, open, close, closed}, ...]."""
+        labels = dict(self.DAY_CHOICES)
+        today_key = self.DAY_ORDER[timezone.localtime().weekday()]
+        out = []
+        for key in self.DAY_ORDER:
+            h = self.get_hours_for_day(key)
+            out.append({
+                'key': key,
+                'label': labels[key],
+                'open': h.get('open', ''),
+                'close': h.get('close', ''),
+                'closed': h.get('closed', True),
+                'is_today': key == today_key,
+            })
+        return out
+
+    # ── Average page rating ──────────────────────────────────────────────────
+    # Derived from ProductReview entries left on this page's Market listings —
+    # no separate BusinessPage review model needed.
+    @property
+    def average_rating(self):
+        result = ProductReview.objects.filter(
+            product__business_page=self
+        ).aggregate(avg=models.Avg('rating'))['avg']
+        return round(result, 1) if result else 0
+
+    @property
+    def review_count(self):
+        return ProductReview.objects.filter(product__business_page=self).count()

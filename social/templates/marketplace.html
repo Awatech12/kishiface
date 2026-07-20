@@ -317,6 +317,14 @@
         .mfy-jcard-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 4px; }
         .mfy-jcard-meta-txt { font-size: 10.5px; color: var(--kf-text-light); }
         .mfy-jcard-meta-txt + .mfy-jcard-meta-txt::before { content: '•'; margin: 0 4px; }
+        .mfy-jcard-time { font-size: 10.5px; color: var(--mfy-text-light); margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
+        .mfy-jcard-time i { font-size: 9px; opacity: .75; }
+
+        /* Rating row — stars + review count, Jumia-style */
+        .mfy-jcard-rating { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+        .mfy-jcard-rating-stars { display: inline-flex; gap: 1px; font-size: 9px; color: #f5a623; }
+        .mfy-jcard-rating-stars i.far { color: #d8d8d8; }
+        .mfy-jcard-rating-count { font-size: 10px; color: var(--kf-text-light); }
 
         .mfy-jcard-price-row { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 8px; }
         .mfy-jcard-price {
@@ -700,12 +708,23 @@
                                 {# Product name #}
                                 <div class="mfy-jcard-name">{{ product.product_name|truncatechars:60 }}</div>
 
+                                {# Rating — stars + review count, shown once the listing has reviews #}
+                                {% if product.review_count %}
+                                <div class="mfy-jcard-rating">
+                                    <span class="mfy-jcard-rating-stars">
+                                        {% for i in "12345" %}<i class="fa-star {% if forloop.counter <= product.average_rating %}fas{% else %}far{% endif %}"></i>{% endfor %}
+                                    </span>
+                                    <span class="mfy-jcard-rating-count">({{ product.review_count }})</span>
+                                </div>
+                                {% endif %}
+
                                 {# Meta line — condition / location / availability #}
                                 <div class="mfy-jcard-meta">
                                     {% if product.product_condition %}<span class="mfy-jcard-meta-txt">{{ product.product_condition }}</span>{% endif %}
                                     {% if product.product_location %}<span class="mfy-jcard-meta-txt">{{ product.product_location }}</span>{% endif %}
                                     {% if product.product_availability %}<span class="mfy-jcard-meta-txt">{{ product.product_availability }}</span>{% endif %}
                                 </div>
+                                <div class="mfy-jcard-time"><i class="far fa-clock"></i> {{ product.time_posted }}</div>
                             </div>
                         </a>
 
@@ -722,25 +741,6 @@
                             </button>
                             {% endif %}
                         </div>
-
-                        {# Action buttons — hidden for the owner viewing their own listing #}
-                        {% if request.user != product.product_owner %}
-                        <div class="mfy-jcard-actions-row">
-                            {% if product.whatsapp_number %}
-                            {% with wa_imgs=product.images.all %}
-                            <a href="https://wa.me/{{ product.whatsapp_number }}?text=Hi%2C%20I%20saw%20your%20ad%20for%20%22{{ product.product_name|urlencode }}%22%20(%E2%82%A6{{ product.product_price|floatformat:"0"|intcomma|urlencode }}{% if product.product_condition %}%2C%20{{ product.product_condition|urlencode }}{% endif %}{% if product.product_location %}%2C%20{{ product.product_location|urlencode }}{% endif %})%20on%20Marketfy%20and%20I%27m%20interested!{% if wa_imgs.0 %}%20{{ request.scheme|urlencode }}%3A%2F%2F{{ request.get_host|urlencode }}{{ wa_imgs.0.product_image.url|urlencode }}{% endif %}"
-                               target="_blank" rel="noopener noreferrer"
-                               class="mfy-jcard-btn mfy-jcard-btn--wa">
-                                <i class="fab fa-whatsapp"></i> WhatsApp
-                            </a>
-                            {% endwith %}
-                            {% endif %}
-                            <a href="{% url 'contact_seller' product.product_id %}"
-                               class="mfy-jcard-btn mfy-jcard-btn--msg">
-                                <i class="fas fa-paper-plane"></i> Message
-                            </a>
-                        </div>
-                        {% endif %}
 
                     </article>
                     {% endfor %}

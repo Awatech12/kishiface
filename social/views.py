@@ -4487,6 +4487,28 @@ def handler500(request):
 # Products/listings use the existing Market + MarketImage models.
 # =============================================================================
 
+_HOURS_TIME_RE = re.compile(r'^([01]\d|2[0-3]):[0-5]\d$')
+
+
+def _parse_business_hours_from_post(post_data):
+    """
+    Build a sanitized business_hours dict from per-day POST fields:
+    hours_<day>_open, hours_<day>_close, hours_<day>_closed ('on' checkbox).
+    Invalid or incomplete rows are simply marked closed rather than raising.
+    """
+    from social.models import BusinessPage
+    hours = {}
+    for day in BusinessPage.DAY_ORDER:
+        closed = post_data.get(f'hours_{day}_closed') == 'on'
+        open_v = post_data.get(f'hours_{day}_open', '').strip()
+        close_v = post_data.get(f'hours_{day}_close', '').strip()
+        if closed or not open_v or not close_v or not _HOURS_TIME_RE.match(open_v) or not _HOURS_TIME_RE.match(close_v):
+            hours[day] = {'open': '', 'close': '', 'closed': True}
+        else:
+            hours[day] = {'open': open_v, 'close': close_v, 'closed': False}
+    return hours
+
+
 @login_required(login_url='/')
 def business_page_create(request):
     from social.models import BusinessPage
@@ -4522,14 +4544,17 @@ def business_page_create(request):
             return render(request, 'business_page_create.html', {
                 'errors': errors, 'form_data': request.POST,
                 'categories': BusinessPage.CATEGORY_CHOICES,
+                'day_choices': BusinessPage.DAY_CHOICES,
             })
+
+        business_hours = _parse_business_hours_from_post(request.POST)
 
         page = BusinessPage(
             owner=request.user, name=name, category=category,
             tagline=tagline, description=description, location=location,
             website=website, whatsapp=whatsapp, phone=phone, email=email_val,
             instagram=instagram, youtube=youtube, facebook=facebook,
-            twitter=twitter, tiktok=tiktok,
+            twitter=twitter, tiktok=tiktok, business_hours=business_hours,
         )
         if request.FILES.get('logo'):        page.logo        = request.FILES['logo']
         if request.FILES.get('cover_photo'): page.cover_photo = request.FILES['cover_photo']
@@ -4541,6 +4566,7 @@ def business_page_create(request):
             return render(request, 'business_page_create.html', {
                 'errors': {}, 'form_data': request.POST,
                 'categories': BusinessPage.CATEGORY_CHOICES,
+                'day_choices': BusinessPage.DAY_CHOICES,
             })
 
         messages.success(request, f'"{page.name}" is live! 🎉')
@@ -4548,6 +4574,7 @@ def business_page_create(request):
 
     return render(request, 'business_page_create.html', {
         'categories': BusinessPage.CATEGORY_CHOICES,
+        'day_choices': BusinessPage.DAY_CHOICES,
     })
 
 
@@ -4594,6 +4621,11 @@ def business_page_detail(request, slug):
         'market_categories': Market.CATEGORY_CHOICES,
         'job_categories':    JobVacancy.CATEGORY_CHOICES,
         'wishlist_ids':      wishlist_ids,
+        'is_open_now':       page.is_open_now,
+        'today_hours':       page.today_hours,
+        'hours_display':     page.hours_display,
+        'average_rating':    page.average_rating,
+        'review_count':      page.review_count,
     })
 
 
@@ -4646,6 +4678,7 @@ def business_page_edit(request, slug):
         page.facebook    = request.POST.get('facebook', '').strip()
         page.twitter     = request.POST.get('twitter', '').strip()
         page.tiktok      = request.POST.get('tiktok', '').strip()
+        page.business_hours = _parse_business_hours_from_post(request.POST)
         if request.FILES.get('logo'):        page.logo        = request.FILES['logo']
         if request.FILES.get('cover_photo'): page.cover_photo = request.FILES['cover_photo']
         try:
@@ -4657,6 +4690,8 @@ def business_page_edit(request, slug):
 
     return render(request, 'business_page_edit.html', {
         'page': page, 'categories': BusinessPage.CATEGORY_CHOICES,
+        'day_choices': BusinessPage.DAY_CHOICES,
+        'hours_display': page.hours_display,
     })
 
 
@@ -4711,6 +4746,8 @@ def business_product_upload(request, slug):
     condition    = request.POST.get('product_condition', 'New').strip()
     availability = request.POST.get('availability', 'Single Item').strip()
     whatsapp     = request.POST.get('whatsapp_number', page.whatsapp or '').strip()
+    instagram    = request.POST.get('instagram_handle', '').strip()
+    twitter      = request.POST.get('twitter_handle', '').strip()
 
     # ── Allowlists ────────────────────────────────────────────────────────────
     _VALID_CATEGORIES   = Market.VALID_CATEGORIES
@@ -4757,6 +4794,8 @@ def business_product_upload(request, slug):
             product_category=category,
             product_condition=condition,
             whatsapp_number=whatsapp,
+            instagram_handle=instagram,
+            twitter_handle=twitter,
             business_page=page,
         )
         for img_file in request.FILES.getlist('images')[:5]:

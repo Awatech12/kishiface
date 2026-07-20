@@ -170,6 +170,27 @@
         }
         .kbiz-toast.show { opacity: 1; }
 
+        /* ── Business hours ── */
+        .kbiz-hours-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 9px 0; border-bottom: 1px solid var(--mfy-border);
+        }
+        .kbiz-hours-row:last-child { border-bottom: none; }
+        .kbiz-hours-day {
+            width: 78px; flex-shrink: 0; font-size: 13px; font-weight: 700;
+        }
+        .kbiz-hours-toggle { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .kbiz-hours-toggle label { font-size: 11px; color: var(--mfy-text-light); font-weight: 600; }
+        .kbiz-hours-times { display: flex; align-items: center; gap: 6px; flex: 1; }
+        .kbiz-hours-time {
+            flex: 1; min-width: 0;
+            border: 1.5px solid var(--mfy-border); border-radius: 8px;
+            padding: 7px 8px; font-size: 13px; font-family: inherit;
+            color: var(--mfy-text); background: var(--mfy-white);
+        }
+        .kbiz-hours-times span { font-size: 12px; color: var(--mfy-text-light); }
+        .kbiz-hours-row.is-closed .kbiz-hours-time { opacity: .4; pointer-events: none; }
+
         /* ── Django messages banner ── */
         .kbiz-alert {
             margin: 12px 16px 0;
@@ -319,6 +340,29 @@
         </div>
     </div>
 
+    <!-- Business Hours -->
+    <p class="kbiz-section-title">
+        <i class="fas fa-clock" style="color:var(--mfy-primary)"></i>
+        Business Hours
+    </p>
+    <div class="kbiz-field" id="hoursList">
+        {% for row in hours_display %}
+        <div class="kbiz-hours-row {% if row.closed %}is-closed{% endif %}" data-day="{{ row.key }}">
+            <span class="kbiz-hours-day">{{ row.label|slice:":3" }}</span>
+            <div class="kbiz-hours-toggle">
+                <input type="checkbox" id="open_{{ row.key }}" onchange="toggleHoursRow('{{ row.key }}')" {% if not row.closed %}checked{% endif %}>
+                <label for="open_{{ row.key }}">Open</label>
+            </div>
+            <div class="kbiz-hours-times">
+                <input class="kbiz-hours-time" type="time" name="hours_{{ row.key }}_open" id="hours_{{ row.key }}_open_input" value="{{ row.open }}">
+                <span>–</span>
+                <input class="kbiz-hours-time" type="time" name="hours_{{ row.key }}_close" id="hours_{{ row.key }}_close_input" value="{{ row.close }}">
+            </div>
+            <input type="hidden" name="hours_{{ row.key }}_closed" id="hours_{{ row.key }}_closed" value="{% if row.closed %}on{% else %}{% endif %}">
+        </div>
+        {% endfor %}
+    </div>
+
     <!-- Social Media -->
     <p class="kbiz-section-title">
         <i class="fas fa-share-alt" style="color:var(--mfy-primary)"></i>
@@ -433,6 +477,22 @@ document.getElementById('logoInput').addEventListener('change', function () {
     reader.readAsDataURL(this.files[0]);
     toast('Logo selected — save to apply.');
 });
+
+// ── Business hours toggle ─────────────────────────────────────────────────────
+function toggleHoursRow(dayKey) {
+    const row      = document.querySelector(`.kbiz-hours-row[data-day="${dayKey}"]`);
+    const checkbox = document.getElementById(`open_${dayKey}`);
+    const closedIn = document.getElementById(`hours_${dayKey}_closed`);
+    const isOpen   = checkbox.checked;
+    row.classList.toggle('is-closed', !isOpen);
+    closedIn.value = isOpen ? '' : 'on';
+    if (isOpen) {
+        const openInput  = document.getElementById(`hours_${dayKey}_open_input`);
+        const closeInput = document.getElementById(`hours_${dayKey}_close_input`);
+        if (!openInput.value)  openInput.value  = '09:00';
+        if (!closeInput.value) closeInput.value = '18:00';
+    }
+}
 
 // ── Prevent double submit ─────────────────────────────────────────────────────
 document.getElementById('bizEditForm').addEventListener('submit', function () {
