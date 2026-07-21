@@ -374,7 +374,14 @@ function kvibeInitCarouselSwipe(carousel) {
         if (!touchLive || e.touches.length !== 1) return;
         var dx = e.touches[0].clientX - touchStartX;
         var dy = e.touches[0].clientY - touchStartY;
-        if (Math.abs(dx) > Math.abs(dy)) {
+        // Only claim the gesture once horizontal intent is unambiguous.
+        // A raw "dx > dy" check fires on the tiny diagonal drift that's
+        // normal at the start of a vertical scroll, which calls
+        // preventDefault() and locks that whole scroll gesture — feeling
+        // like the page is "stuck". Require a minimum distance plus a
+        // clear horizontal skew (matches the touchend threshold below)
+        // before treating it as a swipe.
+        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) {
             e.preventDefault(); // block vertical scroll only when horizontal
             var cur = parseInt(carousel.dataset.slide, 10) || 0;
             var base = -cur * 100;
