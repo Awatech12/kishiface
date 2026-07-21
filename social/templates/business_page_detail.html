@@ -7,15 +7,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{{ page.name }} | Marketfy</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
     <style>
         :root {
             --mfy-primary: #0095f6;
             --mfy-primary-dark: #0077d4;
-            --mfy-bg: #f5f7fa;
+            --mfy-bg: #fafafa;
             --mfy-white: #ffffff;
-            --mfy-text: #1a1d24;
-            --mfy-text-light: #8a92a3;
-            --mfy-border: #e6e9ef;
+            --mfy-text: #262626;
+            --mfy-text-light: #8e8e8e;
+            --mfy-border: #dbdbdb;
             --mfy-success: #25d366;
             --mfy-error: #ed4956;
         }
@@ -26,31 +27,183 @@
             -webkit-font-smoothing: antialiased;
         }
 
+        /* ===== DESKTOP LAYOUT (matches profile page) ===== */
+        .mfy-container { max-width: 100%; width: 100%; }
+
+        .mfy-desktop-layout {
+            display: flex;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 20px 0 20px;
+            gap: 20px;
+        }
+
+        /* Left Sidebar - Main Navigation */
+        .mfy-left-sidebar {
+            width: 245px;
+            flex-shrink: 0;
+            min-height: 0;
+            align-self: flex-start;
+            position: sticky;
+            top: 50px;
+            height: calc(100vh - 104px);
+            max-height: calc(100vh - 104px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            padding-right: 10px;
+        }
+
+        .mfy-desktop-nav {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 20px 0;
+            background: var(--mfy-white);
+        }
+
+        .mfy-desktop-nav-item {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            width: 100%;
+            padding: 12px;
+            position: relative;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+
+        .mfy-desktop-nav-item:hover { background: var(--mfy-bg); }
+        .mfy-desktop-nav-item.active { background: var(--mfy-bg); }
+
+        .mfy-desktop-nav-icon {
+            width: 24px; height: 24px; margin-right: 12px;
+            position: relative; flex-shrink: 0;
+        }
+
+        .mfy-desktop-nav-icon svg {
+            width: 100%; height: 100%;
+            stroke: var(--mfy-text-light);
+            transition: all 0.2s ease;
+        }
+
+        .mfy-desktop-nav-item:hover .mfy-desktop-nav-icon svg,
+        .mfy-desktop-nav-item.active .mfy-desktop-nav-icon svg { stroke: var(--mfy-primary); }
+
+        .mfy-desktop-nav-label {
+            font-size: 14px; color: var(--mfy-text-light);
+            font-weight: 400; transition: all 0.2s ease; white-space: nowrap;
+        }
+
+        .mfy-desktop-nav-item:hover .mfy-desktop-nav-label { color: var(--mfy-text); }
+        .mfy-desktop-nav-item.active .mfy-desktop-nav-label { color: var(--mfy-text); font-weight: 600; }
+
+        .mfy-desktop-notification-badge {
+            position: absolute; top: 8px; left: 20px;
+            background: #0095f6; color: white;
+            font-size: 10px; font-weight: 600;
+            width: 20px; height: 20px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0 3px; border: 2px solid var(--mfy-white);
+        }
+
+        .mfy-desktop-nav-item.logout .mfy-desktop-nav-icon svg { stroke: #0095f6; }
+        .mfy-desktop-nav-item.logout:hover .mfy-desktop-nav-icon svg { stroke: #0095f6; }
+        .mfy-desktop-nav-item.logout:hover .mfy-desktop-nav-label { color: #0095f6; }
+
+        .mfy-desktop-only { display: none; }
+
+        /* Main column that holds the existing business page content */
+        .kbiz-main-col {
+            flex: 1;
+            max-width: 820px;
+            margin: 0 auto;
+            width: 100%;
+            min-width: 0;
+        }
+
+        @media (max-width: 767px) {
+            .mfy-desktop-layout { display: block; padding: 0; }
+            .mfy-left-sidebar { display: none; }
+            .kbiz-main-col { max-width: 100%; }
+            .mfy-desktop-only { display: none; }
+        }
+
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .mfy-desktop-layout { padding: 4px 15px 0 15px; }
+            .mfy-left-sidebar { width: 245px; }
+            .mfy-desktop-only { display: block; }
+        }
+
+        @media (min-width: 1024px) {
+            .mfy-desktop-layout { padding: 24px 20px 0 20px; }
+            .mfy-left-sidebar { width: 245px; }
+            .mfy-desktop-only { display: block; }
+
+            .mfy-left-sidebar::-webkit-scrollbar { width: 6px; }
+            .mfy-left-sidebar::-webkit-scrollbar-track { background: var(--mfy-bg); }
+            .mfy-left-sidebar::-webkit-scrollbar-thumb { background: var(--mfy-border); border-radius: 3px; }
+            .mfy-left-sidebar::-webkit-scrollbar-thumb:hover { background: var(--mfy-text-light); }
+        }
+
         /* ── Topbar ── */
         .kbiz-topbar {
             position: sticky; top: 0; z-index: 100;
-            height: 56px; background: var(--mfy-white);
+            height: 52px; background: var(--mfy-white);
             border-bottom: 1px solid var(--mfy-border);
             display: flex; align-items: center; gap: 12px; padding: 0 16px;
         }
         .kbiz-back { background: none; border: none; cursor: pointer; font-size: 18px; color: var(--mfy-text); padding: 4px; }
-        .kbiz-topbar-name { font-size: 18px; font-weight: 800; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kbiz-topbar-name { font-size: 16px; font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
         .kbiz-edit-link {
             display: inline-flex; align-items: center; gap: 7px;
-            padding: 8px 16px; background: var(--mfy-white);
+            padding: 6px 14px; background: var(--mfy-white);
             color: var(--mfy-text); border: 1.5px solid var(--mfy-border);
             border-radius: 20px; font-size: 13px; font-weight: 700; text-decoration: none;
             white-space: nowrap;
         }
+        .kbiz-share-btn {
+            width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+            background: none; border: 1.5px solid var(--mfy-border);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--mfy-text); font-size: 15px; cursor: pointer;
+        }
+        .kbiz-share-btn:hover { background: var(--mfy-bg); }
+
+        /* ── Share panel ── */
+        .kbiz-share-panel {
+            display: none; position: absolute; top: calc(100% + 8px); right: 16px;
+            background: var(--mfy-white); border: 1px solid var(--mfy-border);
+            border-radius: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.14);
+            padding: 8px; min-width: 190px; z-index: 150;
+        }
+        .kbiz-share-panel.open { display: flex; flex-direction: column; gap: 4px; }
+        .kbiz-share-panel button, .kbiz-share-panel a {
+            display: flex; align-items: center; gap: 10px; width: 100%;
+            padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 600;
+            color: var(--mfy-text); text-decoration: none; text-align: left;
+            background: none; border: none; cursor: pointer; font-family: inherit;
+        }
+        .kbiz-share-panel button:hover, .kbiz-share-panel a:hover { background: var(--mfy-bg); }
+        .kbiz-share-panel i { width: 16px; text-align: center; color: var(--mfy-primary); }
+        .kbiz-share-panel .share-wa i { color: #25d366; }
+        .kbiz-share-panel .share-fb i { color: #1877f2; }
+        .kbiz-share-panel .share-tw i { color: #0a0a0a; }
 
         /* ── Cover / hero banner ── */
         .kbiz-cover {
             position: relative;
             z-index: 1;
-            height: 230px;
+            height: 190px;
             background: linear-gradient(135deg, #0b1f4b 0%, #0095f6 100%);
             overflow: hidden;
+            margin: 0 12px 0;
+            border-radius: 16px 16px 0 0;
         }
+        @media (max-width: 767px) { .kbiz-cover { border-radius: 0; margin: 0; height: 150px; } }
         .kbiz-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .kbiz-cover-ph {
             width: 100%; height: 100%;
@@ -58,23 +211,31 @@
             color: rgba(255,255,255,.55); font-size: 15px; font-weight: 600;
         }
 
-        /* ── Page header ── */
+        /* ── Page header card ── */
         .kbiz-page-header {
             position: relative;
             z-index: 2;
             background: var(--mfy-white);
-            padding: 0 16px 18px;
-            border-bottom: 8px solid var(--mfy-bg);
+            padding: 0 24px 20px;
+            border-radius: 0 0 16px 16px;
+            border: 1px solid var(--mfy-border); border-top: none;
+            margin: 0 12px 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.03);
         }
+        @media (max-width: 767px) { .kbiz-page-header { border-radius: 0; margin: 0 0 12px; border-left: none; border-right: none; } }
+
         .kbiz-logo-row {
-            display: flex; align-items: flex-start; justify-content: space-between;
-            margin-top: -38px; margin-bottom: 14px;
+            display: flex; align-items: flex-end; justify-content: space-between;
+            gap: 20px; margin-bottom: 16px; padding-top: 0;
         }
+        .kbiz-header-left { display: flex; align-items: flex-end; gap: 18px; min-width: 0; flex: 1; }
         .kbiz-logo {
-            width: 88px; height: 88px; border-radius: 18px;
-            border: 4px solid var(--mfy-white); background: #e5e5e5; overflow: hidden; flex-shrink: 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,.12);
+            width: 112px; height: 112px; border-radius: 50%;
+            border: 4px solid var(--mfy-white); background: #e5e5e5; overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,.12); flex-shrink: 0;
+            margin-top: -56px;
         }
+        @media (max-width: 560px) { .kbiz-logo { width: 88px; height: 88px; margin-top: -46px; } }
         .kbiz-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .kbiz-logo-ph {
             width: 100%; height: 100%;
@@ -82,25 +243,26 @@
             font-size: 30px; color: #fff; background: var(--mfy-primary);
         }
 
-        /* Follow / Edit button */
         .kbiz-follow-btn {
-            margin-top: 44px;
-            padding: 10px 26px; background: var(--mfy-primary); color: #fff;
-            border: none; border-radius: 24px;
+            padding: 9px 18px; border-radius: 10px;
             font-size: 14px; font-weight: 700; font-family: inherit;
-            cursor: pointer; transition: background .2s; white-space: nowrap;
+            cursor: pointer; text-decoration: none; display: inline-flex;
+            align-items: center; gap: 6px; border: none; transition: background .2s, opacity .2s;
+            white-space: nowrap;
+            background: var(--mfy-primary); color: #fff;
         }
+        .kbiz-follow-btn:hover { background: var(--mfy-primary-dark); }
         .kbiz-follow-btn.following {
             background: var(--mfy-white); color: var(--mfy-text);
             border: 1.5px solid var(--mfy-border);
         }
 
-        .kbiz-page-name { font-size: 23px; font-weight: 800; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
-        .kbiz-page-cat  { font-size: 14px; color: var(--mfy-primary); font-weight: 600; margin-bottom: 8px; }
+        .kbiz-page-name { font-size: 22px; font-weight: 800; letter-spacing: -0.2px; display: flex; align-items: center; gap: 6px; }
+        .kbiz-page-name .fa-check-circle { color: var(--mfy-primary); font-size: 16px; }
+        .kbiz-page-cat  { font-size: 14px; color: var(--mfy-primary); font-weight: 600; margin-bottom: 6px; }
         .kbiz-page-tag  { font-size: 15px; font-weight: 700; color: var(--mfy-text); margin-bottom: 4px; }
-        .kbiz-page-desc { font-size: 14px; color: var(--mfy-text-light); line-height: 1.55; margin-bottom: 4px; }
+        .kbiz-page-desc { font-size: 14px; color: var(--mfy-text-light); line-height: 1.6; margin-bottom: 4px; }
 
-        /* ── Rating + Open/Closed meta row ── */
         .kbiz-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
         .kbiz-rating {
             display: inline-flex; align-items: center; gap: 5px;
@@ -121,7 +283,6 @@
         .kbiz-hours-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
         .kbiz-hours-badge .kbiz-hours-today { font-weight: 500; color: var(--mfy-text-light); margin-left: 2px; }
 
-        /* ── Hours detail panel ── */
         .kbiz-hours-panel {
             display: none; margin-top: 12px; padding: 12px 14px;
             background: var(--mfy-bg); border-radius: 12px; border: 1px solid var(--mfy-border);
@@ -136,10 +297,12 @@
         .kbiz-hours-panel-row .day-hours { color: var(--mfy-text-light); }
         .kbiz-hours-panel-row.today .day-hours { color: var(--mfy-primary); }
 
-        .kbiz-stats-row { display: flex; gap: 0; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--mfy-border); }
-        .kbiz-stat      { flex: 1; display: flex; flex-direction: column; align-items: center; }
-        .kbiz-stat-num  { font-size: 19px; font-weight: 800; }
-        .kbiz-stat-lbl  { font-size: 12px; color: var(--mfy-text-light); margin-top: 2px; }
+        .kbiz-stats-row {
+            display: flex; gap: 36px; margin-top: 18px; flex-wrap: wrap; padding-top: 16px; border-top: 1px solid var(--mfy-border);
+        }
+        .kbiz-stat { display: flex; flex-direction: column; align-items: flex-start; text-decoration: none; color: inherit; }
+        .kbiz-stat-num { font-size: 19px; font-weight: 800; line-height: 1.2; }
+        .kbiz-stat-lbl { font-size: 12px; color: var(--mfy-text-light); margin-top: 2px; }
 
         .kbiz-contact-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; position: relative; }
         .kbiz-chip {
@@ -190,43 +353,27 @@
         .kbiz-more-panel .chip-em i { color: #6366f1; }
         .kbiz-more-panel .chip-web i { color: #0ea5e9; }
 
-        /* ── Share button / panel (topbar) ── */
-        .kbiz-share-btn {
-            width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
-            background: none; border: 1.5px solid var(--mfy-border);
-            display: flex; align-items: center; justify-content: center;
-            color: var(--mfy-text); font-size: 15px; cursor: pointer;
+        @media (max-width: 560px) {
+            .kbiz-logo-row { flex-direction: column; align-items: flex-start; }
+            .kbiz-follow-btn { width: 100%; justify-content: center; padding-top: 12px; }
+            .kbiz-stats-row { gap: 22px; }
         }
-        .kbiz-share-btn:hover { background: var(--mfy-bg); }
-        .kbiz-share-panel {
-            display: none; position: absolute; top: calc(100% + 8px); right: 16px;
-            background: var(--mfy-white); border: 1px solid var(--mfy-border);
-            border-radius: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.14);
-            padding: 8px; min-width: 190px; z-index: 150;
-        }
-        .kbiz-share-panel.open { display: flex; flex-direction: column; gap: 4px; }
-        .kbiz-share-panel button, .kbiz-share-panel a {
-            display: flex; align-items: center; gap: 10px; width: 100%;
-            padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 600;
-            color: var(--mfy-text); text-decoration: none; text-align: left;
-            background: none; border: none; cursor: pointer; font-family: inherit;
-        }
-        .kbiz-share-panel button:hover, .kbiz-share-panel a:hover { background: var(--mfy-bg); }
-        .kbiz-share-panel i { width: 16px; text-align: center; color: var(--mfy-primary); }
-        .kbiz-share-panel .share-wa i { color: #25d366; }
-        .kbiz-share-panel .share-fb i { color: #1877f2; }
-        .kbiz-share-panel .share-tw i { color: #0a0a0a; }
 
         /* ── Sections ── */
         .kbiz-section {
             background: var(--mfy-white);
-            overflow: hidden; margin: 0 0 8px;
+            overflow: hidden;
+            border: 1px solid var(--mfy-border);
+            border-radius: 16px;
+            margin: 0 12px 16px;
         }
+        @media (max-width: 767px) { .kbiz-section { border-radius: 0; margin: 0 0 8px; border-left: none; border-right: none; } }
         .kbiz-section-header {
             padding: 18px 16px 14px;
             display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid var(--mfy-border);
         }
-        .kbiz-section-header h2 { font-size: 18px; font-weight: 800; }
+        .kbiz-section-header h2 { font-size: 16px; font-weight: 700; }
         .kbiz-upload-btn {
             display: inline-flex; align-items: center; gap: 7px;
             background: var(--mfy-primary); color: #fff; border: none;
@@ -240,7 +387,7 @@
         }
         .kbiz-empty i { font-size: 36px; margin-bottom: 12px; display: block; }
 
-        /* ===== JUMIA-STYLE PRODUCT CARD (parity with home feed) ===== */
+        /* ── Product grid (Jumia-style cards) ── */
         .kbiz-jgrid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -251,9 +398,101 @@
         @media (min-width: 700px)  { .kbiz-jgrid { grid-template-columns: repeat(4, 1fr); } }
         @media (min-width: 900px)  { .kbiz-jgrid { grid-template-columns: repeat(5, 1fr); } }
         @media (min-width: 1150px) { .kbiz-jgrid { grid-template-columns: repeat(6, 1fr); } }
-        @media (min-width: 1350px) { .kbiz-jgrid { grid-template-columns: repeat(7, 1fr); } }
 
-        /* ===== JOB VACANCY CARDS (business page) ===== */
+        .mfy-jcard {
+            background: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--mfy-border);
+            transition: box-shadow 0.2s, transform .15s;
+        }
+        .mfy-jcard:hover { box-shadow: 0 6px 20px rgba(0,0,0,.08); transform: translateY(-1px); }
+
+        .mfy-jcard-img-link { display: block; text-decoration: none; background: #f8f8f8; }
+        .mfy-jcard-img-wrap {
+            position: relative; width: 100%; aspect-ratio: 1 / 1;
+            background: #f8f8f8; overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .mfy-jcard-img {
+            width: 100%; height: 100%; object-fit: contain; display: block;
+            opacity: 0; transition: opacity 0.3s, transform 0.3s ease;
+            background: #f8f8f8; padding: 10px;
+        }
+        .mfy-jcard-img.loaded { opacity: 1; }
+        .mfy-jcard-img-wrap:hover .mfy-jcard-img { transform: scale(1.03); }
+
+        .mfy-jcard-views {
+            position: absolute; top: 6px; right: 6px;
+            background: rgba(0,0,0,0.55); color: #fff;
+            font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+            display: inline-flex; align-items: center; gap: 3px;
+            pointer-events: none; backdrop-filter: blur(4px);
+        }
+        .mfy-jcard-views i { font-size: 8px; opacity: 0.8; }
+
+        .mfy-jcard-category-badge {
+            position: absolute; top: 6px; left: 6px;
+            background: rgba(255,255,255,0.92); color: #262626;
+            font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+            pointer-events: none; letter-spacing: 0.2px;
+            max-width: calc(100% - 50px); overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .mfy-jcard-img-count {
+            position: absolute; bottom: 6px; right: 6px;
+            background: rgba(0,0,0,0.55); color: #fff;
+            font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+            display: inline-flex; align-items: center; gap: 3px;
+            pointer-events: none; backdrop-filter: blur(4px);
+        }
+        .mfy-jcard-img-count i { font-size: 8px; opacity: 0.85; }
+
+        .mfy-jcard-body-link { display: block; text-decoration: none; color: inherit; }
+        .mfy-jcard-body { padding: 8px 8px 2px; }
+
+        .mfy-jcard-name {
+            font-size: 12px; font-weight: 600; color: #262626; line-height: 1.3;
+            margin-bottom: 2px; display: -webkit-box;
+            -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+        }
+
+        .mfy-jcard-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 4px; }
+        .mfy-jcard-meta-txt { font-size: 10.5px; color: var(--mfy-text-light); }
+        .mfy-jcard-meta-txt + .mfy-jcard-meta-txt::before { content: '•'; margin: 0 4px; }
+        .mfy-jcard-time { font-size: 10.5px; color: var(--mfy-text-light); margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
+        .mfy-jcard-time i { font-size: 9px; opacity: .75; }
+
+        .mfy-jcard-rating { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+        .mfy-jcard-rating-stars { display: inline-flex; gap: 1px; font-size: 9px; color: #f5a623; }
+        .mfy-jcard-rating-stars i.far { color: #d8d8d8; }
+        .mfy-jcard-rating-count { font-size: 10px; color: var(--mfy-text-light); }
+
+        .mfy-jcard-price-row { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 8px; }
+        .mfy-jcard-price {
+            font-size: 13px; font-weight: 800; color: var(--mfy-primary);
+            letter-spacing: -0.2px;
+        }
+
+        .mfy-jcard-wish-btn {
+            width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+            background: var(--mfy-bg); color: #8e8e8e;
+            border: none; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; cursor: pointer; z-index: 2;
+            transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+        }
+        .mfy-jcard-wish-btn:hover  { color: #ed4956; }
+        .mfy-jcard-wish-btn:active { transform: scale(0.88); }
+        .mfy-jcard-wish-btn.saved  { background: #ed4956; color: #fff; }
+        .mfy-jcard-wish-btn.pulse  { animation: mfyHeartPulse 0.35s ease; }
+        @keyframes mfyHeartPulse {
+            0%   { transform: scale(1); }
+            40%  { transform: scale(1.25); }
+            100% { transform: scale(1); }
+        }
+
+        /* ── Job cards ── */
         .kbiz-jobs-list { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px; }
         .kbiz-job-card {
             border: 1px solid var(--mfy-border); border-radius: 14px; padding: 16px;
@@ -282,121 +521,16 @@
         }
         .kbiz-job-actions button.del { color: var(--mfy-error); border-color: #f5c6cb; }
 
-        .mfy-jcard {
-            background: #ffffff;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid var(--mfy-border);
-            transition: box-shadow 0.2s, transform .15s;
-        }
-        .mfy-jcard:hover { box-shadow: 0 6px 20px rgba(0,0,0,.08); transform: translateY(-1px); }
-
-        .mfy-jcard-img-link { display: block; text-decoration: none; background: #f8f8f8; }
-
-        .mfy-jcard-img-wrap {
-            position: relative; width: 100%; aspect-ratio: 1 / 1;
-            background: #f8f8f8; overflow: hidden;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .mfy-jcard-img {
-            width: 100%; height: 100%; object-fit: contain; display: block;
-            opacity: 0; transition: opacity 0.3s, transform 0.3s ease;
-            background: #f8f8f8; padding: 10px;
-        }
-        .mfy-jcard-img.loaded { opacity: 1; }
-        .mfy-jcard-img-wrap:hover .mfy-jcard-img { transform: scale(1.03); }
-
-        .mfy-jcard-views {
-            position: absolute; top: 6px; right: 6px;
-            background: rgba(0,0,0,0.55); color: #fff;
-            font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
-            display: inline-flex; align-items: center; gap: 3px;
-            pointer-events: none; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-        }
-        .mfy-jcard-views i { font-size: 8px; opacity: 0.8; }
-
-        .mfy-jcard-category-badge {
-            position: absolute; top: 6px; left: 6px;
-            background: rgba(255,255,255,0.92); color: #262626;
-            font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
-            pointer-events: none; letter-spacing: 0.2px;
-            max-width: calc(100% - 50px); overflow: hidden; text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .mfy-jcard-img-count {
-            position: absolute; bottom: 6px; right: 6px;
-            background: rgba(0,0,0,0.55); color: #fff;
-            font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
-            display: inline-flex; align-items: center; gap: 3px;
-            pointer-events: none; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-        }
-        .mfy-jcard-img-count i { font-size: 8px; opacity: 0.85; }
-
-        .mfy-jcard-body-link { display: block; text-decoration: none; color: inherit; }
-        .mfy-jcard-body { padding: 8px 8px 2px; }
-
-        .mfy-jcard-name {
-            font-size: 12px; font-weight: 600; color: #262626; line-height: 1.3;
-            margin-bottom: 2px; display: -webkit-box;
-            -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
-        }
-
-        .mfy-jcard-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 4px; }
-        .mfy-jcard-meta-txt { font-size: 10.5px; color: var(--mfy-text-light); }
-        .mfy-jcard-meta-txt + .mfy-jcard-meta-txt::before { content: '•'; margin: 0 4px; }
-        .mfy-jcard-time { font-size: 10.5px; color: var(--mfy-text-light); margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
-        .mfy-jcard-time i { font-size: 9px; opacity: .75; }
-
-        /* Rating row — stars + review count, Jumia-style */
-        .mfy-jcard-rating { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
-        .mfy-jcard-rating-stars { display: inline-flex; gap: 1px; font-size: 9px; color: #f5a623; }
-        .mfy-jcard-rating-stars i.far { color: #d8d8d8; }
-        .mfy-jcard-rating-count { font-size: 10px; color: var(--mfy-text-light); }
-
-        .mfy-jcard-price-row { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 8px; }
-        .mfy-jcard-price {
-            font-size: 13px; font-weight: 800; color: var(--mfy-primary);
-            letter-spacing: -0.2px;
-        }
-
-        /* Wishlist heart — bottom-right of price row */
-        .mfy-jcard-wish-btn {
-            width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
-            background: var(--mfy-bg); color: #8e8e8e;
-            border: none; display: flex; align-items: center; justify-content: center;
-            font-size: 12px; cursor: pointer; z-index: 2;
-            transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
-        }
-        .mfy-jcard-wish-btn:hover  { color: #ed4956; }
-        .mfy-jcard-wish-btn:active { transform: scale(0.88); }
-        .mfy-jcard-wish-btn.saved  { background: #ed4956; color: #fff; }
-        .mfy-jcard-wish-btn.pulse  { animation: mfyHeartPulse 0.35s ease; }
-        @keyframes mfyHeartPulse {
-            0%   { transform: scale(1); }
-            40%  { transform: scale(1.25); }
-            100% { transform: scale(1); }
-        }
-
-        .mfy-jcard-actions-row {
-            display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
-            padding: 0 8px 8px;
-        }
-        .mfy-jcard-btn {
-            display: inline-flex; align-items: center; gap: 3px;
-            font-size: 10px; font-weight: 700; padding: 5px 8px; border-radius: 6px;
-            text-decoration: none; border: none; cursor: pointer;
-            transition: opacity 0.15s, transform 0.1s; white-space: nowrap; flex: 1;
-            justify-content: center;
-        }
-        .mfy-jcard-btn:active { transform: scale(0.96); }
-        .mfy-jcard-btn--wa  { background: #e9f9ef; color: #17803d; }
-        .mfy-jcard-btn--msg { background: #e8f4ff; color: #0077d4; }
-        .mfy-jcard-btn:hover { opacity: 0.85; }
-
         /* ── About section ── */
-        .kbiz-about { background: var(--mfy-white); padding: 20px 16px; }
-        .kbiz-about h2 { font-size: 17px; font-weight: 800; margin-bottom: 14px; }
+        .kbiz-about {
+            background: var(--mfy-white);
+            border: 1px solid var(--mfy-border);
+            border-radius: 16px;
+            padding: 20px 16px;
+            margin: 0 12px 16px;
+        }
+        @media (max-width: 767px) { .kbiz-about { border-radius: 0; margin: 0; border-left: none; border-right: none; } }
+        .kbiz-about h2 { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
         .kbiz-about-grid { display: flex; flex-direction: column; gap: 14px; }
         @media (min-width: 640px) { .kbiz-about-grid { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 24px; } }
         .kbiz-about-loc { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--mfy-text); margin-bottom: 10px; }
@@ -410,13 +544,17 @@
         }
         .kbiz-about-chip i { color: var(--mfy-primary); font-size: 15px; width: 16px; text-align: center; }
 
-        /* ── Upload modal ── */
+        /* ── Upload modals ── */
         .kbiz-overlay {
             display: none; position: fixed; inset: 0;
             background: rgba(0,0,0,.55); z-index: 200;
             align-items: flex-end; justify-content: center;
         }
         .kbiz-overlay.open { display: flex; }
+        @media (min-width: 640px) {
+            .kbiz-overlay { align-items: center; padding: 24px; }
+            .kbiz-modal { border-radius: 20px !important; max-width: 520px; max-height: 85vh; }
+        }
         .kbiz-modal {
             background: var(--mfy-white); border-radius: 20px 20px 0 0;
             width: 100%; max-width: 600px; max-height: 92vh; overflow-y: auto;
@@ -442,7 +580,6 @@
         .kbiz-textarea { min-height: 80px; resize: vertical; }
         .kbiz-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-        /* Photo picker */
         .kbiz-photo-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
         .kbiz-add-photo {
             width: 70px; height: 70px; border-radius: 8px;
@@ -463,7 +600,7 @@
             margin-top: 6px; font-family: inherit;
         }
 
-        /* Toast */
+        /* ── Toast ── */
         .kbiz-toast {
             position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
             background: #1a1a1a; color: #fff; padding: 10px 18px;
@@ -471,11 +608,882 @@
             opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 999; white-space: nowrap;
         }
         .kbiz-toast.show { opacity: 1; }
+
+        /* ── Right Sidebar (same as profile page) ── */
+        .mfy-right-sidebar {
+            width: 300px;
+            flex-shrink: 0;
+            min-height: 0;
+            align-self: flex-start;
+            position: sticky;
+            top: 50px;
+            height: calc(100vh - 104px);
+            max-height: calc(100vh - 104px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            padding-bottom: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .mfy-left-sidebar::-webkit-scrollbar,
+            .mfy-right-sidebar::-webkit-scrollbar { width: 6px; }
+            .mfy-left-sidebar::-webkit-scrollbar-track,
+            .mfy-right-sidebar::-webkit-scrollbar-track { background: var(--mfy-bg); }
+            .mfy-left-sidebar::-webkit-scrollbar-thumb,
+            .mfy-right-sidebar::-webkit-scrollbar-thumb { background: var(--mfy-border); border-radius: 3px; }
+            .mfy-left-sidebar::-webkit-scrollbar-thumb:hover,
+            .mfy-right-sidebar::-webkit-scrollbar-thumb:hover { background: var(--mfy-text-light); }
+        }
+
+        /* ── Suggestion follow buttons ── */
+        .mfy-user-suggestion-btn-primary {
+          flex: 1;
+          padding: 10px;
+          background: var(--mfy-primary);
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-weight: 500;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          font-size: 14px;
+        }
+
+        .mfy-user-suggestion-btn-secondary {
+          flex: 1;
+          padding: 10px;
+          background: transparent;
+          color: var(--mfy-primary);
+          border: 1px solid var(--mfy-primary);
+          border-radius: 6px;
+          font-weight: 500;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          font-size: 14px;
+        }
+
+        .mfy-user-suggestion-btn-primary:hover,
+        .mfy-user-suggestion-btn-secondary:hover {
+          opacity: 0.9;
+        }
+
+        /* ── Sidebar social (Following/F followers) ── */
+        .mfy-sidebar-social {
+          background: var(--mfy-white);
+          border-radius: 12px;
+          overflow: hidden;
+        }
+
+        .mfy-sidebar-tabs {
+          display: flex;
+          border-bottom: 1px solid var(--mfy-border);
+        }
+
+        .mfy-sidebar-tab {
+          flex: 1;
+          padding: 12px 8px;
+          background: none;
+          border: none;
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--mfy-text-light);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          transition: all 0.2s ease;
+          border-bottom: 2px solid transparent;
+          margin-bottom: -1px;
+          font-family: inherit;
+        }
+
+        .mfy-sidebar-tab:hover {
+          color: var(--mfy-text);
+          background: var(--mfy-bg);
+        }
+
+        .mfy-sidebar-tab.active {
+          color: var(--mfy-primary);
+          border-bottom-color: var(--mfy-primary);
+          background: none;
+        }
+
+        .mfy-sidebar-tab-count {
+          background: var(--mfy-border);
+          color: var(--mfy-text);
+          font-size: 10px;
+          font-weight: 700;
+          padding: 1px 6px;
+          border-radius: 10px;
+          min-width: 18px;
+          text-align: center;
+          transition: background 0.2s, color 0.2s;
+        }
+
+        .mfy-sidebar-tab.active .mfy-sidebar-tab-count {
+          background: rgba(0, 149, 246, 0.12);
+          color: var(--mfy-primary);
+        }
+
+        .mfy-sidebar-tab-panel {
+          display: none;
+          max-height: 340px;
+          overflow-y: auto;
+          padding: 8px 0;
+          scrollbar-width: thin;
+          scrollbar-color: var(--mfy-border) transparent;
+        }
+
+        .mfy-sidebar-tab-panel::-webkit-scrollbar { width: 4px; }
+        .mfy-sidebar-tab-panel::-webkit-scrollbar-thumb { background: var(--mfy-border); border-radius: 2px; }
+
+        .mfy-sidebar-tab-panel.active {
+          display: block;
+        }
+
+        .mfy-sidebar-user-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 14px;
+          text-decoration: none;
+          transition: background 0.15s ease;
+          border-radius: 0;
+        }
+
+        .mfy-sidebar-user-row:hover {
+          background: var(--mfy-bg);
+        }
+
+        .mfy-sidebar-avatar {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          object-fit: cover;
+          flex-shrink: 0;
+          border: 1px solid var(--mfy-border);
+        }
+
+        .mfy-sidebar-user-info {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .mfy-sidebar-user-name {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--mfy-text);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .mfy-sidebar-user-handle {
+          font-size: 11px;
+          color: var(--mfy-text-light);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .mfy-sidebar-empty {
+          text-align: center;
+          padding: 24px 16px;
+          color: var(--mfy-text-light);
+        }
+
+        .mfy-sidebar-empty i {
+          font-size: 22px;
+          margin-bottom: 8px;
+          opacity: 0.4;
+          display: block;
+        }
+
+        .mfy-sidebar-empty p {
+          font-size: 12px;
+        }
+
+        .mfy-conn-spinner {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          color: var(--mfy-primary);
+          font-size: 20px;
+        }
+
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: flex; }
+
+        .mfy-conn-load-more {
+          display: block;
+          width: 100%;
+          padding: 10px;
+          background: none;
+          border: none;
+          border-top: 1px solid var(--mfy-border);
+          color: var(--mfy-primary);
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          text-align: center;
+          transition: background 0.15s;
+        }
+        .mfy-conn-load-more:hover {
+          background: var(--mfy-bg);
+        }
+
+        /* ── Right-sidebar widgets ── */
+        .mfy-side-stack {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .mfy-profile-card {
+          background: var(--mfy-white);
+          border-radius: 12px;
+          padding: 18px;
+        }
+
+        .mfy-profile-card-top {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+
+        .mfy-profile-card-avatar {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          object-fit: cover;
+          flex-shrink: 0;
+          border: 1px solid var(--mfy-border);
+        }
+
+        .mfy-profile-card-name-wrap {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .mfy-profile-card-name {
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--mfy-text);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .mfy-profile-card-username {
+          font-size: 13px;
+          color: var(--mfy-text-light);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .mfy-profile-card-stats {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 4px 0 16px;
+          margin-bottom: 4px;
+          border-bottom: 1px solid var(--mfy-border);
+        }
+
+        .mfy-profile-card-stat {
+          flex: 1;
+          text-align: center;
+          text-decoration: none;
+          color: inherit;
+          display: block;
+        }
+
+        .mfy-profile-card-stat-num {
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--mfy-text);
+          display: block;
+        }
+
+        .mfy-profile-card-stat-label {
+          font-size: 11px;
+          color: var(--mfy-text-light);
+          margin-top: 2px;
+          display: block;
+        }
+
+        .mfy-side-card {
+          background: var(--mfy-white);
+          border-radius: 12px;
+          padding: 16px;
+        }
+
+        .mfy-side-card-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 6px;
+        }
+
+        .mfy-side-card-title {
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--mfy-text);
+        }
+
+        .mfy-side-card-seeall {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--mfy-primary);
+          text-decoration: none;
+        }
+        .mfy-side-card-seeall:hover { text-decoration: underline; }
+
+        .mfy-shortcut-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 2px;
+          text-decoration: none;
+          color: var(--mfy-text);
+          border-radius: 8px;
+          transition: background 0.15s;
+        }
+        .mfy-shortcut-row:hover { background: var(--mfy-bg); }
+
+        .mfy-shortcut-icon {
+          width: 20px;
+          text-align: center;
+          color: var(--mfy-text-light);
+          font-size: 15px;
+          flex-shrink: 0;
+        }
+
+        .mfy-shortcut-label {
+          flex: 1;
+          font-size: 13.5px;
+          font-weight: 500;
+          color: var(--mfy-text);
+        }
+
+        .mfy-shortcut-chevron {
+          color: var(--mfy-text-light);
+          font-size: 12px;
+          flex-shrink: 0;
+        }
+
+        .mfy-sugg-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 2px;
+          transition: opacity 0.3s;
+        }
+
+        .mfy-sugg-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          object-fit: cover;
+          flex-shrink: 0;
+          border: 1px solid var(--mfy-border);
+        }
+
+        .mfy-sugg-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .mfy-sugg-name {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--mfy-text);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .mfy-sugg-handle {
+          font-size: 12px;
+          color: var(--mfy-text-light);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .mfy-sugg-actions {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-shrink: 0;
+        }
+
+        .mfy-sugg-follow-btn {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--mfy-primary);
+          background: rgba(0,149,246,0.08);
+          border: none;
+          border-radius: 6px;
+          padding: 7px 12px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background 0.15s, color 0.15s;
+        }
+        .mfy-sugg-follow-btn:hover { background: var(--mfy-primary); color: #fff; }
+        .mfy-sugg-follow-btn.is-following {
+          background: var(--mfy-bg);
+          color: var(--mfy-text-light);
+        }
+
+        .mfy-sugg-dismiss {
+          width: 22px;
+          height: 22px;
+          border: none;
+          background: none;
+          color: var(--mfy-text-light);
+          font-size: 11px;
+          cursor: pointer;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: background 0.15s, color 0.15s;
+        }
+        .mfy-sugg-dismiss:hover { background: var(--mfy-bg); color: var(--mfy-text); }
+
+        .mfy-grow-card {
+          background: linear-gradient(165deg, #eaf6ff 0%, #dbeeff 100%);
+          border-radius: 12px;
+          padding: 18px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .mfy-grow-card-title {
+          font-size: 15px;
+          font-weight: 700;
+          color: #0d3a63;
+          margin-bottom: 6px;
+        }
+
+        .mfy-grow-card-text {
+          font-size: 12.5px;
+          color: #3c6a92;
+          line-height: 1.5;
+          max-width: 78%;
+          margin-bottom: 14px;
+        }
+
+        .mfy-grow-card-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: #fff;
+          color: var(--mfy-primary);
+          font-size: 13px;
+          font-weight: 700;
+          padding: 9px 16px;
+          border-radius: 8px;
+          text-decoration: none;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .mfy-grow-card-illustration {
+          position: absolute;
+          right: 12px;
+          bottom: 8px;
+          font-size: 46px;
+          opacity: 0.9;
+          line-height: 1;
+        }
+
+        .mfy-mybiz-card {
+          background: var(--mfy-white);
+          border: 1px solid var(--mfy-border);
+          border-radius: 12px;
+          padding: 16px;
+        }
+
+        .mfy-mybiz-header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          text-decoration: none;
+          margin-bottom: 14px;
+        }
+
+        .mfy-mybiz-logo {
+          width: 44px;
+          height: 44px;
+          border-radius: 10px;
+          flex-shrink: 0;
+          object-fit: cover;
+          background: var(--mfy-bg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--mfy-text-light);
+          font-size: 18px;
+        }
+
+        .mfy-mybiz-info {
+          min-width: 0;
+        }
+
+        .mfy-mybiz-label {
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--mfy-text-light);
+          text-transform: uppercase;
+          letter-spacing: .3px;
+          margin-bottom: 2px;
+        }
+
+        .mfy-mybiz-name {
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--mfy-text);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .mfy-mybiz-stats {
+          display: flex;
+          border-top: 1px solid var(--mfy-border);
+          padding-top: 12px;
+          margin-bottom: 12px;
+        }
+
+        .mfy-mybiz-stat {
+          flex: 1;
+          text-align: center;
+        }
+
+        .mfy-mybiz-stat-num {
+          display: block;
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--mfy-text);
+        }
+
+        .mfy-mybiz-stat-label {
+          font-size: 11px;
+          color: var(--mfy-text-light);
+        }
+
+        .mfy-mybiz-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          width: 100%;
+          background: var(--mfy-bg);
+          color: var(--mfy-primary);
+          font-size: 13px;
+          font-weight: 700;
+          padding: 9px 16px;
+          border-radius: 8px;
+          text-decoration: none;
+        }
+
+        .mfy-mybiz-more {
+          display: block;
+          text-align: center;
+          font-size: 12px;
+          color: var(--mfy-text-light);
+          margin-top: 10px;
+          text-decoration: none;
+        }
+
+        .mfy-mybiz-more:hover {
+          color: var(--mfy-primary);
+        }
+
+        .mfy-toast {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: var(--mfy-primary);
+          color: white;
+          padding: 12px 20px;
+          border-radius: 6px;
+          font-size: 14px;
+          z-index: 9999;
+          animation: mfySlideIn 0.3s ease;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        @keyframes mfySlideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes mfySlideOut {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(100%); opacity: 0; }
+        }
+
+        .kprof-suggest-card {
+            background: var(--mfy-white); border: 1px solid var(--mfy-border);
+            border-radius: 16px; padding: 18px 16px;
+        }
+        .kprof-suggest-head {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+        }
+        .kprof-suggest-head h3 { font-size: 15px; font-weight: 800; }
+        .kprof-suggest-head a { font-size: 12px; color: var(--mfy-text-light); font-weight: 600; text-decoration: none; }
+        .kprof-suggest-head a:hover { color: var(--mfy-primary); }
+
+        .kprof-suggest-row {
+            display: flex; align-items: center; gap: 10px; padding: 8px 0;
+        }
+        .kprof-suggest-avatar {
+            width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
+            background: #e5e5e5; flex-shrink: 0;
+        }
+        .kprof-suggest-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .kprof-suggest-info { flex: 1; min-width: 0; }
+        .kprof-suggest-name {
+            font-size: 13px; font-weight: 700; color: var(--mfy-text); text-decoration: none;
+            display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .kprof-suggest-sub { font-size: 12px; color: var(--mfy-text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .kprof-suggest-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .kprof-suggest-follow {
+            padding: 6px 14px; border-radius: 8px; border: none; cursor: pointer;
+            background: var(--mfy-primary); color: #fff; font-size: 12px; font-weight: 700;
+            font-family: inherit; white-space: nowrap; transition: background .15s, opacity .15s;
+        }
+        .kprof-suggest-follow:hover { background: var(--mfy-primary-dark); }
+        .kprof-suggest-follow.following { background: var(--mfy-white); color: var(--mfy-text); border: 1.5px solid var(--mfy-border); }
+        .kprof-suggest-dismiss {
+            background: none; border: none; color: var(--mfy-text-light); cursor: pointer;
+            font-size: 13px; padding: 4px; line-height: 1;
+        }
+        .kprof-suggest-dismiss:hover { color: var(--mfy-text); }
+        .kprof-suggest-row.dismissed { display: none; }
+
+        .kprof-suggest-invite {
+            margin-top: 16px; padding: 14px 12px; background: var(--mfy-bg);
+            border-radius: 12px; display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; text-decoration: none; color: inherit;
+        }
+        .kprof-suggest-invite-icon {
+            width: 36px; height: 36px; border-radius: 50%; background: #e8f6ff;
+            display: flex; align-items: center; justify-content: center; color: var(--mfy-primary);
+            flex-shrink: 0; font-size: 14px;
+        }
+        .kprof-suggest-invite-text strong { display: block; font-size: 13px; font-weight: 700; }
+        .kprof-suggest-invite-text span { font-size: 11px; color: var(--mfy-text-light); }
+
+        .kprof-suggest-footer {
+            margin-top: 18px; font-size: 11px; color: var(--mfy-text-light); line-height: 1.8;
+        }
+        .kprof-suggest-footer a { color: var(--mfy-text-light); text-decoration: none; }
+        .kprof-suggest-footer a:hover { text-decoration: underline; }
+
+        @media (max-width: 1023px) { .mfy-right-sidebar { display: none; } }
+
+        /* ===== MOBILE "MORE" SIDEBAR (same as profile page) ===== */
+        .mfy-mobile-sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 1100;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .mfy-mobile-sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+        .mfy-mobile-right-sidebar {
+            position: fixed;
+            top: 0;
+            right: -100%;
+            width: 82vw;
+            max-width: 320px;
+            height: 100dvh;
+            background: var(--mfy-white);
+            z-index: 1101;
+            overflow-y: auto;
+            transition: right 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+            padding-bottom: 80px;
+        }
+
+        .mfy-mobile-right-sidebar.open {
+            right: 0;
+        }
+
+        .mfy-mobile-sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--mfy-border);
+            position: sticky;
+            top: 0;
+            background: var(--mfy-white);
+            z-index: 2;
+        }
+
+        .mfy-mobile-sidebar-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--mfy-text);
+        }
+
+        .mfy-mobile-sidebar-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: var(--mfy-bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--mfy-text);
+            font-size: 16px;
+        }
+
+        .mfy-mobile-sidebar-body {
+            padding: 16px;
+        }
+
+        .mfy-mobile-sidebar-toggle {
+            display: none;
+        }
+
+        @media (max-width: 767px) {
+            .mfy-mobile-sidebar-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: fixed;
+                top: 50%;
+                right: 0;
+                transform: translateY(-50%);
+                z-index: 1050;
+                background: var(--mfy-primary);
+                color: white;
+                border: none;
+                border-radius: 8px 0 0 8px;
+                width: 28px;
+                height: 64px;
+                cursor: pointer;
+                box-shadow: -2px 2px 10px rgba(0,0,0,0.18);
+                flex-direction: column;
+                gap: 4px;
+                padding: 0;
+            }
+
+            .mfy-mobile-sidebar-toggle i {
+                font-size: 13px;
+            }
+
+            .mfy-mobile-sidebar-toggle span {
+                font-size: 9px;
+                font-weight: 700;
+                writing-mode: vertical-rl;
+                text-orientation: mixed;
+                letter-spacing: 0.5px;
+            }
+        }
     </style>
 </head>
 <body>
 
 {% include 'header.html' %}
+
+<main class="mfy-container">
+<div class="mfy-desktop-layout">
+
+  <!-- Left Sidebar - Main Navigation (Desktop) -->
+  <aside class="mfy-left-sidebar mfy-desktop-only">
+    <div class="mfy-desktop-nav">
+      <!-- Home -->
+      <a href="{% url 'home' %}" class="mfy-desktop-nav-item" title="Home">
+        <div class="mfy-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="mfy-desktop-nav-label">Home</span>
+      </a>
+
+      <!-- Search -->
+      <a href="{% url 'search' %}" class="mfy-desktop-nav-item" title="Search">
+        <div class="mfy-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="mfy-desktop-nav-label">Search</span>
+      </a>
+
+      <!-- Notifications -->
+      <a href="{% url 'notification_list' %}" class="mfy-desktop-nav-item" title="Notifications">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-regular fa-bell" style="font-size: 20px; color: var(--mfy-text-light);"></i>
+          {% if unread_notifications_count and unread_notifications_count > 0 %}
+          <span class="mfy-desktop-notification-badge">{{ unread_notifications_count }}</span>
+          {% endif %}
+        </div>
+        <span class="mfy-desktop-nav-label">Alerts</span>
+      </a>
+
+      <!-- Profile / My Business -->
+      <a href="{% url 'business_pages_mine' %}" class="mfy-desktop-nav-item" title="Profile">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-regular fa-user" style="font-size: 20px; color: var(--mfy-text-light);"></i>
+        </div>
+        <span class="mfy-desktop-nav-label">My Business</span>
+      </a>
+
+      <!-- Logout -->
+      <a href="#" class="mfy-desktop-nav-item logout" title="Log Out" id="desktopLogoutIcon">
+        <div class="mfy-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </div>
+        <span class="mfy-desktop-nav-label">Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main business page content -->
+  <div class="kbiz-main-col">
 
 <!-- Topbar -->
 <header class="kbiz-topbar">
@@ -494,7 +1502,7 @@
 
     {% if is_owner %}
     <a href="{% url 'business_page_edit' slug=page.slug %}" class="kbiz-edit-link">
-        <i class="fas fa-pen"></i> Edit Page
+        <i class="fas fa-pen"></i> Edit
     </a>
     {% endif %}
 </header>
@@ -511,12 +1519,14 @@
 <!-- Page header card -->
 <div class="kbiz-page-header">
     <div class="kbiz-logo-row">
-        <div class="kbiz-logo">
-            {% if page.get_logo_url %}
-            <img src="{{ page.get_logo_url }}" alt="{{ page.name }} logo">
-            {% else %}
-            <div class="kbiz-logo-ph"><i class="fas fa-store"></i></div>
-            {% endif %}
+        <div class="kbiz-header-left">
+            <div class="kbiz-logo">
+                {% if page.get_logo_url %}
+                <img src="{{ page.get_logo_url }}" alt="{{ page.name }} logo">
+                {% else %}
+                <div class="kbiz-logo-ph"><i class="fas fa-store"></i></div>
+                {% endif %}
+            </div>
         </div>
 
         {% if not is_owner %}
@@ -530,7 +1540,7 @@
 
     <div class="kbiz-page-name">
         {{ page.name }}
-        {% if page.is_verified %}<i class="fas fa-check-circle" style="color:var(--mfy-primary);font-size:16px;"></i>{% endif %}
+        {% if page.is_verified %}<i class="fas fa-check-circle"></i>{% endif %}
     </div>
     <div class="kbiz-page-cat">{{ page.get_category_display }}</div>
     {% if page.tagline %}<div class="kbiz-page-tag">{{ page.tagline }}</div>{% endif %}
@@ -653,7 +1663,7 @@
         <h2>All Listings</h2>
         {% if is_owner %}
         <button class="kbiz-upload-btn" onclick="openModal()">
-            <i class="fas fa-plus"></i> Upload Listing
+            <i class="fas fa-plus"></i> Upload
         </button>
         {% endif %}
     </div>
@@ -661,7 +1671,6 @@
     {% if listings %}
     <div class="kbiz-jgrid" id="listingsGrid">
         {% for product in listings %}
-        {# Full Jumia-style product card — same details as the home feed market card #}
         <article class="mfy-jcard" data-market-id="{{ product.product_id }}">
 
             {% with imgs=product.images.all %}
@@ -684,13 +1693,8 @@
                     >
                     {% endif %}
 
-                    {# Views badge — top-right #}
                     <span class="mfy-jcard-views"><i class="fas fa-eye"></i> {{ product.views_count|default:0 }}</span>
-
-                    {# Category badge — top-left #}
                     <span class="mfy-jcard-category-badge">{{ product.category_icon }} {{ product.category_label }}</span>
-
-                    {# Image-count badge — bottom-right, only when there's more than one photo #}
                     {% if imgs|length > 1 %}
                     <span class="mfy-jcard-img-count"><i class="fas fa-images"></i> {{ imgs|length }}</span>
                     {% endif %}
@@ -698,13 +1702,10 @@
             </a>
             {% endwith %}
 
-            {# Product info body #}
             <a href="{% url 'product_detail' product.product_id %}" class="mfy-jcard-body-link">
                 <div class="mfy-jcard-body">
-                    {# Product name #}
                     <div class="mfy-jcard-name">{{ product.product_name|truncatechars:60 }}</div>
 
-                    {# Rating — stars + review count, shown once the listing has reviews #}
                     {% if product.review_count %}
                     <div class="mfy-jcard-rating">
                         <span class="mfy-jcard-rating-stars">
@@ -714,7 +1715,6 @@
                     </div>
                     {% endif %}
 
-                    {# Meta line — condition / location / availability #}
                     <div class="mfy-jcard-meta">
                         {% if product.product_condition %}<span class="mfy-jcard-meta-txt">{{ product.product_condition }}</span>{% endif %}
                         {% if product.product_location %}<span class="mfy-jcard-meta-txt">{{ product.product_location }}</span>{% endif %}
@@ -724,7 +1724,6 @@
                 </div>
             </a>
 
-            {# Price + wishlist row #}
             <div class="mfy-jcard-price-row">
                 <span class="mfy-jcard-price">₦{{ product.product_price|floatformat:"0"|intcomma }}</span>
                 {% if request.user != product.product_owner %}
@@ -746,7 +1745,7 @@
         <i class="fas fa-box-open"></i>
         {% if is_owner %}
         <strong>No listings yet</strong><br>
-        <small>Tap "Upload Listing" to post your first item.</small>
+        <small>Tap "Upload" to post your first item.</small>
         {% else %}
         <strong>No listings yet</strong><br>
         <small>Check back soon!</small>
@@ -761,7 +1760,7 @@
         <h2>Job Vacancies</h2>
         {% if is_owner %}
         <button class="kbiz-upload-btn" onclick="openJobModal()">
-            <i class="fas fa-plus"></i> Post a Job
+            <i class="fas fa-plus"></i> Post Job
         </button>
         {% endif %}
     </div>
@@ -815,7 +1814,7 @@
         <i class="fas fa-briefcase"></i>
         {% if is_owner %}
         <strong>No jobs posted yet</strong><br>
-        <small>Tap "Post a Job" to advertise your first vacancy.</small>
+        <small>Tap "Post Job" to advertise your first vacancy.</small>
         {% else %}
         <strong>No open vacancies right now</strong><br>
         <small>Check back soon!</small>
@@ -854,7 +1853,6 @@
         <div class="kbiz-modal-handle"></div>
         <div class="kbiz-modal-title">Add New Listing</div>
 
-        <!-- Photos -->
         <div class="kbiz-photo-row" id="photoRow">
             <label class="kbiz-add-photo" for="photoInput">
                 <i class="fas fa-camera fa-lg"></i>
@@ -863,7 +1861,6 @@
         </div>
         <input type="file" id="photoInput" accept="image/*" multiple style="display:none;">
 
-        <!-- Fields — matching Market model field names -->
         <div class="kbiz-field">
             <label class="kbiz-label">Product / Ad Title *</label>
             <input class="kbiz-input" id="upName" type="text" placeholder="What are you selling?">
@@ -939,10 +1936,8 @@
         <button class="kbiz-modal-cancel" onclick="closeModal()">Cancel</button>
     </div>
 </div>
-{% endif %}
 
 <!-- ── Job vacancy modal (owner only) ── -->
-{% if is_owner %}
 <div class="kbiz-overlay" id="jobOverlay">
     <div class="kbiz-modal">
         <div class="kbiz-modal-handle"></div>
@@ -1007,18 +2002,682 @@
 
 <!-- Toast -->
 <div class="kbiz-toast" id="toast"></div>
+
+  </div><!-- /.kbiz-main-col -->
+
+  <!-- Right Sidebar - Same content as home page / profile page -->
+  <aside class="mfy-right-sidebar mfy-desktop-only">
+    <div class="mfy-side-stack">
+
+      <!-- ── Profile summary card (logged-in viewer) ── -->
+      <div class="mfy-profile-card">
+        <div class="mfy-profile-card-top">
+          <img src="{{ request.user.profile.get_picture_url }}" alt="{{ request.user.username }}" class="mfy-profile-card-avatar">
+          <div class="mfy-profile-card-name-wrap">
+            <div class="mfy-profile-card-name">
+              {{ request.user.profile.full_name|default:request.user.username }}
+              {% if request.user.profile.is_verify %}
+              <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" loading="lazy">
+              {% endif %}
+            </div>
+            <div class="mfy-profile-card-username">@{{ request.user.username }}</div>
+          </div>
+        </div>
+
+        <div class="mfy-profile-card-stats">
+          <a href="{% url 'profile' request.user.username %}" class="mfy-profile-card-stat">
+            <span class="mfy-profile-card-stat-num">{{ request.user.products.count }}</span>
+            <span class="mfy-profile-card-stat-label">Listings</span>
+          </a>
+          <a href="{% url 'following' request.user.username %}" class="mfy-profile-card-stat">
+            <span class="mfy-profile-card-stat-num">{{ viewer_following_count }}</span>
+            <span class="mfy-profile-card-stat-label">Following</span>
+          </a>
+          <a href="{% url 'followers' request.user.username %}" class="mfy-profile-card-stat">
+            <span class="mfy-profile-card-stat-num">{{ viewer_follower_count }}</span>
+            <span class="mfy-profile-card-stat-label">Followers</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- ── Shortcuts ────────────────────────────────────────── -->
+      <div class="mfy-side-card">
+        <div class="mfy-side-card-header">
+          <span class="mfy-side-card-title">Shortcuts</span>
+          <a href="{% url 'profile' request.user.username %}" class="mfy-side-card-seeall">See all</a>
+        </div>
+
+        <a href="{% url 'profile' request.user.username %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-list-ul"></i></span>
+          <span class="mfy-shortcut-label">My Listings</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'wishlist' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-regular fa-bookmark"></i></span>
+          <span class="mfy-shortcut-label">Saved Items</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="#" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-file-invoice"></i></span>
+          <span class="mfy-shortcut-label">My Orders</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="#" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-wallet"></i></span>
+          <span class="mfy-shortcut-label">Wallet</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'following' request.user.username %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-user-plus"></i></span>
+          <span class="mfy-shortcut-label">Following</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'channel_create' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-regular fa-newspaper"></i></span>
+          <span class="mfy-shortcut-label">Channels</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'services' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fa-solid fa-briefcase"></i></span>
+          <span class="mfy-shortcut-label">Services</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        <a href="{% url 'business_pages_list' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fas fa-store"></i></span>
+          <span class="mfy-shortcut-label">Businesses Directory</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        {% if request.user.is_staff or request.user.is_superuser %}
+        <a href="{% url 'admin_dashboard' %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon"><i class="fas fa-shield-alt"></i></span>
+          <span class="mfy-shortcut-label">Dashboard</span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+        </a>
+        {% endif %}
+      </div>
+
+      <!-- ── Suggested for you (users) ───────────────────────────── -->
+      {% if sidebar_suggested_users %}
+      <div class="mfy-side-card">
+        <div class="mfy-side-card-header">
+          <span class="mfy-side-card-title">Suggested for you</span>
+          <a href="{% url 'search' %}" class="mfy-side-card-seeall">See all</a>
+        </div>
+
+        {% for u in sidebar_suggested_users %}
+        <div class="mfy-sugg-row mfy-user-suggestion" data-user-id="{{ u.id }}">
+          <a href="{% url 'profile' u.username %}"><img src="{{ u.profile.get_picture_url }}" alt="{{ u.username }}" class="mfy-sugg-avatar"></a>
+          <a href="{% url 'profile' u.username %}" class="mfy-sugg-info" style="text-decoration:none;">
+            <div class="mfy-sugg-name">
+              {{ u.profile.full_name|default:u.username }}
+              {% if u.profile.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+            </div>
+            <div class="mfy-sugg-handle">@{{ u.username }}</div>
+          </a>
+          <div class="mfy-sugg-actions">
+            <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.username }}')">Follow</button>
+            <button class="mfy-sugg-dismiss" aria-label="Dismiss suggestion" onclick="this.closest('.mfy-sugg-row').style.opacity='0'; setTimeout(()=>this.closest('.mfy-sugg-row').remove(),250);">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if viewer_primary_business_page %}
+      <!-- ── Your business page ──────────────────────────────────── -->
+      <div class="mfy-mybiz-card">
+        <a href="{% url 'business_page_detail' viewer_primary_business_page.slug %}" class="mfy-mybiz-header">
+          {% if viewer_primary_business_page.get_logo_url %}
+          <img src="{{ viewer_primary_business_page.get_logo_url }}" alt="{{ viewer_primary_business_page.name }}" class="mfy-mybiz-logo">
+          {% else %}
+          <span class="mfy-mybiz-logo"><i class="fas fa-store"></i></span>
+          {% endif %}
+          <div class="mfy-mybiz-info">
+            <div class="mfy-mybiz-label">Your business page</div>
+            <div class="mfy-mybiz-name">
+              {{ viewer_primary_business_page.name }}
+              {% if viewer_primary_business_page.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+            </div>
+          </div>
+        </a>
+        <div class="mfy-mybiz-stats">
+          <div class="mfy-mybiz-stat">
+            <span class="mfy-mybiz-stat-num">{{ viewer_primary_business_page.follower_count }}</span>
+            <span class="mfy-mybiz-stat-label">Followers</span>
+          </div>
+          <div class="mfy-mybiz-stat">
+            <span class="mfy-mybiz-stat-num">{{ viewer_primary_business_page.listing_count }}</span>
+            <span class="mfy-mybiz-stat-label">Products</span>
+          </div>
+        </div>
+        <a href="{% url 'business_page_detail' viewer_primary_business_page.slug %}" class="mfy-mybiz-btn">
+          <i class="fas fa-store"></i> Manage Page
+        </a>
+        {% if viewer_business_page_count > 1 %}
+        {% with extra=viewer_business_page_count|add:"-1" %}
+        <a href="{% url 'business_pages_mine' %}" class="mfy-mybiz-more">+{{ extra }} more page{{ extra|pluralize }}</a>
+        {% endwith %}
+        {% endif %}
+      </div>
+      {% else %}
+      <!-- ── Grow your business ──────────────────────────────────── -->
+      <div class="mfy-grow-card">
+        <div class="mfy-grow-card-title">Grow your business</div>
+        <div class="mfy-grow-card-text">Create a Business Page and reach more customers.</div>
+        <a href="{% url 'business_page_create' %}" class="mfy-grow-card-btn">Create Page</a>
+        <span class="mfy-grow-card-illustration">🏪</span>
+      </div>
+      {% endif %}
+
+      <!-- ── Following / Followers (logged-in viewer's own network) ── -->
+      <div class="mfy-sidebar-social">
+
+        <div class="mfy-sidebar-tabs">
+          <button class="mfy-sidebar-tab active" data-tab="following"
+                  onclick="mfySwitchTab('following', this); mfyLoadConnectionsOnce('following')">
+            Following
+            <span class="mfy-sidebar-tab-count">{{ viewer_following_count }}</span>
+          </button>
+          <button class="mfy-sidebar-tab" data-tab="followers"
+                  onclick="mfySwitchTab('followers', this); mfyLoadConnectionsOnce('followers')">
+            Followers
+            <span class="mfy-sidebar-tab-count">{{ viewer_follower_count }}</span>
+          </button>
+        </div>
+
+        <!-- Following List (HTMX paginated) -->
+        <div class="mfy-sidebar-tab-panel active" id="mfy-tab-following">
+          <div id="mfy-following-list"
+               hx-get="{% url 'sidebar_connections' %}?type=following&page=1"
+               hx-trigger="load"
+               hx-swap="innerHTML"
+               hx-indicator="#mfy-following-spinner">
+            <div id="mfy-following-spinner" class="mfy-conn-spinner htmx-indicator">
+              <i class="fas fa-circle-notch fa-spin"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Followers List (HTMX paginated) -->
+        <div class="mfy-sidebar-tab-panel" id="mfy-tab-followers">
+          <div id="mfy-followers-list">
+            <!-- loaded lazily when tab is first activated -->
+          </div>
+        </div>
+
+      </div><!-- end .mfy-sidebar-social -->
+
+      <!-- ── Suggestions for you (Business Pages) ── -->
+      {% if suggested_pages %}
+      <div class="kprof-suggest-card">
+          <div class="kprof-suggest-head">
+              <h3>Suggestions for you</h3>
+              <a href="{% url 'business_pages_list' %}">See all</a>
+          </div>
+          {% for page in suggested_pages %}
+          <div class="kprof-suggest-row" id="suggestRow-{{ page.slug }}">
+              <a href="{% url 'business_page_detail' page.slug %}" class="kprof-suggest-avatar">
+                  {% if page.get_logo_url %}
+                  <img src="{{ page.get_logo_url }}" alt="{{ page.name }}">
+                  {% else %}
+                  <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#e8f6ff;color:var(--mfy-primary);">
+                      <i class="fas fa-store"></i>
+                  </div>
+                  {% endif %}
+              </a>
+              <div class="kprof-suggest-info">
+                  <a href="{% url 'business_page_detail' page.slug %}" class="kprof-suggest-name">
+                      {{ page.name }}{% if page.is_verified %} <i class="fas fa-check-circle" style="color:var(--mfy-primary);font-size:11px;"></i>{% endif %}
+                  </a>
+                  <div class="kprof-suggest-sub">{{ page.get_category_display }}</div>
+              </div>
+              <div class="kprof-suggest-actions">
+                  <button type="button" class="kprof-suggest-follow"
+                          data-follow-url="{% url 'business_page_follow' page.slug %}"
+                          onclick="toggleSuggestionFollow(this)">Follow</button>
+                  <button type="button" class="kprof-suggest-dismiss" aria-label="Dismiss"
+                          onclick="dismissSuggestion('{{ page.slug }}')">
+                      <i class="fas fa-times"></i>
+                  </button>
+              </div>
+          </div>
+          {% endfor %}
+
+          <a href="{% url 'business_pages_list' %}" class="kprof-suggest-invite">
+              <div class="kprof-suggest-invite-icon"><i class="fas fa-store"></i></div>
+              <div class="kprof-suggest-invite-text">
+                  <strong>Discover businesses</strong>
+                  <span>Browse more pages on Marketfy</span>
+              </div>
+          </a>
+
+          <div class="kprof-suggest-footer">
+              <a href="{% url 'services' %}">Services</a> ·
+              <a href="{% url 'business_pages_list' %}">Businesses</a> ·
+              <a href="{% url 'search' %}">Explore</a><br>
+              © {% now "Y" %} Marketfy
+          </div>
+      </div>
+      {% endif %}
+
+    </div><!-- end .mfy-side-stack -->
+  </aside>
+
+</div><!-- /.mfy-desktop-layout -->
+</main>
+
 {% include 'footer.html' %}
+
+<!-- ===== MOBILE "MORE" SIDEBAR TOGGLE BUTTON ===== -->
+<button class="mfy-mobile-sidebar-toggle" id="mfy-mobile-sidebar-toggle" onclick="mfyOpenMobileSidebar()" aria-label="Open sidebar">
+  <i class="fas fa-chevron-left"></i>
+  <span>MORE</span>
+</button>
+
+<!-- ===== MOBILE "MORE" SIDEBAR OVERLAY ===== -->
+<div class="mfy-mobile-sidebar-overlay" id="mfy-mobile-sidebar-overlay" onclick="mfyCloseMobileSidebar()"></div>
+
+<!-- ===== MOBILE "MORE" SIDEBAR (same content as home page / profile page) ===== -->
+<aside class="mfy-mobile-right-sidebar" id="mfy-mobile-right-sidebar">
+  <div class="mfy-mobile-sidebar-header">
+    <span class="mfy-mobile-sidebar-title">Discover</span>
+    <button class="mfy-mobile-sidebar-close" onclick="mfyCloseMobileSidebar()" aria-label="Close sidebar">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <div class="mfy-mobile-sidebar-body">
+
+    <!-- ── Profile summary card (logged-in viewer) ─────────────── -->
+    <div class="mfy-profile-card">
+      <div class="mfy-profile-card-top">
+        <img src="{{ request.user.profile.get_picture_url }}" alt="{{ request.user.username }}" class="mfy-profile-card-avatar">
+        <div class="mfy-profile-card-name-wrap">
+          <div class="mfy-profile-card-name">
+            {{ request.user.profile.full_name|default:request.user.username }}
+            {% if request.user.profile.is_verify %}
+            <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" loading="lazy">
+            {% endif %}
+          </div>
+          <div class="mfy-profile-card-username">@{{ request.user.username }}</div>
+        </div>
+      </div>
+
+      <div class="mfy-profile-card-stats">
+        <a href="{% url 'profile' request.user.username %}" class="mfy-profile-card-stat">
+          <span class="mfy-profile-card-stat-num">{{ request.user.products.count }}</span>
+          <span class="mfy-profile-card-stat-label">Listings</span>
+        </a>
+        <a href="{% url 'following' request.user.username %}" class="mfy-profile-card-stat">
+          <span class="mfy-profile-card-stat-num">{{ viewer_following_count }}</span>
+          <span class="mfy-profile-card-stat-label">Following</span>
+        </a>
+        <a href="{% url 'followers' request.user.username %}" class="mfy-profile-card-stat">
+          <span class="mfy-profile-card-stat-num">{{ viewer_follower_count }}</span>
+          <span class="mfy-profile-card-stat-label">Followers</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ── Shortcuts ────────────────────────────────────────── -->
+    <div class="mfy-side-card">
+      <div class="mfy-side-card-header">
+        <span class="mfy-side-card-title">Shortcuts</span>
+        <a href="{% url 'profile' request.user.username %}" class="mfy-side-card-seeall">See all</a>
+      </div>
+
+      <a href="{% url 'profile' request.user.username %}" class="mfy-shortcut-row">
+        <span class="mfy-shortcut-icon"><i class="fa-solid fa-list-ul"></i></span>
+        <span class="mfy-shortcut-label">My Listings</span>
+        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+      </a>
+      <a href="{% url 'wishlist' %}" class="mfy-shortcut-row">
+        <span class="mfy-shortcut-icon"><i class="fa-regular fa-bookmark"></i></span>
+        <span class="mfy-shortcut-label">Saved Items</span>
+        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+      </a>
+      <a href="#" class="mfy-shortcut-row">
+        <span class="mfy-shortcut-icon"><i class="fa-solid fa-file-invoice"></i></span>
+        <span class="mfy-shortcut-label">My Orders</span>
+        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+      </a>
+      <a href="#" class="mfy-shortcut-row">
+        <span class="mfy-shortcut-icon"><i class="fa-solid fa-wallet"></i></span>
+        <span class="mfy-shortcut-label">Wallet</span>
+        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+      </a>
+      <a href="{% url 'following' request.user.username %}" class="mfy-shortcut-row">
+        <span class="mfy-shortcut-icon"><i class="fa-solid fa-user-plus"></i></span>
+        <span class="mfy-shortcut-label">Following</span>
+        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+      </a>
+      <a href="{% url 'channel_create' %}" class="mfy-shortcut-row">
+        <span class="mfy-shortcut-icon"><i class="fa-regular fa-newspaper"></i></span>
+        <span class="mfy-shortcut-label">Channels</span>
+        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+      </a>
+      <a href="{% url 'services' %}" class="mfy-shortcut-row">
+        <span class="mfy-shortcut-icon"><i class="fa-solid fa-briefcase"></i></span>
+        <span class="mfy-shortcut-label">Services</span>
+        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+      </a>
+      <a href="{% url 'business_pages_list' %}" class="mfy-shortcut-row">
+        <span class="mfy-shortcut-icon"><i class="fas fa-store"></i></span>
+        <span class="mfy-shortcut-label">Businesses Directory</span>
+        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+      </a>
+      {% if request.user.is_staff or request.user.is_superuser %}
+      <a href="{% url 'admin_dashboard' %}" class="mfy-shortcut-row">
+        <span class="mfy-shortcut-icon"><i class="fas fa-shield-alt"></i></span>
+        <span class="mfy-shortcut-label">Dashboard</span>
+        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
+      </a>
+      {% endif %}
+    </div>
+
+    <!-- ── Suggested for you (users) ───────────────────────────── -->
+    {% if sidebar_suggested_users %}
+    <div class="mfy-side-card">
+      <div class="mfy-side-card-header">
+        <span class="mfy-side-card-title">Suggested for you</span>
+        <a href="{% url 'search' %}" class="mfy-side-card-seeall">See all</a>
+      </div>
+
+      {% for u in sidebar_suggested_users %}
+      <div class="mfy-sugg-row mfy-user-suggestion" data-user-id="{{ u.id }}">
+        <a href="{% url 'profile' u.username %}"><img src="{{ u.profile.get_picture_url }}" alt="{{ u.username }}" class="mfy-sugg-avatar"></a>
+        <a href="{% url 'profile' u.username %}" class="mfy-sugg-info" style="text-decoration:none;">
+          <div class="mfy-sugg-name">
+            {{ u.profile.full_name|default:u.username }}
+            {% if u.profile.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+          </div>
+          <div class="mfy-sugg-handle">@{{ u.username }}</div>
+        </a>
+        <div class="mfy-sugg-actions">
+          <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.username }}')">Follow</button>
+          <button class="mfy-sugg-dismiss" aria-label="Dismiss suggestion" onclick="this.closest('.mfy-sugg-row').style.opacity='0'; setTimeout(()=>this.closest('.mfy-sugg-row').remove(),250);">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if viewer_primary_business_page %}
+    <!-- ── Your business page ──────────────────────────────────── -->
+    <div class="mfy-mybiz-card">
+      <a href="{% url 'business_page_detail' viewer_primary_business_page.slug %}" class="mfy-mybiz-header">
+        {% if viewer_primary_business_page.get_logo_url %}
+        <img src="{{ viewer_primary_business_page.get_logo_url }}" alt="{{ viewer_primary_business_page.name }}" class="mfy-mybiz-logo">
+        {% else %}
+        <span class="mfy-mybiz-logo"><i class="fas fa-store"></i></span>
+        {% endif %}
+        <div class="mfy-mybiz-info">
+          <div class="mfy-mybiz-label">Your business page</div>
+          <div class="mfy-mybiz-name">
+            {{ viewer_primary_business_page.name }}
+            {% if viewer_primary_business_page.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+          </div>
+        </div>
+      </a>
+      <div class="mfy-mybiz-stats">
+        <div class="mfy-mybiz-stat">
+          <span class="mfy-mybiz-stat-num">{{ viewer_primary_business_page.follower_count }}</span>
+          <span class="mfy-mybiz-stat-label">Followers</span>
+        </div>
+        <div class="mfy-mybiz-stat">
+          <span class="mfy-mybiz-stat-num">{{ viewer_primary_business_page.listing_count }}</span>
+          <span class="mfy-mybiz-stat-label">Products</span>
+        </div>
+      </div>
+      <a href="{% url 'business_page_detail' viewer_primary_business_page.slug %}" class="mfy-mybiz-btn">
+        <i class="fas fa-store"></i> Manage Page
+      </a>
+      {% if viewer_business_page_count > 1 %}
+      {% with extra=viewer_business_page_count|add:"-1" %}
+      <a href="{% url 'business_pages_mine' %}" class="mfy-mybiz-more">+{{ extra }} more page{{ extra|pluralize }}</a>
+      {% endwith %}
+      {% endif %}
+    </div>
+    {% else %}
+    <!-- ── Grow your business ──────────────────────────────────── -->
+    <div class="mfy-grow-card">
+      <div class="mfy-grow-card-title">Grow your business</div>
+      <div class="mfy-grow-card-text">Create a Business Page and reach more customers.</div>
+      <a href="{% url 'business_page_create' %}" class="mfy-grow-card-btn">Create Page</a>
+      <span class="mfy-grow-card-illustration">🏪</span>
+    </div>
+    {% endif %}
+
+    <!-- ── Following / Followers (logged-in viewer's own network) ── -->
+    <div class="mfy-sidebar-social" style="margin-bottom: 16px;">
+      <div class="mfy-sidebar-tabs">
+        <button class="mfy-sidebar-tab active" data-tab="mob-following"
+                onclick="mfySwitchTab('mob-following', this); mfyLoadConnectionsOnce('mob-following')">
+          Following
+          <span class="mfy-sidebar-tab-count">{{ viewer_following_count }}</span>
+        </button>
+        <button class="mfy-sidebar-tab" data-tab="mob-followers"
+                onclick="mfySwitchTab('mob-followers', this); mfyLoadConnectionsOnce('mob-followers')">
+          Followers
+          <span class="mfy-sidebar-tab-count">{{ viewer_follower_count }}</span>
+        </button>
+      </div>
+
+      <!-- Following List (HTMX paginated) -->
+      <div class="mfy-sidebar-tab-panel active" id="mfy-tab-mob-following">
+        <div id="mfy-mob-following-list"
+             hx-get="{% url 'sidebar_connections' %}?type=following&page=1"
+             hx-trigger="revealed"
+             hx-swap="innerHTML"
+             hx-indicator="#mfy-mob-following-spinner">
+          <div id="mfy-mob-following-spinner" class="mfy-conn-spinner htmx-indicator">
+            <i class="fas fa-circle-notch fa-spin"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Followers List (HTMX paginated) -->
+      <div class="mfy-sidebar-tab-panel" id="mfy-tab-mob-followers">
+        <div id="mfy-mob-followers-list">
+          <!-- loaded lazily when tab is first activated -->
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end .mfy-mobile-sidebar-body -->
+</aside>
+
 <script>
 const PAGE_SLUG  = '{{ page.slug }}';
 const CSRF_TOKEN = '{{ csrf_token }}';
 
-// ── Business hours panel ─────────────────────────────────────────────────────
+// ── Right-sidebar Following/Followers tabs (same behavior as profile page) ──
+function mfySwitchTab(tab, btn) {
+  const container = btn.closest('.mfy-sidebar-social');
+  if (!container) return;
+  container.querySelectorAll('.mfy-sidebar-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  container.querySelectorAll('.mfy-sidebar-tab-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('mfy-tab-' + tab);
+  if (panel) panel.classList.add('active');
+}
+
+const _mfyConnLoaded = new Set();
+
+function mfyLoadConnectionsOnce(tab) {
+  if (_mfyConnLoaded.has(tab)) return;
+  _mfyConnLoaded.add(tab);
+
+  const map = {
+    'followers':     { listId: 'mfy-followers-list',     type: 'followers' },
+    'mob-followers': { listId: 'mfy-mob-followers-list', type: 'followers' },
+  };
+  const cfg = map[tab];
+  if (!cfg) return;
+
+  const container = document.getElementById(cfg.listId);
+  if (!container) return;
+
+  container.innerHTML =
+    '<div class="mfy-conn-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>';
+
+  fetch(`{% url 'sidebar_connections' %}?type=${cfg.type}&page=1`, {
+    credentials: 'same-origin',
+    headers: { 'HX-Request': 'true', 'X-CSRFToken': CSRF_TOKEN }
+  })
+  .then(r => r.text())
+  .then(html => { container.innerHTML = html; if (window.htmx) htmx.process(container); })
+  .catch(() => {
+    container.innerHTML =
+      '<div class="mfy-sidebar-empty"><i class="fas fa-exclamation-circle"></i><p>Could not load.</p></div>';
+  });
+}
+
+// ── Right-sidebar "Suggested for you" follow button ──
+function mfyFollowUser(username) {
+  const button = event.target.closest('button');
+  const originalText = button.innerHTML;
+
+  button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  button.disabled = true;
+
+  fetch(`/follow/${username}`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': CSRF_TOKEN,
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      if (data.action === 'followed') {
+        toast(`You are now following @${username}`);
+        button.innerHTML = '<i class="fas fa-check"></i> Following';
+        button.classList.remove('mfy-user-suggestion-btn-primary');
+        button.classList.add('mfy-user-suggestion-btn-secondary');
+
+        setTimeout(() => {
+          const suggestionDiv = button.closest('.mfy-user-suggestion');
+          if (suggestionDiv) {
+            suggestionDiv.style.opacity = '0';
+            suggestionDiv.style.transition = 'opacity 0.3s';
+            setTimeout(() => { suggestionDiv.remove(); }, 300);
+          }
+        }, 1500);
+      } else {
+        toast(`Unfollowed @${username}`);
+        button.innerHTML = '<i class="fas fa-user-plus"></i> Follow';
+        button.classList.remove('mfy-user-suggestion-btn-secondary');
+        button.classList.add('mfy-user-suggestion-btn-primary');
+      }
+    } else {
+      toast('Error: ' + data.error);
+      button.innerHTML = originalText;
+    }
+    button.disabled = false;
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    toast('Something went wrong. Please try again.');
+    button.innerHTML = originalText;
+    button.disabled = false;
+  });
+}
+
+// ── Mobile "MORE" sidebar open/close ──
+function mfyOpenMobileSidebar() {
+  document.getElementById('mfy-mobile-right-sidebar').classList.add('open');
+  document.getElementById('mfy-mobile-sidebar-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function mfyCloseMobileSidebar() {
+  document.getElementById('mfy-mobile-right-sidebar').classList.remove('open');
+  document.getElementById('mfy-mobile-sidebar-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// Close sidebar on swipe right
+(function() {
+  const sidebar = document.getElementById('mfy-mobile-right-sidebar');
+  if (!sidebar) return;
+  let startX = 0;
+  sidebar.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; }, { passive: true });
+  sidebar.addEventListener('touchend', function(e) {
+    const diff = e.changedTouches[0].clientX - startX;
+    if (diff > 60) mfyCloseMobileSidebar();
+  }, { passive: true });
+})();
+
+// ── Bottom sheet logout ──
+function handleSheetLogout() {
+    const logoutModal = document.getElementById('mfyLogoutModal');
+    if (logoutModal) {
+        logoutModal.classList.add('active');
+
+        const cancelLogout = document.getElementById('mfyCancelLogout');
+        const confirmLogout = document.getElementById('mfyConfirmLogout');
+
+        if (cancelLogout) {
+            cancelLogout.onclick = function () {
+                logoutModal.classList.remove('active');
+            };
+        }
+        if (confirmLogout) {
+            confirmLogout.onclick = function () {
+                window.location.href = "{% url 'logout' %}";
+            };
+        }
+    } else {
+        window.location.href = "{% url 'logout' %}";
+    }
+}
+
+// ── Desktop sidebar logout ──
+document.addEventListener('DOMContentLoaded', function () {
+    const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
+    if (desktopLogoutIcon) {
+        desktopLogoutIcon.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const logoutModal = document.getElementById('mfyLogoutModal');
+            if (logoutModal) {
+                logoutModal.classList.add('active');
+
+                const cancelLogout = document.getElementById('mfyCancelLogout');
+                const confirmLogout = document.getElementById('mfyConfirmLogout');
+
+                if (cancelLogout) {
+                    cancelLogout.onclick = function () {
+                        logoutModal.classList.remove('active');
+                    };
+                }
+                if (confirmLogout) {
+                    confirmLogout.onclick = function () {
+                        window.location.href = "{% url 'logout' %}";
+                    };
+                }
+            } else {
+                window.location.href = "{% url 'logout' %}";
+            }
+        });
+    }
+});
+
+// ── Business hours panel ──
 function toggleHoursPanel(evt) {
     evt.stopPropagation();
     document.getElementById('hoursPanel')?.classList.toggle('open');
 }
 
-// ── "More" contact panel ─────────────────────────────────────────────────────
+// ── "More" contact panel ──
 function toggleMorePanel(evt) {
     evt.stopPropagation();
     document.getElementById('morePanel')?.classList.toggle('open');
@@ -1030,7 +2689,7 @@ document.addEventListener('click', function (e) {
     }
 });
 
-// ── Share ─────────────────────────────────────────────────────────────────────
+// ── Share ──
 function getShareUrl()  { return window.location.href; }
 function getShareText() { return 'Check out {{ page.name|escapejs }} on Marketfy'; }
 
@@ -1073,7 +2732,7 @@ function shareVia(platform) {
     return false;
 }
 
-// ── Wishlist toggle (save for later) ─────────────────────────────────────────
+// ── Wishlist toggle ──
 async function toggleMfyWishlist(btn, evt) {
     evt.preventDefault();
     evt.stopPropagation();
@@ -1103,7 +2762,7 @@ async function toggleMfyWishlist(btn, evt) {
     }
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
+// ── Toast ──
 function toast(msg) {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -1111,7 +2770,7 @@ function toast(msg) {
     setTimeout(() => t.classList.remove('show'), 2800);
 }
 
-// ── Follow toggle ─────────────────────────────────────────────────────────────
+// ── Follow toggle ──
 const followBtn = document.getElementById('followBtn');
 if (followBtn) {
     followBtn.addEventListener('click', async function () {
@@ -1123,290 +2782,210 @@ if (followBtn) {
             });
             const data = await res.json();
             if (res.ok) {
-                const f = data.following;
-                this.innerHTML = f
-                    ? '<i class="fas fa-check"></i> Following'
-                    : 'Follow';
-                this.classList.toggle('following', f);
-                document.getElementById('followerCount').textContent = data.follower_count.toLocaleString();
-                toast(f ? 'Now following this page 🎉' : 'Unfollowed.');
+                const isNowFollowing = data.following;
+                const count = data.follower_count;
+                this.classList.toggle('following', isNowFollowing);
+                this.innerHTML = isNowFollowing ? '<i class="fas fa-check"></i> Following' : 'Follow';
+
+                const countEl = document.getElementById('followerCount');
+                if (countEl && typeof count === 'number') countEl.textContent = count.toLocaleString();
+
+                toast(isNowFollowing ? 'Followed!' : 'Unfollowed');
             } else {
                 toast(data.error || 'Something went wrong.');
             }
-        } catch (_) { toast('Network error. Please try again.'); }
-        finally { this.disabled = false; }
+        } catch (_) {
+            toast('Network error. Please try again.');
+        } finally {
+            this.disabled = false;
+        }
     });
 }
 
-// ── Upload modal ──────────────────────────────────────────────────────────────
-function openModal()  { document.getElementById('uploadOverlay').classList.add('open'); }
-function closeModal() { document.getElementById('uploadOverlay').classList.remove('open'); }
-document.getElementById('uploadOverlay')?.addEventListener('click', e => {
-    if (e.target.id === 'uploadOverlay') closeModal();
-});
-
-// Photo previews
-let selectedFiles = [];
-document.getElementById('photoInput')?.addEventListener('change', function () {
-    selectedFiles = [...selectedFiles, ...Array.from(this.files)].slice(0, 5);
-    renderPhotos();
-});
-
-function renderPhotos() {
-    const row = document.getElementById('photoRow');
-    row.innerHTML = '';
-    selectedFiles.forEach((file, i) => {
-        const reader = new FileReader();
-        reader.onload = e => {
-            const wrap = document.createElement('div');
-            wrap.style.cssText = 'position:relative;flex-shrink:0;';
-            wrap.innerHTML = `
-                <img src="${e.target.result}"
-                     style="width:70px;height:70px;border-radius:8px;object-fit:cover;border:1px solid #dbdbdb;">
-                <button onclick="removePhoto(${i})"
-                        style="position:absolute;top:-6px;right:-6px;background:#ed4956;color:#fff;
-                               border:none;border-radius:50%;width:20px;height:20px;font-size:10px;
-                               cursor:pointer;display:flex;align-items:center;justify-content:center;">
-                    <i class='fas fa-times'></i>
-                </button>`;
-            row.insertBefore(wrap, row.querySelector('label'));
-        };
-        reader.readAsDataURL(file);
-    });
-    if (selectedFiles.length < 5) {
-        const lbl = document.createElement('label');
-        lbl.className = 'kbiz-add-photo';
-        lbl.htmlFor   = 'photoInput';
-        lbl.innerHTML = '<i class="fas fa-camera fa-lg"></i><span>Add Photo</span>';
-        row.appendChild(lbl);
+// ── Right-sidebar "Suggestions for you" — follow/unfollow a Business Page ──
+async function toggleSuggestionFollow(btn) {
+    if (btn.disabled) return;
+    const url = btn.dataset.followUrl;
+    btn.disabled = true;
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.error) {
+            toast(data.error);
+        } else {
+            btn.classList.toggle('following', data.following);
+            btn.textContent = data.following ? 'Following' : 'Follow';
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        btn.disabled = false;
     }
 }
 
-function removePhoto(idx) {
-    selectedFiles.splice(idx, 1);
-    renderPhotos();
+function dismissSuggestion(slug) {
+    const row = document.getElementById(`suggestRow-${slug}`);
+    if (row) row.classList.add('dismissed');
 }
 
+// ── Upload Listing (owner only) ──
+let selectedFiles = [];
+
+document.getElementById('photoInput')?.addEventListener('change', function(e) {
+    selectedFiles = Array.from(e.target.files);
+    const row = document.getElementById('photoRow');
+    // Keep the "Add Photo" button, then show file names
+    const label = row.querySelector('.kbiz-add-photo');
+    row.innerHTML = '';
+    selectedFiles.forEach((file, i) => {
+        const div = document.createElement('div');
+        div.style.cssText = 'width:70px;height:70px;border-radius:8px;overflow:hidden;border:1px solid var(--mfy-border);flex-shrink:0;';
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        div.appendChild(img);
+        row.appendChild(div);
+    });
+    row.appendChild(label);
+});
+
+function openModal() {
+    document.getElementById('uploadOverlay')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeModal() {
+    document.getElementById('uploadOverlay')?.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('uploadOverlay')?.addEventListener('click', function(e) {
+    if (e.target.id === 'uploadOverlay') closeModal();
+});
+
 async function submitListing() {
-    const name     = document.getElementById('upName').value.trim();
-    const price    = document.getElementById('upPrice').value.trim();
-    const desc     = document.getElementById('upDesc').value.trim();
-    const whatsapp = document.getElementById('upWhatsapp').value.trim();
-
-    if (!name)     return toast('⚠️ Product name is required.');
-    if (!price)    return toast('⚠️ Price is required.');
-    if (!desc)     return toast('⚠️ Description is required.');
-    if (!whatsapp) return toast('⚠️ WhatsApp number is required.');
-    if (!selectedFiles.length) return toast('⚠️ At least one photo is required.');
-
     const btn = document.getElementById('uploadBtn');
+    if (btn.disabled) return;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
 
-    const fd = new FormData();
-    fd.append('product_name',      name);
-    fd.append('product_price',     price);
-    fd.append('description',       desc);
-    fd.append('category',          document.getElementById('upCategory').value);
-    fd.append('product_condition', document.getElementById('upCondition').value);
-    fd.append('availability',      document.getElementById('upAvailability').value);
-    fd.append('location',          document.getElementById('upLocation').value.trim());
-    fd.append('whatsapp_number',   whatsapp);
-    fd.append('instagram_handle',  document.getElementById('upInstagram').value.trim());
-    fd.append('twitter_handle',    document.getElementById('upTwitter').value.trim());
-    selectedFiles.forEach(f => fd.append('images', f));
+    const formData = new FormData();
+    formData.append('name', document.getElementById('upName').value.trim());
+    formData.append('price', document.getElementById('upPrice').value.trim());
+    formData.append('description', document.getElementById('upDesc').value.trim());
+    formData.append('category', document.getElementById('upCategory').value);
+    formData.append('condition', document.getElementById('upCondition').value);
+    formData.append('availability', document.getElementById('upAvailability').value);
+    formData.append('location', document.getElementById('upLocation').value.trim());
+    formData.append('whatsapp', document.getElementById('upWhatsapp').value.trim());
+    formData.append('instagram', document.getElementById('upInstagram').value.trim());
+    formData.append('twitter', document.getElementById('upTwitter').value.trim());
+
+    selectedFiles.forEach((file) => {
+        formData.append('images', file);
+    });
 
     try {
-        const res  = await fetch(`/business/${PAGE_SLUG}/upload/`, {
+        const res = await fetch(`/business/${PAGE_SLUG}/listing/create/`, {
             method: 'POST',
-            headers: { 'X-CSRFToken': CSRF_TOKEN },
-            body: fd,
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
         });
         const data = await res.json();
-
         if (data.success) {
-            toast(data.message || 'Listing uploaded! 🔥');
+            toast('Listing uploaded!');
             closeModal();
-
-            // Inject card into grid immediately, clicking it goes to product_detail
-            const grid = document.getElementById('listingsGrid');
-            if (!grid) { setTimeout(() => location.reload(), 1200); return; }
-
-            // Remove empty-state placeholder if present
-            const empty = document.querySelector('.kbiz-empty');
-            if (empty) {
-                empty.remove();
-                const g = document.createElement('div');
-                g.className = 'kbiz-jgrid';
-                g.id = 'listingsGrid';
-                document.querySelector('.kbiz-section').appendChild(g);
-            }
-
-            const conditionText   = document.getElementById('upCondition').options[document.getElementById('upCondition').selectedIndex]?.text || '';
-            const availabilityTxt = document.getElementById('upAvailability').options[document.getElementById('upAvailability').selectedIndex]?.text || '';
-            const categoryTxt     = document.getElementById('upCategory').options[document.getElementById('upCategory').selectedIndex]?.text || '';
-            const locationTxt     = document.getElementById('upLocation').value.trim();
-            const photoCount      = selectedFiles.length;
-
-            const card = document.createElement('article');
-            card.className = 'mfy-jcard';
-            card.dataset.marketId = data.product_id || '';
-            card.innerHTML = `
-                <a href="${data.detail_url}" class="mfy-jcard-img-link">
-                    <div class="mfy-jcard-img-wrap">
-                        <img src="${data.image_url}" alt="${data.name}" loading="lazy" class="mfy-jcard-img loaded">
-                        <span class="mfy-jcard-views"><i class="fas fa-eye"></i> 0</span>
-                        ${categoryTxt ? `<span class="mfy-jcard-category-badge">${categoryTxt}</span>` : ''}
-                        ${photoCount > 1 ? `<span class="mfy-jcard-img-count"><i class="fas fa-images"></i> ${photoCount}</span>` : ''}
-                    </div>
-                </a>
-                <a href="${data.detail_url}" class="mfy-jcard-body-link">
-                    <div class="mfy-jcard-body">
-                        <div class="mfy-jcard-name">${data.name}</div>
-                        <div class="mfy-jcard-meta">
-                            ${conditionText ? `<span class="mfy-jcard-meta-txt">${conditionText}</span>` : ''}
-                            ${locationTxt ? `<span class="mfy-jcard-meta-txt">${locationTxt}</span>` : ''}
-                            ${availabilityTxt ? `<span class="mfy-jcard-meta-txt">${availabilityTxt}</span>` : ''}
-                        </div>
-                    </div>
-                </a>
-                <div class="mfy-jcard-price-row">
-                    <span class="mfy-jcard-price">₦${Number(data.price).toLocaleString()}</span>
-                </div>`;
-            const g = document.getElementById('listingsGrid');
-            g.insertBefore(card, g.firstChild);
-
-            // Reset form
-            selectedFiles = [];
-            renderPhotos();
-            ['upName','upPrice','upDesc','upLocation'].forEach(id => {
-                document.getElementById(id).value = '';
-            });
-            // Update listing count badge
-            const cntEl = document.getElementById('listingCount');
-            if (cntEl) cntEl.textContent = parseInt(cntEl.textContent || 0) + 1;
+            setTimeout(() => location.reload(), 600);
         } else {
-            const firstErr = Object.values(data.errors || {})[0] || 'Upload failed.';
-            toast('⚠️ ' + firstErr);
+            toast(data.error || 'Failed to upload listing.');
         }
-    } catch (_) { toast('⚠️ Network error. Please try again.'); }
-    finally {
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-upload"></i> Upload Listing';
     }
 }
 
-// ── Job vacancy modal ─────────────────────────────────────────────────────────
-function openJobModal()  { document.getElementById('jobOverlay')?.classList.add('open'); }
-function closeJobModal() { document.getElementById('jobOverlay')?.classList.remove('open'); }
-document.getElementById('jobOverlay')?.addEventListener('click', e => {
+// ── Job upload (owner only) ──
+function openJobModal() {
+    document.getElementById('jobOverlay')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeJobModal() {
+    document.getElementById('jobOverlay')?.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('jobOverlay')?.addEventListener('click', function(e) {
     if (e.target.id === 'jobOverlay') closeJobModal();
 });
 
 async function submitJob() {
-    const title       = document.getElementById('jobTitle').value.trim();
-    const description = document.getElementById('jobDescription').value.trim();
-
-    if (!title)       return toast('⚠️ Job title is required.');
-    if (!description) return toast('⚠️ Description is required.');
-
     const btn = document.getElementById('jobUploadBtn');
+    if (btn.disabled) return;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting…';
 
-    const fd = new FormData();
-    fd.append('title',        title);
-    fd.append('category',     document.getElementById('jobCategory').value);
-    fd.append('location',     document.getElementById('jobLocation').value.trim());
-    fd.append('description',  description);
-    fd.append('requirements', document.getElementById('jobRequirements').value.trim());
-    fd.append('salary_range', document.getElementById('jobSalary').value.trim());
-    fd.append('contact_info', document.getElementById('jobContact').value.trim());
-    const coverFile = document.getElementById('jobCoverImage').files[0];
-    if (coverFile) fd.append('cover_image', coverFile);
+    const formData = new FormData();
+    formData.append('title', document.getElementById('jobTitle').value.trim());
+    formData.append('category', document.getElementById('jobCategory').value);
+    formData.append('location', document.getElementById('jobLocation').value.trim());
+    formData.append('description', document.getElementById('jobDescription').value.trim());
+    formData.append('requirements', document.getElementById('jobRequirements').value.trim());
+    formData.append('salary', document.getElementById('jobSalary').value.trim());
+    formData.append('contact', document.getElementById('jobContact').value.trim());
+
+    const cover = document.getElementById('jobCoverImage');
+    if (cover.files && cover.files[0]) {
+        formData.append('cover_image', cover.files[0]);
+    }
 
     try {
-        const res  = await fetch(`/business/${PAGE_SLUG}/jobs/upload/`, {
+        const res = await fetch(`/business/${PAGE_SLUG}/job/create/`, {
             method: 'POST',
-            headers: { 'X-CSRFToken': CSRF_TOKEN },
-            body: fd,
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
         });
         const data = await res.json();
-
         if (data.success) {
-            toast(data.message || 'Job vacancy posted! 💼');
+            toast('Job posted!');
             closeJobModal();
-
-            const list = document.getElementById('jobsList');
-            const categoryTxt = document.getElementById('jobCategory').options[document.getElementById('jobCategory').selectedIndex]?.text || '';
-            const locationTxt = document.getElementById('jobLocation').value.trim();
-            const salaryTxt   = document.getElementById('jobSalary').value.trim();
-
-            let container = list;
-            if (!container) {
-                const empty = document.querySelector('#jobsList')?.parentElement.querySelector('.kbiz-empty') || document.querySelectorAll('.kbiz-empty')[1];
-                if (empty) empty.remove();
-                container = document.createElement('div');
-                container.className = 'kbiz-jobs-list';
-                container.id = 'jobsList';
-                document.querySelectorAll('.kbiz-section')[1].appendChild(container);
-            }
-
-            const card = document.createElement('article');
-            card.className = 'kbiz-job-card';
-            card.id = `kbiz-job-${data.job_id}`;
-            card.innerHTML = `
-                <div class="kbiz-job-top">
-                    <div>
-                        <div class="kbiz-job-title">${data.title}</div>
-                    </div>
-                    <span class="kbiz-job-badge" style="background:#0095f6;">${categoryTxt}</span>
-                </div>
-                <div class="kbiz-job-meta">
-                    ${locationTxt ? `<span><i class="fas fa-map-marker-alt"></i>${locationTxt}</span>` : ''}
-                    ${salaryTxt ? `<span><i class="fas fa-money-bill-wave"></i>${salaryTxt}</span>` : ''}
-                    <span><i class="far fa-clock"></i>just now</span>
-                </div>
-                <div class="kbiz-job-desc">${description}</div>
-                <a href="/jobs/#khj-card-${data.job_id}" style="font-size:12px;font-weight:700;color:var(--mfy-primary);text-decoration:none;">
-                    View full listing <i class="fas fa-arrow-right"></i>
-                </a>
-                <div class="kbiz-job-actions">
-                    <button onclick="location.href='/jobs/#khj-card-${data.job_id}'"><i class="fas fa-pen"></i> Manage</button>
-                    <button class="del" onclick="deleteBusinessJob('${data.job_id}', '${data.title}')"><i class="fas fa-trash"></i> Delete</button>
-                </div>`;
-            container.insertBefore(card, container.firstChild);
-
-            ['jobTitle','jobLocation','jobDescription','jobRequirements','jobSalary','jobCoverImage'].forEach(id => {
-                document.getElementById(id).value = '';
-            });
+            setTimeout(() => location.reload(), 600);
         } else {
-            const firstErr = Object.values(data.errors || {})[0] || 'Posting failed.';
-            toast('⚠️ ' + firstErr);
+            toast(data.error || 'Failed to post job.');
         }
-    } catch (_) { toast('⚠️ Network error. Please try again.'); }
-    finally {
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-briefcase"></i> Post Job Vacancy';
     }
 }
 
-// ── Job delete (reuses the existing job_vacancy_delete endpoint) ─────────────
-async function deleteBusinessJob(jobId, jobTitle) {
-    if (!confirm(`Delete "${jobTitle}"? This cannot be undone.`)) return;
+// ── Delete business job ──
+async function deleteBusinessJob(jobId, title) {
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
     try {
-        const res  = await fetch(`/jobs/${jobId}/delete/`, {
+        const res = await fetch(`/business/${PAGE_SLUG}/job/${jobId}/delete/`, {
             method: 'POST',
             headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
         });
         const data = await res.json();
         if (data.success) {
-            document.getElementById(`kbiz-job-${jobId}`)?.remove();
-            toast('Job vacancy deleted.');
+            const el = document.getElementById(`kbiz-job-${jobId}`);
+            if (el) {
+                el.style.transition = 'opacity .2s ease';
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 200);
+            }
+            toast('Job deleted');
         } else {
-            toast(data.error || 'Delete failed.');
+            toast(data.error || 'Failed to delete job.');
         }
-    } catch (_) { toast('⚠️ Network error. Please try again.'); }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
 }
 </script>
 </body>
