@@ -776,6 +776,7 @@ def home(request):
         'sidebar_follower_count':     sidebar_follower_count,
         'user_business_page_count':   user_business_page_count,
         'primary_business_page':      primary_business_page,
+        'viewer_primary_business_page': primary_business_page,
         'recent_dm_users':            recent_dm_users,
         'all_categories':             [
             {'key': k, 'label': l, 'icon': Market.CATEGORY_ICONS.get(k, '📦')}
@@ -4609,6 +4610,17 @@ def business_page_detail(request, slug):
     if request.user.is_authenticated and not is_owner and wishlist_ids:
         listings = listings.exclude(product_id__in=wishlist_ids)
 
+    # ── Logged-in viewer's own business page — for the right-sidebar
+    # "My Listings" shortcut (always about request.user, not the page
+    # being viewed). Mirrors the same widget on home.html / profile.html.
+    viewer_primary_business_page = None
+    if request.user.is_authenticated:
+        viewer_primary_business_page = (
+            BusinessPage.objects.filter(owner=request.user, is_active=True)
+            .order_by('-created_at')
+            .first()
+        )
+
     return render(request, 'business_page_detail.html', {
         'page':              page,
         'listings':          listings,
@@ -4626,6 +4638,7 @@ def business_page_detail(request, slug):
         'hours_display':     page.hours_display,
         'average_rating':    page.average_rating,
         'review_count':      page.review_count,
+        'viewer_primary_business_page': viewer_primary_business_page,
     })
 
 
