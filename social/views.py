@@ -743,6 +743,19 @@ def home(request):
                .order_by('?')[:3]
     )
 
+    # ── Right-sidebar "Suggested for you" — business pages ───────────────────
+    followed_business_ids = set(
+        BusinessPage.objects.filter(followers=request.user).values_list('page_id', flat=True)
+    )
+    suggested_pages = list(
+        BusinessPage.objects
+        .filter(is_active=True)
+        .exclude(owner=request.user)
+        .exclude(page_id__in=followed_business_ids)
+        .select_related('owner')
+        .order_by('?')[:3]
+    )
+
     # ── Recent DM conversation partners (home-page bubble row) ───────────────
     from django.db.models import Max
     _dm_qs = (
@@ -771,6 +784,7 @@ def home(request):
         'next_cursor':                next_cursor,
         'unread_follow_count':        unread_follow_count,
         'users':                      users,
+        'suggested_pages':            suggested_pages,
         'following_ids':              following_ids,
         'sidebar_following_count':    sidebar_following_count,
         'sidebar_follower_count':     sidebar_follower_count,
