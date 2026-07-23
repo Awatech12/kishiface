@@ -3332,9 +3332,50 @@ def wishlist_view(request):
     paginator = Paginator(products, 24)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
+    # ── Right-sidebar widget data (same widgets as home.html / profile.html /
+    # business_page_detail.html) — always about request.user, regardless of
+    # which page is being viewed.
+    viewer_profile          = request.user.profile
+    viewer_following_ids    = list(viewer_profile.followings.values_list('user', flat=True))
+    viewer_following_count  = viewer_profile.followings.count()
+    viewer_follower_count   = viewer_profile.followers.count()
+    sidebar_suggested_users = list(
+        User.objects.exclude(id__in=viewer_following_ids)
+               .exclude(id=request.user.id)
+               .order_by('?')[:3]
+    )
+
+    # ── Viewer's own business page — for the "Your business page" /
+    # "Grow your business" sidebar widget.
+    viewer_business_pages = (
+        BusinessPage.objects.filter(owner=request.user, is_active=True)
+        .order_by('-created_at')
+    )
+    viewer_business_page_count   = viewer_business_pages.count()
+    viewer_primary_business_page = viewer_business_pages.first()
+
+    # ── Right-sidebar "Suggestions for you" — business pages ────────────────
+    followed_business_ids = set(
+        BusinessPage.objects.filter(followers=request.user).values_list('page_id', flat=True)
+    )
+    suggested_pages = list(
+        BusinessPage.objects
+        .filter(is_active=True)
+        .exclude(owner=request.user)
+        .exclude(page_id__in=followed_business_ids)
+        .select_related('owner')
+        .order_by('-created_at')[:5]
+    )
+
     return render(request, 'wishlist.html', {
         'products':      page_obj,
         'wishlist_count': len(products),
+        'viewer_following_count':  viewer_following_count,
+        'viewer_follower_count':   viewer_follower_count,
+        'sidebar_suggested_users': sidebar_suggested_users,
+        'viewer_business_page_count':   viewer_business_page_count,
+        'viewer_primary_business_page': viewer_primary_business_page,
+        'suggested_pages': suggested_pages,
     })
 
 
