@@ -83,6 +83,8 @@ urlpatterns = [
     # ── Job Vacancy ────────────────────────────────────────────────────────
     path('jobs/',                              views.job_vacancy,        name='job_vacancy'),
     path('jobs/create/',                       views.job_vacancy_create, name='job_vacancy_create'),
+    path('jobs/<uuid:job_id>/',                views.job_detail,         name='job_detail'),
+    path('jobs/<uuid:job_id>/contact/',        views.contact_poster,     name='contact_poster'),
     path('jobs/<uuid:job_id>/edit/',           views.job_vacancy_edit,   name='job_vacancy_edit'),
     path('jobs/<uuid:job_id>/delete/',         views.job_vacancy_delete, name='job_vacancy_delete'),
 

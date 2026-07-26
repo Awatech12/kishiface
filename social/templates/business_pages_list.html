@@ -1,6 +1,7 @@
 {% comment %}
   SAVE AS: business_pages_list.html  (for /business/)
-  A discoverable grid of all business pages with category filter.
+  A discoverable grid of all business pages with category filter,
+  redesigned to match the Marketfy dashboard mockup (sidebar + topbar layout).
 {% endcomment %}
 {% load static %}
 {% load humanize %}
@@ -13,126 +14,620 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
         :root {
-            --mfy-primary:#0095f6; --mfy-bg:#fafafa; --mfy-white:#fff;
-            --mfy-text:#262626; --mfy-text-light:#8e8e8e; --mfy-border:#dbdbdb;
+            --mfy-primary:#1479ff; --mfy-primary-dark:#0d63e0; --mfy-primary-light:#eaf3ff;
+            --mfy-bg:#f5f7fb; --mfy-white:#fff; --mfy-text:#14161a; --mfy-text-light:#8a8f98;
+            --mfy-border:#e7e9ee; --mfy-sidebar-w:250px;
         }
         *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
              background:var(--mfy-bg);color:var(--mfy-text);-webkit-font-smoothing:antialiased;}
+        a{color:inherit;}
+        button{font-family:inherit;cursor:pointer;}
 
-        .kbiz-topbar{position:sticky;top:0;z-index:100;height:52px;background:var(--mfy-white);
-            border-bottom:1px solid var(--mfy-border);display:flex;align-items:center;
-            justify-content:space-between;padding:0 16px;}
-        .kbiz-topbar-title{font-size:16px;font-weight:800;}
-        .kbiz-create-link{display:inline-flex;align-items:center;gap:6px;
-            background:var(--mfy-primary);color:#fff;border-radius:20px;
-            padding:7px 14px;font-size:13px;font-weight:700;text-decoration:none;}
+        /* ===== Desktop layout (matches profile page) ===== */
+        .mfy-container{max-width:100%;width:100%;}
 
-        /* Category filter */
-        .kbiz-filter-bar{background:var(--mfy-white);border-bottom:1px solid var(--mfy-border);
-            padding:10px 12px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;}
-        .kbiz-filter-bar::-webkit-scrollbar{display:none;}
-        .kbiz-chip{display:inline-flex;align-items:center;
-            padding:7px 14px;background:var(--mfy-bg);border:1px solid var(--mfy-border);
-            border-radius:20px;font-size:13px;font-weight:500;color:var(--mfy-text);
-            text-decoration:none;margin-right:8px;white-space:nowrap;transition:all .2s;}
-        .kbiz-chip.active,.kbiz-chip:hover{background:var(--mfy-primary);color:#fff;border-color:var(--mfy-primary);}
+        .mfy-desktop-layout{
+            display:flex;
+            max-width:1400px;
+            margin:0 auto;
+            padding:20px 20px 0 20px;
+            gap:20px;
+        }
 
-        /* Grid */
-        .kbiz-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:12px;}
-        @media(min-width:500px){.kbiz-grid{grid-template-columns:repeat(3,1fr);}}
-        @media(min-width:768px){.kbiz-grid{grid-template-columns:repeat(4,1fr);}}
+        /* Left Sidebar - Main Navigation */
+        .mfy-left-sidebar{
+            width:245px;
+            flex-shrink:0;
+            min-height:0;
+            align-self:flex-start;
+            position:sticky;
+            top:20px;
+            height:calc(100vh - 40px);
+            max-height:calc(100vh - 40px);
+            overflow-y:auto;
+            overflow-x:hidden;
+            -webkit-overflow-scrolling:touch;
+            overscroll-behavior:contain;
+            padding-right:10px;
+        }
 
-        .kbiz-page-card{background:var(--mfy-white);border-radius:14px;
-            border:1px solid var(--mfy-border);overflow:hidden;text-decoration:none;color:var(--mfy-text);
-            display:flex;flex-direction:column;transition:box-shadow .2s;}
-        .kbiz-page-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);}
-        .kbiz-card-cover{height:80px;background:linear-gradient(135deg,#0095f6,#33aaff);
-            overflow:hidden;position:relative;}
-        .kbiz-card-cover img{width:100%;height:100%;object-fit:cover;}
-        .kbiz-card-logo-wrap{position:absolute;bottom:-20px;left:12px;
-            width:40px;height:40px;border-radius:10px;border:2.5px solid #fff;
-            background:#e5e5e5;overflow:hidden;}
-        .kbiz-card-logo-wrap img{width:100%;height:100%;object-fit:cover;}
-        .kbiz-card-logo-placeholder{width:100%;height:100%;background:var(--mfy-primary);
-            display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;border-radius:7px;}
-        .kbiz-card-body{padding:28px 12px 12px;}
-        .kbiz-card-name{font-size:13px;font-weight:800;margin-bottom:2px;
+        .mfy-desktop-nav{
+            width:100%;
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            padding:20px 0;
+            background:var(--mfy-white);
+        }
+
+        .mfy-desktop-nav-item{
+            display:flex;
+            align-items:center;
+            text-decoration:none;
+            width:100%;
+            padding:12px;
+            position:relative;
+            transition:all .2s ease;
+            cursor:pointer;
+            border-radius:8px;
+        }
+
+        .mfy-desktop-nav-item:hover{background:var(--mfy-bg);}
+        .mfy-desktop-nav-item.active{background:var(--mfy-bg);}
+
+        .mfy-desktop-nav-icon{
+            width:24px;height:24px;margin-right:12px;
+            position:relative;flex-shrink:0;
+        }
+
+        .mfy-desktop-nav-icon svg{
+            width:100%;height:100%;
+            stroke:var(--mfy-text-light);
+            transition:all .2s ease;
+        }
+
+        .mfy-desktop-nav-item:hover .mfy-desktop-nav-icon svg,
+        .mfy-desktop-nav-item.active .mfy-desktop-nav-icon svg{stroke:var(--mfy-primary);}
+
+        .mfy-desktop-nav-item:hover .mfy-desktop-nav-icon i,
+        .mfy-desktop-nav-item.active .mfy-desktop-nav-icon i{color:var(--mfy-primary) !important;}
+
+        .mfy-desktop-nav-label{
+            font-size:14px;color:var(--mfy-text-light);
+            font-weight:400;transition:all .2s ease;white-space:nowrap;
+        }
+
+        .mfy-desktop-nav-item:hover .mfy-desktop-nav-label{color:var(--mfy-text);}
+        .mfy-desktop-nav-item.active .mfy-desktop-nav-label{color:var(--mfy-text);font-weight:600;}
+
+        .mfy-desktop-notification-badge{
+            position:absolute;top:8px;left:20px;
+            background:var(--mfy-primary);color:#fff;
+            font-size:10px;font-weight:600;
+            width:20px;height:20px;border-radius:50%;
+            display:flex;align-items:center;justify-content:center;
+            padding:0 3px;border:2px solid var(--mfy-white);
+        }
+
+        .mfy-desktop-nav-item.logout .mfy-desktop-nav-icon svg{stroke:var(--mfy-primary);}
+        .mfy-desktop-nav-item.logout:hover .mfy-desktop-nav-icon svg{stroke:var(--mfy-primary);}
+        .mfy-desktop-nav-item.logout:hover .mfy-desktop-nav-label{color:var(--mfy-primary);}
+
+        .mfy-desktop-only{display:none;}
+
+        @media(min-width:901px){
+            .mfy-desktop-only{display:block;}
+            .mfy-left-sidebar::-webkit-scrollbar{width:6px;}
+            .mfy-left-sidebar::-webkit-scrollbar-track{background:var(--mfy-bg);}
+            .mfy-left-sidebar::-webkit-scrollbar-thumb{background:var(--mfy-border);border-radius:3px;}
+            .mfy-left-sidebar::-webkit-scrollbar-thumb:hover{background:var(--mfy-text-light);}
+        }
+
+        /* Right column that holds the existing page content */
+        .mfy-main-col{
+            flex:1;
+            min-width:0;
+            width:100%;
+        }
+
+        .mfy-main{min-height:100vh;}
+
+        /* ===== Page header ===== */
+        .mfy-page-head{display:flex;align-items:flex-start;justify-content:space-between;
+            padding:28px 28px 0;flex-wrap:wrap;gap:14px;}
+        .mfy-page-head h1{font-size:26px;font-weight:800;margin-bottom:4px;}
+        .mfy-page-head p{color:var(--mfy-text-light);font-size:14px;}
+        .mfy-create-link{display:inline-flex;align-items:center;gap:8px;
+            background:var(--mfy-primary);color:#fff;border-radius:10px;
+            padding:12px 20px;font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap;
+            box-shadow:0 6px 16px rgba(20,121,255,.25);}
+        .mfy-create-link:hover{background:var(--mfy-primary-dark);}
+
+        /* ===== Category filter ===== */
+        .mfy-filter-wrap{display:flex;align-items:center;gap:10px;padding:22px 28px 6px;}
+        .mfy-filter-bar{display:flex;gap:10px;overflow-x:auto;scroll-behavior:smooth;
+            -webkit-overflow-scrolling:touch;padding-bottom:4px;}
+        .mfy-filter-bar::-webkit-scrollbar{display:none;}
+        .mfy-chip{display:inline-flex;align-items:center;flex-shrink:0;
+            padding:9px 18px;background:var(--mfy-white);border:1px solid var(--mfy-border);
+            border-radius:999px;font-size:13.5px;font-weight:600;color:var(--mfy-text);
+            text-decoration:none;white-space:nowrap;transition:all .15s;}
+        .mfy-chip:hover{border-color:var(--mfy-primary);}
+        .mfy-chip.active{background:var(--mfy-primary);color:#fff;border-color:var(--mfy-primary);}
+        .mfy-scroll-btn{flex-shrink:0;width:30px;height:30px;border-radius:50%;border:1px solid var(--mfy-border);
+            background:var(--mfy-white);color:var(--mfy-text-light);display:flex;align-items:center;justify-content:center;font-size:12px;}
+        .mfy-scroll-btn:hover{background:var(--mfy-bg);}
+
+        /* ===== Grid ===== */
+        .mfy-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;padding:22px 28px 12px;}
+        @media(min-width:640px){.mfy-grid{grid-template-columns:repeat(3,1fr);}}
+        @media(min-width:1100px){.mfy-grid{grid-template-columns:repeat(4,1fr);}}
+
+        .mfy-card{background:var(--mfy-white);border-radius:16px;border:1px solid var(--mfy-border);
+            overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s;}
+        .mfy-card:hover{box-shadow:0 10px 26px rgba(20,30,60,.09);transform:translateY(-2px);}
+        .mfy-card-link{text-decoration:none;color:inherit;display:block;}
+        .mfy-card-cover{height:150px;background:linear-gradient(135deg,var(--mfy-primary),#66a8ff);
+            position:relative;overflow:hidden;}
+        .mfy-card-cover img{width:100%;height:100%;object-fit:cover;}
+        .mfy-card-cover-menu{position:absolute;top:10px;right:10px;color:#fff;font-size:15px;
+            width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+            background:rgba(0,0,0,.18);border-radius:50%;}
+        .mfy-card-body{padding:16px;flex:1;display:flex;flex-direction:column;}
+        .mfy-card-header-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+        .mfy-card-logo{width:48px;height:48px;border-radius:50%;flex-shrink:0;
+            border:2px solid var(--mfy-border);background:#1c2333;overflow:hidden;display:flex;
+            align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;}
+        .mfy-card-logo img{width:100%;height:100%;object-fit:cover;}
+        .mfy-card-info{min-width:0;flex:1;}
+        .mfy-card-name{font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:6px;
             overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-        .kbiz-card-cat{font-size:11px;color:var(--mfy-primary);font-weight:600;margin-bottom:4px;}
-        .kbiz-card-followers{font-size:11px;color:var(--mfy-text-light);}
+        .mfy-card-name .fa-circle-check{color:var(--mfy-primary);font-size:13px;flex-shrink:0;}
+        .mfy-card-cat{font-size:13px;color:var(--mfy-primary);font-weight:600;margin-top:3px;}
+        .mfy-card-followers{font-size:13px;color:var(--mfy-text-light);margin-top:auto;}
+        .mfy-follow-btn{width:100%;padding:10px 0;border-radius:10px;border:1.5px solid var(--mfy-primary);
+            background:transparent;color:var(--mfy-primary);font-weight:700;font-size:13.5px;margin-top:auto;transition:all .15s;}
+        .mfy-follow-btn:hover{background:var(--mfy-primary-light);}
+        .mfy-follow-btn.following{background:var(--mfy-primary);color:#fff;}
 
-        .kbiz-empty{padding:60px 20px;text-align:center;color:var(--mfy-text-light);grid-column:1/-1;}
-        .kbiz-empty i{font-size:40px;margin-bottom:14px;display:block;}
+        .mfy-empty{padding:70px 20px;text-align:center;color:var(--mfy-text-light);grid-column:1/-1;}
+        .mfy-empty i{font-size:42px;margin-bottom:14px;display:block;color:#d3d7de;}
 
-        /* Pagination */
-        .kbiz-pagination{display:flex;justify-content:center;gap:8px;padding:16px 12px 40px;}
-        .kbiz-page-link{padding:8px 16px;background:var(--mfy-white);border:1px solid var(--mfy-border);
-            border-radius:20px;font-size:13px;font-weight:600;text-decoration:none;color:var(--mfy-text);}
-        .kbiz-page-link.active{background:var(--mfy-primary);color:#fff;border-color:var(--mfy-primary);}
+        /* ===== Pagination ===== */
+        .mfy-pagination{display:flex;justify-content:center;align-items:center;gap:8px;padding:20px 28px 48px;flex-wrap:wrap;}
+        .mfy-page-btn{min-width:38px;height:38px;padding:0 6px;display:flex;align-items:center;justify-content:center;
+            background:var(--mfy-white);border:1px solid var(--mfy-border);border-radius:10px;
+            font-size:13.5px;font-weight:700;text-decoration:none;color:var(--mfy-text);}
+        a.mfy-page-btn:hover{border-color:var(--mfy-primary);color:var(--mfy-primary);}
+        .mfy-page-btn.active{background:var(--mfy-primary);color:#fff;border-color:var(--mfy-primary);}
+        .mfy-page-btn.disabled{color:#c7cad2;pointer-events:none;}
+        .mfy-page-ellipsis{width:38px;height:38px;display:flex;align-items:center;justify-content:center;color:var(--mfy-text-light);font-weight:700;}
+
+        /* ===== MOBILE "MORE" SIDEBAR (same as profile page) ===== */
+        .mfy-mobile-sidebar-overlay{
+            display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
+            z-index:1100;opacity:0;transition:opacity .3s ease;
+        }
+        .mfy-mobile-sidebar-overlay.active{display:block;opacity:1;}
+        .mfy-mobile-right-sidebar{
+            position:fixed;top:0;right:-100%;width:82vw;max-width:320px;height:100dvh;
+            background:var(--mfy-white);z-index:1101;overflow-y:auto;
+            transition:right .32s cubic-bezier(.4,0,.2,1);
+            box-shadow:-4px 0 24px rgba(0,0,0,.15);padding-bottom:80px;
+        }
+        .mfy-mobile-right-sidebar.open{right:0;}
+        .mfy-mobile-sidebar-header{
+            display:flex;align-items:center;justify-content:space-between;
+            padding:14px 16px;border-bottom:1px solid var(--mfy-border);
+            position:sticky;top:0;background:var(--mfy-white);z-index:2;
+        }
+        .mfy-mobile-sidebar-title{font-size:15px;font-weight:700;color:var(--mfy-text);}
+        .mfy-mobile-sidebar-close{
+            width:32px;height:32px;border:none;background:var(--mfy-bg);border-radius:50%;
+            display:flex;align-items:center;justify-content:center;cursor:pointer;
+            color:var(--mfy-text);font-size:16px;
+        }
+        .mfy-mobile-sidebar-body{padding:16px;}
+        .mfy-mobile-sidebar-body .mfy-desktop-nav{padding:0;gap:4px;}
+        .mfy-mobile-sidebar-toggle{display:none;}
+
+        @media(max-width:767px){
+            .mfy-mobile-sidebar-toggle{
+                display:flex;align-items:center;justify-content:center;
+                position:fixed;top:50%;right:0;transform:translateY(-50%);z-index:1050;
+                background:var(--mfy-primary);color:#fff;border:none;border-radius:8px 0 0 8px;
+                width:28px;height:64px;cursor:pointer;box-shadow:-2px 2px 10px rgba(0,0,0,.18);
+                flex-direction:column;gap:4px;padding:0;
+            }
+            .mfy-mobile-sidebar-toggle i{font-size:13px;}
+            .mfy-mobile-sidebar-toggle span{
+                font-size:9px;font-weight:700;writing-mode:vertical-rl;
+                text-orientation:mixed;letter-spacing:.5px;
+            }
+        }
+
+        /* ===== Mobile ===== */
+        @media(max-width:900px){
+            .mfy-desktop-layout{display:block;padding:0;}
+            .mfy-left-sidebar{display:none;}
+            .mfy-main-col{max-width:100%;}
+            .mfy-page-head{padding:20px 16px 0;}
+            .mfy-filter-wrap{padding:18px 16px 6px;}
+            .mfy-grid{padding:18px 16px 12px;gap:14px;}
+            .mfy-pagination{padding:16px 16px 90px;}
+        }
+        @media(max-width:480px){
+            .mfy-grid{grid-template-columns:repeat(2,1fr);gap:12px;}
+            .mfy-card-cover{height:110px;}
+            .mfy-card-body{padding:12px;}
+            .mfy-card-logo{width:38px;height:38px;font-size:11px;}
+            .mfy-card-header-row{gap:8px;margin-bottom:8px;}
+        }
     </style>
 </head>
 <body>
-<header class="kbiz-topbar">
-    <span class="kbiz-topbar-title">Business Pages</span>
-    <a href="{% url 'business_page_create' %}" class="kbiz-create-link">
-        <i class="fas fa-plus"></i> Create Page
-    </a>
-</header>
+{% csrf_token %}
 
-<nav class="kbiz-filter-bar">
-    <a href="{% url 'business_pages_list' %}" class="kbiz-chip {% if not active_cat %}active{% endif %}">All</a>
-    {% for val, label in categories %}
-    <a href="?category={{ val }}" class="kbiz-chip {% if active_cat == val %}active{% endif %}">{{ label }}</a>
-    {% endfor %}
-</nav>
+{% include 'header.html' %}
 
-<div class="kbiz-grid">
-    {% for biz in pages %}
-    <a href="{% url 'business_page_detail' slug=biz.slug %}" class="kbiz-page-card">
-        <div class="kbiz-card-cover">
-            {% if biz.get_cover_url %}<img src="{{ biz.get_cover_url }}" alt="">{% endif %}
-            <div class="kbiz-card-logo-wrap">
-                {% if biz.get_logo_url %}
-                <img src="{{ biz.get_logo_url }}" alt="{{ biz.name }}">
-                {% else %}
-                <div class="kbiz-card-logo-placeholder"><i class="fas fa-store"></i></div>
-                {% endif %}
-            </div>
+<main class="mfy-container">
+<div class="mfy-desktop-layout">
+
+  <!-- Left Sidebar - Main Navigation (Desktop, matches profile page) -->
+  <aside class="mfy-left-sidebar mfy-desktop-only">
+    <div class="mfy-desktop-nav">
+      <!-- Home -->
+      <a href="{% url 'home' %}" class="mfy-desktop-nav-item" title="Home">
+        <div class="mfy-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
-        <div class="kbiz-card-body">
-            <div class="kbiz-card-name">
-                {{ biz.name }}
-                {% if biz.is_verified %}<i class="fas fa-check-circle" style="color:var(--mfy-primary);font-size:10px;"></i>{% endif %}
-            </div>
-            <div class="kbiz-card-cat">{{ biz.get_category_display }}</div>
-            <div class="kbiz-card-followers">{{ biz.follower_count|intcomma }} followers</div>
+        <span class="mfy-desktop-nav-label">Home</span>
+      </a>
+
+      <!-- Search -->
+      <a href="{% url 'search' %}" class="mfy-desktop-nav-item" title="Search">
+        <div class="mfy-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
-    </a>
-    {% empty %}
-    <div class="kbiz-empty">
-        <i class="fas fa-store-slash"></i>
-        <strong>No business pages yet</strong><br>
-        <small>Be the first to create one!</small>
+        <span class="mfy-desktop-nav-label">Search</span>
+      </a>
+
+      <!-- Notifications -->
+      <a href="{% url 'notification_list' %}" class="mfy-desktop-nav-item" title="Notifications">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-regular fa-bell" style="font-size:20px;color:var(--mfy-text-light);"></i>
+          {% if unread_notifications_count and unread_notifications_count > 0 %}
+          <span class="mfy-desktop-notification-badge">{{ unread_notifications_count }}</span>
+          {% endif %}
+        </div>
+        <span class="mfy-desktop-nav-label">Alerts</span>
+      </a>
+
+      <!-- Business Pages (current section) -->
+      <a href="{% url 'business_pages_list' %}" class="mfy-desktop-nav-item active" title="Business Pages">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-solid fa-store" style="font-size:20px;color:var(--mfy-primary);"></i>
+        </div>
+        <span class="mfy-desktop-nav-label">Business Pages</span>
+      </a>
+
+      <!-- Profile / My Business -->
+      <a href="{% url 'business_pages_mine' %}" class="mfy-desktop-nav-item" title="Profile">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-regular fa-user" style="font-size:20px;color:var(--mfy-text-light);"></i>
+        </div>
+        <span class="mfy-desktop-nav-label">My Business</span>
+      </a>
+
+      <!-- Logout -->
+      <a href="#" class="mfy-desktop-nav-item logout" title="Log Out" id="desktopLogoutIcon">
+        <div class="mfy-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </div>
+        <span class="mfy-desktop-nav-label">Logout</span>
+      </a>
     </div>
-    {% endfor %}
-</div>
+  </aside>
 
-{% if pages.has_other_pages %}
-<div class="kbiz-pagination">
-    {% if pages.has_previous %}
-    <a href="?page={{ pages.previous_page_number }}{% if active_cat %}&category={{ active_cat }}{% endif %}"
-       class="kbiz-page-link">← Prev</a>
-    {% endif %}
-    <span class="kbiz-page-link active">{{ pages.number }} / {{ pages.paginator.num_pages }}</span>
-    {% if pages.has_next %}
-    <a href="?page={{ pages.next_page_number }}{% if active_cat %}&category={{ active_cat }}{% endif %}"
-       class="kbiz-page-link">Next →</a>
-    {% endif %}
-</div>
-{% endif %}
+  <!-- Main content -->
+  <div class="mfy-main-col">
+<div class="mfy-main">
+    <!-- ===== Page head ===== -->
+    <div class="mfy-page-head">
+        <div>
+            <h1>Business Pages</h1>
+            <p>Discover trusted businesses and shop with confidence.</p>
+        </div>
+        <a href="{% url 'business_page_create' %}" class="mfy-create-link">
+            <i class="fas fa-plus"></i> Create Page
+        </a>
+    </div>
 
- {% include 'footer.html' %}
+    <!-- ===== Category filter ===== -->
+    <div class="mfy-filter-wrap">
+        <div class="mfy-filter-bar" id="mfyFilterBar">
+            <a href="{% url 'business_pages_list' %}" class="mfy-chip {% if not active_cat %}active{% endif %}">All</a>
+            {% for val, label in categories %}
+            <a href="?category={{ val }}" class="mfy-chip {% if active_cat == val %}active{% endif %}">{{ label }}</a>
+            {% endfor %}
+        </div>
+        <button type="button" class="mfy-scroll-btn" onclick="document.getElementById('mfyFilterBar').scrollBy({left:200,behavior:'smooth'})">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    </div>
+
+    <!-- ===== Grid ===== -->
+    <div class="mfy-grid">
+        {% for biz in pages %}
+        <div class="mfy-card">
+            <a href="{% url 'business_page_detail' slug=biz.slug %}" class="mfy-card-link">
+                <div class="mfy-card-cover">
+                    {% if biz.get_cover_url %}<img src="{{ biz.get_cover_url }}" alt="">{% endif %}
+                </div>
+                <div class="mfy-card-body">
+                    <div class="mfy-card-header-row">
+                        <div class="mfy-card-logo">
+                            {% if biz.get_logo_url %}
+                            <img src="{{ biz.get_logo_url }}" alt="{{ biz.name }}">
+                            {% else %}
+                            {{ biz.name|slice:":2"|upper }}
+                            {% endif %}
+                        </div>
+                        <div class="mfy-card-info">
+                            <div class="mfy-card-name">
+                                {{ biz.name }}
+                                {% if biz.is_verified %}<i class="fas fa-circle-check"></i>{% endif %}
+                            </div>
+                            <div class="mfy-card-cat">{{ biz.get_category_display }}</div>
+                        </div>
+                    </div>
+                    <div class="mfy-card-followers">{{ biz.follower_count|intcomma }} followers</div>
+                </div>
+            </a>
+            <div style="padding:0 16px 16px;">
+                <button type="button" class="mfy-follow-btn" data-slug="{{ biz.slug }}" onclick="mfyToggleFollow(this)">Follow</button>
+            </div>
+        </div>
+        {% empty %}
+        <div class="mfy-empty">
+            <i class="fas fa-store-slash"></i>
+            <strong>No business pages yet</strong><br>
+            <small>Be the first to create one!</small>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- ===== Pagination ===== -->
+    {% if pages.has_other_pages %}
+    {% with total=pages.paginator.num_pages cur=pages.number %}
+    <div class="mfy-pagination">
+        {% if pages.has_previous %}
+        <a class="mfy-page-btn" href="?page={{ pages.previous_page_number }}{% if active_cat %}&category={{ active_cat }}{% endif %}"><i class="fas fa-chevron-left"></i></a>
+        {% else %}
+        <span class="mfy-page-btn disabled"><i class="fas fa-chevron-left"></i></span>
+        {% endif %}
+
+        {% if total <= 7 %}
+            {% for num in pages.paginator.page_range %}
+            <a href="?page={{ num }}{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn {% if num == cur %}active{% endif %}">{{ num }}</a>
+            {% endfor %}
+        {% elif cur <= 4 %}
+            {% for num in pages.paginator.page_range %}
+                {% if num <= 4 %}
+                <a href="?page={{ num }}{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn {% if num == cur %}active{% endif %}">{{ num }}</a>
+                {% endif %}
+            {% endfor %}
+            <span class="mfy-page-ellipsis">…</span>
+            <a href="?page={{ total }}{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn">{{ total }}</a>
+        {% elif cur >= total|add:'-3' %}
+            <a href="?page=1{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn">1</a>
+            <span class="mfy-page-ellipsis">…</span>
+            {% for num in pages.paginator.page_range %}
+                {% if num >= total|add:'-3' %}
+                <a href="?page={{ num }}{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn {% if num == cur %}active{% endif %}">{{ num }}</a>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <a href="?page=1{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn">1</a>
+            <span class="mfy-page-ellipsis">…</span>
+            <a href="?page={{ cur|add:'-1' }}{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn">{{ cur|add:'-1' }}</a>
+            <a href="?page={{ cur }}{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn active">{{ cur }}</a>
+            <a href="?page={{ cur|add:'1' }}{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn">{{ cur|add:'1' }}</a>
+            <span class="mfy-page-ellipsis">…</span>
+            <a href="?page={{ total }}{% if active_cat %}&category={{ active_cat }}{% endif %}" class="mfy-page-btn">{{ total }}</a>
+        {% endif %}
+
+        {% if pages.has_next %}
+        <a class="mfy-page-btn" href="?page={{ pages.next_page_number }}{% if active_cat %}&category={{ active_cat }}{% endif %}"><i class="fas fa-chevron-right"></i></a>
+        {% else %}
+        <span class="mfy-page-btn disabled"><i class="fas fa-chevron-right"></i></span>
+        {% endif %}
+    </div>
+    {% endwith %}
+    {% endif %}
+</div><!-- /.mfy-main -->
+  </div><!-- /.mfy-main-col -->
+
+</div><!-- /.mfy-desktop-layout -->
+</main>
+
+{% include 'footer.html' %}
+
+<!-- ===== MOBILE "MORE" SIDEBAR TOGGLE BUTTON ===== -->
+<button class="mfy-mobile-sidebar-toggle" id="mfy-mobile-sidebar-toggle" onclick="mfyOpenMobileSidebar()" aria-label="Open sidebar">
+  <i class="fas fa-chevron-left"></i>
+  <span>MORE</span>
+</button>
+
+<!-- ===== MOBILE "MORE" SIDEBAR OVERLAY ===== -->
+<div class="mfy-mobile-sidebar-overlay" id="mfy-mobile-sidebar-overlay" onclick="mfyCloseMobileSidebar()"></div>
+
+<!-- ===== MOBILE "MORE" SIDEBAR (nav links, matches profile page behavior) ===== -->
+<aside class="mfy-mobile-right-sidebar" id="mfy-mobile-right-sidebar">
+  <div class="mfy-mobile-sidebar-header">
+    <span class="mfy-mobile-sidebar-title">Menu</span>
+    <button class="mfy-mobile-sidebar-close" onclick="mfyCloseMobileSidebar()" aria-label="Close sidebar">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <div class="mfy-mobile-sidebar-body">
+    <div class="mfy-desktop-nav">
+      <a href="{% url 'home' %}" class="mfy-desktop-nav-item" title="Home">
+        <div class="mfy-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="mfy-desktop-nav-label">Home</span>
+      </a>
+
+      <a href="{% url 'search' %}" class="mfy-desktop-nav-item" title="Search">
+        <div class="mfy-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="mfy-desktop-nav-label">Search</span>
+      </a>
+
+      <a href="{% url 'notification_list' %}" class="mfy-desktop-nav-item" title="Notifications">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-regular fa-bell" style="font-size:20px;color:var(--mfy-text-light);"></i>
+          {% if unread_notifications_count and unread_notifications_count > 0 %}
+          <span class="mfy-desktop-notification-badge">{{ unread_notifications_count }}</span>
+          {% endif %}
+        </div>
+        <span class="mfy-desktop-nav-label">Alerts</span>
+      </a>
+
+      <a href="{% url 'business_pages_list' %}" class="mfy-desktop-nav-item active" title="Business Pages">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-solid fa-store" style="font-size:20px;color:var(--mfy-primary);"></i>
+        </div>
+        <span class="mfy-desktop-nav-label">Business Pages</span>
+      </a>
+
+      <a href="{% url 'business_pages_mine' %}" class="mfy-desktop-nav-item" title="Profile">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-regular fa-user" style="font-size:20px;color:var(--mfy-text-light);"></i>
+        </div>
+        <span class="mfy-desktop-nav-label">My Business</span>
+      </a>
+
+      <a href="#" class="mfy-desktop-nav-item logout" title="Log Out" id="mobileLogoutIcon">
+        <div class="mfy-desktop-nav-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+        </div>
+        <span class="mfy-desktop-nav-label">Logout</span>
+      </a>
+    </div>
+  </div>
+</aside>
+
+<script>
+function getCookie(name){
+    let value = null;
+    if (document.cookie && document.cookie !== '') {
+        document.cookie.split(';').forEach(c => {
+            c = c.trim();
+            if (c.startsWith(name + '=')) value = decodeURIComponent(c.substring(name.length + 1));
+        });
+    }
+    return value;
+}
+
+function mfyToggleFollow(btn){
+    const slug = btn.dataset.slug;
+    const csrftoken = getCookie('csrftoken') || document.querySelector('input[name=csrfmiddlewaretoken]').value;
+    btn.disabled = true;
+    fetch(`/business/${slug}/follow/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrftoken}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { alert(data.error); return; }
+        btn.textContent = data.following ? 'Following' : 'Follow';
+        btn.classList.toggle('following', data.following);
+        const card = btn.closest('.mfy-card');
+        const followersEl = card.querySelector('.mfy-card-followers');
+        if (followersEl) followersEl.textContent = data.follower_count.toLocaleString() + ' followers';
+    })
+    .catch(() => {})
+    .finally(() => { btn.disabled = false; });
+}
+
+// ── Desktop sidebar logout (reuses the shared logout confirm modal from header/footer) ──
+document.addEventListener('DOMContentLoaded', function () {
+    const desktopLogoutIcon = document.getElementById('desktopLogoutIcon');
+    if (desktopLogoutIcon) {
+        desktopLogoutIcon.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const logoutModal = document.getElementById('mfyLogoutModal');
+            if (logoutModal) {
+                logoutModal.classList.add('active');
+            } else {
+                window.location.href = "{% url 'logout' %}";
+            }
+        });
+    }
+
+    const mobileLogoutIcon = document.getElementById('mobileLogoutIcon');
+    if (mobileLogoutIcon) {
+        mobileLogoutIcon.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            mfyCloseMobileSidebar();
+
+            const logoutModal = document.getElementById('mfyLogoutModal');
+            if (logoutModal) {
+                logoutModal.classList.add('active');
+            } else {
+                window.location.href = "{% url 'logout' %}";
+            }
+        });
+    }
+});
+
+// ── Mobile "MORE" sidebar open/close (same behavior as profile page) ──
+function mfyOpenMobileSidebar() {
+  document.getElementById('mfy-mobile-right-sidebar').classList.add('open');
+  document.getElementById('mfy-mobile-sidebar-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function mfyCloseMobileSidebar() {
+  document.getElementById('mfy-mobile-right-sidebar').classList.remove('open');
+  document.getElementById('mfy-mobile-sidebar-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// Close sidebar on swipe right
+(function() {
+  const sidebar = document.getElementById('mfy-mobile-right-sidebar');
+  if (!sidebar) return;
+  let startX = 0;
+  sidebar.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; }, { passive: true });
+  sidebar.addEventListener('touchend', function(e) {
+    const diff = e.changedTouches[0].clientX - startX;
+    if (diff > 60) mfyCloseMobileSidebar();
+  }, { passive: true });
+})();
+</script>
 </body>
 </html>
 

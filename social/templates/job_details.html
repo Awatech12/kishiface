@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    {% load humanize %}
+    {% load static %}
+    {% load post_tags %}
+
+    <title>{{ job.title }} – KishiHub Jobs</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <style>
+        :root {
+            --khd-primary:      #0095f6;
+            --khd-primary-dark: #0077cc;
+            --khd-primary-tint: #eff6ff;
+            --khd-bg:           #ffffff;
+            --khd-page-bg:      #fafafa;
+            --khd-border:       #dbdbdb;
+            --khd-text:         #262626;
+            --khd-muted:        #8e8e8e;
+            --khd-success:      #16a34a;
+            --khd-danger:       #ef4444;
+            --khd-modal-bg:     rgba(0,0,0,0.65);
+            --badge-color:      #0095f6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background: var(--khd-page-bg);
+            color: var(--khd-text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: inherit; }
+
+        .khd-container {
+            max-width: 1180px;
+            margin: 22px auto;
+            padding: 0 16px 120px;
+        }
+
+        .khd-back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            color: var(--khd-text);
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 18px;
+        }
+        .khd-back-link:hover { color: var(--khd-primary); }
+
+        /* ── Poster / business banner ── */
+        .khd-poster-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--khd-text);
+            background: #fff;
+            border: 1px solid var(--khd-border);
+            border-radius: 14px;
+            padding: 12px 16px;
+            margin-bottom: 18px;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .khd-poster-banner:hover { border-color: #bfe3fd; box-shadow: 0 2px 10px rgba(0,149,246,0.08); }
+
+        .khd-poster-logo {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            object-fit: cover;
+            border: 1px solid var(--khd-border);
+            flex-shrink: 0;
+            background: #fff;
+        }
+        .khd-poster-logo.round { border-radius: 50%; }
+
+        .khd-poster-banner-info { flex: 1; min-width: 0; }
+        .khd-poster-banner-name {
+            font-size: 15px; font-weight: 700;
+            display: flex; align-items: center; gap: 5px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .khd-poster-banner-sub {
+            font-size: 12px; color: var(--khd-muted);
+            margin-top: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .khd-poster-visit-btn {
+            flex-shrink: 0;
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 12px; font-weight: 700;
+            color: var(--khd-primary);
+            background: var(--khd-primary-tint);
+            border: 1px solid #bfe3fd;
+            border-radius: 20px;
+            padding: 7px 13px;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 480px) {
+            .khd-poster-visit-btn span { display: none; }
+            .khd-poster-banner-sub { font-size: 11px; }
+        }
+
+        /* ── Page grid ── */
+        .khd-page-grid {
+            display: grid;
+            grid-template-columns: 1.55fr 1fr;
+            gap: 22px;
+            align-items: start;
+        }
+
+        .khd-card {
+            background: #fff;
+            border: 1px solid var(--khd-border);
+            border-radius: 16px;
+            padding: 18px;
+        }
+
+        .khd-left-col, .khd-right-col { display: flex; flex-direction: column; gap: 18px; }
+        .khd-right-col { position: sticky; top: 16px; }
+
+        /* ── Media ── */
+        .khd-media-card { padding: 0; overflow: hidden; }
+        .khd-media-frame { position: relative; background: #f1f3f8; }
+        .khd-main-img {
+            width: 100%; height: 380px;
+            object-fit: cover;
+            display: block;
+            cursor: zoom-in;
+            background: #f7f8fb;
+        }
+        .khd-media-placeholder {
+            width: 100%; height: 380px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 10px;
+            color: var(--khd-border);
+            background: linear-gradient(135deg, #f4f6fa 0%, #eef1f6 100%);
+        }
+        .khd-media-placeholder i { font-size: 42px; }
+        .khd-media-placeholder span { font-size: 13px; color: var(--khd-muted); font-weight: 600; }
+
+        .khd-closed-ribbon {
+            position: absolute; top: 14px; left: -34px;
+            transform: rotate(-45deg);
+            background: var(--khd-danger);
+            color: #fff;
+            font-size: 12px; font-weight: 700;
+            padding: 5px 40px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+        .khd-section-title { font-size: 16px; font-weight: 800; margin-bottom: 12px; }
+        .khd-description { font-size: 14px; line-height: 1.65; color: var(--khd-text); white-space: pre-line; }
+        .khd-empty-note { color: var(--khd-muted); font-size: 13px; }
+
+        /* ── Comments (mirrors reviews) ── */
+        .khd-comment-compose { display: flex; gap: 10px; margin-bottom: 16px; }
+        .khd-comment-avatar-sm { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .khd-comment-textarea {
+            flex: 1;
+            border: 1px solid var(--khd-border);
+            border-radius: 12px;
+            padding: 10px 13px;
+            font-size: 13.5px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 44px;
+            outline: none;
+        }
+        .khd-comment-textarea:focus { border-color: var(--khd-primary); }
+        .khd-comment-send-btn {
+            align-self: flex-end;
+            background: var(--khd-primary);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            padding: 9px 16px;
+            font-size: 13px; font-weight: 700;
+            cursor: pointer;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .khd-comment-send-btn:hover { opacity: 0.9; }
+        .khd-comment-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .khd-comment-item { display: flex; gap: 10px; padding: 12px 0; border-top: 1px solid var(--khd-border); }
+        .khd-comment-item:first-child { border-top: none; padding-top: 0; }
+        .khd-comment-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .khd-comment-body { flex: 1; min-width: 0; }
+        .khd-comment-head { display: flex; align-items: baseline; gap: 8px; }
+        .khd-comment-name { font-size: 13.5px; font-weight: 700; }
+        .khd-comment-time { font-size: 11.5px; color: var(--khd-muted); }
+        .khd-comment-text { font-size: 13.5px; line-height: 1.5; margin-top: 2px; word-break: break-word; }
+        .khd-empty-comments { text-align: center; padding: 26px 0; color: var(--khd-muted); }
+        .khd-empty-comments i { font-size: 26px; color: var(--khd-border); margin-bottom: 8px; display: block; }
+
+        /* ── Sidebar info card ── */
+        .khd-badges-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+        .khd-category-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 11px;
+            border-radius: 12px;
+            font-size: 12px; font-weight: 700;
+            background: color-mix(in srgb, var(--badge-color) 12%, white);
+            color: var(--badge-color);
+        }
+        .khd-closed-badge {
+            font-size: 12px; font-weight: 700;
+            color: var(--khd-danger);
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 12px;
+            padding: 4px 11px;
+        }
+
+        .khd-title { font-size: 20px; font-weight: 800; line-height: 1.3; margin-bottom: 4px; }
+        .khd-company { font-size: 14px; color: var(--khd-muted); margin-bottom: 14px; }
+        .khd-company i { margin-right: 5px; }
+
+        .khd-meta-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; }
+        .khd-meta-row { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--khd-text); }
+        .khd-meta-row i { width: 16px; color: var(--khd-primary); text-align: center; }
+
+        /* ── Vibe reactions ── */
+        .khd-vibe-bar {
+            display: flex; flex-wrap: wrap; gap: 6px;
+            padding: 12px 0;
+            border-top: 1px solid var(--khd-border);
+            border-bottom: 1px solid var(--khd-border);
+            margin-bottom: 14px;
+        }
+        .khd-vibe-btn {
+            display: inline-flex; align-items: center; gap: 5px;
+            border: 1px solid var(--khd-border);
+            background: #fff;
+            border-radius: 20px;
+            padding: 5px 11px;
+            font-size: 12.5px; font-weight: 600;
+            color: var(--khd-text);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .khd-vibe-btn:hover { border-color: var(--khd-primary); }
+        .khd-vibe-btn.active { border-color: var(--vibe-color, var(--khd-primary)); background: color-mix(in srgb, var(--vibe-color, var(--khd-primary)) 12%, white); color: var(--vibe-color, var(--khd-primary)); }
+        .khd-vibe-total { font-size: 11.5px; color: var(--khd-muted); margin-bottom: 14px; }
+
+        /* ── Actions ── */
+        .khd-contact-btn {
+            width: 100%;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 13px;
+            border-radius: 12px;
+            font-size: 14.5px; font-weight: 700;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            margin-bottom: 10px;
+            transition: opacity 0.15s;
+        }
+        .khd-contact-btn:hover { opacity: 0.9; }
+        .khd-contact-btn-primary { background: var(--khd-primary); color: #fff; }
+        .khd-contact-btn-outline { background: #fff; color: var(--khd-text); border: 1px solid var(--khd-border) !important; }
+        .khd-contact-btn-danger { background: #fff; color: var(--khd-danger); border: 1px solid #fecaca !important; }
+        .khd-owner-actions { display: flex; gap: 8px; }
+        .khd-owner-actions .khd-contact-btn { margin-bottom: 0; }
+        .khd-owner-actions .khd-contact-btn:first-child { flex: 1.3; }
+        .khd-owner-actions .khd-contact-btn:last-child { flex: 1; }
+
+        .khd-closed-note {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 600;
+            color: var(--khd-danger);
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 10px 13px;
+            margin-bottom: 10px;
+        }
+
+        /* ── Safety card ── */
+        .khd-safe-card {
+            display: flex; gap: 12px; align-items: flex-start;
+            background: var(--khd-primary-tint);
+            border: 1px solid #bfe3fd;
+            border-radius: 14px;
+            padding: 14px 16px;
+        }
+        .khd-safe-icon { font-size: 18px; color: var(--khd-primary); margin-top: 2px; }
+        .khd-safe-card-title { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+        .khd-safe-card-body { font-size: 12.5px; color: var(--khd-muted); line-height: 1.5; }
+
+        /* ── Poster card ── */
+        .khd-poster-card-title { font-size: 13px; font-weight: 700; color: var(--khd-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 12px; }
+        .khd-poster-header { display: flex; align-items: center; gap: 10px; }
+        .khd-avatar { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; border: 1px solid var(--khd-border); flex-shrink: 0; }
+        .khd-poster-info { flex: 1; min-width: 0; }
+        .khd-username { font-weight: 700; font-size: 14.5px; text-decoration: none; display: flex; align-items: center; gap: 5px; }
+        .khd-online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--khd-success); display: inline-block; }
+        .khd-poster-sub { font-size: 12px; color: var(--khd-muted); margin-top: 2px; }
+
+        /* ── Related jobs ── */
+        .khd-more-section { margin-top: 8px; }
+        .khd-more-title { font-size: 18px; font-weight: 800; margin-bottom: 16px; }
+        .khd-related-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .khd-related-card {
+            display: block; text-decoration: none; color: var(--khd-text);
+            background: #fff; border: 1px solid var(--khd-border); border-radius: 14px;
+            overflow: hidden; transition: box-shadow 0.15s, transform 0.15s;
+        }
+        .khd-related-card:hover { box-shadow: 0 6px 18px rgba(17,24,39,0.08); transform: translateY(-2px); }
+        .khd-related-img-wrap { position: relative; aspect-ratio: 16/10; background: #f1f3f8; overflow: hidden; }
+        .khd-related-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .khd-related-img-wrap .khd-related-noimg { width:100%; height:100%; display:flex; align-items:center; justify-content:center; color: var(--khd-border); font-size: 26px; }
+        .khd-related-cat-tag {
+            position: absolute; top: 8px; left: 8px;
+            font-size: 10.5px; font-weight: 700;
+            padding: 3px 9px; border-radius: 10px;
+            background: rgba(255,255,255,0.92);
+            color: var(--badge-color);
+        }
+        .khd-related-body { padding: 10px 12px 12px; }
+        .khd-related-name { font-size: 13px; font-weight: 700; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 4px; }
+        .khd-related-meta { font-size: 12px; color: var(--khd-muted); }
+        .khd-empty-related { grid-column: 1/-1; text-align: center; padding: 30px 0; }
+        .khd-empty-related i { font-size: 26px; color: var(--khd-border); margin-bottom: 8px; display: block; }
+        .khd-empty-related p { font-size: 13px; color: var(--khd-muted); }
+
+        /* ── Spinner / toast ── */
+        .khd-spinner {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: khdSpin 0.7s linear infinite;
+            display: none;
+        }
+        @keyframes khdSpin { to { transform: rotate(360deg); } }
+
+        .khd-toast {
+            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+            background: #262626; color: #fff;
+            padding: 10px 20px; border-radius: 8px;
+            font-size: 13px; font-weight: 600;
+            z-index: 9999; white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            animation: khdSlideUp 0.2s ease;
+        }
+        @keyframes khdSlideUp { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+        /* ── Modals ── */
+        .khd-modal-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: var(--khd-modal-bg);
+            z-index: 5000;
+            align-items: center; justify-content: center;
+            padding: 16px;
+        }
+        .khd-modal-overlay.open { display: flex; }
+        .khd-modal {
+            background: #fff;
+            border-radius: 18px;
+            width: 100%; max-width: 520px;
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 22px;
+        }
+        .khd-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .khd-modal-header h2 { font-size: 17px; font-weight: 700; }
+        .khd-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--khd-muted); padding: 4px 8px; border-radius: 8px; }
+        .khd-modal-close:hover { background: var(--khd-page-bg); }
+
+        .khd-form-group { margin-bottom: 14px; }
+        .khd-form-group label { display: block; font-size: 12px; font-weight: 700; color: var(--khd-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+        .khd-form-group input, .khd-form-group select, .khd-form-group textarea {
+            width: 100%; padding: 10px 13px;
+            border: 1px solid var(--khd-border); border-radius: 10px;
+            font-size: 14px; font-family: inherit; color: var(--khd-text);
+            outline: none; transition: border-color 0.15s;
+        }
+        .khd-form-group input:focus, .khd-form-group select:focus, .khd-form-group textarea:focus { border-color: var(--khd-primary); }
+        .khd-form-group textarea { resize: vertical; min-height: 90px; }
+        .khd-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 480px) { .khd-form-row { grid-template-columns: 1fr; } }
+
+        .khd-char-count { text-align: right; font-size: 11px; color: var(--khd-muted); margin-top: 4px; }
+        .khd-char-count.over { color: var(--khd-danger); }
+
+        .khd-status-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px; border: 1px solid var(--khd-border); border-radius: 10px; margin-bottom: 14px; }
+        .khd-status-label { font-size: 13px; font-weight: 600; }
+        .khd-toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+        .khd-toggle input { opacity: 0; width: 0; height: 0; }
+        .khd-toggle-slider { position: absolute; inset: 0; background: var(--khd-border); border-radius: 24px; cursor: pointer; transition: background 0.2s; }
+        .khd-toggle-slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+        .khd-toggle input:checked + .khd-toggle-slider { background: var(--khd-primary); }
+        .khd-toggle input:checked + .khd-toggle-slider::before { transform: translateX(18px); }
+
+        .khd-submit-btn { width: 100%; padding: 12px; background: var(--khd-primary); color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; margin-top: 4px; }
+        .khd-submit-btn:hover { opacity: 0.88; }
+        .khd-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .khd-form-error { font-size: 12px; color: var(--khd-danger); margin-top: 10px; display: none; }
+
+        .khd-confirm-btns { display: flex; gap: 10px; margin-top: 20px; }
+        .khd-confirm-btns button { flex: 1; padding: 11px; border-radius: 10px; font-size: 14px; font-weight: 700; border: none; cursor: pointer; }
+        .khd-confirm-btns .cancel-btn { background: var(--khd-page-bg); color: var(--khd-text); border: 1px solid var(--khd-border); }
+        .khd-confirm-btns .delete-btn { background: var(--khd-danger); color: #fff; }
+
+        /* ── Full image modal ── */
+        .khd-image-modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.9); z-index: 6000;
+            align-items: center; justify-content: center; cursor: zoom-out;
+        }
+        .khd-image-modal-overlay.open { display: flex; }
+        .khd-image-modal-overlay img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; }
+        .khd-image-modal-close { position: fixed; top: 20px; right: 30px; font-size: 36px; color: #fff; background: none; border: none; cursor: pointer; }
+
+        /* ── Responsive ── */
+        @media (max-width: 900px) {
+            .khd-page-grid { grid-template-columns: 1fr; }
+            .khd-right-col { position: static; }
+            .khd-related-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 480px) {
+            .khd-related-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+{% include 'header.html' %}
+
+<div class="khd-container">
+
+    {% if business_page %}
+        <a href="{% url 'business_page_detail' business_page.slug %}" class="khd-back-link">
+            <i class="fas fa-chevron-left"></i> Back to {{ business_page.name }}
+        </a>
+        <a href="{% url 'business_page_detail' business_page.slug %}" class="khd-poster-banner">
+            <img src="{% if business_page.get_logo_url %}{{ business_page.get_logo_url }}{% else %}https://placehold.co/56x56/0095f6/ffffff?text=B{% endif %}"
+                 class="khd-poster-logo" alt="{{ business_page.name }} logo">
+            <div class="khd-poster-banner-info">
+                <div class="khd-poster-banner-name">
+                    {{ business_page.name }}
+                    {% if business_page.is_verified %}
+                        <i class="fas fa-circle-check" style="color: var(--khd-primary); font-size: 13px;"></i>
+                    {% endif %}
+                </div>
+                <div class="khd-poster-banner-sub">
+                    {% if business_page.tagline %}{{ business_page.tagline }}{% else %}{{ business_page.get_category_display }}{% endif %}
+                </div>
+            </div>
+            <span class="khd-poster-visit-btn"><span>Visit Page</span> <i class="fas fa-chevron-right" style="font-size:10px;"></i></span>
+        </a>
+    {% else %}
+        <a href="{% url 'job_vacancy' %}" class="khd-back-link">
+            <i class="fas fa-chevron-left"></i> Back to Jobs
+        </a>
+    {% endif %}
+
+    <div class="khd-page-grid">
+
+        <!-- ══ LEFT COLUMN ══ -->
+        <div class="khd-left-col">
+
+            <!-- Media -->
+            <div class="khd-card khd-media-card">
+                <div class="khd-media-frame">
+                    {% if not job.is_open %}
+                        <span class="khd-closed-ribbon">CLOSED</span>
+                    {% endif %}
+                    {% if job.cover_image %}
+                        <img src="{{ job.cover_image.url }}" class="khd-main-img" alt="{{ job.title }}"
+                             onclick="khdOpenImageModal('{{ job.cover_image.url|escapejs }}')">
+                    {% else %}
+                        <div class="khd-media-placeholder">
+                            <i class="fas fa-{% if job.category == 'gig' %}toolbox{% elif job.category == 'apprenticeship' %}graduation-cap{% else %}briefcase{% endif %}"></i>
+                            <span>No cover image provided</span>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div class="khd-card">
+                <div class="khd-section-title">Job Description</div>
+                {% if job.description %}
+                    <div class="khd-description">{{ job.description }}</div>
+                {% else %}
+                    <div class="khd-empty-note">No description provided.</div>
+                {% endif %}
+            </div>
+
+            <!-- Requirements -->
+            {% if job.requirements %}
+            <div class="khd-card">
+                <div class="khd-section-title">Requirements</div>
+                <div class="khd-description">{{ job.requirements }}</div>
+            </div>
+            {% endif %}
+
+            <!-- How to apply -->
+            {% if job.contact_info %}
+            <div class="khd-card">
+                <div class="khd-section-title">How to Apply</div>
+                <div class="khd-description" style="word-break:break-word;">{{ job.contact_info }}</div>
+            </div>
+            {% endif %}
+
+            <!-- Comments -->
+            <div class="khd-card" id="khdComments">
+                <div class="khd-section-title">Comments (<span id="khdCommentCount">{{ comments_count }}</span>)</div>
+
+                {% if request.user.is_authenticated %}
+                <div class="khd-comment-compose">
+                    <img class="khd-comment-avatar-sm" src="{{ request.user.profile.get_picture_url }}" alt="{{ request.user.username }}" onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';">
+                    <textarea id="khdCommentText" class="khd-comment-textarea" maxlength="5000" placeholder="Ask a question about this vacancy..."></textarea>
+                    <button type="button" class="khd-comment-send-btn" id="khdCommentSendBtn" onclick="khdPostComment()">
+                        <i class="fas fa-paper-plane"></i>
+                        <span class="khd-spinner" id="khdCommentSpinner"></span>
+                    </button>
+                </div>
+                {% else %}
+                <div class="khd-empty-note" style="margin-bottom:14px;"><a href="{% url 'index' %}" style="color:var(--khd-primary);font-weight:600;">Log in</a> to leave a comment.</div>
+                {% endif %}
+
+                <div class="khd-comment-list" id="khdCommentList">
+                    {% for c in comments %}
+                    <div class="khd-comment-item">
+                        <img class="khd-comment-avatar" src="{{ c.author.profile.get_picture_url }}" alt="{{ c.author.username }}" onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';">
+                        <div class="khd-comment-body">
+                            <div class="khd-comment-head">
+                                <span class="khd-comment-name">{{ c.author.get_full_name|default:c.author.username }}</span>
+                                <span class="khd-comment-time">{{ c.created_at|naturaltime }}</span>
+                            </div>
+                            <div class="khd-comment-text">{{ c.text }}</div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="khd-empty-comments" id="khdEmptyComments">
+                        <i class="far fa-comment-dots"></i>
+                        <p>No comments yet. Be the first to ask something!</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div><!-- /khd-left-col -->
+
+        <!-- ══ RIGHT COLUMN ══ -->
+        <div class="khd-right-col">
+
+            <!-- Title / info / actions card -->
+            <div class="khd-card">
+                <div class="khd-badges-row" style="--badge-color: {{ job.category_color }};">
+                    <span class="khd-category-badge">{{ job.category_emoji }} {{ job.get_category_display }}</span>
+                    {% if not job.is_open %}<span class="khd-closed-badge">Closed</span>{% endif %}
+                </div>
+
+                <div class="khd-title">{{ job.title }}</div>
+                {% if job.company %}<div class="khd-company"><i class="fas fa-building"></i>{{ job.company }}</div>{% endif %}
+
+                <div class="khd-meta-list">
+                    {% if job.location %}
+                    <div class="khd-meta-row"><i class="fas fa-map-marker-alt"></i> {{ job.location }}</div>
+                    {% endif %}
+                    {% if job.salary_range %}
+                    <div class="khd-meta-row"><i class="fas fa-money-bill-wave"></i> {{ job.salary_range }}</div>
+                    {% endif %}
+                    <div class="khd-meta-row"><i class="far fa-clock"></i> Posted {{ job.created_at|naturaltime }}</div>
+                </div>
+
+                <!-- Vibe reactions -->
+                <div class="khd-vibe-bar" id="khdVibeBar">
+                    {% for v in vibe_data %}
+                    <button type="button" class="khd-vibe-btn {% if v.active %}active{% endif %}"
+                            style="--vibe-color: {{ v.color }};"
+                            data-vibe="{{ v.value }}"
+                            onclick="khdToggleVibe('{{ v.value }}', this)">
+                        {{ v.emoji }} <span class="khd-vibe-count">{{ v.count }}</span>
+                    </button>
+                    {% endfor %}
+                </div>
+                <div class="khd-vibe-total"><span id="khdVibeTotal">{{ vibe_total }}</span> reaction{{ vibe_total|pluralize }}</div>
+
+                {% if is_owner %}
+                    <div class="khd-owner-actions">
+                        <button type="button" class="khd-contact-btn khd-contact-btn-primary" onclick="khdOpenEdit()">
+                            <i class="fas fa-pen"></i> Edit Vacancy
+                        </button>
+                        <button type="button" class="khd-contact-btn khd-contact-btn-danger" onclick="khdOpenDelete()">
+                            <i class="fas fa-trash-alt"></i> Delete
+                        </button>
+                    </div>
+                {% else %}
+                    {% if not job.is_open %}
+                        <div class="khd-closed-note"><i class="fas fa-circle-exclamation"></i> This vacancy is no longer accepting applicants.</div>
+                    {% endif %}
+                    {% if request.user.is_authenticated %}
+                        <button type="button" class="khd-contact-btn khd-contact-btn-primary" onclick="khdOpenDmModal()">
+                            <i class="fas fa-paper-plane"></i> Apply / Message Poster
+                        </button>
+                    {% else %}
+                        <a href="{% url 'index' %}" class="khd-contact-btn khd-contact-btn-primary">
+                            <i class="fas fa-right-to-bracket"></i> Log In to Apply
+                        </a>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            <!-- Safety notice -->
+            <div class="khd-safe-card">
+                <i class="fas fa-shield-alt khd-safe-icon"></i>
+                <div>
+                    <div class="khd-safe-card-title">Apply safely on KishiHub</div>
+                    <div class="khd-safe-card-body">Never pay a fee to "secure" a job. Keep communication on KishiHub and verify the employer before sharing personal documents.</div>
+                </div>
+            </div>
+
+            <!-- Poster card -->
+            <div class="khd-card">
+                <div class="khd-poster-card-title">Posted by</div>
+                <div class="khd-poster-header">
+                    <a href="{% url 'profile' job.posted_by.username %}">
+                        <img src="{{ poster.get_picture_url }}" class="khd-avatar" alt="{{ job.posted_by.username }}" onerror="this.src='https://placehold.co/46x46/dbdbdb/8e8e8e?text=U';">
+                    </a>
+                    <div class="khd-poster-info">
+                        <a href="{% url 'profile' job.posted_by.username %}" class="khd-username">
+                            {{ job.posted_by.get_full_name|default:job.posted_by.username }}
+                            {% if poster.is_verify %}<i class="fas fa-circle-check" style="color: var(--khd-primary); font-size: 13px;"></i>{% endif %}
+                            {% if poster.online %}<span class="khd-online-dot" title="Online"></span>{% endif %}
+                        </a>
+                        {% if poster.location %}<div class="khd-poster-sub"><i class="fas fa-map-marker-alt" style="font-size:10px;"></i> {{ poster.location }}</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /khd-right-col -->
+
+    </div><!-- /khd-page-grid -->
+
+    <!-- Related jobs -->
+    <div class="khd-more-section">
+        <div class="khd-more-title">More {{ job.get_category_display }} vacancies</div>
+        <div class="khd-related-grid">
+            {% for rj in related_jobs %}
+            <a href="{% url 'job_detail' rj.id %}" class="khd-related-card">
+                <div class="khd-related-img-wrap" style="--badge-color: {{ rj.category_color }};">
+                    {% if rj.cover_image %}
+                        <img src="{{ rj.cover_image.url }}" alt="{{ rj.title }}">
+                    {% else %}
+                        <span class="khd-related-noimg"><i class="fas fa-briefcase"></i></span>
+                    {% endif %}
+                    <span class="khd-related-cat-tag">{{ rj.category_emoji }} {{ rj.get_category_display }}</span>
+                </div>
+                <div class="khd-related-body">
+                    <div class="khd-related-name">{{ rj.title }}</div>
+                    <div class="khd-related-meta">{% if rj.location %}{{ rj.location }}{% else %}{{ rj.company|default:"KishiHub" }}{% endif %}</div>
+                </div>
+            </a>
+            {% empty %}
+            <div class="khd-empty-related">
+                <i class="fas fa-briefcase"></i>
+                <p>No other vacancies in this category right now.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div><!-- /khd-container -->
+
+<!-- ══ Full image modal ══ -->
+<div class="khd-image-modal-overlay" id="khdImageModalOverlay" onclick="khdCloseImageModal()">
+    <button type="button" class="khd-image-modal-close" onclick="khdCloseImageModal(); event.stopPropagation();">&times;</button>
+    <img id="khdModalImage" src="" alt="Job cover">
+</div>
+
+<!-- ══ DM / Apply Modal ══ -->
+<div class="khd-modal-overlay" id="khdDmModal">
+    <div class="khd-modal">
+        <div class="khd-modal-header">
+            <h2><i class="fas fa-paper-plane" style="color:var(--khd-primary);"></i> Message the Poster</h2>
+            <button type="button" class="khd-modal-close" onclick="khdCloseDmModal()">&times;</button>
+        </div>
+        <div class="khd-form-group">
+            <label>Your message</label>
+            <textarea id="khdDmText" class="khd-comment-textarea" style="min-height:130px;width:100%;" maxlength="1000" oninput="khdDmCharCount(this)"></textarea>
+            <div class="khd-char-count" id="khdDmCharCount">0 / 1000</div>
+        </div>
+        <button type="button" class="khd-submit-btn" id="khdDmSendBtn" onclick="khdSendDm()">
+            <i class="fas fa-paper-plane"></i> Send <span class="khd-spinner" id="khdDmSpinner"></span>
+        </button>
+    </div>
+</div>
+
+{% if is_owner %}
+<!-- ══ Edit Modal ══ -->
+<div class="khd-modal-overlay" id="khdEditModal">
+    <div class="khd-modal">
+        <div class="khd-modal-header">
+            <h2>✏️ Edit Vacancy</h2>
+            <button type="button" class="khd-modal-close" onclick="khdCloseEdit()">&times;</button>
+        </div>
+
+        <div class="khd-status-row">
+            <span class="khd-status-label">Vacancy is open</span>
+            <label class="khd-toggle">
+                <input type="checkbox" id="khdFIsOpen" {% if job.is_open %}checked{% endif %}>
+                <span class="khd-toggle-slider"></span>
+            </label>
+        </div>
+
+        <div class="khd-form-group">
+            <label>Job Title</label>
+            <input type="text" id="khdFTitle" value="{{ job.title|escapejs }}">
+        </div>
+        <div class="khd-form-group">
+            <label>Category</label>
+            <select id="khdFCategory">
+                <option value="gig" {% if job.category == 'gig' %}selected{% endif %}>🛠️ Gig</option>
+                <option value="fulltime" {% if job.category == 'fulltime' %}selected{% endif %}>💼 Full-time</option>
+                <option value="apprenticeship" {% if job.category == 'apprenticeship' %}selected{% endif %}>🎓 Apprenticeship</option>
+            </select>
+        </div>
+        <div class="khd-form-row">
+            <div class="khd-form-group">
+                <label>Company</label>
+                <input type="text" id="khdFCompany" value="{{ job.company|escapejs }}">
+            </div>
+            <div class="khd-form-group">
+                <label>Location</label>
+                <input type="text" id="khdFLocation" value="{{ job.location|escapejs }}">
+            </div>
+        </div>
+        <div class="khd-form-group">
+            <label>Salary Range</label>
+            <input type="text" id="khdFSalary" value="{{ job.salary_range|escapejs }}">
+        </div>
+        <div class="khd-form-group">
+            <label>Description</label>
+            <textarea id="khdFDesc">{{ job.description }}</textarea>
+        </div>
+        <div class="khd-form-group">
+            <label>Requirements</label>
+            <textarea id="khdFReqs">{{ job.requirements }}</textarea>
+        </div>
+        <div class="khd-form-group">
+            <label>How to Apply</label>
+            <input type="text" id="khdFContact" value="{{ job.contact_info|escapejs }}">
+        </div>
+        <div class="khd-form-group">
+            <label>Cover Image <span style="font-weight:400;">(optional — leave blank to keep current)</span></label>
+            <input type="file" id="khdFImage" accept="image/*">
+        </div>
+
+        <div class="khd-form-error" id="khdEditError"></div>
+        <button type="button" class="khd-submit-btn" id="khdEditSubmitBtn" onclick="khdSubmitEdit()">
+            Save Changes <span class="khd-spinner" id="khdEditSpinner"></span>
+        </button>
+    </div>
+</div>
+
+<!-- ══ Delete Confirm Modal ══ -->
+<div class="khd-modal-overlay" id="khdDeleteModal">
+    <div class="khd-modal" style="max-width:400px;">
+        <div class="khd-modal-header">
+            <h2><i class="fas fa-triangle-exclamation" style="color:var(--khd-danger);"></i> Delete Vacancy</h2>
+            <button type="button" class="khd-modal-close" onclick="khdCloseDelete()">&times;</button>
+        </div>
+        <p style="font-size:14px;line-height:1.5;">
+            Are you sure you want to delete <strong>"{{ job.title|escapejs }}"</strong>? This cannot be undone.
+        </p>
+        <div class="khd-confirm-btns">
+            <button class="cancel-btn" onclick="khdCloseDelete()">Cancel</button>
+            <button class="delete-btn" id="khdConfirmDeleteBtn" onclick="khdConfirmDelete()">Delete</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+    function getCsrf() {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.content : '';
+    }
+
+    function showToast(msg, color) {
+        const el = document.createElement('div');
+        el.className = 'khd-toast';
+        el.textContent = msg;
+        if (color) el.style.background = color;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2600);
+    }
+
+    // ── Image modal ──────────────────────────────────────────────────────────
+    function khdOpenImageModal(url) {
+        if (!url) return;
+        document.getElementById('khdModalImage').src = url;
+        document.getElementById('khdImageModalOverlay').classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+    function khdCloseImageModal() {
+        document.getElementById('khdImageModalOverlay').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+
+    // ── Vibe reactions ───────────────────────────────────────────────────────
+    const _khdJobId = '{{ job.id }}';
+
+    async function khdToggleVibe(vibeType, btn) {
+        {% if not request.user.is_authenticated %}
+            showToast('⚠️ Please log in to react.', '#e03131');
+            return;
+        {% endif %}
+        try {
+            const res = await fetch(`/jobs/${_khdJobId}/vibe/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+                body: JSON.stringify({ vibe_type: vibeType }),
+            });
+            const data = await res.json();
+            if (!res.ok) { showToast('⚠️ ' + (data.error || 'Could not react.'), '#e03131'); return; }
+
+            document.querySelectorAll('#khdVibeBar .khd-vibe-btn').forEach(b => {
+                const v = b.dataset.vibe;
+                b.classList.toggle('active', data.user_vibe === v);
+                const cnt = b.querySelector('.khd-vibe-count');
+                cnt.textContent = data.summary[v] || 0;
+            });
+            document.getElementById('khdVibeTotal').textContent = data.total;
+        } catch (_) {
+            showToast('⚠️ Network error. Please try again.', '#e03131');
+        }
+    }
+
+    // ── Comments ──────────────────────────────────────────────────────────────
+    async function khdPostComment() {
+        const ta  = document.getElementById('khdCommentText');
+        const btn = document.getElementById('khdCommentSendBtn');
+        const sp  = document.getElementById('khdCommentSpinner');
+        const text = ta ? ta.value.trim() : '';
+
+        if (!text) { showToast('⚠️ Write something first.', '#e03131'); return; }
+
+        btn.disabled = true;
+        if (sp) sp.style.display = 'inline-block';
+
+        try {
+            const res = await fetch(`/jobs/${_khdJobId}/comments/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+                body: JSON.stringify({ text }),
+            });
+            const data = await res.json();
+            if (!res.ok) { showToast('⚠️ ' + (data.error || 'Could not post comment.'), '#e03131'); return; }
+
+            const empty = document.getElementById('khdEmptyComments');
+            if (empty) empty.remove();
+
+            const list = document.getElementById('khdCommentList');
+            const item = document.createElement('div');
+            item.className = 'khd-comment-item';
+            item.innerHTML = `
+                <img class="khd-comment-avatar" src="${data.avatar}" alt="${data.author}" onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';">
+                <div class="khd-comment-body">
+                    <div class="khd-comment-head">
+                        <span class="khd-comment-name"></span>
+                        <span class="khd-comment-time">${data.time}</span>
+                    </div>
+                    <div class="khd-comment-text"></div>
+                </div>`;
+            item.querySelector('.khd-comment-name').textContent = data.author_name;
+            item.querySelector('.khd-comment-text').textContent = data.text;
+            list.appendChild(item);
+
+            document.getElementById('khdCommentCount').textContent = data.count;
+            ta.value = '';
+        } catch (_) {
+            showToast('⚠️ Network error. Please try again.', '#e03131');
+        } finally {
+            btn.disabled = false;
+            if (sp) sp.style.display = 'none';
+        }
+    }
+
+    // ── DM / Apply modal ─────────────────────────────────────────────────────
+    const _khdJobTitle = '{{ job.title|escapejs }}';
+    const _khdJobUrl    = '{{ request.build_absolute_uri }}';
+
+    function khdOpenDmModal() {
+        const modal = document.getElementById('khdDmModal');
+        if (!modal) return;
+        const ta = document.getElementById('khdDmText');
+        if (ta && !ta.value.trim()) {
+            ta.value = "Hi! I'm interested in this vacancy:\n💼 " + _khdJobTitle + "\n🔗 " + _khdJobUrl + "\n\nIs this position still open?";
+            khdDmCharCount(ta);
+        }
+        modal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+    function khdCloseDmModal() {
+        document.getElementById('khdDmModal').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+    function khdDmCharCount(ta) {
+        const count = ta.value.length;
+        const el = document.getElementById('khdDmCharCount');
+        if (!el) return;
+        el.textContent = count + ' / 1000';
+        el.classList.toggle('over', count >= 950);
+    }
+
+    async function khdSendDm() {
+        const ta  = document.getElementById('khdDmText');
+        const btn = document.getElementById('khdDmSendBtn');
+        const sp  = document.getElementById('khdDmSpinner');
+        const msg = ta ? ta.value.trim() : '';
+
+        if (!msg) { showToast('⚠️ Please write a message first.', '#e03131'); ta && ta.focus(); return; }
+
+        btn.disabled = true;
+        if (sp) sp.style.display = 'inline-block';
+
+        try {
+            const res = await fetch('{% url "contact_poster" job.id %}', {
+                method: 'GET',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+
+            if (res.redirected) {
+                khdCloseDmModal();
+                showToast('Opening conversation…', '#0095f6');
+                setTimeout(() => { window.location.href = res.url; }, 700);
+                return;
+            }
+            showToast('⚠️ Could not open conversation.', '#e03131');
+        } catch (_) {
+            showToast('⚠️ Network error. Please try again.', '#e03131');
+        } finally {
+            btn.disabled = false;
+            if (sp) sp.style.display = 'none';
+        }
+    }
+
+    // Close modals with Escape
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            khdCloseImageModal();
+            khdCloseDmModal();
+            {% if is_owner %}
+            khdCloseEdit();
+            khdCloseDelete();
+            {% endif %}
+        }
+    });
+
+    {% if is_owner %}
+    // ── Edit modal ───────────────────────────────────────────────────────────
+    function khdOpenEdit() {
+        document.getElementById('khdEditError').style.display = 'none';
+        document.getElementById('khdEditModal').classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+    function khdCloseEdit() {
+        document.getElementById('khdEditModal').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+
+    async function khdSubmitEdit() {
+        const errEl = document.getElementById('khdEditError');
+        const btn   = document.getElementById('khdEditSubmitBtn');
+        const sp    = document.getElementById('khdEditSpinner');
+        errEl.style.display = 'none';
+
+        const title = document.getElementById('khdFTitle').value.trim();
+        const category = document.getElementById('khdFCategory').value;
+        const desc = document.getElementById('khdFDesc').value.trim();
+
+        if (!title) { errEl.textContent = 'Job title is required.'; errEl.style.display = 'block'; return; }
+        if (!desc)  { errEl.textContent = 'Description is required.'; errEl.style.display = 'block'; return; }
+
+        const fd = new FormData();
+        fd.append('title', title);
+        fd.append('category', category);
+        fd.append('company', document.getElementById('khdFCompany').value.trim());
+        fd.append('location', document.getElementById('khdFLocation').value.trim());
+        fd.append('salary_range', document.getElementById('khdFSalary').value.trim());
+        fd.append('description', desc);
+        fd.append('requirements', document.getElementById('khdFReqs').value.trim());
+        fd.append('contact_info', document.getElementById('khdFContact').value.trim());
+        fd.append('is_open', document.getElementById('khdFIsOpen').checked ? '1' : '0');
+        const fImage = document.getElementById('khdFImage');
+        if (fImage.files[0]) fd.append('cover_image', fImage.files[0]);
+
+        btn.disabled = true;
+        if (sp) sp.style.display = 'inline-block';
+
+        try {
+            const res = await fetch('/jobs/{{ job.id }}/edit/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrf() },
+                body: fd,
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('✅ Changes saved!', '#0095f6');
+                setTimeout(() => window.location.reload(), 600);
+            } else {
+                errEl.textContent = data.error || 'Something went wrong.';
+                errEl.style.display = 'block';
+            }
+        } catch (_) {
+            errEl.textContent = 'Network error. Please try again.';
+            errEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            if (sp) sp.style.display = 'none';
+        }
+    }
+
+    // ── Delete modal ─────────────────────────────────────────────────────────
+    function khdOpenDelete() {
+        document.getElementById('khdDeleteModal').classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+    function khdCloseDelete() {
+        document.getElementById('khdDeleteModal').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+
+    async function khdConfirmDelete() {
+        const btn = document.getElementById('khdConfirmDeleteBtn');
+        btn.disabled = true;
+        btn.textContent = 'Deleting…';
+        try {
+            const res = await fetch('/jobs/{{ job.id }}/delete/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrf(), 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `csrfmiddlewaretoken=${encodeURIComponent(getCsrf())}`,
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('✅ Vacancy deleted.', '#0095f6');
+                setTimeout(() => { window.location.href = '{% url "job_vacancy" %}'; }, 700);
+            } else {
+                alert(data.error || 'Could not delete. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Delete';
+            }
+        } catch (_) {
+            alert('Network error. Please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Delete';
+        }
+    }
+    {% endif %}
+</script>
+</body>
+</html>

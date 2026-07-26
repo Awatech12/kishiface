@@ -550,6 +550,21 @@ class Message(models.Model):
     linked_product_snapshot = models.JSONField(null=True, blank=True)
     # snapshot keys: name, price, condition, category, location, image_url, product_id
 
+    # ── Job enquiry context ───────────────────────────────────────────────────
+    # Set when an applicant messages a poster directly from a job vacancy page.
+    # Stores a snapshot of the vacancy so the card stays visible even if the
+    # listing is later deleted or closed.
+    linked_job = models.ForeignKey(
+        'JobVacancy',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='enquiry_messages',
+    )
+    linked_job_snapshot = models.JSONField(null=True, blank=True)
+    # snapshot keys: job_id, title, company, category, category_label, location,
+    # salary_range, is_open, image_url, detail_url
+
     def __str__(self):
         return f"{self.sender} to {self.receiver}: {self.conversation[:50]}"
     

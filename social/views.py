@@ -23,6 +23,7 @@ import time, json, logging, re, requests, ipaddress
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, quote as url_quote
 from django.http import JsonResponse, Http404
+from django.urls import reverse
 from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -1552,9 +1553,9 @@ def _search_pages_qs(query):
             Q(location__icontains=query),
             is_active=True,
         )
-        .annotate(follower_count=Count('followers', distinct=True))
+        .annotate(_follower_count=Count('followers', distinct=True))
         .distinct()
-        .order_by('-follower_count')
+        .order_by('-_follower_count')
     )
 
 
@@ -1573,6 +1574,56 @@ def _search_jobs_qs(query):
     )
 
 
+def _search_events_qs(query):
+    return (
+        SocialEvent.objects.filter(
+            Q(title__icontains=query) |
+            Q(description__icontains=query) |
+            Q(location__icontains=query) |
+            Q(event_type__icontains=query)
+        )
+        .select_related('created_by')
+        .distinct()
+        .order_by('date', 'time')
+    )
+
+
+def _trending_searches(limit=8, days=14, exclude_query=None):
+    """
+    Site-wide trending search terms — most frequently searched queries
+    (case-insensitive) across all users within the trailing window.
+    """
+    from django.db.models.functions import Lower
+
+    cutoff = timezone.now() - timedelta(days=days)
+    qs = (
+        SearchHistory.objects
+        .filter(created_at__gte=cutoff)
+        .annotate(q_norm=Lower('query'))
+    )
+    if exclude_query:
+        qs = qs.exclude(q_norm=exclude_query.strip().lower())
+
+    rows = (
+        qs.values('q_norm')
+        .annotate(hits=Count('id'))
+        .order_by('-hits')[:limit]
+    )
+    # Re-title-case for display (e.g. "iphone 13" -> "iPhone 13" is not knowable,
+    # so just use the most recent original-cased spelling for each normalized term).
+    results = []
+    for row in rows:
+        original = (
+            SearchHistory.objects
+            .filter(created_at__gte=cutoff, query__iexact=row['q_norm'])
+            .order_by('-created_at')
+            .values_list('query', flat=True)
+            .first()
+        )
+        results.append({'query': original or row['q_norm'], 'hits': row['hits']})
+    return results
+
+
 @login_required(login_url='/')
 def search(request):
     _PAGE = 10   # items per HTMX page
@@ -1587,21 +1638,29 @@ def search(request):
         products_qs = _search_products_qs(query)
         pages_qs    = _search_pages_qs(query)
         jobs_qs     = _search_jobs_qs(query)
+        events_qs   = _search_events_qs(query)
 
         users_total    = users_qs.count()
         products_total = products_qs.count()
         pages_total    = pages_qs.count()
         jobs_total     = jobs_qs.count()
+        events_total   = events_qs.count()
 
         users    = users_qs[:_PAGE]
         products = products_qs[:_PAGE]
         pages    = pages_qs[:_PAGE]
         jobs     = jobs_qs[:_PAGE]
+        events   = events_qs[:_PAGE]
 
         recent_searches = (
             SearchHistory.objects.filter(user=request.user)
             .exclude(query=query).order_by('-created_at')[:8]
         )
+
+        # ── Wishlist state for the product cards ───────────────────────────────
+        wishlist_ids = set(
+            Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
+        ) if request.user.is_authenticated else set()
 
         # ── Sidebar context ────────────────────────────────────────────────────
         _unread_follow_count = FollowNotification.objects.filter(to_user=request.user, is_read=False).count()
@@ -1620,8 +1679,12 @@ def search(request):
             'jobs':              jobs,
             'jobs_total':        jobs_total,
             'jobs_has_more':     jobs_total > _PAGE,
+            'events':            events,
+            'events_total':      events_total,
+            'events_has_more':   events_total > _PAGE,
             'recent_searches':   recent_searches,
             'page_size':         _PAGE,
+            'wishlist_ids':      wishlist_ids,
             'unread_follow_count':        _unread_follow_count,
         })
 
@@ -1630,6 +1693,7 @@ def search(request):
     search_history = (
         SearchHistory.objects.filter(user=request.user).order_by('-created_at')[:20]
     )
+    trending_searches = _trending_searches(limit=8, days=14)
 
     current_profile = request.user.profile
     following_profile_ids = current_profile.followings.values_list('id', flat=True)
@@ -1637,8 +1701,8 @@ def search(request):
         Profile.objects
         .exclude(user=request.user)
         .exclude(id__in=following_profile_ids)
-        .annotate(follower_count=Count('followers'))
-        .order_by('-follower_count')[:12]
+        .annotate(_follower_count=Count('followers'))
+        .order_by('-_follower_count')[:12]
     )
 
     explore_products_qs = (
@@ -1652,8 +1716,14 @@ def search(request):
 
     trending_pages = (
         BusinessPage.objects.filter(is_active=True)
-        .annotate(follower_count=Count('followers', distinct=True))
-        .order_by('-follower_count')[:10]
+        .annotate(_follower_count=Count('followers', distinct=True))
+        .order_by('-_follower_count')[:10]
+    )
+
+    upcoming_events = (
+        SocialEvent.objects.filter(date__gte=timezone.now().date())
+        .select_related('created_by')
+        .order_by('date', 'time')[:6]
     )
 
     # ── Sidebar context ────────────────────────────────────────────────────────
@@ -1661,10 +1731,12 @@ def search(request):
 
     return render(request, 'search.html', {
         'search_history':        search_history,
+        'trending_searches':     trending_searches,
         'suggested_users':       suggested_users,
         'explore_products':      explore_products,
         'explore_has_more':      explore_products_total > _EXPLORE_PAGE,
         'trending_pages':        trending_pages,
+        'upcoming_events':       upcoming_events,
         'unread_follow_count':   _unread_follow_count,
     })
 
@@ -1723,11 +1795,16 @@ def search_products_partial(request):
     products = products_qs[offset: offset + _PAGE]
     has_more = (offset + _PAGE) < total
 
+    wishlist_ids = set(
+        Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
+    ) if request.user.is_authenticated else set()
+
     return render(request, 'snippet/search_products_partial.html', {
-        'products': products,
-        'query':    query,
-        'page':     page + 1,
-        'has_more': has_more,
+        'products':     products,
+        'query':        query,
+        'page':         page + 1,
+        'has_more':     has_more,
+        'wishlist_ids': wishlist_ids,
     })
 
 
@@ -1783,6 +1860,31 @@ def search_jobs_partial(request):
 
 @login_required(login_url='/')
 @require_GET
+def search_events_partial(request):
+    """GET /search/events/?q=…&page=N — HTMX paginated event rows."""
+    if not request.headers.get('HX-Request'):
+        return JsonResponse({'error': 'HTMX only'}, status=400)
+
+    _PAGE = 10
+    query = request.GET.get('q', '').strip()[:100]
+    page  = max(1, int(request.GET.get('page', 1) or 1))
+    offset = (page - 1) * _PAGE
+
+    events_qs = _search_events_qs(query)
+    total = events_qs.count()
+    events = events_qs[offset: offset + _PAGE]
+    has_more = (offset + _PAGE) < total
+
+    return render(request, 'snippet/search_events_partial.html', {
+        'events':   events,
+        'query':    query,
+        'page':     page + 1,
+        'has_more': has_more,
+    })
+
+
+@login_required(login_url='/')
+@require_GET
 def explore_products_partial(request):
     """GET /search/explore/products/?page=N — HTMX paginated explore grid (no query)."""
     if not request.headers.get('HX-Request'):
@@ -1806,6 +1908,101 @@ def explore_products_partial(request):
         'products': products,
         'page':     page + 1,
         'has_more': has_more,
+    })
+
+
+@login_required(login_url='/')
+@require_GET
+def search_suggestions_v0(request):
+    """
+    GET /search/suggestions/?q=… — lightweight live-typeahead results,
+    called as the user types. Returns a small mixed bag of matches
+    across users, products, pages, jobs and events, plus any of the
+    user's own past searches that match.
+    """
+    query = request.GET.get('q', '').strip()[:100]
+
+    if not query:
+        return JsonResponse({'query': '', 'results': [], 'history': []})
+
+    _N = 4  # max items per category in the dropdown
+
+    users    = list(_search_users_qs(query)[:_N])
+    products = list(_search_products_qs(query)[:_N])
+    pages    = list(_search_pages_qs(query)[:_N])
+    jobs     = list(_search_jobs_qs(query)[:_N])
+    events   = list(_search_events_qs(query)[:_N])
+
+    results = []
+
+    for u in users:
+        pic = ''
+        try:
+            pic = u.profile.get_picture_url()
+        except Exception:
+            pic = ''
+        results.append({
+            'type':  'user',
+            'label': u.username,
+            'sub':   u.get_full_name() or 'User',
+            'image': pic,
+            'url':   reverse('profile', args=[u.username]),
+        })
+
+    for p in products:
+        first_image = p.images.first()
+        results.append({
+            'type':  'product',
+            'label': p.product_name,
+            'sub':   f'₦{p.product_price:,.0f}' if p.product_price is not None else '',
+            'image': first_image.product_image.url if first_image and first_image.product_image else '',
+            'url':   reverse('product_detail', args=[p.product_id]),
+        })
+
+    for bp in pages:
+        logo = ''
+        try:
+            logo = bp.get_logo_url()
+        except Exception:
+            logo = ''
+        results.append({
+            'type':  'page',
+            'label': bp.name,
+            'sub':   bp.get_category_display() if hasattr(bp, 'get_category_display') else 'Business',
+            'image': logo,
+            'url':   reverse('business_page_detail', args=[bp.slug]),
+        })
+
+    for j in jobs:
+        results.append({
+            'type':  'job',
+            'label': j.title,
+            'sub':   j.company,
+            'image': '',
+            'url':   f"{reverse('job_vacancy')}#khj-card-{j.id}",
+        })
+
+    for e in events:
+        results.append({
+            'type':  'event',
+            'label': e.title,
+            'sub':   e.date.strftime('%b %d') if e.date else e.get_event_type_display(),
+            'image': '',
+            'url':   f"{reverse('event_calendar')}#event-card-{e.id}",
+        })
+
+    history = list(
+        SearchHistory.objects.filter(user=request.user, query__icontains=query)
+        .exclude(query__iexact=query)
+        .order_by('-created_at')
+        .values_list('query', flat=True)
+        .distinct()[:5]
+    )
+
+    return JsonResponse({
+        'query':   query,
+        'results': results,
+        'history': history,
     })
 
 
@@ -1900,10 +2097,37 @@ def message(request, username):
         except Exception:
             product_context = None
 
+    # ── Job enquiry context ────────────────────────────────────────────────────
+    # If ?job=<uuid> is in the URL, preload the vacancy so the template can
+    # pre-fill the composer with a job card prompt (mirrors product_context).
+    job_context = None
+    job_uuid = request.GET.get('job')
+    if job_uuid:
+        try:
+            import uuid as _uuid_mod2
+            _jid = _uuid_mod2.UUID(str(job_uuid))
+            _job = JobVacancy.objects.select_related('business_page').get(id=_jid)
+            if _job.posted_by != request.user:
+                job_context = {
+                    'job_id':       str(_job.id),
+                    'title':        _job.title,
+                    'company':      _job.company,
+                    'category':     _job.category,
+                    'category_label': _job.get_category_display(),
+                    'location':     _job.location,
+                    'salary_range': _job.salary_range,
+                    'is_open':      _job.is_open,
+                    'image_url':    _job.cover_image.url if _job.cover_image else '',
+                    'detail_url':   f"/jobs/{_job.id}/",
+                }
+        except Exception:
+            job_context = None
+
     context = {
         'grouped_messages': grouped_messages,
         'receiver': receiver,
         'product_context': product_context,
+        'job_context': job_context,
     }
     return render(request, 'message.html', context)
 
@@ -1931,10 +2155,12 @@ def send_message(request, username):
             message_text = str(data.get('message', ''))
             reply_to_id = data.get('reply_to')
             product_id_raw = data.get('product_id')
+            job_id_raw = data.get('job_id')
         else:
             message_text = request.POST.get('message', '')
             reply_to_id = request.POST.get('reply_to')
             product_id_raw = request.POST.get('product_id')
+            job_id_raw = request.POST.get('job_id')
         
         file_upload = request.FILES.get('file_upload')
 
@@ -2040,6 +2266,33 @@ def send_message(request, username):
                 linked_product_obj = None
                 linked_product_snapshot = None
 
+        # ── Resolve linked job (applicant → poster enquiry) ────────────────────
+        linked_job_obj = None
+        linked_job_snapshot = None
+        if job_id_raw:
+            try:
+                import uuid as _uuid_mod3
+                _jid = _uuid_mod3.UUID(str(job_id_raw))
+                _job = JobVacancy.objects.select_related('business_page').get(id=_jid)
+                # Only attach if the receiver is the actual poster
+                if _job.posted_by == receiver:
+                    linked_job_obj = _job
+                    linked_job_snapshot = {
+                        'job_id':         str(_job.id),
+                        'title':          _job.title,
+                        'company':        _job.company,
+                        'category':       _job.category,
+                        'category_label': _job.get_category_display(),
+                        'location':       _job.location,
+                        'salary_range':   _job.salary_range,
+                        'is_open':        _job.is_open,
+                        'image_url':      _job.cover_image.url if _job.cover_image else '',
+                        'detail_url':     f"/jobs/{_job.id}/",
+                    }
+            except Exception:
+                linked_job_obj = None
+                linked_job_snapshot = None
+
         msg_obj = Message.objects.create(
             sender=request.user, receiver=receiver,
             conversation=message_text if message_text else '',
@@ -2049,6 +2302,8 @@ def send_message(request, username):
             link_preview=link_preview,
             linked_product=linked_product_obj,
             linked_product_snapshot=linked_product_snapshot,
+            linked_job=linked_job_obj,
+            linked_job_snapshot=linked_job_snapshot,
         )
         
         Message.objects.filter(sender=receiver, receiver=request.user, is_read=False).update(is_read=True)
@@ -2087,6 +2342,7 @@ def send_message(request, username):
                 'reply_to': reply_data,
                 'link_preview': link_preview,
                 'linked_product_snapshot': linked_product_snapshot,
+                'linked_job_snapshot': linked_job_snapshot,
             }
         )
         
@@ -3848,6 +4104,98 @@ def job_vacancy(request):
         'user_can_post':  user_can_post,
         'missing_fields': missing_fields,
     })
+
+
+def job_detail(request, job_id):
+    """
+    Full-page detail view for a single Job Vacancy — mirrors product_detail.
+    """
+    job = get_object_or_404(
+        JobVacancy.objects.select_related('posted_by__profile', 'business_page'),
+        id=job_id,
+    )
+
+    related_jobs = JobVacancy.objects.filter(
+        category=job.category, is_open=True
+    ).exclude(id=job.id).select_related('posted_by__profile')[:4]
+
+    poster_profile = get_object_or_404(Profile, user=job.posted_by)
+
+    # ── Vibe reactions summary ──────────────────────────────────────────────
+    vibe_rows = (
+        JobVibe.objects.filter(job=job)
+        .values('vibe_type')
+        .annotate(cnt=Count('id'))
+    )
+    vibe_summary = {r['vibe_type']: r['cnt'] for r in vibe_rows}
+    vibe_total = sum(vibe_summary.values())
+
+    user_vibe = None
+    if request.user.is_authenticated:
+        v = JobVibe.objects.filter(job=job, user=request.user).first()
+        if v:
+            user_vibe = v.vibe_type
+
+    vibe_data = [
+        {
+            'value':  value,
+            'label':  label,
+            'emoji':  JobVibe.VIBE_EMOJIS.get(value, ''),
+            'color':  JobVibe.VIBE_COLORS.get(value, '#0095f6'),
+            'count':  vibe_summary.get(value, 0),
+            'active': user_vibe == value,
+        }
+        for value, label in JobVibe.VIBE_CHOICES
+    ]
+
+    # ── Comments ─────────────────────────────────────────────────────────────
+    comments = (
+        JobComment.objects.filter(job=job)
+        .select_related('author', 'author__profile')
+        .order_by('created_at')[:50]
+    )
+    comments_count = JobComment.objects.filter(job=job).count()
+
+    is_owner = request.user.is_authenticated and request.user == job.posted_by
+
+    context = {
+        'job':             job,
+        'related_jobs':    related_jobs,
+        'poster':          poster_profile,
+        'business_page':   job.business_page,
+        'is_owner':        is_owner,
+        'vibe_summary':    vibe_summary,
+        'vibe_total':      vibe_total,
+        'user_vibe':       user_vibe,
+        'vibe_data':       vibe_data,
+        'comments':        comments,
+        'comments_count':  comments_count,
+    }
+    return render(request, 'job_details.html', context)
+
+
+def contact_poster(request, job_id):
+    """AJAX/redirect target for messaging a job poster — mirrors contact_seller."""
+    job = get_object_or_404(JobVacancy, id=job_id)
+    poster = job.posted_by
+
+    if poster == request.user:
+        return redirect('job_detail', job_id=job_id)
+
+    if not request.user.is_authenticated:
+        return redirect('/')
+
+    try:
+        if request.user.profile.has_blocked(poster.profile) or poster.profile.has_blocked(request.user.profile):
+            from django.contrib import messages as _msgs
+            _msgs.error(request, 'You cannot message this poster.')
+            return redirect('job_detail', job_id=job_id)
+    except Exception:
+        pass
+
+    from django.urls import reverse
+    base_url = reverse('message', kwargs={'username': poster.username})
+    return redirect(f"{base_url}?job={job_id}")
 
 
 @login_required(login_url='/')
