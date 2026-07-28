@@ -980,6 +980,33 @@
       background: #ef4444;
       color: #fff;
     }
+
+    /* ── DM char count / spinner / toast ── */
+    .khj-char-count { text-align: right; font-size: 11px; color: var(--khub-text-light); margin-top: 4px; }
+    .khj-char-count.over { color: #ef4444; }
+
+    .khj-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: khjSpin 0.7s linear infinite;
+      display: none;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    @keyframes khjSpin { to { transform: rotate(360deg); } }
+
+    .khj-toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      background: #262626; color: #fff;
+      padding: 10px 20px; border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      z-index: 9999; white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      animation: khjSlideUp 0.2s ease;
+    }
+    @keyframes khjSlideUp { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
   </style>
 </head>
 <body>
@@ -1055,40 +1082,11 @@
         <span style="font-size:13px;color:rgba(255,255,255,0.8);">
           {{ counts.total }} open listing{{ counts.total|pluralize }}
         </span>
-        {% if user_can_post %}
-          <button class="khj-post-btn" id="khjOpenCreateBtn">
-            <i class="fas fa-plus"></i> Post a Job
-          </button>
-        {% else %}
-          <button class="khj-post-btn-disabled" id="khjOpenCreateBtn"
-                  onclick="document.getElementById('khjVerifyBanner').scrollIntoView({behavior:'smooth'});return false;">
-            <i class="fas fa-user-edit"></i> Complete Profile to Post
-          </button>
-        {% endif %}
+        <button class="khj-post-btn" id="khjOpenCreateBtn">
+          <i class="fas fa-plus"></i> Post a Job
+        </button>
       </div>
     </div>
-
-    <!-- Profile completion banner — shown only when required fields are missing -->
-    {% if not user_can_post %}
-    <div class="khj-verify-banner" id="khjVerifyBanner">
-      <div class="khj-verify-banner-icon">📝</div>
-      <div class="khj-verify-banner-body">
-        <div class="khj-verify-banner-title">Complete your profile to post jobs</div>
-        <div class="khj-verify-banner-desc">
-          To keep the community safe, you need a complete profile before posting job vacancies.
-          {% if missing_fields %}
-            <br>Your profile is missing the following required information:
-            <ul>
-              {% for field in missing_fields %}<li>{{ field }}</li>{% endfor %}
-            </ul>
-          {% endif %}
-        </div>
-        <a href="{% url 'profile' request.user.username %}" class="khj-verify-banner-link">
-          <i class="fas fa-user-edit"></i> Complete My Profile
-        </a>
-      </div>
-    </div>
-    {% endif %}
 
     <!-- Category Tabs -->
     <div class="khj-tabs">
@@ -1189,12 +1187,12 @@
           <div class="khj-jcard-price-row">
             <span class="khj-jcard-price">{% if job.salary_range %}{{ job.salary_range }}{% else %}Salary: Negotiable{% endif %}</span>
             {% if job.posted_by != request.user %}
-            <a href="{% url 'contact_poster' job.id %}"
+            <button type="button"
                class="khj-jcard-quick-btn"
-               onclick="event.stopPropagation()"
+               onclick="event.stopPropagation(); khjOpenDmModal('{{ job.id }}', '{{ job.title|escapejs }}', '{{ request.scheme }}://{{ request.get_host }}{% url "job_detail" job.id %}', '{% url "send_message" job.posted_by.username %}', '{% url "message" job.posted_by.username %}?job={{ job.id }}');"
                aria-label="Message poster">
                 <i class="fas fa-paper-plane"></i>
-            </a>
+            </button>
             {% endif %}
           </div>
 
@@ -1316,8 +1314,8 @@
       <div class="mfy-grow-card">
         <div class="mfy-grow-card-title">📢 Hiring?</div>
         <div class="mfy-grow-card-text">Post your vacancy and reach the entire Kishi community for free.</div>
-        <button {% if user_can_post %}class="mfy-grow-card-btn" id="khjOpenCreateBtn2"{% else %}class="mfy-grow-card-btn" onclick="document.getElementById('khjVerifyBanner').scrollIntoView({behavior:'smooth'});return false;"{% endif %}>
-          <i class="fas fa-{% if user_can_post %}plus{% else %}lock{% endif %}"></i> Post a Job Now
+        <button class="mfy-grow-card-btn" id="khjOpenCreateBtn2">
+          <i class="fas fa-plus"></i> Post a Job Now
         </button>
         <span class="mfy-grow-card-illustration">💼</span>
       </div>
@@ -1400,8 +1398,8 @@
     <div class="mfy-grow-card" style="margin-top:16px;">
       <div class="mfy-grow-card-title">📢 Hiring?</div>
       <div class="mfy-grow-card-text">Post your vacancy and reach the entire Kishi community for free.</div>
-      <button {% if user_can_post %}class="mfy-grow-card-btn" id="khjOpenCreateBtnMobile"{% else %}class="mfy-grow-card-btn" onclick="document.getElementById('khjVerifyBanner').scrollIntoView({behavior:'smooth'});return false;"{% endif %}>
-        <i class="fas fa-{% if user_can_post %}plus{% else %}lock{% endif %}"></i> Post a Job Now
+      <button class="mfy-grow-card-btn" id="khjOpenCreateBtnMobile">
+        <i class="fas fa-plus"></i> Post a Job Now
       </button>
       <span class="mfy-grow-card-illustration">💼</span>
     </div>
@@ -1521,6 +1519,24 @@
   </div>
 </div>
 
+<!-- ══ DM / Message Poster Modal ══ -->
+<div class="khj-modal-overlay" id="khjDmModal">
+  <div class="khj-modal">
+    <div class="khj-modal-header">
+      <h2><i class="fas fa-paper-plane" style="color:var(--khub-primary);"></i> Message the Poster</h2>
+      <button class="khj-modal-close" id="khjCloseDmBtn">✕</button>
+    </div>
+    <div class="khj-form-group">
+      <label>Your message</label>
+      <textarea id="khjDmText" style="min-height:130px;" maxlength="1000" oninput="khjDmCharCount(this)"></textarea>
+      <div class="khj-char-count" id="khjDmCharCount">0 / 1000</div>
+    </div>
+    <button type="button" class="khj-submit-btn" id="khjDmSendBtn" onclick="khjSendDm()">
+      <i class="fas fa-paper-plane"></i> Send <span class="khj-spinner" id="khjDmSpinner"></span>
+    </button>
+  </div>
+</div>
+
 <!-- Hidden logout form -->
 <form id="khjLogoutForm" method="POST" action="{% url 'logout' %}" style="display:none;">
   {% csrf_token %}
@@ -1564,6 +1580,85 @@
     overlay.classList.remove('open');
     document.body.style.overflow = '';
   }
+
+  function showToast(msg, color) {
+    const el = document.createElement('div');
+    el.className = 'khj-toast';
+    el.textContent = msg;
+    if (color) el.style.background = color;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2600);
+  }
+
+  /* ── DM / Message Poster Modal ── */
+  const dmOverlay   = document.getElementById('khjDmModal');
+  const dmText      = document.getElementById('khjDmText');
+  const dmSendBtn   = document.getElementById('khjDmSendBtn');
+  const dmSpinner   = document.getElementById('khjDmSpinner');
+  let   dmSendUrl   = null;
+  let   dmSuccessUrl = null;
+  let   dmJobId       = null;
+
+  window.khjOpenDmModal = function (jobId, jobTitle, jobUrl, sendUrl, successUrl) {
+    dmJobId      = jobId;
+    dmSendUrl    = sendUrl;
+    dmSuccessUrl = successUrl;
+
+    if (dmText && !dmText.value.trim()) {
+      dmText.value = "Hi! I'm interested in this vacancy:\n💼 " + jobTitle + "\n🔗 " + jobUrl + "\n\nIs this position still open?";
+      khjDmCharCount(dmText);
+    }
+    showModal(dmOverlay);
+  };
+
+  window.khjCloseDmModal = function () {
+    hideModal(dmOverlay);
+  };
+
+  window.khjDmCharCount = function (ta) {
+    const count = ta.value.length;
+    const el = document.getElementById('khjDmCharCount');
+    if (!el) return;
+    el.textContent = count + ' / 1000';
+    el.classList.toggle('over', count >= 950);
+  };
+
+  window.khjSendDm = async function () {
+    const msg = dmText ? dmText.value.trim() : '';
+    if (!msg) { showToast('⚠️ Please write a message first.', '#ed4956'); dmText && dmText.focus(); return; }
+
+    dmSendBtn.disabled = true;
+    if (dmSpinner) dmSpinner.style.display = 'inline-block';
+
+    try {
+      const res = await fetch(dmSendUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': CSRF,
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ message: msg, job_id: dmJobId }),
+      });
+      const data = await res.json();
+
+      if (data.status === 'success') {
+        window.khjCloseDmModal();
+        showToast('Message sent!', '#0095f6');
+        setTimeout(() => { window.location.href = dmSuccessUrl; }, 700);
+        return;
+      }
+      showToast(data.message || '⚠️ Could not send message.', '#ed4956');
+    } catch (_) {
+      showToast('⚠️ Network error. Please try again.', '#ed4956');
+    } finally {
+      dmSendBtn.disabled = false;
+      if (dmSpinner) dmSpinner.style.display = 'none';
+    }
+  };
+
+  document.getElementById('khjCloseDmBtn').addEventListener('click', () => window.khjCloseDmModal());
+  dmOverlay.addEventListener('click', e => { if (e.target === dmOverlay) window.khjCloseDmModal(); });
 
   /* ── Create Modal ── */
   const createOverlay = document.getElementById('khjCreateModal');
@@ -1659,11 +1754,9 @@
   const openBtn1 = document.getElementById('khjOpenCreateBtn');
   const openBtn2 = document.getElementById('khjOpenCreateBtn2');
   const openBtn3 = document.getElementById('khjOpenCreateBtnMobile');
-  {% if user_can_post %}
   if (openBtn1) openBtn1.addEventListener('click', openCreate);
   if (openBtn2) openBtn2.addEventListener('click', openCreate);
   if (openBtn3) openBtn3.addEventListener('click', openCreate);
-  {% endif %}
 
   /* Close */
   document.getElementById('khjCloseModalBtn').addEventListener('click', () => hideModal(createOverlay));

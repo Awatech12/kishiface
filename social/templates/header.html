@@ -90,6 +90,61 @@
             color: #888; font-size: 14px; pointer-events: none;
         }
 
+        /* Spinner swaps in for the magnifying glass while a search is in flight */
+        #header-search-spinner { transition: opacity 0.1s ease; }
+        #header-search-icon.is-searching { opacity: 0; }
+        #header-search-spinner.is-searching { opacity: 1 !important; }
+
+        .header-search-results {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0; right: 0;
+            background: var(--white);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 1001;
+        }
+
+        .header-search-results:empty { display: none; border: none; box-shadow: none; }
+
+        .hsr-section-label {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            color: #888; padding: 10px 14px 4px;
+        }
+
+        .hsr-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 14px; text-decoration: none; color: var(--text-dark);
+            font-size: 14px;
+        }
+        .hsr-row:hover { background: var(--main-bg); }
+
+        .hsr-row img {
+            width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+            background: var(--main-bg); flex-shrink: 0;
+        }
+        .hsr-row .hsr-icon {
+            width: 32px; height: 32px; border-radius: 50%; background: var(--main-bg);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            color: #888; font-size: 13px;
+        }
+
+        .hsr-row .hsr-text { min-width: 0; }
+        .hsr-row .hsr-label { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .hsr-row .hsr-sub { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .hsr-history-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 14px; cursor: pointer; font-size: 14px; color: var(--text-dark);
+        }
+        .hsr-history-row:hover { background: var(--main-bg); }
+        .hsr-history-row i { color: #888; font-size: 13px; width: 16px; text-align: center; }
+
+        .hsr-empty { padding: 16px 14px; font-size: 13px; color: #888; text-align: center; }
+
         header .icon-group {
             display: flex; gap: 20px; align-items: center;
             justify-self: end;
@@ -342,9 +397,14 @@
 <header>
     <h1><span class="brand-full">Marketfy.com</span><span class="brand-short">M</span></h1>
 
-    <form class="header-search" action="{% url 'search' %}" method="get">
-        <input type="text" name="q" placeholder="Search Marketfy...">
-        <i class="fas fa-magnifying-glass"></i>
+    <form class="header-search" action="{% url 'search' %}" method="get" autocomplete="off">
+        <input type="text"
+               name="q"
+               id="header-search-input"
+               placeholder="Search Marketfy...">
+        <i class="fas fa-magnifying-glass" id="header-search-icon"></i>
+        <i class="fas fa-spinner fa-spin" id="header-search-spinner" style="opacity:0;"></i>
+        <div id="header-search-results" class="header-search-results"></div>
     </form>
 
     <div class="icon-group">
@@ -632,6 +692,140 @@
                 }
             };
         }
+    });
+</script>
+
+<script>
+    // 5. Live header search — fires on keydown, no debounce, cancels stale requests
+    document.addEventListener('DOMContentLoaded', function () {
+        var input      = document.getElementById('header-search-input');
+        var resultsBox = document.getElementById('header-search-results');
+        var icon       = document.getElementById('header-search-icon');
+        var spinner    = document.getElementById('header-search-spinner');
+        if (!input || !resultsBox) return;
+
+        var suggestionsUrl = "{% url 'search_suggestions' %}";
+        var currentController = null;
+        var latestQuery = '';
+
+        var TYPE_ICON = {
+            user:    'fa-user',
+            product: 'fa-tag',
+            page:    'fa-store',
+            job:     'fa-briefcase',
+            event:   'fa-calendar-days'
+        };
+
+        function setLoading(isLoading) {
+            if (!icon || !spinner) return;
+            icon.classList.toggle('is-searching', isLoading);
+            spinner.classList.toggle('is-searching', isLoading);
+        }
+
+        function escapeHtml(str) {
+            return (str || '').replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        function renderResults(data) {
+            // Ignore stale responses that raced past a newer keystroke
+            if (data.query !== latestQuery) return;
+
+            if (!data.results.length && !data.history.length) {
+                resultsBox.innerHTML = '<div class="hsr-empty">No matches for "' + escapeHtml(data.query) + '"</div>';
+                return;
+            }
+
+            var html = '';
+
+            if (data.history.length) {
+                html += '<div class="hsr-section-label">Recent searches</div>';
+                data.history.forEach(function (h) {
+                    html += '<div class="hsr-history-row" data-query="' + escapeHtml(h) + '">' +
+                                '<i class="fas fa-clock-rotate-left"></i>' +
+                                '<span>' + escapeHtml(h) + '</span>' +
+                            '</div>';
+                });
+            }
+
+            if (data.results.length) {
+                html += '<div class="hsr-section-label">Results</div>';
+                data.results.forEach(function (r) {
+                    var media = r.image
+                        ? '<img src="' + escapeHtml(r.image) + '" alt="">'
+                        : '<span class="hsr-icon"><i class="fas ' + (TYPE_ICON[r.type] || 'fa-magnifying-glass') + '"></i></span>';
+
+                    html += '<a class="hsr-row" href="' + escapeHtml(r.url) + '">' +
+                                media +
+                                '<span class="hsr-text">' +
+                                    '<div class="hsr-label">' + escapeHtml(r.label) + '</div>' +
+                                    '<div class="hsr-sub">' + escapeHtml(r.sub) + '</div>' +
+                                '</span>' +
+                            '</a>';
+                });
+            }
+
+            resultsBox.innerHTML = html;
+
+            // Recent-search rows re-run the search for that stored query
+            resultsBox.querySelectorAll('.hsr-history-row').forEach(function (row) {
+                row.addEventListener('click', function () {
+                    input.value = row.dataset.query;
+                    runSearch(row.dataset.query);
+                    input.focus();
+                });
+            });
+        }
+
+        function runSearch(query) {
+            latestQuery = query;
+
+            if (!query) {
+                resultsBox.innerHTML = '';
+                setLoading(false);
+                if (currentController) currentController.abort();
+                return;
+            }
+
+            if (currentController) currentController.abort();
+            currentController = new AbortController();
+            setLoading(true);
+
+            fetch(suggestionsUrl + '?q=' + encodeURIComponent(query), {
+                signal: currentController.signal,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    setLoading(false);
+                    renderResults(data);
+                })
+                .catch(function (err) {
+                    if (err.name === 'AbortError') return;
+                    setLoading(false);
+                    console.warn('[KVibe] Search suggestions failed:', err);
+                });
+        }
+
+        // Fires the instant a key goes down — not on keyup, not after a debounce delay
+        input.addEventListener('keydown', function () {
+            // Read the field on the next tick, once the keystroke has landed in the value
+            setTimeout(function () { runSearch(input.value.trim()); }, 0);
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.header-search')) {
+                resultsBox.innerHTML = '';
+            }
+        });
+
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                resultsBox.innerHTML = '';
+                input.blur();
+            }
+        });
     });
 </script>
 </body>

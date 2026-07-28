@@ -932,18 +932,26 @@
         if (sp) sp.style.display = 'inline-block';
 
         try {
-            const res = await fetch('{% url "contact_poster" job.id %}', {
-                method: 'GET',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            const res = await fetch('{% url "send_message" job.posted_by.username %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrf(),
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ message: msg, job_id: '{{ job.id }}' }),
             });
+            const data = await res.json();
 
-            if (res.redirected) {
+            if (data.status === 'success') {
                 khdCloseDmModal();
-                showToast('Opening conversation…', '#0095f6');
-                setTimeout(() => { window.location.href = res.url; }, 700);
+                showToast('Message sent!', '#0095f6');
+                setTimeout(() => {
+                    window.location.href = '{% url "message" job.posted_by.username %}?job={{ job.id }}';
+                }, 700);
                 return;
             }
-            showToast('⚠️ Could not open conversation.', '#e03131');
+            showToast(data.message || '⚠️ Could not send message.', '#e03131');
         } catch (_) {
             showToast('⚠️ Network error. Please try again.', '#e03131');
         } finally {

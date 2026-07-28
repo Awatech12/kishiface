@@ -619,23 +619,12 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     _market_injected = 0
     _MAX_MARKET_PER_PAGE = 6
     # ── Job vacancy pool ──────────────────────────────────────────────────────
+    # Job cards are disabled on the home feed — pool intentionally left empty
+    # so no DB query is made and no job card is ever injected below.
     import datetime as _dt_feed
-    _seen_job_ids = set(str(i) for i in (seen_job_ids or []))
     _job_pool = []
-    _job_base_qs = JobVacancy.objects.filter(is_open=True)
-    if _seen_job_ids:
-        _job_base_qs = _job_base_qs.exclude(id__in=_seen_job_ids)
-    _job_count = _job_base_qs.count()
-    if _job_count > 0:
-        _job_offset = random.randint(0, max(0, _job_count - 4))
-        _job_pool = list(
-            _job_base_qs
-            .select_related('posted_by', 'posted_by__profile')
-            [_job_offset: _job_offset + 4]
-        )
-        random.shuffle(_job_pool)
     _job_injected = 0
-    _MAX_JOB_PER_PAGE = 1
+    _MAX_JOB_PER_PAGE = 0
 
     # ── Social event pool ─────────────────────────────────────────────────────
     _today = _dt_feed.date.today()
@@ -1938,7 +1927,7 @@ def search_suggestions_v0(request):
     for u in users:
         pic = ''
         try:
-            pic = u.profile.get_picture_url()
+            pic = u.profile.get_picture_url
         except Exception:
             pic = ''
         results.append({
@@ -1962,7 +1951,7 @@ def search_suggestions_v0(request):
     for bp in pages:
         logo = ''
         try:
-            logo = bp.get_logo_url()
+            logo = bp.get_logo_url
         except Exception:
             logo = ''
         results.append({

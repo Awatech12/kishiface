@@ -36,6 +36,7 @@ urlpatterns = [
 
     # ── Search ─────────────────────────────────────────────────────────────────
     path('search',                           views.search,                   name='search'),
+    path('search/suggestions/',              views.search_suggestions_v0,    name='search_suggestions'),
     path('search/users/',                    views.search_users_partial,     name='search_users_partial'),
     path('search/products/',                 views.search_products_partial,  name='search_products_partial'),
     path('search/pages/',                    views.search_pages_partial,     name='search_pages_partial'),
