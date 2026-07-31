@@ -12,6 +12,19 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview
+from social.models import validate_url
+from django.core.exceptions import ValidationError as _ModelValidationError
+
+
+def _clean_apply_link(raw):
+    """Validate an optional 'apply link' POST field. Returns (url, error_message)."""
+    raw = (raw or '').strip()
+    if not raw:
+        return '', None
+    try:
+        return validate_url(raw), None
+    except _ModelValidationError:
+        return '', 'Please enter a valid application link (starting with http:// or https://).'
 from django.db.models import Q
 from django.db.models import Count, Max, Min
 from django.core.paginator import Paginator
@@ -236,12 +249,33 @@ def index(request):
         'business_pages':  _format_count(BusinessPage.objects.count()),
         'listings':        _format_count(Market.objects.count()),
         'communities':     _format_count(Channel.objects.count()),
+        'job_vacancies':   _format_count(JobVacancy.objects.count()),
     }
+
+    # ── Real business pages for the homepage "On Marketfy" preview ─────────────
+    featured_pages = list(
+        BusinessPage.objects.filter(is_active=True)
+        .order_by('-created_at')[:6]
+    )
+    for _fp in featured_pages:
+        try:
+            _fp.logo_url = _fp.get_logo_url
+        except Exception:
+            _fp.logo_url = ''
+
+    # ── Real open job vacancies for the homepage jobs preview ──────────────────
+    featured_jobs = list(
+        JobVacancy.objects.filter(is_open=True)
+        .select_related('business_page')
+        .order_by('-id')[:6]
+    )
 
     return render(request, 'index.html', {
         'marquee_columns':     marquee_columns,
         'marquee_flat':        marquee_flat,
         'stats':               stats,
+        'featured_pages':      featured_pages,
+        'featured_jobs':       featured_jobs,
         # Tells index.html to auto-open the Register modal instead of the
         # Login modal (set by register() when it bounces validation errors
         # back to '/', or when someone hits /register/ directly).
@@ -4068,11 +4102,14 @@ def job_vacancy(request):
     Job Vacancy listing page.
     Supports optional ?category= filter (gig | fulltime | apprenticeship).
     """
-    category = request.GET.get('category', '').strip()
+    category  = request.GET.get('category', '').strip()
+    work_mode = request.GET.get('work_mode', '').strip()
 
     qs = JobVacancy.objects.filter(is_open=True).select_related('posted_by__profile')
     if category and category in dict(JobVacancy.CATEGORY_CHOICES):
         qs = qs.filter(category=category)
+    if work_mode and work_mode in dict(JobVacancy.WORK_MODE_CHOICES):
+        qs = qs.filter(work_mode=work_mode)
 
     counts = {
         'gig':            JobVacancy.objects.filter(is_open=True, category='gig').count(),
@@ -4081,17 +4118,25 @@ def job_vacancy(request):
         'total':          JobVacancy.objects.filter(is_open=True).count(),
     }
 
+    work_mode_counts = {
+        'on_site': JobVacancy.objects.filter(is_open=True, work_mode='on_site').count(),
+        'remote':  JobVacancy.objects.filter(is_open=True, work_mode='remote').count(),
+        'hybrid':  JobVacancy.objects.filter(is_open=True, work_mode='hybrid').count(),
+    }
+
     paginator = Paginator(qs, 12)
     page_obj  = paginator.get_page(request.GET.get('page'))
 
     user_can_post, missing_fields = _profile_post_status(request.user)
 
     return render(request, 'job_vacancy.html', {
-        'jobs':           page_obj,
-        'counts':         counts,
-        'category':       category,
-        'user_can_post':  user_can_post,
-        'missing_fields': missing_fields,
+        'jobs':             page_obj,
+        'counts':           counts,
+        'work_mode_counts': work_mode_counts,
+        'category':         category,
+        'work_mode':        work_mode,
+        'user_can_post':    user_can_post,
+        'missing_fields':   missing_fields,
     })
 
 
@@ -4196,23 +4241,37 @@ def job_vacancy_create(request):
         msg = 'Please complete your profile before posting jobs. Missing: ' + ', '.join(missing) + '.'
         return JsonResponse({'success': False, 'error': msg, 'error_code': 'incomplete_profile'}, status=403)
 
-    title        = html_escape(request.POST.get('title', '').strip())
-    category     = request.POST.get('category', '').strip()
-    company      = html_escape(request.POST.get('company', '').strip())
-    location     = html_escape(request.POST.get('location', '').strip())
-    description  = html_escape(request.POST.get('description', '').strip())
-    requirements = html_escape(request.POST.get('requirements', '').strip())
-    contact_info = html_escape(request.POST.get('contact_info', '').strip())
-    salary_range = html_escape(request.POST.get('salary_range', '').strip())
-    cover_image  = request.FILES.get('cover_image')
-    page_slug    = request.POST.get('business_page', '').strip()
+    title           = html_escape(request.POST.get('title', '').strip())
+    category        = request.POST.get('category', '').strip()
+    work_mode       = request.POST.get('work_mode', '').strip()
+    advertiser_type = request.POST.get('advertiser_type', '').strip()
+    company         = html_escape(request.POST.get('company', '').strip())
+    location        = html_escape(request.POST.get('location', '').strip())
+    description     = html_escape(request.POST.get('description', '').strip())
+    requirements    = html_escape(request.POST.get('requirements', '').strip())
+    contact_info    = html_escape(request.POST.get('contact_info', '').strip())
+    salary_range    = html_escape(request.POST.get('salary_range', '').strip())
+    cover_image     = request.FILES.get('cover_image')
+    page_slug       = request.POST.get('business_page', '').strip()
 
     if not title:
         return JsonResponse({'success': False, 'error': 'Job title is required.'}, status=400)
     if category not in dict(JobVacancy.CATEGORY_CHOICES):
         return JsonResponse({'success': False, 'error': 'Invalid category.'}, status=400)
+    if not work_mode:
+        work_mode = JobVacancy.WORK_ONSITE
+    if work_mode not in dict(JobVacancy.WORK_MODE_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Please select a valid work mode (On-site, Remote, or Hybrid).'}, status=400)
     if not description:
         return JsonResponse({'success': False, 'error': 'Description is required.'}, status=400)
+    if not advertiser_type:
+        advertiser_type = JobVacancy.ADV_PERSONAL
+    if advertiser_type not in dict(JobVacancy.ADVERTISER_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Invalid advertiser type.'}, status=400)
+
+    apply_link, link_error = _clean_apply_link(request.POST.get('apply_link', ''))
+    if link_error:
+        return JsonResponse({'success': False, 'error': link_error}, status=400)
 
     # Optional — post this job vacancy under one of the user's own business pages
     business_page = None
@@ -4224,16 +4283,19 @@ def job_vacancy_create(request):
             company = business_page.name
 
     job = JobVacancy(
-        posted_by     = request.user,
-        title         = title,
-        category      = category,
-        company       = company,
-        location      = location,
-        description   = description,
-        requirements  = requirements,
-        contact_info  = contact_info,
-        salary_range  = salary_range,
-        business_page = business_page,
+        posted_by       = request.user,
+        title           = title,
+        category        = category,
+        work_mode       = work_mode,
+        advertiser_type = advertiser_type,
+        company         = company,
+        location        = location,
+        description     = description,
+        requirements    = requirements,
+        contact_info    = contact_info,
+        apply_link      = apply_link,
+        salary_range    = salary_range,
+        business_page   = business_page,
     )
 
     if cover_image:
@@ -4250,9 +4312,10 @@ def job_vacancy_create(request):
     return JsonResponse({
         'success': True,
         'job': {
-            'id':       str(job.id),
-            'title':    job.title,
-            'category': job.category,
+            'id':        str(job.id),
+            'title':     job.title,
+            'category':  job.category,
+            'work_mode': job.work_mode,
         }
     })
 
@@ -4270,24 +4333,38 @@ def job_vacancy_edit(request, job_id):
     if job.posted_by != request.user:
         return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
 
-    title        = html_escape(request.POST.get('title', '').strip())
-    category     = request.POST.get('category', '').strip()
-    company      = html_escape(request.POST.get('company', '').strip())
-    location     = html_escape(request.POST.get('location', '').strip())
-    description  = html_escape(request.POST.get('description', '').strip())
-    requirements = html_escape(request.POST.get('requirements', '').strip())
-    contact_info = html_escape(request.POST.get('contact_info', '').strip())
-    salary_range = html_escape(request.POST.get('salary_range', '').strip())
-    is_open      = request.POST.get('is_open', '1').strip() == '1'
-    cover_image  = request.FILES.get('cover_image')
-    page_slug    = request.POST.get('business_page', None)
+    title           = html_escape(request.POST.get('title', '').strip())
+    category        = request.POST.get('category', '').strip()
+    work_mode       = request.POST.get('work_mode', '').strip()
+    advertiser_type = request.POST.get('advertiser_type', '').strip()
+    company         = html_escape(request.POST.get('company', '').strip())
+    location        = html_escape(request.POST.get('location', '').strip())
+    description     = html_escape(request.POST.get('description', '').strip())
+    requirements    = html_escape(request.POST.get('requirements', '').strip())
+    contact_info    = html_escape(request.POST.get('contact_info', '').strip())
+    salary_range    = html_escape(request.POST.get('salary_range', '').strip())
+    is_open         = request.POST.get('is_open', '1').strip() == '1'
+    cover_image     = request.FILES.get('cover_image')
+    page_slug       = request.POST.get('business_page', None)
 
     if not title:
         return JsonResponse({'success': False, 'error': 'Job title is required.'}, status=400)
     if category not in dict(JobVacancy.CATEGORY_CHOICES):
         return JsonResponse({'success': False, 'error': 'Invalid category.'}, status=400)
+    if not work_mode:
+        work_mode = JobVacancy.WORK_ONSITE
+    if work_mode not in dict(JobVacancy.WORK_MODE_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Please select a valid work mode (On-site, Remote, or Hybrid).'}, status=400)
     if not description:
         return JsonResponse({'success': False, 'error': 'Description is required.'}, status=400)
+    if not advertiser_type:
+        advertiser_type = JobVacancy.ADV_PERSONAL
+    if advertiser_type not in dict(JobVacancy.ADVERTISER_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Invalid advertiser type.'}, status=400)
+
+    apply_link, link_error = _clean_apply_link(request.POST.get('apply_link', ''))
+    if link_error:
+        return JsonResponse({'success': False, 'error': link_error}, status=400)
 
     # Optional — reassign the business page this job is posted under (owner only)
     if page_slug is not None:
@@ -4299,15 +4376,18 @@ def job_vacancy_edit(request, job_id):
                 return JsonResponse({'success': False, 'error': 'Not authorised for that business page.'}, status=403)
             job.business_page = business_page
 
-    job.title        = title
-    job.category     = category
-    job.company      = company
-    job.location     = location
-    job.description  = description
-    job.requirements = requirements
-    job.contact_info = contact_info
-    job.salary_range = salary_range
-    job.is_open      = is_open
+    job.title           = title
+    job.category        = category
+    job.work_mode       = work_mode
+    job.advertiser_type = advertiser_type
+    job.company         = company
+    job.location        = location
+    job.description     = description
+    job.requirements    = requirements
+    job.contact_info    = contact_info
+    job.apply_link      = apply_link
+    job.salary_range    = salary_range
+    job.is_open         = is_open
 
     if cover_image:
         allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
@@ -5270,15 +5350,21 @@ def business_job_upload(request, slug):
     cache.set(_rl_key, _rl_hits + 1, timeout=3600)
 
     # ── Field extraction ────────────────────────────────────────────────────────
-    title        = html_escape(request.POST.get('title', '').strip())
-    category     = request.POST.get('category', '').strip()
-    company      = html_escape(request.POST.get('company', page.name).strip() or page.name)
-    location     = html_escape(request.POST.get('location', page.location or '').strip())
-    description  = html_escape(request.POST.get('description', '').strip())
-    requirements = html_escape(request.POST.get('requirements', '').strip())
-    contact_info = html_escape(request.POST.get('contact_info', page.whatsapp or '').strip())
-    salary_range = html_escape(request.POST.get('salary_range', '').strip())
-    cover_image  = request.FILES.get('cover_image')
+    title           = html_escape(request.POST.get('title', '').strip())
+    category        = request.POST.get('category', '').strip()
+    work_mode       = request.POST.get('work_mode', '').strip() or JobVacancy.WORK_ONSITE
+    # Posted from a business page, so it defaults to "Company / School" —
+    # still overridable (e.g. a school page posting on behalf of government).
+    advertiser_type = request.POST.get('advertiser_type', '').strip() or JobVacancy.ADV_COMPANY_SCHOOL
+    company         = html_escape(request.POST.get('company', page.name).strip() or page.name)
+    location        = html_escape(request.POST.get('location', page.location or '').strip())
+    description     = html_escape(request.POST.get('description', '').strip())
+    requirements    = html_escape(request.POST.get('requirements', '').strip())
+    contact_info    = html_escape(request.POST.get('contact_info', page.whatsapp or '').strip())
+    salary_range    = html_escape(request.POST.get('salary_range', '').strip())
+    cover_image     = request.FILES.get('cover_image')
+
+    apply_link, link_error = _clean_apply_link(request.POST.get('apply_link', ''))
 
     # ── Validation ───────────────────────────────────────────────────────────────
     errors = {}
@@ -5286,8 +5372,14 @@ def business_job_upload(request, slug):
         errors['title'] = 'Job title is required.'
     if category not in dict(JobVacancy.CATEGORY_CHOICES):
         errors['category'] = 'Please choose a valid category.'
+    if work_mode not in dict(JobVacancy.WORK_MODE_CHOICES):
+        errors['work_mode'] = 'Please choose a valid work mode.'
+    if advertiser_type not in dict(JobVacancy.ADVERTISER_CHOICES):
+        errors['advertiser_type'] = 'Please choose a valid advertiser type.'
     if not description:
         errors['description'] = 'Description is required.'
+    if link_error:
+        errors['apply_link'] = link_error
     if cover_image:
         allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
         if cover_image.content_type not in allowed_types:
@@ -5299,17 +5391,20 @@ def business_job_upload(request, slug):
 
     try:
         job = JobVacancy.objects.create(
-            posted_by     = request.user,
-            business_page = page,
-            title         = title,
-            category      = category,
-            company       = company,
-            location      = location,
-            description   = description,
-            requirements  = requirements,
-            contact_info  = contact_info,
-            salary_range  = salary_range,
-            cover_image   = cover_image if cover_image else None,
+            posted_by       = request.user,
+            business_page   = page,
+            title           = title,
+            category        = category,
+            work_mode       = work_mode,
+            advertiser_type = advertiser_type,
+            company         = company,
+            location        = location,
+            description     = description,
+            requirements    = requirements,
+            contact_info    = contact_info,
+            apply_link      = apply_link,
+            salary_range    = salary_range,
+            cover_image     = cover_image if cover_image else None,
         )
     except Exception:
         import logging
@@ -5321,6 +5416,7 @@ def business_job_upload(request, slug):
         'job_id':     str(job.id),
         'title':      job.title,
         'category':   job.category,
+        'work_mode':  job.work_mode,
         'cover_url':  job.cover_image.url if job.cover_image else '',
         'detail_url': f"/jobs/#khj-card-{job.id}",
         'message':    'Job vacancy posted successfully! 💼',

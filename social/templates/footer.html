@@ -97,6 +97,95 @@
       .nav-item .nav-label { font-size: 8px; }
     }
 
+    /* === CREATE OPTIONS MODAL === */
+    .create-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1100;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .create-modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .create-modal {
+      background: #fff;
+      width: 100%;
+      max-width: 420px;
+      border-radius: 24px 24px 0 0;
+      padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .create-modal-overlay.open .create-modal {
+      transform: translateY(0);
+    }
+
+    .create-modal-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--nav-border);
+      border-radius: 2px;
+      margin: 0 auto 18px;
+    }
+
+    .create-modal-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: #262626;
+      margin: 0 0 18px;
+      text-align: center;
+    }
+
+    .create-modal-options {
+      display: flex;
+      justify-content: space-evenly;
+      gap: 10px;
+    }
+
+    .create-option {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: #262626;
+      flex: 1;
+    }
+
+    .create-option-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #f0f2f5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: var(--nav-accent);
+      transition: transform 0.15s, background 0.15s;
+    }
+
+    .create-option:active .create-option-icon {
+      transform: scale(0.92);
+      background: #e3f2fd;
+    }
+
+    .create-option-label {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
     /* === MOBILE-ONLY VISIBILITY === */
     /* Hide the bottom nav by default (tablet/desktop) */
     .bottom-nav {
@@ -132,12 +221,13 @@
         <span class="nav-label">Wishlist</span>
     </a>
     
-    <!-- 3. Search -->
-    <a href="{% url 'search' %}" 
-       class="nav-item {% if '/search' in request.path %}active{% endif %}" 
-       title="Search">
-        <i class="fas fa-magnifying-glass"></i>
-        <span class="nav-label">Search</span>
+    <!-- 3. Create (opens upload options modal) -->
+    <a href="#" 
+       class="nav-item" 
+       id="createNavBtn"
+       title="Create">
+        <i class="fas fa-plus"></i>
+        <span class="nav-label">Create</span>
     </a>
 
     <!-- 4. Jobs -->
@@ -157,6 +247,35 @@
     </a>
 
 </nav>  
+
+<!-- Create Options Modal -->
+<div class="create-modal-overlay" id="createModalOverlay">
+  <div class="create-modal" role="dialog" aria-modal="true" aria-labelledby="createModalTitle">
+    <div class="create-modal-handle"></div>
+    <p class="create-modal-title" id="createModalTitle">What would you like to post?</p>
+    <div class="create-modal-options">
+      {% if viewer_primary_business_page %}
+      <a href="{% url 'business_page_detail' slug=viewer_primary_business_page.slug %}" class="create-option">
+        <span class="create-option-icon"><i class="fas fa-tag"></i></span>
+        <span class="create-option-label">Product</span>
+      </a>
+      {% else %}
+      <a href="{% url 'business_page_create' %}" class="create-option">
+        <span class="create-option-icon"><i class="fas fa-tag"></i></span>
+        <span class="create-option-label">Product</span>
+      </a>
+      {% endif %}
+      <a href="{% url 'job_vacancy' %}" class="create-option">
+        <span class="create-option-icon"><i class="fas fa-briefcase"></i></span>
+        <span class="create-option-label">Job</span>
+      </a>
+      <a href="{% url 'event_calendar' %}" class="create-option">
+        <span class="create-option-icon"><i class="fas fa-calendar-plus"></i></span>
+        <span class="create-option-label">Event</span>
+      </a>
+    </div>
+  </div>
+</div>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
@@ -205,6 +324,39 @@
     }
     document.addEventListener('touchstart', showNav);
     document.addEventListener('mousedown', showNav);
+
+    // ── Create options modal ────────────────────────────────────────────
+    var createNavBtn     = document.getElementById('createNavBtn');
+    var createModalOverlay = document.getElementById('createModalOverlay');
+
+    function openCreateModal() {
+      createModalOverlay.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeCreateModal() {
+      createModalOverlay.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    if (createNavBtn && createModalOverlay) {
+      createNavBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        openCreateModal();
+      });
+
+      // Close when tapping the dark backdrop (not the sheet itself)
+      createModalOverlay.addEventListener('click', function (e) {
+        if (e.target === createModalOverlay) {
+          closeCreateModal();
+        }
+      });
+
+      // Close on Escape (useful for desktop testing)
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeCreateModal();
+      });
+    }
 
   });
 </script>

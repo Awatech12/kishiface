@@ -1,4 +1,4 @@
-from .models import Message, FollowNotification, BusinessNotification, Channel
+from .models import Message, FollowNotification, BusinessNotification, Channel, BusinessPage
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
@@ -114,3 +114,23 @@ def channel_unread_processor(request):
     followed_channels = Channel.objects.filter(subscriber=request.user)
     total_unread = sum(c.unread_count_for_user(request.user) for c in followed_channels)
     return {'total_followed_unread': total_unread}
+
+
+def viewer_business_page_processor(request):
+    """
+    Makes the logged-in user's own business page (if any) available on every
+    page — used by the bottom-nav "Create" modal (footer.html) to decide
+    whether the Product option should link to the user's existing page or
+    to the page-creation flow.
+    """
+    if not request.user.is_authenticated:
+        return {'viewer_primary_business_page': None}
+    try:
+        viewer_primary_business_page = (
+            BusinessPage.objects.filter(owner=request.user, is_active=True)
+            .order_by('-created_at')
+            .first()
+        )
+    except Exception:
+        viewer_primary_business_page = None
+    return {'viewer_primary_business_page': viewer_primary_business_page}

@@ -1305,9 +1305,44 @@ class JobVacancy(models.Model):
         (CAT_APPRENTICE, 'Apprenticeship'),
     ]
 
+    # ── Work mode ─────────────────────────────────────────────────────────────
+    # Self-declared, LinkedIn-style workplace type: where does the work happen.
+    WORK_ONSITE = 'on_site'
+    WORK_REMOTE = 'remote'
+    WORK_HYBRID = 'hybrid'
+
+    WORK_MODE_CHOICES = [
+        (WORK_ONSITE, 'On-site'),
+        (WORK_REMOTE, 'Remote'),
+        (WORK_HYBRID, 'Hybrid'),
+    ]
+
+    # ── Advertiser type ──────────────────────────────────────────────────────
+    # Self-declared label so applicants can gauge, at a glance, who is behind
+    # a vacancy: an individual, a company/school, or a government body. This
+    # is NOT a verification — templates should still show a "verify
+    # independently" note for government-tagged posts.
+    ADV_PERSONAL        = 'personal'
+    ADV_COMPANY_SCHOOL  = 'company_school'
+    ADV_GOVERNMENT      = 'government'
+
+    ADVERTISER_CHOICES = [
+        (ADV_PERSONAL,       'Personal'),
+        (ADV_COMPANY_SCHOOL, 'Company / School'),
+        (ADV_GOVERNMENT,     'Government'),
+    ]
+
     id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     posted_by    = models.ForeignKey(User, on_delete=models.CASCADE, related_name='job_vacancies')
     category     = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default=CAT_FULLTIME, db_index=True)
+    work_mode    = models.CharField(
+        max_length=20, choices=WORK_MODE_CHOICES, default=WORK_ONSITE, db_index=True,
+        help_text='Where the work happens — On-site, Remote, or Hybrid (like LinkedIn)',
+    )
+    advertiser_type = models.CharField(
+        max_length=20, choices=ADVERTISER_CHOICES, default=ADV_PERSONAL, db_index=True,
+        help_text='Who is behind this vacancy — helps applicants judge how official it is',
+    )
     title        = models.CharField(max_length=200)
     company      = models.CharField(max_length=150, blank=True, default='')
     location     = models.CharField(max_length=300, blank=True, default='')
@@ -1315,6 +1350,8 @@ class JobVacancy(models.Model):
     requirements = models.TextField(blank=True, default='')
     contact_info = models.CharField(max_length=300, blank=True, default='',
                                     help_text='Email, phone, or link to apply')
+    apply_link   = models.URLField(max_length=500, blank=True, default='',
+                                    help_text='Optional external link — official portal, application form, etc.')
     salary_range = models.CharField(max_length=100, blank=True, default='',
                                     help_text='e.g. ₦80,000–₦120,000/month or "Negotiable"')
     if settings.USE_CLOUDINARY:
@@ -1337,6 +1374,21 @@ class JobVacancy(models.Model):
     def __str__(self):
         return f'{self.title} [{self.get_category_display()}] — {self.posted_by.username}'
 
+    def clean(self):
+        super().clean()
+        self.title        = sanitize_text(self.title)
+        self.company      = sanitize_text(self.company)
+        self.location     = sanitize_text(self.location, 'location')
+        self.description  = sanitize_text(self.description, 'product_description')
+        self.requirements = sanitize_text(self.requirements, 'product_description')
+        self.contact_info = sanitize_text(self.contact_info)
+        self.salary_range = sanitize_text(self.salary_range)
+        if self.apply_link:
+            try:
+                self.apply_link = validate_url(self.apply_link)
+            except ValidationError:
+                self.apply_link = ''
+
     @property
     def category_emoji(self):
         return {
@@ -1352,6 +1404,44 @@ class JobVacancy(models.Model):
             self.CAT_FULLTIME:   '#0095f6',
             self.CAT_APPRENTICE: '#7c3aed',
         }.get(self.category, '#0095f6')
+
+    # ── Work mode display helpers ────────────────────────────────────────────
+    @property
+    def work_mode_emoji(self):
+        return {
+            self.WORK_ONSITE: '🏢',
+            self.WORK_REMOTE: '🏡',
+            self.WORK_HYBRID: '🔀',
+        }.get(self.work_mode, '🏢')
+
+    @property
+    def work_mode_color(self):
+        return {
+            self.WORK_ONSITE: '#0f766e',
+            self.WORK_REMOTE: '#16a34a',
+            self.WORK_HYBRID: '#9333ea',
+        }.get(self.work_mode, '#0f766e')
+
+    # ── Advertiser display helpers ──────────────────────────────────────────
+    @property
+    def advertiser_emoji(self):
+        return {
+            self.ADV_PERSONAL:       '🙋',
+            self.ADV_COMPANY_SCHOOL: '🏢',
+            self.ADV_GOVERNMENT:     '🏛️',
+        }.get(self.advertiser_type, '🙋')
+
+    @property
+    def advertiser_color(self):
+        return {
+            self.ADV_PERSONAL:       '#64748b',
+            self.ADV_COMPANY_SCHOOL: '#0f766e',
+            self.ADV_GOVERNMENT:     '#b45309',
+        }.get(self.advertiser_type, '#64748b')
+
+    @property
+    def is_government_advertiser(self):
+        return self.advertiser_type == self.ADV_GOVERNMENT
 
 
 # =============================================================================
