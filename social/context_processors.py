@@ -1,4 +1,4 @@
-from .models import Message, FollowNotification, BusinessNotification, Channel, BusinessPage
+from .models import Message, FollowNotification, BusinessNotification, EventNotification, Channel, BusinessPage
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
@@ -53,6 +53,9 @@ def follow_notifications_context(request):
             'unread_business_count': 0,
             'recent_business_notifications': [],
             'has_unread_business_notifications': False,
+            'unread_event_count': 0,
+            'recent_event_notifications': [],
+            'has_unread_event_notifications': False,
             'unread_notifications_total': 0,
         }
 
@@ -83,6 +86,17 @@ def follow_notifications_context(request):
             .order_by('-created_at')[:10]
         )
 
+        unread_event_count = EventNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
+
+        recent_event_notifications = (
+            EventNotification.objects
+            .filter(to_user=request.user)
+            .select_related('actor', 'actor__profile', 'event')
+            .order_by('-created_at')[:10]
+        )
+
         return {
             'unread_follow_count':        unread_follow_count,
             'recent_follows':             recent_follows,
@@ -92,7 +106,10 @@ def follow_notifications_context(request):
             'unread_business_count':              unread_business_count,
             'recent_business_notifications':      recent_business_notifications,
             'has_unread_business_notifications':  unread_business_count > 0,
-            'unread_notifications_total':  unread_follow_count + unread_business_count,
+            'unread_event_count':                 unread_event_count,
+            'recent_event_notifications':         recent_event_notifications,
+            'has_unread_event_notifications':     unread_event_count > 0,
+            'unread_notifications_total':  unread_follow_count + unread_business_count + unread_event_count,
         }
     except Exception:
         return {
@@ -104,6 +121,9 @@ def follow_notifications_context(request):
             'unread_business_count': 0,
             'recent_business_notifications': [],
             'has_unread_business_notifications': False,
+            'unread_event_count': 0,
+            'recent_event_notifications': [],
+            'has_unread_event_notifications': False,
             'unread_notifications_total': 0,
         }
 

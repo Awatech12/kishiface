@@ -61,8 +61,10 @@ urlpatterns = [
     # ── Event Calendar ─────────────────────────────────────────────────────────
     path('events/',                    views.event_calendar,        name='event_calendar'),
     path('events/create/',             views.event_calendar_create, name='event_calendar_create'),
+    path('events/<int:event_id>/',        views.event_detail,          name='event_detail'),
     path('events/<int:event_id>/edit/',   views.event_calendar_edit,   name='event_calendar_edit'),
     path('events/<int:event_id>/delete/', views.event_calendar_delete, name='event_calendar_delete'),
+    path('events/<int:event_id>/follow/', views.event_follow_toggle,   name='event_follow_toggle'),
 
     # ── Follow ─────────────────────────────────────────────────────────────────
     path('follow/<str:username>',      views.follow,         name='follow'),

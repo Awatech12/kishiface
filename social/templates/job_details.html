@@ -1,1154 +1,1212 @@
+{% load humanize %}
+{% load static %}
+{% load post_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="csrf-token" content="{{ csrf_token }}">
-    {% load humanize %}
-    {% load static %}
-    {% load post_tags %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <title>{{ job.title }} · KishiHub Jobs</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
-    <title>{{ job.title }} – KishiHub Jobs</title>
+  <style>
+    :root {
+      --khub-bg: #fafafa;
+      --khub-white: #ffffff;
+      --khub-text: #262626;
+      --khub-text-light: #8e8e8e;
+      --khub-primary: #0095f6;
+      --khub-border: #dbdbdb;
+      --khub-danger: #ef4444;
+      --khub-modal-bg: rgba(0,0,0,0.65);
+      --jb-color: {{ job.category_color }};
+    }
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-    <style>
-        :root {
-            --khd-primary:      #0095f6;
-            --khd-primary-dark: #0077cc;
-            --khd-primary-tint: #eff6ff;
-            --khd-bg:           #ffffff;
-            --khd-page-bg:      #fafafa;
-            --khd-border:       #dbdbdb;
-            --khd-text:         #262626;
-            --khd-muted:        #8e8e8e;
-            --khd-success:      #16a34a;
-            --khd-danger:       #ef4444;
-            --khd-modal-bg:     rgba(0,0,0,0.65);
-            --badge-color:      #0095f6;
-        }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--khub-bg);
+      color: var(--khub-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 40px;
+    }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    a { color: inherit; }
 
-        body {
-            background: var(--khd-page-bg);
-            color: var(--khd-text);
-            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-            -webkit-font-smoothing: antialiased;
-        }
+    .jbd-wrap {
+      max-width: 620px;
+      margin: 0 auto;
+      background: var(--khub-white);
+      min-height: 100vh;
+    }
 
-        a { color: inherit; }
+    /* ─── Top bar ─── */
+    .jbd-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      position: sticky;
+      top: 0;
+      background: var(--khub-white);
+      z-index: 20;
+      border-bottom: 1px solid var(--khub-border);
+    }
 
-        .khd-container {
-            max-width: 1180px;
-            margin: 22px auto;
-            padding: 0 16px 120px;
-        }
+    .jbd-back {
+      font-size: 20px;
+      color: var(--khub-text);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px;
+    }
 
-        .khd-back-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            text-decoration: none;
-            color: var(--khd-text);
-            font-weight: 600;
-            font-size: 14px;
-            margin-bottom: 18px;
-        }
-        .khd-back-link:hover { color: var(--khd-primary); }
+    .jbd-status-badge {
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      background: #16a34a;
+    }
 
-        /* ── Poster / business banner ── */
-        .khd-poster-banner {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-decoration: none;
-            color: var(--khd-text);
-            background: #fff;
-            padding: 12px 16px;
-            margin-bottom: 18px;
-            box-shadow: 0 1px 3px rgba(17,24,39,0.06);
-            transition: box-shadow 0.15s;
-        }
-        .khd-poster-banner:hover { box-shadow: 0 4px 14px rgba(0,149,246,0.14); }
+    .jbd-status-badge.closed { background: #dc2626; }
 
-        .khd-poster-logo {
-            width: 48px; height: 48px;
-            border-radius: 12px;
-            object-fit: cover;
-            flex-shrink: 0;
-            background: #fff;
-        }
-        .khd-poster-logo.round { border-radius: 50%; }
+    .jbd-menu-btn {
+      font-size: 18px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px 10px;
+      position: relative;
+    }
 
-        .khd-poster-banner-info { flex: 1; min-width: 0; }
-        .khd-poster-banner-name {
-            font-size: 15px; font-weight: 700;
-            display: flex; align-items: center; gap: 5px;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .khd-poster-banner-sub {
-            font-size: 12px; color: var(--khd-muted);
-            margin-top: 2px;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .khd-poster-visit-btn {
-            flex-shrink: 0;
-            display: inline-flex; align-items: center; gap: 5px;
-            font-size: 12px; font-weight: 700;
-            color: var(--khd-primary);
-            background: var(--khd-primary-tint);
-            border-radius: 20px;
-            padding: 7px 13px;
-            white-space: nowrap;
-        }
+    .jbd-menu-dropdown {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 36px;
+      background: var(--khub-white);
+      border: 1px solid var(--khub-border);
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+      min-width: 170px;
+      overflow: hidden;
+      z-index: 30;
+    }
 
-        @media (max-width: 480px) {
-            .khd-poster-visit-btn span { display: none; }
-            .khd-poster-banner-sub { font-size: 11px; }
-        }
+    .jbd-menu-dropdown.open { display: block; }
 
-        /* ── Page grid ── */
-        .khd-page-grid {
-            display: grid;
-            grid-template-columns: 1.55fr 1fr;
-            gap: 22px;
-            align-items: start;
-        }
+    .jbd-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      color: var(--khub-text);
+    }
 
-        .khd-card {
-            background: #fff;
-            padding: 18px;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(17,24,39,0.06);
-        }
+    .jbd-menu-item:hover { background: var(--khub-bg); }
+    .jbd-menu-item.danger { color: #dc2626; }
 
-        .khd-left-col, .khd-right-col { display: flex; flex-direction: column; gap: 18px; }
-        .khd-right-col { position: sticky; top: 16px; }
+    /* ─── Cover ─── */
+    .jbd-cover {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      display: block;
+      cursor: zoom-in;
+      background: linear-gradient(135deg, var(--jb-color), #333);
+    }
 
-        /* ── Media ── */
-        .khd-media-card { padding: 0; overflow: hidden; }
-        .khd-media-frame { position: relative; background: #f1f3f8; }
-        .khd-main-img {
-            width: 100%; height: 380px;
-            object-fit: cover;
-            display: block;
-            cursor: zoom-in;
-            background: #f7f8fb;
-        }
-        .khd-media-placeholder {
-            width: 100%; height: 380px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            gap: 10px;
-            color: var(--khd-border);
-            background: linear-gradient(135deg, #f4f6fa 0%, #eef1f6 100%);
-        }
-        .khd-media-placeholder i { font-size: 42px; }
-        .khd-media-placeholder span { font-size: 13px; color: var(--khd-muted); font-weight: 600; }
+    .jbd-cover-placeholder {
+      width: 100%;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 56px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--jb-color), #222);
+    }
 
-        .khd-closed-ribbon {
-            position: absolute; top: 14px; left: -34px;
-            transform: rotate(-45deg);
-            background: var(--khd-danger);
-            color: #fff;
-            font-size: 12px; font-weight: 700;
-            padding: 5px 40px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-        }
+    /* ─── Body ─── */
+    .jbd-body { padding: 18px 18px 8px; }
 
-        .khd-section-title { font-size: 16px; font-weight: 800; margin-bottom: 12px; }
-        .khd-description { font-size: 14px; line-height: 1.65; color: var(--khd-text); white-space: pre-line; }
-        .khd-empty-note { color: var(--khd-muted); font-size: 13px; }
+    .jbd-title { font-size: 24px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
 
-        /* ── Comments (blog-style messages) ── */
-        .khd-comment-compose { display: flex; gap: 10px; margin-bottom: 20px; }
-        .khd-comment-avatar-sm { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-        .khd-comment-textarea {
-            flex: 1;
-            background: var(--khd-page-bg);
-            border: none;
-            border-radius: 12px;
-            padding: 11px 14px;
-            font-size: 13.5px;
-            font-family: inherit;
-            line-height: 1.6;
-            resize: vertical;
-            min-height: 44px;
-            outline: none;
-            transition: box-shadow 0.15s;
-        }
-        .khd-comment-textarea:focus { box-shadow: 0 0 0 2px var(--khd-primary); }
-        .khd-comment-send-btn {
-            align-self: flex-end;
-            background: var(--khd-primary);
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            padding: 9px 16px;
-            font-size: 13px; font-weight: 700;
-            cursor: pointer;
-            display: flex; align-items: center; gap: 6px;
-        }
-        .khd-comment-send-btn:hover { opacity: 0.9; }
-        .khd-comment-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .jbd-subline {
+      font-size: 14px;
+      color: var(--khub-text-light);
+      margin-bottom: 4px;
+    }
 
-        .khd-comment-list { display: flex; flex-direction: column; gap: 14px; }
-        .khd-comment-item {
-            display: flex; gap: 12px;
-            padding: 16px;
-            background: var(--khd-page-bg);
-            border-radius: 12px;
-        }
-        .khd-comment-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-        .khd-comment-body { flex: 1; min-width: 0; }
-        .khd-comment-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; }
-        .khd-comment-name { font-size: 14px; font-weight: 700; letter-spacing: 0.1px; }
-        .khd-comment-time { font-size: 11.5px; color: var(--khd-muted); font-style: italic; }
-        .khd-comment-text { font-size: 14px; line-height: 1.7; color: var(--khd-text); word-break: break-word; }
-        .khd-empty-comments { text-align: center; padding: 26px 0; color: var(--khd-muted); }
-        .khd-empty-comments i { font-size: 26px; color: var(--khd-border); margin-bottom: 8px; display: block; }
+    .jbd-gov-note {
+      display: flex; align-items: flex-start; gap: 8px;
+      background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+      font-size: 12.5px; line-height: 1.5;
+      padding: 10px 12px; border-radius: 8px;
+      margin: 10px 0;
+    }
+    .jbd-gov-note i { margin-top: 2px; }
 
-        /* ── Sidebar info card ── */
-        .khd-badges-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-        .khd-category-badge {
-            display: inline-flex; align-items: center; gap: 5px;
-            padding: 4px 11px;
-            border-radius: 12px;
-            font-size: 12px; font-weight: 700;
-            background: color-mix(in srgb, var(--badge-color) 12%, white);
-            color: var(--badge-color);
-        }
-        .khd-closed-badge {
-            font-size: 12px; font-weight: 700;
-            color: var(--khd-danger);
-            background: #fef2f2;
-            border-radius: 12px;
-            padding: 4px 11px;
-        }
-        .khd-advertiser-badge {
-            display: inline-flex; align-items: center; gap: 5px;
-            padding: 4px 11px;
-            border-radius: 12px;
-            font-size: 12px; font-weight: 700;
-            background: color-mix(in srgb, var(--adv-color) 12%, white);
-            color: var(--adv-color);
-        }
-        .khd-workmode-badge {
-            display: inline-flex; align-items: center; gap: 5px;
-            padding: 4px 11px;
-            border-radius: 12px;
-            font-size: 12px; font-weight: 700;
-            background: color-mix(in srgb, var(--wm-color) 12%, white);
-            color: var(--wm-color);
-        }
-        .khd-gov-note {
-            display: flex; align-items: flex-start; gap: 8px;
-            background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
-            font-size: 12.5px; line-height: 1.5;
-            padding: 10px 12px; border-radius: 8px;
-            margin-bottom: 12px;
-        }
-        .khd-gov-note i { margin-top: 2px; }
+    .jbd-info-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14.5px;
+      padding: 8px 0;
+      color: var(--khub-text);
+    }
 
-        .khd-title { font-size: 24px; font-weight: 600; line-height: 1.3; margin-bottom: 4px; }
-        .khd-company { font-size: 16px; color: var(--khd-text); margin-bottom: 14px; }
-        .khd-company i { margin-right: 5px; }
+    .jbd-info-row i { width: 18px; color: var(--khub-text-light); margin-top: 2px; }
+    .jbd-info-row a { color: var(--khub-primary); text-decoration: none; word-break: break-all; }
 
-        .khd-meta-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; }
-        .khd-meta-row { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--khd-muted); }
-        .khd-meta-row i { width: 16px; color: var(--khd-muted); text-align: center; }
+    .jbd-poster-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--khub-text);
+    }
+    .jbd-poster-row img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #eee; }
+    .jbd-poster-text { font-size: 14px; color: var(--khub-text); display: flex; align-items: center; gap: 5px; }
+    .jbd-online-dot { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; display: inline-block; }
 
-        /* ── Vibe reactions ── */
-        .khd-vibe-bar {
-            display: flex; flex-wrap: wrap; gap: 6px;
-            padding: 12px 0;
-            margin-bottom: 14px;
-        }
-        .khd-vibe-btn {
-            display: inline-flex; align-items: center; gap: 5px;
-            border: 1px solid var(--khd-border);
-            background: #fff;
-            border-radius: 20px;
-            padding: 5px 11px;
-            font-size: 12.5px; font-weight: 600;
-            color: var(--khd-text);
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-        .khd-vibe-btn:hover { border-color: var(--khd-primary); }
-        .khd-vibe-btn.active { border-color: var(--vibe-color, var(--khd-primary)); background: color-mix(in srgb, var(--vibe-color, var(--khd-primary)) 12%, white); color: var(--vibe-color, var(--khd-primary)); }
-        .khd-vibe-total { font-size: 11.5px; color: var(--khd-muted); margin-bottom: 14px; }
+    /* ─── Action row ─── */
+    .jbd-actions {
+      display: flex;
+      gap: 10px;
+      padding: 14px 0 6px;
+      flex-wrap: wrap;
+    }
 
-        /* ── Actions — LinkedIn-style pill buttons ── */
-        .khd-contact-btn {
-            width: 100%;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            padding: 10px;
-            border-radius: 24px;
-            font-size: 15px; font-weight: 600;
-            border: 1.5px solid transparent;
-            cursor: pointer;
-            text-decoration: none;
-            margin-bottom: 10px;
-            transition: background 0.15s, border-color 0.15s;
-        }
-        .khd-contact-btn:hover { opacity: 1; }
-        .khd-contact-btn-primary { background: var(--khd-primary); color: #fff; border-color: var(--khd-primary); }
-        .khd-contact-btn-primary:hover { background: var(--khd-primary-dark); border-color: var(--khd-primary-dark); }
-        .khd-contact-btn-outline { background: #fff; color: var(--khd-primary); border: 1.5px solid var(--khd-primary) !important; }
-        .khd-contact-btn-outline:hover { background: var(--khd-primary-tint); }
-        .khd-contact-btn-danger { background: #fff; color: var(--khd-danger); border: 1.5px solid var(--khd-danger) !important; }
-        .khd-owner-actions { display: flex; gap: 8px; }
-        .khd-owner-actions .khd-contact-btn { margin-bottom: 0; }
-        .khd-owner-actions .khd-contact-btn:first-child { flex: 1.3; }
-        .khd-owner-actions .khd-contact-btn:last-child { flex: 1; }
+    .jbd-primary-btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 11px 14px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1.5px solid var(--khub-primary);
+      background: var(--khub-primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: all .18s;
+      text-decoration: none;
+    }
+    .jbd-primary-btn:hover { opacity: .92; }
 
-        .khd-closed-note {
-            display: flex; align-items: center; gap: 8px;
-            font-size: 13px; font-weight: 600;
-            color: var(--khd-danger);
-            background: #fef2f2;
-            border-radius: 10px;
-            padding: 10px 13px;
-            margin-bottom: 10px;
-        }
+    .jbd-owner-btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 11px 14px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1.5px solid var(--khub-border);
+      background: var(--khub-white);
+      color: var(--khub-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+    .jbd-owner-btn.danger { border-color: #dc2626; color: #dc2626; }
 
-        /* ── Safety card ── */
-        .khd-safe-card {
-            display: flex; gap: 12px; align-items: flex-start;
-            background: var(--khd-primary-tint);
-            border-radius: 14px;
-            padding: 14px 16px;
-        }
-        .khd-safe-icon { font-size: 18px; color: var(--khd-primary); margin-top: 2px; }
-        .khd-safe-card-title { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
-        .khd-safe-card-body { font-size: 12.5px; color: var(--khd-muted); line-height: 1.5; }
+    .jbd-share-btn {
+      padding: 11px 20px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 700;
+      border: 1.5px solid var(--khub-border);
+      background: var(--khub-white);
+      cursor: pointer;
+    }
 
-        /* ── Poster card ── */
-        .khd-poster-card-title { font-size: 13px; font-weight: 700; color: var(--khd-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 12px; }
-        .khd-poster-header { display: flex; align-items: center; gap: 10px; }
-        .khd-avatar { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-        .khd-poster-info { flex: 1; min-width: 0; }
-        .khd-username { font-weight: 700; font-size: 14.5px; text-decoration: none; display: flex; align-items: center; gap: 5px; }
-        .khd-online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--khd-success); display: inline-block; }
-        .khd-poster-sub { font-size: 12px; color: var(--khd-muted); margin-top: 2px; }
+    .jbd-full-badge {
+      font-size: 13px;
+      color: #b91c1c;
+      font-weight: 600;
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
-        /* ── Related jobs — LinkedIn-style vertical "similar jobs" list ── */
-        .khd-more-section { margin-top: 8px; }
-        .khd-more-title { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
-        .khd-related-grid {
-            display: flex; flex-direction: column;
-            background: #fff; box-shadow: 0 1px 3px rgba(17,24,39,0.06); border-radius: 8px;
-            overflow: hidden;
-        }
-        .khd-related-card {
-            display: flex; align-items: center; gap: 12px;
-            text-decoration: none; color: var(--khd-text);
-            background: #fff;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--khd-border);
-            transition: background 0.12s;
-        }
-        .khd-related-card:last-child { border-bottom: none; }
-        .khd-related-card:hover { background: rgba(0,0,0,0.035); }
-        .khd-related-img-wrap { position: relative; width: 48px; height: 48px; flex-shrink: 0; background: #f3f2ef; border: 1px solid var(--khd-border); border-radius: 4px; overflow: hidden; }
-        .khd-related-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
-        .khd-related-img-wrap .khd-related-noimg { width:100%; height:100%; display:flex; align-items:center; justify-content:center; color: var(--khd-muted); font-size: 18px; }
-        .khd-related-cat-tag {
-            display: block;
-            font-size: 11.5px; font-weight: 600;
-            color: var(--badge-color);
-            margin-top: 2px;
-        }
-        .khd-related-body { flex: 1; min-width: 0; }
-        .khd-related-name { font-size: 14px; font-weight: 600; color: var(--khd-primary); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 2px; }
-        .khd-related-meta { font-size: 12.5px; color: var(--khd-muted); }
-        .khd-empty-related { text-align: center; padding: 30px 0; background: #fff; box-shadow: 0 1px 3px rgba(17,24,39,0.06); border-radius: 8px; }
-        .khd-empty-related i { font-size: 26px; color: var(--khd-border); margin-bottom: 8px; display: block; }
-        .khd-empty-related p { font-size: 13px; color: var(--khd-muted); }
+    /* ─── Info badges ─── */
+    .jbd-badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0 4px; }
+    .jbd-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 11px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    }
+    .jbd-badge.type      { background: color-mix(in srgb, var(--jb-color) 14%, white); color: var(--jb-color); }
+    .jbd-badge.workmode   { background: color-mix(in srgb, var(--wm-color, var(--khub-primary)) 14%, white); color: var(--wm-color, var(--khub-primary)); }
+    .jbd-badge.advertiser { background: color-mix(in srgb, var(--adv-color, var(--khub-primary)) 14%, white); color: var(--adv-color, var(--khub-primary)); }
+    .jbd-badge.closed    { background: #fef2f2; color: #b91c1c; }
 
-        /* ── Spinner / toast ── */
-        .khd-spinner {
-            width: 16px; height: 16px;
-            border: 2px solid rgba(255,255,255,0.4);
-            border-top-color: #fff;
-            border-radius: 50%;
-            animation: khdSpin 0.7s linear infinite;
-            display: none;
-        }
-        @keyframes khdSpin { to { transform: rotate(360deg); } }
+    /* ─── Vibes ─── */
+    .jbd-vibe-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0 4px; }
+    .jbd-vibe-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      border: 1px solid var(--khub-border);
+      background: #fff;
+      border-radius: 20px;
+      padding: 5px 11px;
+      font-size: 12.5px; font-weight: 600;
+      color: var(--khub-text);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .jbd-vibe-btn:hover { border-color: var(--khub-primary); }
+    .jbd-vibe-btn.active { border-color: var(--vibe-color, var(--khub-primary)); background: color-mix(in srgb, var(--vibe-color, var(--khub-primary)) 12%, white); color: var(--vibe-color, var(--khub-primary)); }
+    .jbd-vibe-total { font-size: 12px; color: var(--khub-text-light); padding: 2px 0 6px; }
 
-        .khd-toast {
-            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
-            background: #262626; color: #fff;
-            padding: 10px 20px; border-radius: 8px;
-            font-size: 13px; font-weight: 600;
-            z-index: 9999; white-space: nowrap;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            animation: khdSlideUp 0.2s ease;
-        }
-        @keyframes khdSlideUp { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    /* ─── Tabs ─── */
+    .jbd-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--khub-border);
+      margin-top: 14px;
+      position: sticky;
+      top: 53px;
+      background: var(--khub-white);
+      z-index: 15;
+    }
 
-        /* ── Modals ── */
-        .khd-modal-overlay {
-            display: none;
-            position: fixed; inset: 0;
-            background: var(--khd-modal-bg);
-            z-index: 5000;
-            align-items: center; justify-content: center;
-            padding: 16px;
-        }
-        .khd-modal-overlay.open { display: flex; }
-        .khd-modal {
-            background: #fff;
-            border-radius: 18px;
-            width: 100%; max-width: 520px;
-            max-height: 92vh;
-            overflow-y: auto;
-            padding: 22px;
-        }
-        .khd-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-        .khd-modal-header h2 { font-size: 17px; font-weight: 700; }
-        .khd-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--khd-muted); padding: 4px 8px; border-radius: 8px; }
-        .khd-modal-close:hover { background: var(--khd-page-bg); }
+    .jbd-tab {
+      flex: 1;
+      text-align: center;
+      padding: 13px 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--khub-text-light);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+    }
 
-        .khd-form-group { margin-bottom: 14px; }
-        .khd-form-group label { display: block; font-size: 12px; font-weight: 700; color: var(--khd-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
-        .khd-form-group input, .khd-form-group select, .khd-form-group textarea {
-            width: 100%; padding: 10px 13px;
-            border: 1px solid var(--khd-border); border-radius: 10px;
-            font-size: 14px; font-family: inherit; color: var(--khd-text);
-            outline: none; transition: border-color 0.15s;
-        }
-        .khd-form-group input:focus, .khd-form-group select:focus, .khd-form-group textarea:focus { border-color: var(--khd-primary); }
-        .khd-form-group textarea { resize: vertical; min-height: 90px; }
-        .khd-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        @media (max-width: 480px) { .khd-form-row { grid-template-columns: 1fr; } }
+    .jbd-tab.active { color: var(--khub-primary); border-bottom-color: var(--khub-primary); }
 
-        .khd-char-count { text-align: right; font-size: 11px; color: var(--khd-muted); margin-top: 4px; }
-        .khd-char-count.over { color: var(--khd-danger); }
+    .jbd-tabpanel { display: none; padding: 18px; }
+    .jbd-tabpanel.active { display: block; }
 
-        .khd-status-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px; background: var(--khd-page-bg); border-radius: 10px; margin-bottom: 14px; }
-        .khd-status-label { font-size: 13px; font-weight: 600; }
-        .khd-toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
-        .khd-toggle input { opacity: 0; width: 0; height: 0; }
-        .khd-toggle-slider { position: absolute; inset: 0; background: var(--khd-border); border-radius: 24px; cursor: pointer; transition: background 0.2s; }
-        .khd-toggle-slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
-        .khd-toggle input:checked + .khd-toggle-slider { background: var(--khd-primary); }
-        .khd-toggle input:checked + .khd-toggle-slider::before { transform: translateX(18px); }
+    .jbd-section-title { font-size: 17px; font-weight: 800; margin-bottom: 10px; }
+    .jbd-section-title:not(:first-child) { margin-top: 20px; }
+    .jbd-about-text { font-size: 14.5px; line-height: 1.65; white-space: pre-line; color: var(--khub-text); }
+    .jbd-empty-note { color: var(--khub-text-light); font-size: 13.5px; }
 
-        .khd-submit-btn { width: 100%; padding: 12px; background: var(--khd-primary); color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; margin-top: 4px; }
-        .khd-submit-btn:hover { opacity: 0.88; }
-        .khd-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .khd-form-error { font-size: 12px; color: var(--khd-danger); margin-top: 10px; display: none; }
+    .jbd-apply-link-btn {
+      margin-top: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-        .khd-confirm-btns { display: flex; gap: 10px; margin-top: 20px; }
-        .khd-confirm-btns button { flex: 1; padding: 11px; border-radius: 10px; font-size: 14px; font-weight: 700; border: none; cursor: pointer; }
-        .khd-confirm-btns .cancel-btn { background: var(--khd-page-bg); color: var(--khd-text); border: 1px solid var(--khd-border); }
-        .khd-confirm-btns .delete-btn { background: var(--khd-danger); color: #fff; }
+    /* ─── Safety card ─── */
+    .jbd-safe-card {
+      display: flex; gap: 12px; align-items: flex-start;
+      background: #eff6ff;
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-top: 20px;
+    }
+    .jbd-safe-icon { font-size: 18px; color: var(--khub-primary); margin-top: 2px; }
+    .jbd-safe-card-title { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+    .jbd-safe-card-body { font-size: 12.5px; color: var(--khub-text-light); line-height: 1.5; }
 
-        /* ── Full image modal ── */
-        .khd-image-modal-overlay {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.9); z-index: 6000;
-            align-items: center; justify-content: center; cursor: zoom-out;
-        }
-        .khd-image-modal-overlay.open { display: flex; }
-        .khd-image-modal-overlay img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; }
-        .khd-image-modal-close { position: fixed; top: 20px; right: 30px; font-size: 36px; color: #fff; background: none; border: none; cursor: pointer; }
+    /* ─── Comments ─── */
+    .jbd-comment-box {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
 
-        /* ── Responsive ── */
-        @media (max-width: 900px) {
-            .khd-page-grid { grid-template-columns: 1fr; }
-            .khd-right-col { position: static; }
-            .khd-related-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 480px) {
-            .khd-related-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-    </style>
+    .jbd-comment-box img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+
+    .jbd-comment-input {
+      flex: 1;
+      border: 1.5px solid var(--khub-border);
+      border-radius: 20px;
+      padding: 10px 16px;
+      font-size: 14px;
+      resize: none;
+      font-family: inherit;
+    }
+
+    .jbd-comment-submit {
+      align-self: flex-end;
+      background: var(--khub-primary);
+      color: #fff;
+      border: none;
+      border-radius: 18px;
+      padding: 9px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .jbd-comment-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+    .jbd-comment {
+      display: flex;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--khub-bg);
+    }
+
+    .jbd-comment img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .jbd-comment-bubble {
+      background: var(--khub-bg);
+      border-radius: 14px;
+      padding: 9px 14px;
+      flex: 1;
+    }
+    .jbd-comment-author { font-size: 13.5px; font-weight: 700; }
+    .jbd-comment-text { font-size: 14px; margin-top: 2px; word-break: break-word; }
+    .jbd-comment-time { font-size: 11.5px; color: var(--khub-text-light); margin-top: 4px; }
+
+    .jbd-empty {
+      text-align: center;
+      color: var(--khub-text-light);
+      font-size: 14px;
+      padding: 30px 0;
+    }
+    .jbd-empty i { font-size: 22px; display: block; margin-bottom: 8px; }
+
+    /* ─── Similar jobs ─── */
+    .jbd-related {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 0;
+      text-decoration: none;
+    }
+    .jbd-related-thumb {
+      width: 42px; height: 42px; border-radius: 10px; object-fit: cover; background: #eee;
+      display: flex; align-items: center; justify-content: center; color: var(--khub-text-light); flex-shrink: 0;
+    }
+    .jbd-related-name { font-size: 14.5px; font-weight: 600; color: var(--khub-text); }
+    .jbd-related-badge { font-size: 12px; color: var(--khub-text-light); }
+
+    .jbd-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #262626;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      opacity: 0;
+      pointer-events: none;
+      transition: all .25s;
+      z-index: 999;
+      max-width: 90vw;
+      text-align: center;
+    }
+    .jbd-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ─── Modals (edit / delete / DM) ─── */
+    .jbd-modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: var(--khub-modal-bg);
+      backdrop-filter: blur(4px);
+      z-index: 5000;
+      align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .jbd-modal-overlay.open { display: flex; }
+    .jbd-modal {
+      background: #fff;
+      border-radius: 20px;
+      width: 100%; max-width: 480px;
+      max-height: 92vh;
+      overflow-y: auto;
+      padding: 24px 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .jbd-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .jbd-modal-header h2 { font-size: 17px; font-weight: 700; }
+    .jbd-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--khub-text-light); padding: 4px 8px; border-radius: 8px; }
+    .jbd-modal-close:hover { background: var(--khub-bg); }
+
+    .jbd-form-group { margin-bottom: 14px; }
+    .jbd-form-group label { display: block; font-size: 12px; font-weight: 700; color: var(--khub-text-light); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+    .jbd-form-group input, .jbd-form-group select, .jbd-form-group textarea {
+      width: 100%; padding: 10px 13px;
+      border: 1px solid var(--khub-border); border-radius: 10px;
+      font-size: 14px; font-family: inherit; color: var(--khub-text);
+      outline: none; transition: border-color 0.15s;
+    }
+    .jbd-form-group input:focus, .jbd-form-group select:focus, .jbd-form-group textarea:focus { border-color: var(--khub-primary); }
+    .jbd-form-group textarea { resize: vertical; min-height: 90px; }
+    .jbd-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 480px) { .jbd-form-row { grid-template-columns: 1fr; } }
+
+    .jbd-char-count { text-align: right; font-size: 11px; color: var(--khub-text-light); margin-top: 4px; }
+    .jbd-char-count.over { color: var(--khub-danger); }
+
+    .jbd-status-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px; background: var(--khub-bg); border-radius: 10px; margin-bottom: 14px; }
+    .jbd-status-label { font-size: 13px; font-weight: 600; }
+    .jbd-toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+    .jbd-toggle input { opacity: 0; width: 0; height: 0; }
+    .jbd-toggle-slider { position: absolute; inset: 0; background: var(--khub-border); border-radius: 24px; cursor: pointer; transition: background 0.2s; }
+    .jbd-toggle-slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+    .jbd-toggle input:checked + .jbd-toggle-slider { background: var(--khub-primary); }
+    .jbd-toggle input:checked + .jbd-toggle-slider::before { transform: translateX(18px); }
+
+    .jbd-submit-btn { width: 100%; padding: 12px; background: var(--khub-primary); color: #fff; font-size: 15px; font-weight: 700; border: none; border-radius: 24px; cursor: pointer; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .jbd-submit-btn:hover { opacity: 0.9; }
+    .jbd-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .jbd-form-error { font-size: 12px; color: var(--khub-danger); margin-top: 10px; display: none; }
+
+    .jbd-confirm-btns { display: flex; gap: 10px; margin-top: 20px; }
+    .jbd-confirm-btns button { flex: 1; padding: 11px; border-radius: 24px; font-size: 14px; font-weight: 700; border: none; cursor: pointer; }
+    .jbd-confirm-btns .cancel-btn { background: var(--khub-bg); color: var(--khub-text); border: 1px solid var(--khub-border); }
+    .jbd-confirm-btns .delete-btn { background: var(--khub-danger); color: #fff; }
+
+    .jbd-spinner {
+      width: 15px; height: 15px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: jbdSpin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes jbdSpin { to { transform: rotate(360deg); } }
+
+    /* ─── Full image modal ─── */
+    .jbd-image-modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.9); z-index: 6000;
+      align-items: center; justify-content: center; cursor: zoom-out;
+    }
+    .jbd-image-modal-overlay.open { display: flex; }
+    .jbd-image-modal-overlay img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; }
+    .jbd-image-modal-close { position: fixed; top: 20px; right: 30px; font-size: 36px; color: #fff; background: none; border: none; cursor: pointer; }
+
+    @media (max-width: 640px) {
+      .jbd-wrap { max-width: 100%; }
+    }
+  </style>
 </head>
 <body>
 
 {% include 'header.html' %}
 
-<div class="khd-container">
+<div class="jbd-wrap">
 
+  <!-- Top bar -->
+  <div class="jbd-topbar">
+    <button class="jbd-back" onclick="history.back()"><i class="fas fa-arrow-left"></i></button>
+
+    <span class="jbd-status-badge {% if not job.is_open %}closed{% endif %}" id="jbdStatusBadge">
+      {% if job.is_open %}Open{% else %}Closed{% endif %}
+    </span>
+
+    <div style="position:relative;">
+      <button class="jbd-menu-btn" onclick="document.getElementById('jbdMenu').classList.toggle('open')">
+        <i class="fas fa-ellipsis-h"></i>
+      </button>
+      <div class="jbd-menu-dropdown" id="jbdMenu">
+        <button class="jbd-menu-item" onclick="jbdCopyLink()"><i class="fas fa-link"></i> Copy link</button>
+        {% if is_owner %}
+          <button class="jbd-menu-item" onclick="jbdOpenEdit()"><i class="fas fa-pen"></i> Edit vacancy</button>
+          <button class="jbd-menu-item danger" onclick="jbdOpenDelete()"><i class="fas fa-trash"></i> Delete vacancy</button>
+        {% else %}
+          <button class="jbd-menu-item danger" onclick="jbdToast('Thanks — this has been reported.')"><i class="fas fa-flag"></i> Report vacancy</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Cover -->
+  {% if job.cover_image %}
+    <img class="jbd-cover" src="{{ job.cover_image.url }}" alt="{{ job.title }}" onclick="jbdOpenImageModal('{{ job.cover_image.url|escapejs }}')">
+  {% else %}
+    <div class="jbd-cover-placeholder">
+      <i class="fas fa-{% if job.category == 'gig' %}toolbox{% elif job.category == 'apprenticeship' %}graduation-cap{% else %}briefcase{% endif %}"></i>
+    </div>
+  {% endif %}
+
+  <div class="jbd-body">
     {% if business_page %}
-        <a href="{% url 'business_page_detail' business_page.slug %}" class="khd-back-link">
-            <i class="fas fa-chevron-left"></i> Back to {{ business_page.name }}
+      <div class="jbd-subline">
+        <a href="{% url 'business_page_detail' business_page.slug %}" style="color:var(--khub-primary);text-decoration:none;font-weight:600;">
+          <i class="fas fa-chevron-left" style="font-size:11px;"></i> Back to {{ business_page.name }}
         </a>
-        <a href="{% url 'business_page_detail' business_page.slug %}" class="khd-poster-banner">
-            <img src="{% if business_page.get_logo_url %}{{ business_page.get_logo_url }}{% else %}https://placehold.co/56x56/0095f6/ffffff?text=B{% endif %}"
-                 class="khd-poster-logo" alt="{{ business_page.name }} logo">
-            <div class="khd-poster-banner-info">
-                <div class="khd-poster-banner-name">
-                    {{ business_page.name }}
-                    {% if business_page.is_verified %}
-                        <i class="fas fa-circle-check" style="color: var(--khd-primary); font-size: 13px;"></i>
-                    {% endif %}
-                </div>
-                <div class="khd-poster-banner-sub">
-                    {% if business_page.tagline %}{{ business_page.tagline }}{% else %}{{ business_page.get_category_display }}{% endif %}
-                </div>
-            </div>
-            <span class="khd-poster-visit-btn"><span>Visit Page</span> <i class="fas fa-chevron-right" style="font-size:10px;"></i></span>
-        </a>
-    {% else %}
-        <a href="{% url 'job_vacancy' %}" class="khd-back-link">
-            <i class="fas fa-chevron-left"></i> Back to Jobs
-        </a>
+      </div>
     {% endif %}
 
-    <div class="khd-page-grid">
-
-        <!-- ══ LEFT COLUMN ══ -->
-        <div class="khd-left-col">
-
-            <!-- Media -->
-            <div class="khd-card khd-media-card">
-                <div class="khd-media-frame">
-                    {% if not job.is_open %}
-                        <span class="khd-closed-ribbon">CLOSED</span>
-                    {% endif %}
-                    {% if job.cover_image %}
-                        <img src="{{ job.cover_image.url }}" class="khd-main-img" alt="{{ job.title }}"
-                             onclick="khdOpenImageModal('{{ job.cover_image.url|escapejs }}')">
-                    {% else %}
-                        <div class="khd-media-placeholder">
-                            <i class="fas fa-{% if job.category == 'gig' %}toolbox{% elif job.category == 'apprenticeship' %}graduation-cap{% else %}briefcase{% endif %}"></i>
-                            <span>No cover image provided</span>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Description -->
-            <div class="khd-card">
-                <div class="khd-section-title">Job Description</div>
-                {% if job.description %}
-                    <div class="khd-description">{{ job.description }}</div>
-                {% else %}
-                    <div class="khd-empty-note">No description provided.</div>
-                {% endif %}
-            </div>
-
-            <!-- Requirements -->
-            {% if job.requirements %}
-            <div class="khd-card">
-                <div class="khd-section-title">Requirements</div>
-                <div class="khd-description">{{ job.requirements }}</div>
-            </div>
-            {% endif %}
-
-            <!-- How to apply -->
-            {% if job.contact_info or job.apply_link %}
-            <div class="khd-card">
-                <div class="khd-section-title">How to Apply</div>
-                {% if job.contact_info %}
-                <div class="khd-description" style="word-break:break-word;">{{ job.contact_info }}</div>
-                {% endif %}
-                {% if job.apply_link %}
-                <a href="{{ job.apply_link }}" target="_blank" rel="noopener noreferrer nofollow"
-                   class="khd-contact-btn khd-contact-btn-primary" style="margin-top:10px;display:inline-flex;">
-                    <i class="fas fa-arrow-up-right-from-square"></i> Open Application Link
-                </a>
-                <div class="khd-empty-note" style="margin-top:6px;">Links open in a new tab. Never enter passwords, card details, or pay a fee on a page that looks suspicious.</div>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            <!-- Comments -->
-            <div class="khd-card" id="khdComments">
-                <div class="khd-section-title">Comments (<span id="khdCommentCount">{{ comments_count }}</span>)</div>
-
-                {% if request.user.is_authenticated %}
-                <div class="khd-comment-compose">
-                    <img class="khd-comment-avatar-sm" src="{{ request.user.profile.get_picture_url }}" alt="{{ request.user.username }}" onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';">
-                    <textarea id="khdCommentText" class="khd-comment-textarea" maxlength="5000" placeholder="Share a thought or ask a question about this vacancy..."></textarea>
-                    <button type="button" class="khd-comment-send-btn" id="khdCommentSendBtn" onclick="khdPostComment()">
-                        <i class="fas fa-paper-plane"></i>
-                        <span class="khd-spinner" id="khdCommentSpinner"></span>
-                    </button>
-                </div>
-                {% else %}
-                <div class="khd-empty-note" style="margin-bottom:14px;"><a href="{% url 'index' %}" style="color:var(--khd-primary);font-weight:600;">Log in</a> to leave a comment.</div>
-                {% endif %}
-
-                <div class="khd-comment-list" id="khdCommentList">
-                    {% for c in comments %}
-                    <div class="khd-comment-item">
-                        <img class="khd-comment-avatar" src="{{ c.author.profile.get_picture_url }}" alt="{{ c.author.username }}" onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';">
-                        <div class="khd-comment-body">
-                            <div class="khd-comment-head">
-                                <span class="khd-comment-name">{{ c.author.get_full_name|default:c.author.username }}</span>
-                                <span class="khd-comment-time">{{ c.created_at|naturaltime }}</span>
-                            </div>
-                            <div class="khd-comment-text">{{ c.text }}</div>
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div class="khd-empty-comments" id="khdEmptyComments">
-                        <i class="far fa-comment-dots"></i>
-                        <p>No comments yet. Be the first to ask something!</p>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-        </div><!-- /khd-left-col -->
-
-        <!-- ══ RIGHT COLUMN ══ -->
-        <div class="khd-right-col">
-
-            <!-- Title / info / actions card -->
-            <div class="khd-card">
-                <div class="khd-badges-row" style="--badge-color: {{ job.category_color }};">
-                    <span class="khd-category-badge">{{ job.category_emoji }} {{ job.get_category_display }}</span>
-                    <span class="khd-workmode-badge" style="--wm-color: {{ job.work_mode_color }};">{{ job.work_mode_emoji }} {{ job.get_work_mode_display }}</span>
-                    <span class="khd-advertiser-badge" style="--adv-color: {{ job.advertiser_color }};">{{ job.advertiser_emoji }} {{ job.get_advertiser_type_display }}</span>
-                    {% if not job.is_open %}<span class="khd-closed-badge">Closed</span>{% endif %}
-                </div>
-                {% if job.is_government_advertiser %}
-                <div class="khd-gov-note">
-                    <i class="fas fa-circle-info"></i>
-                    This post is tagged "Government" by its poster — that isn't a KishiHub verification. Confirm any recruitment portal is an official .gov.ng site before sharing documents or fees.
-                </div>
-                {% endif %}
-
-                <div class="khd-title">{{ job.title }}</div>
-                {% if job.company %}<div class="khd-company"><i class="fas fa-building"></i>{{ job.company }}</div>{% endif %}
-
-                <div class="khd-meta-list">
-                    {% if job.location %}
-                    <div class="khd-meta-row"><i class="fas fa-map-marker-alt"></i> {{ job.location }}</div>
-                    {% endif %}
-                    {% if job.salary_range and not job.is_government_advertiser %}
-                    <div class="khd-meta-row"><i class="fas fa-money-bill-wave"></i> {{ job.salary_range }}</div>
-                    {% endif %}
-                    <div class="khd-meta-row"><i class="far fa-clock"></i> Posted {{ job.created_at|naturaltime }}</div>
-                </div>
-
-                <!-- Vibe reactions -->
-                <div class="khd-vibe-bar" id="khdVibeBar">
-                    {% for v in vibe_data %}
-                    <button type="button" class="khd-vibe-btn {% if v.active %}active{% endif %}"
-                            style="--vibe-color: {{ v.color }};"
-                            data-vibe="{{ v.value }}"
-                            onclick="khdToggleVibe('{{ v.value }}', this)">
-                        {{ v.emoji }} <span class="khd-vibe-count">{{ v.count }}</span>
-                    </button>
-                    {% endfor %}
-                </div>
-                <div class="khd-vibe-total"><span id="khdVibeTotal">{{ vibe_total }}</span> reaction{{ vibe_total|pluralize }}</div>
-
-                {% if is_owner %}
-                    <div class="khd-owner-actions">
-                        <button type="button" class="khd-contact-btn khd-contact-btn-primary" onclick="khdOpenEdit()">
-                            <i class="fas fa-pen"></i> Edit Vacancy
-                        </button>
-                        <button type="button" class="khd-contact-btn khd-contact-btn-danger" onclick="khdOpenDelete()">
-                            <i class="fas fa-trash-alt"></i> Delete
-                        </button>
-                    </div>
-                {% else %}
-                    {% if not job.is_open %}
-                        <div class="khd-closed-note"><i class="fas fa-circle-exclamation"></i> This vacancy is no longer accepting applicants.</div>
-                    {% endif %}
-                    {% if request.user.is_authenticated %}
-                        <button type="button" class="khd-contact-btn khd-contact-btn-primary" onclick="khdOpenDmModal()">
-                            <i class="fas fa-paper-plane"></i> Apply / Message Poster
-                        </button>
-                    {% else %}
-                        <a href="{% url 'index' %}" class="khd-contact-btn khd-contact-btn-primary">
-                            <i class="fas fa-right-to-bracket"></i> Log In to Apply
-                        </a>
-                    {% endif %}
-                {% endif %}
-            </div>
-
-            <!-- Safety notice -->
-            <div class="khd-safe-card">
-                <i class="fas fa-shield-alt khd-safe-icon"></i>
-                <div>
-                    <div class="khd-safe-card-title">Apply safely on KishiHub</div>
-                    <div class="khd-safe-card-body">Never pay a fee to "secure" a job. Keep communication on KishiHub and verify the employer before sharing personal documents.</div>
-                </div>
-            </div>
-
-            <!-- Poster card -->
-            <div class="khd-card">
-                <div class="khd-poster-card-title">Posted by</div>
-                <div class="khd-poster-header">
-                    <a href="{% url 'profile' job.posted_by.username %}">
-                        <img src="{{ poster.get_picture_url }}" class="khd-avatar" alt="{{ job.posted_by.username }}" onerror="this.src='https://placehold.co/46x46/dbdbdb/8e8e8e?text=U';">
-                    </a>
-                    <div class="khd-poster-info">
-                        <a href="{% url 'profile' job.posted_by.username %}" class="khd-username">
-                            {{ job.posted_by.get_full_name|default:job.posted_by.username }}
-                            {% if poster.is_verify %}<i class="fas fa-circle-check" style="color: var(--khd-primary); font-size: 13px;"></i>{% endif %}
-                            {% if poster.online %}<span class="khd-online-dot" title="Online"></span>{% endif %}
-                        </a>
-                        {% if poster.location %}<div class="khd-poster-sub"><i class="fas fa-map-marker-alt" style="font-size:10px;"></i> {{ poster.location }}</div>{% endif %}
-                    </div>
-                </div>
-            </div>
-
-        </div><!-- /khd-right-col -->
-
-    </div><!-- /khd-page-grid -->
-
-    <!-- Related jobs -->
-    <div class="khd-more-section">
-        <div class="khd-more-title">More {{ job.get_category_display }} vacancies</div>
-        <div class="khd-related-grid">
-            {% for rj in related_jobs %}
-            <a href="{% url 'job_detail' rj.id %}" class="khd-related-card">
-                <div class="khd-related-img-wrap">
-                    {% if rj.cover_image %}
-                        <img src="{{ rj.cover_image.url }}" alt="{{ rj.title }}">
-                    {% else %}
-                        <span class="khd-related-noimg"><i class="fas fa-briefcase"></i></span>
-                    {% endif %}
-                </div>
-                <div class="khd-related-body">
-                    <div class="khd-related-name">{{ rj.title }}</div>
-                    <div class="khd-related-meta">{% if rj.location %}{{ rj.location }}{% else %}{{ rj.company|default:"KishiHub" }}{% endif %} · {{ rj.work_mode_emoji }} {{ rj.get_work_mode_display }}</div>
-                    <span class="khd-related-cat-tag" style="--badge-color: {{ rj.category_color }};">{{ rj.category_emoji }} {{ rj.get_category_display }}</span>
-                </div>
-            </a>
-            {% empty %}
-            <div class="khd-empty-related">
-                <i class="fas fa-briefcase"></i>
-                <p>No other vacancies in this category right now.</p>
-            </div>
-            {% endfor %}
-        </div>
+    <div class="jbd-title">{{ job.title }}</div>
+    <div class="jbd-subline">
+      Posted by <strong>{{ job.posted_by.get_full_name|default:job.posted_by.username }}</strong>{% if job.company %} · {{ job.company }}{% endif %}
     </div>
 
-</div><!-- /khd-container -->
+    {% if job.is_government_advertiser %}
+      <div class="jbd-gov-note">
+        <i class="fas fa-circle-info"></i>
+        This post is tagged "Government" by its poster — that isn't a KishiHub verification. Confirm any recruitment portal is an official .gov.ng site before sharing documents or fees.
+      </div>
+    {% endif %}
 
-<!-- ══ Full image modal ══ -->
-<div class="khd-image-modal-overlay" id="khdImageModalOverlay" onclick="khdCloseImageModal()">
-    <button type="button" class="khd-image-modal-close" onclick="khdCloseImageModal(); event.stopPropagation();">&times;</button>
-    <img id="khdModalImage" src="" alt="Job cover">
+    {% if job.location %}
+      <div class="jbd-info-row">
+        <i class="fas fa-map-marker-alt"></i>
+        <span>{{ job.location }}</span>
+      </div>
+    {% endif %}
+
+    {% if job.salary_range and not job.is_government_advertiser %}
+      <div class="jbd-info-row">
+        <i class="fas fa-money-bill-wave"></i>
+        <span>{{ job.salary_range }}</span>
+      </div>
+    {% endif %}
+
+    <div class="jbd-info-row">
+      <i class="far fa-clock"></i>
+      <span>Posted {{ job.created_at|naturaltime }}</span>
+    </div>
+
+    {% if job.apply_link %}
+      <div class="jbd-info-row">
+        <i class="fas fa-arrow-up-right-from-square"></i>
+        <span><a href="{{ job.apply_link }}" target="_blank" rel="noopener noreferrer nofollow">{{ job.apply_link }}</a></span>
+      </div>
+    {% endif %}
+
+    <div class="jbd-badges">
+      <span class="jbd-badge type">{{ job.category_emoji }} {{ job.get_category_display }}</span>
+      <span class="jbd-badge workmode" style="--wm-color: {{ job.work_mode_color }};">{{ job.work_mode_emoji }} {{ job.get_work_mode_display }}</span>
+      <span class="jbd-badge advertiser" style="--adv-color: {{ job.advertiser_color }};">{{ job.advertiser_emoji }} {{ job.get_advertiser_type_display }}</span>
+      {% if not job.is_open %}
+        <span class="jbd-badge closed"><i class="fas fa-ban"></i> Closed</span>
+      {% endif %}
+    </div>
+
+    <a class="jbd-poster-row" href="{% url 'profile' job.posted_by.username %}">
+      <img src="{{ poster.get_picture_url }}" alt="{{ job.posted_by.username }}" onerror="this.src='https://placehold.co/32x32/dbdbdb/8e8e8e?text=U';">
+      <span class="jbd-poster-text">
+        {{ job.posted_by.get_full_name|default:job.posted_by.username }}
+        {% if poster.is_verify %}<i class="fas fa-circle-check" style="color: var(--khub-primary); font-size: 12px;"></i>{% endif %}
+        {% if poster.online %}<span class="jbd-online-dot" title="Online"></span>{% endif %}
+      </span>
+    </a>
+
+    <div class="jbd-vibe-bar" id="jbdVibeBar">
+      {% for v in vibe_data %}
+        <button type="button" class="jbd-vibe-btn {% if v.active %}active{% endif %}"
+                style="--vibe-color: {{ v.color }};"
+                data-vibe="{{ v.value }}"
+                onclick="jbdToggleVibe('{{ v.value }}', this)">
+          {{ v.emoji }} <span class="jbd-vibe-count">{{ v.count }}</span>
+        </button>
+      {% endfor %}
+    </div>
+    <div class="jbd-vibe-total"><span id="jbdVibeTotal">{{ vibe_total }}</span> reaction{{ vibe_total|pluralize }}</div>
+
+    <div class="jbd-actions">
+      {% if is_owner %}
+        <button type="button" class="jbd-owner-btn" onclick="jbdOpenEdit()"><i class="fas fa-pen"></i> Edit</button>
+        <button type="button" class="jbd-owner-btn danger" onclick="jbdOpenDelete()"><i class="fas fa-trash-alt"></i> Delete</button>
+      {% else %}
+        {% if job.is_open %}
+          {% if request.user.is_authenticated %}
+            <button type="button" class="jbd-primary-btn" onclick="jbdOpenDmModal()">
+              <i class="fas fa-paper-plane"></i> Apply / Message Poster
+            </button>
+          {% else %}
+            <a href="{% url 'index' %}" class="jbd-primary-btn">
+              <i class="fas fa-right-to-bracket"></i> Log In to Apply
+            </a>
+          {% endif %}
+        {% endif %}
+      {% endif %}
+      <button class="jbd-share-btn" onclick="jbdCopyLink()"><i class="fas fa-share"></i></button>
+    </div>
+
+    {% if not job.is_open %}
+      <div class="jbd-full-badge"><i class="fas fa-circle-exclamation"></i> This vacancy is no longer accepting applicants.</div>
+    {% endif %}
+  </div>
+
+  <!-- Tabs -->
+  <div class="jbd-tabs">
+    <div class="jbd-tab active" id="jbdTabBtn-details" onclick="jbdSwitchTab('details')">Details</div>
+    <div class="jbd-tab" id="jbdTabBtn-comments" onclick="jbdSwitchTab('comments')">Comments</div>
+    <div class="jbd-tab" id="jbdTabBtn-similar" onclick="jbdSwitchTab('similar')">Similar</div>
+  </div>
+
+  <!-- Details tab -->
+  <div class="jbd-tabpanel active" id="jbdTab-details">
+    <div class="jbd-section-title">Job Description</div>
+    {% if job.description %}
+      <div class="jbd-about-text">{{ job.description }}</div>
+    {% else %}
+      <div class="jbd-empty-note">No description provided.</div>
+    {% endif %}
+
+    {% if job.requirements %}
+      <div class="jbd-section-title">Requirements</div>
+      <div class="jbd-about-text">{{ job.requirements }}</div>
+    {% endif %}
+
+    {% if job.contact_info or job.apply_link %}
+      <div class="jbd-section-title">How to Apply</div>
+      {% if job.contact_info %}
+        <div class="jbd-about-text" style="word-break:break-word;">{{ job.contact_info }}</div>
+      {% endif %}
+      {% if job.apply_link %}
+        <a href="{{ job.apply_link }}" target="_blank" rel="noopener noreferrer nofollow" class="jbd-primary-btn jbd-apply-link-btn">
+          <i class="fas fa-arrow-up-right-from-square"></i> Open Application Link
+        </a>
+        <div class="jbd-empty-note" style="margin-top:8px;">Links open in a new tab. Never enter passwords, card details, or pay a fee on a page that looks suspicious.</div>
+      {% endif %}
+    {% endif %}
+
+    <div class="jbd-safe-card">
+      <i class="fas fa-shield-alt jbd-safe-icon"></i>
+      <div>
+        <div class="jbd-safe-card-title">Apply safely on KishiHub</div>
+        <div class="jbd-safe-card-body">Never pay a fee to "secure" a job. Keep communication on KishiHub and verify the employer before sharing personal documents.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comments tab -->
+  <div class="jbd-tabpanel" id="jbdTab-comments">
+    {% if request.user.is_authenticated %}
+      <div class="jbd-comment-box">
+        <img src="{{ request.user.profile.get_picture_url }}" alt="You" onerror="this.src='https://placehold.co/36x36/dbdbdb/8e8e8e?text=U';">
+        <textarea class="jbd-comment-input" id="jbdCommentInput" rows="1" maxlength="5000" placeholder="Share a thought or ask a question about this vacancy…"></textarea>
+        <button class="jbd-comment-submit" id="jbdCommentSubmit" onclick="jbdSubmitComment()">
+          Post <span class="jbd-spinner" id="jbdCommentSpinner"></span>
+        </button>
+      </div>
+    {% else %}
+      <div class="jbd-empty-note" style="margin-bottom:14px;"><a href="{% url 'index' %}" style="color:var(--khub-primary);font-weight:600;">Log in</a> to leave a comment.</div>
+    {% endif %}
+
+    <div id="jbdCommentList">
+      {% for c in comments %}
+        <div class="jbd-comment">
+          <img src="{{ c.author.profile.get_picture_url }}" alt="{{ c.author.username }}" onerror="this.src='https://placehold.co/36x36/dbdbdb/8e8e8e?text=U';">
+          <div class="jbd-comment-bubble">
+            <div class="jbd-comment-author">{{ c.author.get_full_name|default:c.author.username }}</div>
+            <div class="jbd-comment-text">{{ c.text }}</div>
+            <div class="jbd-comment-time">{{ c.created_at|naturaltime }}</div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="jbd-empty" id="jbdEmptyComments"><i class="far fa-comment-dots"></i>No comments yet. Be the first to ask something!</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Similar tab -->
+  <div class="jbd-tabpanel" id="jbdTab-similar">
+    {% if related_jobs %}
+      <div class="jbd-section-title">More {{ job.get_category_display }} vacancies</div>
+      {% for rj in related_jobs %}
+        <a class="jbd-related" href="{% url 'job_detail' rj.id %}">
+          {% if rj.cover_image %}
+            <img class="jbd-related-thumb" src="{{ rj.cover_image.url }}" alt="{{ rj.title }}">
+          {% else %}
+            <span class="jbd-related-thumb"><i class="fas fa-briefcase"></i></span>
+          {% endif %}
+          <div>
+            <div class="jbd-related-name">{{ rj.title }}</div>
+            <div class="jbd-related-badge">{% if rj.location %}{{ rj.location }}{% else %}{{ rj.company|default:"KishiHub" }}{% endif %} · {{ rj.work_mode_emoji }} {{ rj.get_work_mode_display }}</div>
+          </div>
+        </a>
+      {% endfor %}
+    {% else %}
+      <div class="jbd-empty"><i class="fas fa-briefcase"></i>No other vacancies in this category right now.</div>
+    {% endif %}
+  </div>
+
 </div>
 
-<!-- ══ DM / Apply Modal ══ -->
-<div class="khd-modal-overlay" id="khdDmModal">
-    <div class="khd-modal">
-        <div class="khd-modal-header">
-            <h2><i class="fas fa-paper-plane" style="color:var(--khd-primary);"></i> Message the Poster</h2>
-            <button type="button" class="khd-modal-close" onclick="khdCloseDmModal()">&times;</button>
-        </div>
-        <div class="khd-form-group">
-            <label>Your message</label>
-            <textarea id="khdDmText" class="khd-comment-textarea" style="min-height:130px;width:100%;" maxlength="1000" oninput="khdDmCharCount(this)"></textarea>
-            <div class="khd-char-count" id="khdDmCharCount">0 / 1000</div>
-        </div>
-        <button type="button" class="khd-submit-btn" id="khdDmSendBtn" onclick="khdSendDm()">
-            <i class="fas fa-paper-plane"></i> Send <span class="khd-spinner" id="khdDmSpinner"></span>
-        </button>
+<div class="jbd-toast" id="jbdToast"></div>
+
+<!-- Full image modal -->
+<div class="jbd-image-modal-overlay" id="jbdImageModalOverlay" onclick="jbdCloseImageModal()">
+  <button type="button" class="jbd-image-modal-close" onclick="jbdCloseImageModal(); event.stopPropagation();">&times;</button>
+  <img id="jbdModalImage" src="" alt="Job cover">
+</div>
+
+<!-- DM / Apply modal -->
+<div class="jbd-modal-overlay" id="jbdDmModal">
+  <div class="jbd-modal">
+    <div class="jbd-modal-header">
+      <h2><i class="fas fa-paper-plane" style="color:var(--khub-primary);"></i> Message the Poster</h2>
+      <button type="button" class="jbd-modal-close" onclick="jbdCloseDmModal()">&times;</button>
     </div>
+    <div class="jbd-form-group">
+      <label>Your message</label>
+      <textarea id="jbdDmText" class="jbd-comment-input" style="min-height:130px;width:100%;border-radius:12px;" maxlength="1000" oninput="jbdDmCharCount(this)"></textarea>
+      <div class="jbd-char-count" id="jbdDmCharCount">0 / 1000</div>
+    </div>
+    <button type="button" class="jbd-submit-btn" id="jbdDmSendBtn" onclick="jbdSendDm()">
+      <i class="fas fa-paper-plane"></i> Send <span class="jbd-spinner" id="jbdDmSpinner"></span>
+    </button>
+  </div>
 </div>
 
 {% if is_owner %}
-<!-- ══ Edit Modal ══ -->
-<div class="khd-modal-overlay" id="khdEditModal">
-    <div class="khd-modal">
-        <div class="khd-modal-header">
-            <h2>✏️ Edit Vacancy</h2>
-            <button type="button" class="khd-modal-close" onclick="khdCloseEdit()">&times;</button>
-        </div>
-
-        <div class="khd-status-row">
-            <span class="khd-status-label">Vacancy is open</span>
-            <label class="khd-toggle">
-                <input type="checkbox" id="khdFIsOpen" {% if job.is_open %}checked{% endif %}>
-                <span class="khd-toggle-slider"></span>
-            </label>
-        </div>
-
-        <div class="khd-form-group">
-            <label>Job Title</label>
-            <input type="text" id="khdFTitle" value="{{ job.title|escapejs }}">
-        </div>
-        <div class="khd-form-row">
-            <div class="khd-form-group">
-                <label>Category</label>
-                <select id="khdFCategory">
-                    <option value="gig" {% if job.category == 'gig' %}selected{% endif %}>🛠️ Gig</option>
-                    <option value="fulltime" {% if job.category == 'fulltime' %}selected{% endif %}>💼 Full-time</option>
-                    <option value="apprenticeship" {% if job.category == 'apprenticeship' %}selected{% endif %}>🎓 Apprenticeship</option>
-                </select>
-            </div>
-            <div class="khd-form-group">
-                <label>Work Mode</label>
-                <select id="khdFWorkMode">
-                    <option value="on_site" {% if job.work_mode == 'on_site' %}selected{% endif %}>🏢 On-site</option>
-                    <option value="remote" {% if job.work_mode == 'remote' %}selected{% endif %}>🏡 Remote</option>
-                    <option value="hybrid" {% if job.work_mode == 'hybrid' %}selected{% endif %}>🔀 Hybrid</option>
-                </select>
-            </div>
-        </div>
-        <div class="khd-form-row">
-            <div class="khd-form-group">
-                <label>Posted As</label>
-                <select id="khdFAdvertiser">
-                    <option value="personal" {% if job.advertiser_type == 'personal' %}selected{% endif %}>🙋 Personal</option>
-                    <option value="company_school" {% if job.advertiser_type == 'company_school' %}selected{% endif %}>🏢 Company / School</option>
-                    <option value="government" {% if job.advertiser_type == 'government' %}selected{% endif %}>🏛️ Government</option>
-                </select>
-            </div>
-        </div>
-        <div class="khd-form-row">
-            <div class="khd-form-group">
-                <label>Company</label>
-                <input type="text" id="khdFCompany" value="{{ job.company|escapejs }}">
-            </div>
-            <div class="khd-form-group">
-                <label>Location</label>
-                <input type="text" id="khdFLocation" value="{{ job.location|escapejs }}">
-            </div>
-        </div>
-        <div class="khd-form-group">
-            <label>Salary Range</label>
-            <input type="text" id="khdFSalary" value="{{ job.salary_range|escapejs }}">
-        </div>
-        <div class="khd-form-group">
-            <label>Description</label>
-            <textarea id="khdFDesc">{{ job.description }}</textarea>
-        </div>
-        <div class="khd-form-group">
-            <label>Requirements</label>
-            <textarea id="khdFReqs">{{ job.requirements }}</textarea>
-        </div>
-        <div class="khd-form-group">
-            <label>How to Apply</label>
-            <input type="text" id="khdFContact" value="{{ job.contact_info|escapejs }}">
-        </div>
-        <div class="khd-form-group">
-            <label>Application Link <span style="font-weight:400;">(optional)</span></label>
-            <input type="url" id="khdFApplyLink" value="{{ job.apply_link|escapejs }}" placeholder="https://official-portal.gov.ng/apply">
-        </div>
-        <div class="khd-form-group">
-            <label>Cover Image <span style="font-weight:400;">(optional — leave blank to keep current)</span></label>
-            <input type="file" id="khdFImage" accept="image/*">
-        </div>
-
-        <div class="khd-form-error" id="khdEditError"></div>
-        <button type="button" class="khd-submit-btn" id="khdEditSubmitBtn" onclick="khdSubmitEdit()">
-            Save Changes <span class="khd-spinner" id="khdEditSpinner"></span>
-        </button>
+<!-- Edit modal -->
+<div class="jbd-modal-overlay" id="jbdEditModal">
+  <div class="jbd-modal">
+    <div class="jbd-modal-header">
+      <h2>✏️ Edit Vacancy</h2>
+      <button type="button" class="jbd-modal-close" onclick="jbdCloseEdit()">&times;</button>
     </div>
+
+    <div class="jbd-status-row">
+      <span class="jbd-status-label">Vacancy is open</span>
+      <label class="jbd-toggle">
+        <input type="checkbox" id="jbdFIsOpen" {% if job.is_open %}checked{% endif %}>
+        <span class="jbd-toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="jbd-form-group">
+      <label>Job Title</label>
+      <input type="text" id="jbdFTitle" value="{{ job.title|escapejs }}">
+    </div>
+    <div class="jbd-form-row">
+      <div class="jbd-form-group">
+        <label>Category</label>
+        <select id="jbdFCategory">
+          <option value="gig" {% if job.category == 'gig' %}selected{% endif %}>🛠️ Gig</option>
+          <option value="fulltime" {% if job.category == 'fulltime' %}selected{% endif %}>💼 Full-time</option>
+          <option value="apprenticeship" {% if job.category == 'apprenticeship' %}selected{% endif %}>🎓 Apprenticeship</option>
+        </select>
+      </div>
+      <div class="jbd-form-group">
+        <label>Work Mode</label>
+        <select id="jbdFWorkMode">
+          <option value="on_site" {% if job.work_mode == 'on_site' %}selected{% endif %}>🏢 On-site</option>
+          <option value="remote" {% if job.work_mode == 'remote' %}selected{% endif %}>🏡 Remote</option>
+          <option value="hybrid" {% if job.work_mode == 'hybrid' %}selected{% endif %}>🔀 Hybrid</option>
+        </select>
+      </div>
+    </div>
+    <div class="jbd-form-row">
+      <div class="jbd-form-group">
+        <label>Posted As</label>
+        <select id="jbdFAdvertiser">
+          <option value="personal" {% if job.advertiser_type == 'personal' %}selected{% endif %}>🙋 Personal</option>
+          <option value="company_school" {% if job.advertiser_type == 'company_school' %}selected{% endif %}>🏢 Company / School</option>
+          <option value="government" {% if job.advertiser_type == 'government' %}selected{% endif %}>🏛️ Government</option>
+        </select>
+      </div>
+    </div>
+    <div class="jbd-form-row">
+      <div class="jbd-form-group">
+        <label>Company</label>
+        <input type="text" id="jbdFCompany" value="{{ job.company|escapejs }}">
+      </div>
+      <div class="jbd-form-group">
+        <label>Location</label>
+        <input type="text" id="jbdFLocation" value="{{ job.location|escapejs }}">
+      </div>
+    </div>
+    <div class="jbd-form-group">
+      <label>Salary Range</label>
+      <input type="text" id="jbdFSalary" value="{{ job.salary_range|escapejs }}">
+    </div>
+    <div class="jbd-form-group">
+      <label>Description</label>
+      <textarea id="jbdFDesc">{{ job.description }}</textarea>
+    </div>
+    <div class="jbd-form-group">
+      <label>Requirements</label>
+      <textarea id="jbdFReqs">{{ job.requirements }}</textarea>
+    </div>
+    <div class="jbd-form-group">
+      <label>How to Apply</label>
+      <input type="text" id="jbdFContact" value="{{ job.contact_info|escapejs }}">
+    </div>
+    <div class="jbd-form-group">
+      <label>Application Link <span style="font-weight:400;">(optional)</span></label>
+      <input type="url" id="jbdFApplyLink" value="{{ job.apply_link|escapejs }}" placeholder="https://official-portal.gov.ng/apply">
+    </div>
+    <div class="jbd-form-group">
+      <label>Cover Image <span style="font-weight:400;">(optional — leave blank to keep current)</span></label>
+      <input type="file" id="jbdFImage" accept="image/*">
+    </div>
+
+    <div class="jbd-form-error" id="jbdEditError"></div>
+    <button type="button" class="jbd-submit-btn" id="jbdEditSubmitBtn" onclick="jbdSubmitEdit()">
+      Save Changes <span class="jbd-spinner" id="jbdEditSpinner"></span>
+    </button>
+  </div>
 </div>
 
-<!-- ══ Delete Confirm Modal ══ -->
-<div class="khd-modal-overlay" id="khdDeleteModal">
-    <div class="khd-modal" style="max-width:400px;">
-        <div class="khd-modal-header">
-            <h2><i class="fas fa-triangle-exclamation" style="color:var(--khd-danger);"></i> Delete Vacancy</h2>
-            <button type="button" class="khd-modal-close" onclick="khdCloseDelete()">&times;</button>
-        </div>
-        <p style="font-size:14px;line-height:1.5;">
-            Are you sure you want to delete <strong>"{{ job.title|escapejs }}"</strong>? This cannot be undone.
-        </p>
-        <div class="khd-confirm-btns">
-            <button class="cancel-btn" onclick="khdCloseDelete()">Cancel</button>
-            <button class="delete-btn" id="khdConfirmDeleteBtn" onclick="khdConfirmDelete()">Delete</button>
-        </div>
+<!-- Delete confirm modal -->
+<div class="jbd-modal-overlay" id="jbdDeleteModal">
+  <div class="jbd-modal" style="max-width:380px;">
+    <div class="jbd-modal-header">
+      <h2><i class="fas fa-triangle-exclamation" style="color:var(--khub-danger);"></i> Delete Vacancy</h2>
+      <button type="button" class="jbd-modal-close" onclick="jbdCloseDelete()">&times;</button>
     </div>
+    <p style="font-size:14px;line-height:1.5;">
+      Are you sure you want to delete <strong>"{{ job.title|escapejs }}"</strong>? This cannot be undone.
+    </p>
+    <div class="jbd-confirm-btns">
+      <button class="cancel-btn" onclick="jbdCloseDelete()">Cancel</button>
+      <button class="delete-btn" id="jbdConfirmDeleteBtn" onclick="jbdConfirmDelete()">Delete</button>
+    </div>
+  </div>
 </div>
 {% endif %}
 
+{% include 'footer.html' %}
+
 <script>
-    function getCsrf() {
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? meta.content : '';
-    }
+  var JBD_JOB_ID   = '{{ job.id }}';
+  var JBD_SHARE_URL = "{{ request.build_absolute_uri }}";
+  var _jbdJobTitle  = '{{ job.title|escapejs }}';
 
-    function showToast(msg, color) {
-        const el = document.createElement('div');
-        el.className = 'khd-toast';
-        el.textContent = msg;
-        if (color) el.style.background = color;
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 2600);
-    }
+  function getCsrf() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : '';
+  }
 
-    // ── Image modal ──────────────────────────────────────────────────────────
-    function khdOpenImageModal(url) {
-        if (!url) return;
-        document.getElementById('khdModalImage').src = url;
-        document.getElementById('khdImageModalOverlay').classList.add('open');
-        document.body.style.overflow = 'hidden';
-    }
-    function khdCloseImageModal() {
-        document.getElementById('khdImageModalOverlay').classList.remove('open');
-        document.body.style.overflow = '';
-    }
+  function jbdToast(msg, color) {
+    var t = document.getElementById('jbdToast');
+    t.textContent = msg;
+    t.style.background = color || '#262626';
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 2400);
+  }
 
-    // ── Vibe reactions ───────────────────────────────────────────────────────
-    const _khdJobId = '{{ job.id }}';
-
-    async function khdToggleVibe(vibeType, btn) {
-        {% if not request.user.is_authenticated %}
-            showToast('⚠️ Please log in to react.', '#e03131');
-            return;
-        {% endif %}
-        try {
-            const res = await fetch(`/jobs/${_khdJobId}/vibe/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-                body: JSON.stringify({ vibe_type: vibeType }),
-            });
-            const data = await res.json();
-            if (!res.ok) { showToast('⚠️ ' + (data.error || 'Could not react.'), '#e03131'); return; }
-
-            document.querySelectorAll('#khdVibeBar .khd-vibe-btn').forEach(b => {
-                const v = b.dataset.vibe;
-                b.classList.toggle('active', data.user_vibe === v);
-                const cnt = b.querySelector('.khd-vibe-count');
-                cnt.textContent = data.summary[v] || 0;
-            });
-            document.getElementById('khdVibeTotal').textContent = data.total;
-        } catch (_) {
-            showToast('⚠️ Network error. Please try again.', '#e03131');
-        }
-    }
-
-    // ── Comments ──────────────────────────────────────────────────────────────
-    async function khdPostComment() {
-        const ta  = document.getElementById('khdCommentText');
-        const btn = document.getElementById('khdCommentSendBtn');
-        const sp  = document.getElementById('khdCommentSpinner');
-        const text = ta ? ta.value.trim() : '';
-
-        if (!text) { showToast('⚠️ Write something first.', '#e03131'); return; }
-
-        btn.disabled = true;
-        if (sp) sp.style.display = 'inline-block';
-
-        try {
-            const res = await fetch(`/jobs/${_khdJobId}/comments/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-                body: JSON.stringify({ text }),
-            });
-            const data = await res.json();
-            if (!res.ok) { showToast('⚠️ ' + (data.error || 'Could not post comment.'), '#e03131'); return; }
-
-            const empty = document.getElementById('khdEmptyComments');
-            if (empty) empty.remove();
-
-            const list = document.getElementById('khdCommentList');
-            const item = document.createElement('div');
-            item.className = 'khd-comment-item';
-            item.innerHTML = `
-                <img class="khd-comment-avatar" src="${data.avatar}" alt="${data.author}" onerror="this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';">
-                <div class="khd-comment-body">
-                    <div class="khd-comment-head">
-                        <span class="khd-comment-name"></span>
-                        <span class="khd-comment-time">${data.time}</span>
-                    </div>
-                    <div class="khd-comment-text"></div>
-                </div>`;
-            item.querySelector('.khd-comment-name').textContent = data.author_name;
-            item.querySelector('.khd-comment-text').textContent = data.text;
-            list.appendChild(item);
-
-            document.getElementById('khdCommentCount').textContent = data.count;
-            ta.value = '';
-        } catch (_) {
-            showToast('⚠️ Network error. Please try again.', '#e03131');
-        } finally {
-            btn.disabled = false;
-            if (sp) sp.style.display = 'none';
-        }
-    }
-
-    // ── DM / Apply modal ─────────────────────────────────────────────────────
-    const _khdJobTitle = '{{ job.title|escapejs }}';
-    const _khdJobUrl    = '{{ request.build_absolute_uri }}';
-
-    function khdOpenDmModal() {
-        const modal = document.getElementById('khdDmModal');
-        if (!modal) return;
-        const ta = document.getElementById('khdDmText');
-        if (ta && !ta.value.trim()) {
-            ta.value = "Hi! I'm interested in this vacancy:\n💼 " + _khdJobTitle + "\n🔗 " + _khdJobUrl + "\n\nIs this position still open?";
-            khdDmCharCount(ta);
-        }
-        modal.classList.add('open');
-        document.body.style.overflow = 'hidden';
-    }
-    function khdCloseDmModal() {
-        document.getElementById('khdDmModal').classList.remove('open');
-        document.body.style.overflow = '';
-    }
-    function khdDmCharCount(ta) {
-        const count = ta.value.length;
-        const el = document.getElementById('khdDmCharCount');
-        if (!el) return;
-        el.textContent = count + ' / 1000';
-        el.classList.toggle('over', count >= 950);
-    }
-
-    async function khdSendDm() {
-        const ta  = document.getElementById('khdDmText');
-        const btn = document.getElementById('khdDmSendBtn');
-        const sp  = document.getElementById('khdDmSpinner');
-        const msg = ta ? ta.value.trim() : '';
-
-        if (!msg) { showToast('⚠️ Please write a message first.', '#e03131'); ta && ta.focus(); return; }
-
-        btn.disabled = true;
-        if (sp) sp.style.display = 'inline-block';
-
-        try {
-            const res = await fetch('{% url "send_message" job.posted_by.username %}', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCsrf(),
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({ message: msg, job_id: '{{ job.id }}' }),
-            });
-            const data = await res.json();
-
-            if (data.status === 'success') {
-                khdCloseDmModal();
-                showToast('Message sent!', '#0095f6');
-                setTimeout(() => {
-                    window.location.href = '{% url "message" job.posted_by.username %}?job={{ job.id }}';
-                }, 700);
-                return;
-            }
-            showToast(data.message || '⚠️ Could not send message.', '#e03131');
-        } catch (_) {
-            showToast('⚠️ Network error. Please try again.', '#e03131');
-        } finally {
-            btn.disabled = false;
-            if (sp) sp.style.display = 'none';
-        }
-    }
-
-    // Close modals with Escape
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            khdCloseImageModal();
-            khdCloseDmModal();
-            {% if is_owner %}
-            khdCloseEdit();
-            khdCloseDelete();
-            {% endif %}
-        }
+  function jbdSwitchTab(tab) {
+    ['details', 'comments', 'similar'].forEach(function (t) {
+      document.getElementById('jbdTab-' + t).classList.toggle('active', t === tab);
+      document.getElementById('jbdTabBtn-' + t).classList.toggle('active', t === tab);
     });
+  }
 
-    {% if is_owner %}
-    // ── Edit modal ───────────────────────────────────────────────────────────
-    function khdOpenEdit() {
-        document.getElementById('khdEditError').style.display = 'none';
-        document.getElementById('khdEditModal').classList.add('open');
-        document.body.style.overflow = 'hidden';
+  // ── Share / copy link ──
+  function jbdCopyLink() {
+    var menu = document.getElementById('jbdMenu');
+    if (menu) menu.classList.remove('open');
+    if (navigator.share) {
+      navigator.share({ title: _jbdJobTitle, url: JBD_SHARE_URL }).catch(function () {});
+      return;
     }
-    function khdCloseEdit() {
-        document.getElementById('khdEditModal').classList.remove('open');
-        document.body.style.overflow = '';
+    navigator.clipboard.writeText(JBD_SHARE_URL).then(function () {
+      jbdToast('🔗 Link copied to clipboard');
+    }).catch(function () {
+      jbdToast(JBD_SHARE_URL);
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var menu = document.getElementById('jbdMenu');
+    if (menu && menu.classList.contains('open') && !menu.contains(e.target) && !e.target.closest('.jbd-menu-btn')) {
+      menu.classList.remove('open');
     }
+  });
 
-    async function khdSubmitEdit() {
-        const errEl = document.getElementById('khdEditError');
-        const btn   = document.getElementById('khdEditSubmitBtn');
-        const sp    = document.getElementById('khdEditSpinner');
-        errEl.style.display = 'none';
+  var jbdCommentInputEl = document.getElementById('jbdCommentInput');
+  if (jbdCommentInputEl) {
+    jbdCommentInputEl.addEventListener('input', function () {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+  }
 
-        const title = document.getElementById('khdFTitle').value.trim();
-        const category = document.getElementById('khdFCategory').value;
-        const desc = document.getElementById('khdFDesc').value.trim();
+  // ── Image modal ──
+  function jbdOpenImageModal(url) {
+    if (!url) return;
+    document.getElementById('jbdModalImage').src = url;
+    document.getElementById('jbdImageModalOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function jbdCloseImageModal() {
+    document.getElementById('jbdImageModalOverlay').classList.remove('open');
+    document.body.style.overflow = '';
+  }
 
-        if (!title) { errEl.textContent = 'Job title is required.'; errEl.style.display = 'block'; return; }
-        if (!desc)  { errEl.textContent = 'Description is required.'; errEl.style.display = 'block'; return; }
-
-        const fd = new FormData();
-        fd.append('title', title);
-        fd.append('category', category);
-        fd.append('work_mode', document.getElementById('khdFWorkMode').value);
-        fd.append('advertiser_type', document.getElementById('khdFAdvertiser').value);
-        fd.append('company', document.getElementById('khdFCompany').value.trim());
-        fd.append('location', document.getElementById('khdFLocation').value.trim());
-        fd.append('salary_range', document.getElementById('khdFSalary').value.trim());
-        fd.append('description', desc);
-        fd.append('requirements', document.getElementById('khdFReqs').value.trim());
-        fd.append('contact_info', document.getElementById('khdFContact').value.trim());
-        fd.append('apply_link', document.getElementById('khdFApplyLink').value.trim());
-        fd.append('is_open', document.getElementById('khdFIsOpen').checked ? '1' : '0');
-        const fImage = document.getElementById('khdFImage');
-        if (fImage.files[0]) fd.append('cover_image', fImage.files[0]);
-
-        btn.disabled = true;
-        if (sp) sp.style.display = 'inline-block';
-
-        try {
-            const res = await fetch('/jobs/{{ job.id }}/edit/', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCsrf() },
-                body: fd,
-            });
-            const data = await res.json();
-            if (data.success) {
-                showToast('✅ Changes saved!', '#0095f6');
-                setTimeout(() => window.location.reload(), 600);
-            } else {
-                errEl.textContent = data.error || 'Something went wrong.';
-                errEl.style.display = 'block';
-            }
-        } catch (_) {
-            errEl.textContent = 'Network error. Please try again.';
-            errEl.style.display = 'block';
-        } finally {
-            btn.disabled = false;
-            if (sp) sp.style.display = 'none';
-        }
-    }
-
-    // ── Delete modal ─────────────────────────────────────────────────────────
-    function khdOpenDelete() {
-        document.getElementById('khdDeleteModal').classList.add('open');
-        document.body.style.overflow = 'hidden';
-    }
-    function khdCloseDelete() {
-        document.getElementById('khdDeleteModal').classList.remove('open');
-        document.body.style.overflow = '';
-    }
-
-    async function khdConfirmDelete() {
-        const btn = document.getElementById('khdConfirmDeleteBtn');
-        btn.disabled = true;
-        btn.textContent = 'Deleting…';
-        try {
-            const res = await fetch('/jobs/{{ job.id }}/delete/', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCsrf(), 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `csrfmiddlewaretoken=${encodeURIComponent(getCsrf())}`,
-            });
-            const data = await res.json();
-            if (data.success) {
-                showToast('✅ Vacancy deleted.', '#0095f6');
-                setTimeout(() => { window.location.href = '{% url "job_vacancy" %}'; }, 700);
-            } else {
-                alert(data.error || 'Could not delete. Please try again.');
-                btn.disabled = false;
-                btn.textContent = 'Delete';
-            }
-        } catch (_) {
-            alert('Network error. Please try again.');
-            btn.disabled = false;
-            btn.textContent = 'Delete';
-        }
-    }
+  // ── Vibe reactions ──
+  async function jbdToggleVibe(vibeType, btn) {
+    {% if not request.user.is_authenticated %}
+      jbdToast('⚠️ Please log in to react.', '#e03131');
+      return;
     {% endif %}
+    try {
+      const res = await fetch(`/jobs/${JBD_JOB_ID}/vibe/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        body: JSON.stringify({ vibe_type: vibeType }),
+      });
+      const data = await res.json();
+      if (!res.ok) { jbdToast('⚠️ ' + (data.error || 'Could not react.'), '#e03131'); return; }
+
+      document.querySelectorAll('#jbdVibeBar .jbd-vibe-btn').forEach(function (b) {
+        var v = b.dataset.vibe;
+        b.classList.toggle('active', data.user_vibe === v);
+        b.querySelector('.jbd-vibe-count').textContent = data.summary[v] || 0;
+      });
+      document.getElementById('jbdVibeTotal').textContent = data.total;
+    } catch (_) {
+      jbdToast('⚠️ Network error. Please try again.', '#e03131');
+    }
+  }
+
+  // ── Comments ──
+  async function jbdSubmitComment() {
+    var ta  = document.getElementById('jbdCommentInput');
+    var btn = document.getElementById('jbdCommentSubmit');
+    var sp  = document.getElementById('jbdCommentSpinner');
+    var text = ta ? ta.value.trim() : '';
+
+    if (!text) { jbdToast('⚠️ Write something first.', '#e03131'); return; }
+
+    btn.disabled = true;
+    if (sp) sp.style.display = 'inline-block';
+
+    try {
+      const res = await fetch(`/jobs/${JBD_JOB_ID}/comments/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        body: JSON.stringify({ text: text }),
+      });
+      const data = await res.json();
+      if (!res.ok) { jbdToast('⚠️ ' + (data.error || 'Could not post comment.'), '#e03131'); return; }
+
+      var empty = document.getElementById('jbdEmptyComments');
+      if (empty) empty.remove();
+
+      var list = document.getElementById('jbdCommentList');
+      var wrap = document.createElement('div');
+      wrap.innerHTML =
+        '<div class="jbd-comment">' +
+          '<img src="' + data.avatar + '" alt="' + data.author + '" onerror="this.src=\'https://placehold.co/36x36/dbdbdb/8e8e8e?text=U\';">' +
+          '<div class="jbd-comment-bubble">' +
+            '<div class="jbd-comment-author">' + data.author_name + '</div>' +
+            '<div class="jbd-comment-text">' + data.text + '</div>' +
+            '<div class="jbd-comment-time">' + data.time + '</div>' +
+          '</div>' +
+        '</div>';
+      list.appendChild(wrap.firstElementChild);
+      ta.value = '';
+      jbdToast('💬 Comment posted.');
+    } catch (_) {
+      jbdToast('⚠️ Network error. Please try again.', '#e03131');
+    } finally {
+      btn.disabled = false;
+      if (sp) sp.style.display = 'none';
+    }
+  }
+
+  // ── DM / Apply modal ──
+  function jbdOpenDmModal() {
+    var modal = document.getElementById('jbdDmModal');
+    if (!modal) return;
+    var ta = document.getElementById('jbdDmText');
+    if (ta && !ta.value.trim()) {
+      ta.value = "Hi! I'm interested in this vacancy:\n💼 " + _jbdJobTitle + "\n🔗 " + JBD_SHARE_URL + "\n\nIs this position still open?";
+      jbdDmCharCount(ta);
+    }
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function jbdCloseDmModal() {
+    document.getElementById('jbdDmModal').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  function jbdDmCharCount(ta) {
+    var count = ta.value.length;
+    var el = document.getElementById('jbdDmCharCount');
+    if (!el) return;
+    el.textContent = count + ' / 1000';
+    el.classList.toggle('over', count >= 950);
+  }
+
+  async function jbdSendDm() {
+    var ta  = document.getElementById('jbdDmText');
+    var btn = document.getElementById('jbdDmSendBtn');
+    var sp  = document.getElementById('jbdDmSpinner');
+    var msg = ta ? ta.value.trim() : '';
+
+    if (!msg) { jbdToast('⚠️ Please write a message first.', '#e03131'); ta && ta.focus(); return; }
+
+    btn.disabled = true;
+    if (sp) sp.style.display = 'inline-block';
+
+    try {
+      const res = await fetch('{% url "send_message" job.posted_by.username %}', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrf(),
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ message: msg, job_id: JBD_JOB_ID }),
+      });
+      const data = await res.json();
+
+      if (data.status === 'success') {
+        jbdCloseDmModal();
+        jbdToast('Message sent!', '#0095f6');
+        setTimeout(function () {
+          window.location.href = '{% url "message" job.posted_by.username %}?job={{ job.id }}';
+        }, 700);
+        return;
+      }
+      jbdToast(data.message || '⚠️ Could not send message.', '#e03131');
+    } catch (_) {
+      jbdToast('⚠️ Network error. Please try again.', '#e03131');
+    } finally {
+      btn.disabled = false;
+      if (sp) sp.style.display = 'none';
+    }
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      jbdCloseImageModal();
+      jbdCloseDmModal();
+      {% if is_owner %}
+      jbdCloseEdit();
+      jbdCloseDelete();
+      {% endif %}
+    }
+  });
+
+  {% if is_owner %}
+  // ── Edit modal ──
+  function jbdOpenEdit() {
+    var menu = document.getElementById('jbdMenu');
+    if (menu) menu.classList.remove('open');
+    document.getElementById('jbdEditError').style.display = 'none';
+    document.getElementById('jbdEditModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function jbdCloseEdit() {
+    document.getElementById('jbdEditModal').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  async function jbdSubmitEdit() {
+    var errEl = document.getElementById('jbdEditError');
+    var btn   = document.getElementById('jbdEditSubmitBtn');
+    var sp    = document.getElementById('jbdEditSpinner');
+    errEl.style.display = 'none';
+
+    var title = document.getElementById('jbdFTitle').value.trim();
+    var desc  = document.getElementById('jbdFDesc').value.trim();
+
+    if (!title) { errEl.textContent = 'Job title is required.'; errEl.style.display = 'block'; return; }
+    if (!desc)  { errEl.textContent = 'Description is required.'; errEl.style.display = 'block'; return; }
+
+    var fd = new FormData();
+    fd.append('title', title);
+    fd.append('category', document.getElementById('jbdFCategory').value);
+    fd.append('work_mode', document.getElementById('jbdFWorkMode').value);
+    fd.append('advertiser_type', document.getElementById('jbdFAdvertiser').value);
+    fd.append('company', document.getElementById('jbdFCompany').value.trim());
+    fd.append('location', document.getElementById('jbdFLocation').value.trim());
+    fd.append('salary_range', document.getElementById('jbdFSalary').value.trim());
+    fd.append('description', desc);
+    fd.append('requirements', document.getElementById('jbdFReqs').value.trim());
+    fd.append('contact_info', document.getElementById('jbdFContact').value.trim());
+    fd.append('apply_link', document.getElementById('jbdFApplyLink').value.trim());
+    fd.append('is_open', document.getElementById('jbdFIsOpen').checked ? '1' : '0');
+    var fImage = document.getElementById('jbdFImage');
+    if (fImage.files[0]) fd.append('cover_image', fImage.files[0]);
+
+    btn.disabled = true;
+    if (sp) sp.style.display = 'inline-block';
+
+    try {
+      const res = await fetch('/jobs/{{ job.id }}/edit/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrf() },
+        body: fd,
+      });
+      const data = await res.json();
+      if (data.success) {
+        jbdToast('✅ Changes saved!', '#0095f6');
+        setTimeout(function () { window.location.reload(); }, 600);
+      } else {
+        errEl.textContent = data.error || 'Something went wrong.';
+        errEl.style.display = 'block';
+      }
+    } catch (_) {
+      errEl.textContent = 'Network error. Please try again.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      if (sp) sp.style.display = 'none';
+    }
+  }
+
+  // ── Delete modal ──
+  function jbdOpenDelete() {
+    var menu = document.getElementById('jbdMenu');
+    if (menu) menu.classList.remove('open');
+    document.getElementById('jbdDeleteModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function jbdCloseDelete() {
+    document.getElementById('jbdDeleteModal').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  async function jbdConfirmDelete() {
+    var btn = document.getElementById('jbdConfirmDeleteBtn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try {
+      const res = await fetch('/jobs/{{ job.id }}/delete/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrf(), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `csrfmiddlewaretoken=${encodeURIComponent(getCsrf())}`,
+      });
+      const data = await res.json();
+      if (data.success) {
+        jbdToast('✅ Vacancy deleted.', '#0095f6');
+        setTimeout(function () { window.location.href = '{% url "job_vacancy" %}'; }, 700);
+      } else {
+        alert(data.error || 'Could not delete. Please try again.');
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+      }
+    } catch (_) {
+      alert('Network error. Please try again.');
+      btn.disabled = false;
+      btn.textContent = 'Delete';
+    }
+  }
+  {% endif %}
 </script>
+
 </body>
 </html>

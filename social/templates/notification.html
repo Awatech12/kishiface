@@ -111,7 +111,7 @@
 
     <div class="kishiface-header">
         <span class="kishiface-header-title">Notifications</span>
-        {% if today_notifications or week_notifications or earlier_notifications or business_notifications %}
+        {% if today_notifications or week_notifications or earlier_notifications or business_notifications or event_notifications %}
             <button class="kishiface-mark-all-btn" onclick="kishifaceMarkAllRead()">Mark all read</button>
         {% endif %}
     </div>
@@ -152,7 +152,47 @@
             {% endfor %}
         {% endif %}
 
-        {% if today_notifications or week_notifications or earlier_notifications or business_notifications %}
+        {% if event_notifications %}
+            <div class="kishiface-section-title" data-section="event">Event Activity</div>
+            {% for en in event_notifications %}
+                <div class="kishiface-notification-wrapper {% if not en.is_read %}kishiface-unread{% endif %}"
+                     id="kishiface-event-notif-{{ en.id }}"
+                     data-type="{{ en.notif_type }}"
+                     data-event-notif-id="{{ en.id }}">
+                    <a href="{% url 'event_calendar' %}#event-card-{{ en.event.id }}"
+                       style="display:flex;align-items:center;gap:12px;padding:12px 48px 12px 16px;">
+                        {% if en.notif_type == 'new_comment' %}
+                            <img src="{{ en.actor.profile.picture.url }}" alt="{{ en.actor.username }}"
+                                 style="width:44px;height:44px;border-radius:50%;object-fit:cover;">
+                            <span>
+                                <strong>{{ en.actor.username }}</strong> commented on
+                                <strong>{{ en.event.title }}</strong>
+                                <span style="display:block;font-size:12px;color:#8e8e8e;">{{ en.created_at|naturaltime }}</span>
+                            </span>
+                        {% else %}
+                            <div style="width:44px;height:44px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;background:color-mix(in srgb, {{ en.event.type_color }} 14%, white);">
+                                {% if en.notif_type == 'event_cancelled' %}🚫{% elif en.notif_type == 'event_reminder' %}⏰{% else %}{{ en.event.type_emoji }}{% endif %}
+                            </div>
+                            <span>
+                                {% if en.notif_type == 'event_updated' %}
+                                    <strong>{{ en.event.title }}</strong> was updated by the organizer
+                                {% elif en.notif_type == 'event_reminder' %}
+                                    <strong>{{ en.event.title }}</strong> is coming up soon
+                                {% elif en.notif_type == 'event_cancelled' %}
+                                    <strong>{{ en.event.title }}</strong> was cancelled
+                                {% endif %}
+                                <span style="display:block;font-size:12px;color:#8e8e8e;">{{ en.created_at|naturaltime }}</span>
+                            </span>
+                        {% endif %}
+                    </a>
+                    <button class="kishiface-remove-btn" aria-label="Dismiss" onclick="kishifaceRemoveEvent(this)">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% if today_notifications or week_notifications or earlier_notifications or business_notifications or event_notifications %}
 
             {% if today_notifications %}
                 <div class="kishiface-section-title" data-section="today">Today</div>
@@ -320,6 +360,23 @@
         btn.disabled  = true;
 
         doPost('/notifications/delete-group/', { business_notif_id: id })
+            .then(function (data) {
+                if (data.status === 'success') { slideOut(wrapper); }
+                else { btn.innerHTML = origHtml; btn.disabled = false; }
+            })
+            .catch(function () { btn.innerHTML = origHtml; btn.disabled = false; });
+    };
+
+    /* ── Dismiss button — event notifications ──────────────────────────── */
+    window.kishifaceRemoveEvent = function (btn) {
+        var wrapper = btn.closest('.kishiface-notification-wrapper');
+        var id      = wrapper.dataset.eventNotifId;
+        var origHtml = btn.innerHTML;
+
+        btn.innerHTML = '<i class="fas fa-circle-notch kishiface-spin"></i>';
+        btn.disabled  = true;
+
+        doPost('/notifications/delete-group/', { event_notif_id: id })
             .then(function (data) {
                 if (data.status === 'success') { slideOut(wrapper); }
                 else { btn.innerHTML = origHtml; btn.disabled = false; }

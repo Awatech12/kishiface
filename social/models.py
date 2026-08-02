@@ -163,8 +163,10 @@ class Profile(models.Model):
     
     if settings.USE_CLOUDINARY:
         picture = CloudinaryField('picture', folder='profile_image', default='logo_iowyea')
+        cover_photo = CloudinaryField('cover_photo', folder='profile_covers', blank=True, null=True)
     else:
         picture = models.ImageField(upload_to='profile_image/', default='male.png')
+        cover_photo = models.ImageField(upload_to='profile_covers/', blank=True, null=True)
     
     # ── Gender ────────────────────────────────────────────────
     GENDER_MALE        = 'male'
@@ -228,6 +230,10 @@ class Profile(models.Model):
         if self.picture and hasattr(self.picture, 'name'):
             validate_file_extension(self.picture)
             validate_file_size(self.picture, max_size_mb=10)
+
+        if self.cover_photo and hasattr(self.cover_photo, 'name'):
+            validate_file_extension(self.cover_photo)
+            validate_file_size(self.cover_photo, max_size_mb=10)
 
     # ── Privacy helpers ─────────────────────────────────────────
     def can_view_details(self, viewer):
@@ -365,6 +371,37 @@ class Profile(models.Model):
             pass
 
         return 'https://placehold.co/40x40/dbdbdb/8e8e8e?text=U'
+
+    # ── Cover photo URL helper ─────────────────────────────────────
+    @property
+    def get_cover_url(self):
+        """
+        Returns a full usable cover photo URL, or '' if none is set
+        (the template falls back to a decorative gradient in that case).
+        """
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                cover = self.cover_photo
+                public_id = None
+                if hasattr(cover, 'public_id') and cover.public_id:
+                    public_id = str(cover.public_id).strip()
+                elif cover and str(cover).strip() not in ('', 'None'):
+                    public_id = str(cover).strip()
+
+                if public_id:
+                    return cloudinary.CloudinaryImage(public_id).build_url(secure=True)
+                return ''
+            else:
+                cover = self.cover_photo
+                if cover:
+                    try:
+                        return cover.url
+                    except Exception:
+                        pass
+                return ''
+        except Exception:
+            return ''
 
     # ── Website helpers ──────────────────────────────────────────
     @property
@@ -1226,24 +1263,94 @@ class SecretQuestion(models.Model):
 
 
 class SocialEvent(models.Model):
-    TYPE_TOWN     = 'town'
-    TYPE_FESTIVAL = 'festival'
-    TYPE_WEDDING  = 'wedding'
-    TYPE_OTHER    = 'other'
+    # ── Event type (LinkedIn-style broad category set) ─────────────────────
+    TYPE_TOWN        = 'town'
+    TYPE_FESTIVAL     = 'festival'
+    TYPE_WEDDING       = 'wedding'
+    TYPE_CONFERENCE    = 'conference'
+    TYPE_WORKSHOP      = 'workshop'
+    TYPE_WEBINAR       = 'webinar'
+    TYPE_NETWORKING    = 'networking'
+    TYPE_MEETUP        = 'meetup'
+    TYPE_SEMINAR       = 'seminar'
+    TYPE_TRAINING      = 'training'
+    TYPE_CONCERT       = 'concert'
+    TYPE_SPORTS        = 'sports'
+    TYPE_EXHIBITION    = 'exhibition'
+    TYPE_CHARITY       = 'charity'
+    TYPE_PARTY         = 'party'
+    TYPE_REUNION       = 'reunion'
+    TYPE_RELIGIOUS     = 'religious'
+    TYPE_PRODUCT_LAUNCH = 'product_launch'
+    TYPE_SALE          = 'sale'
+    TYPE_OTHER         = 'other'
 
     TYPE_CHOICES = [
-        (TYPE_TOWN,     'Town Meeting'),
-        (TYPE_FESTIVAL, 'Festival'),
-        (TYPE_WEDDING,  'Wedding'),
-        (TYPE_OTHER,    'Other'),
+        (TYPE_TOWN,           'Town Meeting'),
+        (TYPE_FESTIVAL,       'Festival'),
+        (TYPE_WEDDING,        'Wedding'),
+        (TYPE_CONFERENCE,     'Conference'),
+        (TYPE_WORKSHOP,       'Workshop'),
+        (TYPE_WEBINAR,        'Webinar'),
+        (TYPE_NETWORKING,     'Networking'),
+        (TYPE_MEETUP,         'Meetup'),
+        (TYPE_SEMINAR,        'Seminar'),
+        (TYPE_TRAINING,       'Training / Class'),
+        (TYPE_CONCERT,        'Concert / Live Music'),
+        (TYPE_SPORTS,         'Sports'),
+        (TYPE_EXHIBITION,     'Exhibition / Expo'),
+        (TYPE_CHARITY,        'Charity / Fundraiser'),
+        (TYPE_PARTY,          'Party / Social'),
+        (TYPE_REUNION,        'Reunion'),
+        (TYPE_RELIGIOUS,      'Religious / Faith'),
+        (TYPE_PRODUCT_LAUNCH, 'Product Launch'),
+        (TYPE_SALE,           'Sale / Promo'),
+        (TYPE_OTHER,          'Other'),
     ]
+
+    TYPE_EMOJIS = {
+        TYPE_TOWN: '🏛️', TYPE_FESTIVAL: '🎪', TYPE_WEDDING: '💍',
+        TYPE_CONFERENCE: '🎤', TYPE_WORKSHOP: '🛠️', TYPE_WEBINAR: '💻',
+        TYPE_NETWORKING: '🤝', TYPE_MEETUP: '👥', TYPE_SEMINAR: '📚',
+        TYPE_TRAINING: '🎓', TYPE_CONCERT: '🎵', TYPE_SPORTS: '⚽',
+        TYPE_EXHIBITION: '🖼️', TYPE_CHARITY: '❤️', TYPE_PARTY: '🎉',
+        TYPE_REUNION: '👨‍👩‍👧‍👦', TYPE_RELIGIOUS: '🙏', TYPE_PRODUCT_LAUNCH: '🚀',
+        TYPE_SALE: '🏷️', TYPE_OTHER: '✨',
+    }
+
+    TYPE_COLORS = {
+        TYPE_TOWN: '#0095f6', TYPE_FESTIVAL: '#ff6b35', TYPE_WEDDING: '#e91e8c',
+        TYPE_CONFERENCE: '#2563eb', TYPE_WORKSHOP: '#0891b2', TYPE_WEBINAR: '#6366f1',
+        TYPE_NETWORKING: '#059669', TYPE_MEETUP: '#0d9488', TYPE_SEMINAR: '#7c3aed',
+        TYPE_TRAINING: '#4338ca', TYPE_CONCERT: '#db2777', TYPE_SPORTS: '#16a34a',
+        TYPE_EXHIBITION: '#9333ea', TYPE_CHARITY: '#dc2626', TYPE_PARTY: '#f59e0b',
+        TYPE_REUNION: '#ea580c', TYPE_RELIGIOUS: '#78350f', TYPE_PRODUCT_LAUNCH: '#111827',
+        TYPE_SALE: '#ca8a04', TYPE_OTHER: '#7c3aed',
+    }
 
     title       = models.CharField(max_length=200)
     event_type  = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_OTHER, db_index=True)
     date        = models.DateField(db_index=True)
     time        = models.TimeField(null=True, blank=True)
+    end_date    = models.DateField(null=True, blank=True, help_text='Optional — for multi-day events')
+    end_time    = models.TimeField(null=True, blank=True)
     location    = models.CharField(max_length=300, blank=True, default='')
     description = models.TextField(blank=True, default='')
+
+    # ── Useful info, LinkedIn-events style ──────────────────────────────────
+    organizer_name = models.CharField(max_length=200, blank=True, default='')
+    contact_email  = models.EmailField(blank=True, default='')
+    contact_phone  = models.CharField(max_length=20, blank=True, default='')
+
+    is_virtual   = models.BooleanField(default=False, db_index=True)
+    virtual_link = models.URLField(max_length=500, blank=True, default='')
+
+    is_free = models.BooleanField(default=True)
+    price   = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    capacity = models.PositiveIntegerField(null=True, blank=True, help_text='Leave blank for unlimited spots')
+
+    is_cancelled = models.BooleanField(default=False, db_index=True)
 
     if settings.USE_CLOUDINARY:
         cover_image = CloudinaryField('image', folder='event_covers', blank=True, null=True)
@@ -1264,23 +1371,32 @@ class SocialEvent(models.Model):
     def __str__(self):
         return f'{self.title} ({self.get_event_type_display()}) — {self.date}'
 
+    def clean(self):
+        super().clean()
+        self.title          = sanitize_text(self.title, 'product_name')
+        self.location       = sanitize_text(self.location, 'location')
+        self.description    = sanitize_text(self.description, 'product_description')
+        self.organizer_name = sanitize_text(self.organizer_name)
+        if self.contact_phone:
+            try:
+                self.contact_phone = validate_phone_number(self.contact_phone)
+            except ValidationError:
+                self.contact_phone = ''
+        if self.virtual_link:
+            try:
+                self.virtual_link = validate_url(self.virtual_link)
+            except ValidationError:
+                self.virtual_link = ''
+        if self.is_free:
+            self.price = None
+
     @property
     def type_emoji(self):
-        return {
-            self.TYPE_TOWN:     '🏛️',
-            self.TYPE_FESTIVAL: '🎪',
-            self.TYPE_WEDDING:  '💍',
-            self.TYPE_OTHER:    '✨',
-        }.get(self.event_type, '📌')
+        return self.TYPE_EMOJIS.get(self.event_type, '📌')
 
     @property
     def type_color(self):
-        return {
-            self.TYPE_TOWN:     '#0095f6',
-            self.TYPE_FESTIVAL: '#ff6b35',
-            self.TYPE_WEDDING:  '#e91e8c',
-            self.TYPE_OTHER:    '#7c3aed',
-        }.get(self.event_type, '#0095f6')
+        return self.TYPE_COLORS.get(self.event_type, '#0095f6')
 
     @property
     def time_display(self):
@@ -1290,6 +1406,109 @@ class SocialEvent(models.Model):
         ap = 'AM' if h < 12 else 'PM'
         h12 = h % 12 or 12
         return f'{h12}:{m:02d} {ap}'
+
+    # ── Follower / attendee helpers (LinkedIn-style "Follow"/RSVP) ─────────
+    @property
+    def follower_count(self):
+        return self.follows.count()
+
+    @property
+    def going_count(self):
+        return self.follows.filter(status=EventFollow.STATUS_GOING).count()
+
+    @property
+    def interested_count(self):
+        return self.follows.filter(status=EventFollow.STATUS_INTERESTED).count()
+
+    @property
+    def is_full(self):
+        if not self.capacity:
+            return False
+        return self.going_count >= self.capacity
+
+    @property
+    def spots_left(self):
+        if not self.capacity:
+            return None
+        return max(0, self.capacity - self.going_count)
+
+    @property
+    def is_past(self):
+        today = timezone.localdate()
+        end = self.end_date or self.date
+        return end < today
+
+    @property
+    def price_display(self):
+        if self.is_free:
+            return 'Free'
+        return f'₦{self.price:,.2f}' if self.price is not None else 'Paid'
+
+
+class EventFollow(models.Model):
+    """
+    A user's relationship to a SocialEvent — mirrors LinkedIn's Follow/RSVP
+    pattern. 'interested' = loosely tracking it; 'going' = confirmed attending.
+    `notify` controls whether the user receives EventNotification updates.
+    """
+    STATUS_INTERESTED = 'interested'
+    STATUS_GOING      = 'going'
+    STATUS_CHOICES = [
+        (STATUS_INTERESTED, 'Interested'),
+        (STATUS_GOING,      'Going'),
+    ]
+
+    event      = models.ForeignKey(SocialEvent, on_delete=models.CASCADE, related_name='follows')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='followed_events')
+    status     = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_INTERESTED)
+    notify     = models.BooleanField(default=True, help_text='Receive notifications about this event')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('event', 'user')
+        ordering = ['-created_at']
+        db_table = 'EventFollow_Table'
+
+    def __str__(self):
+        return f'{self.user.username} · {self.status} · {self.event.title}'
+
+
+class EventNotification(models.Model):
+    """
+    Notifications sent to a SocialEvent's followers:
+      - 'event_updated'   → organizer changed key event details
+      - 'event_reminder'  → the event is starting soon
+      - 'event_cancelled' → the organizer cancelled the event
+      - 'new_comment'     → someone commented on an event the user follows
+    """
+    EVENT_UPDATED   = 'event_updated'
+    EVENT_REMINDER  = 'event_reminder'
+    EVENT_CANCELLED = 'event_cancelled'
+    NEW_COMMENT     = 'new_comment'
+    NOTIF_TYPE_CHOICES = [
+        (EVENT_UPDATED,   'Event updated'),
+        (EVENT_REMINDER,  'Event reminder'),
+        (EVENT_CANCELLED, 'Event cancelled'),
+        (NEW_COMMENT,     'New comment'),
+    ]
+
+    notif_type = models.CharField(max_length=20, choices=NOTIF_TYPE_CHOICES, db_index=True)
+    event      = models.ForeignKey(SocialEvent, on_delete=models.CASCADE, related_name='notifications')
+    actor      = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_event_notifications')
+    to_user    = models.ForeignKey(User, on_delete=models.CASCADE, related_name='event_notifications')
+    is_read    = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'EventNotification_Table'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['to_user', 'is_read']),
+            models.Index(fields=['event', 'notif_type']),
+        ]
+
+    def __str__(self):
+        return f'{self.get_notif_type_display()} — {self.event.title} → {self.to_user.username}'
 
 
 # ─── Job Vacancy ─────────────────────────────────────────────────────────────

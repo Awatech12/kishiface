@@ -1,0 +1,743 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <title>{{ event.title }} · KishiHub Events</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    :root {
+      --khub-bg: #fafafa;
+      --khub-white: #ffffff;
+      --khub-text: #262626;
+      --khub-text-light: #8e8e8e;
+      --khub-primary: #0095f6;
+      --khub-border: #dbdbdb;
+      --ev-color: {{ event.type_color }};
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--khub-bg);
+      color: var(--khub-text);
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 40px;
+    }
+
+    a { color: inherit; }
+
+    .evd-wrap {
+      max-width: 620px;
+      margin: 0 auto;
+      background: var(--khub-white);
+      min-height: 100vh;
+    }
+
+    /* ─── Top bar ─── */
+    .evd-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      position: sticky;
+      top: 0;
+      background: var(--khub-white);
+      z-index: 20;
+      border-bottom: 1px solid var(--khub-border);
+    }
+
+    .evd-back {
+      font-size: 20px;
+      color: var(--khub-text);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px;
+    }
+
+    .evd-status-badge {
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      background: #6b7280;
+    }
+
+    .evd-status-badge.upcoming { background: var(--khub-primary); }
+    .evd-status-badge.ongoing  { background: #16a34a; }
+    .evd-status-badge.cancelled { background: #dc2626; }
+
+    .evd-menu-btn {
+      font-size: 18px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px 10px;
+      position: relative;
+    }
+
+    .evd-menu-dropdown {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 36px;
+      background: var(--khub-white);
+      border: 1px solid var(--khub-border);
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+      min-width: 170px;
+      overflow: hidden;
+      z-index: 30;
+    }
+
+    .evd-menu-dropdown.open { display: block; }
+
+    .evd-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      color: var(--khub-text);
+    }
+
+    .evd-menu-item:hover { background: var(--khub-bg); }
+    .evd-menu-item.danger { color: #dc2626; }
+
+    /* ─── Cover ─── */
+    .evd-cover {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      display: block;
+      background: linear-gradient(135deg, var(--ev-color), #333);
+    }
+
+    .evd-cover-placeholder {
+      width: 100%;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 64px;
+      background: linear-gradient(135deg, var(--ev-color), #222);
+    }
+
+    /* ─── Body ─── */
+    .evd-body { padding: 18px 18px 8px; }
+
+    .evd-title { font-size: 24px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
+
+    .evd-subline {
+      font-size: 14px;
+      color: var(--khub-text-light);
+      margin-bottom: 4px;
+    }
+
+    .evd-info-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14.5px;
+      padding: 8px 0;
+      color: var(--khub-text);
+    }
+
+    .evd-info-row i { width: 18px; color: var(--khub-text-light); margin-top: 2px; }
+    .evd-info-row a { color: var(--khub-primary); text-decoration: none; word-break: break-all; }
+
+    .evd-attendee-stack {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      cursor: pointer;
+    }
+
+    .evd-avatars { display: flex; }
+    .evd-avatars img {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 2px solid var(--khub-white);
+      object-fit: cover;
+      margin-left: -10px;
+      background: #eee;
+    }
+    .evd-avatars img:first-child { margin-left: 0; }
+
+    .evd-attendee-text { font-size: 14px; color: var(--khub-text); }
+
+    /* ─── Action row ─── */
+    .evd-actions {
+      display: flex;
+      gap: 10px;
+      padding: 14px 0 6px;
+      flex-wrap: wrap;
+    }
+
+    .evd-rsvp-btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 11px 14px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1.5px solid var(--khub-border);
+      background: var(--khub-white);
+      color: var(--khub-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: all .18s;
+    }
+
+    .evd-rsvp-btn.interested { border-color: var(--khub-primary); color: var(--khub-primary); }
+    .evd-rsvp-btn.interested.active { background: var(--khub-primary); color: #fff; }
+    .evd-rsvp-btn.going { border-color: #16a34a; color: #16a34a; }
+    .evd-rsvp-btn.going.active { background: #16a34a; color: #fff; }
+
+    .evd-share-btn {
+      padding: 11px 20px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 700;
+      border: 1.5px solid var(--khub-border);
+      background: var(--khub-white);
+      cursor: pointer;
+    }
+
+    .evd-full-badge {
+      font-size: 13px;
+      color: #b91c1c;
+      font-weight: 600;
+      padding: 8px 0;
+    }
+
+    /* ─── Info badges ─── */
+    .evd-badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0 4px; }
+    .evd-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 11px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    }
+    .evd-badge.virtual  { background: #eef2ff; color: #4338ca; }
+    .evd-badge.inperson { background: #f0fdf4; color: #15803d; }
+    .evd-badge.free     { background: #f0fdf4; color: #15803d; }
+    .evd-badge.paid     { background: #fff7ed; color: #c2410c; }
+    .evd-badge.cap      { background: #fef2f2; color: #b91c1c; }
+    .evd-badge.cancelled{ background: #fef2f2; color: #b91c1c; }
+    .evd-badge.type     { background: color-mix(in srgb, var(--ev-color) 14%, white); color: var(--ev-color); }
+
+    /* ─── Tabs ─── */
+    .evd-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--khub-border);
+      margin-top: 14px;
+      position: sticky;
+      top: 53px;
+      background: var(--khub-white);
+      z-index: 15;
+    }
+
+    .evd-tab {
+      flex: 1;
+      text-align: center;
+      padding: 13px 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--khub-text-light);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+    }
+
+    .evd-tab.active { color: var(--khub-primary); border-bottom-color: var(--khub-primary); }
+
+    .evd-tabpanel { display: none; padding: 18px; }
+    .evd-tabpanel.active { display: block; }
+
+    .evd-section-title { font-size: 17px; font-weight: 800; margin-bottom: 10px; }
+    .evd-about-text { font-size: 14.5px; line-height: 1.65; white-space: pre-wrap; color: var(--khub-text); }
+
+    /* ─── Comments ─── */
+    .evd-comment-box {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .evd-comment-box img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+
+    .evd-comment-input {
+      flex: 1;
+      border: 1.5px solid var(--khub-border);
+      border-radius: 20px;
+      padding: 10px 16px;
+      font-size: 14px;
+      resize: none;
+      font-family: inherit;
+    }
+
+    .evd-comment-submit {
+      align-self: flex-end;
+      background: var(--khub-primary);
+      color: #fff;
+      border: none;
+      border-radius: 18px;
+      padding: 9px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .evd-comment-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+    .evd-comment {
+      display: flex;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--khub-bg);
+    }
+
+    .evd-comment img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .evd-comment-bubble {
+      background: var(--khub-bg);
+      border-radius: 14px;
+      padding: 9px 14px;
+      flex: 1;
+    }
+    .evd-comment-author { font-size: 13.5px; font-weight: 700; }
+    .evd-comment-text { font-size: 14px; margin-top: 2px; word-break: break-word; }
+    .evd-comment-time { font-size: 11.5px; color: var(--khub-text-light); margin-top: 4px; }
+
+    .evd-empty {
+      text-align: center;
+      color: var(--khub-text-light);
+      font-size: 14px;
+      padding: 30px 0;
+    }
+
+    /* ─── People ─── */
+    .evd-people-group-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--khub-text-light);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin: 18px 0 8px;
+    }
+    .evd-people-group-title:first-child { margin-top: 0; }
+
+    .evd-person {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 0;
+      text-decoration: none;
+    }
+    .evd-person img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; background: #eee; }
+    .evd-person-name { font-size: 14.5px; font-weight: 600; color: var(--khub-text); }
+    .evd-person-badge { font-size: 12px; color: var(--khub-text-light); }
+
+    .evd-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #262626;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      opacity: 0;
+      pointer-events: none;
+      transition: all .25s;
+      z-index: 999;
+      max-width: 90vw;
+      text-align: center;
+    }
+    .evd-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    @media (max-width: 640px) {
+      .evd-wrap { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+{% include 'header.html' %}
+
+<div class="evd-wrap">
+
+  <!-- Top bar -->
+  <div class="evd-topbar">
+    <button class="evd-back" onclick="history.back()"><i class="fas fa-arrow-left"></i></button>
+
+    <span class="evd-status-badge {{ status_class }}" id="evdStatusBadge">{{ status_label }}</span>
+
+    <div style="position:relative;">
+      <button class="evd-menu-btn" onclick="document.getElementById('evdMenu').classList.toggle('open')">
+        <i class="fas fa-ellipsis-h"></i>
+      </button>
+      <div class="evd-menu-dropdown" id="evdMenu">
+        <button class="evd-menu-item" onclick="evdCopyLink()"><i class="fas fa-link"></i> Copy link</button>
+        {% if is_owner %}
+          <button class="evd-menu-item" onclick="window.location.href='{% url 'event_calendar' %}?edit={{ event.id }}'">
+            <i class="fas fa-pen"></i> Edit event
+          </button>
+          <button class="evd-menu-item danger" onclick="evdDeleteEvent()"><i class="fas fa-trash"></i> Delete event</button>
+        {% else %}
+          <button class="evd-menu-item danger" onclick="evdToast('Thanks — this has been reported.')"><i class="fas fa-flag"></i> Report event</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Cover -->
+  {% if cover_url %}
+    <img class="evd-cover" src="{{ cover_url }}" alt="{{ event.title }}">
+  {% else %}
+    <div class="evd-cover-placeholder">{{ event.type_emoji }}</div>
+  {% endif %}
+
+  <div class="evd-body">
+    <div class="evd-title">{{ event.title }}</div>
+    <div class="evd-subline">Event by <strong>{{ event.organizer_name|default:event.created_by.username }}</strong></div>
+
+    <div class="evd-info-row">
+      <i class="far fa-calendar"></i>
+      <span>
+        {{ event.date|date:"M j, Y" }}{% if event.time %}, {{ event.time_display }}{% endif %}
+        {% if event.end_date and event.end_date != event.date %} &ndash; {{ event.end_date|date:"M j, Y" }}{% endif %}
+      </span>
+    </div>
+
+    {% if event.is_virtual %}
+      <div class="evd-info-row">
+        <i class="fas fa-video"></i>
+        <span>Online
+          {% if event.virtual_link %} &middot; <a href="{{ event.virtual_link }}" target="_blank" rel="noopener">{{ event.virtual_link }}</a>{% endif %}
+        </span>
+      </div>
+    {% elif event.location %}
+      <div class="evd-info-row">
+        <i class="fas fa-map-marker-alt"></i>
+        <span>{{ event.location }}</span>
+      </div>
+    {% endif %}
+
+    {% if event.contact_email or event.contact_phone %}
+      <div class="evd-info-row">
+        <i class="far fa-envelope"></i>
+        <span>
+          {% if event.contact_email %}{{ event.contact_email }}{% endif %}
+          {% if event.contact_email and event.contact_phone %} &middot; {% endif %}
+          {% if event.contact_phone %}{{ event.contact_phone }}{% endif %}
+        </span>
+      </div>
+    {% endif %}
+
+    <div class="evd-badges">
+      <span class="evd-badge type">{{ event.type_emoji }} {{ event.get_event_type_display }}</span>
+      {% if event.is_free %}
+        <span class="evd-badge free"><i class="fas fa-tag"></i> Free</span>
+      {% else %}
+        <span class="evd-badge paid"><i class="fas fa-tag"></i> {{ event.price_display }}</span>
+      {% endif %}
+      {% if event.capacity %}
+        <span class="evd-badge cap"><i class="fas fa-users"></i> {{ event.spots_left }} spot{{ event.spots_left|pluralize }} left</span>
+      {% endif %}
+      {% if event.is_cancelled %}
+        <span class="evd-badge cancelled"><i class="fas fa-ban"></i> Cancelled</span>
+      {% endif %}
+    </div>
+
+    <div class="evd-attendee-stack" onclick="evdSwitchTab('people')">
+      <div class="evd-avatars">
+        {% for f in preview_follows %}
+          <img src="{{ f.user.profile.get_picture_url }}" alt="{{ f.user.username }}">
+        {% endfor %}
+      </div>
+      <span class="evd-attendee-text">{{ event.follower_count }} attendee{{ event.follower_count|pluralize }}</span>
+    </div>
+
+    <div class="evd-actions">
+      <button class="evd-rsvp-btn interested {% if my_status == 'interested' %}active{% endif %}" id="evdInterestedBtn" onclick="evdToggleRsvp('interested')">
+        <i class="{% if my_status == 'interested' %}fas{% else %}far{% endif %} fa-bell"></i> Interested
+      </button>
+      <button class="evd-rsvp-btn going {% if my_status == 'going' %}active{% endif %}" id="evdGoingBtn" onclick="evdToggleRsvp('going')">
+        <i class="fas fa-check"></i> Going
+      </button>
+      <button class="evd-share-btn" onclick="evdCopyLink()"><i class="fas fa-share"></i></button>
+    </div>
+
+    {% if event.is_full and my_status != 'going' %}
+      <div class="evd-full-badge"><i class="fas fa-circle-exclamation"></i> This event is full — you can still mark yourself Interested.</div>
+    {% endif %}
+  </div>
+
+  <!-- Tabs -->
+  <div class="evd-tabs">
+    <div class="evd-tab active" id="evdTabBtn-details" onclick="evdSwitchTab('details')">Details</div>
+    <div class="evd-tab" id="evdTabBtn-comments" onclick="evdSwitchTab('comments')">Comments</div>
+    <div class="evd-tab" id="evdTabBtn-people" onclick="evdSwitchTab('people')">People</div>
+  </div>
+
+  <!-- Details tab -->
+  <div class="evd-tabpanel active" id="evdTab-details">
+    <div class="evd-section-title">About</div>
+    <div class="evd-about-text">{{ event.description|default:"No description provided yet." }}</div>
+  </div>
+
+  <!-- Comments tab -->
+  <div class="evd-tabpanel" id="evdTab-comments">
+    <div class="evd-comment-box">
+      <img src="{{ request.user.profile.get_picture_url }}" alt="You">
+      <textarea class="evd-comment-input" id="evdCommentInput" rows="1" placeholder="Write a comment…"></textarea>
+      <button class="evd-comment-submit" id="evdCommentSubmit" onclick="evdSubmitComment()">Post</button>
+    </div>
+    <div id="evdCommentList">
+      <div class="evd-empty"><i class="far fa-comments" style="font-size:22px;display:block;margin-bottom:8px;"></i>Loading comments…</div>
+    </div>
+  </div>
+
+  <!-- People tab -->
+  <div class="evd-tabpanel" id="evdTab-people">
+    {% if going_list %}
+      <div class="evd-people-group-title">Going &middot; {{ going_list|length }}</div>
+      {% for f in going_list %}
+        <a class="evd-person" href="{% url 'profile' username=f.user.username %}">
+          <img src="{{ f.user.profile.get_picture_url }}" alt="{{ f.user.username }}">
+          <div>
+            <div class="evd-person-name">{{ f.user.username }}</div>
+            <div class="evd-person-badge"><i class="fas fa-check" style="color:#16a34a;"></i> Going</div>
+          </div>
+        </a>
+      {% endfor %}
+    {% endif %}
+
+    {% if interested_list %}
+      <div class="evd-people-group-title">Interested &middot; {{ interested_list|length }}</div>
+      {% for f in interested_list %}
+        <a class="evd-person" href="{% url 'profile' username=f.user.username %}">
+          <img src="{{ f.user.profile.get_picture_url }}" alt="{{ f.user.username }}">
+          <div>
+            <div class="evd-person-name">{{ f.user.username }}</div>
+            <div class="evd-person-badge"><i class="far fa-bell" style="color:var(--khub-primary);"></i> Interested</div>
+          </div>
+        </a>
+      {% endfor %}
+    {% endif %}
+
+    {% if not going_list and not interested_list %}
+      <div class="evd-empty"><i class="far fa-user" style="font-size:22px;display:block;margin-bottom:8px;"></i>No one has RSVP'd yet — be the first!</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<div class="evd-toast" id="evdToast"></div>
+
+{% include 'footer.html' %}
+
+<script>
+  var EVD_EVENT_ID   = {{ event.id }};
+  var EVD_MY_STATUS  = {% if my_status %}"{{ my_status }}"{% else %}null{% endif %};
+  var EVD_SHARE_URL  = "{{ share_url }}";
+  var _evdCommentsLoaded = false;
+
+  function evdToast(msg) {
+    var t = document.getElementById('evdToast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+
+  function getCookie(name) {
+    var v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  }
+
+  function evdSwitchTab(tab) {
+    ['details', 'comments', 'people'].forEach(function (t) {
+      document.getElementById('evdTab-' + t).classList.toggle('active', t === tab);
+      document.getElementById('evdTabBtn-' + t).classList.toggle('active', t === tab);
+    });
+    if (tab === 'comments' && !_evdCommentsLoaded) {
+      evdLoadComments();
+    }
+  }
+
+  // ── RSVP toggle ──
+  function evdToggleRsvp(status) {
+    var newStatus = EVD_MY_STATUS === status ? 'none' : status;
+    var fd = new FormData();
+    fd.append('status', newStatus);
+
+    fetch('/events/' + EVD_EVENT_ID + '/follow/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken'), 'X-Requested-With': 'XMLHttpRequest' },
+      body: fd
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.success) { evdToast(data.error || 'Could not update RSVP.'); return; }
+      EVD_MY_STATUS = data.status;
+
+      var interestedBtn = document.getElementById('evdInterestedBtn');
+      var goingBtn = document.getElementById('evdGoingBtn');
+      interestedBtn.classList.toggle('active', data.status === 'interested');
+      goingBtn.classList.toggle('active', data.status === 'going');
+      interestedBtn.querySelector('i').className = (data.status === 'interested' ? 'fas' : 'far') + ' fa-bell';
+
+      var attendeeText = document.querySelector('.evd-attendee-text');
+      if (attendeeText) {
+        attendeeText.textContent = data.follower_count + ' attendee' + (data.follower_count === 1 ? '' : 's');
+      }
+
+      evdToast(
+        data.status === 'going' ? "✅ You're going! The organizer has been notified." :
+        data.status === 'interested' ? '🔔 Marked as interested' :
+        'Removed from your events'
+      );
+    })
+    .catch(function () { evdToast('Network error — please try again.'); });
+  }
+
+  // ── Comments ──
+  function evdLoadComments() {
+    fetch('/events/' + EVD_EVENT_ID + '/comments/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        _evdCommentsLoaded = true;
+        evdRenderComments(data.comments || []);
+      })
+      .catch(function () {
+        document.getElementById('evdCommentList').innerHTML = '<div class="evd-empty">Could not load comments.</div>';
+      });
+  }
+
+  function evdEsc(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
+  function evdRenderComments(comments) {
+    var list = document.getElementById('evdCommentList');
+    if (!comments.length) {
+      list.innerHTML = '<div class="evd-empty"><i class="far fa-comments" style="font-size:22px;display:block;margin-bottom:8px;"></i>No comments yet — start the conversation.</div>';
+      return;
+    }
+    list.innerHTML = comments.map(function (c) {
+      return '<div class="evd-comment">' +
+        '<img src="' + evdEsc(c.avatar) + '" alt="' + evdEsc(c.author) + '">' +
+        '<div class="evd-comment-bubble">' +
+          '<div class="evd-comment-author">' + evdEsc(c.author_name) + '</div>' +
+          '<div class="evd-comment-text">' + evdEsc(c.text) + '</div>' +
+          '<div class="evd-comment-time">' + evdEsc(c.time) + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function evdSubmitComment() {
+    var input = document.getElementById('evdCommentInput');
+    var text = input.value.trim();
+    if (!text) return;
+
+    var btn = document.getElementById('evdCommentSubmit');
+    btn.disabled = true;
+
+    fetch('/events/' + EVD_EVENT_ID + '/comments/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken'),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({ text: text })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      btn.disabled = false;
+      if (data.error) { evdToast(data.error); return; }
+      input.value = '';
+      var list = document.getElementById('evdCommentList');
+      if (list.querySelector('.evd-empty')) { list.innerHTML = ''; }
+      var wrap = document.createElement('div');
+      wrap.innerHTML =
+        '<div class="evd-comment">' +
+          '<img src="' + evdEsc(data.avatar) + '" alt="' + evdEsc(data.author) + '">' +
+          '<div class="evd-comment-bubble">' +
+            '<div class="evd-comment-author">' + evdEsc(data.author_name) + '</div>' +
+            '<div class="evd-comment-text">' + evdEsc(data.text) + '</div>' +
+            '<div class="evd-comment-time">' + evdEsc(data.time) + '</div>' +
+          '</div>' +
+        '</div>';
+      list.appendChild(wrap.firstElementChild);
+      evdToast('💬 Comment posted — attendees notified.');
+    })
+    .catch(function () { btn.disabled = false; evdToast('Network error — please try again.'); });
+  }
+
+  // ── Share / copy link ──
+  function evdCopyLink() {
+    document.getElementById('evdMenu').classList.remove('open');
+    if (navigator.share) {
+      navigator.share({ title: '{{ event.title|escapejs }}', url: EVD_SHARE_URL }).catch(function () {});
+      return;
+    }
+    navigator.clipboard.writeText(EVD_SHARE_URL).then(function () {
+      evdToast('🔗 Link copied to clipboard');
+    }).catch(function () {
+      evdToast(EVD_SHARE_URL);
+    });
+  }
+
+  // ── Delete (owner only) ──
+  function evdDeleteEvent() {
+    document.getElementById('evdMenu').classList.remove('open');
+    if (!confirm('Delete this event? This cannot be undone and all attendees will be notified.')) return;
+
+    fetch('/events/' + EVD_EVENT_ID + '/delete/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken'), 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.success) {
+        window.location.href = '{% url "event_calendar" %}';
+      } else {
+        evdToast(data.error || 'Could not delete event.');
+      }
+    })
+    .catch(function () { evdToast('Network error — please try again.'); });
+  }
+
+  document.addEventListener('click', function (e) {
+    var menu = document.getElementById('evdMenu');
+    if (menu.classList.contains('open') && !menu.contains(e.target) && !e.target.closest('.evd-menu-btn')) {
+      menu.classList.remove('open');
+    }
+  });
+
+  document.getElementById('evdCommentInput').addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+</script>
+
+</body>
+</html>

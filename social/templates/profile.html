@@ -172,13 +172,21 @@
             background:
                 linear-gradient(120deg, rgba(255,166,77,.28), rgba(120,140,255,.32)),
                 linear-gradient(135deg, #ffb37a 0%, #f5877a 28%, #7f8fe8 68%, #5b6bd6 100%);
-            position: relative; overflow: hidden;
+            position: relative; overflow: hidden; z-index: 0;
         }
         .kprof-banner::after {
             content: ''; position: absolute; inset: 0;
             background: radial-gradient(circle at 15% 85%, rgba(255,255,255,.18), transparent 45%),
                         radial-gradient(circle at 90% 20%, rgba(255,255,255,.22), transparent 40%);
         }
+        .kprof-banner-img { width: 100%; height: 100%; object-fit: cover; display: block; position: relative; z-index: 1; cursor: pointer; }
+        .kprof-banner-edit-btn {
+            position: absolute; bottom: 12px; right: 12px; z-index: 2;
+            width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer;
+            background: rgba(0,0,0,.5); color: #fff; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .kprof-banner-edit-btn:hover { background: rgba(0,0,0,.65); }
         @media (max-width: 767px) { .kprof-banner { border-radius: 0; margin: 0; height: 150px; } }
 
         /* ── Header card ── */
@@ -200,7 +208,7 @@
         .kprof-avatar {
             width: 112px; height: 112px; border-radius: 50%;
             border: 4px solid var(--mfy-white); background: #e5e5e5; overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,.12);
+            box-shadow: 0 2px 10px rgba(0,0,0,.12); cursor: pointer;
         }
         .kprof-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .kprof-online-dot {
@@ -530,6 +538,25 @@
             font-family: inherit; cursor: pointer;
         }
         .kprof-sheet-submit:disabled { background: #a7d4fb; cursor: not-allowed; }
+
+        /* Photo viewer (full-size avatar / cover image) */
+        .kprof-photo-viewer {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,.9);
+            z-index: 300; align-items: center; justify-content: center; padding: 24px;
+        }
+        .kprof-photo-viewer.open { display: flex; }
+        .kprof-photo-viewer img {
+            max-width: 100%; max-height: 100%; object-fit: contain;
+            border-radius: 8px; animation: kprofPhotoIn .18s ease;
+        }
+        @keyframes kprofPhotoIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+        .kprof-photo-viewer-close {
+            position: absolute; top: 16px; right: 16px; width: 40px; height: 40px;
+            border-radius: 50%; border: none; cursor: pointer;
+            background: rgba(255,255,255,.15); color: #fff; font-size: 18px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .kprof-photo-viewer-close:hover { background: rgba(255,255,255,.25); }
 
         /* Toast */
         .kprof-toast {
@@ -1547,14 +1574,23 @@
 {% else %}
 
 <!-- Banner -->
-<div class="kprof-banner"></div>
+<div class="kprof-banner">
+    {% if profile.get_cover_url %}
+        <img class="kprof-banner-img" src="{{ profile.get_cover_url }}" alt="{{ user.username }}'s cover photo" onclick="openPhotoViewer('{{ profile.get_cover_url|escapejs }}')">
+    {% endif %}
+    {% if is_own_profile %}
+        <button type="button" class="kprof-banner-edit-btn" onclick="event.stopPropagation(); openEditSheet()" title="Change cover photo" aria-label="Change cover photo">
+            <i class="fas fa-camera"></i>
+        </button>
+    {% endif %}
+</div>
 
 <!-- Profile header card -->
 <div class="kprof-header">
     <div class="kprof-avatar-row">
         <div class="kprof-header-left">
             <div class="kprof-avatar-wrap">
-                <div class="kprof-avatar">
+                <div class="kprof-avatar" onclick="openPhotoViewer('{{ profile.get_picture_url|escapejs }}')">
                     <img src="{{ profile.get_picture_url }}" alt="{{ user.username }}">
                 </div>
                 {% if profile.online %}<span class="kprof-online-dot"></span>{% endif %}
@@ -2054,6 +2090,14 @@
 </div>
 {% endif %}
 
+<!-- ── Photo viewer (full-size avatar / cover image) ── -->
+<div class="kprof-photo-viewer" id="photoViewer" onclick="if (event.target === this) closePhotoViewer()">
+    <button type="button" class="kprof-photo-viewer-close" onclick="closePhotoViewer()" aria-label="Close">
+        <i class="fas fa-times"></i>
+    </button>
+    <img id="photoViewerImg" src="" alt="Full size photo">
+</div>
+
 <!-- ── Edit Profile bottom sheet (owner only) ── -->
 {% if is_own_profile %}
 <div class="kprof-overlay" id="editOverlay">
@@ -2068,6 +2112,28 @@
             </div>
 
             <div class="kprof-edit-body">
+                <div class="kprof-edit-cover-row" style="margin-bottom:20px;">
+                    <div class="kprof-edit-cover" style="position:relative; width:100%; height:120px; border-radius:12px; overflow:hidden; background:linear-gradient(135deg, #ffb37a 0%, #f5877a 28%, #7f8fe8 68%, #5b6bd6 100%);">
+                        {% if profile.get_cover_url %}
+                            <img id="editCoverPreview" src="{{ profile.get_cover_url }}" alt="{{ user.username }}'s cover photo" style="width:100%; height:100%; object-fit:cover; display:block;">
+                        {% else %}
+                            <img id="editCoverPreview" src="" alt="" style="width:100%; height:100%; object-fit:cover; display:none;">
+                        {% endif %}
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button type="button" class="kprof-edit-avatar-btn" onclick="document.getElementById('editCoverInput').click()">
+                            Change cover
+                        </button>
+                        {% if profile.get_cover_url %}
+                        <button type="button" class="kprof-edit-avatar-btn" onclick="removeEditCover()">
+                            Remove
+                        </button>
+                        {% endif %}
+                    </div>
+                    <input type="file" id="editCoverInput" name="cover_image" accept="image/*" style="display:none;" onchange="previewEditCover(event)">
+                    <input type="hidden" id="editClearCover" name="clear_cover" value="0">
+                </div>
+
                 <div class="kprof-edit-avatar-row">
                     <div class="kprof-edit-avatar">
                         <img id="editAvatarPreview" src="{{ profile.get_picture_url }}" alt="{{ user.username }}">
@@ -2989,6 +3055,23 @@ document.getElementById('reportOverlay')?.addEventListener('click', e => {
     if (e.target.id === 'reportOverlay') closeReportSheet();
 });
 
+/* ── Full-size photo viewer ── */
+function openPhotoViewer(url) {
+    if (!url) return;
+    const viewer = document.getElementById('photoViewer');
+    const img    = document.getElementById('photoViewerImg');
+    if (img) img.src = url;
+    viewer?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closePhotoViewer() {
+    document.getElementById('photoViewer')?.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePhotoViewer();
+});
+
 /* ── Edit Profile sheet ── */
 function openEditSheet() {
     document.getElementById('editOverlay')?.classList.add('open');
@@ -3018,6 +3101,28 @@ function previewEditAvatar(event) {
         if (img) img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+}
+
+function previewEditCover(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = document.getElementById('editCoverPreview');
+        if (img) { img.src = e.target.result; img.style.display = 'block'; }
+        const clearFlag = document.getElementById('editClearCover');
+        if (clearFlag) clearFlag.value = '0';
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeEditCover() {
+    const img = document.getElementById('editCoverPreview');
+    if (img) { img.src = ''; img.style.display = 'none'; }
+    const input = document.getElementById('editCoverInput');
+    if (input) input.value = '';
+    const clearFlag = document.getElementById('editClearCover');
+    if (clearFlag) clearFlag.value = '1';
 }
 
 async function submitEditProfile(event) {

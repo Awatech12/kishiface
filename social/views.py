@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification
 from social.models import validate_url
 from django.core.exceptions import ValidationError as _ModelValidationError
 
@@ -1275,6 +1275,7 @@ def update_profile(request, username):
         address          = request.POST.get('address', '').strip()
         location         = request.POST.get('location', '').strip()
         image            = request.FILES.get('image')
+        cover_image      = request.FILES.get('cover_image')
         bio              = request.POST.get('bio', '').strip()
         website          = request.POST.get('website', '').strip()
         privacy_level    = request.POST.get('privacy_level', '').strip()
@@ -1343,6 +1344,30 @@ def update_profile(request, username):
                 profile.picture = image
                 profile.save()
 
+            if cover_image:
+                allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+                if cover_image.content_type not in allowed_types:
+                    raise ValueError('Only JPEG, PNG, WebP or GIF images are allowed for the cover photo.')
+                if cover_image.size > 10 * 1024 * 1024:
+                    raise ValueError('Cover photo must be under 10MB.')
+                if getattr(settings, 'USE_CLOUDINARY', False) and profile.cover_photo:
+                    try:
+                        import cloudinary.uploader as _cu
+                        _cu.destroy(str(profile.cover_photo))
+                    except Exception:
+                        pass
+                profile.cover_photo = cover_image
+                profile.save()
+            elif request.POST.get('clear_cover') == '1' and profile.cover_photo:
+                if getattr(settings, 'USE_CLOUDINARY', False):
+                    try:
+                        import cloudinary.uploader as _cu
+                        _cu.destroy(str(profile.cover_photo))
+                    except Exception:
+                        pass
+                profile.cover_photo = None
+                profile.save()
+
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({
                     'success': True,
@@ -1354,6 +1379,7 @@ def update_profile(request, username):
                         'address':         profile.address,
                         'location':        profile.location,
                         'picture_url':     profile.picture.url,
+                        'cover_url':       profile.get_cover_url,
                         'website':         profile.website,
                         'privacy_level':   profile.privacy_level,
                         'gender':          profile.gender,
@@ -2661,14 +2687,23 @@ def notification_list(request):
     from .models import FollowNotification as _FN
     _FN.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
     BusinessNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
+    EventNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
 
     business_notifications = (
         BusinessNotification.objects
         .filter(to_user=request.user)
         .select_related('business_page', 'actor', 'product')[:30]
     )
+    event_notifications = (
+        EventNotification.objects
+        .filter(to_user=request.user)
+        .select_related('event', 'actor')[:30]
+    )
 
-    context = {'business_notifications': business_notifications}
+    context = {
+        'business_notifications': business_notifications,
+        'event_notifications': event_notifications,
+    }
 
     if request.GET.get('panel') == '1':
         return render(request, 'snippet/notification_panel_partial.html', context)
@@ -2684,12 +2719,17 @@ def notification_partial(request):
         unread_business_count = BusinessNotification.objects.filter(
             to_user=request.user, is_read=False
         ).count()
+        unread_event_count = EventNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
     else:
         unread_follow_count = 0
         unread_business_count = 0
+        unread_event_count = 0
     return render(request, 'snippet/notification_count.html', {
         'unread_follow_count': unread_follow_count,
         'unread_business_count': unread_business_count,
+        'unread_event_count': unread_event_count,
     })
 
 
@@ -2735,6 +2775,21 @@ def delete_notification_group(request):
 
         return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
 
+    # ── Event notification (event_updated / event_reminder / event_cancelled / new_comment) ──
+    event_notif_id = data.get('event_notif_id')
+    if event_notif_id is not None:
+        try:
+            event_notif_id = int(event_notif_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid event_notif_id'}, status=400)
+
+        deleted_count, _ = EventNotification.objects.filter(
+            pk=event_notif_id,
+            to_user=request.user,
+        ).delete()
+
+        return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
+
     return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
 
 
@@ -2745,6 +2800,9 @@ def mark_all_notifications_read(request):
         to_user=request.user, is_read=False
     ).update(is_read=True)
     BusinessNotification.objects.filter(
+        to_user=request.user, is_read=False
+    ).update(is_read=True)
+    EventNotification.objects.filter(
         to_user=request.user, is_read=False
     ).update(is_read=True)
     return JsonResponse({'status': 'success'})
@@ -3883,20 +3941,73 @@ def services(request):
 def event_calendar(request):
     """
     Main event calendar page.
-    Supports optional ?type= filter (town | festival | wedding | other).
+    Supports optional ?type= filter (any SocialEvent.TYPE_CHOICES key).
     """
     event_type = request.GET.get('type', '').strip()
 
-    events = SocialEvent.objects.all().order_by('date', 'time')
+    events = (
+        SocialEvent.objects
+        .select_related('created_by')
+        .prefetch_related('follows')
+        .all().order_by('date', 'time')
+    )
     if event_type and event_type in dict(SocialEvent.TYPE_CHOICES):
         events = events.filter(event_type=event_type)
 
     counts = {
-        'town':     SocialEvent.objects.filter(event_type='town').count(),
-        'festival': SocialEvent.objects.filter(event_type='festival').count(),
-        'wedding':  SocialEvent.objects.filter(event_type='wedding').count(),
-        'other':    SocialEvent.objects.filter(event_type='other').count(),
+        key: SocialEvent.objects.filter(event_type=key).count()
+        for key, _label in SocialEvent.TYPE_CHOICES
     }
+    counts['total'] = SocialEvent.objects.count()
+
+    event_type_meta = [
+        {
+            'key': key,
+            'label': label,
+            'emoji': SocialEvent.TYPE_EMOJIS.get(key, '📌'),
+            'color': SocialEvent.TYPE_COLORS.get(key, '#0095f6'),
+            'count': counts.get(key, 0),
+        }
+        for key, label in SocialEvent.TYPE_CHOICES
+    ]
+
+    # This user's current follow status per event: {event_id: 'interested'|'going'}
+    my_follows = {}
+    if request.user.is_authenticated:
+        my_follows = dict(
+            EventFollow.objects.filter(user=request.user).values_list('event_id', 'status')
+        )
+
+    events_list = list(events)
+    events_js = [
+        {
+            'id': ev.id,
+            'title': ev.title,
+            'type': ev.event_type,
+            'date': ev.date.isoformat(),
+            'time': ev.time.strftime('%H:%M') if ev.time else '',
+            'endDate': ev.end_date.isoformat() if ev.end_date else '',
+            'endTime': ev.end_time.strftime('%H:%M') if ev.end_time else '',
+            'location': ev.location,
+            'desc': ev.description,
+            'organizer': ev.organizer_name,
+            'contactEmail': ev.contact_email,
+            'contactPhone': ev.contact_phone,
+            'isVirtual': ev.is_virtual,
+            'virtualLink': ev.virtual_link,
+            'isFree': ev.is_free,
+            'price': str(ev.price) if ev.price is not None else '',
+            'capacity': ev.capacity,
+            'isCancelled': ev.is_cancelled,
+            'goingCount': ev.going_count,
+            'interestedCount': ev.interested_count,
+            'followerCount': ev.follower_count,
+            'myStatus': my_follows.get(ev.id),
+            'coverImage': _event_image_url(ev),
+            'isOwner': bool(request.user.is_authenticated and ev.created_by_id == request.user.id),
+        }
+        for ev in events_list
+    ]
 
     user_can_post = False
     missing_fields = []
@@ -3904,11 +4015,79 @@ def event_calendar(request):
         user_can_post, missing_fields = _profile_post_status(request.user)
 
     return render(request, 'event_calendar.html', {
-        'events':        events,
-        'event_type':    event_type,
-        'counts':        counts,
-        'user_can_post': user_can_post,
-        'missing_fields': missing_fields,
+        'events':          events_list,
+        'events_json':     json.dumps(events_js),
+        'event_type':      event_type,
+        'counts':          counts,
+        'event_types':     SocialEvent.TYPE_CHOICES,
+        'event_type_meta': event_type_meta,
+        'event_type_meta_json': json.dumps(event_type_meta),
+        'my_follows':      my_follows,
+        'user_can_post':   user_can_post,
+        'missing_fields':  missing_fields,
+    })
+
+
+@login_required(login_url='/')
+def event_detail(request, event_id):
+    """
+    Full LinkedIn-style event page: cover, details, RSVP, comments,
+    and the list of people who are interested/going.
+    """
+    event = get_object_or_404(
+        SocialEvent.objects.select_related('created_by', 'created_by__profile'),
+        id=event_id,
+    )
+
+    going_qs = (
+        EventFollow.objects
+        .filter(event=event, status=EventFollow.STATUS_GOING)
+        .select_related('user', 'user__profile')
+        .order_by('-created_at')
+    )
+    interested_qs = (
+        EventFollow.objects
+        .filter(event=event, status=EventFollow.STATUS_INTERESTED)
+        .select_related('user', 'user__profile')
+        .order_by('-created_at')
+    )
+    going_list = list(going_qs[:200])
+    interested_list = list(interested_qs[:200])
+
+    # Small avatar-stack preview (going first, then interested), like the LinkedIn header
+    preview_follows = (going_list + interested_list)[:5]
+
+    my_status = None
+    if request.user.is_authenticated:
+        fol = EventFollow.objects.filter(event=event, user=request.user).first()
+        my_status = fol.status if fol else None
+
+    is_owner = bool(request.user.is_authenticated and event.created_by_id == request.user.id)
+
+    today = timezone.localdate()
+    end_date = event.end_date or event.date
+    if event.is_cancelled:
+        status_label, status_class = 'Event cancelled', 'cancelled'
+    elif end_date < today:
+        status_label, status_class = 'Event ended', 'ended'
+    elif event.date <= today <= end_date:
+        status_label, status_class = 'Happening now', 'ongoing'
+    else:
+        status_label, status_class = 'Upcoming', 'upcoming'
+
+    return render(request, 'event_detail.html', {
+        'event':            event,
+        'going_list':       going_list,
+        'interested_list':  interested_list,
+        'going_count':      len(going_list) if len(going_list) < 200 else event.going_count,
+        'interested_count': len(interested_list) if len(interested_list) < 200 else event.interested_count,
+        'preview_follows':  preview_follows,
+        'my_status':        my_status,
+        'is_owner':         is_owner,
+        'status_label':     status_label,
+        'status_class':     status_class,
+        'share_url':        request.build_absolute_uri(reverse('event_detail', args=[event.id])),
+        'cover_url':        _event_image_url(event),
     })
 
 
@@ -3918,9 +4097,23 @@ def _event_parse_and_validate(post_data, files):
     event_type  = post_data.get('event_type', '').strip()
     date_str    = post_data.get('date', '').strip()
     time_str    = post_data.get('time', '').strip()
+    end_date_str = post_data.get('end_date', '').strip()
+    end_time_str = post_data.get('end_time', '').strip()
     location    = html_escape(post_data.get('location', '').strip())
     description = html_escape(post_data.get('description', '').strip())
     cover_image = files.get('cover_image') if files else None
+
+    organizer_name = html_escape(post_data.get('organizer_name', '').strip())
+    contact_email  = post_data.get('contact_email', '').strip()
+    contact_phone  = post_data.get('contact_phone', '').strip()
+
+    is_virtual   = post_data.get('is_virtual') in ('1', 'true', 'on')
+    virtual_link = post_data.get('virtual_link', '').strip()
+
+    is_free   = post_data.get('is_free', '1') in ('1', 'true', 'on')
+    price_raw = post_data.get('price', '').strip()
+
+    capacity_raw = post_data.get('capacity', '').strip()
 
     if not title:
         return None, 'Title is required.'
@@ -3941,6 +4134,55 @@ def _event_parse_and_validate(post_data, files):
         except ValueError:
             pass
 
+    end_date_obj = None
+    if end_date_str:
+        try:
+            end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date_obj = None
+        if end_date_obj and end_date_obj < ev_date:
+            return None, 'End date cannot be before the start date.'
+
+    end_time_obj = None
+    if end_time_str:
+        try:
+            end_time_obj = datetime.strptime(end_time_str, '%H:%M').time()
+        except ValueError:
+            pass
+
+    if is_virtual and virtual_link:
+        try:
+            virtual_link = validate_url(virtual_link)
+        except _ModelValidationError:
+            return None, 'Please enter a valid virtual event link.'
+    elif not is_virtual:
+        virtual_link = ''
+
+    price_val = None
+    if not is_free:
+        try:
+            price_val = float(price_raw) if price_raw else None
+            if price_val is not None and price_val < 0:
+                return None, 'Price cannot be negative.'
+        except ValueError:
+            return None, 'Please enter a valid price.'
+
+    capacity_val = None
+    if capacity_raw:
+        try:
+            capacity_val = int(capacity_raw)
+            if capacity_val < 1:
+                return None, 'Capacity must be at least 1.'
+        except ValueError:
+            return None, 'Please enter a valid capacity.'
+
+    if contact_email:
+        try:
+            from django.core.validators import validate_email
+            validate_email(contact_email)
+        except _ModelValidationError:
+            return None, 'Please enter a valid contact email.'
+
     if cover_image:
         _ALLOWED_IMG = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
         if cover_image.content_type not in _ALLOWED_IMG:
@@ -3950,8 +4192,12 @@ def _event_parse_and_validate(post_data, files):
 
     return {
         'title': title, 'event_type': event_type, 'date': ev_date,
-        'time': time_obj, 'location': location, 'description': description,
-        'cover_image': cover_image,
+        'time': time_obj, 'end_date': end_date_obj, 'end_time': end_time_obj,
+        'location': location, 'description': description,
+        'organizer_name': organizer_name, 'contact_email': contact_email,
+        'contact_phone': contact_phone, 'is_virtual': is_virtual,
+        'virtual_link': virtual_link, 'is_free': is_free, 'price': price_val,
+        'capacity': capacity_val, 'cover_image': cover_image,
     }, None
 
 
@@ -3969,6 +4215,58 @@ def _event_image_url(event):
         return event.cover_image.url
     except Exception:
         return None
+
+
+def _event_serialize(event, request_user=None):
+    """Shared JSON shape for an event, including 'useful info' + follow state."""
+    my_status = None
+    if request_user is not None and request_user.is_authenticated:
+        fol = EventFollow.objects.filter(event=event, user=request_user).first()
+        my_status = fol.status if fol else None
+
+    return {
+        'id':              event.id,
+        'title':           event.title,
+        'event_type':      event.event_type,
+        'event_type_label': event.get_event_type_display(),
+        'date':            event.date.isoformat(),
+        'time':            event.time.strftime('%H:%M') if event.time else '',
+        'end_date':        event.end_date.isoformat() if event.end_date else '',
+        'end_time':        event.end_time.strftime('%H:%M') if event.end_time else '',
+        'location':        event.location,
+        'description':     event.description,
+        'organizer_name':  event.organizer_name,
+        'contact_email':   event.contact_email,
+        'contact_phone':   event.contact_phone,
+        'is_virtual':      event.is_virtual,
+        'virtual_link':    event.virtual_link,
+        'is_free':         event.is_free,
+        'price':           str(event.price) if event.price is not None else '',
+        'capacity':        event.capacity,
+        'spots_left':      event.spots_left,
+        'is_cancelled':    event.is_cancelled,
+        'cover_image':     _event_image_url(event),
+        'is_owner':        bool(request_user and request_user.is_authenticated and event.created_by_id == request_user.id),
+        'follower_count':  event.follower_count,
+        'going_count':     event.going_count,
+        'interested_count': event.interested_count,
+        'my_status':       my_status,
+    }
+
+
+def _notify_event_followers(event, actor, notif_type):
+    """Bulk-create EventNotifications for everyone following an event (except the actor)."""
+    recipients = list(
+        EventFollow.objects.filter(event=event, notify=True)
+        .exclude(user=actor)
+        .values_list('user_id', flat=True)
+    )
+    if not recipients:
+        return
+    EventNotification.objects.bulk_create([
+        EventNotification(notif_type=notif_type, event=event, actor=actor, to_user_id=uid)
+        for uid in recipients
+    ])
 
 
 @login_required(login_url='/')
@@ -3989,28 +4287,30 @@ def event_calendar_create(request):
         event_type=data['event_type'],
         date=data['date'],
         time=data['time'],
+        end_date=data['end_date'],
+        end_time=data['end_time'],
         location=data['location'],
         description=data['description'],
+        organizer_name=data['organizer_name'] or request.user.get_full_name() or request.user.username,
+        contact_email=data['contact_email'],
+        contact_phone=data['contact_phone'],
+        is_virtual=data['is_virtual'],
+        virtual_link=data['virtual_link'],
+        is_free=data['is_free'],
+        price=data['price'],
+        capacity=data['capacity'],
         created_by=request.user,
     )
     if data['cover_image']:
         event.cover_image = data['cover_image']
     event.save()
 
-    return JsonResponse({
-        'success': True,
-        'event': {
-            'id':          event.id,
-            'title':       event.title,
-            'event_type':  event.event_type,
-            'date':        event.date.isoformat(),
-            'time':        event.time.strftime('%H:%M') if event.time else '',
-            'location':    event.location,
-            'description': event.description,
-            'cover_image': _event_image_url(event),
-            'is_owner':    True,
-        }
-    })
+    # Organizer automatically "goes" and follows their own event for notifications
+    EventFollow.objects.get_or_create(
+        event=event, user=request.user, defaults={'status': EventFollow.STATUS_GOING}
+    )
+
+    return JsonResponse({'success': True, 'event': _event_serialize(event, request.user)})
 
 
 @login_required(login_url='/')
@@ -4030,12 +4330,22 @@ def event_calendar_edit(request, event_id):
     if err:
         return JsonResponse({'success': False, 'error': err}, status=400)
 
-    event.title       = data['title']
-    event.event_type  = data['event_type']
-    event.date        = data['date']
-    event.time        = data['time']
-    event.location    = data['location']
-    event.description = data['description']
+    event.title           = data['title']
+    event.event_type      = data['event_type']
+    event.date             = data['date']
+    event.time              = data['time']
+    event.end_date          = data['end_date']
+    event.end_time          = data['end_time']
+    event.location          = data['location']
+    event.description       = data['description']
+    event.organizer_name    = data['organizer_name']
+    event.contact_email     = data['contact_email']
+    event.contact_phone     = data['contact_phone']
+    event.is_virtual        = data['is_virtual']
+    event.virtual_link      = data['virtual_link']
+    event.is_free           = data['is_free']
+    event.price             = data['price']
+    event.capacity          = data['capacity']
 
     if data['cover_image']:
         # Delete old Cloudinary image if present
@@ -4058,19 +4368,10 @@ def event_calendar_edit(request, event_id):
 
     event.save()
 
-    return JsonResponse({
-        'success': True,
-        'event': {
-            'id':          event.id,
-            'title':       event.title,
-            'event_type':  event.event_type,
-            'date':        event.date.isoformat(),
-            'time':        event.time.strftime('%H:%M') if event.time else '',
-            'location':    event.location,
-            'description': event.description,
-            'cover_image': _event_image_url(event),
-        }
-    })
+    # Let interested/going followers know the event changed
+    _notify_event_followers(event, request.user, EventNotification.EVENT_UPDATED)
+
+    return JsonResponse({'success': True, 'event': _event_serialize(event, request.user)})
 
 
 @login_required(login_url='/')
@@ -4081,6 +4382,9 @@ def event_calendar_delete(request, event_id):
     if event.created_by != request.user:
         return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
 
+    # Notify followers before the event (and its notifications, via CASCADE) disappear
+    _notify_event_followers(event, request.user, EventNotification.EVENT_CANCELLED)
+
     if event.cover_image:
         try:
             import cloudinary.uploader as _cu
@@ -4090,6 +4394,47 @@ def event_calendar_delete(request, event_id):
 
     event.delete()
     return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def event_follow_toggle(request, event_id):
+    """
+    AJAX endpoint — LinkedIn-style Follow/RSVP toggle.
+    POST body: status = 'interested' | 'going' | 'none' (none = unfollow).
+    """
+    event = get_object_or_404(SocialEvent, id=event_id)
+    status = request.POST.get('status', '').strip()
+
+    if status == 'none':
+        EventFollow.objects.filter(event=event, user=request.user).delete()
+        return JsonResponse({
+            'success': True, 'status': None,
+            'follower_count': event.follower_count,
+            'going_count': event.going_count,
+            'interested_count': event.interested_count,
+        })
+
+    if status not in (EventFollow.STATUS_INTERESTED, EventFollow.STATUS_GOING):
+        return JsonResponse({'success': False, 'error': 'Invalid status.'}, status=400)
+
+    if event.is_full and status == EventFollow.STATUS_GOING:
+        already_going = EventFollow.objects.filter(
+            event=event, user=request.user, status=EventFollow.STATUS_GOING
+        ).exists()
+        if not already_going:
+            return JsonResponse({'success': False, 'error': 'This event is full.'}, status=409)
+
+    EventFollow.objects.update_or_create(
+        event=event, user=request.user, defaults={'status': status, 'notify': True}
+    )
+
+    return JsonResponse({
+        'success': True, 'status': status,
+        'follower_count': event.follower_count,
+        'going_count': event.going_count,
+        'interested_count': event.interested_count,
+    })
 
 
 # =============================================================================
@@ -4564,7 +4909,10 @@ def event_vibe(request, event_id):
 def event_comments(request, event_id):
     event = get_object_or_404(SocialEvent, id=event_id)
     if request.method == 'POST':
-        return _card_comments_post(request, event, EventComment, 'event')
+        response = _card_comments_post(request, event, EventComment, 'event')
+        if response.status_code == 200:
+            _notify_event_followers(event, request.user, EventNotification.NEW_COMMENT)
+        return response
     return _card_comments_get(request, event, EventComment, 'event')
 
 # =============================================================================
