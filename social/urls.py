@@ -144,6 +144,13 @@ urlpatterns = [
     path('business/<slug:slug>/upload/',                views.business_product_upload,   name='business_product_upload'),
     path('business/<slug:slug>/jobs/upload/',           views.business_job_upload,       name='business_job_upload'),
 
+    # ── Business Page Updates (image / video / text / poll posts) ─────────────
+    path('business/<slug:slug>/posts/create/',          views.business_post_create,      name='business_post_create'),
+    path('posts/<uuid:post_id>/delete/',                views.business_post_delete,      name='business_post_delete'),
+    path('posts/<uuid:post_id>/vote/',                  views.business_post_poll_vote,   name='business_post_poll_vote'),
+    path('posts/<uuid:post_id>/vibe/',                  views.business_post_vibe,        name='business_post_vibe'),
+    path('posts/<uuid:post_id>/comments/',              views.business_post_comments,    name='business_post_comments'),
+
     # ── Profiles (catch-alls — must stay at the bottom) ───────────────────────
     path('block/<str:username>/',                    views.block_user,          name='block_user'),
     path('report/<str:username>/',                   views.report_user,         name='report_user'),

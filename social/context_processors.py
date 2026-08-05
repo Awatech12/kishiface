@@ -82,7 +82,7 @@ def follow_notifications_context(request):
         recent_business_notifications = (
             BusinessNotification.objects
             .filter(to_user=request.user)
-            .select_related('actor', 'actor__profile', 'business_page', 'product')
+            .select_related('actor', 'actor__profile', 'business_page', 'product', 'post')
             .order_by('-created_at')[:10]
         )
 

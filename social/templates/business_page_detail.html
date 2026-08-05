@@ -1,6 +1,7 @@
 {% load static %}
 {% load humanize %}
 {% load business_extras %}
+{% load post_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -385,6 +386,49 @@
         }
         .kbiz-empty i { font-size: 36px; margin-bottom: 12px; display: block; }
 
+        /* ── Content Tabs (Products / Posts / Jobs) ── */
+        .kbiz-content-tabs {
+            display: flex;
+            background: var(--mfy-white);
+            border-radius: 16px;
+            margin: 0 12px 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.03);
+            overflow: hidden;
+            position: sticky;
+            top: 52px;
+            z-index: 90;
+        }
+        @media (max-width: 767px) {
+            .kbiz-content-tabs { border-radius: 0; margin: 0 0 8px; box-shadow: none; border-bottom: 1px solid var(--mfy-border); }
+        }
+        .kbiz-content-tab {
+            flex: 1;
+            display: flex; align-items: center; justify-content: center; gap: 7px;
+            padding: 14px 8px;
+            background: none; border: none; cursor: pointer;
+            font-family: inherit; font-size: 13px; font-weight: 700;
+            color: var(--mfy-text-light);
+            border-bottom: 2.5px solid transparent;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .kbiz-content-tab i { font-size: 14px; }
+        .kbiz-content-tab:hover { color: var(--mfy-text); background: var(--mfy-bg); }
+        .kbiz-content-tab.active { color: var(--mfy-primary); border-bottom-color: var(--mfy-primary); }
+        .kbiz-content-tab-count {
+            background: var(--mfy-bg); color: var(--mfy-text-light);
+            font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px;
+        }
+        .kbiz-content-tab.active .kbiz-content-tab-count { background: rgba(0,149,246,0.12); color: var(--mfy-primary); }
+
+        .kbiz-tab-panel { display: none; }
+        .kbiz-tab-panel.active { display: block; }
+
+        @media (max-width: 480px) {
+            .kbiz-content-tab { font-size: 12px; padding: 12px 4px; gap: 5px; }
+            .kbiz-content-tab-count { display: none; }
+        }
+
         /* ── Product grid (Jumia-style cards) — same fluid sizing as home feed ── */
         .kbiz-jgrid {
             display: grid;
@@ -487,35 +531,477 @@
             100% { transform: scale(1); }
         }
 
-        /* ── Job cards ── */
-        .kbiz-jobs-list { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px; }
-        .kbiz-job-card {
-            border-radius: 14px; padding: 16px;
+        /* ── Job cards — ported 1:1 from job_vacancy.html's .khj-jcard ── */
+        .kbiz-jobs-list { padding: 0 16px 16px; }
+
+        .khj-jcard {
             background: var(--mfy-white);
-            box-shadow: 0 1px 3px rgba(0,0,0,.05);
+            border: 1px solid var(--mfy-border);
+            border-radius: 14px;
+            margin-bottom: 14px;
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+            position: relative;
         }
-        .kbiz-job-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-        .kbiz-job-title { font-size: 15px; font-weight: 700; color: var(--mfy-text); }
-        .kbiz-job-company { font-size: 12px; color: var(--mfy-text-light); margin-top: 2px; }
-        .kbiz-job-company i { margin-right: 4px; }
-        .kbiz-job-badge {
-            flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 4px 10px;
-            border-radius: 20px; color: #fff; white-space: nowrap;
+        .khj-jcard:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+        .khj-jcard:last-child { margin-bottom: 0; }
+
+        .khj-jrow { display: block; }
+
+        /* Banner — cover image, or an abstract category-tinted placeholder */
+        .khj-jcard-img-link { display: block; position: relative; }
+
+        .khj-jcard-img-wrap {
+            position: relative;
+            width: 100%;
+            height: 132px;
+            overflow: hidden;
+            background: var(--pill-color, var(--mfy-primary));
         }
-        .kbiz-job-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; font-size: 12px; color: var(--mfy-text-light); }
-        .kbiz-job-meta span i { margin-right: 3px; color: var(--mfy-primary); }
-        .kbiz-job-desc { font-size: 13px; color: var(--mfy-text); line-height: 1.5; margin-bottom: 8px; }
-        .kbiz-job-closed {
-            display: inline-block; font-size: 11px; font-weight: 700; color: var(--mfy-error);
-            background: #fdeaec; padding: 3px 9px; border-radius: 20px; margin-left: 8px;
+        .khj-jcard-img-wrap.placeholder {
+            background:
+                radial-gradient(circle at 18% 58%, color-mix(in srgb, var(--pill-color) 30%, white) 0 32%, transparent 33%),
+                radial-gradient(circle at 44% 52%, color-mix(in srgb, var(--pill-color) 30%, white) 0 36%, transparent 37%),
+                linear-gradient(to right, color-mix(in srgb, var(--pill-color) 20%, white) 0 58%, color-mix(in srgb, var(--pill-color) 55%, white) 58% 100%);
         }
-        .kbiz-job-actions { display: flex; gap: 8px; margin-top: 8px; }
-        .kbiz-job-actions button {
-            flex: 1; border: 1.5px solid var(--mfy-border); background: var(--mfy-white);
-            border-radius: 8px; padding: 7px; font-size: 12px; font-weight: 700;
-            color: var(--mfy-text); cursor: pointer; font-family: inherit;
+        .khj-jcard-img {
+            width: 100%; height: 100%; object-fit: cover; display: block;
+            opacity: 0; transition: opacity 0.3s ease;
         }
-        .kbiz-job-actions button.del { color: var(--mfy-error); border-color: #f5c6cb; }
+        .khj-jcard-img.loaded { opacity: 1; }
+
+        .khj-jcard-type-chip {
+            position: absolute;
+            top: 10px; left: 10px;
+            background: rgba(255,255,255,0.92);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--pill-color, var(--mfy-primary));
+            display: flex; align-items: center; gap: 4px;
+        }
+
+        .khj-jcard-body-link { display: block; text-decoration: none; color: inherit; }
+        .khj-jcard-body { padding: 14px 16px 16px; }
+
+        .khj-jcard-name {
+            font-size: 17px; font-weight: 800; color: var(--mfy-text); line-height: 1.3;
+            margin-bottom: 5px; display: block;
+        }
+        .khj-jcard-body-link:hover .khj-jcard-name { text-decoration: underline; }
+
+        /* Poster badge — business page (avatar + name) or poster avatar fallback */
+        .khj-jcard-seller {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            color: inherit;
+            margin-bottom: 8px;
+        }
+        .khj-jcard-seller-avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+            background: var(--mfy-bg);
+            border: 1px solid var(--mfy-border);
+        }
+        .khj-jcard-seller-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--mfy-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .khj-jcard-seller-badge {
+            font-size: 11px;
+            color: var(--mfy-primary);
+            flex-shrink: 0;
+        }
+
+        .khj-jcard-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 13px; color: var(--mfy-text-light); }
+        .khj-jcard-meta-txt { font-size: 13px; color: var(--mfy-text-light); }
+        .khj-jcard-meta-txt i { font-size: 11px; margin-right: 3px; }
+        .khj-jcard-meta-txt + .khj-jcard-meta-txt::before { content: '·'; margin: 0 5px; }
+        .khj-jcard-time { font-size: 13px; color: var(--mfy-text-light); margin-bottom: 14px; display: flex; align-items: center; gap: 4px; }
+        .khj-jcard-time i { font-size: 11px; opacity: .75; }
+
+        /* Insight pills — category / work mode / advertiser */
+        .khj-jcard-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+        .khj-pill {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 11.5px; font-weight: 700;
+            padding: 4px 10px; border-radius: 20px;
+            background: color-mix(in srgb, var(--pill-color, #666) 10%, white);
+            color: var(--pill-color, #444);
+            white-space: nowrap;
+        }
+
+        .khj-jcard-price-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+        .khj-jcard-price { font-size: 13px; font-weight: 700; color: var(--mfy-text); }
+
+        /* Footer — View Details button, matching event card footer */
+        .khj-jcard-footer { display: flex; gap: 10px; align-items: center; }
+
+        .khj-view-btn {
+            flex: 1;
+            text-align: center;
+            padding: 9px 0;
+            border-radius: 22px;
+            border: 1.5px solid var(--mfy-primary);
+            color: var(--mfy-primary);
+            font-weight: 700;
+            font-size: 14px;
+            text-decoration: none;
+            background: var(--mfy-white);
+            transition: background 0.15s;
+            display: block;
+        }
+        .khj-view-btn:hover { background: color-mix(in srgb, var(--mfy-primary) 8%, white); }
+
+        /* Owner actions (edit/delete) — extra row under the card body */
+        .khj-jcard-owner-row {
+            display: flex; gap: 8px;
+            padding: 0 16px 16px;
+        }
+        .khj-owner-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 6px 14px;
+            border-radius: 16px;
+            font-size: 13px; font-weight: 600;
+            border: 1px solid var(--mfy-primary);
+            background: transparent;
+            color: var(--mfy-primary);
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+        .khj-owner-btn.del { border-color: rgba(0,0,0,0.3); color: var(--mfy-text-light); }
+        .khj-owner-btn:hover { background: rgba(0,149,246,0.08); }
+        .khj-owner-btn.del:hover { border-color: var(--mfy-error); color: var(--mfy-error); background: rgba(237,73,86,0.06); }
+
+        /* Quick-contact button — circular, overlaid on the banner */
+        .khj-jcard-actions-col {
+            position: absolute;
+            top: 8px; right: 8px;
+            display: flex; gap: 6px;
+            z-index: 2;
+        }
+        .khj-jcard-quick-btn {
+            width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+            background: rgba(255,255,255,0.92); color: #333;
+            border: none; display: flex; align-items: center; justify-content: center;
+            font-size: 13px; cursor: pointer; text-decoration: none;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .khj-jcard-quick-btn:hover  { background: #fff; color: var(--mfy-primary); }
+        .khj-jcard-quick-btn:active { transform: scale(0.92); }
+
+        /* ── DM / Message Poster modal — ported from job_vacancy.html ── */
+        .khj-modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(4px);
+            z-index: 9000;
+            display: flex; align-items: center; justify-content: center;
+            padding: 16px;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .khj-modal-overlay.open { opacity: 1; pointer-events: all; }
+        .khj-modal {
+            background: var(--mfy-white);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 540px;
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 28px 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            transform: translateY(20px);
+            transition: transform 0.2s;
+        }
+        .khj-modal-overlay.open .khj-modal { transform: translateY(0); }
+        .khj-modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .khj-modal-header h2 { font-size: 18px; font-weight: 700; }
+        .khj-modal-close {
+            background: none; border: none;
+            font-size: 20px; cursor: pointer;
+            color: var(--mfy-text-light);
+            padding: 4px 8px;
+            border-radius: 8px;
+            transition: background 0.15s;
+        }
+        .khj-modal-close:hover { background: var(--mfy-bg); }
+        .khj-form-group { margin-bottom: 14px; }
+        .khj-form-group label {
+            display: block;
+            font-size: 12px; font-weight: 700;
+            color: var(--mfy-text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 6px;
+        }
+        .khj-form-group textarea {
+            width: 100%;
+            padding: 10px 13px;
+            border: 1px solid var(--mfy-border);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            color: var(--mfy-text);
+            background: var(--mfy-white);
+            transition: border-color 0.15s;
+            outline: none;
+            resize: vertical; min-height: 90px;
+        }
+        .khj-form-group textarea:focus { border-color: var(--mfy-primary); }
+        .khj-char-count { text-align: right; font-size: 11px; color: var(--mfy-text-light); margin-top: 4px; }
+        .khj-char-count.over { color: #ef4444; }
+        .khj-submit-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--mfy-primary);
+            color: #fff;
+            font-size: 15px; font-weight: 700;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: opacity 0.15s;
+            margin-top: 6px;
+            font-family: inherit;
+        }
+        .khj-submit-btn:hover { opacity: 0.88; }
+        .khj-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .khj-spinner {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: khjSpin 0.7s linear infinite;
+            display: none;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        @keyframes khjSpin { to { transform: rotate(360deg); } }
+
+        /* ── Updates feed (image / video / text / poll posts) ── */
+        /* Flat feed layout — posts separated by a bottom border line, like a LinkedIn-style feed */
+        .kbiz-posts-list { padding: 0 16px 4px; display: flex; flex-direction: column; }
+        .kbiz-post-card {
+            border-radius: 0;
+            background: var(--mfy-white);
+            border-bottom: 1px solid var(--mfy-border);
+            margin-bottom: 14px;
+            padding-bottom: 14px;
+        }
+        .kbiz-post-card:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .kbiz-post-top { display: flex; align-items: flex-start; justify-content: space-between; padding: 12px 14px 8px; gap: 8px; }
+        .kbiz-post-author { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+        .kbiz-post-author img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .kbiz-post-author-name { font-size: 13.5px; font-weight: 700; color: var(--mfy-text); line-height: 1.3; }
+        .kbiz-post-author-sub { font-size: 11.5px; color: var(--mfy-text-light); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+        .kbiz-post-time { font-size: 11px; color: var(--mfy-text-light); display: flex; align-items: center; gap: 5px; margin-top: 1px; }
+        .kbiz-post-pin { color: var(--mfy-primary); font-size: 11px; }
+
+        /* Kebab menu (owner actions) */
+        .kbiz-post-menu-wrap { position: relative; flex-shrink: 0; }
+        .kbiz-post-menu-btn {
+            background: none; border: none; color: var(--mfy-text-light);
+            cursor: pointer; font-size: 15px; padding: 7px 9px; border-radius: 50%;
+        }
+        .kbiz-post-menu-btn:hover { background: var(--mfy-bg); color: var(--mfy-text); }
+        .kbiz-post-menu {
+            display: none; position: absolute; top: calc(100% + 4px); right: 0;
+            background: var(--mfy-white); border: 1px solid var(--mfy-border);
+            border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.14);
+            padding: 6px; min-width: 150px; z-index: 20;
+        }
+        .kbiz-post-menu.open { display: block; }
+        .kbiz-post-menu button {
+            display: flex; align-items: center; gap: 9px; width: 100%;
+            padding: 9px 10px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+            color: var(--mfy-error); text-align: left; background: none; border: none;
+            cursor: pointer; font-family: inherit;
+        }
+        .kbiz-post-menu button:hover { background: #fdeaec; }
+
+        .kbiz-post-caption { padding: 2px 14px 10px; font-size: 13.5px; line-height: 1.5; color: var(--mfy-text); white-space: pre-wrap; }
+
+        .kbiz-post-media { width: 100%; background: #000; }
+        .kbiz-post-media img, .kbiz-post-media video { width: 100%; max-height: 520px; object-fit: contain; display: block; background: #000; }
+        .kbiz-post-media-grid { display: grid; gap: 2px; }
+        .kbiz-post-media-grid.n1 { grid-template-columns: 1fr; }
+        .kbiz-post-media-grid.n2 { grid-template-columns: 1fr 1fr; }
+        .kbiz-post-media-grid.n3, .kbiz-post-media-grid.nmany { grid-template-columns: 1fr 1fr; }
+        .kbiz-post-media-grid img { width: 100%; height: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; background: #f0f0f0; }
+
+        .kbiz-post-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 10.5px; font-weight: 700; color: var(--mfy-primary);
+            background: #eaf6ff; padding: 3px 9px; border-radius: 20px; margin: 0 14px 8px;
+        }
+
+        /* Poll */
+        .kbiz-poll { padding: 4px 14px 14px; }
+        .kbiz-poll-question { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: var(--mfy-text); }
+        .kbiz-poll-option {
+            position: relative; display: block; width: 100%; text-align: left;
+            border: 1.5px solid var(--mfy-border); border-radius: 10px;
+            padding: 10px 12px; margin-bottom: 8px; background: var(--mfy-white);
+            cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600;
+            color: var(--mfy-text); overflow: hidden;
+        }
+        .kbiz-poll-option:disabled { cursor: default; }
+        .kbiz-poll-option-fill {
+            position: absolute; top: 0; left: 0; bottom: 0;
+            background: #eaf6ff; z-index: 0; transition: width .35s ease;
+        }
+        .kbiz-poll-option.voted { border-color: var(--mfy-primary); }
+        .kbiz-poll-option-row { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .kbiz-poll-option-pct { font-size: 12px; font-weight: 700; color: var(--mfy-primary); flex-shrink: 0; }
+        .kbiz-poll-meta { font-size: 11.5px; color: var(--mfy-text-light); margin-top: 2px; }
+
+        /* Post engagement — reactions + comments */
+        .kbiz-post-engage-summary {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 14px 0; font-size: 11.5px; color: var(--mfy-text-light);
+        }
+        .kbiz-post-engage-summary .vibes { display: flex; align-items: center; gap: 5px; }
+        .kbiz-post-engage-summary .vibes .vibe-icon {
+            width: 18px; height: 18px; border-radius: 50%; background: var(--mfy-primary);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .kbiz-post-engage-summary .vibes .vibe-icon i { font-size: 9px; color: #fff; }
+        .kbiz-post-engage-summary .vibes span.emoji { font-size: 13px; }
+        .kbiz-post-engage-summary .comment-link { cursor: pointer; }
+        .kbiz-post-engage-summary .comment-link:hover { text-decoration: underline; }
+        .kbiz-post-engage-bar {
+            display: flex;
+            margin: 8px 14px 0; padding-top: 4px;
+        }
+        .kbiz-post-engage-btn {
+            flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+            background: none; border: none; padding: 9px 4px; cursor: pointer;
+            font-family: inherit; font-size: 12.5px; font-weight: 700; color: var(--mfy-text-light);
+            border-radius: 8px; position: relative;
+        }
+        .kbiz-post-engage-btn:hover { background: var(--mfy-bg); }
+        .kbiz-post-engage-btn.reacted { color: var(--mfy-primary); }
+        .kbiz-post-engage-btn i { font-size: 14px; }
+
+        .kbiz-vibe-popover {
+            display: none; position: absolute; bottom: 100%; left: 8px; margin-bottom: 6px;
+            background: var(--mfy-white); border-radius: 30px; padding: 6px 8px;
+            box-shadow: 0 4px 18px rgba(0,0,0,.15); border: 1px solid var(--mfy-border);
+            gap: 4px; z-index: 5;
+        }
+        .kbiz-vibe-popover.open { display: flex; }
+        .kbiz-vibe-popover button {
+            background: none; border: none; font-size: 20px; padding: 4px; cursor: pointer;
+            border-radius: 50%; transition: transform .12s ease;
+            line-height: 1;
+        }
+        .kbiz-vibe-popover button:hover { transform: scale(1.25); background: var(--mfy-bg); }
+
+        /* ── Comments: bottom sheet on mobile, pop-up modal on desktop ── */
+        .kbiz-comments-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,.55); z-index: 220;
+            align-items: flex-end; justify-content: center;
+        }
+        .kbiz-comments-overlay.open { display: flex; }
+        .kbiz-comments-sheet {
+            background: var(--mfy-white); width: 100%; max-width: 600px;
+            border-radius: 18px 18px 0 0;
+            height: 78vh; max-height: 78vh;
+            display: flex; flex-direction: column;
+            animation: slideUp .28s ease;
+        }
+        @media (min-width: 640px) {
+            .kbiz-comments-overlay { align-items: center; padding: 24px; }
+            .kbiz-comments-sheet { border-radius: 16px; height: 640px; max-height: 85vh; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+        }
+        .kbiz-comments-sheet-handle {
+            width: 40px; height: 4px; background: var(--mfy-border);
+            border-radius: 4px; margin: 10px auto 0; flex-shrink: 0;
+        }
+        @media (min-width: 640px) { .kbiz-comments-sheet-handle { display: none; } }
+        .kbiz-comments-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; border-bottom: 1px solid var(--mfy-border); flex-shrink: 0;
+        }
+        .kbiz-comments-header-title { font-size: 15px; font-weight: 800; color: var(--mfy-text); }
+        .kbiz-comments-close {
+            background: none; border: none; color: var(--mfy-text-light);
+            font-size: 16px; cursor: pointer; padding: 6px; border-radius: 50%; line-height: 1;
+        }
+        .kbiz-comments-close:hover { background: var(--mfy-bg); color: var(--mfy-text); }
+        .kbiz-comments-body { flex: 1; overflow-y: auto; padding: 14px 16px; -webkit-overflow-scrolling: touch; }
+        .kbiz-comment-list { display: flex; flex-direction: column; gap: 14px; }
+        .kbiz-comment-row { display: flex; gap: 9px; }
+        .kbiz-comment-row img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .kbiz-comment-bubble { background: var(--mfy-bg); border-radius: 14px; padding: 8px 12px; flex: 1; }
+        .kbiz-comment-author { font-size: 12.5px; font-weight: 700; color: var(--mfy-text); }
+        .kbiz-comment-text { font-size: 13px; color: var(--mfy-text); line-height: 1.4; white-space: pre-wrap; }
+        .kbiz-comment-time { font-size: 10.5px; color: var(--mfy-text-light); margin-top: 3px; margin-left: 2px; }
+        .kbiz-comment-empty { font-size: 12.5px; color: var(--mfy-text-light); text-align: center; padding: 30px 0; }
+        .kbiz-comments-footer {
+            display: flex; gap: 9px; align-items: center; flex-shrink: 0;
+            padding: 10px 14px; border-top: 1px solid var(--mfy-border);
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+        .kbiz-comments-footer img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .kbiz-comment-input-row { display: flex; gap: 8px; align-items: center; flex: 1; }
+        .kbiz-comment-input-row input {
+            flex: 1; border: 1.5px solid var(--mfy-border); border-radius: 20px;
+            padding: 9px 14px; font-size: 13px; font-family: inherit; outline: none;
+        }
+        .kbiz-comment-input-row input:focus { border-color: var(--mfy-primary); }
+        .kbiz-comment-send {
+            width: 34px; height: 34px; border-radius: 50%; border: none; flex-shrink: 0;
+            background: var(--mfy-primary); color: #fff; cursor: pointer; font-size: 13px;
+        }
+        .kbiz-comment-send:disabled { background: #bcdff5; cursor: not-allowed; }
+
+        /* Create-post type picker */
+        .kbiz-post-type-row { display: flex; gap: 8px; margin-bottom: 14px; }
+        .kbiz-post-type-btn {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+            border: 1.5px solid var(--mfy-border); border-radius: 12px; padding: 10px 4px;
+            background: var(--mfy-white); cursor: pointer; font-family: inherit;
+            font-size: 11px; font-weight: 700; color: var(--mfy-text-light);
+        }
+        .kbiz-post-type-btn i { font-size: 16px; }
+        .kbiz-post-type-btn.active { border-color: var(--mfy-primary); color: var(--mfy-primary); background: #eaf6ff; }
+        .kbiz-poll-option-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .kbiz-poll-option-input-row .kbiz-input { flex: 1; }
+        .kbiz-poll-remove-opt {
+            width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; border: none;
+            background: var(--mfy-bg); color: var(--mfy-text-light); cursor: pointer; font-size: 13px;
+        }
+        .kbiz-poll-add-opt {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: none; border: 1.5px dashed var(--mfy-border); border-radius: 8px;
+            padding: 8px 12px; font-size: 12.5px; font-weight: 700; color: var(--mfy-primary);
+            cursor: pointer; font-family: inherit; width: 100%; justify-content: center; margin-top: 2px;
+        }
+        .kbiz-checkbox-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 13px; color: var(--mfy-text); }
 
         /* ── About section ── */
         .kbiz-about {
@@ -1653,6 +2139,24 @@
     {% endif %}
 </div>
 
+<!-- Content Tabs -->
+<div class="kbiz-content-tabs" role="tablist">
+    <button type="button" class="kbiz-content-tab active" data-tab="products" role="tab" aria-selected="true" onclick="kbizSwitchContentTab('products', this)">
+        <i class="fas fa-box"></i> Products
+        {% if listings %}<span class="kbiz-content-tab-count">{{ listings|length }}</span>{% endif %}
+    </button>
+    <button type="button" class="kbiz-content-tab" data-tab="posts" role="tab" aria-selected="false" onclick="kbizSwitchContentTab('posts', this)">
+        <i class="fas fa-bullhorn"></i> Posts
+        {% if posts %}<span class="kbiz-content-tab-count">{{ posts|length }}</span>{% endif %}
+    </button>
+    <button type="button" class="kbiz-content-tab" data-tab="jobs" role="tab" aria-selected="false" onclick="kbizSwitchContentTab('jobs', this)">
+        <i class="fas fa-briefcase"></i> Jobs
+        {% if jobs %}<span class="kbiz-content-tab-count">{{ jobs|length }}</span>{% endif %}
+    </button>
+</div>
+
+<!-- Products Tab Panel -->
+<div class="kbiz-tab-panel active" id="kbiz-panel-products">
 <!-- Listings Section -->
 <div class="kbiz-section">
     <div class="kbiz-section-header">
@@ -1749,7 +2253,11 @@
     </div>
     {% endif %}
 </div>
+</div>
+<!-- /Products Tab Panel -->
 
+<!-- Jobs Tab Panel -->
+<div class="kbiz-tab-panel" id="kbiz-panel-jobs">
 <!-- Jobs Section -->
 <div class="kbiz-section">
     <div class="kbiz-section-header">
@@ -1764,44 +2272,99 @@
     {% if jobs %}
     <div class="kbiz-jobs-list" id="jobsList">
         {% for job in jobs %}
-        <article class="kbiz-job-card" id="kbiz-job-{{ job.id }}">
-            <div class="kbiz-job-top">
-                <div>
-                    <div class="kbiz-job-title">
-                        {{ job.title }}
-                        {% if not job.is_open %}<span class="kbiz-job-closed">Closed</span>{% endif %}
-                    </div>
-                    {% if job.company %}
-                    <div class="kbiz-job-company"><i class="fas fa-building"></i>{{ job.company }}</div>
-                    {% endif %}
-                </div>
-                <span class="kbiz-job-badge" style="background:{{ job.category_color }};">
-                    {{ job.category_emoji }} {{ job.get_category_display }}
-                </span>
-            </div>
+        <article class="khj-jcard" id="kbiz-job-{{ job.id }}">
+          <div class="khj-jrow">
 
-            <div class="kbiz-job-meta">
-                {% if job.location %}<span><i class="fas fa-map-marker-alt"></i>{{ job.location }}</span>{% endif %}
-                {% if job.salary_range %}<span><i class="fas fa-money-bill-wave"></i>{{ job.salary_range }}</span>{% endif %}
-                <span><i class="far fa-clock"></i>{{ job.created_at|timesince }} ago</span>
-            </div>
-
-            <div class="kbiz-job-desc">{{ job.description|truncatechars:180 }}</div>
-
-            <a href="{% url 'job_vacancy' %}#khj-card-{{ job.id }}" style="font-size:12px;font-weight:700;color:var(--mfy-primary);text-decoration:none;">
-                View full listing <i class="fas fa-arrow-right"></i>
+            {# Banner — cover image, or an abstract category-tinted placeholder #}
+            <a href="{% url 'job_detail' job.id %}" class="khj-jcard-img-link">
+              <div class="khj-jcard-img-wrap {% if not job.cover_image %}placeholder{% endif %}" style="--pill-color: {{ job.category_color }};">
+                {% if job.cover_image %}
+                <img
+                    src="{{ job.cover_image.url }}"
+                    alt="{{ job.title }}"
+                    loading="lazy"
+                    onload="this.classList.add('loaded')"
+                    class="khj-jcard-img"
+                >
+                {% endif %}
+              </div>
+              <span class="khj-jcard-type-chip" style="--pill-color: {{ job.category_color }};">{{ job.category_emoji }} {{ job.get_category_display }}</span>
             </a>
 
-            {% if is_owner %}
-            <div class="kbiz-job-actions">
-                <button onclick="location.href='{% url 'job_vacancy' %}#khj-card-{{ job.id }}'">
-                    <i class="fas fa-pen"></i> Manage
-                </button>
-                <button class="del" onclick="deleteBusinessJob('{{ job.id }}', '{{ job.title|escapejs }}')">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
+            {# Actions overlay — poster quick-contact, top-right of the banner #}
+            <div class="khj-jcard-actions-col">
+              {% if job.posted_by != request.user %}
+              <button type="button"
+                 class="khj-jcard-quick-btn"
+                 onclick="event.stopPropagation(); khjOpenDmModal('{{ job.id }}', '{{ job.title|escapejs }}', '{{ request.scheme }}://{{ request.get_host }}{% url 'job_detail' job.id %}', '{% url 'send_message' job.posted_by.username %}', '{% url 'message' job.posted_by.username %}?job={{ job.id }}');"
+                 aria-label="Message poster">
+                  <i class="fas fa-paper-plane"></i>
+              </button>
+              {% endif %}
             </div>
-            {% endif %}
+
+            {# Job info body #}
+            <div class="khj-jcard-body">
+              <a href="{% url 'job_detail' job.id %}" class="khj-jcard-body-link">
+                <span class="khj-jcard-name">{{ job.title|truncatechars:70 }}</span>
+              </a>
+
+              {# Poster identity #}
+              {% if job.business_page %}
+              <a href="{% url 'business_page_detail' job.business_page.slug %}" class="khj-jcard-seller" onclick="event.stopPropagation()">
+                {% if job.business_page.logo %}
+                    <img src="{{ job.business_page.logo.url }}" alt="{{ job.business_page.name }}" class="khj-jcard-seller-avatar">
+                {% else %}
+                    <img src="https://placehold.co/40x40/f8f8f8/aaa?text={{ job.business_page.name|first|upper }}" alt="{{ job.business_page.name }}" class="khj-jcard-seller-avatar">
+                {% endif %}
+                <span class="khj-jcard-seller-name">{{ job.business_page.name|truncatechars:20 }}</span>
+                {% if job.business_page.is_verified %}<i class="fas fa-circle-check khj-jcard-seller-badge" title="Verified business"></i>{% endif %}
+              </a>
+              {% else %}
+              <a href="{% url 'profile' job.posted_by.username %}" class="khj-jcard-seller" onclick="event.stopPropagation()">
+                <img src="{{ job.posted_by|safe_pic_url }}" alt="{{ job.posted_by.username }}" class="khj-jcard-seller-avatar">
+                <span class="khj-jcard-seller-name">{{ job.posted_by.username|truncatechars:20 }}</span>
+              </a>
+              {% endif %}
+
+              {# Meta line — company / location #}
+              <div class="khj-jcard-meta">
+                {% if job.company %}<span class="khj-jcard-meta-txt"><i class="fas fa-building"></i>{{ job.company }}</span>{% endif %}
+                {% if job.location %}<span class="khj-jcard-meta-txt">{{ job.location }}</span>{% endif %}
+              </div>
+              <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ job.created_at|naturaltime }}</div>
+
+              {# Insight pills — work mode / advertiser / status #}
+              <div class="khj-jcard-pills">
+                <span class="khj-pill" style="--pill-color: {{ job.work_mode_color }};">{{ job.work_mode_emoji }} {{ job.get_work_mode_display }}</span>
+                <span class="khj-pill" style="--pill-color: {{ job.advertiser_color }};">{{ job.advertiser_emoji }} {{ job.get_advertiser_type_display }}</span>
+                {% if not job.is_open %}<span class="khj-pill" style="--pill-color:#ed4956;">Closed</span>{% endif %}
+              </div>
+
+              {% if not job.is_government_advertiser %}
+              <div class="khj-jcard-price-row">
+                <span class="khj-jcard-price">{% if job.salary_range %}{{ job.salary_range }}{% else %}Salary: Negotiable{% endif %}</span>
+              </div>
+              {% endif %}
+
+              <div class="khj-jcard-footer">
+                <a href="{% url 'job_detail' job.id %}" class="khj-view-btn">View Details</a>
+              </div>
+            </div>
+
+          </div>
+
+          {# Owner actions — edit/delete #}
+          {% if is_owner %}
+          <div class="khj-jcard-owner-row">
+            <button class="khj-owner-btn" onclick="location.href='{% url 'job_vacancy' %}#khj-card-{{ job.id }}'">
+              <i class="fas fa-pen"></i> Edit
+            </button>
+            <button class="khj-owner-btn del" onclick="deleteBusinessJob('{{ job.id }}', '{{ job.title|escapejs }}')">
+              <i class="fas fa-trash"></i> Delete
+            </button>
+          </div>
+          {% endif %}
         </article>
         {% endfor %}
     </div>
@@ -1818,6 +2381,179 @@
     </div>
     {% endif %}
 </div>
+</div>
+<!-- /Jobs Tab Panel -->
+
+<!-- Posts Tab Panel -->
+<div class="kbiz-tab-panel" id="kbiz-panel-posts">
+<!-- Updates Section -->
+<div class="kbiz-section">
+    <div class="kbiz-section-header">
+        <h2>Updates</h2>
+        {% if is_owner %}
+        <button class="kbiz-upload-btn" onclick="openPostModal()">
+            <i class="fas fa-plus"></i> New Post
+        </button>
+        {% endif %}
+    </div>
+
+    {% if posts %}
+    <div class="kbiz-posts-list" id="postsList">
+        {% for post in posts %}
+        <article class="kbiz-post-card" id="kbiz-post-{{ post.post_id }}">
+            <div class="kbiz-post-top">
+                <div class="kbiz-post-author">
+                    <img src="{{ page.get_logo_url }}" alt="{{ page.name }}"
+                         onerror="this.onerror=null;this.src='https://placehold.co/68x68/f97316/ffffff?text=B';">
+                    <div style="min-width:0;">
+                        <div class="kbiz-post-author-name">{{ page.name }}</div>
+                        {% if page.category %}<div class="kbiz-post-author-sub">{{ page.category }}</div>{% endif %}
+                        <div class="kbiz-post-time">
+                            {% if post.is_pinned %}<span class="kbiz-post-pin"><i class="fas fa-thumbtack"></i></span>{% endif %}
+                            <i class="far fa-clock"></i> {{ post.time_posted }}
+                            <i class="fas fa-earth-americas" style="font-size:9px;"></i>
+                        </div>
+                    </div>
+                </div>
+                {% if is_owner %}
+                <div class="kbiz-post-menu-wrap">
+                    <button class="kbiz-post-menu-btn" onclick="togglePostMenu(this)" aria-label="Post options">
+                        <i class="fas fa-ellipsis"></i>
+                    </button>
+                    <div class="kbiz-post-menu">
+                        <button onclick="deleteBusinessPost('{{ post.post_id }}')">
+                            <i class="fas fa-trash"></i> Delete post
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if post.post_type == 'video' %}
+            <span class="kbiz-post-badge"><i class="fas fa-video"></i> Video{% if post.video_duration_display %} · {{ post.video_duration_display }}{% endif %}</span>
+            {% elif post.post_type == 'poll' %}
+            <span class="kbiz-post-badge"><i class="fas fa-square-poll-vertical"></i> Poll</span>
+            {% endif %}
+
+            {% if post.caption %}
+            <div class="kbiz-post-caption">{{ post.caption }}</div>
+            {% endif %}
+
+            {% if post.post_type == 'image' %}
+                {% with imgs=post.images.all %}
+                {% if imgs %}
+                <div class="kbiz-post-media">
+                    <div class="kbiz-post-media-grid {% if imgs|length == 1 %}n1{% elif imgs|length == 2 %}n2{% elif imgs|length == 3 %}n3{% else %}nmany{% endif %}">
+                        {% for img in imgs %}
+                        <img src="{{ img.get_image_url }}" alt="" loading="lazy"
+                             onerror="this.onerror=null;this.src='https://placehold.co/600x600/f8f8f8/aaa?text=Image';">
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endwith %}
+            {% elif post.post_type == 'video' %}
+                {% if post.get_video_url %}
+                <div class="kbiz-post-media">
+                    <video src="{{ post.get_video_url }}" controls preload="metadata"></video>
+                </div>
+                {% endif %}
+            {% elif post.post_type == 'poll' and post.poll %}
+                <div class="kbiz-poll" data-poll-id="{{ post.poll.poll_id }}" data-allow-multiple="{% if post.poll.allow_multiple %}1{% else %}0{% endif %}">
+                    <div class="kbiz-poll-question">{{ post.poll.question }}</div>
+                    {% for opt in post.poll.options.all %}
+                    <button type="button"
+                            class="kbiz-poll-option {% if opt.option_id in post.poll.viewer_voted_ids %}voted{% endif %}"
+                            data-option-id="{{ opt.option_id }}"
+                            {% if post.poll.is_closed %}disabled{% endif %}
+                            onclick="voteBusinessPoll('{{ post.post_id }}', '{{ opt.option_id }}', this)">
+                        <span class="kbiz-poll-option-fill" style="width:{{ opt.viewer_pct }}%;"></span>
+                        <span class="kbiz-poll-option-row">
+                            <span>{% if opt.option_id in post.poll.viewer_voted_ids %}<i class="fas fa-check-circle" style="color:var(--mfy-primary);margin-right:6px;"></i>{% endif %}{{ opt.text }}</span>
+                            <span class="kbiz-poll-option-pct">{{ opt.viewer_pct }}%</span>
+                        </span>
+                    </button>
+                    {% endfor %}
+                    <div class="kbiz-poll-meta">
+                        {{ post.poll.viewer_total_votes }} vote{{ post.poll.viewer_total_votes|pluralize }}
+                        {% if post.poll.allow_multiple %} · Multiple choices allowed{% endif %}
+                        {% if post.poll.is_closed %} · Closed{% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="kbiz-post-engage-summary">
+                <span class="vibes">
+                    {% if post.vibe_count %}<span class="vibe-icon"><i class="fas fa-heart"></i></span>{% endif %}
+                    {% if post.top_vibe_emoji %}<span class="emoji">{{ post.top_vibe_emoji }}</span>{% endif %}
+                    <span data-vibe-total>{{ post.vibe_count }}</span>
+                </span>
+                <span class="comment-link" data-comment-total onclick="toggleCommentsPanel('{{ post.post_id }}')">{{ post.comment_count }} comment{{ post.comment_count|pluralize }}</span>
+            </div>
+
+            <div class="kbiz-post-engage-bar" style="position:relative;">
+                <button type="button" class="kbiz-post-engage-btn {% if post.viewer_vibe %}reacted{% endif %}"
+                        data-vibe-btn
+                        onclick="toggleVibePopover(this)">
+                    <span data-vibe-emoji>{% if post.viewer_vibe %}{{ post.viewer_vibe_emoji }}{% else %}<i class="far fa-heart"></i>{% endif %}</span>
+                    React
+                </button>
+                <div class="kbiz-vibe-popover" data-vibe-popover>
+                    {% for v in vibe_choices %}
+                    <button type="button" title="{{ v.label }}" onclick="reactToBusinessPost('{{ post.post_id }}', '{{ v.type }}', this)">{{ v.emoji }}</button>
+                    {% endfor %}
+                </div>
+                <button type="button" class="kbiz-post-engage-btn" onclick="toggleCommentsPanel('{{ post.post_id }}')">
+                    <i class="far fa-comment"></i> Comment
+                </button>
+            </div>
+
+            <!-- Comments: bottom sheet (mobile) / pop-up modal (desktop) -->
+            <div class="kbiz-comments-overlay" id="commentsOverlay-{{ post.post_id }}" onclick="if(event.target===this) closeCommentsPanel('{{ post.post_id }}')">
+                <div class="kbiz-comments-sheet" id="comments-{{ post.post_id }}" data-loaded="0" role="dialog" aria-modal="true" aria-label="Comments">
+                    <div class="kbiz-comments-sheet-handle"></div>
+                    <div class="kbiz-comments-header">
+                        <span class="kbiz-comments-header-title" data-comment-total-label>{{ post.comment_count }} Comment{{ post.comment_count|pluralize }}</span>
+                        <button class="kbiz-comments-close" onclick="closeCommentsPanel('{{ post.post_id }}')" aria-label="Close comments">
+                            <i class="fas fa-xmark"></i>
+                        </button>
+                    </div>
+                    <div class="kbiz-comments-body">
+                        <div class="kbiz-comment-list" id="commentList-{{ post.post_id }}">
+                            <div class="kbiz-comment-empty">Loading comments…</div>
+                        </div>
+                    </div>
+                    <div class="kbiz-comments-footer">
+                        <img src="{{ request.user.profile.get_picture_url }}" alt=""
+                             onerror="this.onerror=null;this.src='https://placehold.co/56x56/dbdbdb/888?text=%20';">
+                        <div class="kbiz-comment-input-row">
+                            <input type="text" id="commentInput-{{ post.post_id }}" placeholder="Write a comment…"
+                                   onkeydown="if(event.key==='Enter'){submitBusinessComment('{{ post.post_id }}');}">
+                            <button class="kbiz-comment-send" onclick="submitBusinessComment('{{ post.post_id }}')" aria-label="Send comment">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="kbiz-empty">
+        <i class="fas fa-bullhorn"></i>
+        {% if is_owner %}
+        <strong>No updates yet</strong><br>
+        <small>Share photos, a short video, a text update, or a poll.</small>
+        {% else %}
+        <strong>No updates yet</strong><br>
+        <small>Check back soon!</small>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+</div>
+<!-- /Posts Tab Panel -->
 
 <!-- About Section -->
 <div class="kbiz-about">
@@ -1994,7 +2730,113 @@
         <button class="kbiz-modal-cancel" onclick="closeJobModal()">Cancel</button>
     </div>
 </div>
+
+<!-- ── Create Post modal (owner only) — image / video / text / poll ── -->
+<div class="kbiz-overlay" id="postOverlay">
+    <div class="kbiz-modal">
+        <div class="kbiz-modal-handle"></div>
+        <div class="kbiz-modal-title">New Update</div>
+
+        <div class="kbiz-post-type-row">
+            <button type="button" class="kbiz-post-type-btn active" data-type="image" onclick="setPostType('image')">
+                <i class="fas fa-image"></i> Image
+            </button>
+            <button type="button" class="kbiz-post-type-btn" data-type="video" onclick="setPostType('video')">
+                <i class="fas fa-video"></i> Video
+            </button>
+            <button type="button" class="kbiz-post-type-btn" data-type="text" onclick="setPostType('text')">
+                <i class="fas fa-align-left"></i> Text
+            </button>
+            <button type="button" class="kbiz-post-type-btn" data-type="poll" onclick="setPostType('poll')">
+                <i class="fas fa-square-poll-vertical"></i> Poll
+            </button>
+        </div>
+
+        <!-- Image fields -->
+        <div class="kbiz-post-type-fields" id="postFields-image">
+            <div class="kbiz-photo-row" id="postPhotoRow">
+                <label class="kbiz-add-photo" for="postImagesInput">
+                    <i class="fas fa-camera fa-lg"></i>
+                    <span>Add Photos</span>
+                </label>
+            </div>
+            <input type="file" id="postImagesInput" accept="image/*" multiple style="display:none;">
+            <div class="kbiz-field">
+                <label class="kbiz-label">Caption (optional)</label>
+                <textarea class="kbiz-textarea" id="postImageCaption" placeholder="New arrivals, a promo, behind-the-scenes…"></textarea>
+            </div>
+        </div>
+
+        <!-- Video fields -->
+        <div class="kbiz-post-type-fields" id="postFields-video" style="display:none;">
+            <div class="kbiz-field">
+                <label class="kbiz-label">Video (15–90 seconds) *</label>
+                <input type="file" id="postVideoInput" accept="video/*" class="kbiz-input" style="padding:8px;">
+            </div>
+            <div class="kbiz-field">
+                <label class="kbiz-label">Caption (optional)</label>
+                <textarea class="kbiz-textarea" id="postVideoCaption" placeholder="Say something about this video…"></textarea>
+            </div>
+        </div>
+
+        <!-- Text fields -->
+        <div class="kbiz-post-type-fields" id="postFields-text" style="display:none;">
+            <div class="kbiz-field">
+                <label class="kbiz-label">Update *</label>
+                <textarea class="kbiz-textarea" id="postTextCaption" placeholder="What's new?" style="min-height:120px;"></textarea>
+            </div>
+        </div>
+
+        <!-- Poll fields -->
+        <div class="kbiz-post-type-fields" id="postFields-poll" style="display:none;">
+            <div class="kbiz-field">
+                <label class="kbiz-label">Question *</label>
+                <input class="kbiz-input" id="postPollQuestion" type="text" placeholder="Ask your followers something…">
+            </div>
+            <label class="kbiz-label">Options *</label>
+            <div id="postPollOptions">
+                <div class="kbiz-poll-option-input-row">
+                    <input class="kbiz-input poll-opt" type="text" placeholder="Option 1">
+                    <button type="button" class="kbiz-poll-remove-opt" onclick="removePollOptionRow(this)">&times;</button>
+                </div>
+                <div class="kbiz-poll-option-input-row">
+                    <input class="kbiz-input poll-opt" type="text" placeholder="Option 2">
+                    <button type="button" class="kbiz-poll-remove-opt" onclick="removePollOptionRow(this)">&times;</button>
+                </div>
+            </div>
+            <button type="button" class="kbiz-poll-add-opt" onclick="addPollOptionRow()">
+                <i class="fas fa-plus"></i> Add option
+            </button>
+            <label class="kbiz-checkbox-row">
+                <input type="checkbox" id="postPollMultiple"> Allow multiple choices
+            </label>
+        </div>
+
+        <button class="kbiz-modal-submit" id="postUploadBtn" onclick="submitBusinessPost()">
+            <i class="fas fa-paper-plane"></i> Post Update
+        </button>
+        <button class="kbiz-modal-cancel" onclick="closePostModal()">Cancel</button>
+    </div>
+</div>
 {% endif %}
+
+<!-- DM / Message Poster Modal -->
+<div class="khj-modal-overlay" id="khjDmModal">
+  <div class="khj-modal">
+    <div class="khj-modal-header">
+      <h2><i class="fas fa-paper-plane" style="color:var(--mfy-primary);"></i> Message the Poster</h2>
+      <button class="khj-modal-close" id="khjCloseDmBtn">✕</button>
+    </div>
+    <div class="khj-form-group">
+      <label>Your message</label>
+      <textarea id="khjDmText" style="min-height:130px;" maxlength="1000" oninput="khjDmCharCount(this)"></textarea>
+      <div class="khj-char-count" id="khjDmCharCount">0 / 1000</div>
+    </div>
+    <button type="button" class="khj-submit-btn" id="khjDmSendBtn" onclick="khjSendDm()">
+      <i class="fas fa-paper-plane"></i> Send <span class="khj-spinner" id="khjDmSpinner"></span>
+    </button>
+  </div>
+</div>
 
 <!-- Toast -->
 <div class="kbiz-toast" id="toast"></div>
@@ -2257,8 +3099,6 @@
 </div><!-- /.mfy-desktop-layout -->
 </main>
 
-{% include 'footer.html' %}
-
 <!-- ===== MOBILE "MORE" SIDEBAR TOGGLE BUTTON ===== -->
 <button class="mfy-mobile-sidebar-toggle" id="mfy-mobile-sidebar-toggle" onclick="mfyOpenMobileSidebar()" aria-label="Open sidebar">
   <i class="fas fa-chevron-left"></i>
@@ -2476,6 +3316,20 @@
 <script>
 const PAGE_SLUG  = '{{ page.slug }}';
 const CSRF_TOKEN = '{{ csrf_token }}';
+
+// ── Content Tabs (Products / Posts / Jobs) ──
+function kbizSwitchContentTab(tab, btn) {
+    document.querySelectorAll('.kbiz-content-tab').forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+
+    document.querySelectorAll('.kbiz-tab-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById('kbiz-panel-' + tab);
+    if (panel) panel.classList.add('active');
+}
 
 // ── Right-sidebar Following/Followers tabs (same behavior as profile page) ──
 function mfySwitchTab(tab, btn) {
@@ -2914,6 +3768,80 @@ document.getElementById('jobOverlay')?.addEventListener('click', function(e) {
     if (e.target.id === 'jobOverlay') closeJobModal();
 });
 
+// ── DM / Message Poster modal (job cards) ──
+const khjDmOverlay    = document.getElementById('khjDmModal');
+const khjDmText       = document.getElementById('khjDmText');
+const khjDmSendBtn    = document.getElementById('khjDmSendBtn');
+const khjDmSpinner    = document.getElementById('khjDmSpinner');
+let   khjDmSendUrl    = null;
+let   khjDmSuccessUrl = null;
+let   khjDmJobId      = null;
+
+function khjOpenDmModal(jobId, jobTitle, jobUrl, sendUrl, successUrl) {
+    khjDmJobId      = jobId;
+    khjDmSendUrl    = sendUrl;
+    khjDmSuccessUrl = successUrl;
+
+    if (khjDmText && !khjDmText.value.trim()) {
+        khjDmText.value = "Hi! I'm interested in this vacancy:\n💼 " + jobTitle + "\n🔗 " + jobUrl + "\n\nIs this position still open?";
+        khjDmCharCount(khjDmText);
+    }
+    khjDmOverlay?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function khjCloseDmModal() {
+    khjDmOverlay?.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+function khjDmCharCount(ta) {
+    const count = ta.value.length;
+    const el = document.getElementById('khjDmCharCount');
+    if (!el) return;
+    el.textContent = count + ' / 1000';
+    el.classList.toggle('over', count >= 950);
+}
+
+async function khjSendDm() {
+    const msg = khjDmText ? khjDmText.value.trim() : '';
+    if (!msg) { toast('Please write a message first.'); khjDmText && khjDmText.focus(); return; }
+
+    khjDmSendBtn.disabled = true;
+    if (khjDmSpinner) khjDmSpinner.style.display = 'inline-block';
+
+    try {
+        const res = await fetch(khjDmSendUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN,
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({ message: msg, job_id: khjDmJobId }),
+        });
+        const data = await res.json();
+
+        if (data.status === 'success') {
+            khjCloseDmModal();
+            toast('Message sent!');
+            setTimeout(() => { window.location.href = khjDmSuccessUrl; }, 700);
+            return;
+        }
+        toast(data.message || 'Could not send message.');
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        khjDmSendBtn.disabled = false;
+        if (khjDmSpinner) khjDmSpinner.style.display = 'none';
+    }
+}
+
+document.getElementById('khjCloseDmBtn')?.addEventListener('click', khjCloseDmModal);
+khjDmOverlay?.addEventListener('click', function(e) {
+    if (e.target === khjDmOverlay) khjCloseDmModal();
+});
+
 async function submitJob() {
     const btn = document.getElementById('jobUploadBtn');
     if (btn.disabled) return;
@@ -2978,6 +3906,390 @@ async function deleteBusinessJob(jobId, title) {
         }
     } catch (_) {
         toast('Network error. Please try again.');
+    }
+}
+
+// ── Business page updates (image / video / text / poll posts) ──
+let currentPostType = 'image';
+let postSelectedImages = [];
+
+function openPostModal() {
+    document.getElementById('postOverlay')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closePostModal() {
+    document.getElementById('postOverlay')?.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('postOverlay')?.addEventListener('click', function(e) {
+    if (e.target.id === 'postOverlay') closePostModal();
+});
+
+function setPostType(type) {
+    currentPostType = type;
+    document.querySelectorAll('.kbiz-post-type-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.type === type);
+    });
+    document.querySelectorAll('.kbiz-post-type-fields').forEach(el => {
+        el.style.display = (el.id === `postFields-${type}`) ? '' : 'none';
+    });
+}
+
+document.getElementById('postImagesInput')?.addEventListener('change', function(e) {
+    postSelectedImages = Array.from(e.target.files);
+    const row = document.getElementById('postPhotoRow');
+    const label = row.querySelector('.kbiz-add-photo');
+    row.innerHTML = '';
+    postSelectedImages.forEach((file) => {
+        const div = document.createElement('div');
+        div.style.cssText = 'width:70px;height:70px;border-radius:8px;overflow:hidden;border:1px solid var(--mfy-border);flex-shrink:0;';
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        div.appendChild(img);
+        row.appendChild(div);
+    });
+    row.appendChild(label);
+});
+
+function addPollOptionRow() {
+    const wrap = document.getElementById('postPollOptions');
+    if (wrap.querySelectorAll('.poll-opt').length >= 6) { toast('Up to 6 options.'); return; }
+    const row = document.createElement('div');
+    row.className = 'kbiz-poll-option-input-row';
+    row.innerHTML = `<input class="kbiz-input poll-opt" type="text" placeholder="Option ${wrap.querySelectorAll('.poll-opt').length + 1}">
+                      <button type="button" class="kbiz-poll-remove-opt" onclick="removePollOptionRow(this)">&times;</button>`;
+    wrap.appendChild(row);
+}
+function removePollOptionRow(btn) {
+    const wrap = document.getElementById('postPollOptions');
+    if (wrap.querySelectorAll('.poll-opt').length <= 2) { toast('Polls need at least 2 options.'); return; }
+    btn.closest('.kbiz-poll-option-input-row').remove();
+}
+
+function getVideoDuration(file) {
+    return new Promise((resolve) => {
+        try {
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.onloadedmetadata = function() {
+                URL.revokeObjectURL(video.src);
+                resolve(Math.round(video.duration) || null);
+            };
+            video.onerror = () => resolve(null);
+            video.src = URL.createObjectURL(file);
+        } catch (_) { resolve(null); }
+    });
+}
+
+async function submitBusinessPost() {
+    const btn = document.getElementById('postUploadBtn');
+    if (btn.disabled) return;
+
+    const formData = new FormData();
+    formData.append('post_type', currentPostType);
+
+    if (currentPostType === 'image') {
+        if (!postSelectedImages.length) { toast('Please add at least one image.'); return; }
+        formData.append('caption', document.getElementById('postImageCaption').value.trim());
+        postSelectedImages.forEach(f => formData.append('images', f));
+
+    } else if (currentPostType === 'video') {
+        const fileInput = document.getElementById('postVideoInput');
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) { toast('Please attach a video.'); return; }
+        formData.append('caption', document.getElementById('postVideoCaption').value.trim());
+        formData.append('video', file);
+        const duration = await getVideoDuration(file);
+        if (duration) formData.append('video_duration_seconds', duration);
+
+    } else if (currentPostType === 'text') {
+        const text = document.getElementById('postTextCaption').value.trim();
+        if (!text) { toast('Please write an update.'); return; }
+        formData.append('caption', text);
+
+    } else if (currentPostType === 'poll') {
+        const question = document.getElementById('postPollQuestion').value.trim();
+        const options = Array.from(document.querySelectorAll('#postPollOptions .poll-opt'))
+            .map(i => i.value.trim()).filter(Boolean);
+        if (!question) { toast('Please add a poll question.'); return; }
+        if (options.length < 2) { toast('Polls need at least 2 options.'); return; }
+        formData.append('poll_question', question);
+        options.forEach(o => formData.append('poll_options', o));
+        if (document.getElementById('postPollMultiple').checked) formData.append('allow_multiple', '1');
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting…';
+
+    try {
+        const res = await fetch(`/business/${PAGE_SLUG}/posts/create/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
+        });
+        let data;
+        try { data = await res.json(); } catch (_) { data = null; }
+        if (res.ok && data && data.success) {
+            toast('Posted!');
+            closePostModal();
+            setTimeout(() => location.reload(), 600);
+        } else {
+            toast((data && data.error) || `Failed to post (HTTP ${res.status}).`);
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Update';
+    }
+}
+
+async function deleteBusinessPost(postId) {
+    if (!confirm('Delete this update? This cannot be undone.')) return;
+    try {
+        const res = await fetch(`/posts/${postId}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            const el = document.getElementById(`kbiz-post-${postId}`);
+            if (el) {
+                el.style.transition = 'opacity .2s ease';
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 200);
+            }
+            toast('Update deleted');
+        } else {
+            toast(data.error || 'Failed to delete update.');
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+async function voteBusinessPoll(postId, optionId, btnEl) {
+    const pollEl = btnEl.closest('.kbiz-poll');
+    const allowMultiple = pollEl.dataset.allowMultiple === '1';
+    let optionIds = [optionId];
+
+    // If multiple choices are allowed, toggle this option alongside any
+    // other already-voted options in the same poll.
+    if (pollEl.querySelector('.kbiz-poll-option.voted') && allowMultiple) {
+        const voted = Array.from(pollEl.querySelectorAll('.kbiz-poll-option.voted')).map(b => b.dataset.optionId);
+        optionIds = voted.includes(optionId) ? voted.filter(id => id !== optionId) : [...voted, optionId];
+        if (!optionIds.length) optionIds = [optionId];
+    }
+
+    const formData = new FormData();
+    optionIds.forEach(id => formData.append('option_ids', id));
+
+    try {
+        const res = await fetch(`/posts/${postId}/vote/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
+        });
+        const data = await res.json();
+        if (!data.success) { toast(data.error || 'Could not vote.'); return; }
+
+        const votedSet = new Set(optionIds);
+        pollEl.querySelectorAll('.kbiz-poll-option').forEach(optBtn => {
+            const stats = data.poll.options.find(o => o.option_id === optBtn.dataset.optionId);
+            if (!stats) return;
+            optBtn.querySelector('.kbiz-poll-option-fill').style.width = stats.pct + '%';
+            optBtn.querySelector('.kbiz-poll-option-pct').textContent = stats.pct + '%';
+            optBtn.classList.toggle('voted', votedSet.has(optBtn.dataset.optionId));
+        });
+        const meta = pollEl.querySelector('.kbiz-poll-meta');
+        if (meta) meta.textContent = `${data.poll.total_votes} vote${data.poll.total_votes === 1 ? '' : 's'}`;
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+// ── Post reactions (vibe popover) ──
+document.addEventListener('click', function(e) {
+    // Close any open vibe popover when clicking outside it/its trigger button.
+    document.querySelectorAll('.kbiz-vibe-popover.open').forEach(pop => {
+        const bar = pop.closest('.kbiz-post-engage-bar');
+        if (bar && !bar.contains(e.target)) pop.classList.remove('open');
+    });
+});
+
+function toggleVibePopover(btn) {
+    const bar = btn.closest('.kbiz-post-engage-bar');
+    const pop = bar.querySelector('[data-vibe-popover]');
+    const wasOpen = pop.classList.contains('open');
+    document.querySelectorAll('.kbiz-vibe-popover.open').forEach(p => p.classList.remove('open'));
+    if (!wasOpen) pop.classList.add('open');
+}
+
+async function reactToBusinessPost(postId, vibeType, optBtn) {
+    const pop = optBtn.closest('.kbiz-vibe-popover');
+    pop.classList.remove('open');
+    const card = document.getElementById(`kbiz-post-${postId}`);
+    try {
+        const res = await fetch(`/posts/${postId}/vibe/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vibe_type: vibeType }),
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error === 'login required' ? 'Please log in to react.' : data.error); return; }
+
+        const engageBtn = card.querySelector('[data-vibe-btn]');
+        const emojiSlot  = card.querySelector('[data-vibe-emoji]');
+        const totalSlot  = card.querySelector('[data-vibe-total]');
+        const EMOJIS = { fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊', love:'❤️' };
+
+        if (data.user_vibe) {
+            engageBtn.classList.add('reacted');
+            emojiSlot.innerHTML = EMOJIS[data.user_vibe] || '';
+        } else {
+            engageBtn.classList.remove('reacted');
+            emojiSlot.innerHTML = '<i class="far fa-heart"></i>';
+        }
+        if (totalSlot) totalSlot.textContent = data.total;
+
+        const topType = Object.entries(data.summary).sort((a, b) => b[1] - a[1])[0];
+        const summaryEmojiEl = card.querySelector('.kbiz-post-engage-summary .vibes .emoji');
+        if (topType) {
+            const emoji = EMOJIS[topType[0]] || '';
+            if (summaryEmojiEl) {
+                summaryEmojiEl.textContent = emoji;
+            } else {
+                const span = document.createElement('span');
+                span.className = 'emoji';
+                span.textContent = emoji;
+                card.querySelector('.kbiz-post-engage-summary .vibes').prepend(span);
+            }
+        } else if (summaryEmojiEl) {
+            summaryEmojiEl.remove();
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+// ── Post comments ──
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function renderComment(c) {
+    return `<div class="kbiz-comment-row">
+        <img src="${c.avatar}" alt="" onerror="this.onerror=null;this.src='https://placehold.co/56x56/dbdbdb/888?text=%20';">
+        <div class="kbiz-comment-bubble">
+            <div class="kbiz-comment-author">${escapeHtml(c.author_name)}</div>
+            <div class="kbiz-comment-text">${escapeHtml(c.text)}</div>
+            <div class="kbiz-comment-time">${c.time}</div>
+        </div>
+    </div>`;
+}
+
+async function toggleCommentsPanel(postId) {
+    const overlay = document.getElementById(`commentsOverlay-${postId}`);
+    const panel = document.getElementById(`comments-${postId}`);
+    if (!overlay || !panel) return;
+    if (overlay.classList.contains('open')) { closeCommentsPanel(postId); return; }
+
+    document.querySelectorAll('.kbiz-comments-overlay.open').forEach(el => el.classList.remove('open'));
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    if (panel.dataset.loaded !== '1') {
+        panel.dataset.loaded = '1';
+        try {
+            const res = await fetch(`/posts/${postId}/comments/`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json();
+            const list = document.getElementById(`commentList-${postId}`);
+            if (!data.comments || !data.comments.length) {
+                list.innerHTML = '<div class="kbiz-comment-empty">No comments yet — be the first!</div>';
+            } else {
+                list.innerHTML = data.comments.map(renderComment).join('');
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (_) {
+            const list = document.getElementById(`commentList-${postId}`);
+            if (list) list.innerHTML = '<div class="kbiz-comment-empty">Could not load comments.</div>';
+        }
+    }
+
+    // Focus the input shortly after the sheet finishes animating in.
+    setTimeout(() => {
+        const input = document.getElementById(`commentInput-${postId}`);
+        if (input && window.innerWidth >= 640) input.focus();
+    }, 200);
+}
+
+function closeCommentsPanel(postId) {
+    const overlay = document.getElementById(`commentsOverlay-${postId}`);
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+// Close comments sheet/modal on Escape, and any open post kebab menu.
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll('.kbiz-comments-overlay.open').forEach(el => {
+        el.classList.remove('open');
+        document.body.style.overflow = '';
+    });
+    document.querySelectorAll('.kbiz-post-menu.open').forEach(el => el.classList.remove('open'));
+});
+
+// ── Post kebab menu (owner: delete, etc.) ──
+document.addEventListener('click', function(e) {
+    document.querySelectorAll('.kbiz-post-menu.open').forEach(menu => {
+        const wrap = menu.closest('.kbiz-post-menu-wrap');
+        if (wrap && !wrap.contains(e.target)) menu.classList.remove('open');
+    });
+});
+
+function togglePostMenu(btn) {
+    const menu = btn.nextElementSibling;
+    const wasOpen = menu.classList.contains('open');
+    document.querySelectorAll('.kbiz-post-menu.open').forEach(m => m.classList.remove('open'));
+    if (!wasOpen) menu.classList.add('open');
+}
+
+async function submitBusinessComment(postId) {
+    const input = document.getElementById(`commentInput-${postId}`);
+    const text = input.value.trim();
+    if (!text) return;
+    input.disabled = true;
+    try {
+        const res = await fetch(`/posts/${postId}/comments/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error); return; }
+
+        const list = document.getElementById(`commentList-${postId}`);
+        const empty = list.querySelector('.kbiz-comment-empty');
+        if (empty) empty.remove();
+        list.insertAdjacentHTML('beforeend', renderComment(data));
+        list.scrollTop = list.scrollHeight;
+        input.value = '';
+
+        const totalSlot = document.querySelector(`#kbiz-post-${postId} [data-comment-total]`);
+        if (totalSlot) totalSlot.textContent = `${data.count} comment${data.count === 1 ? '' : 's'}`;
+        const headerLabel = document.querySelector(`#commentsOverlay-${postId} [data-comment-total-label]`);
+        if (headerLabel) headerLabel.textContent = `${data.count} Comment${data.count === 1 ? '' : 's'}`;
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        input.disabled = false;
+        input.focus();
     }
 }
 </script>

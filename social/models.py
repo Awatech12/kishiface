@@ -29,6 +29,9 @@ MAX_TEXT_LENGTHS = {
     'product_name': 100,
     'channel_name': 200,
     'profession': 150,
+    'post_caption': 2200,
+    'poll_question': 300,
+    'poll_option': 120,
 }
 
 def sanitize_text(text, field_name=None):
@@ -509,9 +512,11 @@ class BusinessNotification(models.Model):
     """
     NEW_FOLLOWER = 'new_follower'
     NEW_PRODUCT  = 'new_product'
+    NEW_COMMENT  = 'new_comment'
     NOTIF_TYPE_CHOICES = [
         (NEW_FOLLOWER, 'New page follower'),
         (NEW_PRODUCT,  'New product'),
+        (NEW_COMMENT,  'New comment on a post'),
     ]
 
     notif_type    = models.CharField(max_length=20, choices=NOTIF_TYPE_CHOICES, db_index=True)
@@ -532,6 +537,11 @@ class BusinessNotification(models.Model):
         'Market', on_delete=models.CASCADE, null=True, blank=True,
         related_name='new_product_notifications',
         help_text='Set for new_product notifications only.'
+    )
+    post = models.ForeignKey(
+        'BusinessPost', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='comment_notifications',
+        help_text='Set for new_comment notifications only.'
     )
     is_read    = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -2047,3 +2057,347 @@ class BusinessPage(models.Model):
     @property
     def review_count(self):
         return ProductReview.objects.filter(product__business_page=self).count()
+
+    @property
+    def post_count(self):
+        return self.posts.count()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Business page updates — image / video / text / poll posts
+# ─────────────────────────────────────────────────────────────────────────────
+
+class BusinessPost(models.Model):
+    """
+    A single update posted to a BusinessPage's feed. One of four kinds:
+      - image : one or more photos (see BusinessPostImage), + optional caption
+      - video : a single short video (15–90s guideline, enforced client-side),
+                + optional caption
+      - text  : caption only, no media
+      - poll  : caption used as an optional intro line; the actual question and
+                options live on the related BusinessPostPoll / BusinessPostPollOption
+    """
+    TYPE_IMAGE = 'image'
+    TYPE_VIDEO = 'video'
+    TYPE_TEXT  = 'text'
+    TYPE_POLL  = 'poll'
+    POST_TYPE_CHOICES = [
+        (TYPE_IMAGE, 'Image'),
+        (TYPE_VIDEO, 'Video'),
+        (TYPE_TEXT,  'Text update'),
+        (TYPE_POLL,  'Poll'),
+    ]
+
+    MIN_VIDEO_SECONDS = 15
+    MAX_VIDEO_SECONDS = 90
+
+    post_id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='posts')
+    post_type     = models.CharField(max_length=10, choices=POST_TYPE_CHOICES, default=TYPE_TEXT, db_index=True)
+    caption       = models.TextField(blank=True, default='')
+
+    if settings.USE_CLOUDINARY:
+        video = CloudinaryField('video', folder='business_post_videos', resource_type='video', blank=True, null=True)
+    else:
+        video = models.FileField(upload_to='business_post_videos/', blank=True, null=True)
+
+    # Client-reported duration (seconds) — used only to nudge the 15–90s
+    # guideline in the UI; actual media length can't be verified server-side
+    # without a transcoding pipeline, so this is best-effort, not enforced.
+    video_duration_seconds = models.PositiveIntegerField(blank=True, null=True)
+
+    is_pinned  = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'BusinessPost_Table'
+        ordering = ['-is_pinned', '-created_at']
+
+    def __str__(self):
+        return f'{self.get_post_type_display()} post by {self.business_page.name}'
+
+    def clean(self):
+        super().clean()
+        if self.post_type not in dict(self.POST_TYPE_CHOICES):
+            raise ValidationError({'post_type': 'Invalid post type.'})
+        self.caption = sanitize_text(self.caption, 'post_caption')
+
+        if self.post_type == self.TYPE_TEXT and not self.caption:
+            raise ValidationError({'caption': 'Text updates need some text.'})
+
+        if self.post_type == self.TYPE_VIDEO:
+            if self.video:
+                validate_file_extension(self.video)
+                validate_file_size(self.video, max_size_mb=100)
+            elif not self.pk:
+                raise ValidationError({'video': 'Please attach a video.'})
+
+        if self.video_duration_seconds is not None and self.video_duration_seconds < 0:
+            self.video_duration_seconds = None
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_video_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.video:
+                    pid = str(getattr(self.video, 'public_id', None) or self.video).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryVideo(pid).build_url(secure=True)
+                return ''
+            else:
+                return self.video.url if self.video else ''
+        except Exception:
+            return ''
+
+    @property
+    def video_duration_display(self):
+        secs = self.video_duration_seconds
+        if not secs:
+            return ''
+        m, s = divmod(int(secs), 60)
+        return f'{m}:{s:02d}' if m else f'0:{s:02d}'
+
+    @property
+    def vibe_count(self):
+        return self.vibes.count()
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+    @property
+    def top_vibe_emoji(self):
+        row = (
+            self.vibes.values('vibe_type')
+            .annotate(cnt=models.Count('id'))
+            .order_by('-cnt')
+            .first()
+        )
+        if not row:
+            return ''
+        return BusinessPostVibe.VIBE_EMOJIS.get(row['vibe_type'], '')
+
+    @property
+    def time_posted(self):
+        now = timezone.localtime()
+        posted = timezone.localtime(self.created_at)
+        seconds = (now - posted).total_seconds()
+        if seconds < 60:
+            return 'Just now'
+        if seconds < 3600:
+            mins = int(seconds // 60)
+            return f"{mins} minute{'s' if mins != 1 else ''} ago"
+        days_diff = (now.date() - posted.date()).days
+        if days_diff == 0:
+            hours = int(seconds // 3600)
+            return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        if days_diff == 1:
+            return 'Yesterday'
+        if days_diff < 7:
+            return f'{days_diff} days ago'
+        if days_diff < 30:
+            weeks = days_diff // 7
+            return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+        if days_diff < 365:
+            months = days_diff // 30
+            return f"{months} month{'s' if months != 1 else ''} ago"
+        years = days_diff // 365
+        return f"{years} year{'s' if years != 1 else ''} ago"
+
+
+class BusinessPostImage(models.Model):
+    """One photo within an 'image' type BusinessPost — supports multi-image posts."""
+    image_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post     = models.ForeignKey(BusinessPost, on_delete=models.CASCADE, related_name='images')
+    order    = models.PositiveSmallIntegerField(default=0)
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='business_post_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='business_post_images/', blank=True, null=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def clean(self):
+        super().clean()
+        if self.image:
+            validate_file_extension(self.image)
+            validate_file_size(self.image, max_size_mb=10)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            else:
+                return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
+
+class BusinessPostPoll(models.Model):
+    """The poll attached to a 'poll' type BusinessPost — one per post."""
+    poll_id        = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post           = models.OneToOneField(BusinessPost, on_delete=models.CASCADE, related_name='poll')
+    question       = models.CharField(max_length=300)
+    allow_multiple = models.BooleanField(default=False, help_text='Let voters pick more than one option.')
+    closes_at      = models.DateTimeField(blank=True, null=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.question
+
+    def clean(self):
+        super().clean()
+        self.question = sanitize_text(self.question, 'poll_question')
+        if not self.question:
+            raise ValidationError({'question': 'A poll needs a question.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_closed(self):
+        return bool(self.closes_at and timezone.now() >= self.closes_at)
+
+    @property
+    def total_votes(self):
+        return BusinessPostPollVote.objects.filter(option__poll=self).values('user_id').distinct().count()
+
+    def voted_option_ids(self, user):
+        if not user or not user.is_authenticated:
+            return set()
+        return set(
+            BusinessPostPollVote.objects.filter(option__poll=self, user=user)
+            .values_list('option_id', flat=True)
+        )
+
+
+class BusinessPostPollOption(models.Model):
+    option_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    poll      = models.ForeignKey(BusinessPostPoll, on_delete=models.CASCADE, related_name='options')
+    text      = models.CharField(max_length=120)
+    order     = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.text
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'poll_option')
+        if not self.text:
+            raise ValidationError({'text': 'Option text is required.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def vote_count(self):
+        return self.votes.count()
+
+    def vote_pct(self, total_votes=None):
+        total = total_votes if total_votes is not None else self.poll.total_votes
+        if not total:
+            return 0
+        return round((self.vote_count / total) * 100)
+
+
+class BusinessPostPollVote(models.Model):
+    vote_id  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    option   = models.ForeignKey(BusinessPostPollOption, on_delete=models.CASCADE, related_name='votes')
+    user     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='business_poll_votes')
+    voted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['option', 'user'], name='unique_vote_per_option_per_user'),
+        ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BusinessPostVibe / BusinessPostComment — reactions & comments on posts,
+# mirroring the JobVibe/JobComment and EventVibe/EventComment pattern so the
+# existing generic _card_vibe_* / _card_comments_* view helpers can be reused.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class BusinessPostVibe(models.Model):
+    """Vibe reactions on BusinessPost updates. One per user per post."""
+
+    FIRE   = 'fire'
+    REAL   = 'real'
+    VIBING = 'vibing'
+    DEAD   = 'dead'
+    CRINGE = 'cringe'
+    CHILL  = 'chill'
+    LOVE   = 'love'
+
+    VIBE_CHOICES = [
+        (FIRE,   '🔥 Fire'),
+        (REAL,   '💯 Real'),
+        (VIBING, '🎵 Vibing'),
+        (DEAD,   '😂 Dead'),
+        (CRINGE, '😬 Cringe'),
+        (CHILL,  '🧊 Chill'),
+        (LOVE,   '❤️ Love'),
+    ]
+
+    VIBE_EMOJIS = {FIRE:'🔥', REAL:'💯', VIBING:'🎵', DEAD:'😂', CRINGE:'😬', CHILL:'🧊', LOVE:'❤️'}
+    VIBE_COLORS = {FIRE:'#ff4500', REAL:'#ff0080', VIBING:'#3b82f6', DEAD:'#f59e0b', CRINGE:'#8b5cf6', CHILL:'#06b6d4', LOVE:'#e11d48'}
+
+    post       = models.ForeignKey(BusinessPost, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User,         on_delete=models.CASCADE, related_name='business_post_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('post', 'user')
+        ordering = ['created_at']
+        db_table = 'BusinessPostVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on post {self.post_id}"
+
+
+class BusinessPostComment(models.Model):
+    """Comments on BusinessPost updates."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post       = models.ForeignKey(BusinessPost, on_delete=models.CASCADE, related_name='comments')
+    author     = models.ForeignKey(User,         on_delete=models.CASCADE, related_name='business_post_comments')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'BusinessPostComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on post {self.post_id}: {self.text[:50]}"

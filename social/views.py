@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment
 from social.models import validate_url
 from django.core.exceptions import ValidationError as _ModelValidationError
 
@@ -39,6 +39,7 @@ from django.http import JsonResponse, Http404
 from django.urls import reverse
 from django.conf import settings
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime as django_parse_datetime
 from datetime import datetime, timedelta
 import random
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
@@ -166,6 +167,21 @@ def _profile_post_status(user):
     ]
     can_post = not missing
     return can_post, missing
+
+
+def _flatten_validation_error(e):
+    """Flatten a Django ValidationError (dict or list form) into a list of plain strings."""
+    try:
+        if hasattr(e, 'message_dict'):
+            out = []
+            for msgs in e.message_dict.values():
+                out.extend(msgs)
+            return out
+        if hasattr(e, 'messages'):
+            return list(e.messages)
+    except Exception:
+        pass
+    return [str(e)]
 
 
 def _format_count(n):
@@ -2692,7 +2708,7 @@ def notification_list(request):
     business_notifications = (
         BusinessNotification.objects
         .filter(to_user=request.user)
-        .select_related('business_page', 'actor', 'product')[:30]
+        .select_related('business_page', 'actor', 'product', 'post')[:30]
     )
     event_notifications = (
         EventNotification.objects
@@ -4915,6 +4931,42 @@ def event_comments(request, event_id):
         return response
     return _card_comments_get(request, event, EventComment, 'event')
 
+
+# ── Business page post reactions & comments ────────────────────────────────
+
+@login_required(login_url='/')
+def business_post_vibe(request, post_id):
+    post = get_object_or_404(BusinessPost, pk=post_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, post, BusinessPostVibe, 'post')
+    return _card_vibe_toggle(request, post, BusinessPostVibe, 'post')
+
+
+@login_required(login_url='/')
+def business_post_comments(request, post_id):
+    post = get_object_or_404(BusinessPost, pk=post_id)
+    if request.method == 'POST':
+        response = _card_comments_post(request, post, BusinessPostComment, 'post')
+        if response.status_code == 200:
+            # Notify the page owner someone commented, unless they commented
+            # on their own post.
+            try:
+                if post.business_page.owner != request.user:
+                    BusinessNotification.objects.create(
+                        notif_type=BusinessNotification.NEW_COMMENT,
+                        business_page=post.business_page,
+                        actor=request.user,
+                        to_user=post.business_page.owner,
+                        post=post,
+                    )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception(
+                    'Failed to create comment notification for post %s', post.pk
+                )
+        return response
+    return _card_comments_get(request, post, BusinessPostComment, 'post')
+
 # =============================================================================
 # ADMIN DASHBOARD VIEWS
 # Add these to the bottom of your existing views.py
@@ -5419,6 +5471,30 @@ def business_page_detail(request, slug):
         jobs = jobs.filter(is_open=True)
     jobs = jobs.order_by('-created_at')
 
+    posts = (
+        BusinessPost.objects.filter(business_page=page)
+        .prefetch_related('images', 'poll__options__votes', 'vibes', 'comments')
+        .order_by('-is_pinned', '-created_at')
+    )
+    # Attach each poll's total vote count + the viewer's own selected option ids,
+    # plus the viewer's own reaction on the post — so the template can render
+    # everything without extra queries per post.
+    for _post in posts:
+        if _post.post_type == BusinessPost.TYPE_POLL and hasattr(_post, 'poll'):
+            _poll = _post.poll
+            _total = sum(o.vote_count for o in _poll.options.all())
+            _poll.viewer_total_votes = _total
+            _poll.viewer_voted_ids = _poll.voted_option_ids(request.user)
+            for _opt in _poll.options.all():
+                _opt.viewer_pct = _opt.vote_pct(_total)
+        _post.viewer_vibe = None
+        _post.viewer_vibe_emoji = ''
+        if request.user.is_authenticated:
+            _mine = next((v for v in _post.vibes.all() if v.user_id == request.user.pk), None)
+            if _mine:
+                _post.viewer_vibe = _mine.vibe_type
+                _post.viewer_vibe_emoji = BusinessPostVibe.VIBE_EMOJIS.get(_mine.vibe_type, '')
+
     wishlist_ids = set(
         Wishlist.objects.filter(user=request.user, product__business_page=page)
         .values_list('product_id', flat=True)
@@ -5446,6 +5522,13 @@ def business_page_detail(request, slug):
         'listings':          listings,
         'jobs':              jobs,
         'job_count':         jobs.count(),
+        'posts':             posts,
+        'post_count':        posts.count(),
+        'post_type_choices': BusinessPost.POST_TYPE_CHOICES,
+        'vibe_choices': [
+            {'type': t, 'emoji': BusinessPostVibe.VIBE_EMOJIS[t], 'label': label.split(' ', 1)[-1]}
+            for t, label in BusinessPostVibe.VIBE_CHOICES
+        ],
         'is_owner':          is_owner,
         'is_follower':       is_follower,
         'follower_count':    page.follower_count,
@@ -5489,6 +5572,227 @@ def business_page_follow(request, slug):
                 'Failed to create new_follower notification for page %s', page.slug
             )
     return JsonResponse({'following': following, 'follower_count': page.follower_count})
+
+
+# =============================================================================
+# Business page updates/feed — image, video, text, poll posts
+# =============================================================================
+
+def _serialize_business_post(post, viewer=None):
+    data = {
+        'post_id':    str(post.post_id),
+        'post_type':  post.post_type,
+        'caption':    post.caption,
+        'is_pinned':  post.is_pinned,
+        'time_posted': post.time_posted,
+        'images':     [],
+        'video_url':  '',
+        'video_duration': post.video_duration_display,
+        'poll':       None,
+        'vibe_count':    post.vibe_count,
+        'comment_count': post.comment_count,
+    }
+    if post.post_type == BusinessPost.TYPE_IMAGE:
+        data['images'] = [img.get_image_url for img in post.images.all()]
+    elif post.post_type == BusinessPost.TYPE_VIDEO:
+        data['video_url'] = post.get_video_url
+    elif post.post_type == BusinessPost.TYPE_POLL and hasattr(post, 'poll'):
+        poll = post.poll
+        total = sum(o.vote_count for o in poll.options.all())
+        voted_ids = {str(i) for i in poll.voted_option_ids(viewer)} if viewer else set()
+        data['poll'] = {
+            'poll_id':        str(poll.poll_id),
+            'question':       poll.question,
+            'allow_multiple': poll.allow_multiple,
+            'is_closed':      poll.is_closed,
+            'total_votes':    total,
+            'options': [
+                {
+                    'option_id':  str(opt.option_id),
+                    'text':       opt.text,
+                    'vote_count': opt.vote_count,
+                    'pct':        opt.vote_pct(total),
+                    'voted':      str(opt.option_id) in voted_ids,
+                }
+                for opt in poll.options.all()
+            ],
+        }
+    return data
+
+
+@login_required(login_url='/')
+@require_POST
+def business_post_create(request, slug):
+    """AJAX — owner posts an image / video / text / poll update to their page."""
+    page = get_object_or_404(BusinessPage, slug=slug)
+    if page.owner != request.user:
+        return JsonResponse({'success': False, 'error': 'Not authorised for that business page.'}, status=403)
+
+    post_type = request.POST.get('post_type', '').strip()
+    caption   = request.POST.get('caption', '').strip()
+
+    if post_type not in dict(BusinessPost.POST_TYPE_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Please choose a valid post type.'}, status=400)
+
+    if post_type == BusinessPost.TYPE_TEXT and not caption:
+        return JsonResponse({'success': False, 'error': 'Please write something to post.'}, status=400)
+
+    if post_type == BusinessPost.TYPE_IMAGE:
+        images = request.FILES.getlist('images')
+        if not images:
+            return JsonResponse({'success': False, 'error': 'Please attach at least one image.'}, status=400)
+        if len(images) > 10:
+            return JsonResponse({'success': False, 'error': 'You can attach up to 10 images per post.'}, status=400)
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        for img in images:
+            if img.content_type not in allowed_types:
+                return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+            if img.size > 10 * 1024 * 1024:
+                return JsonResponse({'success': False, 'error': 'Each image must be under 10 MB.'}, status=400)
+
+    elif post_type == BusinessPost.TYPE_VIDEO:
+        video = request.FILES.get('video')
+        if not video:
+            return JsonResponse({'success': False, 'error': 'Please attach a video.'}, status=400)
+        allowed_video_types = {'video/mp4', 'video/quicktime', 'video/webm', 'video/x-msvideo'}
+        if video.content_type not in allowed_video_types:
+            return JsonResponse({'success': False, 'error': 'Only MP4, MOV, WebM or AVI videos are allowed.'}, status=400)
+        if video.size > 100 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Video must be under 100 MB.'}, status=400)
+        raw_duration = request.POST.get('video_duration_seconds', '').strip()
+        duration = None
+        if raw_duration:
+            try:
+                duration = int(float(raw_duration))
+            except ValueError:
+                duration = None
+        if duration is not None and not (BusinessPost.MIN_VIDEO_SECONDS <= duration <= BusinessPost.MAX_VIDEO_SECONDS):
+            return JsonResponse({
+                'success': False,
+                'error': f'Videos should be {BusinessPost.MIN_VIDEO_SECONDS}\u201390 seconds long.'
+            }, status=400)
+
+    elif post_type == BusinessPost.TYPE_POLL:
+        question = request.POST.get('poll_question', '').strip()
+        option_texts = [o.strip() for o in request.POST.getlist('poll_options') if o.strip()]
+        if not question:
+            return JsonResponse({'success': False, 'error': 'Please give your poll a question.'}, status=400)
+        if len(option_texts) < 2:
+            return JsonResponse({'success': False, 'error': 'Polls need at least 2 options.'}, status=400)
+        if len(option_texts) > 6:
+            return JsonResponse({'success': False, 'error': 'Polls can have up to 6 options.'}, status=400)
+
+    try:
+        post = BusinessPost(business_page=page, post_type=post_type, caption=caption)
+
+        if post_type == BusinessPost.TYPE_VIDEO:
+            post.video = video
+            if duration is not None:
+                post.video_duration_seconds = duration
+
+        post.save()
+
+        if post_type == BusinessPost.TYPE_IMAGE:
+            for idx, img in enumerate(images):
+                BusinessPostImage.objects.create(post=post, image=img, order=idx)
+
+        elif post_type == BusinessPost.TYPE_POLL:
+            allow_multiple = request.POST.get('allow_multiple') in ('1', 'true', 'on')
+            closes_at = None
+            raw_closes = request.POST.get('closes_at', '').strip()
+            if raw_closes:
+                parsed = django_parse_datetime(raw_closes)
+                if parsed:
+                    closes_at = parsed if timezone.is_aware(parsed) else timezone.make_aware(parsed)
+            poll = BusinessPostPoll.objects.create(
+                post=post, question=question, allow_multiple=allow_multiple, closes_at=closes_at,
+            )
+            for idx, text in enumerate(option_texts):
+                BusinessPostPollOption.objects.create(poll=poll, text=text, order=idx)
+
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    post = (
+        BusinessPost.objects.filter(pk=post.pk)
+        .prefetch_related('images', 'poll__options')
+        .first()
+    )
+    return JsonResponse({
+        'success': True,
+        'post': _serialize_business_post(post, viewer=request.user),
+        'post_count': page.post_count,
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_post_delete(request, post_id):
+    """AJAX — delete a BusinessPost (page owner only)."""
+    post = get_object_or_404(BusinessPost, pk=post_id)
+    if post.business_page.owner != request.user:
+        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
+
+    if not settings.USE_CLOUDINARY:
+        for img in post.images.all():
+            if img.image:
+                img.image.delete(save=False)
+        if post.video:
+            post.video.delete(save=False)
+    else:
+        try:
+            import cloudinary.uploader as _cu
+            for img in post.images.all():
+                if img.image:
+                    _cu.destroy(str(img.image))
+            if post.video:
+                _cu.destroy(str(post.video), resource_type='video')
+        except Exception:
+            pass
+
+    post.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def business_post_poll_vote(request, post_id):
+    """AJAX — cast (or change) a vote on a BusinessPost poll."""
+    post = get_object_or_404(BusinessPost.objects.select_related('poll'), pk=post_id)
+    if post.post_type != BusinessPost.TYPE_POLL or not hasattr(post, 'poll'):
+        return JsonResponse({'success': False, 'error': 'This post is not a poll.'}, status=400)
+
+    poll = post.poll
+    if poll.is_closed:
+        return JsonResponse({'success': False, 'error': 'This poll is closed.'}, status=400)
+
+    option_ids = request.POST.getlist('option_ids')
+    if not option_ids:
+        return JsonResponse({'success': False, 'error': 'Please select an option.'}, status=400)
+    if not poll.allow_multiple and len(option_ids) > 1:
+        return JsonResponse({'success': False, 'error': 'This poll only allows one choice.'}, status=400)
+
+    options = list(poll.options.filter(option_id__in=option_ids))
+    if len(options) != len(set(option_ids)):
+        return JsonResponse({'success': False, 'error': 'Invalid option selected.'}, status=400)
+
+    # Voting again replaces the viewer's previous choice(s) on this poll.
+    BusinessPostPollVote.objects.filter(option__poll=poll, user=request.user).delete()
+    for opt in options:
+        BusinessPostPollVote.objects.create(option=opt, user=request.user)
+
+    fresh_options = poll.options.all()
+    total = sum(o.vote_count for o in fresh_options)
+    return JsonResponse({
+        'success': True,
+        'poll': {
+            'total_votes': total,
+            'options': [
+                {'option_id': str(o.option_id), 'vote_count': o.vote_count, 'pct': o.vote_pct(total)}
+                for o in fresh_options
+            ],
+        },
+    })
 
 
 @login_required(login_url='/')
