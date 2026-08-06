@@ -223,75 +223,12 @@ def index(request):
         if user is not None:
             login(request, user)
             request.session.set_expiry(None)
-            return redirect(_safe_next(request, '/market'))
+            return redirect(_safe_next(request, '/home'))
         else:
             messages.error(request, 'Invalid username or password. Please try again.')
             return redirect('/')
 
-    # ── GET — pull real listings for the marketing marquee ─────────────────────
-    _marquee_products = list(
-        Market.objects
-        .order_by('-is_promoted', '-posted_on')[:24]
-    )
-
-    if _marquee_products:
-        marquee_flat = _marquee_products[:12]  # for the mobile horizontal strip
-
-        # Split into (up to) 3 columns for the desktop scrolling marquee.
-        _col_size = max(1, -(-len(_marquee_products) // 3))  # ceil division
-        marquee_columns = [
-            _marquee_products[i:i + _col_size]
-            for i in range(0, len(_marquee_products), _col_size)
-        ][:3]
-        # Duplicate each column's items so the CSS scroll loop is seamless.
-        marquee_columns = [col + col for col in marquee_columns if col]
-    else:
-        # Fresh install with no listings yet — fall back to category previews.
-        _fallback_categories = [
-            {'category_icon': Market.CATEGORY_ICONS[key], 'category_label': label}
-            for key, label in Market.CATEGORY_CHOICES
-        ]
-        marquee_flat = _fallback_categories[:12]
-
-        _col_size = max(1, -(-len(_fallback_categories) // 3))
-        marquee_columns = [
-            _fallback_categories[i:i + _col_size]
-            for i in range(0, len(_fallback_categories), _col_size)
-        ][:3]
-        marquee_columns = [col + col for col in marquee_columns if col]
-
-    stats = {
-        'active_users':    _format_count(User.objects.filter(is_active=True).count()),
-        'business_pages':  _format_count(BusinessPage.objects.count()),
-        'listings':        _format_count(Market.objects.count()),
-        'communities':     _format_count(Channel.objects.count()),
-        'job_vacancies':   _format_count(JobVacancy.objects.count()),
-    }
-
-    # ── Real business pages for the homepage "On Marketfy" preview ─────────────
-    featured_pages = list(
-        BusinessPage.objects.filter(is_active=True)
-        .order_by('-created_at')[:6]
-    )
-    for _fp in featured_pages:
-        try:
-            _fp.logo_url = _fp.get_logo_url
-        except Exception:
-            _fp.logo_url = ''
-
-    # ── Real open job vacancies for the homepage jobs preview ──────────────────
-    featured_jobs = list(
-        JobVacancy.objects.filter(is_open=True)
-        .select_related('business_page')
-        .order_by('-id')[:6]
-    )
-
     return render(request, 'index.html', {
-        'marquee_columns':     marquee_columns,
-        'marquee_flat':        marquee_flat,
-        'stats':               stats,
-        'featured_pages':      featured_pages,
-        'featured_jobs':       featured_jobs,
         # Tells index.html to auto-open the Register modal instead of the
         # Login modal (set by register() when it bounces validation errors
         # back to '/', or when someone hits /register/ directly).
