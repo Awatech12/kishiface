@@ -5413,6 +5413,27 @@ def business_page_create(request):
         if category not in {c[0] for c in BusinessPage.CATEGORY_CHOICES}:
             category = 'others'
 
+        # Pre-sanitize URL fields BEFORE they hit BusinessPage.full_clean()'s
+        # built-in field validators. full_clean() runs clean_fields() (strict
+        # Django URLField/EmailField validation on the RAW value) before it
+        # runs our custom clean() method, which is where https:// normally
+        # gets prepended. Without this, "yourbusiness.com" (no scheme) fails
+        # validation before clean() ever has a chance to fix it up, save()
+        # raises, and the page silently fails to create.
+        for _field_name, _val in (('website', website), ('youtube', youtube), ('facebook', facebook)):
+            if _val:
+                try:
+                    fixed = validate_url(_val)
+                except _ModelValidationError:
+                    errors[_field_name] = 'Please enter a valid URL.'
+                    fixed = ''
+                if _field_name == 'website':
+                    website = fixed
+                elif _field_name == 'youtube':
+                    youtube = fixed
+                else:
+                    facebook = fixed
+
         if errors:
             return render(request, 'business_page_create.html', {
                 'errors': errors, 'form_data': request.POST,
@@ -5434,6 +5455,19 @@ def business_page_create(request):
 
         try:
             page.save()
+        except _ModelValidationError as exc:
+            # full_clean() failed on something not caught above (e.g. email
+            # format). message_dict maps field -> [messages]; fall back to a
+            # flat list if Django didn't attach it to specific fields.
+            field_errors = getattr(exc, 'message_dict', None) or {'__all__': exc.messages}
+            for field, msgs in field_errors.items():
+                errors[field if field != '__all__' else 'name'] = ' '.join(msgs)
+            messages.error(request, 'Please fix the highlighted fields and try again.')
+            return render(request, 'business_page_create.html', {
+                'errors': errors, 'form_data': request.POST,
+                'categories': BusinessPage.CATEGORY_CHOICES,
+                'day_choices': BusinessPage.DAY_CHOICES,
+            })
         except Exception as exc:
             messages.error(request, f'Could not create page: {exc}')
             return render(request, 'business_page_create.html', {
