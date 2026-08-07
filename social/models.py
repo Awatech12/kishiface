@@ -34,6 +34,214 @@ MAX_TEXT_LENGTHS = {
     'poll_option': 120,
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Member Type / Onboarding — "What do you use Marketfy for?"
+# One flexible schema instead of 10 separate models: each type has its own
+# list of fields, stored together in Profile.member_type_data (JSONField).
+# ─────────────────────────────────────────────────────────────────────────────
+
+MEMBER_TYPE_SCHEMA = {
+    'skilled_professional': {
+        'label': 'Skilled Professional',
+        'emoji': '👨\u200d🔧',
+        'blurb': 'Trade or licensed skill — e.g. plumber, electrician, hairstylist',
+        'fields': [
+            {'key': 'profession',        'label': 'Profession',         'type': 'text',     'max_length': 150, 'required': True, 'placeholder': 'e.g. Plumber'},
+            {'key': 'skills',            'label': 'Skills',             'type': 'text',      'max_length': 300, 'placeholder': 'e.g. Pipe fitting, Leak repair, Installations'},
+            {'key': 'years_experience',  'label': 'Years of Experience','type': 'number'},
+            {'key': 'services_offered',  'label': 'Services Offered',   'type': 'textarea',  'max_length': 1000},
+            {'key': 'location',          'label': 'Location',           'type': 'text',      'max_length': 200},
+            {'key': 'work_radius',       'label': 'Work Radius',        'type': 'text',      'max_length': 100, 'placeholder': 'e.g. Within 10km'},
+            {'key': 'availability',      'label': 'Availability',       'type': 'select',    'choices': ['Full-time', 'Part-time', 'Weekends only', 'By appointment']},
+            {'key': 'portfolio',         'label': 'Portfolio Link',     'type': 'url'},
+            {'key': 'certifications',    'label': 'Certifications',     'type': 'text',      'max_length': 300},
+            {'key': 'pricing',           'label': 'Pricing',            'type': 'text',      'max_length': 200, 'placeholder': 'e.g. ₦5,000/hr or Negotiable'},
+            {'key': 'contact',           'label': 'Contact',            'type': 'text',      'max_length': 150},
+        ],
+    },
+    'job_seeker': {
+        'label': 'Job Seeker',
+        'emoji': '👔',
+        'blurb': 'Looking for employment',
+        'fields': [
+            {'key': 'desired_job',        'label': 'Desired Job',        'type': 'text',     'max_length': 150, 'required': True},
+            {'key': 'skills',             'label': 'Skills',             'type': 'text',     'max_length': 300},
+            {'key': 'education',          'label': 'Education',          'type': 'text',     'max_length': 200},
+            {'key': 'experience',         'label': 'Experience',         'type': 'textarea', 'max_length': 1000},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
+            {'key': 'preferred_location', 'label': 'Preferred Location', 'type': 'text',     'max_length': 200},
+            {'key': 'expected_salary',    'label': 'Expected Salary',    'type': 'text',     'max_length': 100},
+            {'key': 'work_mode',          'label': 'Work Mode',          'type': 'select',   'choices': ['Remote', 'On-site', 'Hybrid']},
+            {'key': 'availability',       'label': 'Availability',       'type': 'select',   'choices': ['Immediately', 'Within 2 weeks', 'Within a month', 'Flexible']},
+        ],
+    },
+    'business_owner': {
+        'label': 'Business Owner',
+        'emoji': '🏢',
+        'blurb': 'Runs a registered or informal business',
+        'fields': [
+            {'key': 'business_name',        'label': 'Business Name',        'type': 'text',     'max_length': 150, 'required': True},
+            {'key': 'business_category',    'label': 'Business Category',    'type': 'text',     'max_length': 150},
+            {'key': 'products_services',    'label': 'Products / Services',  'type': 'textarea', 'max_length': 1000},
+            {'key': 'business_location',    'label': 'Business Location',    'type': 'text',     'max_length': 200},
+            {'key': 'opening_hours',        'label': 'Opening Hours',        'type': 'text',     'max_length': 150, 'placeholder': 'e.g. Mon–Sat, 8am–6pm'},
+            {'key': 'website',              'label': 'Website',              'type': 'url'},
+            {'key': 'business_description', 'label': 'Business Description', 'type': 'textarea', 'max_length': 1000},
+        ],
+    },
+    'teacher_tutor': {
+        'label': 'Teacher / Tutor',
+        'emoji': '👨\u200d🏫',
+        'blurb': 'Teaches or tutors, in-person or online',
+        'fields': [
+            {'key': 'subjects',        'label': 'Subjects',         'type': 'text',   'max_length': 300, 'required': True, 'placeholder': 'e.g. Mathematics, English, Physics'},
+            {'key': 'teaching_level',  'label': 'Teaching Level',   'type': 'select', 'choices': ['Nursery/Primary', 'Secondary', 'Tertiary', 'Adult / Professional']},
+            {'key': 'qualifications',  'label': 'Qualifications',   'type': 'text',   'max_length': 300},
+            {'key': 'years_experience','label': 'Years of Experience','type': 'number'},
+            {'key': 'mode',            'label': 'Mode',             'type': 'select', 'choices': ['In-person', 'Online', 'Both']},
+            {'key': 'location',        'label': 'Location',         'type': 'text',   'max_length': 200},
+            {'key': 'rate',            'label': 'Rate',             'type': 'text',   'max_length': 150, 'placeholder': 'e.g. ₦3,000/hr'},
+            {'key': 'availability',    'label': 'Availability',     'type': 'text',   'max_length': 150},
+        ],
+    },
+    'freelancer': {
+        'label': 'Freelancer',
+        'emoji': '🧑\u200d💻',
+        'blurb': 'Independent, project-based work — often remote',
+        'fields': [
+            {'key': 'skills',           'label': 'Skills',           'type': 'text',     'max_length': 300, 'required': True},
+            {'key': 'services_offered', 'label': 'Services Offered', 'type': 'textarea', 'max_length': 1000},
+            {'key': 'portfolio_link',   'label': 'Portfolio Link',   'type': 'url'},
+            {'key': 'rate',             'label': 'Rate',             'type': 'text',     'max_length': 150},
+            {'key': 'availability',     'label': 'Availability',     'type': 'select',   'choices': ['Full-time', 'Part-time', 'Project-based']},
+            {'key': 'work_mode',        'label': 'Work Mode',        'type': 'select',   'choices': ['Remote', 'Hybrid', 'On-site']},
+            {'key': 'tools_used',       'label': 'Tools Used',       'type': 'text',     'max_length': 300},
+        ],
+    },
+    'artisan_technician': {
+        'label': 'Artisan / Technician',
+        'emoji': '🛠️',
+        'blurb': 'Hands-on trade or repair work',
+        'fields': [
+            {'key': 'trade',            'label': 'Trade',             'type': 'text',     'max_length': 150, 'required': True, 'placeholder': 'e.g. Carpentry, GSM repair'},
+            {'key': 'skills',           'label': 'Skills',            'type': 'text',     'max_length': 300},
+            {'key': 'years_experience', 'label': 'Years of Experience','type': 'number'},
+            {'key': 'tools_equipment',  'label': 'Tools / Equipment', 'type': 'text',     'max_length': 300},
+            {'key': 'location',         'label': 'Location',          'type': 'text',     'max_length': 200},
+            {'key': 'work_radius',      'label': 'Work Radius',       'type': 'text',     'max_length': 100},
+            {'key': 'availability',     'label': 'Availability',      'type': 'select',   'choices': ['Full-time', 'Part-time', 'Weekends only', 'By appointment']},
+            {'key': 'pricing',          'label': 'Pricing',           'type': 'text',     'max_length': 200},
+            {'key': 'certifications',   'label': 'Certifications',    'type': 'text',     'max_length': 300},
+        ],
+    },
+    'service_provider': {
+        'label': 'Service Provider',
+        'emoji': '🚚',
+        'blurb': 'Delivery, logistics, cleaning, transport and similar services',
+        'fields': [
+            {'key': 'service_type',      'label': 'Service Type',      'type': 'text',   'max_length': 150, 'required': True, 'placeholder': 'e.g. Dispatch rider, House cleaning'},
+            {'key': 'coverage_area',     'label': 'Coverage Area',     'type': 'text',   'max_length': 200},
+            {'key': 'vehicle_equipment', 'label': 'Vehicle / Equipment','type': 'text',  'max_length': 200},
+            {'key': 'availability',      'label': 'Availability',      'type': 'select', 'choices': ['Full-time', 'Part-time', 'On-demand']},
+            {'key': 'pricing',           'label': 'Pricing',           'type': 'text',   'max_length': 200},
+            {'key': 'contact',           'label': 'Contact',           'type': 'text',   'max_length': 150},
+            {'key': 'license_permit',    'label': 'License / Permit',  'type': 'text',   'max_length': 200},
+        ],
+    },
+    'student_apprentice': {
+        'label': 'Student / Apprentice',
+        'emoji': '🎓',
+        'blurb': 'Currently studying or learning a trade',
+        'fields': [
+            {'key': 'institution',      'label': 'Institution',        'type': 'text', 'max_length': 200, 'required': True},
+            {'key': 'field_of_study',   'label': 'Field of Study',     'type': 'text', 'max_length': 200},
+            {'key': 'level',            'label': 'Level / Year',       'type': 'text', 'max_length': 100, 'placeholder': 'e.g. 300 Level, Year 2 apprentice'},
+            {'key': 'skills_learning',  'label': 'Skills Learning',    'type': 'text', 'max_length': 300},
+            {'key': 'availability',     'label': 'Availability',       'type': 'text', 'max_length': 150, 'placeholder': 'e.g. Weekends, After school'},
+            {'key': 'interests',        'label': 'Interests',          'type': 'text', 'max_length': 300},
+        ],
+    },
+    'employer_recruiter': {
+        'label': 'Employer / Recruiter',
+        'emoji': '👔',
+        'blurb': 'Hiring on behalf of a company',
+        'fields': [
+            {'key': 'company_name',     'label': 'Company Name',      'type': 'text',     'max_length': 200, 'required': True},
+            {'key': 'industry',         'label': 'Industry',          'type': 'text',     'max_length': 150},
+            {'key': 'company_size',     'label': 'Company Size',      'type': 'select',   'choices': ['1-10', '11-50', '51-200', '201-500', '500+']},
+            {'key': 'hiring_for',       'label': 'Hiring For',        'type': 'textarea', 'max_length': 1000},
+            {'key': 'company_location', 'label': 'Company Location',  'type': 'text',     'max_length': 200},
+            {'key': 'website',          'label': 'Website',           'type': 'url'},
+            {'key': 'contact',          'label': 'Contact',           'type': 'text',     'max_length': 150},
+        ],
+    },
+    'other_professional': {
+        'label': 'Other Professional',
+        'emoji': '🔄',
+        'blurb': "Doesn't fit the categories above",
+        'fields': [
+            {'key': 'description', 'label': 'What do you do?', 'type': 'textarea', 'max_length': 1000, 'required': True},
+            {'key': 'skills',      'label': 'Skills',          'type': 'text',     'max_length': 300},
+            {'key': 'services',    'label': 'Services',        'type': 'text',     'max_length': 300},
+            {'key': 'location',    'label': 'Location',        'type': 'text',     'max_length': 200},
+            {'key': 'contact',     'label': 'Contact',         'type': 'text',     'max_length': 150},
+        ],
+    },
+}
+
+MEMBER_TYPE_CHOICES = [(key, cfg['label']) for key, cfg in MEMBER_TYPE_SCHEMA.items()]
+
+
+def sanitize_member_type_data(member_type, raw_data):
+    """
+    Given a member_type key and a dict of raw submitted values, returns a
+    cleaned dict containing only the keys defined in that type's schema,
+    sanitized/validated per field 'type'. Unknown member_type -> {}.
+    File fields are handled separately by the view (not stored in JSON).
+    """
+    schema = MEMBER_TYPE_SCHEMA.get(member_type)
+    if not schema or not isinstance(raw_data, dict):
+        return {}
+
+    cleaned = {}
+    for field in schema['fields']:
+        key = field['key']
+        ftype = field['type']
+        if ftype == 'file':
+            # Files are stored on their own model field(s), not in the JSON blob.
+            continue
+
+        value = raw_data.get(key, '')
+        if value is None:
+            value = ''
+        value = str(value).strip()
+
+        if not value:
+            continue
+
+        if ftype == 'textarea':
+            value = sanitize_text(value)[:1000]
+        elif ftype == 'text':
+            value = sanitize_text(value)[: field.get('max_length', 300)]
+        elif ftype == 'number':
+            try:
+                value = str(max(0, int(float(value))))
+            except (ValueError, TypeError):
+                continue
+        elif ftype == 'url':
+            try:
+                value = validate_url(value)
+            except ValidationError:
+                continue
+        elif ftype == 'select':
+            choices = field.get('choices', [])
+            if value not in choices:
+                continue
+        cleaned[key] = value
+
+    return cleaned
+
+
 def sanitize_text(text, field_name=None):
     """
     Sanitize text input by removing HTML/JS and limiting length.
@@ -197,6 +405,12 @@ class Profile(models.Model):
 
     profession       = models.CharField(max_length=150, blank=True, default='')
 
+    # ── Member type / onboarding ("What do you use Marketfy for?") ──────
+    member_type          = models.CharField(max_length=30, choices=MEMBER_TYPE_CHOICES, blank=True, default='')
+    member_type_data     = models.JSONField(default=dict, blank=True)
+    member_type_cv       = models.FileField(upload_to='member_type/cv/', null=True, blank=True)
+    onboarding_completed = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     online = models.BooleanField(default=False)
 
@@ -213,6 +427,18 @@ class Profile(models.Model):
         self.full_name    = sanitize_text(self.full_name)
         self.address      = sanitize_text(self.address)
         self.profession      = sanitize_text(self.profession,      'profession')
+
+        valid_member_types = [c[0] for c in MEMBER_TYPE_CHOICES]
+        if self.member_type and self.member_type not in valid_member_types:
+            self.member_type = ''
+        if self.member_type:
+            self.member_type_data = sanitize_member_type_data(self.member_type, self.member_type_data)
+        else:
+            self.member_type_data = {}
+
+        if self.member_type_cv and hasattr(self.member_type_cv, 'name'):
+            validate_file_size(self.member_type_cv, max_size_mb=5)
+
         if self.website:
             try:
                 self.website = validate_url(self.website)
@@ -429,6 +655,39 @@ class Profile(models.Model):
         if len(display_url) > 30:
             return display_url[:27] + '...'
         return display_url
+
+    # ── Member type helpers ──────────────────────────────────────
+    @property
+    def member_type_schema(self):
+        """The field list for this profile's chosen member type, or []."""
+        return MEMBER_TYPE_SCHEMA.get(self.member_type, {}).get('fields', [])
+
+    @property
+    def member_type_label(self):
+        return MEMBER_TYPE_SCHEMA.get(self.member_type, {}).get('label', '')
+
+    @property
+    def member_type_emoji(self):
+        return MEMBER_TYPE_SCHEMA.get(self.member_type, {}).get('emoji', '')
+
+    @property
+    def member_type_display_fields(self):
+        """
+        List of (label, value) pairs for this profile's filled-in type-specific
+        fields, for rendering on the profile page. Skips empty values.
+        """
+        data = self.member_type_data or {}
+        out = []
+        for field in self.member_type_schema:
+            value = data.get(field['key'], '')
+            if value:
+                out.append((field['label'], value))
+        if self.member_type_cv:
+            out.append(('CV / Resume', self.member_type_cv.url))
+        return out
+
+    def get_member_type_value(self, key, default=''):
+        return (self.member_type_data or {}).get(key, default)
 
 
 class UserReport(models.Model):

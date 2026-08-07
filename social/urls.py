@@ -18,6 +18,9 @@ urlpatterns = [
     path('forgot-password/lookup/', views.forgot_password_lookup, name='forgot_password_lookup'),
     path('forgot-password/reset/',  views.forgot_password_reset,  name='forgot_password_reset'),
 
+    # ── Onboarding ─────────────────────────────────────────────────────────────
+    path('onboarding/',             views.onboarding,           name='onboarding'),
+
     # ── Home feed ──────────────────────────────────────────────────────────────
     path('home',                    views.home,                 name='home'),
     path('feed/more/',              views.feed_load_more,       name='feed_load_more'),

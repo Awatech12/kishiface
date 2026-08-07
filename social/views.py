@@ -13,6 +13,37 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment
 from social.models import validate_url
+from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size
+
+
+def _member_type_edit_schema(profile):
+    """
+    Builds a version of MEMBER_TYPE_SCHEMA with each field's current saved
+    value attached, so the edit-profile modal template can render inputs
+    without needing dynamic dict lookups by variable key.
+    """
+    data = profile.member_type_data or {}
+    out = []
+    for key, cfg in MEMBER_TYPE_SCHEMA.items():
+        fields = []
+        for field in cfg['fields']:
+            f = dict(field)
+            saved_value = data.get(field['key'], '')
+            f['value'] = saved_value
+            if field['type'] == 'select_other':
+                choices = field.get('choices', [])
+                if saved_value in choices:
+                    f['select_value'] = saved_value
+                    f['other_value'] = ''
+                elif saved_value:
+                    f['select_value'] = 'Other'
+                    f['other_value'] = saved_value
+                else:
+                    f['select_value'] = ''
+                    f['other_value'] = ''
+            fields.append(f)
+        out.append({'key': key, 'label': cfg['label'], 'emoji': cfg['emoji'], 'blurb': cfg['blurb'], 'fields': fields})
+    return out
 from django.core.exceptions import ValidationError as _ModelValidationError
 
 
@@ -304,6 +335,80 @@ def register(request):
     # register modal open.
     request.session['mfy_open_register'] = True
     return redirect('/')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Onboarding — "What do you use Marketfy for?"
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def onboarding(request):
+    profile = request.user.profile
+
+    # Already done — nothing to do here (unless they explicitly want to change it).
+    if profile.onboarding_completed and request.method == 'GET' and request.GET.get('edit') != '1':
+        return redirect('home')
+
+    if request.method == 'POST':
+        if request.POST.get('skip') == '1':
+            profile.onboarding_completed = True
+            profile.save(update_fields=['onboarding_completed'])
+            return redirect('home')
+
+        member_type = request.POST.get('member_type', '').strip()
+        valid_types = {k for k, _ in MEMBER_TYPE_CHOICES}
+
+        if member_type not in valid_types:
+            messages.error(request, 'Please choose what best describes you.')
+            return render(request, 'onboarding.html', {
+                'member_type_schema': MEMBER_TYPE_SCHEMA,
+                'selected_type': member_type,
+            })
+
+        raw_data = {
+            field['key']: request.POST.get(field['key'], '')
+            for field in MEMBER_TYPE_SCHEMA[member_type]['fields']
+        }
+        cleaned = sanitize_member_type_data(member_type, raw_data)
+
+        required_missing = [
+            f['label'] for f in MEMBER_TYPE_SCHEMA[member_type]['fields']
+            if f.get('required') and not cleaned.get(f['key']) and f['type'] != 'file'
+        ]
+        if required_missing:
+            messages.error(request, f"Please fill in: {', '.join(required_missing)}")
+            return render(request, 'onboarding.html', {
+                'member_type_schema': MEMBER_TYPE_SCHEMA,
+                'selected_type': member_type,
+                'submitted': raw_data,
+            })
+
+        profile.member_type = member_type
+        profile.member_type_data = cleaned
+
+        cv_file = request.FILES.get('cv')
+        if cv_file:
+            try:
+                validate_file_size(cv_file, max_size_mb=5)
+                profile.member_type_cv = cv_file
+            except _ModelValidationError as e:
+                messages.error(request, str(e))
+                return render(request, 'onboarding.html', {
+                    'member_type_schema': MEMBER_TYPE_SCHEMA,
+                    'selected_type': member_type,
+                    'submitted': raw_data,
+                })
+
+        profile.onboarding_completed = True
+        profile.save()
+
+        messages.success(request, "You're all set!")
+        return redirect('profile', username=request.user.username)
+
+    return render(request, 'onboarding.html', {
+        'member_type_schema': MEMBER_TYPE_SCHEMA,
+        'selected_type': profile.member_type,
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -685,6 +790,10 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
 @login_required(login_url='/')
 def home(request):
     profile = Profile.objects.get(user=request.user)
+
+    if not profile.onboarding_completed:
+        return redirect('onboarding')
+
     following_ids = list(profile.followings.values_list('user', flat=True))
 
     unread_follow_count = FollowNotification.objects.filter(
@@ -1055,8 +1164,6 @@ def profile(request, username):
             'business_page_count': 0,
             'business_page_previews': [],
             'wishlist_ids': set(),
-            'user_listings': [],
-            'user_listings_count': 0,
             'suggested_pages': [],
             'saved_products': [],
             'saved_products_count': 0,
@@ -1133,15 +1240,6 @@ def profile(request, username):
             .order_by('-created_at')[:5]
         )
 
-    # ── Listings owned by this user (for the "My Listings" grid on the profile) ──
-    user_listings_qs = (
-        Market.objects.filter(product_owner=user)
-        .order_by('-posted_on')
-        .prefetch_related('images')
-    )
-    user_listings_count = user_listings_qs.count()
-    user_listings = list(user_listings_qs[:8])
-
     # ── Saved items for the "Saved" tab (owner only — wishlist is private) ──────
     saved_products = []
     saved_products_count = 0
@@ -1167,14 +1265,12 @@ def profile(request, username):
 
     # Wishlist ("likes") counts per listing — queried separately so we don't
     # depend on a specific reverse-relation name from the Wishlist model.
-    listing_ids = [listing.product_id for listing in user_listings] + [p.product_id for p in saved_products]
+    listing_ids = [p.product_id for p in saved_products]
     wishlist_counts = {}
     if listing_ids:
         for row in (Wishlist.objects.filter(product_id__in=listing_ids)
                     .values('product_id').annotate(c=Count('id'))):
             wishlist_counts[row['product_id']] = row['c']
-    for listing in user_listings:
-        listing.like_count = wishlist_counts.get(listing.product_id, 0)
     for product in saved_products:
         product.like_count = wishlist_counts.get(product.product_id, 0)
 
@@ -1192,8 +1288,6 @@ def profile(request, username):
         'business_page_count': business_page_count,
         'business_page_previews': business_page_previews,
         'wishlist_ids': wishlist_ids,
-        'user_listings': user_listings,
-        'user_listings_count': user_listings_count,
         'suggested_pages': suggested_pages,
         'saved_products': saved_products,
         'saved_products_count': saved_products_count,
@@ -1204,6 +1298,7 @@ def profile(request, username):
         'sidebar_suggested_users': sidebar_suggested_users,
         'viewer_business_page_count':   viewer_business_page_count,
         'viewer_primary_business_page': viewer_primary_business_page,
+        'member_type_edit_schema': _member_type_edit_schema(profile) if request.user == user else [],
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1239,6 +1334,11 @@ def update_profile(request, username):
         show_dob         = 'show_dob'    in request.POST
         # Kishi community fields
         profession       = request.POST.get('profession',       '').strip()
+
+        # Member type (only touched if the edit form actually included it —
+        # the main profile-edit form doesn't, onboarding/its own "edit" link do)
+        member_type_submitted = 'member_type' in request.POST
+        member_type = request.POST.get('member_type', '').strip()
 
         # ── Whitelist validation ─────────────────────────────────
         VALID_PRIVACY = {'public', 'followers_only', 'private'}
@@ -1290,6 +1390,24 @@ def update_profile(request, username):
             profile.profession       = profession
             profile_dirty = True
 
+            if member_type_submitted:
+                valid_types = {k for k, _ in MEMBER_TYPE_CHOICES}
+                if member_type in valid_types:
+                    raw_data = {
+                        field['key']: request.POST.get(field['key'], '')
+                        for field in MEMBER_TYPE_SCHEMA[member_type]['fields']
+                    }
+                    profile.member_type = member_type
+                    profile.member_type_data = sanitize_member_type_data(member_type, raw_data)
+                    cv_file = request.FILES.get('cv')
+                    if cv_file:
+                        profile.member_type_cv = cv_file
+                    profile_dirty = True
+                elif member_type == '':
+                    profile.member_type = ''
+                    profile.member_type_data = {}
+                    profile_dirty = True
+
             if profile_dirty:
                 profile.save()
 
@@ -1340,6 +1458,7 @@ def update_profile(request, username):
                         'show_gender':     profile.show_gender,
                         'show_dob':        profile.show_dob,
                         'profession':      profile.profession,
+                        'member_type':     profile.member_type,
                     },
                     'message': 'Profile updated successfully!'
                 })

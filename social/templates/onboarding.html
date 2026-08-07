@@ -1,0 +1,299 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Welcome to Marketfy</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        :root {
+            --mfy-primary: #0095f6;
+            --mfy-primary-dark: #0077d4;
+            --mfy-bg: #fafafa;
+            --mfy-white: #ffffff;
+            --mfy-text: #262626;
+            --mfy-text-light: #8e8e8e;
+            --mfy-border: #dbdbdb;
+            --mfy-success: #25d366;
+            --mfy-error: #ed4956;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--mfy-bg); color: var(--mfy-text);
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        .ob-wrap {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 32px 20px 80px;
+        }
+
+        .ob-header { text-align: center; margin-bottom: 28px; }
+        .ob-header h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+        .ob-header p { color: var(--mfy-text-light); font-size: 14px; }
+
+        .ob-progress {
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; margin-bottom: 24px;
+        }
+        .ob-progress .dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--mfy-border);
+        }
+        .ob-progress .dot.active { background: var(--mfy-primary); }
+
+        .ob-messages { margin-bottom: 16px; }
+        .ob-message {
+            background: #fdecee; color: var(--mfy-error);
+            border: 1px solid #f6c6cb; border-radius: 10px;
+            padding: 10px 14px; font-size: 13px; margin-bottom: 8px;
+        }
+        .ob-message.success { background: #e8fbf1; color: #1a9c58; border-color: #b9f0d3; }
+
+        /* Step 1 — type cards */
+        .ob-types {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        .ob-type-card {
+            border: 1.5px solid var(--mfy-border);
+            border-radius: 14px;
+            background: var(--mfy-white);
+            padding: 18px 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color .15s, box-shadow .15s, transform .1s;
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+        }
+        .ob-type-card:active { transform: scale(0.98); }
+        .ob-type-card.selected {
+            border-color: var(--mfy-primary);
+            box-shadow: 0 0 0 3px rgba(0,149,246,0.12);
+        }
+        .ob-type-card .emoji { font-size: 28px; }
+        .ob-type-card .label { font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+        .ob-type-card .blurb { font-size: 11.5px; color: var(--mfy-text-light); line-height: 1.3; }
+
+        .ob-continue-bar {
+            position: sticky; bottom: 0;
+            background: linear-gradient(to top, var(--mfy-bg) 60%, transparent);
+            padding: 20px 0 4px;
+            margin-top: 20px;
+        }
+
+        .ob-btn {
+            display: block; width: 100%;
+            background: var(--mfy-primary); color: #fff;
+            border: none; border-radius: 10px;
+            padding: 13px; font-size: 15px; font-weight: 600;
+            cursor: pointer; text-align: center;
+        }
+        .ob-btn:disabled { background: #b3ddfb; cursor: not-allowed; }
+        .ob-btn.secondary {
+            background: transparent; color: var(--mfy-text-light);
+            font-weight: 500; font-size: 13.5px; padding: 10px;
+        }
+
+        /* Step 2 — dynamic fields */
+        .ob-selected-banner {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--mfy-white); border: 1px solid var(--mfy-border);
+            border-radius: 12px; padding: 12px 14px; margin-bottom: 18px;
+        }
+        .ob-selected-banner .emoji { font-size: 22px; }
+        .ob-selected-banner .label { font-weight: 600; font-size: 14.5px; flex: 1; }
+        .ob-selected-banner button {
+            background: none; border: none; color: var(--mfy-primary);
+            font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+
+        .ob-field { margin-bottom: 16px; }
+        .ob-field label {
+            display: block; font-size: 13px; font-weight: 600;
+            margin-bottom: 6px; color: var(--mfy-text);
+        }
+        .ob-field label .req { color: var(--mfy-error); }
+        .ob-field input[type="text"],
+        .ob-field input[type="number"],
+        .ob-field input[type="url"],
+        .ob-field input[type="file"],
+        .ob-field select,
+        .ob-field textarea {
+            width: 100%;
+            border: 1.5px solid var(--mfy-border);
+            border-radius: 10px;
+            padding: 11px 12px;
+            font-size: 14.5px;
+            font-family: inherit;
+            background: var(--mfy-white);
+            color: var(--mfy-text);
+        }
+        .ob-field textarea { resize: vertical; min-height: 80px; }
+        .ob-field input:focus, .ob-field select:focus, .ob-field textarea:focus {
+            outline: none; border-color: var(--mfy-primary);
+        }
+
+        .ob-step { display: none; }
+        .ob-step.active { display: block; }
+
+        @media (max-width: 420px) {
+            .ob-types { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+<div class="ob-wrap">
+    <div class="ob-header">
+        <h1>Welcome to Marketfy 👋</h1>
+        <p>What do you use Marketfy for?</p>
+    </div>
+
+    <div class="ob-progress">
+        <span class="dot active" data-step-dot="1"></span>
+        <span class="dot" data-step-dot="2"></span>
+    </div>
+
+    {% if messages %}
+    <div class="ob-messages">
+        {% for message in messages %}
+        <div class="ob-message{% if message.tags == 'success' %} success{% endif %}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" id="onboardingForm">
+        {% csrf_token %}
+        <input type="hidden" name="member_type" id="memberTypeInput" value="{{ selected_type|default:'' }}">
+
+        <!-- ── Step 1: choose type ───────────────────────────────────────── -->
+        <div class="ob-step {% if not selected_type %}active{% endif %}" data-step="1">
+            <div class="ob-types">
+                {% for key, cfg in member_type_schema.items %}
+                <div class="ob-type-card{% if selected_type == key %} selected{% endif %}" data-type-card="{{ key }}">
+                    <div class="emoji">{{ cfg.emoji }}</div>
+                    <div class="label">{{ cfg.label }}</div>
+                    <div class="blurb">{{ cfg.blurb }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="ob-continue-bar">
+                <button type="button" class="ob-btn" id="step1ContinueBtn" disabled>Continue</button>
+                <button type="submit" name="skip" value="1" class="ob-btn secondary" style="width:100%; margin-top:6px;">Skip for now</button>
+            </div>
+        </div>
+
+        <!-- ── Step 2: dynamic fields per type ───────────────────────────── -->
+        <div class="ob-step {% if selected_type %}active{% endif %}" data-step="2">
+            <div class="ob-selected-banner" id="selectedBanner">
+                <span class="emoji" id="selectedEmoji"></span>
+                <span class="label" id="selectedLabel"></span>
+                <button type="button" id="changeTypeBtn">Change</button>
+            </div>
+
+            {% for key, cfg in member_type_schema.items %}
+            <div class="ob-fieldset" data-fieldset="{{ key }}" {% if selected_type != key %}style="display:none;"{% endif %}>
+                {% for field in cfg.fields %}
+                <div class="ob-field">
+                    <label for="id_{{ field.key }}">
+                        {{ field.label }}{% if field.required %} <span class="req">*</span>{% endif %}
+                    </label>
+
+                    {% if field.type == 'textarea' %}
+                        <textarea name="{{ field.key }}" id="id_{{ field.key }}" maxlength="{{ field.max_length|default:1000 }}" placeholder="{{ field.placeholder|default:'' }}"></textarea>
+                    {% elif field.type == 'select' %}
+                        <select name="{{ field.key }}" id="id_{{ field.key }}">
+                            <option value="">Select…</option>
+                            {% for choice in field.choices %}
+                            <option value="{{ choice }}">{{ choice }}</option>
+                            {% endfor %}
+                        </select>
+                    {% elif field.type == 'file' %}
+                        <input type="file" name="{{ field.key }}" id="id_{{ field.key }}" accept=".pdf,.doc,.docx">
+                    {% elif field.type == 'number' %}
+                        <input type="number" min="0" name="{{ field.key }}" id="id_{{ field.key }}" placeholder="{{ field.placeholder|default:'' }}">
+                    {% elif field.type == 'url' %}
+                        <input type="url" name="{{ field.key }}" id="id_{{ field.key }}" placeholder="https://…">
+                    {% else %}
+                        <input type="text" name="{{ field.key }}" id="id_{{ field.key }}" maxlength="{{ field.max_length|default:150 }}" placeholder="{{ field.placeholder|default:'' }}">
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+
+            <div class="ob-continue-bar">
+                <button type="submit" class="ob-btn">Finish</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+(function () {
+    var form          = document.getElementById('onboardingForm');
+    var memberTypeIn  = document.getElementById('memberTypeInput');
+    var step1         = document.querySelector('.ob-step[data-step="1"]');
+    var step2         = document.querySelector('.ob-step[data-step="2"]');
+    var step1Continue = document.getElementById('step1ContinueBtn');
+    var changeTypeBtn = document.getElementById('changeTypeBtn');
+    var selectedEmoji = document.getElementById('selectedEmoji');
+    var selectedLabel = document.getElementById('selectedLabel');
+    var dots           = document.querySelectorAll('[data-step-dot]');
+    var cards          = document.querySelectorAll('[data-type-card]');
+    var fieldsets       = document.querySelectorAll('[data-fieldset]');
+
+    function selectType(key) {
+        memberTypeIn.value = key;
+        cards.forEach(function (c) {
+            c.classList.toggle('selected', c.getAttribute('data-type-card') === key);
+        });
+        var card = document.querySelector('[data-type-card="' + key + '"]');
+        if (card) {
+            selectedEmoji.textContent = card.querySelector('.emoji').textContent;
+            selectedLabel.textContent = card.querySelector('.label').textContent;
+        }
+        fieldsets.forEach(function (fs) {
+            fs.style.display = (fs.getAttribute('data-fieldset') === key) ? '' : 'none';
+        });
+        step1Continue.disabled = false;
+    }
+
+    cards.forEach(function (card) {
+        card.addEventListener('click', function () {
+            selectType(card.getAttribute('data-type-card'));
+        });
+    });
+
+    function goToStep(n) {
+        step1.classList.toggle('active', n === 1);
+        step2.classList.toggle('active', n === 2);
+        dots.forEach(function (d) {
+            d.classList.toggle('active', d.getAttribute('data-step-dot') == n);
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    step1Continue.addEventListener('click', function () {
+        if (!memberTypeIn.value) return;
+        goToStep(2);
+    });
+
+    changeTypeBtn.addEventListener('click', function () {
+        goToStep(1);
+    });
+
+    // Pre-select if server rendered a selected_type (e.g. validation error re-render)
+    if (memberTypeIn.value) {
+        selectType(memberTypeIn.value);
+    }
+})();
+</script>
+</body>
+</html>
