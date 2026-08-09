@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessAchievement
 from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size
 
@@ -71,6 +71,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime as django_parse_datetime
+import json as _json
 from datetime import datetime, timedelta
 import random
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
@@ -5525,6 +5526,7 @@ def business_page_create(request):
     if request.method == 'POST':
         name        = request.POST.get('name', '').strip()
         category    = request.POST.get('category', 'others').strip()
+        page_type   = request.POST.get('page_type', BusinessPage.PAGE_TYPE_BUSINESS).strip()
         tagline     = request.POST.get('tagline', '').strip()
         description = request.POST.get('description', '').strip()
         location    = request.POST.get('location', '').strip()
@@ -5545,6 +5547,22 @@ def business_page_create(request):
             errors['name'] = 'Name must be 150 characters or fewer.'
         if category not in {c[0] for c in BusinessPage.CATEGORY_CHOICES}:
             category = 'others'
+        if page_type not in dict(BusinessPage.PAGE_TYPE_CHOICES):
+            page_type = BusinessPage.PAGE_TYPE_BUSINESS
+
+        # Products are opt-in — "sells_products" checkbox on the form.
+        # Falls back to the page type's sensible default when the field is
+        # simply missing (e.g. JS-disabled client), but an explicit "0"
+        # from the toggle always wins.
+        if 'sells_products' in request.POST:
+            sells_products = request.POST.get('sells_products') in ('1', 'true', 'on')
+        else:
+            sells_products = page_type in BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT
+
+        # Optional sections — checkboxes named "sections". Falls back to the
+        # page type's defaults when the owner hasn't touched any checkboxes.
+        posted_sections = [s for s in request.POST.getlist('sections') if s in BusinessPage.VALID_OPTIONAL_SECTIONS]
+        enabled_sections = posted_sections if posted_sections else BusinessPage.default_sections_for(page_type)
 
         # Pre-sanitize URL fields BEFORE they hit BusinessPage.full_clean()'s
         # built-in field validators. full_clean() runs clean_fields() (strict
@@ -5567,17 +5585,28 @@ def business_page_create(request):
                 else:
                     facebook = fixed
 
+        _create_context_extra = {
+            'categories':          BusinessPage.CATEGORY_CHOICES,
+            'day_choices':         BusinessPage.DAY_CHOICES,
+            'page_type_choices':   BusinessPage.PAGE_TYPE_CHOICES,
+            'section_choices':     BusinessPage.OPTIONAL_SECTION_CHOICES,
+            'page_type_defaults':  BusinessPage.PAGE_TYPE_SECTION_DEFAULTS,
+            'page_types_selling':  list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT),
+            'page_type_defaults_json': _json.dumps(BusinessPage.PAGE_TYPE_SECTION_DEFAULTS),
+            'page_types_selling_json': _json.dumps(list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT)),
+        }
+
         if errors:
             return render(request, 'business_page_create.html', {
                 'errors': errors, 'form_data': request.POST,
-                'categories': BusinessPage.CATEGORY_CHOICES,
-                'day_choices': BusinessPage.DAY_CHOICES,
+                **_create_context_extra,
             })
 
         business_hours = _parse_business_hours_from_post(request.POST)
 
         page = BusinessPage(
-            owner=request.user, name=name, category=category,
+            owner=request.user, name=name, category=category, page_type=page_type,
+            sells_products=sells_products, enabled_sections=enabled_sections,
             tagline=tagline, description=description, location=location,
             website=website, whatsapp=whatsapp, phone=phone, email=email_val,
             instagram=instagram, youtube=youtube, facebook=facebook,
@@ -5598,23 +5627,27 @@ def business_page_create(request):
             messages.error(request, 'Please fix the highlighted fields and try again.')
             return render(request, 'business_page_create.html', {
                 'errors': errors, 'form_data': request.POST,
-                'categories': BusinessPage.CATEGORY_CHOICES,
-                'day_choices': BusinessPage.DAY_CHOICES,
+                **_create_context_extra,
             })
         except Exception as exc:
             messages.error(request, f'Could not create page: {exc}')
             return render(request, 'business_page_create.html', {
                 'errors': {}, 'form_data': request.POST,
-                'categories': BusinessPage.CATEGORY_CHOICES,
-                'day_choices': BusinessPage.DAY_CHOICES,
+                **_create_context_extra,
             })
 
         messages.success(request, f'"{page.name}" is live! 🎉')
         return redirect('business_page_detail', slug=page.slug)
 
     return render(request, 'business_page_create.html', {
-        'categories': BusinessPage.CATEGORY_CHOICES,
-        'day_choices': BusinessPage.DAY_CHOICES,
+        'categories':         BusinessPage.CATEGORY_CHOICES,
+        'day_choices':        BusinessPage.DAY_CHOICES,
+        'page_type_choices':  BusinessPage.PAGE_TYPE_CHOICES,
+        'section_choices':    BusinessPage.OPTIONAL_SECTION_CHOICES,
+        'page_type_defaults': BusinessPage.PAGE_TYPE_SECTION_DEFAULTS,
+        'page_types_selling': list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT),
+        'page_type_defaults_json': _json.dumps(BusinessPage.PAGE_TYPE_SECTION_DEFAULTS),
+        'page_types_selling_json': _json.dumps(list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT)),
     })
 
 
@@ -5637,6 +5670,16 @@ def business_page_detail(request, slug):
     if not is_owner:
         jobs = jobs.filter(is_open=True)
     jobs = jobs.order_by('-created_at')
+
+    # ── Optional professional-page sections ─────────────────────────────────
+    services = BusinessService.objects.filter(business_page=page, is_active=True).order_by('order', '-created_at') \
+        if (page.show_services or is_owner) else BusinessService.objects.none()
+    portfolio_items = BusinessPortfolioItem.objects.filter(business_page=page, kind=BusinessPortfolioItem.KIND_PORTFOLIO).order_by('order', '-created_at') \
+        if (page.show_portfolio or is_owner) else BusinessPortfolioItem.objects.none()
+    project_items = BusinessPortfolioItem.objects.filter(business_page=page, kind=BusinessPortfolioItem.KIND_PROJECT).order_by('order', '-created_at') \
+        if (page.show_projects or is_owner) else BusinessPortfolioItem.objects.none()
+    achievements = BusinessAchievement.objects.filter(business_page=page).order_by('order', '-date_achieved', '-created_at') \
+        if (page.show_achievements or is_owner) else BusinessAchievement.objects.none()
 
     posts = (
         BusinessPost.objects.filter(business_page=page)
@@ -5692,6 +5735,15 @@ def business_page_detail(request, slug):
         'posts':             posts,
         'post_count':        posts.count(),
         'post_type_choices': BusinessPost.POST_TYPE_CHOICES,
+        'post_category_choices': BusinessPost.POST_CATEGORY_CHOICES,
+        'services':          services,
+        'service_count':     services.count(),
+        'portfolio_items':   portfolio_items,
+        'portfolio_count':   portfolio_items.count(),
+        'project_items':     project_items,
+        'project_count':     project_items.count(),
+        'achievements':      achievements,
+        'achievement_count': achievements.count(),
         'vibe_choices': [
             {'type': t, 'emoji': BusinessPostVibe.VIBE_EMOJIS[t], 'label': label.split(' ', 1)[-1]}
             for t, label in BusinessPostVibe.VIBE_CHOICES
@@ -5749,6 +5801,8 @@ def _serialize_business_post(post, viewer=None):
     data = {
         'post_id':    str(post.post_id),
         'post_type':  post.post_type,
+        'post_category': post.post_category,
+        'category_label': post.category_label,
         'caption':    post.caption,
         'is_pinned':  post.is_pinned,
         'time_posted': post.time_posted,
@@ -5797,6 +5851,9 @@ def business_post_create(request, slug):
 
     post_type = request.POST.get('post_type', '').strip()
     caption   = request.POST.get('caption', '').strip()
+    post_category = request.POST.get('post_category', BusinessPost.CATEGORY_UPDATE).strip()
+    if post_category not in dict(BusinessPost.POST_CATEGORY_CHOICES):
+        post_category = BusinessPost.CATEGORY_UPDATE
 
     if post_type not in dict(BusinessPost.POST_TYPE_CHOICES):
         return JsonResponse({'success': False, 'error': 'Please choose a valid post type.'}, status=400)
@@ -5850,7 +5907,7 @@ def business_post_create(request, slug):
             return JsonResponse({'success': False, 'error': 'Polls can have up to 6 options.'}, status=400)
 
     try:
-        post = BusinessPost(business_page=page, post_type=post_type, caption=caption)
+        post = BusinessPost(business_page=page, post_type=post_type, post_category=post_category, caption=caption)
 
         if post_type == BusinessPost.TYPE_VIDEO:
             post.video = video
@@ -5970,6 +6027,14 @@ def business_page_edit(request, slug):
     if request.method == 'POST':
         page.name        = request.POST.get('name', page.name).strip()
         page.category    = request.POST.get('category', page.category).strip()
+        posted_page_type = request.POST.get('page_type', page.page_type).strip()
+        if posted_page_type in dict(BusinessPage.PAGE_TYPE_CHOICES):
+            page.page_type = posted_page_type
+        if 'sells_products' in request.POST:
+            page.sells_products = request.POST.get('sells_products') in ('1', 'true', 'on')
+        # The edit form always renders the sections checkbox group, so an
+        # empty list here means the owner deliberately unchecked everything.
+        page.enabled_sections = [s for s in request.POST.getlist('sections') if s in BusinessPage.VALID_OPTIONAL_SECTIONS]
         page.tagline     = request.POST.get('tagline', '').strip()
         page.description = request.POST.get('description', '').strip()
         page.location    = request.POST.get('location', '').strip()
@@ -5996,6 +6061,10 @@ def business_page_edit(request, slug):
         'page': page, 'categories': BusinessPage.CATEGORY_CHOICES,
         'day_choices': BusinessPage.DAY_CHOICES,
         'hours_display': page.hours_display,
+        'page_type_choices': BusinessPage.PAGE_TYPE_CHOICES,
+        'section_choices': BusinessPage.OPTIONAL_SECTION_CHOICES,
+        'page_type_defaults_json': _json.dumps(BusinessPage.PAGE_TYPE_SECTION_DEFAULTS),
+        'page_types_selling_json': _json.dumps(list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT)),
     })
 
 
@@ -6033,6 +6102,12 @@ def business_product_upload(request, slug):
     from social.models import BusinessPage
 
     page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
+
+    if not page.sells_products:
+        return JsonResponse({
+            'success': False,
+            'errors': {'__all__': 'Products are turned off for this page. Enable "Sell Products" in Edit Page to add listings.'},
+        }, status=403)
 
     # ── Rate limit: max 10 listings per hour (reuse market rate-limit key) ──
     _rl_key  = f'ad_post:{request.user.id}'
@@ -6240,3 +6315,183 @@ def business_job_upload(request, slug):
         'detail_url': f"/jobs/#khj-card-{job.id}",
         'message':    'Job vacancy posted successfully! 💼',
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Optional professional-page sections — Services / Portfolio & Projects /
+# Achievements. Simple owner-only create + delete, mirroring the pattern
+# used by business_post_create / business_post_delete above.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+@require_POST
+def business_service_create(request, slug):
+    """Owner adds a Service to their professional page."""
+    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
+
+    title      = request.POST.get('title', '').strip()
+    description = request.POST.get('description', '').strip()
+    price_text = request.POST.get('price_text', '').strip()
+    image      = request.FILES.get('image')
+
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Please give the service a title.'}, status=400)
+    if len(title) > 150:
+        return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
+    if image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+
+    try:
+        service = BusinessService.objects.create(
+            business_page=page, title=title, description=description,
+            price_text=price_text, image=image if image else None,
+        )
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'service': {
+            'service_id':  str(service.service_id),
+            'title':       service.title,
+            'description': service.description,
+            'price_text':  service.price_text,
+            'image_url':   service.get_image_url,
+        },
+        'service_count': page.service_count,
+        'message': 'Service added! 🛠️',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_service_delete(request, service_id):
+    service = get_object_or_404(BusinessService, service_id=service_id, business_page__owner=request.user)
+    service.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def business_portfolio_create(request, slug):
+    """Owner adds a Portfolio piece or a Project to their professional page."""
+    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
+
+    kind        = request.POST.get('kind', BusinessPortfolioItem.KIND_PORTFOLIO).strip()
+    title       = request.POST.get('title', '').strip()
+    description = request.POST.get('description', '').strip()
+    link_url    = request.POST.get('link_url', '').strip()
+    is_ongoing  = request.POST.get('is_ongoing') in ('1', 'true', 'on')
+    image       = request.FILES.get('image')
+
+    if kind not in dict(BusinessPortfolioItem.KIND_CHOICES):
+        kind = BusinessPortfolioItem.KIND_PORTFOLIO
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Please give it a title.'}, status=400)
+    if len(title) > 150:
+        return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
+    if image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+
+    try:
+        item = BusinessPortfolioItem.objects.create(
+            business_page=page, kind=kind, title=title, description=description,
+            link_url=link_url, is_ongoing=is_ongoing if kind == BusinessPortfolioItem.KIND_PROJECT else False,
+            image=image if image else None,
+        )
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'item': {
+            'item_id':      str(item.item_id),
+            'kind':         item.kind,
+            'title':        item.title,
+            'description':  item.description,
+            'link_url':     item.link_url,
+            'is_ongoing':   item.is_ongoing,
+            'image_url':    item.get_image_url,
+        },
+        'portfolio_count': page.portfolio_count,
+        'project_count':   page.project_count,
+        'message': 'Added to your page! ✨',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_portfolio_delete(request, item_id):
+    item = get_object_or_404(BusinessPortfolioItem, item_id=item_id, business_page__owner=request.user)
+    item.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def business_achievement_create(request, slug):
+    """Owner adds an Achievement (award, certification, milestone) to their page."""
+    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
+
+    title         = request.POST.get('title', '').strip()
+    issuer        = request.POST.get('issuer', '').strip()
+    description   = request.POST.get('description', '').strip()
+    date_raw      = request.POST.get('date_achieved', '').strip()
+    image         = request.FILES.get('image')
+
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Please give the achievement a title.'}, status=400)
+    if len(title) > 150:
+        return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
+
+    date_achieved = None
+    if date_raw:
+        try:
+            date_achieved = datetime.strptime(date_raw, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Enter a valid date.'}, status=400)
+
+    if image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+
+    try:
+        achievement = BusinessAchievement.objects.create(
+            business_page=page, title=title, issuer=issuer, description=description,
+            date_achieved=date_achieved, image=image if image else None,
+        )
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'achievement': {
+            'achievement_id': str(achievement.achievement_id),
+            'title':          achievement.title,
+            'issuer':         achievement.issuer,
+            'description':    achievement.description,
+            'date_achieved':  achievement.date_achieved.isoformat() if achievement.date_achieved else '',
+            'image_url':      achievement.get_image_url,
+        },
+        'achievement_count': page.achievement_count,
+        'message': 'Achievement added! 🏆',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_achievement_delete(request, achievement_id):
+    achievement = get_object_or_404(BusinessAchievement, achievement_id=achievement_id, business_page__owner=request.user)
+    achievement.delete()
+    return JsonResponse({'success': True})

@@ -191,6 +191,55 @@
         .kbiz-hours-times span { font-size: 12px; color: var(--mfy-text-light); }
         .kbiz-hours-row.is-closed .kbiz-hours-time { opacity: .4; pointer-events: none; }
 
+        /* ── Page type picker ── */
+        .kbiz-hint { font-size: 12.5px; color: var(--mfy-text-light); margin: -8px 0 14px; line-height: 1.4; }
+        .kbiz-ptype-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+            margin-bottom: 4px;
+        }
+        .kbiz-ptype-card {
+            border: 1.5px solid var(--mfy-border); border-radius: 12px;
+            padding: 12px 10px; cursor: pointer; text-align: center;
+            font-size: 13px; font-weight: 600; color: var(--mfy-text);
+            transition: border-color .15s, background .15s;
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+        }
+        .kbiz-ptype-card i { font-size: 18px; color: var(--mfy-text-light); }
+        .kbiz-ptype-card.active { border-color: var(--mfy-primary); background: #eaf7ff; }
+        .kbiz-ptype-card.active i { color: var(--mfy-primary); }
+
+        /* ── Toggle switch (sell products?) ── */
+        .kbiz-toggle-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; padding: 12px 0;
+        }
+        .kbiz-toggle-row .kbiz-toggle-copy strong { display: block; font-size: 14px; }
+        .kbiz-toggle-row .kbiz-toggle-copy span { font-size: 12.5px; color: var(--mfy-text-light); }
+        .kbiz-switch { position: relative; width: 46px; height: 26px; flex-shrink: 0; }
+        .kbiz-switch input { opacity: 0; width: 0; height: 0; }
+        .kbiz-switch-track {
+            position: absolute; inset: 0; background: #ccc; border-radius: 999px;
+            cursor: pointer; transition: background .2s;
+        }
+        .kbiz-switch-track::before {
+            content: ''; position: absolute; width: 20px; height: 20px;
+            left: 3px; top: 3px; background: #fff; border-radius: 50%;
+            transition: transform .2s;
+        }
+        .kbiz-switch input:checked + .kbiz-switch-track { background: var(--mfy-primary); }
+        .kbiz-switch input:checked + .kbiz-switch-track::before { transform: translateX(20px); }
+
+        /* ── Optional sections checkboxes ── */
+        .kbiz-sections-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .kbiz-section-chip {
+            border: 1.5px solid var(--mfy-border); border-radius: 999px;
+            padding: 8px 14px; font-size: 13px; font-weight: 600;
+            cursor: pointer; color: var(--mfy-text); user-select: none;
+            transition: border-color .15s, background .15s;
+        }
+        .kbiz-section-chip.active { border-color: var(--mfy-primary); background: #eaf7ff; color: var(--mfy-primary-dark); }
+        .kbiz-section-chip input { display: none; }
+
         /* ── Django messages banner ── */
         .kbiz-alert {
             margin: 12px 16px 0;
@@ -267,6 +316,31 @@
                value="{{ page.name }}" maxlength="150" required>
     </div>
 
+    <p class="kbiz-section-title">
+        <i class="fas fa-id-badge" style="color:var(--mfy-primary)"></i>
+        What kind of page is this?
+    </p>
+    <div class="kbiz-hint">This decides what shows on your page — Services, Portfolio, Projects, Achievements or Jobs — and whether Products are turned on.</div>
+    <div class="kbiz-ptype-grid" id="ptypeGrid">
+        {% for val, label in page_type_choices %}
+        <div class="kbiz-ptype-card {% if page.page_type == val %}active{% endif %}" data-value="{{ val }}" onclick="selectPageType('{{ val }}')">
+            <i class="fas
+                {% if val == 'business' %}fa-store
+                {% elif val == 'freelancer' %}fa-laptop-code
+                {% elif val == 'developer' %}fa-code
+                {% elif val == 'teacher' %}fa-chalkboard-user
+                {% elif val == 'artisan' %}fa-screwdriver-wrench
+                {% elif val == 'service_provider' %}fa-truck
+                {% elif val == 'creative' %}fa-palette
+                {% elif val == 'student' %}fa-graduation-cap
+                {% elif val == 'skilled_professional' %}fa-user-gear
+                {% else %}fa-briefcase{% endif %}"></i>
+            <span>{{ label }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    <input type="hidden" name="page_type" id="pageTypeInput" value="{{ page.page_type }}">
+
     <div class="kbiz-field">
         <label class="kbiz-label">Category *</label>
         <select class="kbiz-select" name="category">
@@ -284,9 +358,39 @@
     </div>
 
     <div class="kbiz-field">
-        <label class="kbiz-label">About Your Business</label>
+        <label class="kbiz-label">About</label>
         <textarea class="kbiz-textarea" name="description"
-                  placeholder="Tell people what your business does…">{{ page.description }}</textarea>
+                  placeholder="Tell people what you do, what you offer, your story…">{{ page.description }}</textarea>
+    </div>
+
+    <p class="kbiz-section-title">
+        <i class="fas fa-box" style="color:var(--mfy-primary)"></i>
+        Products
+    </p>
+    <div class="kbiz-toggle-row">
+        <div class="kbiz-toggle-copy">
+            <strong>Sell products on this page?</strong>
+            <span>Only turn this on if you sell physical or digital products. Posts, services, portfolio etc. work fine without it.</span>
+        </div>
+        <label class="kbiz-switch">
+            <input type="hidden" name="sells_products" value="0">
+            <input type="checkbox" name="sells_products" id="sellsProductsInput" value="1" {% if page.sells_products %}checked{% endif %}>
+            <span class="kbiz-switch-track"></span>
+        </label>
+    </div>
+
+    <p class="kbiz-section-title">
+        <i class="fas fa-layer-group" style="color:var(--mfy-primary)"></i>
+        Optional Sections
+    </p>
+    <div class="kbiz-hint">Pick what to show on your page — you can change this any time.</div>
+    <div class="kbiz-sections-grid" id="sectionsGrid">
+        {% for val, label in section_choices %}
+        <label class="kbiz-section-chip {% if val in page.enabled_sections %}active{% endif %}" data-value="{{ val }}">
+            <input type="checkbox" name="sections" value="{{ val }}" {% if val in page.enabled_sections %}checked{% endif %}>
+            {{ label }}
+        </label>
+        {% endfor %}
     </div>
 
     <!-- Contact & Location -->
@@ -476,6 +580,23 @@ document.getElementById('logoInput').addEventListener('change', function () {
     };
     reader.readAsDataURL(this.files[0]);
     toast('Logo selected — save to apply.');
+});
+
+// ── Page type picker ──────────────────────────────────────────────────────────
+function selectPageType(value) {
+    document.getElementById('pageTypeInput').value = value;
+    document.querySelectorAll('.kbiz-ptype-card').forEach(card => {
+        card.classList.toggle('active', card.dataset.value === value);
+    });
+}
+
+// ── Optional sections chips ───────────────────────────────────────────────────
+// (checkbox is wrapped by its label, so a click already toggles it natively —
+// we just listen for the resulting 'change' to sync the visual state)
+document.querySelectorAll('.kbiz-section-chip input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', function () {
+        this.closest('.kbiz-section-chip').classList.toggle('active', this.checked);
+    });
 });
 
 // ── Business hours toggle ─────────────────────────────────────────────────────

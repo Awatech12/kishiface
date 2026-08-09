@@ -47,7 +47,9 @@ MEMBER_TYPE_SCHEMA = {
         'blurb': 'Trade or licensed skill — e.g. plumber, electrician, hairstylist',
         'fields': [
             {'key': 'profession',        'label': 'Profession',         'type': 'text',     'max_length': 150, 'required': True, 'placeholder': 'e.g. Plumber'},
-            {'key': 'skills',            'label': 'Skills',             'type': 'text',      'max_length': 300, 'placeholder': 'e.g. Pipe fitting, Leak repair, Installations'},
+            {'key': 'skills',            'label': 'Skills',             'type': 'select_other', 'max_length': 300,
+             'choices': ['Plumbing', 'Electrical wiring', 'Carpentry', 'Welding', 'Painting', 'Tiling',
+                         'AC repair', 'Generator repair', 'Hairdressing', 'Barbing', 'Makeup artistry']},
             {'key': 'years_experience',  'label': 'Years of Experience','type': 'number'},
             {'key': 'services_offered',  'label': 'Services Offered',   'type': 'textarea',  'max_length': 1000},
             {'key': 'location',          'label': 'Location',           'type': 'text',      'max_length': 200},
@@ -65,7 +67,9 @@ MEMBER_TYPE_SCHEMA = {
         'blurb': 'Looking for employment',
         'fields': [
             {'key': 'desired_job',        'label': 'Desired Job',        'type': 'text',     'max_length': 150, 'required': True},
-            {'key': 'skills',             'label': 'Skills',             'type': 'text',     'max_length': 300},
+            {'key': 'skills',             'label': 'Skills',             'type': 'select_other', 'max_length': 300,
+             'choices': ['Customer service', 'Sales', 'Accounting', 'Data entry', 'Graphic design', 'Writing',
+                         'Marketing', 'IT support', 'Teaching', 'Driving']},
             {'key': 'education',          'label': 'Education',          'type': 'text',     'max_length': 200},
             {'key': 'experience',         'label': 'Experience',         'type': 'textarea', 'max_length': 1000},
             {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
@@ -109,7 +113,10 @@ MEMBER_TYPE_SCHEMA = {
         'emoji': '🧑\u200d💻',
         'blurb': 'Independent, project-based work — often remote',
         'fields': [
-            {'key': 'skills',           'label': 'Skills',           'type': 'text',     'max_length': 300, 'required': True},
+            {'key': 'skills',           'label': 'Skills',           'type': 'select_other', 'max_length': 300, 'required': True,
+             'choices': ['Web development', 'Graphic design', 'Content writing', 'Video editing',
+                         'Social media management', 'Virtual assistance', 'Translation', 'Photography',
+                         'UI/UX design', 'Digital marketing']},
             {'key': 'services_offered', 'label': 'Services Offered', 'type': 'textarea', 'max_length': 1000},
             {'key': 'portfolio_link',   'label': 'Portfolio Link',   'type': 'url'},
             {'key': 'rate',             'label': 'Rate',             'type': 'text',     'max_length': 150},
@@ -124,7 +131,9 @@ MEMBER_TYPE_SCHEMA = {
         'blurb': 'Hands-on trade or repair work',
         'fields': [
             {'key': 'trade',            'label': 'Trade',             'type': 'text',     'max_length': 150, 'required': True, 'placeholder': 'e.g. Carpentry, GSM repair'},
-            {'key': 'skills',           'label': 'Skills',            'type': 'text',     'max_length': 300},
+            {'key': 'skills',           'label': 'Skills',            'type': 'select_other', 'max_length': 300,
+             'choices': ['Carpentry', 'GSM/Phone repair', 'Electronics repair', 'Shoemaking', 'Tailoring',
+                         'Welding', 'Auto mechanic', 'Refrigeration']},
             {'key': 'years_experience', 'label': 'Years of Experience','type': 'number'},
             {'key': 'tools_equipment',  'label': 'Tools / Equipment', 'type': 'text',     'max_length': 300},
             {'key': 'location',         'label': 'Location',          'type': 'text',     'max_length': 200},
@@ -156,7 +165,9 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'institution',      'label': 'Institution',        'type': 'text', 'max_length': 200, 'required': True},
             {'key': 'field_of_study',   'label': 'Field of Study',     'type': 'text', 'max_length': 200},
             {'key': 'level',            'label': 'Level / Year',       'type': 'text', 'max_length': 100, 'placeholder': 'e.g. 300 Level, Year 2 apprentice'},
-            {'key': 'skills_learning',  'label': 'Skills Learning',    'type': 'text', 'max_length': 300},
+            {'key': 'skills_learning',  'label': 'Skills Learning',    'type': 'select_other', 'max_length': 300,
+             'choices': ['Coding/Programming', 'Graphic design', 'Tailoring', 'Catering', 'Hairdressing',
+                         'Welding', 'Plumbing', 'Digital marketing']},
             {'key': 'availability',     'label': 'Availability',       'type': 'text', 'max_length': 150, 'placeholder': 'e.g. Weekends, After school'},
             {'key': 'interests',        'label': 'Interests',          'type': 'text', 'max_length': 300},
         ],
@@ -181,7 +192,8 @@ MEMBER_TYPE_SCHEMA = {
         'blurb': "Doesn't fit the categories above",
         'fields': [
             {'key': 'description', 'label': 'What do you do?', 'type': 'textarea', 'max_length': 1000, 'required': True},
-            {'key': 'skills',      'label': 'Skills',          'type': 'text',     'max_length': 300},
+            {'key': 'skills',      'label': 'Skills',          'type': 'select_other', 'max_length': 300,
+             'choices': ['Customer service', 'Public speaking', 'Project management', 'Research']},
             {'key': 'services',    'label': 'Services',        'type': 'text',     'max_length': 300},
             {'key': 'location',    'label': 'Location',        'type': 'text',     'max_length': 200},
             {'key': 'contact',     'label': 'Contact',         'type': 'text',     'max_length': 150},
@@ -236,6 +248,16 @@ def sanitize_member_type_data(member_type, raw_data):
         elif ftype == 'select':
             choices = field.get('choices', [])
             if value not in choices:
+                continue
+        elif ftype == 'select_other':
+            choices = field.get('choices', [])
+            if value == 'Other':
+                other_raw = raw_data.get(key + '__other', '')
+                other_raw = '' if other_raw is None else str(other_raw).strip()
+                if not other_raw:
+                    continue
+                value = sanitize_text(other_raw)[: field.get('max_length', 300)]
+            elif value not in choices:
                 continue
         cleaned[key] = value
 
@@ -2087,11 +2109,77 @@ class BusinessPage(models.Model):
         ('others',       'Others'),
     ]
 
+    # ─────────────────────────────────────────────────────────────────────
+    # Page type / profession — what kind of professional or business this
+    # page represents. Drives which optional sections (Services, Portfolio,
+    # Projects, Achievements, Jobs, Products) are suggested by default.
+    # Mirrors the shape of MEMBER_TYPE_SCHEMA above, but scoped to Pages.
+    # ─────────────────────────────────────────────────────────────────────
+    PAGE_TYPE_BUSINESS     = 'business'
+    PAGE_TYPE_FREELANCER   = 'freelancer'
+    PAGE_TYPE_DEVELOPER    = 'developer'
+    PAGE_TYPE_TEACHER      = 'teacher'
+    PAGE_TYPE_ARTISAN      = 'artisan'
+    PAGE_TYPE_SERVICE      = 'service_provider'
+    PAGE_TYPE_CREATIVE     = 'creative'
+    PAGE_TYPE_STUDENT      = 'student'
+    PAGE_TYPE_SKILLED      = 'skilled_professional'
+    PAGE_TYPE_OTHER        = 'other'
+
+    PAGE_TYPE_CHOICES = [
+        (PAGE_TYPE_BUSINESS,   'Business Owner'),
+        (PAGE_TYPE_FREELANCER, 'Freelancer'),
+        (PAGE_TYPE_DEVELOPER,  'Developer / Tech Professional'),
+        (PAGE_TYPE_TEACHER,    'Teacher / Tutor'),
+        (PAGE_TYPE_ARTISAN,    'Artisan / Technician'),
+        (PAGE_TYPE_SERVICE,    'Service Provider'),
+        (PAGE_TYPE_CREATIVE,   'Creative / Artist'),
+        (PAGE_TYPE_STUDENT,    'Student'),
+        (PAGE_TYPE_SKILLED,    'Skilled Professional'),
+        (PAGE_TYPE_OTHER,      'Other Professional'),
+    ]
+
+    # Which optional sections make sense by default for each page type.
+    # The page owner can still turn any of these on/off at creation or edit.
+    PAGE_TYPE_SECTION_DEFAULTS = {
+        PAGE_TYPE_BUSINESS:   ['services', 'jobs'],
+        PAGE_TYPE_FREELANCER: ['services', 'portfolio', 'projects'],
+        PAGE_TYPE_DEVELOPER:  ['services', 'portfolio', 'projects', 'achievements'],
+        PAGE_TYPE_TEACHER:    ['services', 'achievements'],
+        PAGE_TYPE_ARTISAN:    ['services', 'portfolio', 'achievements'],
+        PAGE_TYPE_SERVICE:    ['services', 'jobs'],
+        PAGE_TYPE_CREATIVE:   ['portfolio', 'projects', 'achievements'],
+        PAGE_TYPE_STUDENT:    ['portfolio', 'projects', 'achievements'],
+        PAGE_TYPE_SKILLED:    ['services', 'portfolio', 'achievements'],
+        PAGE_TYPE_OTHER:      ['services', 'portfolio', 'projects', 'achievements', 'jobs'],
+    }
+
+    # Page types that default to selling products, since most professional
+    # pages (tutors, freelancers, artisans providing services…) don't.
+    PAGE_TYPES_SELLING_BY_DEFAULT = {PAGE_TYPE_BUSINESS}
+
+    OPTIONAL_SECTION_CHOICES = [
+        ('services',     'Services'),
+        ('portfolio',    'Portfolio'),
+        ('projects',     'Projects'),
+        ('achievements', 'Achievements'),
+        ('jobs',         'Jobs'),
+    ]
+    VALID_OPTIONAL_SECTIONS = {s[0] for s in OPTIONAL_SECTION_CHOICES}
+
     page_id     = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='business_pages')
     name        = models.CharField(max_length=150)
     slug        = models.SlugField(max_length=160, unique=True)
     category    = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='others')
+    page_type   = models.CharField(max_length=25, choices=PAGE_TYPE_CHOICES, default=PAGE_TYPE_BUSINESS, db_index=True)
+    # Products are opt-in: only professionals/businesses that actually sell
+    # physical or digital products should see the Products tab & be able to
+    # post Market listings from this page.
+    sells_products   = models.BooleanField(default=True)
+    # Which optional sections (see OPTIONAL_SECTION_CHOICES) are turned on
+    # for this page. Stored as a plain list, e.g. ["services", "portfolio"].
+    enabled_sections = models.JSONField(default=list, blank=True)
     tagline     = models.CharField(max_length=200, blank=True, default='')
     description = models.TextField(blank=True, default='')
     location    = models.CharField(max_length=200, blank=True, default='')
@@ -2184,6 +2272,26 @@ class BusinessPage(models.Model):
         if self.tiktok:
             self.tiktok = re.sub(r'[^a-zA-Z0-9._]', '', self.tiktok.lstrip('@').strip())[:100]
         self.business_hours = self._sanitize_business_hours(self.business_hours)
+        if self.page_type not in dict(self.PAGE_TYPE_CHOICES):
+            self.page_type = self.PAGE_TYPE_BUSINESS
+        self.enabled_sections = self._sanitize_enabled_sections(self.enabled_sections)
+
+    @classmethod
+    def _sanitize_enabled_sections(cls, raw):
+        """Keep only known, deduplicated optional-section keys."""
+        if not isinstance(raw, (list, tuple, set)):
+            return []
+        seen = []
+        for key in raw:
+            key = str(key).strip()
+            if key in cls.VALID_OPTIONAL_SECTIONS and key not in seen:
+                seen.append(key)
+        return seen
+
+    @classmethod
+    def default_sections_for(cls, page_type):
+        """The suggested optional sections for a given page type."""
+        return list(cls.PAGE_TYPE_SECTION_DEFAULTS.get(page_type, cls.PAGE_TYPE_SECTION_DEFAULTS[cls.PAGE_TYPE_OTHER]))
 
     @classmethod
     def _sanitize_business_hours(cls, raw):
@@ -2321,6 +2429,230 @@ class BusinessPage(models.Model):
     def post_count(self):
         return self.posts.count()
 
+    # ── Professional page sections ───────────────────────────────────────────
+    @property
+    def page_type_label(self):
+        return dict(self.PAGE_TYPE_CHOICES).get(self.page_type, 'Business Owner')
+
+    @property
+    def show_products(self):
+        return bool(self.sells_products)
+
+    @property
+    def show_services(self):
+        return 'services' in (self.enabled_sections or [])
+
+    @property
+    def show_portfolio(self):
+        return 'portfolio' in (self.enabled_sections or [])
+
+    @property
+    def show_projects(self):
+        return 'projects' in (self.enabled_sections or [])
+
+    @property
+    def show_achievements(self):
+        return 'achievements' in (self.enabled_sections or [])
+
+    @property
+    def show_jobs_section(self):
+        return 'jobs' in (self.enabled_sections or [])
+
+    @property
+    def service_count(self):
+        return self.services.count()
+
+    @property
+    def portfolio_count(self):
+        return self.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PORTFOLIO).count()
+
+    @property
+    def project_count(self):
+        return self.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PROJECT).count()
+
+    @property
+    def achievement_count(self):
+        return self.achievements.count()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Optional professional-page sections — Services, Portfolio/Projects,
+# Achievements. Jobs already exist via JobVacancy.business_page and Products
+# via Market.business_page, so no new models are needed for those two.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class BusinessService(models.Model):
+    """A service offered by a professional/business page — e.g. 'Logo design',
+    'AC repair', 'Home tutoring'. Shown in the optional Services section."""
+    service_id    = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='services')
+    title         = models.CharField(max_length=150)
+    description   = models.TextField(blank=True, default='')
+    price_text    = models.CharField(max_length=150, blank=True, default='',
+                                      help_text='e.g. ₦15,000, Starting from ₦5,000/hr, or Negotiable')
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='business_service_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='business_service_images/', blank=True, null=True)
+
+    order      = models.PositiveSmallIntegerField(default=0)
+    is_active  = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'BusinessService_Table'
+        ordering = ['order', '-created_at']
+
+    def __str__(self):
+        return f'{self.title} — {self.business_page.name}'
+
+    def clean(self):
+        super().clean()
+        self.title       = sanitize_text(self.title)
+        self.description = sanitize_text(self.description, 'about')
+        self.price_text  = sanitize_text(self.price_text)
+        if not self.title:
+            raise ValidationError({'title': 'Service title is required.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
+
+class BusinessPortfolioItem(models.Model):
+    """A single Portfolio piece or Project shown on a professional page.
+    Same shape for both — 'kind' distinguishes a past-work sample
+    (portfolio) from a featured/ongoing body of work (project)."""
+    KIND_PORTFOLIO = 'portfolio'
+    KIND_PROJECT   = 'project'
+    KIND_CHOICES = [
+        (KIND_PORTFOLIO, 'Portfolio piece'),
+        (KIND_PROJECT,   'Project'),
+    ]
+
+    item_id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='portfolio_items')
+    kind          = models.CharField(max_length=12, choices=KIND_CHOICES, default=KIND_PORTFOLIO, db_index=True)
+    title         = models.CharField(max_length=150)
+    description   = models.TextField(blank=True, default='')
+    link_url      = models.URLField(max_length=500, blank=True, default='')
+    is_ongoing    = models.BooleanField(default=False, help_text='Only meaningful for projects.')
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='business_portfolio_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='business_portfolio_images/', blank=True, null=True)
+
+    order      = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'BusinessPortfolioItem_Table'
+        ordering = ['order', '-created_at']
+
+    def __str__(self):
+        return f'{self.title} ({self.get_kind_display()})'
+
+    def clean(self):
+        super().clean()
+        self.title       = sanitize_text(self.title)
+        self.description = sanitize_text(self.description, 'about')
+        if self.kind not in dict(self.KIND_CHOICES):
+            self.kind = self.KIND_PORTFOLIO
+        if self.link_url:
+            try:
+                self.link_url = validate_url(self.link_url)
+            except ValidationError:
+                self.link_url = ''
+        if not self.title:
+            raise ValidationError({'title': 'Title is required.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
+
+class BusinessAchievement(models.Model):
+    """A certification, award, or milestone shown on a professional page."""
+    achievement_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business_page  = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='achievements')
+    title          = models.CharField(max_length=150)
+    issuer         = models.CharField(max_length=150, blank=True, default='')
+    description    = models.TextField(blank=True, default='')
+    date_achieved  = models.DateField(blank=True, null=True)
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='business_achievement_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='business_achievement_images/', blank=True, null=True)
+
+    order      = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'BusinessAchievement_Table'
+        ordering = ['order', '-date_achieved', '-created_at']
+
+    def __str__(self):
+        return f'{self.title} — {self.business_page.name}'
+
+    def clean(self):
+        super().clean()
+        self.title       = sanitize_text(self.title)
+        self.issuer      = sanitize_text(self.issuer)
+        self.description = sanitize_text(self.description, 'about')
+        if not self.title:
+            raise ValidationError({'title': 'Achievement title is required.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Business page updates — image / video / text / poll posts
@@ -2350,9 +2682,26 @@ class BusinessPost(models.Model):
     MIN_VIDEO_SECONDS = 15
     MAX_VIDEO_SECONDS = 90
 
+    # Content category — a lightweight tag independent of post_type (which
+    # describes the *media*: image/video/text/poll). Lets a professional
+    # page label what a post is *about*, e.g. a work update vs a tutorial.
+    CATEGORY_UPDATE       = 'update'
+    CATEGORY_WORK         = 'work'
+    CATEGORY_PROJECT      = 'project'
+    CATEGORY_TUTORIAL     = 'tutorial'
+    CATEGORY_ANNOUNCEMENT = 'announcement'
+    POST_CATEGORY_CHOICES = [
+        (CATEGORY_UPDATE,       'General Update'),
+        (CATEGORY_WORK,         'Work Update'),
+        (CATEGORY_PROJECT,      'Project'),
+        (CATEGORY_TUTORIAL,     'Tutorial'),
+        (CATEGORY_ANNOUNCEMENT, 'Announcement'),
+    ]
+
     post_id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='posts')
     post_type     = models.CharField(max_length=10, choices=POST_TYPE_CHOICES, default=TYPE_TEXT, db_index=True)
+    post_category = models.CharField(max_length=15, choices=POST_CATEGORY_CHOICES, default=CATEGORY_UPDATE, db_index=True)
     caption       = models.TextField(blank=True, default='')
 
     if settings.USE_CLOUDINARY:
@@ -2380,6 +2729,8 @@ class BusinessPost(models.Model):
         super().clean()
         if self.post_type not in dict(self.POST_TYPE_CHOICES):
             raise ValidationError({'post_type': 'Invalid post type.'})
+        if self.post_category not in dict(self.POST_CATEGORY_CHOICES):
+            self.post_category = self.CATEGORY_UPDATE
         self.caption = sanitize_text(self.caption, 'post_caption')
 
         if self.post_type == self.TYPE_TEXT and not self.caption:
@@ -2429,6 +2780,10 @@ class BusinessPost(models.Model):
     @property
     def comment_count(self):
         return self.comments.count()
+
+    @property
+    def category_label(self):
+        return dict(self.POST_CATEGORY_CHOICES).get(self.post_category, 'General Update')
 
     @property
     def top_vibe_emoji(self):

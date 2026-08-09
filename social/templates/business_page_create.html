@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Create Business Page | Marketfy</title>
+    <title>Create Professional Page | Marketfy</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
         :root {
@@ -149,6 +149,55 @@
         .kbiz-hours-times span { font-size: 12px; color: var(--mfy-text-light); }
         .kbiz-hours-row.is-closed .kbiz-hours-time { opacity: .4; pointer-events: none; }
         .kbiz-hours-closed-lbl { font-size: 12px; color: var(--mfy-text-light); flex: 1; }
+
+        /* ── Page type picker ── */
+        .kbiz-hint { font-size: 12.5px; color: var(--mfy-text-light); margin: -8px 0 14px; line-height: 1.4; }
+        .kbiz-ptype-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+            margin-bottom: 4px;
+        }
+        .kbiz-ptype-card {
+            border: 1.5px solid var(--mfy-border); border-radius: 12px;
+            padding: 12px 10px; cursor: pointer; text-align: center;
+            font-size: 13px; font-weight: 600; color: var(--mfy-text);
+            transition: border-color .15s, background .15s;
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+        }
+        .kbiz-ptype-card i { font-size: 18px; color: var(--mfy-text-light); }
+        .kbiz-ptype-card.active { border-color: var(--mfy-primary); background: #eaf7ff; }
+        .kbiz-ptype-card.active i { color: var(--mfy-primary); }
+
+        /* ── Toggle switch (sell products?) ── */
+        .kbiz-toggle-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; padding: 12px 0;
+        }
+        .kbiz-toggle-row .kbiz-toggle-copy strong { display: block; font-size: 14px; }
+        .kbiz-toggle-row .kbiz-toggle-copy span { font-size: 12.5px; color: var(--mfy-text-light); }
+        .kbiz-switch { position: relative; width: 46px; height: 26px; flex-shrink: 0; }
+        .kbiz-switch input { opacity: 0; width: 0; height: 0; }
+        .kbiz-switch-track {
+            position: absolute; inset: 0; background: #ccc; border-radius: 999px;
+            cursor: pointer; transition: background .2s;
+        }
+        .kbiz-switch-track::before {
+            content: ''; position: absolute; width: 20px; height: 20px;
+            left: 3px; top: 3px; background: #fff; border-radius: 50%;
+            transition: transform .2s;
+        }
+        .kbiz-switch input:checked + .kbiz-switch-track { background: var(--mfy-primary); }
+        .kbiz-switch input:checked + .kbiz-switch-track::before { transform: translateX(20px); }
+
+        /* ── Optional sections checkboxes ── */
+        .kbiz-sections-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .kbiz-section-chip {
+            border: 1.5px solid var(--mfy-border); border-radius: 999px;
+            padding: 8px 14px; font-size: 13px; font-weight: 600;
+            cursor: pointer; color: var(--mfy-text); user-select: none;
+            transition: border-color .15s, background .15s;
+        }
+        .kbiz-section-chip.active { border-color: var(--mfy-primary); background: #eaf7ff; color: var(--mfy-primary-dark); }
+        .kbiz-section-chip input { display: none; }
     </style>
 </head>
 <body>
@@ -169,7 +218,7 @@
     <button type="button" class="kbiz-header-back" onclick="window.history.back()">
         <i class="fas fa-arrow-left"></i> Back
     </button>
-    <span class="kbiz-header-title">New Business Page</span>
+    <span class="kbiz-header-title">New Professional Page</span>
     <button type="submit" class="kbiz-header-save">Create</button>
 </header>
 
@@ -201,7 +250,29 @@
         {% if errors.name %}<div class="kbiz-field-error">{{ errors.name }}</div>{% endif %}
     </div>
 
-    <div class="kbiz-field">
+    <p class="kbiz-section-title">What kind of page is this?</p>
+    <div class="kbiz-hint">This decides what shows on your page — Services, Portfolio, Projects, Achievements or Jobs — and whether Products are turned on. You can change this any time.</div>
+    <div class="kbiz-ptype-grid" id="ptypeGrid">
+        {% for val, label in page_type_choices %}
+        <div class="kbiz-ptype-card {% if forloop.first and not form_data.page_type %}active{% elif form_data.page_type == val %}active{% endif %}" data-value="{{ val }}" onclick="selectPageType('{{ val }}')">
+            <i class="fas
+                {% if val == 'business' %}fa-store
+                {% elif val == 'freelancer' %}fa-laptop-code
+                {% elif val == 'developer' %}fa-code
+                {% elif val == 'teacher' %}fa-chalkboard-user
+                {% elif val == 'artisan' %}fa-screwdriver-wrench
+                {% elif val == 'service_provider' %}fa-truck
+                {% elif val == 'creative' %}fa-palette
+                {% elif val == 'student' %}fa-graduation-cap
+                {% elif val == 'skilled_professional' %}fa-user-gear
+                {% else %}fa-briefcase{% endif %}"></i>
+            <span>{{ label }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    <input type="hidden" name="page_type" id="pageTypeInput" value="{{ form_data.page_type|default:'business' }}">
+
+    <div class="kbiz-field" style="margin-top:16px;">
         <label class="kbiz-label">Category *</label>
         <select class="kbiz-select" name="category">
             {% for val, label in categories %}
@@ -217,9 +288,33 @@
     </div>
 
     <div class="kbiz-field">
-        <label class="kbiz-label">About Your Business</label>
+        <label class="kbiz-label">About</label>
         <textarea class="kbiz-textarea" name="description"
-                  placeholder="Tell people what your business does, what you sell, your story…">{{ form_data.description|default:'' }}</textarea>
+                  placeholder="Tell people what you do, what you offer, your story…">{{ form_data.description|default:'' }}</textarea>
+    </div>
+
+    <p class="kbiz-section-title">Products</p>
+    <div class="kbiz-toggle-row">
+        <div class="kbiz-toggle-copy">
+            <strong>Sell products on this page?</strong>
+            <span>Only turn this on if you sell physical or digital products. Posts, services, portfolio etc. work fine without it.</span>
+        </div>
+        <label class="kbiz-switch">
+            <input type="hidden" name="sells_products" value="0">
+            <input type="checkbox" name="sells_products" id="sellsProductsInput" value="1">
+            <span class="kbiz-switch-track"></span>
+        </label>
+    </div>
+
+    <p class="kbiz-section-title">Optional Sections</p>
+    <div class="kbiz-hint">Pick what to show on your page. We've pre-selected sensible defaults for the page type you chose above — feel free to adjust.</div>
+    <div class="kbiz-sections-grid" id="sectionsGrid">
+        {% for val, label in section_choices %}
+        <label class="kbiz-section-chip" data-value="{{ val }}">
+            <input type="checkbox" name="sections" value="{{ val }}">
+            {{ label }}
+        </label>
+        {% endfor %}
     </div>
 
     <p class="kbiz-section-title">Contact & Location</p>
@@ -360,6 +455,42 @@
             if (!closeInput.value) closeInput.value = '18:00';
         }
     }
+
+    // ── Page type → default sections & products toggle ─────────────────────
+    const PAGE_TYPE_DEFAULTS  = {{ page_type_defaults_json|safe }};
+    const PAGE_TYPES_SELLING  = {{ page_types_selling_json|safe }};
+    let sectionsTouchedByUser = false;
+
+    document.querySelectorAll('.kbiz-section-chip input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', function () {
+            sectionsTouchedByUser = true;
+            this.closest('.kbiz-section-chip').classList.toggle('active', this.checked);
+        });
+    });
+
+    function applyPageTypeDefaults(pageType) {
+        // Products toggle
+        document.getElementById('sellsProductsInput').checked = PAGE_TYPES_SELLING.includes(pageType);
+        // Optional sections — only auto-apply if the owner hasn't hand-picked any yet
+        if (sectionsTouchedByUser) return;
+        const defaults = PAGE_TYPE_DEFAULTS[pageType] || [];
+        document.querySelectorAll('.kbiz-section-chip').forEach(chip => {
+            const isDefault = defaults.includes(chip.dataset.value);
+            chip.querySelector('input[type="checkbox"]').checked = isDefault;
+            chip.classList.toggle('active', isDefault);
+        });
+    }
+
+    function selectPageType(value) {
+        document.getElementById('pageTypeInput').value = value;
+        document.querySelectorAll('.kbiz-ptype-card').forEach(card => {
+            card.classList.toggle('active', card.dataset.value === value);
+        });
+        applyPageTypeDefaults(value);
+    }
+
+    // Initialize on load using whichever card starts active
+    applyPageTypeDefaults(document.getElementById('pageTypeInput').value);
 
     // Disable submit on click to prevent double-submission
     document.getElementById('bizCreateForm').addEventListener('submit', function () {

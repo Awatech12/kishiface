@@ -2024,7 +2024,7 @@
         {{ page.name }}
         {% if page.is_verified %}<i class="fas fa-check-circle"></i>{% endif %}
     </div>
-    <div class="kbiz-page-cat">{{ page.get_category_display }}</div>
+    <div class="kbiz-page-cat">{{ page.page_type_label }} · {{ page.get_category_display }}</div>
     {% if page.tagline %}<div class="kbiz-page-tag">{{ page.tagline }}</div>{% endif %}
     {% if page.description %}<div class="kbiz-page-desc">{{ page.description }}</div>{% endif %}
 
@@ -2141,32 +2141,63 @@
 
 <!-- Content Tabs -->
 <div class="kbiz-content-tabs" role="tablist">
-    <button type="button" class="kbiz-content-tab active" data-tab="products" role="tab" aria-selected="true" onclick="kbizSwitchContentTab('products', this)">
-        <i class="fas fa-box"></i> Products
-        {% if listings %}<span class="kbiz-content-tab-count">{{ listings|length }}</span>{% endif %}
-    </button>
-    <button type="button" class="kbiz-content-tab" data-tab="posts" role="tab" aria-selected="false" onclick="kbizSwitchContentTab('posts', this)">
+    <button type="button" class="kbiz-content-tab active" data-tab="posts" role="tab" aria-selected="true" onclick="kbizSwitchContentTab('posts', this)">
         <i class="fas fa-bullhorn"></i> Posts
         {% if posts %}<span class="kbiz-content-tab-count">{{ posts|length }}</span>{% endif %}
     </button>
+    {% if page.show_services %}
+    <button type="button" class="kbiz-content-tab" data-tab="services" role="tab" aria-selected="false" onclick="kbizSwitchContentTab('services', this)">
+        <i class="fas fa-hand-holding-heart"></i> Services
+        {% if services %}<span class="kbiz-content-tab-count">{{ services|length }}</span>{% endif %}
+    </button>
+    {% endif %}
+    {% if page.show_portfolio %}
+    <button type="button" class="kbiz-content-tab" data-tab="portfolio" role="tab" aria-selected="false" onclick="kbizSwitchContentTab('portfolio', this)">
+        <i class="fas fa-images"></i> Portfolio
+        {% if portfolio_items %}<span class="kbiz-content-tab-count">{{ portfolio_items|length }}</span>{% endif %}
+    </button>
+    {% endif %}
+    {% if page.show_projects %}
+    <button type="button" class="kbiz-content-tab" data-tab="projects" role="tab" aria-selected="false" onclick="kbizSwitchContentTab('projects', this)">
+        <i class="fas fa-diagram-project"></i> Projects
+        {% if project_items %}<span class="kbiz-content-tab-count">{{ project_items|length }}</span>{% endif %}
+    </button>
+    {% endif %}
+    {% if page.show_achievements %}
+    <button type="button" class="kbiz-content-tab" data-tab="achievements" role="tab" aria-selected="false" onclick="kbizSwitchContentTab('achievements', this)">
+        <i class="fas fa-trophy"></i> Achievements
+        {% if achievements %}<span class="kbiz-content-tab-count">{{ achievements|length }}</span>{% endif %}
+    </button>
+    {% endif %}
+    {% if page.show_jobs_section or job_count %}
     <button type="button" class="kbiz-content-tab" data-tab="jobs" role="tab" aria-selected="false" onclick="kbizSwitchContentTab('jobs', this)">
         <i class="fas fa-briefcase"></i> Jobs
         {% if jobs %}<span class="kbiz-content-tab-count">{{ jobs|length }}</span>{% endif %}
     </button>
+    {% endif %}
+    {% if page.show_products %}
+    <button type="button" class="kbiz-content-tab" data-tab="products" role="tab" aria-selected="false" onclick="kbizSwitchContentTab('products', this)">
+        <i class="fas fa-box"></i> Products
+        {% if listings %}<span class="kbiz-content-tab-count">{{ listings|length }}</span>{% endif %}
+    </button>
+    {% endif %}
 </div>
 
 <!-- Products Tab Panel -->
-<div class="kbiz-tab-panel active" id="kbiz-panel-products">
+<div class="kbiz-tab-panel" id="kbiz-panel-products">
 <!-- Listings Section -->
 <div class="kbiz-section">
     <div class="kbiz-section-header">
-        <h2>All Listings</h2>
-        {% if is_owner %}
+        <h2>Products</h2>
+        {% if is_owner and page.show_products %}
         <button class="kbiz-upload-btn" onclick="openModal()">
-            <i class="fas fa-plus"></i> Upload
+            <i class="fas fa-plus"></i> Add Product
         </button>
         {% endif %}
     </div>
+    {% if is_owner and not page.show_products %}
+    <div class="kbiz-hint" style="margin:-4px 0 14px;">Products are turned off for this page. Enable "Sell Products" in Edit Page to start listing items.</div>
+    {% endif %}
 
     {% if listings %}
     <div class="kbiz-jgrid" id="listingsGrid">
@@ -2385,14 +2416,14 @@
 <!-- /Jobs Tab Panel -->
 
 <!-- Posts Tab Panel -->
-<div class="kbiz-tab-panel" id="kbiz-panel-posts">
+<div class="kbiz-tab-panel active" id="kbiz-panel-posts">
 <!-- Updates Section -->
 <div class="kbiz-section">
     <div class="kbiz-section-header">
-        <h2>Updates</h2>
+        <h2>Posts</h2>
         {% if is_owner %}
         <button class="kbiz-upload-btn" onclick="openPostModal()">
-            <i class="fas fa-plus"></i> New Post
+            <i class="fas fa-plus"></i> Create Post
         </button>
         {% endif %}
     </div>
@@ -2407,7 +2438,7 @@
                          onerror="this.onerror=null;this.src='https://placehold.co/68x68/f97316/ffffff?text=B';">
                     <div style="min-width:0;">
                         <div class="kbiz-post-author-name">{{ page.name }}</div>
-                        {% if page.category %}<div class="kbiz-post-author-sub">{{ page.category }}</div>{% endif %}
+                        {% if page.category %}<div class="kbiz-post-author-sub">{{ page.page_type_label }}</div>{% endif %}
                         <div class="kbiz-post-time">
                             {% if post.is_pinned %}<span class="kbiz-post-pin"><i class="fas fa-thumbtack"></i></span>{% endif %}
                             <i class="far fa-clock"></i> {{ post.time_posted }}
@@ -2543,10 +2574,10 @@
     <div class="kbiz-empty">
         <i class="fas fa-bullhorn"></i>
         {% if is_owner %}
-        <strong>No updates yet</strong><br>
-        <small>Share photos, a short video, a text update, or a poll.</small>
+        <strong>No posts yet</strong><br>
+        <small>Share a work update, project, tutorial, announcement, photos, video, or a poll.</small>
         {% else %}
-        <strong>No updates yet</strong><br>
+        <strong>No posts yet</strong><br>
         <small>Check back soon!</small>
         {% endif %}
     </div>
@@ -2554,6 +2585,208 @@
 </div>
 </div>
 <!-- /Posts Tab Panel -->
+
+<!-- Services Tab Panel -->
+<div class="kbiz-tab-panel" id="kbiz-panel-services">
+<div class="kbiz-section">
+    <div class="kbiz-section-header">
+        <h2>Services</h2>
+        {% if is_owner %}
+        <button class="kbiz-upload-btn" onclick="openServiceModal()">
+            <i class="fas fa-plus"></i> Add Service
+        </button>
+        {% endif %}
+    </div>
+    {% if services %}
+    <div class="kbiz-jgrid" id="servicesGrid">
+        {% for service in services %}
+        <article class="mfy-jcard" id="kbiz-service-{{ service.service_id }}">
+            <div class="mfy-jcard-img-wrap">
+                <img src="{{ service.get_image_url|default:'https://placehold.co/600x400/eaf7ff/0095f6?text=Service' }}"
+                     alt="{{ service.title }}" loading="lazy" class="mfy-jcard-img loaded">
+            </div>
+            <div class="mfy-jcard-body">
+                <div class="mfy-jcard-name">{{ service.title }}</div>
+                {% if service.description %}<div class="mfy-jcard-meta-txt">{{ service.description|truncatechars:120 }}</div>{% endif %}
+                {% if service.price_text %}<div class="mfy-jcard-price">{{ service.price_text }}</div>{% endif %}
+            </div>
+            {% if is_owner %}
+            <div class="khj-jcard-owner-row">
+                <button class="khj-owner-btn del" onclick="deleteBusinessService('{{ service.service_id }}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="kbiz-empty">
+        <i class="fas fa-hand-holding-heart"></i>
+        {% if is_owner %}
+        <strong>No services listed yet</strong><br>
+        <small>Add what you offer — pricing, packages, consultations.</small>
+        {% else %}
+        <strong>No services listed yet</strong><br>
+        <small>Check back soon!</small>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+</div>
+<!-- /Services Tab Panel -->
+
+<!-- Portfolio Tab Panel -->
+<div class="kbiz-tab-panel" id="kbiz-panel-portfolio">
+<div class="kbiz-section">
+    <div class="kbiz-section-header">
+        <h2>Portfolio</h2>
+        {% if is_owner %}
+        <button class="kbiz-upload-btn" onclick="openPortfolioModal('portfolio')">
+            <i class="fas fa-plus"></i> Add Portfolio Piece
+        </button>
+        {% endif %}
+    </div>
+    {% if portfolio_items %}
+    <div class="kbiz-jgrid" id="portfolioGrid">
+        {% for item in portfolio_items %}
+        <article class="mfy-jcard" id="kbiz-portfolio-{{ item.item_id }}">
+            <div class="mfy-jcard-img-wrap">
+                <img src="{{ item.get_image_url|default:'https://placehold.co/600x400/eaf7ff/0095f6?text=Portfolio' }}"
+                     alt="{{ item.title }}" loading="lazy" class="mfy-jcard-img loaded">
+            </div>
+            <div class="mfy-jcard-body">
+                <div class="mfy-jcard-name">{{ item.title }}</div>
+                {% if item.description %}<div class="mfy-jcard-meta-txt">{{ item.description|truncatechars:120 }}</div>{% endif %}
+                {% if item.link_url %}<a href="{{ item.link_url }}" target="_blank" rel="noopener" class="mfy-jcard-meta-txt"><i class="fas fa-link"></i> View</a>{% endif %}
+            </div>
+            {% if is_owner %}
+            <div class="khj-jcard-owner-row">
+                <button class="khj-owner-btn del" onclick="deleteBusinessPortfolio('{{ item.item_id }}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="kbiz-empty">
+        <i class="fas fa-images"></i>
+        {% if is_owner %}
+        <strong>No portfolio pieces yet</strong><br>
+        <small>Showcase samples of your past work.</small>
+        {% else %}
+        <strong>No portfolio pieces yet</strong><br>
+        <small>Check back soon!</small>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+</div>
+<!-- /Portfolio Tab Panel -->
+
+<!-- Projects Tab Panel -->
+<div class="kbiz-tab-panel" id="kbiz-panel-projects">
+<div class="kbiz-section">
+    <div class="kbiz-section-header">
+        <h2>Projects</h2>
+        {% if is_owner %}
+        <button class="kbiz-upload-btn" onclick="openPortfolioModal('project')">
+            <i class="fas fa-plus"></i> Add Project
+        </button>
+        {% endif %}
+    </div>
+    {% if project_items %}
+    <div class="kbiz-jgrid" id="projectsGrid">
+        {% for item in project_items %}
+        <article class="mfy-jcard" id="kbiz-portfolio-{{ item.item_id }}">
+            <div class="mfy-jcard-img-wrap">
+                <img src="{{ item.get_image_url|default:'https://placehold.co/600x400/eaf7ff/0095f6?text=Project' }}"
+                     alt="{{ item.title }}" loading="lazy" class="mfy-jcard-img loaded">
+                {% if item.is_ongoing %}<span class="mfy-jcard-category-badge">Ongoing</span>{% endif %}
+            </div>
+            <div class="mfy-jcard-body">
+                <div class="mfy-jcard-name">{{ item.title }}</div>
+                {% if item.description %}<div class="mfy-jcard-meta-txt">{{ item.description|truncatechars:120 }}</div>{% endif %}
+                {% if item.link_url %}<a href="{{ item.link_url }}" target="_blank" rel="noopener" class="mfy-jcard-meta-txt"><i class="fas fa-link"></i> View</a>{% endif %}
+            </div>
+            {% if is_owner %}
+            <div class="khj-jcard-owner-row">
+                <button class="khj-owner-btn del" onclick="deleteBusinessPortfolio('{{ item.item_id }}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="kbiz-empty">
+        <i class="fas fa-diagram-project"></i>
+        {% if is_owner %}
+        <strong>No projects yet</strong><br>
+        <small>Highlight ongoing or featured bodies of work.</small>
+        {% else %}
+        <strong>No projects yet</strong><br>
+        <small>Check back soon!</small>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+</div>
+<!-- /Projects Tab Panel -->
+
+<!-- Achievements Tab Panel -->
+<div class="kbiz-tab-panel" id="kbiz-panel-achievements">
+<div class="kbiz-section">
+    <div class="kbiz-section-header">
+        <h2>Achievements</h2>
+        {% if is_owner %}
+        <button class="kbiz-upload-btn" onclick="openAchievementModal()">
+            <i class="fas fa-plus"></i> Add Achievement
+        </button>
+        {% endif %}
+    </div>
+    {% if achievements %}
+    <div class="kbiz-jgrid" id="achievementsGrid">
+        {% for a in achievements %}
+        <article class="mfy-jcard" id="kbiz-achievement-{{ a.achievement_id }}">
+            <div class="mfy-jcard-img-wrap">
+                <img src="{{ a.get_image_url|default:'https://placehold.co/600x400/fff7e6/f59e0b?text=Achievement' }}"
+                     alt="{{ a.title }}" loading="lazy" class="mfy-jcard-img loaded">
+            </div>
+            <div class="mfy-jcard-body">
+                <div class="mfy-jcard-name">{{ a.title }}</div>
+                {% if a.issuer %}<div class="mfy-jcard-meta-txt"><i class="fas fa-award"></i> {{ a.issuer }}</div>{% endif %}
+                {% if a.date_achieved %}<div class="mfy-jcard-meta-txt">{{ a.date_achieved }}</div>{% endif %}
+                {% if a.description %}<div class="mfy-jcard-meta-txt">{{ a.description|truncatechars:120 }}</div>{% endif %}
+            </div>
+            {% if is_owner %}
+            <div class="khj-jcard-owner-row">
+                <button class="khj-owner-btn del" onclick="deleteBusinessAchievement('{{ a.achievement_id }}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="kbiz-empty">
+        <i class="fas fa-trophy"></i>
+        {% if is_owner %}
+        <strong>No achievements yet</strong><br>
+        <small>Add awards, certifications, or milestones.</small>
+        {% else %}
+        <strong>No achievements yet</strong><br>
+        <small>Check back soon!</small>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+</div>
+<!-- /Achievements Tab Panel -->
 
 <!-- About Section -->
 <div class="kbiz-about">
@@ -2735,7 +2968,16 @@
 <div class="kbiz-overlay" id="postOverlay">
     <div class="kbiz-modal">
         <div class="kbiz-modal-handle"></div>
-        <div class="kbiz-modal-title">New Update</div>
+        <div class="kbiz-modal-title">Create Post</div>
+
+        <div class="kbiz-field">
+            <label class="kbiz-label">What's this about?</label>
+            <select class="kbiz-select" id="postCategorySelect">
+                {% for val, label in post_category_choices %}
+                <option value="{{ val }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
 
         <div class="kbiz-post-type-row">
             <button type="button" class="kbiz-post-type-btn active" data-type="image" onclick="setPostType('image')">
@@ -2813,9 +3055,109 @@
         </div>
 
         <button class="kbiz-modal-submit" id="postUploadBtn" onclick="submitBusinessPost()">
-            <i class="fas fa-paper-plane"></i> Post Update
+            <i class="fas fa-paper-plane"></i> Share Post
         </button>
         <button class="kbiz-modal-cancel" onclick="closePostModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- ── Add Service modal (owner only) ── -->
+<div class="kbiz-overlay" id="serviceOverlay">
+    <div class="kbiz-modal">
+        <div class="kbiz-modal-handle"></div>
+        <div class="kbiz-modal-title">Add Service</div>
+        <div class="kbiz-photo-row">
+            <label class="kbiz-add-photo" for="serviceImageInput">
+                <i class="fas fa-camera fa-lg"></i>
+                <span>Add Photo</span>
+            </label>
+        </div>
+        <input type="file" id="serviceImageInput" accept="image/*" style="display:none;">
+        <div class="kbiz-field">
+            <label class="kbiz-label">Title *</label>
+            <input class="kbiz-input" id="serviceTitleInput" type="text" placeholder="e.g. Logo Design, Home Tutoring, AC Repair" maxlength="150">
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">Description</label>
+            <textarea class="kbiz-textarea" id="serviceDescInput" placeholder="What does this service include?"></textarea>
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">Price</label>
+            <input class="kbiz-input" id="servicePriceInput" type="text" placeholder="e.g. ₦15,000 or Starting from ₦5,000/hr" maxlength="150">
+        </div>
+        <button class="kbiz-modal-submit" id="serviceSubmitBtn" onclick="submitBusinessService()">
+            <i class="fas fa-check"></i> Add Service
+        </button>
+        <button class="kbiz-modal-cancel" onclick="closeServiceModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- ── Add Portfolio / Project modal (owner only) ── -->
+<div class="kbiz-overlay" id="portfolioOverlay">
+    <div class="kbiz-modal">
+        <div class="kbiz-modal-handle"></div>
+        <div class="kbiz-modal-title" id="portfolioModalTitle">Add Portfolio Piece</div>
+        <div class="kbiz-photo-row">
+            <label class="kbiz-add-photo" for="portfolioImageInput">
+                <i class="fas fa-camera fa-lg"></i>
+                <span>Add Photo</span>
+            </label>
+        </div>
+        <input type="file" id="portfolioImageInput" accept="image/*" style="display:none;">
+        <div class="kbiz-field">
+            <label class="kbiz-label">Title *</label>
+            <input class="kbiz-input" id="portfolioTitleInput" type="text" placeholder="Name of the piece or project" maxlength="150">
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">Description</label>
+            <textarea class="kbiz-textarea" id="portfolioDescInput" placeholder="What is this? What did you do?"></textarea>
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">Link (optional)</label>
+            <input class="kbiz-input" id="portfolioLinkInput" type="url" placeholder="https://…">
+        </div>
+        <label class="kbiz-checkbox-row" id="portfolioOngoingRow" style="display:none;">
+            <input type="checkbox" id="portfolioOngoingInput"> This project is ongoing
+        </label>
+        <button class="kbiz-modal-submit" id="portfolioSubmitBtn" onclick="submitBusinessPortfolio()">
+            <i class="fas fa-check"></i> Add
+        </button>
+        <button class="kbiz-modal-cancel" onclick="closePortfolioModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- ── Add Achievement modal (owner only) ── -->
+<div class="kbiz-overlay" id="achievementOverlay">
+    <div class="kbiz-modal">
+        <div class="kbiz-modal-handle"></div>
+        <div class="kbiz-modal-title">Add Achievement</div>
+        <div class="kbiz-photo-row">
+            <label class="kbiz-add-photo" for="achievementImageInput">
+                <i class="fas fa-camera fa-lg"></i>
+                <span>Add Photo</span>
+            </label>
+        </div>
+        <input type="file" id="achievementImageInput" accept="image/*" style="display:none;">
+        <div class="kbiz-field">
+            <label class="kbiz-label">Title *</label>
+            <input class="kbiz-input" id="achievementTitleInput" type="text" placeholder="e.g. Certified Electrician, Best Vendor 2025" maxlength="150">
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">Issued by</label>
+            <input class="kbiz-input" id="achievementIssuerInput" type="text" placeholder="Who awarded / issued this?" maxlength="150">
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">Date</label>
+            <input class="kbiz-input" id="achievementDateInput" type="date">
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-label">Description</label>
+            <textarea class="kbiz-textarea" id="achievementDescInput" placeholder="Any extra detail…"></textarea>
+        </div>
+        <button class="kbiz-modal-submit" id="achievementSubmitBtn" onclick="submitBusinessAchievement()">
+            <i class="fas fa-check"></i> Add Achievement
+        </button>
+        <button class="kbiz-modal-cancel" onclick="closeAchievementModal()">Cancel</button>
     </div>
 </div>
 {% endif %}
@@ -3924,6 +4266,11 @@ function closePostModal() {
 document.getElementById('postOverlay')?.addEventListener('click', function(e) {
     if (e.target.id === 'postOverlay') closePostModal();
 });
+['serviceOverlay', 'portfolioOverlay', 'achievementOverlay'].forEach(id => {
+    document.getElementById(id)?.addEventListener('click', function(e) {
+        if (e.target.id === id) document.getElementById(id).classList.remove('open');
+    });
+});
 
 function setPostType(type) {
     currentPostType = type;
@@ -3988,6 +4335,7 @@ async function submitBusinessPost() {
 
     const formData = new FormData();
     formData.append('post_type', currentPostType);
+    formData.append('post_category', document.getElementById('postCategorySelect').value);
 
     if (currentPostType === 'image') {
         if (!postSelectedImages.length) { toast('Please add at least one image.'); return; }
@@ -4041,7 +4389,7 @@ async function submitBusinessPost() {
         toast('Network error. Please try again.');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Update';
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Share Post';
     }
 }
 
@@ -4290,6 +4638,219 @@ async function submitBusinessComment(postId) {
     } finally {
         input.disabled = false;
         input.focus();
+    }
+}
+
+// ── Services ──
+let serviceImageFile = null;
+function openServiceModal() {
+    document.getElementById('serviceOverlay')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeServiceModal() {
+    document.getElementById('serviceOverlay')?.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('serviceImageInput')?.addEventListener('change', function () {
+    serviceImageFile = this.files && this.files[0] ? this.files[0] : null;
+});
+async function submitBusinessService() {
+    const btn = document.getElementById('serviceSubmitBtn');
+    if (btn.disabled) return;
+    const title = document.getElementById('serviceTitleInput').value.trim();
+    if (!title) { toast('Please give the service a title.'); return; }
+
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('description', document.getElementById('serviceDescInput').value.trim());
+    formData.append('price_text', document.getElementById('servicePriceInput').value.trim());
+    if (serviceImageFile) formData.append('image', serviceImageFile);
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding…';
+    try {
+        const res = await fetch(`/business/${PAGE_SLUG}/services/create/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast(data.message || 'Service added!');
+            closeServiceModal();
+            setTimeout(() => location.reload(), 600);
+        } else {
+            toast(data.error || 'Failed to add service.');
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Add Service';
+    }
+}
+async function deleteBusinessService(serviceId) {
+    if (!confirm('Delete this service? This cannot be undone.')) return;
+    try {
+        const res = await fetch(`/services/${serviceId}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            const el = document.getElementById(`kbiz-service-${serviceId}`);
+            if (el) { el.style.transition = 'opacity .2s ease'; el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }
+            toast('Service deleted');
+        } else {
+            toast(data.error || 'Failed to delete service.');
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+// ── Portfolio & Projects (share one modal, one endpoint) ──
+let portfolioImageFile = null;
+let portfolioCurrentKind = 'portfolio';
+function openPortfolioModal(kind) {
+    portfolioCurrentKind = kind === 'project' ? 'project' : 'portfolio';
+    document.getElementById('portfolioModalTitle').textContent = portfolioCurrentKind === 'project' ? 'Add Project' : 'Add Portfolio Piece';
+    document.getElementById('portfolioOngoingRow').style.display = portfolioCurrentKind === 'project' ? 'flex' : 'none';
+    document.getElementById('portfolioOverlay')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closePortfolioModal() {
+    document.getElementById('portfolioOverlay')?.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('portfolioImageInput')?.addEventListener('change', function () {
+    portfolioImageFile = this.files && this.files[0] ? this.files[0] : null;
+});
+async function submitBusinessPortfolio() {
+    const btn = document.getElementById('portfolioSubmitBtn');
+    if (btn.disabled) return;
+    const title = document.getElementById('portfolioTitleInput').value.trim();
+    if (!title) { toast('Please give it a title.'); return; }
+
+    const formData = new FormData();
+    formData.append('kind', portfolioCurrentKind);
+    formData.append('title', title);
+    formData.append('description', document.getElementById('portfolioDescInput').value.trim());
+    formData.append('link_url', document.getElementById('portfolioLinkInput').value.trim());
+    if (portfolioCurrentKind === 'project' && document.getElementById('portfolioOngoingInput').checked) {
+        formData.append('is_ongoing', '1');
+    }
+    if (portfolioImageFile) formData.append('image', portfolioImageFile);
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding…';
+    try {
+        const res = await fetch(`/business/${PAGE_SLUG}/portfolio/create/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast(data.message || 'Added!');
+            closePortfolioModal();
+            setTimeout(() => location.reload(), 600);
+        } else {
+            toast(data.error || 'Failed to add.');
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Add';
+    }
+}
+async function deleteBusinessPortfolio(itemId) {
+    if (!confirm('Delete this item? This cannot be undone.')) return;
+    try {
+        const res = await fetch(`/portfolio/${itemId}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            const el = document.getElementById(`kbiz-portfolio-${itemId}`);
+            if (el) { el.style.transition = 'opacity .2s ease'; el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }
+            toast('Deleted');
+        } else {
+            toast(data.error || 'Failed to delete.');
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+// ── Achievements ──
+let achievementImageFile = null;
+function openAchievementModal() {
+    document.getElementById('achievementOverlay')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeAchievementModal() {
+    document.getElementById('achievementOverlay')?.classList.remove('open');
+    document.body.style.overflow = '';
+}
+document.getElementById('achievementImageInput')?.addEventListener('change', function () {
+    achievementImageFile = this.files && this.files[0] ? this.files[0] : null;
+});
+async function submitBusinessAchievement() {
+    const btn = document.getElementById('achievementSubmitBtn');
+    if (btn.disabled) return;
+    const title = document.getElementById('achievementTitleInput').value.trim();
+    if (!title) { toast('Please give the achievement a title.'); return; }
+
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('issuer', document.getElementById('achievementIssuerInput').value.trim());
+    formData.append('description', document.getElementById('achievementDescInput').value.trim());
+    formData.append('date_achieved', document.getElementById('achievementDateInput').value);
+    if (achievementImageFile) formData.append('image', achievementImageFile);
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding…';
+    try {
+        const res = await fetch(`/business/${PAGE_SLUG}/achievements/create/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast(data.message || 'Achievement added!');
+            closeAchievementModal();
+            setTimeout(() => location.reload(), 600);
+        } else {
+            toast(data.error || 'Failed to add achievement.');
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Add Achievement';
+    }
+}
+async function deleteBusinessAchievement(achievementId) {
+    if (!confirm('Delete this achievement? This cannot be undone.')) return;
+    try {
+        const res = await fetch(`/achievements/${achievementId}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            const el = document.getElementById(`kbiz-achievement-${achievementId}`);
+            if (el) { el.style.transition = 'opacity .2s ease'; el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }
+            toast('Achievement deleted');
+        } else {
+            toast(data.error || 'Failed to delete achievement.');
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
     }
 }
 </script>
