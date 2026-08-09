@@ -1169,11 +1169,20 @@ def profile(request, username):
             'saved_products_count': 0,
             'user_reviews': [],
             'user_reviews_count': 0,
+            'profile_followers': [],
+            'profile_followers_count': 0,
+            'profile_following': [],
+            'profile_following_count': 0,
+            'viewer_following_row_ids': set(),
             'viewer_following_count':  viewer_following_count,
             'viewer_follower_count':   viewer_follower_count,
             'sidebar_suggested_users': sidebar_suggested_users,
             'viewer_business_page_count':   viewer_business_page_count,
             'viewer_primary_business_page': viewer_primary_business_page,
+            'profile_completion_pct': 0,
+            'profile_completion_missing': [],
+            'profile_skills': [],
+            'user_reviews': [],
         }
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, 'profile.html', context)
@@ -1263,6 +1272,36 @@ def profile(request, username):
     user_reviews_count = user_reviews_qs.count()
     user_reviews = list(user_reviews_qs[:10])
 
+    # ── Followers / Following for the "Followers" and "Following" tabs ──────────
+    # Small first page rendered directly (fast, no extra request); the full
+    # lists live at the existing 'followers' / 'following' pages for "View All".
+    profile_followers_qs = (
+        profile.followers.select_related('user').order_by('user__username')
+    )
+    profile_following_qs = (
+        profile.followings.select_related('user').order_by('user__username')
+    )
+    profile_followers_count = profile_followers_qs.count()
+    profile_following_count = profile_following_qs.count()
+    profile_followers = list(profile_followers_qs[:12])
+    profile_following = list(profile_following_qs[:12])
+
+    # So each row can show "Following" vs "Follow" when the viewer is logged
+    # in (does the viewer already follow this row's user?).
+    viewer_following_row_ids = set()
+    if request.user.is_authenticated:
+        viewer_following_row_ids = set(
+            request.user.profile.followings.values_list('user_id', flat=True)
+        )
+
+    # Call button on each row uses that row's own phone number, respecting
+    # their own privacy setting (same can_view_details check used for the
+    # main profile's own contact info) — never expose a number they've hidden.
+    for row_profile in profile_followers + profile_following:
+        row_profile.call_phone = (
+            row_profile.phone if row_profile.phone and row_profile.can_view_details(request.user) else ''
+        )
+
     # Wishlist ("likes") counts per listing — queried separately so we don't
     # depend on a specific reverse-relation name from the Wishlist model.
     listing_ids = [p.product_id for p in saved_products]
@@ -1274,6 +1313,36 @@ def profile(request, username):
     for product in saved_products:
         product.like_count = wishlist_counts.get(product.product_id, 0)
 
+    # ── LinkedIn-style "profile strength" meter (owner-only nudge) ───────────
+    # Each of these fields contributes equally toward a completeness score,
+    # mirroring LinkedIn's profile-strength bar. Missing items are surfaced
+    # as quick "Add X" prompts that deep-link into the edit sheet.
+    completion_checks = [
+        (bool(profile.picture), 'Add a profile photo'),
+        (bool(profile.cover_photo), 'Add a cover photo'),
+        (bool(profile.bio), 'Write an About summary'),
+        (bool(profile.profession), 'Add a headline'),
+        (bool(profile.location), 'Add your location'),
+        (bool(profile.website), 'Add a website'),
+        (bool(profile.phone), 'Add a phone number'),
+        (business_page_count > 0, 'Create a business page'),
+    ]
+    completion_done = sum(1 for done, _ in completion_checks if done)
+    profile_completion_pct = round(completion_done * 100 / len(completion_checks))
+    profile_completion_missing = [label for done, label in completion_checks if not done][:3]
+
+    # ── LinkedIn-style "skills" chips ─────────────────────────────────────────
+    # There's no dedicated skills model, so we surface the closest real signal:
+    # the user's stated profession plus the categories of businesses they run.
+    profile_skills = []
+    if profile.profession:
+        profile_skills.append(profile.profession)
+    for preview in business_page_previews:
+        cat = preview['page'].get_category_display()
+        if cat and cat not in profile_skills:
+            profile_skills.append(cat)
+    profile_skills = profile_skills[:8]
+
     context = {
         'user': user, 'profile': profile,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
@@ -1281,6 +1350,9 @@ def profile(request, username):
         'is_blocked': False,
         'can_view_details': can_view_details,
         'is_own_profile': is_own_profile,
+        'profile_completion_pct': profile_completion_pct,
+        'profile_completion_missing': profile_completion_missing,
+        'profile_skills': profile_skills,
         'is_following': is_following,
         'sidebar_following_count': sidebar_following_count,
         'sidebar_follower_count':  sidebar_follower_count,
@@ -1293,6 +1365,11 @@ def profile(request, username):
         'saved_products_count': saved_products_count,
         'user_reviews': user_reviews,
         'user_reviews_count': user_reviews_count,
+        'profile_followers': profile_followers,
+        'profile_followers_count': profile_followers_count,
+        'profile_following': profile_following,
+        'profile_following_count': profile_following_count,
+        'viewer_following_row_ids': viewer_following_row_ids,
         'viewer_following_count':  viewer_following_count,
         'viewer_follower_count':   viewer_follower_count,
         'sidebar_suggested_users': sidebar_suggested_users,
