@@ -268,9 +268,15 @@
       display: none;
     }
 
-    /* Full-width items span both columns */
+    /* Full-width items span both columns — product cards (.mfy-jcard) are the
+       only ones meant to sit in the narrow product grid; everything else
+       (jobs, posts, achievements, suggestions) should read as a normal
+       full-width feed card, exactly like on the business page's own tabs. */
     .mfy-main-feed > .mfy-market-post,
     .mfy-main-feed > .mfy-business-suggestion,
+    .mfy-main-feed > .mfy-user-suggestion,
+    .mfy-main-feed > .khj-jcard,
+    .mfy-main-feed > .kbiz-post-card,
     .mfy-main-feed > #mfy-feed-sentinel,
     .mfy-main-feed > #mfy-feed-end {
       grid-column: 1 / -1;
@@ -2918,6 +2924,364 @@
     #mfy-notif-panel,
     #mfy-notif-backdrop { display:none !important; }
   }
+
+    /* ── Ported 1:1 from business_page_detail.html so feed job / post / achievement cards match the business page exactly ── */
+        /* ── Job cards — ported 1:1 from job_vacancy.html's .khj-jcard ── */
+        .kbiz-jobs-list { padding: 0 16px 16px; }
+
+        .khj-jcard {
+            background: var(--mfy-white);
+            border: 1px solid var(--mfy-border);
+            border-radius: 14px;
+            margin-bottom: 14px;
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+            position: relative;
+        }
+        .khj-jcard:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+        .khj-jcard:last-child { margin-bottom: 0; }
+
+        .khj-jrow { display: block; }
+
+        /* Banner — cover image, or an abstract category-tinted placeholder */
+        .khj-jcard-img-link { display: block; position: relative; }
+
+        .khj-jcard-img-wrap {
+            position: relative;
+            width: 100%;
+            height: 132px;
+            overflow: hidden;
+            background: var(--pill-color, var(--mfy-primary));
+        }
+        .khj-jcard-img-wrap.placeholder {
+            background:
+                radial-gradient(circle at 18% 58%, color-mix(in srgb, var(--pill-color) 30%, white) 0 32%, transparent 33%),
+                radial-gradient(circle at 44% 52%, color-mix(in srgb, var(--pill-color) 30%, white) 0 36%, transparent 37%),
+                linear-gradient(to right, color-mix(in srgb, var(--pill-color) 20%, white) 0 58%, color-mix(in srgb, var(--pill-color) 55%, white) 58% 100%);
+        }
+        .khj-jcard-img {
+            width: 100%; height: 100%; object-fit: cover; display: block;
+            opacity: 0; transition: opacity 0.3s ease;
+        }
+        .khj-jcard-img.loaded { opacity: 1; }
+
+        .khj-jcard-type-chip {
+            position: absolute;
+            top: 10px; left: 10px;
+            background: rgba(255,255,255,0.92);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--pill-color, var(--mfy-primary));
+            display: flex; align-items: center; gap: 4px;
+        }
+
+        .khj-jcard-body-link { display: block; text-decoration: none; color: inherit; }
+        .khj-jcard-body { padding: 14px 16px 16px; }
+
+        .khj-jcard-name {
+            font-size: 17px; font-weight: 800; color: var(--mfy-text); line-height: 1.3;
+            margin-bottom: 5px; display: block;
+        }
+        .khj-jcard-body-link:hover .khj-jcard-name { text-decoration: underline; }
+
+        /* Poster badge — business page (avatar + name) or poster avatar fallback */
+        .khj-jcard-seller {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            color: inherit;
+            margin-bottom: 8px;
+        }
+        .khj-jcard-seller-avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+            background: var(--mfy-bg);
+            border: 1px solid var(--mfy-border);
+        }
+        .khj-jcard-seller-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--mfy-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .khj-jcard-seller-badge {
+            font-size: 11px;
+            color: var(--mfy-primary);
+            flex-shrink: 0;
+        }
+
+        .khj-jcard-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 13px; color: var(--mfy-text-light); }
+        .khj-jcard-meta-txt { font-size: 13px; color: var(--mfy-text-light); }
+        .khj-jcard-meta-txt i { font-size: 11px; margin-right: 3px; }
+        .khj-jcard-meta-txt + .khj-jcard-meta-txt::before { content: '·'; margin: 0 5px; }
+        .khj-jcard-time { font-size: 13px; color: var(--mfy-text-light); margin-bottom: 14px; display: flex; align-items: center; gap: 4px; }
+        .khj-jcard-time i { font-size: 11px; opacity: .75; }
+
+        /* Insight pills — category / work mode / advertiser */
+        .khj-jcard-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+        .khj-pill {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 11.5px; font-weight: 700;
+            padding: 4px 10px; border-radius: 20px;
+            background: color-mix(in srgb, var(--pill-color, #666) 10%, white);
+            color: var(--pill-color, #444);
+            white-space: nowrap;
+        }
+
+        .khj-jcard-price-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+        .khj-jcard-price { font-size: 13px; font-weight: 700; color: var(--mfy-text); }
+
+        /* Footer — View Details button, matching event card footer */
+        .khj-jcard-footer { display: flex; gap: 10px; align-items: center; }
+
+        .khj-view-btn {
+            flex: 1;
+            text-align: center;
+            padding: 9px 0;
+            border-radius: 22px;
+            border: 1.5px solid var(--mfy-primary);
+            color: var(--mfy-primary);
+            font-weight: 700;
+            font-size: 14px;
+            text-decoration: none;
+            background: var(--mfy-white);
+            transition: background 0.15s;
+            display: block;
+        }
+        .khj-view-btn:hover { background: color-mix(in srgb, var(--mfy-primary) 8%, white); }
+
+        /* Owner actions (edit/delete) — extra row under the card body */
+        .khj-jcard-owner-row {
+            display: flex; gap: 8px;
+            padding: 0 16px 16px;
+        }
+        .khj-owner-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 6px 14px;
+            border-radius: 16px;
+            font-size: 13px; font-weight: 600;
+            border: 1px solid var(--mfy-primary);
+            background: transparent;
+            color: var(--mfy-primary);
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+        .khj-owner-btn.del { border-color: rgba(0,0,0,0.3); color: var(--mfy-text-light); }
+        .khj-owner-btn:hover { background: rgba(0,149,246,0.08); }
+        .khj-owner-btn.del:hover { border-color: var(--mfy-error); color: var(--mfy-error); background: rgba(237,73,86,0.06); }
+
+        /* Quick-contact button — circular, overlaid on the banner */
+        .khj-jcard-actions-col {
+            position: absolute;
+            top: 8px; right: 8px;
+            display: flex; gap: 6px;
+            z-index: 2;
+        }
+        .khj-jcard-quick-btn {
+            width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+            background: rgba(255,255,255,0.92); color: #333;
+            border: none; display: flex; align-items: center; justify-content: center;
+            font-size: 13px; cursor: pointer; text-decoration: none;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .khj-jcard-quick-btn:hover  { background: #fff; color: var(--mfy-primary); }
+        .khj-jcard-quick-btn:active { transform: scale(0.92); }
+
+
+        .kbiz-posts-list { padding: 0 16px 4px; display: flex; flex-direction: column; }
+        .kbiz-post-card {
+            border-radius: 0;
+            background: var(--mfy-white);
+            border-bottom: 1px solid var(--mfy-border);
+            margin-bottom: 14px;
+            padding-bottom: 14px;
+        }
+        .kbiz-post-card:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .kbiz-post-top { display: flex; align-items: flex-start; justify-content: space-between; padding: 12px 14px 8px; gap: 8px; }
+        .kbiz-post-author { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+        .kbiz-post-author img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .kbiz-post-author-name { font-size: 13.5px; font-weight: 700; color: var(--mfy-text); line-height: 1.3; }
+        .kbiz-post-author-sub { font-size: 11.5px; color: var(--mfy-text-light); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+        .kbiz-post-time { font-size: 11px; color: var(--mfy-text-light); display: flex; align-items: center; gap: 5px; margin-top: 1px; }
+        .kbiz-post-pin { color: var(--mfy-primary); font-size: 11px; }
+
+        /* Kebab menu (owner actions) */
+        .kbiz-post-menu-wrap { position: relative; flex-shrink: 0; }
+        .kbiz-post-menu-btn {
+            background: none; border: none; color: var(--mfy-text-light);
+            cursor: pointer; font-size: 15px; padding: 7px 9px; border-radius: 50%;
+        }
+        .kbiz-post-menu-btn:hover { background: var(--mfy-bg); color: var(--mfy-text); }
+        .kbiz-post-menu {
+            display: none; position: absolute; top: calc(100% + 4px); right: 0;
+            background: var(--mfy-white); border: 1px solid var(--mfy-border);
+            border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.14);
+            padding: 6px; min-width: 150px; z-index: 20;
+        }
+        .kbiz-post-menu.open { display: block; }
+        .kbiz-post-menu button {
+            display: flex; align-items: center; gap: 9px; width: 100%;
+            padding: 9px 10px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+            color: var(--mfy-error); text-align: left; background: none; border: none;
+            cursor: pointer; font-family: inherit;
+        }
+        .kbiz-post-menu button:hover { background: #fdeaec; }
+
+        .kbiz-post-caption { padding: 2px 14px 10px; font-size: 13.5px; line-height: 1.5; color: var(--mfy-text); white-space: pre-wrap; }
+
+        .kbiz-post-media { width: 100%; background: #000; }
+        .kbiz-post-media img, .kbiz-post-media video { width: 100%; max-height: 520px; object-fit: contain; display: block; background: #000; }
+        .kbiz-post-media-grid { display: grid; gap: 2px; }
+        .kbiz-post-media-grid.n1 { grid-template-columns: 1fr; }
+        .kbiz-post-media-grid.n2 { grid-template-columns: 1fr 1fr; }
+        .kbiz-post-media-grid.n3, .kbiz-post-media-grid.nmany { grid-template-columns: 1fr 1fr; }
+        .kbiz-post-media-grid img { width: 100%; height: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; background: #f0f0f0; }
+
+        .kbiz-post-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 10.5px; font-weight: 700; color: var(--mfy-primary);
+            background: #eaf6ff; padding: 3px 9px; border-radius: 20px; margin: 0 14px 8px;
+        }
+
+        /* Poll */
+        .kbiz-poll { padding: 4px 14px 14px; }
+        .kbiz-poll-question { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: var(--mfy-text); }
+        .kbiz-poll-option {
+            position: relative; display: block; width: 100%; text-align: left;
+            border: 1.5px solid var(--mfy-border); border-radius: 10px;
+            padding: 10px 12px; margin-bottom: 8px; background: var(--mfy-white);
+            cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600;
+            color: var(--mfy-text); overflow: hidden;
+        }
+        .kbiz-poll-option:disabled { cursor: default; }
+        .kbiz-poll-option-fill {
+            position: absolute; top: 0; left: 0; bottom: 0;
+            background: #eaf6ff; z-index: 0; transition: width .35s ease;
+        }
+        .kbiz-poll-option.voted { border-color: var(--mfy-primary); }
+        .kbiz-poll-option-row { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .kbiz-poll-option-pct { font-size: 12px; font-weight: 700; color: var(--mfy-primary); flex-shrink: 0; }
+        .kbiz-poll-meta { font-size: 11.5px; color: var(--mfy-text-light); margin-top: 2px; }
+
+        /* Post engagement — reactions + comments */
+        .kbiz-post-engage-summary {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 14px 0; font-size: 11.5px; color: var(--mfy-text-light);
+        }
+        .kbiz-post-engage-summary .vibes { display: flex; align-items: center; gap: 5px; }
+        .kbiz-post-engage-summary .vibes .vibe-icon {
+            width: 18px; height: 18px; border-radius: 50%; background: var(--mfy-primary);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .kbiz-post-engage-summary .vibes .vibe-icon i { font-size: 9px; color: #fff; }
+        .kbiz-post-engage-summary .vibes span.emoji { font-size: 13px; }
+        .kbiz-post-engage-summary .comment-link { cursor: pointer; }
+        .kbiz-post-engage-summary .comment-link:hover { text-decoration: underline; }
+        .kbiz-post-engage-bar {
+            display: flex;
+            margin: 8px 14px 0; padding-top: 4px;
+        }
+        .kbiz-post-engage-btn {
+            flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+            background: none; border: none; padding: 9px 4px; cursor: pointer;
+            font-family: inherit; font-size: 12.5px; font-weight: 700; color: var(--mfy-text-light);
+            border-radius: 8px; position: relative;
+        }
+        .kbiz-post-engage-btn:hover { background: var(--mfy-bg); }
+        .kbiz-post-engage-btn.reacted { color: var(--mfy-primary); }
+        .kbiz-post-engage-btn i { font-size: 14px; }
+
+        .kbiz-vibe-popover {
+            display: none; position: absolute; bottom: 100%; left: 8px; margin-bottom: 6px;
+            background: var(--mfy-white); border-radius: 30px; padding: 6px 8px;
+            box-shadow: 0 4px 18px rgba(0,0,0,.15); border: 1px solid var(--mfy-border);
+            gap: 4px; z-index: 900;
+        }
+        .kbiz-vibe-popover.open { display: flex; }
+        .kbiz-vibe-popover button {
+            background: none; border: none; font-size: 20px; padding: 4px; cursor: pointer;
+            border-radius: 50%; transition: transform .12s ease;
+            line-height: 1;
+        }
+        .kbiz-vibe-popover button:hover { transform: scale(1.25); background: var(--mfy-bg); }
+
+        /* ── Comments: bottom sheet on mobile, pop-up modal on desktop ── */
+        .kbiz-comments-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,.55); z-index: 900;
+            align-items: flex-end; justify-content: center;
+        }
+        .kbiz-comments-overlay.open { display: flex; }
+        .kbiz-comments-sheet {
+            background: var(--mfy-white); width: 100%; max-width: 600px;
+            border-radius: 18px 18px 0 0;
+            height: 78vh; max-height: 78vh;
+            display: flex; flex-direction: column;
+            animation: slideUp .28s ease;
+        }
+        @media (min-width: 640px) {
+            .kbiz-comments-overlay { align-items: center; padding: 24px; }
+            .kbiz-comments-sheet { border-radius: 16px; height: 640px; max-height: 85vh; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+        }
+        .kbiz-comments-sheet-handle {
+            width: 40px; height: 4px; background: var(--mfy-border);
+            border-radius: 4px; margin: 10px auto 0; flex-shrink: 0;
+        }
+        @media (min-width: 640px) { .kbiz-comments-sheet-handle { display: none; } }
+        .kbiz-comments-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; border-bottom: 1px solid var(--mfy-border); flex-shrink: 0;
+        }
+        .kbiz-comments-header-title { font-size: 15px; font-weight: 800; color: var(--mfy-text); }
+        .kbiz-comments-close {
+            background: none; border: none; color: var(--mfy-text-light);
+            font-size: 16px; cursor: pointer; padding: 6px; border-radius: 50%; line-height: 1;
+        }
+        .kbiz-comments-close:hover { background: var(--mfy-bg); color: var(--mfy-text); }
+        .kbiz-comments-body { flex: 1; overflow-y: auto; padding: 14px 16px; -webkit-overflow-scrolling: touch; }
+        .kbiz-comment-list { display: flex; flex-direction: column; gap: 14px; }
+        .kbiz-comment-row { display: flex; gap: 9px; }
+        .kbiz-comment-row img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .kbiz-comment-bubble { background: var(--mfy-bg); border-radius: 14px; padding: 8px 12px; flex: 1; }
+        .kbiz-comment-author { font-size: 12.5px; font-weight: 700; color: var(--mfy-text); }
+        .kbiz-comment-text { font-size: 13px; color: var(--mfy-text); line-height: 1.4; white-space: pre-wrap; }
+        .kbiz-comment-time { font-size: 10.5px; color: var(--mfy-text-light); margin-top: 3px; margin-left: 2px; }
+        .kbiz-comment-empty { font-size: 12.5px; color: var(--mfy-text-light); text-align: center; padding: 30px 0; }
+        .kbiz-comments-footer {
+            display: flex; gap: 9px; align-items: center; flex-shrink: 0;
+            padding: 10px 14px; border-top: 1px solid var(--mfy-border);
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+        .kbiz-comments-footer img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .kbiz-comment-input-row { display: flex; gap: 8px; align-items: center; flex: 1; }
+        .kbiz-comment-input-row input {
+            flex: 1; border: 1.5px solid var(--mfy-border); border-radius: 20px;
+            padding: 9px 14px; font-size: 13px; font-family: inherit; outline: none;
+        }
+        .kbiz-comment-input-row input:focus { border-color: var(--mfy-primary); }
+        .kbiz-comment-send {
+            width: 34px; height: 34px; border-radius: 50%; border: none; flex-shrink: 0;
+            background: var(--mfy-primary); color: #fff; cursor: pointer; font-size: 13px;
+        }
+        .kbiz-comment-send:disabled { background: #bcdff5; cursor: not-allowed; }
+
 </style>
 
 <script>
@@ -3059,6 +3423,238 @@
   });
 
 }());
+</script>
+
+<script>
+// ── Ported 1:1 from business_page_detail.html so feed post cards (react,
+// comment, poll-vote) behave identically to the business page's own feed. ──
+const CSRF_TOKEN = getCsrfFromMeta();
+function toast(msg) { showToast(msg); }
+
+async function voteBusinessPoll(postId, optionId, btnEl) {
+    const pollEl = btnEl.closest('.kbiz-poll');
+    const allowMultiple = pollEl.dataset.allowMultiple === '1';
+    let optionIds = [optionId];
+
+    // If multiple choices are allowed, toggle this option alongside any
+    // other already-voted options in the same poll.
+    if (pollEl.querySelector('.kbiz-poll-option.voted') && allowMultiple) {
+        const voted = Array.from(pollEl.querySelectorAll('.kbiz-poll-option.voted')).map(b => b.dataset.optionId);
+        optionIds = voted.includes(optionId) ? voted.filter(id => id !== optionId) : [...voted, optionId];
+        if (!optionIds.length) optionIds = [optionId];
+    }
+
+    const formData = new FormData();
+    optionIds.forEach(id => formData.append('option_ids', id));
+
+    try {
+        const res = await fetch(`/posts/${postId}/vote/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
+        });
+        const data = await res.json();
+        if (!data.success) { toast(data.error || 'Could not vote.'); return; }
+
+        const votedSet = new Set(optionIds);
+        pollEl.querySelectorAll('.kbiz-poll-option').forEach(optBtn => {
+            const stats = data.poll.options.find(o => o.option_id === optBtn.dataset.optionId);
+            if (!stats) return;
+            optBtn.querySelector('.kbiz-poll-option-fill').style.width = stats.pct + '%';
+            optBtn.querySelector('.kbiz-poll-option-pct').textContent = stats.pct + '%';
+            optBtn.classList.toggle('voted', votedSet.has(optBtn.dataset.optionId));
+        });
+        const meta = pollEl.querySelector('.kbiz-poll-meta');
+        if (meta) meta.textContent = `${data.poll.total_votes} vote${data.poll.total_votes === 1 ? '' : 's'}`;
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+// ── Post reactions (vibe popover) ──
+document.addEventListener('click', function(e) {
+    // Close any open vibe popover when clicking outside it/its trigger button.
+    document.querySelectorAll('.kbiz-vibe-popover.open').forEach(pop => {
+        const bar = pop.closest('.kbiz-post-engage-bar');
+        if (bar && !bar.contains(e.target)) pop.classList.remove('open');
+    });
+});
+
+function toggleVibePopover(btn) {
+    const bar = btn.closest('.kbiz-post-engage-bar');
+    const pop = bar.querySelector('[data-vibe-popover]');
+    const wasOpen = pop.classList.contains('open');
+    document.querySelectorAll('.kbiz-vibe-popover.open').forEach(p => p.classList.remove('open'));
+    if (!wasOpen) pop.classList.add('open');
+}
+
+async function reactToBusinessPost(postId, vibeType, optBtn) {
+    const pop = optBtn.closest('.kbiz-vibe-popover');
+    pop.classList.remove('open');
+    const card = document.getElementById(`kbiz-post-${postId}`);
+    try {
+        const res = await fetch(`/posts/${postId}/vibe/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vibe_type: vibeType }),
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error === 'login required' ? 'Please log in to react.' : data.error); return; }
+
+        const engageBtn = card.querySelector('[data-vibe-btn]');
+        const emojiSlot  = card.querySelector('[data-vibe-emoji]');
+        const totalSlot  = card.querySelector('[data-vibe-total]');
+        const EMOJIS = { fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊', love:'❤️' };
+
+        if (data.user_vibe) {
+            engageBtn.classList.add('reacted');
+            emojiSlot.innerHTML = EMOJIS[data.user_vibe] || '';
+        } else {
+            engageBtn.classList.remove('reacted');
+            emojiSlot.innerHTML = '<i class="far fa-heart"></i>';
+        }
+        if (totalSlot) totalSlot.textContent = data.total;
+
+        const topType = Object.entries(data.summary).sort((a, b) => b[1] - a[1])[0];
+        const summaryEmojiEl = card.querySelector('.kbiz-post-engage-summary .vibes .emoji');
+        if (topType) {
+            const emoji = EMOJIS[topType[0]] || '';
+            if (summaryEmojiEl) {
+                summaryEmojiEl.textContent = emoji;
+            } else {
+                const span = document.createElement('span');
+                span.className = 'emoji';
+                span.textContent = emoji;
+                card.querySelector('.kbiz-post-engage-summary .vibes').prepend(span);
+            }
+        } else if (summaryEmojiEl) {
+            summaryEmojiEl.remove();
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+// ── Post comments ──
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function renderComment(c) {
+    return `<div class="kbiz-comment-row">
+        <img src="${c.avatar}" alt="" onerror="this.onerror=null;this.src='https://placehold.co/56x56/dbdbdb/888?text=%20';">
+        <div class="kbiz-comment-bubble">
+            <div class="kbiz-comment-author">${escapeHtml(c.author_name)}</div>
+            <div class="kbiz-comment-text">${escapeHtml(c.text)}</div>
+            <div class="kbiz-comment-time">${c.time}</div>
+        </div>
+    </div>`;
+}
+
+async function toggleCommentsPanel(postId) {
+    const overlay = document.getElementById(`commentsOverlay-${postId}`);
+    const panel = document.getElementById(`comments-${postId}`);
+    if (!overlay || !panel) return;
+    if (overlay.classList.contains('open')) { closeCommentsPanel(postId); return; }
+
+    document.querySelectorAll('.kbiz-comments-overlay.open').forEach(el => el.classList.remove('open'));
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    if (panel.dataset.loaded !== '1') {
+        panel.dataset.loaded = '1';
+        try {
+            const res = await fetch(`/posts/${postId}/comments/`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json();
+            const list = document.getElementById(`commentList-${postId}`);
+            if (!data.comments || !data.comments.length) {
+                list.innerHTML = '<div class="kbiz-comment-empty">No comments yet — be the first!</div>';
+            } else {
+                list.innerHTML = data.comments.map(renderComment).join('');
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (_) {
+            const list = document.getElementById(`commentList-${postId}`);
+            if (list) list.innerHTML = '<div class="kbiz-comment-empty">Could not load comments.</div>';
+        }
+    }
+
+    // Focus the input shortly after the sheet finishes animating in.
+    setTimeout(() => {
+        const input = document.getElementById(`commentInput-${postId}`);
+        if (input && window.innerWidth >= 640) input.focus();
+    }, 200);
+}
+
+function closeCommentsPanel(postId) {
+    const overlay = document.getElementById(`commentsOverlay-${postId}`);
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+// Close comments sheet/modal on Escape, and any open post kebab menu.
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll('.kbiz-comments-overlay.open').forEach(el => {
+        el.classList.remove('open');
+        document.body.style.overflow = '';
+    });
+    document.querySelectorAll('.kbiz-post-menu.open').forEach(el => el.classList.remove('open'));
+});
+
+// ── Post kebab menu (owner: delete, etc.) ──
+document.addEventListener('click', function(e) {
+    document.querySelectorAll('.kbiz-post-menu.open').forEach(menu => {
+        const wrap = menu.closest('.kbiz-post-menu-wrap');
+        if (wrap && !wrap.contains(e.target)) menu.classList.remove('open');
+    });
+});
+
+function togglePostMenu(btn) {
+    const menu = btn.nextElementSibling;
+    const wasOpen = menu.classList.contains('open');
+    document.querySelectorAll('.kbiz-post-menu.open').forEach(m => m.classList.remove('open'));
+    if (!wasOpen) menu.classList.add('open');
+}
+
+async function submitBusinessComment(postId) {
+    const input = document.getElementById(`commentInput-${postId}`);
+    const text = input.value.trim();
+    if (!text) return;
+    input.disabled = true;
+    try {
+        const res = await fetch(`/posts/${postId}/comments/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error); return; }
+
+        const list = document.getElementById(`commentList-${postId}`);
+        const empty = list.querySelector('.kbiz-comment-empty');
+        if (empty) empty.remove();
+        list.insertAdjacentHTML('beforeend', renderComment(data));
+        list.scrollTop = list.scrollHeight;
+        input.value = '';
+
+        const totalSlot = document.querySelector(`#kbiz-post-${postId} [data-comment-total]`);
+        if (totalSlot) totalSlot.textContent = `${data.count} comment${data.count === 1 ? '' : 's'}`;
+        const headerLabel = document.querySelector(`#commentsOverlay-${postId} [data-comment-total-label]`);
+        if (headerLabel) headerLabel.textContent = `${data.count} Comment${data.count === 1 ? '' : 's'}`;
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        input.disabled = false;
+        input.focus();
+    }
+}
+
 </script>
 
 </body>

@@ -441,6 +441,12 @@ class Profile(models.Model):
 
     profession       = models.CharField(max_length=150, blank=True, default='')
 
+    # ── Interests (personalized feed signal) ─────────────────────────────
+    # Free-form list of interest tags the user picks/edits (e.g. product
+    # categories, event types, topics). Used alongside profession/skills to
+    # personalize the home feed. Stored as a plain JSON list of strings.
+    interests = models.JSONField(default=list, blank=True)
+
     # ── Member type / onboarding ("What do you use Marketfy for?") ──────
     member_type          = models.CharField(max_length=30, choices=MEMBER_TYPE_CHOICES, blank=True, default='')
     member_type_data     = models.JSONField(default=dict, blank=True)
@@ -467,6 +473,19 @@ class Profile(models.Model):
         self.full_name    = sanitize_text(self.full_name)
         self.address      = sanitize_text(self.address)
         self.profession      = sanitize_text(self.profession,      'profession')
+
+        # Interests — keep a short, sanitized list of plain strings only.
+        if isinstance(self.interests, (list, tuple)):
+            cleaned_interests = []
+            for tag in self.interests:
+                tag = sanitize_text(str(tag))[:60]
+                if tag and tag not in cleaned_interests:
+                    cleaned_interests.append(tag)
+                if len(cleaned_interests) >= 15:
+                    break
+            self.interests = cleaned_interests
+        else:
+            self.interests = []
 
         valid_member_types = [c[0] for c in MEMBER_TYPE_CHOICES]
         if self.member_type and self.member_type not in valid_member_types:
@@ -741,6 +760,40 @@ class Profile(models.Model):
 
     def get_member_type_value(self, key, default=''):
         return (self.member_type_data or {}).get(key, default)
+
+    # ── Personalized-feed helpers ──────────────────────────────────────────
+    # A lightweight "who this person is / what they care about" keyword bag,
+    # built from profession, member type, skills/experience captured in
+    # member_type_data, and explicit interest tags. Used by the home feed
+    # ranking to score how relevant a piece of content is to this user.
+    _WORD_RE = re.compile(r'[a-z0-9]+')
+
+    @classmethod
+    def _tokenize(cls, text):
+        if not text:
+            return set()
+        return set(cls._WORD_RE.findall(str(text).lower()))
+
+    @property
+    def feed_keywords(self):
+        kw = set()
+        kw |= self._tokenize(self.profession)
+        kw |= self._tokenize(self.member_type)
+        kw |= self._tokenize(self.member_type_label)
+        for value in (self.member_type_data or {}).values():
+            if isinstance(value, (list, tuple)):
+                for v in value:
+                    kw |= self._tokenize(v)
+            else:
+                kw |= self._tokenize(value)
+        for tag in (self.interests or []):
+            kw |= self._tokenize(tag)
+        kw |= self._tokenize(self.bio)
+        return kw
+
+    @property
+    def feed_location_tokens(self):
+        return self._tokenize(self.location)
 
 
 class UserReport(models.Model):

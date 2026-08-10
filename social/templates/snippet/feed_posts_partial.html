@@ -173,91 +173,79 @@
   </article>
 
   {% elif item.type == 'job' %}
-  {# ── Job Vacancy card — exact parity with the mfy-jcard product card, sits inline with products ─────── #}
-  <article class="mfy-post mfy-jcard" data-job-id="{{ item.data.id }}">
+  {# ── Job Vacancy card — ported 1:1 from the business page's own Jobs tab (.khj-jcard) ─────── #}
+  <article class="khj-jcard" id="feed-job-{{ item.data.id }}" data-job-id="{{ item.data.id }}">
+    <div class="khj-jrow">
 
-    <a href="{% url 'job_detail' item.data.id %}" class="mfy-jcard-img-link">
-      <div class="mfy-jcard-img-wrap">
-        {% if item.data.cover_image %}
-        <img
-          src="{{ item.data.cover_image.url }}"
-          alt="{{ item.data.title }}"
-          loading="lazy"
-          onload="this.classList.add('loaded')"
-          onerror="this.onerror=null;this.src='https://placehold.co/600x600/1a1a2e/ffffff?text=Job+Opening';"
-          class="mfy-jcard-img"
-        >
-        {% else %}
-        <img
-          src="https://placehold.co/600x600/1a1a2e/ffffff?text=Job+Opening"
-          alt="{{ item.data.title }}"
-          class="mfy-jcard-img loaded"
-        >
-        {% endif %}
-
-        {# Job type badge — top-right #}
-        <span class="mfy-jcard-views">{{ item.data.category_emoji }} {{ item.data.get_category_display }}</span>
-
-        {# Category badge — top-left #}
-        <span class="mfy-jcard-category-badge"><i class="fas fa-briefcase"></i> Job</span>
-      </div>
-    </a>
-
-    {# Poster badge — business page avatar+name, else uploader's avatar #}
-    {% if item.data.business_page %}
-    <a href="{% url 'business_page_detail' item.data.business_page.slug %}" class="mfy-jcard-seller" onclick="event.stopPropagation()">
-      {% if item.data.business_page.logo %}
-        <img src="{{ item.data.business_page.logo.url }}" alt="{{ item.data.business_page.name }}" class="mfy-jcard-seller-avatar">
-      {% else %}
-        <img src="https://placehold.co/40x40/1a1a2e/ffffff?text={{ item.data.business_page.name|first|upper }}" alt="{{ item.data.business_page.name }}" class="mfy-jcard-seller-avatar">
-      {% endif %}
-      <span class="mfy-jcard-seller-name">{{ item.data.business_page.name|truncatechars:26 }}</span>
-      {% if item.data.business_page.is_verified %}
-      <i class="fas fa-circle-check mfy-jcard-seller-badge" title="Verified business"></i>
-      {% endif %}
-    </a>
-    {% else %}
-    <a href="{% url 'profile' item.data.posted_by.username %}" class="mfy-jcard-seller" onclick="event.stopPropagation()">
-      <img src="{{ item.data.posted_by|safe_pic_url }}" alt="{{ item.data.posted_by.username }}" class="mfy-jcard-seller-avatar" onerror="this.onerror=null;this.src='https://placehold.co/40x40/dbdbdb/8e8e8e?text=U';">
-      <span class="mfy-jcard-seller-name">{{ item.data.posted_by.first_name }} {{ item.data.posted_by.last_name }}</span>
-    </a>
-    {% endif %}
-
-    {# Job info body #}
-    <a href="{% url 'job_detail' item.data.id %}" class="mfy-jcard-body-link">
-      <div class="mfy-jcard-body">
-        {# Job title #}
-        <div class="mfy-jcard-name">{{ item.data.title|truncatechars:60 }}</div>
-
-        {# Description — shown in the same slot as the product's rating line #}
-        {% if item.data.description %}
-        <div class="mfy-jcard-desc">{{ item.data.description|truncatechars:80 }}</div>
-        {% endif %}
-
-        {# Meta line — company / location #}
-        <div class="mfy-jcard-meta">
-          {% if item.data.company %}<span class="mfy-jcard-meta-txt">{{ item.data.company }}</span>{% endif %}
-          {% if item.data.location %}<span class="mfy-jcard-meta-txt">{{ item.data.location }}</span>{% endif %}
+      <a href="{% url 'job_detail' item.data.id %}" class="khj-jcard-img-link">
+        <div class="khj-jcard-img-wrap {% if not item.data.cover_image %}placeholder{% endif %}" style="--pill-color: {{ item.data.category_color }};">
+          {% if item.data.cover_image %}
+          <img src="{{ item.data.cover_image.url }}" alt="{{ item.data.title }}" loading="lazy"
+               onload="this.classList.add('loaded')" class="khj-jcard-img">
+          {% endif %}
         </div>
-        <div class="mfy-jcard-time"><i class="far fa-clock"></i> {{ item.data.created_at|naturaltime }}</div>
-      </div>
-    </a>
-
-    {# Salary + message row #}
-    <div class="mfy-jcard-price-row">
-      <span class="mfy-jcard-price">{% if item.data.salary_range %}{{ item.data.salary_range }}{% else %}Salary N/A{% endif %}</span>
-      {% if request.user != item.data.posted_by %}
-      <a href="{% url 'message' item.data.posted_by.username %}?job={{ item.data.id }}"
-         class="mfy-jcard-wish-btn mfy-dm-feed-msg"
-         data-username="{{ item.data.posted_by.username }}"
-         data-avatar="{{ item.data.posted_by|safe_pic_url }}"
-         onclick="event.stopPropagation();"
-         aria-label="Message poster">
-        <i class="fas fa-paper-plane"></i>
+        <span class="khj-jcard-type-chip" style="--pill-color: {{ item.data.category_color }};">{{ item.data.category_emoji }} {{ item.data.get_category_display }}</span>
       </a>
-      {% endif %}
-    </div>
 
+      <div class="khj-jcard-actions-col">
+        {% if item.data.posted_by != request.user %}
+        <a href="{% url 'message' item.data.posted_by.username %}?job={{ item.data.id }}"
+           class="khj-jcard-quick-btn mfy-dm-feed-msg"
+           data-username="{{ item.data.posted_by.username }}"
+           data-avatar="{{ item.data.posted_by|safe_pic_url }}"
+           onclick="event.stopPropagation();"
+           aria-label="Message poster">
+          <i class="fas fa-paper-plane"></i>
+        </a>
+        {% endif %}
+      </div>
+
+      <div class="khj-jcard-body">
+        <a href="{% url 'job_detail' item.data.id %}" class="khj-jcard-body-link">
+          <span class="khj-jcard-name">{{ item.data.title|truncatechars:70 }}</span>
+        </a>
+
+        {% if item.data.business_page %}
+        <a href="{% url 'business_page_detail' item.data.business_page.slug %}" class="khj-jcard-seller" onclick="event.stopPropagation()">
+          {% if item.data.business_page.logo %}
+            <img src="{{ item.data.business_page.logo.url }}" alt="{{ item.data.business_page.name }}" class="khj-jcard-seller-avatar">
+          {% else %}
+            <img src="https://placehold.co/40x40/f8f8f8/aaa?text={{ item.data.business_page.name|first|upper }}" alt="{{ item.data.business_page.name }}" class="khj-jcard-seller-avatar">
+          {% endif %}
+          <span class="khj-jcard-seller-name">{{ item.data.business_page.name|truncatechars:20 }}</span>
+          {% if item.data.business_page.is_verified %}<i class="fas fa-circle-check khj-jcard-seller-badge" title="Verified business"></i>{% endif %}
+        </a>
+        {% else %}
+        <a href="{% url 'profile' item.data.posted_by.username %}" class="khj-jcard-seller" onclick="event.stopPropagation()">
+          <img src="{{ item.data.posted_by|safe_pic_url }}" alt="{{ item.data.posted_by.username }}" class="khj-jcard-seller-avatar">
+          <span class="khj-jcard-seller-name">{{ item.data.posted_by.username|truncatechars:20 }}</span>
+        </a>
+        {% endif %}
+
+        <div class="khj-jcard-meta">
+          {% if item.data.company %}<span class="khj-jcard-meta-txt"><i class="fas fa-building"></i>{{ item.data.company }}</span>{% endif %}
+          {% if item.data.location %}<span class="khj-jcard-meta-txt">{{ item.data.location }}</span>{% endif %}
+        </div>
+        <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ item.data.created_at|naturaltime }}</div>
+
+        <div class="khj-jcard-pills">
+          <span class="khj-pill" style="--pill-color: {{ item.data.work_mode_color }};">{{ item.data.work_mode_emoji }} {{ item.data.get_work_mode_display }}</span>
+          <span class="khj-pill" style="--pill-color: {{ item.data.advertiser_color }};">{{ item.data.advertiser_emoji }} {{ item.data.get_advertiser_type_display }}</span>
+          {% if not item.data.is_open %}<span class="khj-pill" style="--pill-color:#ed4956;">Closed</span>{% endif %}
+        </div>
+
+        {% if not item.data.is_government_advertiser %}
+        <div class="khj-jcard-price-row">
+          <span class="khj-jcard-price">{% if item.data.salary_range %}{{ item.data.salary_range }}{% else %}Salary: Negotiable{% endif %}</span>
+        </div>
+        {% endif %}
+
+        <div class="khj-jcard-footer">
+          <a href="{% url 'job_detail' item.data.id %}" class="khj-view-btn">View Details</a>
+        </div>
+      </div>
+
+    </div>
   </article>
 
   {% elif item.type == 'event' %}
@@ -338,6 +326,233 @@
     {% include 'snippet/card_engagement.html' with card_type="event" card_id=item.data.id|stringformat:"s" comment_count=item.data.comments.count card_title=item.data.title %}
 
   </article>
+
+  {% elif item.type == 'business_post' %}
+  {# ── Business page update — ported 1:1 from the business page's own Posts tab (.kbiz-post-card), ranked into the feed by relevance to the viewer's profile ─────── #}
+  {% with post=item.data page=item.data.business_page %}
+  <article class="kbiz-post-card" id="kbiz-post-{{ post.post_id }}">
+      <div class="kbiz-post-top">
+          <a href="{% url 'business_page_detail' page.slug %}" class="kbiz-post-author" style="text-decoration:none;">
+              <img src="{{ page.get_logo_url|default:'https://placehold.co/68x68/f97316/ffffff?text=B' }}" alt="{{ page.name }}"
+                   onerror="this.onerror=null;this.src='https://placehold.co/68x68/f97316/ffffff?text=B';">
+              <div style="min-width:0;">
+                  <div class="kbiz-post-author-name">
+                    {{ page.name }}
+                    {% if page.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="13" width="13" alt="✓" style="vertical-align:middle;" loading="lazy">{% endif %}
+                  </div>
+                  {% if page.category %}<div class="kbiz-post-author-sub">{{ page.page_type_label }}</div>{% endif %}
+                  <div class="kbiz-post-time">
+                      {% if post.is_pinned %}<span class="kbiz-post-pin"><i class="fas fa-thumbtack"></i></span>{% endif %}
+                      <i class="far fa-clock"></i> {{ post.time_posted }}
+                      <i class="fas fa-earth-americas" style="font-size:9px;"></i>
+                  </div>
+              </div>
+          </a>
+      </div>
+
+      {% if post.post_type == 'video' %}
+      <span class="kbiz-post-badge"><i class="fas fa-video"></i> Video{% if post.video_duration_display %} · {{ post.video_duration_display }}{% endif %}</span>
+      {% elif post.post_type == 'poll' %}
+      <span class="kbiz-post-badge"><i class="fas fa-square-poll-vertical"></i> Poll</span>
+      {% endif %}
+
+      {% if post.caption %}
+      <div class="kbiz-post-caption">{{ post.caption }}</div>
+      {% endif %}
+
+      {% if post.post_type == 'image' %}
+          {% with imgs=post.images.all %}
+          {% if imgs %}
+          <div class="kbiz-post-media">
+              <div class="kbiz-post-media-grid {% if imgs|length == 1 %}n1{% elif imgs|length == 2 %}n2{% elif imgs|length == 3 %}n3{% else %}nmany{% endif %}">
+                  {% for img in imgs %}
+                  <img src="{{ img.get_image_url }}" alt="" loading="lazy"
+                       onerror="this.onerror=null;this.src='https://placehold.co/600x600/f8f8f8/aaa?text=Image';">
+                  {% endfor %}
+              </div>
+          </div>
+          {% endif %}
+          {% endwith %}
+      {% elif post.post_type == 'video' %}
+          {% if post.get_video_url %}
+          <div class="kbiz-post-media">
+              <video src="{{ post.get_video_url }}" controls preload="metadata"></video>
+          </div>
+          {% endif %}
+      {% elif post.post_type == 'poll' and post.poll %}
+          <div class="kbiz-poll" data-poll-id="{{ post.poll.poll_id }}" data-allow-multiple="{% if post.poll.allow_multiple %}1{% else %}0{% endif %}">
+              <div class="kbiz-poll-question">{{ post.poll.question }}</div>
+              {% for opt in post.poll.options.all %}
+              <button type="button"
+                      class="kbiz-poll-option {% if opt.option_id in post.poll.viewer_voted_ids %}voted{% endif %}"
+                      data-option-id="{{ opt.option_id }}"
+                      {% if post.poll.is_closed %}disabled{% endif %}
+                      onclick="voteBusinessPoll('{{ post.post_id }}', '{{ opt.option_id }}', this)">
+                  <span class="kbiz-poll-option-fill" style="width:{{ opt.viewer_pct }}%;"></span>
+                  <span class="kbiz-poll-option-row">
+                      <span>{% if opt.option_id in post.poll.viewer_voted_ids %}<i class="fas fa-check-circle" style="color:var(--mfy-primary);margin-right:6px;"></i>{% endif %}{{ opt.text }}</span>
+                      <span class="kbiz-poll-option-pct">{{ opt.viewer_pct }}%</span>
+                  </span>
+              </button>
+              {% endfor %}
+              <div class="kbiz-poll-meta">
+                  {{ post.poll.viewer_total_votes }} vote{{ post.poll.viewer_total_votes|pluralize }}
+                  {% if post.poll.allow_multiple %} · Multiple choices allowed{% endif %}
+                  {% if post.poll.is_closed %} · Closed{% endif %}
+              </div>
+          </div>
+      {% endif %}
+
+      <div class="kbiz-post-engage-summary">
+          <span class="vibes">
+              {% if post.vibe_count %}<span class="vibe-icon"><i class="fas fa-heart"></i></span>{% endif %}
+              {% if post.top_vibe_emoji %}<span class="emoji">{{ post.top_vibe_emoji }}</span>{% endif %}
+              <span data-vibe-total>{{ post.vibe_count }}</span>
+          </span>
+          <span class="comment-link" data-comment-total onclick="toggleCommentsPanel('{{ post.post_id }}')">{{ post.comment_count }} comment{{ post.comment_count|pluralize }}</span>
+      </div>
+
+      <div class="kbiz-post-engage-bar" style="position:relative;">
+          <button type="button" class="kbiz-post-engage-btn {% if post.viewer_vibe %}reacted{% endif %}"
+                  data-vibe-btn
+                  onclick="toggleVibePopover(this)">
+              <span data-vibe-emoji>{% if post.viewer_vibe %}{{ post.viewer_vibe_emoji }}{% else %}<i class="far fa-heart"></i>{% endif %}</span>
+              React
+          </button>
+          <div class="kbiz-vibe-popover" data-vibe-popover>
+              {% for v in vibe_choices %}
+              <button type="button" title="{{ v.label }}" onclick="reactToBusinessPost('{{ post.post_id }}', '{{ v.type }}', this)">{{ v.emoji }}</button>
+              {% endfor %}
+          </div>
+          <button type="button" class="kbiz-post-engage-btn" onclick="toggleCommentsPanel('{{ post.post_id }}')">
+              <i class="far fa-comment"></i> Comment
+          </button>
+      </div>
+
+      <!-- Comments: bottom sheet (mobile) / pop-up modal (desktop) -->
+      <div class="kbiz-comments-overlay" id="commentsOverlay-{{ post.post_id }}" onclick="if(event.target===this) closeCommentsPanel('{{ post.post_id }}')">
+          <div class="kbiz-comments-sheet" id="comments-{{ post.post_id }}" data-loaded="0" role="dialog" aria-modal="true" aria-label="Comments">
+              <div class="kbiz-comments-sheet-handle"></div>
+              <div class="kbiz-comments-header">
+                  <span class="kbiz-comments-header-title" data-comment-total-label>{{ post.comment_count }} Comment{{ post.comment_count|pluralize }}</span>
+                  <button class="kbiz-comments-close" onclick="closeCommentsPanel('{{ post.post_id }}')" aria-label="Close comments">
+                      <i class="fas fa-xmark"></i>
+                  </button>
+              </div>
+              <div class="kbiz-comments-body">
+                  <div class="kbiz-comment-list" id="commentList-{{ post.post_id }}">
+                      <div class="kbiz-comment-empty">Loading comments…</div>
+                  </div>
+              </div>
+              <div class="kbiz-comments-footer">
+                  <img src="{{ request.user.profile.get_picture_url }}" alt=""
+                       onerror="this.onerror=null;this.src='https://placehold.co/56x56/dbdbdb/888?text=%20';">
+                  <div class="kbiz-comment-input-row">
+                      <input type="text" id="commentInput-{{ post.post_id }}" placeholder="Write a comment…"
+                             onkeydown="if(event.key==='Enter'){submitBusinessComment('{{ post.post_id }}');}">
+                      <button class="kbiz-comment-send" onclick="submitBusinessComment('{{ post.post_id }}')" aria-label="Send comment">
+                          <i class="fas fa-paper-plane"></i>
+                      </button>
+                  </div>
+              </div>
+          </div>
+      </div>
+  </article>
+  {% endwith %}
+
+  {% elif item.type == 'achievement' %}
+  {# ── Business achievement — ported 1:1 from the business page's own Achievements tab (.khj-jcard) ─────── #}
+  {% with a=item.data page=item.data.business_page %}
+  <article class="khj-jcard" id="feed-achievement-{{ a.achievement_id }}">
+    <div class="khj-jrow">
+
+      <a href="{% url 'business_page_detail' page.slug %}" class="khj-jcard-img-link">
+        <div class="khj-jcard-img-wrap">
+          <img src="{{ a.get_image_url|default:'https://placehold.co/600x400/fff7e6/f59e0b?text=Achievement' }}"
+               alt="{{ a.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img loaded">
+        </div>
+        <span class="khj-jcard-type-chip" style="--pill-color:#f59e0b;"><i class="fas fa-trophy"></i> Achievement</span>
+      </a>
+
+      <div class="khj-jcard-body">
+        <a href="{% url 'business_page_detail' page.slug %}" class="khj-jcard-body-link">
+          <span class="khj-jcard-name">{{ a.title }}</span>
+        </a>
+
+        <a href="{% url 'business_page_detail' page.slug %}" class="khj-jcard-seller" onclick="event.stopPropagation()">
+          {% if page.logo %}
+            <img src="{{ page.logo.url }}" alt="{{ page.name }}" class="khj-jcard-seller-avatar">
+          {% else %}
+            <img src="https://placehold.co/40x40/fff7e6/f59e0b?text={{ page.name|first|upper }}" alt="{{ page.name }}" class="khj-jcard-seller-avatar">
+          {% endif %}
+          <span class="khj-jcard-seller-name">{{ page.name|truncatechars:20 }}</span>
+          {% if page.is_verified %}<i class="fas fa-circle-check khj-jcard-seller-badge" title="Verified business"></i>{% endif %}
+        </a>
+
+        <div class="khj-jcard-meta">
+          {% if a.issuer %}<span class="khj-jcard-meta-txt"><i class="fas fa-award"></i>{{ a.issuer }}</span>{% endif %}
+          {% if a.date_achieved %}<span class="khj-jcard-meta-txt">{{ a.date_achieved }}</span>{% endif %}
+        </div>
+        {% if a.description %}
+        <div class="khj-jcard-meta">
+          <span class="khj-jcard-meta-txt">{{ a.description|truncatechars:120 }}</span>
+        </div>
+        {% endif %}
+
+        <div class="khj-jcard-footer">
+          <a href="{% url 'business_page_detail' page.slug %}" class="khj-view-btn">View Page</a>
+        </div>
+      </div>
+
+    </div>
+  </article>
+  {% endwith %}
+
+  {% elif item.type == 'people_suggestion' %}
+  {# ── Person suggestion — ranked by profession / skills / interests / location match ─────── #}
+  {% with u=item.data p=item.data.profile %}
+  <div class="mfy-user-suggestion" data-user-id="{{ u.id }}">
+    <div class="mfy-user-suggestion-header">
+      <div class="mfy-user-suggestion-badge">
+        <i class="fas fa-user-plus"></i> People to follow
+      </div>
+    </div>
+    <div class="mfy-user-suggestion-content">
+      <div class="mfy-user-suggestion-profile">
+        <img src="{{ p.get_picture_url }}" alt="{{ u.username }}" class="mfy-user-suggestion-picture"
+             onerror="this.onerror=null;this.src='https://placehold.co/60x60/dbdbdb/8e8e8e?text=U';">
+        <div class="mfy-user-suggestion-details">
+          <div class="mfy-user-suggestion-name">
+            {{ p.full_name|default:u.username }}
+            {% if p.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;" loading="lazy">{% endif %}
+          </div>
+          <div class="mfy-user-suggestion-username">@{{ u.username }}{% if p.profession %} · {{ p.profession }}{% endif %}</div>
+          {% if p.bio %}
+          <div class="mfy-user-suggestion-bio">{{ p.bio|truncatechars:80 }}</div>
+          {% endif %}
+          <div class="mfy-user-suggestion-meta">
+            {% if p.location %}
+            <span class="mfy-user-suggestion-meta-pill">
+              <i class="fas fa-map-marker-alt"></i>{{ p.location|truncatechars:26 }}
+            </span>
+            {% endif %}
+            {% if p.member_type_label %}
+            <span class="mfy-user-suggestion-meta-pill">{{ p.member_type_emoji }} {{ p.member_type_label }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mfy-user-suggestion-actions">
+      <button class="mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.username }}')">
+        <i class="fas fa-user-plus"></i> Follow
+      </button>
+      <a href="{% url 'profile' u.username %}" class="mfy-user-suggestion-btn-secondary">
+        <i class="fas fa-user"></i> View Profile
+      </a>
+    </div>
+  </div>
+  {% endwith %}
 
   {% endif %}
 

@@ -386,25 +386,30 @@
         }
         .kbiz-empty i { font-size: 36px; margin-bottom: 12px; display: block; }
 
-        /* ── Content Tabs (Products / Posts / Jobs) ── */
+        /* ── Content Tabs (Products / Posts / Jobs) — horizontally scrollable ── */
         .kbiz-content-tabs {
             display: flex;
             background: var(--mfy-white);
             border-radius: 16px;
             margin: 0 12px 16px;
             box-shadow: 0 1px 3px rgba(0,0,0,.03);
-            overflow: hidden;
             position: sticky;
             top: 52px;
             z-index: 90;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
+        .kbiz-content-tabs::-webkit-scrollbar { display: none; }
         @media (max-width: 767px) {
             .kbiz-content-tabs { border-radius: 0; margin: 0 0 8px; box-shadow: none; border-bottom: 1px solid var(--mfy-border); }
         }
         .kbiz-content-tab {
-            flex: 1;
+            flex: 0 0 auto;
             display: flex; align-items: center; justify-content: center; gap: 7px;
-            padding: 14px 8px;
+            padding: 14px 16px;
             background: none; border: none; cursor: pointer;
             font-family: inherit; font-size: 13px; font-weight: 700;
             color: var(--mfy-text-light);
@@ -425,7 +430,7 @@
         .kbiz-tab-panel.active { display: block; }
 
         @media (max-width: 480px) {
-            .kbiz-content-tab { font-size: 12px; padding: 12px 4px; gap: 5px; }
+            .kbiz-content-tab { font-size: 12px; padding: 12px 14px; gap: 5px; }
             .kbiz-content-tab-count { display: none; }
         }
 
@@ -1090,6 +1095,36 @@
             opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 999; white-space: nowrap;
         }
         .kbiz-toast.show { opacity: 1; }
+
+        /* ── Custom confirm dialog (replaces browser confirm()) ── */
+        .kbiz-confirm-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,.55); z-index: 400;
+            align-items: center; justify-content: center; padding: 24px;
+        }
+        .kbiz-confirm-overlay.open { display: flex; }
+        .kbiz-confirm-box {
+            background: var(--mfy-white); border-radius: 16px;
+            width: 100%; max-width: 320px; padding: 22px 20px 16px;
+            text-align: center; animation: slideUp .2s ease;
+            box-shadow: 0 12px 40px rgba(0,0,0,.2);
+        }
+        .kbiz-confirm-icon {
+            width: 44px; height: 44px; border-radius: 50%;
+            background: rgba(237,73,86,.1); color: var(--mfy-error);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; margin: 0 auto 12px;
+        }
+        .kbiz-confirm-msg { font-size: 14.5px; font-weight: 600; color: var(--mfy-text); line-height: 1.4; margin-bottom: 18px; }
+        .kbiz-confirm-actions { display: flex; gap: 8px; }
+        .kbiz-confirm-btn {
+            flex: 1; padding: 11px; border-radius: 10px; font-size: 14px; font-weight: 700;
+            font-family: inherit; cursor: pointer; border: none;
+        }
+        .kbiz-confirm-cancel { background: var(--mfy-bg); color: var(--mfy-text); }
+        .kbiz-confirm-cancel:hover { background: var(--mfy-border); }
+        .kbiz-confirm-ok { background: var(--mfy-error); color: #fff; }
+        .kbiz-confirm-ok:hover { background: #d63c48; }
 
         /* ── Right Sidebar (same as profile page) ── */
         .mfy-right-sidebar {
@@ -2598,25 +2633,43 @@
         {% endif %}
     </div>
     {% if services %}
-    <div class="kbiz-jgrid" id="servicesGrid">
+    <div class="kbiz-jobs-list" id="servicesGrid">
         {% for service in services %}
-        <article class="mfy-jcard" id="kbiz-service-{{ service.service_id }}">
-            <div class="mfy-jcard-img-wrap">
+        <article class="khj-jcard" id="kbiz-service-{{ service.service_id }}">
+          <div class="khj-jrow">
+
+            <div class="khj-jcard-img-link">
+              <div class="khj-jcard-img-wrap">
                 <img src="{{ service.get_image_url|default:'https://placehold.co/600x400/eaf7ff/0095f6?text=Service' }}"
-                     alt="{{ service.title }}" loading="lazy" class="mfy-jcard-img loaded">
+                     alt="{{ service.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img">
+              </div>
             </div>
-            <div class="mfy-jcard-body">
-                <div class="mfy-jcard-name">{{ service.title }}</div>
-                {% if service.description %}<div class="mfy-jcard-meta-txt">{{ service.description|truncatechars:120 }}</div>{% endif %}
-                {% if service.price_text %}<div class="mfy-jcard-price">{{ service.price_text }}</div>{% endif %}
+
+            <div class="khj-jcard-body">
+              <span class="khj-jcard-name">{{ service.title }}</span>
+
+              {% if service.description %}
+              <div class="khj-jcard-meta">
+                <span class="khj-jcard-meta-txt">{{ service.description|truncatechars:120 }}</span>
+              </div>
+              {% endif %}
+
+              {% if service.price_text %}
+              <div class="khj-jcard-price-row">
+                <span class="khj-jcard-price">{{ service.price_text }}</span>
+              </div>
+              {% endif %}
             </div>
-            {% if is_owner %}
-            <div class="khj-jcard-owner-row">
-                <button class="khj-owner-btn del" onclick="deleteBusinessService('{{ service.service_id }}')">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-            </div>
-            {% endif %}
+
+          </div>
+
+          {% if is_owner %}
+          <div class="khj-jcard-owner-row">
+            <button class="khj-owner-btn del" onclick="deleteBusinessService('{{ service.service_id }}')">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+          </div>
+          {% endif %}
         </article>
         {% endfor %}
     </div>
@@ -2648,25 +2701,43 @@
         {% endif %}
     </div>
     {% if portfolio_items %}
-    <div class="kbiz-jgrid" id="portfolioGrid">
+    <div class="kbiz-jobs-list" id="portfolioGrid">
         {% for item in portfolio_items %}
-        <article class="mfy-jcard" id="kbiz-portfolio-{{ item.item_id }}">
-            <div class="mfy-jcard-img-wrap">
+        <article class="khj-jcard" id="kbiz-portfolio-{{ item.item_id }}">
+          <div class="khj-jrow">
+
+            <div class="khj-jcard-img-link">
+              <div class="khj-jcard-img-wrap">
                 <img src="{{ item.get_image_url|default:'https://placehold.co/600x400/eaf7ff/0095f6?text=Portfolio' }}"
-                     alt="{{ item.title }}" loading="lazy" class="mfy-jcard-img loaded">
+                     alt="{{ item.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img">
+              </div>
             </div>
-            <div class="mfy-jcard-body">
-                <div class="mfy-jcard-name">{{ item.title }}</div>
-                {% if item.description %}<div class="mfy-jcard-meta-txt">{{ item.description|truncatechars:120 }}</div>{% endif %}
-                {% if item.link_url %}<a href="{{ item.link_url }}" target="_blank" rel="noopener" class="mfy-jcard-meta-txt"><i class="fas fa-link"></i> View</a>{% endif %}
+
+            <div class="khj-jcard-body">
+              <span class="khj-jcard-name">{{ item.title }}</span>
+
+              {% if item.description %}
+              <div class="khj-jcard-meta">
+                <span class="khj-jcard-meta-txt">{{ item.description|truncatechars:120 }}</span>
+              </div>
+              {% endif %}
+
+              {% if item.link_url %}
+              <div class="khj-jcard-footer">
+                <a href="{{ item.link_url }}" target="_blank" rel="noopener" class="khj-view-btn"><i class="fas fa-link"></i> View</a>
+              </div>
+              {% endif %}
             </div>
-            {% if is_owner %}
-            <div class="khj-jcard-owner-row">
-                <button class="khj-owner-btn del" onclick="deleteBusinessPortfolio('{{ item.item_id }}')">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-            </div>
-            {% endif %}
+
+          </div>
+
+          {% if is_owner %}
+          <div class="khj-jcard-owner-row">
+            <button class="khj-owner-btn del" onclick="deleteBusinessPortfolio('{{ item.item_id }}')">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+          </div>
+          {% endif %}
         </article>
         {% endfor %}
     </div>
@@ -2698,26 +2769,44 @@
         {% endif %}
     </div>
     {% if project_items %}
-    <div class="kbiz-jgrid" id="projectsGrid">
+    <div class="kbiz-jobs-list" id="projectsGrid">
         {% for item in project_items %}
-        <article class="mfy-jcard" id="kbiz-portfolio-{{ item.item_id }}">
-            <div class="mfy-jcard-img-wrap">
+        <article class="khj-jcard" id="kbiz-portfolio-{{ item.item_id }}">
+          <div class="khj-jrow">
+
+            <div class="khj-jcard-img-link">
+              <div class="khj-jcard-img-wrap">
                 <img src="{{ item.get_image_url|default:'https://placehold.co/600x400/eaf7ff/0095f6?text=Project' }}"
-                     alt="{{ item.title }}" loading="lazy" class="mfy-jcard-img loaded">
-                {% if item.is_ongoing %}<span class="mfy-jcard-category-badge">Ongoing</span>{% endif %}
+                     alt="{{ item.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img">
+              </div>
+              {% if item.is_ongoing %}<span class="khj-jcard-type-chip">Ongoing</span>{% endif %}
             </div>
-            <div class="mfy-jcard-body">
-                <div class="mfy-jcard-name">{{ item.title }}</div>
-                {% if item.description %}<div class="mfy-jcard-meta-txt">{{ item.description|truncatechars:120 }}</div>{% endif %}
-                {% if item.link_url %}<a href="{{ item.link_url }}" target="_blank" rel="noopener" class="mfy-jcard-meta-txt"><i class="fas fa-link"></i> View</a>{% endif %}
+
+            <div class="khj-jcard-body">
+              <span class="khj-jcard-name">{{ item.title }}</span>
+
+              {% if item.description %}
+              <div class="khj-jcard-meta">
+                <span class="khj-jcard-meta-txt">{{ item.description|truncatechars:120 }}</span>
+              </div>
+              {% endif %}
+
+              {% if item.link_url %}
+              <div class="khj-jcard-footer">
+                <a href="{{ item.link_url }}" target="_blank" rel="noopener" class="khj-view-btn"><i class="fas fa-link"></i> View</a>
+              </div>
+              {% endif %}
             </div>
-            {% if is_owner %}
-            <div class="khj-jcard-owner-row">
-                <button class="khj-owner-btn del" onclick="deleteBusinessPortfolio('{{ item.item_id }}')">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-            </div>
-            {% endif %}
+
+          </div>
+
+          {% if is_owner %}
+          <div class="khj-jcard-owner-row">
+            <button class="khj-owner-btn del" onclick="deleteBusinessPortfolio('{{ item.item_id }}')">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+          </div>
+          {% endif %}
         </article>
         {% endfor %}
     </div>
@@ -2749,26 +2838,42 @@
         {% endif %}
     </div>
     {% if achievements %}
-    <div class="kbiz-jgrid" id="achievementsGrid">
+    <div class="kbiz-jobs-list" id="achievementsGrid">
         {% for a in achievements %}
-        <article class="mfy-jcard" id="kbiz-achievement-{{ a.achievement_id }}">
-            <div class="mfy-jcard-img-wrap">
+        <article class="khj-jcard" id="kbiz-achievement-{{ a.achievement_id }}">
+          <div class="khj-jrow">
+
+            <div class="khj-jcard-img-link">
+              <div class="khj-jcard-img-wrap">
                 <img src="{{ a.get_image_url|default:'https://placehold.co/600x400/fff7e6/f59e0b?text=Achievement' }}"
-                     alt="{{ a.title }}" loading="lazy" class="mfy-jcard-img loaded">
+                     alt="{{ a.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img">
+              </div>
             </div>
-            <div class="mfy-jcard-body">
-                <div class="mfy-jcard-name">{{ a.title }}</div>
-                {% if a.issuer %}<div class="mfy-jcard-meta-txt"><i class="fas fa-award"></i> {{ a.issuer }}</div>{% endif %}
-                {% if a.date_achieved %}<div class="mfy-jcard-meta-txt">{{ a.date_achieved }}</div>{% endif %}
-                {% if a.description %}<div class="mfy-jcard-meta-txt">{{ a.description|truncatechars:120 }}</div>{% endif %}
+
+            <div class="khj-jcard-body">
+              <span class="khj-jcard-name">{{ a.title }}</span>
+
+              <div class="khj-jcard-meta">
+                {% if a.issuer %}<span class="khj-jcard-meta-txt"><i class="fas fa-award"></i>{{ a.issuer }}</span>{% endif %}
+                {% if a.date_achieved %}<span class="khj-jcard-meta-txt">{{ a.date_achieved }}</span>{% endif %}
+              </div>
+
+              {% if a.description %}
+              <div class="khj-jcard-meta">
+                <span class="khj-jcard-meta-txt">{{ a.description|truncatechars:120 }}</span>
+              </div>
+              {% endif %}
             </div>
-            {% if is_owner %}
-            <div class="khj-jcard-owner-row">
-                <button class="khj-owner-btn del" onclick="deleteBusinessAchievement('{{ a.achievement_id }}')">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-            </div>
-            {% endif %}
+
+          </div>
+
+          {% if is_owner %}
+          <div class="khj-jcard-owner-row">
+            <button class="khj-owner-btn del" onclick="deleteBusinessAchievement('{{ a.achievement_id }}')">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+          </div>
+          {% endif %}
         </article>
         {% endfor %}
     </div>
@@ -3182,6 +3287,17 @@
 
 <!-- Toast -->
 <div class="kbiz-toast" id="toast"></div>
+
+<div class="kbiz-confirm-overlay" id="confirmOverlay">
+    <div class="kbiz-confirm-box">
+        <div class="kbiz-confirm-icon"><i class="fas fa-trash-alt"></i></div>
+        <div class="kbiz-confirm-msg" id="confirmMsg">Are you sure?</div>
+        <div class="kbiz-confirm-actions">
+            <button type="button" class="kbiz-confirm-btn kbiz-confirm-cancel" id="confirmCancelBtn">Cancel</button>
+            <button type="button" class="kbiz-confirm-btn kbiz-confirm-ok" id="confirmOkBtn">Delete</button>
+        </div>
+    </div>
+</div>
 
   </div><!-- /.kbiz-main-col -->
 
@@ -3948,6 +4064,38 @@ function toast(msg) {
     setTimeout(() => t.classList.remove('show'), 2800);
 }
 
+// ── Custom confirm dialog (replaces browser confirm()) ──
+function customConfirm(message, okLabel) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('confirmOverlay');
+        const msgEl = document.getElementById('confirmMsg');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+        if (!overlay || !msgEl || !okBtn || !cancelBtn) { resolve(window.confirm(message)); return; }
+
+        msgEl.textContent = message;
+        okBtn.textContent = okLabel || 'Delete';
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+
+        function cleanup(result) {
+            overlay.classList.remove('open');
+            document.body.style.overflow = '';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            overlay.removeEventListener('click', onOverlayClick);
+            resolve(result);
+        }
+        function onOk() { cleanup(true); }
+        function onCancel() { cleanup(false); }
+        function onOverlayClick(e) { if (e.target === overlay) cleanup(false); }
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        overlay.addEventListener('click', onOverlayClick);
+    });
+}
+
 // ── Follow toggle ──
 const followBtn = document.getElementById('followBtn');
 if (followBtn) {
@@ -4228,7 +4376,7 @@ async function submitJob() {
 
 // ── Delete business job ──
 async function deleteBusinessJob(jobId, title) {
-    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    if (!await customConfirm(`Delete "${title}"? This cannot be undone.`)) return;
     try {
         const res = await fetch(`/jobs/${jobId}/delete/`, {
             method: 'POST',
@@ -4394,7 +4542,7 @@ async function submitBusinessPost() {
 }
 
 async function deleteBusinessPost(postId) {
-    if (!confirm('Delete this update? This cannot be undone.')) return;
+    if (!await customConfirm('Delete this update? This cannot be undone.')) return;
     try {
         const res = await fetch(`/posts/${postId}/delete/`, {
             method: 'POST',
@@ -4690,7 +4838,7 @@ async function submitBusinessService() {
     }
 }
 async function deleteBusinessService(serviceId) {
-    if (!confirm('Delete this service? This cannot be undone.')) return;
+    if (!await customConfirm('Delete this service? This cannot be undone.')) return;
     try {
         const res = await fetch(`/services/${serviceId}/delete/`, {
             method: 'POST',
@@ -4766,7 +4914,7 @@ async function submitBusinessPortfolio() {
     }
 }
 async function deleteBusinessPortfolio(itemId) {
-    if (!confirm('Delete this item? This cannot be undone.')) return;
+    if (!await customConfirm('Delete this item? This cannot be undone.')) return;
     try {
         const res = await fetch(`/portfolio/${itemId}/delete/`, {
             method: 'POST',
@@ -4835,7 +4983,7 @@ async function submitBusinessAchievement() {
     }
 }
 async function deleteBusinessAchievement(achievementId) {
-    if (!confirm('Delete this achievement? This cannot be undone.')) return;
+    if (!await customConfirm('Delete this achievement? This cannot be undone.')) return;
     try {
         const res = await fetch(`/achievements/${achievementId}/delete/`, {
             method: 'POST',
