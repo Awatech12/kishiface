@@ -746,6 +746,31 @@
         .kprof-field-row { display: flex; gap: 12px; }
         .kprof-field-row .kprof-field { flex: 1; }
         .kprof-char-count { text-align: right; font-size: 11px; color: var(--mfy-text-light); margin-top: 4px; }
+        .kprof-cv-upload { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .kprof-cv-upload-btn {
+            display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px;
+            border: 1.5px dashed var(--mfy-border); border-radius: 10px; font-size: 13px;
+            font-weight: 700; color: var(--mfy-primary); cursor: pointer; background: var(--mfy-white);
+            transition: border-color .15s, background .15s;
+        }
+        .kprof-cv-upload-btn:hover { border-color: var(--mfy-primary); background: rgba(0,149,246,.06); }
+        .kprof-cv-upload .kprof-char-count { margin: 0; text-align: left; }
+        .kprof-cv-current {
+            display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 12px;
+            background: var(--mfy-bg, #f5f5f5); border-radius: 10px; font-size: 13px;
+        }
+        .kprof-cv-current i.fa-file-alt { color: var(--mfy-primary); }
+        .kprof-cv-current a {
+            color: var(--mfy-text); font-weight: 600; text-decoration: none;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+        }
+        .kprof-cv-current a:hover { color: var(--mfy-primary); }
+        .kprof-cv-remove {
+            border: none; background: none; color: var(--mfy-text-light); cursor: pointer;
+            padding: 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .kprof-cv-remove:hover { color: #e0245e; background: rgba(224,36,94,.08); }
         .kprof-toggle-row {
             display: flex; align-items: center; justify-content: space-between;
             padding: 10px 0; border-bottom: 1px solid var(--mfy-border);
@@ -2003,9 +2028,18 @@
     {% endif %}
     {% if profile.member_type_display_fields %}
     <div class="kprof-listings-panel">
+        <div class="kprof-section-h"><h2>{{ profile.member_type_emoji }} {{ profile.member_type_label }} Details</h2></div>
         <div class="kprof-type-details">
             {% for label, value in profile.member_type_display_fields %}
-            <div class="kprof-type-row"><span class="kprof-type-label">{{ label }}</span><span class="kprof-type-value">{{ value }}</span></div>
+                {% if label == 'CV / Resume' %}
+                <div class="kprof-type-row kprof-cv-current" style="margin-top:0;">
+                    <i class="fas fa-file-alt"></i>
+                    <a href="{{ value }}" target="_blank" rel="noopener noreferrer">{{ profile.member_type_cv_display_name|default:'View CV / Resume' }}</a>
+                    <i class="fas fa-external-link-alt" style="font-size:11px;color:var(--mfy-text-light);"></i>
+                </div>
+                {% else %}
+                <div class="kprof-type-row"><span class="kprof-type-label">{{ label }}</span><span class="kprof-type-value">{{ value }}</span></div>
+                {% endif %}
             {% endfor %}
         </div>
     </div>
@@ -2313,38 +2347,55 @@
                 <div class="kprof-member-type-fields" data-mt-fieldset="{{ t.key }}" {% if profile.member_type != t.key %}style="display:none;"{% endif %}>
                     {% for field in t.fields %}
                     <div class="kprof-field">
-                        <label for="mt_{{ field.key }}">{{ field.label }}{% if field.required %} <span style="color:var(--mfy-error);">*</span>{% endif %}</label>
+                        <label for="mt_{{ t.key }}__{{ field.key }}">{{ field.label }}{% if field.required %} <span style="color:var(--mfy-error);">*</span>{% endif %}</label>
                         {% if field.type == 'textarea' %}
-                            <textarea id="mt_{{ field.key }}" name="{{ field.key }}" maxlength="{{ field.max_length|default:1000 }}" placeholder="{{ field.placeholder|default:'' }}">{{ field.value }}</textarea>
+                            <textarea id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" maxlength="{{ field.max_length|default:1000 }}" placeholder="{{ field.placeholder|default:'' }}">{{ field.value }}</textarea>
                         {% elif field.type == 'select' %}
-                            <select id="mt_{{ field.key }}" name="{{ field.key }}">
+                            <select id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}">
                                 <option value="">Select…</option>
                                 {% for choice in field.choices %}
                                 <option value="{{ choice }}" {% if field.value == choice %}selected{% endif %}>{{ choice }}</option>
                                 {% endfor %}
                             </select>
                         {% elif field.type == 'select_other' %}
-                            <select id="mt_{{ field.key }}" name="{{ field.key }}" onchange="onEditSelectOtherChange(this)">
+                            <select id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" onchange="onEditSelectOtherChange(this)">
                                 <option value="">Select…</option>
                                 {% for choice in field.choices %}
                                 <option value="{{ choice }}" {% if field.select_value == choice %}selected{% endif %}>{{ choice }}</option>
                                 {% endfor %}
                                 <option value="Other" {% if field.select_value == 'Other' %}selected{% endif %}>Other</option>
                             </select>
-                            <input type="text" id="mt_{{ field.key }}__other" name="{{ field.key }}__other"
+                            <input type="text" id="mt_{{ t.key }}__{{ field.key }}__other" name="mt_{{ t.key }}__{{ field.key }}__other"
                                    class="kprof-select-other-input"
                                    value="{{ field.other_value }}" maxlength="{{ field.max_length|default:300 }}"
                                    placeholder="Please specify"
                                    style="{% if field.select_value != 'Other' %}display:none;{% endif %}margin-top:8px;">
                         {% elif field.type == 'file' %}
-                            <input type="file" id="mt_{{ field.key }}" name="{{ field.key }}" accept=".pdf,.doc,.docx">
-                            {% if profile.member_type_cv %}<div class="kprof-char-count">Current: <a href="{{ profile.member_type_cv.url }}" target="_blank" rel="noopener">view file</a></div>{% endif %}
+                            <div class="kprof-cv-upload">
+                                <label for="mt_{{ t.key }}__{{ field.key }}" class="kprof-cv-upload-btn">
+                                    <i class="fas fa-file-upload"></i>
+                                    <span id="mt_{{ t.key }}__{{ field.key }}_label">{% if profile.member_type_cv %}Replace file{% else %}Choose file{% endif %}</span>
+                                </label>
+                                <input type="file" id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" accept=".pdf,.doc,.docx"
+                                       style="display:none;" onchange="onCvFileChosen(this, 'mt_{{ t.key }}__{{ field.key }}')">
+                                <span class="kprof-char-count">PDF, DOC or DOCX, up to 5MB</span>
+                            </div>
+                            {% if profile.member_type_cv %}
+                            <div class="kprof-cv-current" id="mt_{{ t.key }}__{{ field.key }}_current">
+                                <i class="fas fa-file-alt"></i>
+                                <a href="{{ profile.member_type_cv.url }}" target="_blank" rel="noopener noreferrer">{{ profile.member_type_cv_display_name|default:'View current CV' }}</a>
+                                <button type="button" class="kprof-cv-remove" onclick="removeCv('mt_{{ t.key }}__{{ field.key }}')" title="Remove CV">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <input type="hidden" id="mt_{{ t.key }}__{{ field.key }}_clear" name="clear_cv" value="0">
+                            {% endif %}
                         {% elif field.type == 'number' %}
-                            <input type="number" min="0" id="mt_{{ field.key }}" name="{{ field.key }}" value="{{ field.value }}" placeholder="{{ field.placeholder|default:'' }}">
+                            <input type="number" min="0" id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" value="{{ field.value }}" placeholder="{{ field.placeholder|default:'' }}">
                         {% elif field.type == 'url' %}
-                            <input type="url" id="mt_{{ field.key }}" name="{{ field.key }}" value="{{ field.value }}" placeholder="https://…">
+                            <input type="url" id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" value="{{ field.value }}" placeholder="https://…">
                         {% else %}
-                            <input type="text" id="mt_{{ field.key }}" name="{{ field.key }}" value="{{ field.value }}" maxlength="{{ field.max_length|default:150 }}" placeholder="{{ field.placeholder|default:'' }}">
+                            <input type="text" id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" value="{{ field.value }}" maxlength="{{ field.max_length|default:150 }}" placeholder="{{ field.placeholder|default:'' }}">
                         {% endif %}
                     </div>
                     {% endfor %}
@@ -3238,6 +3289,30 @@ function removeEditCover() {
     if (input) input.value = '';
     const clearFlag = document.getElementById('editClearCover');
     if (clearFlag) clearFlag.value = '1';
+}
+
+// Shows the chosen filename next to the "Choose file" button and cancels
+// any pending removal, since picking a new file supersedes a "remove" click.
+function onCvFileChosen(inputEl, baseId) {
+    const label = document.getElementById(baseId + '_label');
+    const file  = inputEl.files && inputEl.files[0];
+    if (label) label.textContent = file ? file.name : 'Choose file';
+    const clearFlag = document.getElementById(baseId + '_clear');
+    if (clearFlag) clearFlag.value = '0';
+    const current = document.getElementById(baseId + '_current');
+    if (current) current.style.display = file ? 'none' : '';
+}
+
+// Marks the existing CV for removal on save (no new file selected).
+function removeCv(baseId) {
+    const current = document.getElementById(baseId + '_current');
+    if (current) current.style.display = 'none';
+    const clearFlag = document.getElementById(baseId + '_clear');
+    if (clearFlag) clearFlag.value = '1';
+    const input = document.getElementById(baseId);
+    if (input) input.value = '';
+    const label = document.getElementById(baseId + '_label');
+    if (label) label.textContent = 'Choose file';
 }
 
 async function submitEditProfile(event) {

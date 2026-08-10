@@ -390,8 +390,12 @@ def onboarding(request):
         cv_file = request.FILES.get('cv')
         if cv_file:
             try:
+                ext = os.path.splitext(cv_file.name)[1].lower()
+                if ext not in {'.pdf', '.doc', '.docx'}:
+                    raise _ModelValidationError('CV must be a PDF, DOC, or DOCX file.')
                 validate_file_size(cv_file, max_size_mb=5)
                 profile.member_type_cv = cv_file
+                profile.member_type_cv_name = cv_file.name
             except _ModelValidationError as e:
                 messages.error(request, str(e))
                 return render(request, 'onboarding.html', {
@@ -1471,19 +1475,46 @@ def update_profile(request, username):
             if member_type_submitted:
                 valid_types = {k for k, _ in MEMBER_TYPE_CHOICES}
                 if member_type in valid_types:
-                    raw_data = {
-                        field['key']: request.POST.get(field['key'], '')
-                        for field in MEMBER_TYPE_SCHEMA[member_type]['fields']
-                    }
+                    # Each dynamic field is rendered with a name namespaced to its
+                    # member type (mt_<member_type>__<key>) so that fields from the
+                    # other (CSS-hidden, but still present in the DOM and therefore
+                    # still submitted) member-type fieldsets don't collide with the
+                    # currently selected one, or with generic fields like
+                    # "profession"/"location" that share the same key.
+                    raw_data = {}
+                    cv_field_name = None
+                    for field in MEMBER_TYPE_SCHEMA[member_type]['fields']:
+                        key = field['key']
+                        posted_name = f'mt_{member_type}__{key}'
+                        if field['type'] == 'file':
+                            cv_field_name = posted_name
+                            continue
+                        raw_data[key] = request.POST.get(posted_name, '')
+                        if field['type'] == 'select_other':
+                            raw_data[key + '__other'] = request.POST.get(posted_name + '__other', '')
                     profile.member_type = member_type
                     profile.member_type_data = sanitize_member_type_data(member_type, raw_data)
-                    cv_file = request.FILES.get('cv')
+
+                    cv_file = request.FILES.get(cv_field_name) if cv_field_name else None
                     if cv_file:
+                        validate_file_extension_cv = os.path.splitext(cv_file.name)[1].lower()
+                        if validate_file_extension_cv not in {'.pdf', '.doc', '.docx'}:
+                            raise ValueError('CV must be a PDF, DOC, or DOCX file.')
+                        validate_file_size(cv_file, max_size_mb=5)
                         profile.member_type_cv = cv_file
+                        profile.member_type_cv_name = cv_file.name
+                    elif request.POST.get('clear_cv') == '1' and profile.member_type_cv:
+                        profile.member_type_cv.delete(save=False)
+                        profile.member_type_cv = None
+                        profile.member_type_cv_name = ''
                     profile_dirty = True
                 elif member_type == '':
                     profile.member_type = ''
                     profile.member_type_data = {}
+                    if profile.member_type_cv:
+                        profile.member_type_cv.delete(save=False)
+                    profile.member_type_cv = None
+                    profile.member_type_cv_name = ''
                     profile_dirty = True
 
             if profile_dirty:
@@ -1544,6 +1575,14 @@ def update_profile(request, username):
                 messages.info(request, 'Profile Updated Successfully')
                 return redirect('profile', username=request.user.username)
 
+        except (ValueError, _ModelValidationError) as e:
+            # Expected validation failures (bad CV type/size, etc.) — safe to show verbatim.
+            error_message = str(e).strip("[]'\"") or 'Please check your input and try again.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_message})
+            else:
+                messages.error(request, error_message)
+                return redirect('profile', username=request.user.username)
         except Exception as e:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'error': 'Failed to update profile.'})

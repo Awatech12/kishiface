@@ -364,6 +364,20 @@ def validate_file_size(value, max_size_mb=50):
             raise ValidationError(f'File size must be under {max_size_mb}MB')
 
 
+CV_ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx']
+
+
+def validate_cv_extension(value):
+    """Restrict CV/resume uploads to document formats only (server-side —
+    the accept="" attribute on the file input is only a client-side hint)."""
+    if value and hasattr(value, 'name'):
+        ext = os.path.splitext(value.name)[1].lower()
+        if ext not in CV_ALLOWED_EXTENSIONS:
+            raise ValidationError(
+                f'CV must be a {", ".join(CV_ALLOWED_EXTENSIONS)} file, not "{ext}".'
+            )
+
+
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -430,7 +444,11 @@ class Profile(models.Model):
     # ── Member type / onboarding ("What do you use Marketfy for?") ──────
     member_type          = models.CharField(max_length=30, choices=MEMBER_TYPE_CHOICES, blank=True, default='')
     member_type_data     = models.JSONField(default=dict, blank=True)
-    member_type_cv       = models.FileField(upload_to='member_type/cv/', null=True, blank=True)
+    member_type_cv        = models.FileField(
+        upload_to='member_type/cv/', null=True, blank=True,
+        validators=[validate_cv_extension],
+    )
+    member_type_cv_name   = models.CharField(max_length=255, blank=True, default='')
     onboarding_completed = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -459,7 +477,10 @@ class Profile(models.Model):
             self.member_type_data = {}
 
         if self.member_type_cv and hasattr(self.member_type_cv, 'name'):
+            validate_cv_extension(self.member_type_cv)
             validate_file_size(self.member_type_cv, max_size_mb=5)
+        elif not self.member_type_cv:
+            self.member_type_cv_name = ''
 
         if self.website:
             try:
@@ -707,6 +728,16 @@ class Profile(models.Model):
         if self.member_type_cv:
             out.append(('CV / Resume', self.member_type_cv.url))
         return out
+
+    @property
+    def member_type_cv_display_name(self):
+        """Human-friendly filename for the uploaded CV, falling back to the
+        stored path's basename if no original filename was recorded."""
+        if self.member_type_cv_name:
+            return self.member_type_cv_name
+        if self.member_type_cv:
+            return os.path.basename(self.member_type_cv.name)
+        return ''
 
     def get_member_type_value(self, key, default=''):
         return (self.member_type_data or {}).get(key, default)
