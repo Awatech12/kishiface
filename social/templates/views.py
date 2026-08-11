@@ -821,10 +821,6 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # page's own Posts tab does — so the ported kbiz-post-card partial can
     # render identically without extra per-post queries.
     for _post in _post_pool:
-        # Annotate so the ported kbiz-post-card partial can render the
-        # Follow/Following state correctly on page load (not just after
-        # the AJAX toggle updates the button client-side).
-        _post.business_page.is_following = _post.business_page_id in followed_business_ids
         if _post.post_type == BusinessPost.TYPE_POLL and hasattr(_post, 'poll'):
             _poll = _post.poll
             _total = sum(o.vote_count for o in _poll.options.all())
@@ -1155,9 +1151,9 @@ def home(request):
     # mutual_followings/mutual_count pattern).
     _my_following = profile.followings.all()
     for _u in users:
-        _mutuals_qs = _my_following.filter(followings=_u.profile)
-        _u.pymk_mutual_profile = _mutuals_qs.first()
-        _u.pymk_mutual_count = _mutuals_qs.count()
+        _mutuals = _my_following.filter(followings=_u.profile)[:1]
+        _u.pymk_mutual_profile = _mutuals.first()
+        _u.pymk_mutual_count = _my_following.filter(followings=_u.profile).count()
 
     # ── Recent DM conversation partners (home-page bubble row) ───────────────
     from django.db.models import Max

@@ -15,162 +15,40 @@
 {% for item in posts_with_ads %}
 
   {% if item.type == 'business_suggestion' %}
-  <div class="mfy-user-suggestion mfy-business-suggestion" data-business-id="{{ item.data.page_id }}">
-    <div class="mfy-user-suggestion-header">
-      <div class="mfy-user-suggestion-badge">
-        <i class="fas fa-store"></i> Business to follow
-      </div>
+  {# ── Business to follow — styled identically to the "Suggested for you" sidebar row (.mfy-side-card / .mfy-sugg-row) ─────── #}
+  <div class="mfy-side-card mfy-business-suggestion" data-business-id="{{ item.data.page_id }}">
+    <div class="mfy-side-card-header">
+      <span class="mfy-side-card-title"><i class="fas fa-store"></i> Business to follow</span>
+      <a href="{% url 'business_page_detail' item.data.slug %}" class="mfy-side-card-seeall">View</a>
     </div>
-    <div class="mfy-user-suggestion-content">
-      <div class="mfy-user-suggestion-profile">
+
+    <div class="mfy-sugg-row">
+      <a href="{% url 'business_page_detail' item.data.slug %}">
         {% if item.data.logo %}
-        <img src="{{ item.data.logo.url }}"
-             alt="{{ item.data.name }}"
-             class="mfy-user-suggestion-picture"
-             style="border-radius:12px;">
+        <img src="{{ item.data.logo.url }}" alt="{{ item.data.name }}" class="mfy-sugg-avatar">
         {% else %}
-        <img src="https://placehold.co/120x120/f0f0f0/aaa?text={{ item.data.name|slice:':1' }}"
-             alt="{{ item.data.name }}"
-             class="mfy-user-suggestion-picture"
-             style="border-radius:12px;">
+        <span class="mfy-sugg-avatar" style="display:flex;align-items:center;justify-content:center;background:var(--mfy-bg);"><i class="fas fa-store"></i></span>
         {% endif %}
-        <div class="mfy-user-suggestion-details">
-          <div class="mfy-user-suggestion-name">
-            {{ item.data.name }}
-            {% if item.data.is_verified %}
-              <img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;" loading="lazy">
-            {% endif %}
-          </div>
-          <div class="mfy-user-suggestion-username">{{ item.data.get_category_display }}</div>
-          {% if item.data.tagline %}
-          <div class="mfy-user-suggestion-bio">{{ item.data.tagline|truncatechars:80 }}</div>
-          {% endif %}
-          <div class="mfy-user-suggestion-meta">
-            {% if item.data.location %}
-            <span class="mfy-user-suggestion-meta-pill">
-              <i class="fas fa-map-marker-alt"></i>{{ item.data.location|truncatechars:26 }}
-            </span>
-            {% endif %}
-            <span class="mfy-user-suggestion-meta-pill">
-              <i class="fas fa-users"></i>{{ item.data.follower_count }} followers
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="mfy-user-suggestion-actions">
-      <button class="mfy-user-suggestion-btn-primary"
-              onclick="mfyFollowBusiness('{{ item.data.slug }}','{{ item.data.name|escapejs }}')">
-        <i class="fas fa-store"></i> Follow
-      </button>
-      <a href="{% url 'business_page_detail' item.data.slug %}" class="mfy-user-suggestion-btn-secondary">
-        <i class="fas fa-store-alt"></i> View Page
       </a>
+      <a href="{% url 'business_page_detail' item.data.slug %}" class="mfy-sugg-info" style="text-decoration:none;">
+        <div class="mfy-sugg-name">
+          {{ item.data.name }}
+          {% if item.data.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+        </div>
+        <div class="mfy-sugg-handle">{{ item.data.get_category_display|default:"Business Page" }}</div>
+      </a>
+      <div class="mfy-sugg-actions">
+        <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary"
+                onclick="mfyFollowBusiness('{{ item.data.slug }}','{{ item.data.name|escapejs }}')">
+          <i class="fas fa-store"></i> Follow
+        </button>
+        <button class="mfy-sugg-dismiss" aria-label="Dismiss suggestion"
+                onclick="this.closest('.mfy-business-suggestion').style.opacity='0'; setTimeout(()=>this.closest('.mfy-business-suggestion').remove(),250);">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
     </div>
   </div>
-
-  {% elif item.type == 'market' %}
-  {# ── Marketfy Ads card — exact parity with the marketplace grid card ─────── #}
-  <article class="mfy-post mfy-jcard" data-market-id="{{ item.data.product_id }}">
-
-    {% with imgs=item.data.images.all %}
-    <a href="{% url 'product_detail' item.data.product_id %}" class="mfy-jcard-img-link">
-      <div class="mfy-jcard-img-wrap">
-        {% if imgs.0 %}
-        <img
-          src="{{ imgs.0.product_image.url }}"
-          alt="{{ item.data.product_name }}"
-          loading="lazy"
-          onload="this.classList.add('loaded')"
-          onerror="this.onerror=null;this.src='https://placehold.co/600x600/f8f8f8/aaa?text=Product';"
-          class="mfy-jcard-img"
-        >
-        {% else %}
-        <img
-          src="https://placehold.co/600x600/f8f8f8/aaa?text=Product"
-          alt="{{ item.data.product_name }}"
-          class="mfy-jcard-img loaded"
-        >
-        {% endif %}
-
-        {# Views badge — top-right #}
-        <span class="mfy-jcard-views"><i class="fas fa-eye"></i> {{ item.data.views_count|default:0 }}</span>
-
-        {# Category badge — top-left #}
-        <span class="mfy-jcard-category-badge">{{ item.data.category_icon }} {{ item.data.category_label }}</span>
-
-        {# Image-count badge — bottom-right, only when there's more than one photo #}
-        {% if imgs|length > 1 %}
-        <span class="mfy-jcard-img-count"><i class="fas fa-images"></i> {{ imgs|length }}</span>
-        {% endif %}
-      </div>
-    </a>
-    {% endwith %}
-
-    {# Seller badge — business page avatar+name, else uploader's avatar #}
-    {% if item.data.business_page %}
-    <a href="{% url 'business_page_detail' item.data.business_page.slug %}" class="mfy-jcard-seller" onclick="event.stopPropagation()">
-      {% if item.data.business_page.logo %}
-        <img src="{{ item.data.business_page.logo.url }}" alt="{{ item.data.business_page.name }}" class="mfy-jcard-seller-avatar">
-      {% else %}
-        <img src="https://placehold.co/40x40/f8f8f8/aaa?text={{ item.data.business_page.name|first|upper }}" alt="{{ item.data.business_page.name }}" class="mfy-jcard-seller-avatar">
-      {% endif %}
-      <span class="mfy-jcard-seller-name">{{ item.data.business_page.name|truncatechars:26 }}</span>
-      <i class="fas fa-circle-check mfy-jcard-seller-badge" title="Business page"></i>
-    </a>
-    {% else %}
-    <a href="{% url 'profile' item.data.product_owner.username %}" class="mfy-jcard-seller" onclick="event.stopPropagation()">
-      {% if item.data.product_owner.profile.picture %}
-        <img src="{{ item.data.product_owner.profile.picture.url }}" alt="{{ item.data.product_owner.username }}" class="mfy-jcard-seller-avatar">
-      {% else %}
-        <img src="https://placehold.co/40x40/f8f8f8/aaa?text={{ item.data.product_owner.username|first|upper }}" alt="{{ item.data.product_owner.username }}" class="mfy-jcard-seller-avatar">
-      {% endif %}
-      <span class="mfy-jcard-seller-name">{{ item.data.product_owner.username|truncatechars:26 }}</span>
-    </a>
-    {% endif %}
-
-    {# Product info body #}
-    <a href="{% url 'product_detail' item.data.product_id %}" class="mfy-jcard-body-link">
-      <div class="mfy-jcard-body">
-        {# Product name #}
-        <div class="mfy-jcard-name">{{ item.data.product_name|truncatechars:60 }}</div>
-
-        {# Rating — stars + review count, shown once the listing has reviews #}
-        {% if item.data.review_count %}
-        <div class="mfy-jcard-rating">
-          <span class="mfy-jcard-rating-stars">
-            {% for i in "12345" %}<i class="fa-star {% if forloop.counter <= item.data.average_rating %}fas{% else %}far{% endif %}"></i>{% endfor %}
-          </span>
-          <span class="mfy-jcard-rating-count">({{ item.data.review_count }})</span>
-        </div>
-        {% endif %}
-
-        {# Meta line — condition / location / availability #}
-        <div class="mfy-jcard-meta">
-          {% if item.data.product_condition %}<span class="mfy-jcard-meta-txt">{{ item.data.product_condition }}</span>{% endif %}
-          {% if item.data.product_location %}<span class="mfy-jcard-meta-txt">{{ item.data.product_location }}</span>{% endif %}
-          {% if item.data.product_availability %}<span class="mfy-jcard-meta-txt">{{ item.data.product_availability }}</span>{% endif %}
-        </div>
-        <div class="mfy-jcard-time"><i class="far fa-clock"></i> {{ item.data.time_posted }}</div>
-      </div>
-    </a>
-
-    {# Price + wishlist row #}
-    <div class="mfy-jcard-price-row">
-      <span class="mfy-jcard-price">₦{{ item.data.product_price|floatformat:"0"|intcomma }}</span>
-      {% if request.user != item.data.product_owner %}
-      <button type="button"
-              class="mfy-jcard-wish-btn {% if item.data.in_wishlist %}saved{% endif %}"
-              data-product-id="{{ item.data.product_id }}"
-              onclick="mfyToggleWishlist(this, event)"
-              aria-pressed="{% if item.data.in_wishlist %}true{% else %}false{% endif %}"
-              aria-label="Save for later">
-        <i class="fa-heart {% if item.data.in_wishlist %}fas{% else %}far{% endif %}"></i>
-      </button>
-      {% endif %}
-    </div>
-
-  </article>
 
   {% elif item.type == 'job' %}
   {# ── Job Vacancy card — ported 1:1 from the business page's own Jobs tab (.khj-jcard) ─────── #}
@@ -226,7 +104,7 @@
           {% if item.data.company %}<span class="khj-jcard-meta-txt"><i class="fas fa-building"></i>{{ item.data.company }}</span>{% endif %}
           {% if item.data.location %}<span class="khj-jcard-meta-txt">{{ item.data.location }}</span>{% endif %}
         </div>
-        <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ item.data.created_at|naturaltime }}</div>
+        <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ item.data.created_at|insta_timesince }}</div>
 
         <div class="khj-jcard-pills">
           <span class="khj-pill" style="--pill-color: {{ item.data.work_mode_color }};">{{ item.data.work_mode_emoji }} {{ item.data.get_work_mode_display }}</span>
@@ -343,11 +221,24 @@
                   {% if page.category %}<div class="kbiz-post-author-sub">{{ page.page_type_label }}</div>{% endif %}
                   <div class="kbiz-post-time">
                       {% if post.is_pinned %}<span class="kbiz-post-pin"><i class="fas fa-thumbtack"></i></span>{% endif %}
-                      <i class="far fa-clock"></i> {{ post.time_posted }}
+                      <i class="far fa-clock"></i> {{ post.created_at|insta_timesince }}
                       <i class="fas fa-earth-americas" style="font-size:9px;"></i>
                   </div>
               </div>
           </a>
+
+          {% if request.user.is_authenticated and page.owner != request.user %}
+          <button type="button"
+                  class="kbiz-post-follow-btn {% if page.is_following %}is-following{% endif %}"
+                  data-slug="{{ page.slug }}"
+                  onclick="kbizPostFollowToggle(this, '{{ page.slug }}', '{{ page.name|escapejs }}')">
+              {% if page.is_following %}
+                <i class="fas fa-check"></i> Following
+              {% else %}
+                <i class="fas fa-plus"></i> Follow
+              {% endif %}
+          </button>
+          {% endif %}
       </div>
 
       {% if post.post_type == 'video' %}

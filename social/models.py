@@ -40,6 +40,25 @@ MAX_TEXT_LENGTHS = {
 # list of fields, stored together in Profile.member_type_data (JSONField).
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Shared choices for the 'days_hours' field type (working days + opening/
+# closing time selects), used wherever a schema needs "what days / what
+# hours do you work" instead of a free-text box.
+DAY_CHOICES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+
+def _generate_hour_choices():
+    """12-hour clock choices in 30-minute steps, e.g. '9:00 AM', '9:30 PM'."""
+    choices = []
+    for total_minutes in range(0, 24 * 60, 30):
+        h, m = divmod(total_minutes, 60)
+        period = 'AM' if h < 12 else 'PM'
+        display_h = h % 12 or 12
+        choices.append(f'{display_h}:{m:02d} {period}')
+    return choices
+
+
+HOUR_CHOICES = _generate_hour_choices()
+
 MEMBER_TYPE_SCHEMA = {
     'skilled_professional': {
         'label': 'Skilled Professional',
@@ -53,7 +72,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'years_experience',  'label': 'Years of Experience','type': 'number'},
             {'key': 'services_offered',  'label': 'Services Offered',   'type': 'textarea',  'max_length': 1000},
             {'key': 'location',          'label': 'Location',           'type': 'text',      'max_length': 200},
-            {'key': 'work_radius',       'label': 'Work Radius',        'type': 'text',      'max_length': 100, 'placeholder': 'e.g. Within 10km'},
+            {'key': 'work_radius',       'label': 'Work Radius',        'type': 'select',    'choices': ['Within 5km', 'Within 10km', 'Within 20km', 'Citywide', 'Statewide', 'Nationwide']},
             {'key': 'availability',      'label': 'Availability',       'type': 'select',    'choices': ['Full-time', 'Part-time', 'Weekends only', 'By appointment']},
             {'key': 'portfolio',         'label': 'Portfolio Link',     'type': 'url'},
             {'key': 'certifications',    'label': 'Certifications',     'type': 'text',      'max_length': 300},
@@ -88,7 +107,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'business_category',    'label': 'Business Category',    'type': 'text',     'max_length': 150},
             {'key': 'products_services',    'label': 'Products / Services',  'type': 'textarea', 'max_length': 1000},
             {'key': 'business_location',    'label': 'Business Location',    'type': 'text',     'max_length': 200},
-            {'key': 'opening_hours',        'label': 'Opening Hours',        'type': 'text',     'max_length': 150, 'placeholder': 'e.g. Mon–Sat, 8am–6pm'},
+            {'key': 'opening_hours',        'label': 'Opening Hours',        'type': 'days_hours'},
             {'key': 'website',              'label': 'Website',              'type': 'url'},
             {'key': 'business_description', 'label': 'Business Description', 'type': 'textarea', 'max_length': 1000},
         ],
@@ -105,7 +124,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'mode',            'label': 'Mode',             'type': 'select', 'choices': ['In-person', 'Online', 'Both']},
             {'key': 'location',        'label': 'Location',         'type': 'text',   'max_length': 200},
             {'key': 'rate',            'label': 'Rate',             'type': 'text',   'max_length': 150, 'placeholder': 'e.g. ₦3,000/hr'},
-            {'key': 'availability',    'label': 'Availability',     'type': 'text',   'max_length': 150},
+            {'key': 'availability',    'label': 'Availability',     'type': 'days_hours'},
         ],
     },
     'freelancer': {
@@ -137,7 +156,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'years_experience', 'label': 'Years of Experience','type': 'number'},
             {'key': 'tools_equipment',  'label': 'Tools / Equipment', 'type': 'text',     'max_length': 300},
             {'key': 'location',         'label': 'Location',          'type': 'text',     'max_length': 200},
-            {'key': 'work_radius',      'label': 'Work Radius',       'type': 'text',     'max_length': 100},
+            {'key': 'work_radius',      'label': 'Work Radius',       'type': 'select',   'choices': ['Within 5km', 'Within 10km', 'Within 20km', 'Citywide', 'Statewide', 'Nationwide']},
             {'key': 'availability',     'label': 'Availability',      'type': 'select',   'choices': ['Full-time', 'Part-time', 'Weekends only', 'By appointment']},
             {'key': 'pricing',          'label': 'Pricing',           'type': 'text',     'max_length': 200},
             {'key': 'certifications',   'label': 'Certifications',    'type': 'text',     'max_length': 300},
@@ -168,7 +187,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'skills_learning',  'label': 'Skills Learning',    'type': 'select_other', 'max_length': 300,
              'choices': ['Coding/Programming', 'Graphic design', 'Tailoring', 'Catering', 'Hairdressing',
                          'Welding', 'Plumbing', 'Digital marketing']},
-            {'key': 'availability',     'label': 'Availability',       'type': 'text', 'max_length': 150, 'placeholder': 'e.g. Weekends, After school'},
+            {'key': 'availability',     'label': 'Availability',       'type': 'days_hours'},
             {'key': 'interests',        'label': 'Interests',          'type': 'text', 'max_length': 300},
         ],
     },
@@ -221,6 +240,37 @@ def sanitize_member_type_data(member_type, raw_data):
         ftype = field['type']
         if ftype == 'file':
             # Files are stored on their own model field(s), not in the JSON blob.
+            continue
+
+        if ftype == 'days_hours':
+            # Combines a working-days multi-select with two hour-of-day
+            # selects into one stored display string, e.g.
+            # "Monday, Wednesday, Friday · 9:00 AM – 5:00 PM".
+            days_raw = raw_data.get(key + '__days', [])
+            if isinstance(days_raw, str):
+                days_raw = [d.strip() for d in days_raw.split(',') if d.strip()]
+            valid_days = [d for d in DAY_CHOICES if d in days_raw]
+
+            open_v = str(raw_data.get(key + '__open', '') or '').strip()
+            close_v = str(raw_data.get(key + '__close', '') or '').strip()
+            if open_v not in HOUR_CHOICES:
+                open_v = ''
+            if close_v not in HOUR_CHOICES:
+                close_v = ''
+
+            parts = []
+            if valid_days:
+                parts.append(', '.join(valid_days))
+            if open_v and close_v:
+                parts.append(f'{open_v} – {close_v}')
+            elif open_v:
+                parts.append(f'From {open_v}')
+            elif close_v:
+                parts.append(f'Until {close_v}')
+
+            value = ' · '.join(parts)
+            if value:
+                cleaned[key] = value
             continue
 
         value = raw_data.get(key, '')

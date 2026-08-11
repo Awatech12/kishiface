@@ -246,7 +246,23 @@
         /* Headline sits directly under the name, LinkedIn-style: normal weight, primary text color */
         .kprof-profession { font-size: 16px; color: var(--mfy-text); font-weight: 400; margin-bottom: 4px; line-height: 1.4; }
         /* Secondary line (e.g. school/org), matches LinkedIn's line right under the headline */
-        .kprof-member-type { display: block; font-size: 14px; font-weight: 400; color: var(--mfy-text); background: none; border: none; border-radius: 0; padding: 0; margin-bottom: 2px; }
+        .kprof-member-type { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 400; color: var(--mfy-text); background: none; border: none; border-radius: 0; padding: 0; margin-bottom: 2px; }
+        .kprof-member-type-update {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 12px; font-weight: 600; color: var(--mfy-primary);
+            text-decoration: none;
+        }
+        .kprof-member-type-update:hover { text-decoration: underline; }
+        .kprof-member-type-update i { font-size: 10px; }
+        /* Shown on your own profile when you haven't set what you use KishiHub for yet */
+        .kprof-member-type-cta {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 13.5px; font-weight: 600; color: var(--mfy-primary);
+            background: #e8f6ff; border: 1px solid #bfe6fd; border-radius: 20px;
+            padding: 6px 12px; margin-bottom: 4px; text-decoration: none; width: fit-content;
+        }
+        .kprof-member-type-cta:hover { background: #d9f0ff; }
+        .kprof-member-type-cta i.fa-chevron-right { font-size: 10px; color: var(--mfy-primary); }
         /* Username is de-emphasized and pushed further down the stack, not immediately under the name */
         .kprof-username { font-size: 13px; color: var(--mfy-text-light); font-weight: 400; margin: 6px 0 0; }
         .kprof-type-details { margin-top: 6px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 4px; }
@@ -771,6 +787,22 @@
             flex-shrink: 0;
         }
         .kprof-cv-remove:hover { color: #e0245e; background: rgba(224,36,94,.08); }
+        .kprof-edit-link-card {
+            display: flex; align-items: center; gap: 12px;
+            border: 1.5px solid var(--mfy-border); border-radius: 12px;
+            padding: 13px 14px; margin-bottom: 20px; text-decoration: none;
+            background: var(--mfy-bg, #fafafa); transition: border-color .15s, background .15s;
+        }
+        .kprof-edit-link-card:hover { border-color: var(--mfy-primary); background: rgba(0,149,246,.06); }
+        .kprof-edit-link-card .kprof-edit-link-icon {
+            width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+            background: rgba(0,149,246,.12); color: var(--mfy-primary);
+            display: flex; align-items: center; justify-content: center; font-size: 15px;
+        }
+        .kprof-edit-link-text { flex: 1; min-width: 0; }
+        .kprof-edit-link-text .title { font-size: 13.5px; font-weight: 700; color: var(--mfy-text); }
+        .kprof-edit-link-text .subtitle { font-size: 12px; color: var(--mfy-text-light); margin-top: 2px; }
+        .kprof-edit-link-card .fa-chevron-right { color: var(--mfy-text-light); font-size: 13px; flex-shrink: 0; }
         .kprof-toggle-row {
             display: flex; align-items: center; justify-content: space-between;
             padding: 10px 0; border-bottom: 1px solid var(--mfy-border);
@@ -1765,7 +1797,19 @@
 
     <!-- Secondary line (school/org equivalent), directly under the headline like LinkedIn -->
     {% if profile.member_type %}
-        <div class="kprof-member-type">{{ profile.member_type_emoji }} {{ profile.member_type_label }}</div>
+        <div class="kprof-member-type">
+            <span>{{ profile.member_type_emoji }} {{ profile.member_type_label }}</span>
+            {% if is_own_profile %}
+            <a href="{% url 'onboarding' %}?edit=1" class="kprof-member-type-update">
+                <i class="fas fa-pen"></i> Update
+            </a>
+            {% endif %}
+        </div>
+    {% elif is_own_profile %}
+        <a href="{% url 'onboarding' %}?edit=1" class="kprof-member-type-cta">
+            <i class="fas fa-briefcase"></i> Add what you use KishiHub for
+            <i class="fas fa-chevron-right"></i>
+        </a>
     {% endif %}
 
     {% if not can_view_details and not is_own_profile %}
@@ -2333,74 +2377,16 @@
                     <input type="text" id="editProfession" name="profession" value="{{ profile.profession }}" maxlength="150" placeholder="e.g. Fashion designer">
                 </div>
 
-                <div class="kprof-field">
-                    <label for="editMemberType">What do you use Marketfy for?</label>
-                    <select id="editMemberType" name="member_type" onchange="onEditMemberTypeChange()">
-                        <option value="" {% if not profile.member_type %}selected{% endif %}>Not specified</option>
-                        {% for t in member_type_edit_schema %}
-                        <option value="{{ t.key }}" {% if profile.member_type == t.key %}selected{% endif %}>{{ t.emoji }} {{ t.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                {% for t in member_type_edit_schema %}
-                <div class="kprof-member-type-fields" data-mt-fieldset="{{ t.key }}" {% if profile.member_type != t.key %}style="display:none;"{% endif %}>
-                    {% for field in t.fields %}
-                    <div class="kprof-field">
-                        <label for="mt_{{ t.key }}__{{ field.key }}">{{ field.label }}{% if field.required %} <span style="color:var(--mfy-error);">*</span>{% endif %}</label>
-                        {% if field.type == 'textarea' %}
-                            <textarea id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" maxlength="{{ field.max_length|default:1000 }}" placeholder="{{ field.placeholder|default:'' }}">{{ field.value }}</textarea>
-                        {% elif field.type == 'select' %}
-                            <select id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}">
-                                <option value="">Select…</option>
-                                {% for choice in field.choices %}
-                                <option value="{{ choice }}" {% if field.value == choice %}selected{% endif %}>{{ choice }}</option>
-                                {% endfor %}
-                            </select>
-                        {% elif field.type == 'select_other' %}
-                            <select id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" onchange="onEditSelectOtherChange(this)">
-                                <option value="">Select…</option>
-                                {% for choice in field.choices %}
-                                <option value="{{ choice }}" {% if field.select_value == choice %}selected{% endif %}>{{ choice }}</option>
-                                {% endfor %}
-                                <option value="Other" {% if field.select_value == 'Other' %}selected{% endif %}>Other</option>
-                            </select>
-                            <input type="text" id="mt_{{ t.key }}__{{ field.key }}__other" name="mt_{{ t.key }}__{{ field.key }}__other"
-                                   class="kprof-select-other-input"
-                                   value="{{ field.other_value }}" maxlength="{{ field.max_length|default:300 }}"
-                                   placeholder="Please specify"
-                                   style="{% if field.select_value != 'Other' %}display:none;{% endif %}margin-top:8px;">
-                        {% elif field.type == 'file' %}
-                            <div class="kprof-cv-upload">
-                                <label for="mt_{{ t.key }}__{{ field.key }}" class="kprof-cv-upload-btn">
-                                    <i class="fas fa-file-upload"></i>
-                                    <span id="mt_{{ t.key }}__{{ field.key }}_label">{% if profile.member_type_cv %}Replace file{% else %}Choose file{% endif %}</span>
-                                </label>
-                                <input type="file" id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" accept=".pdf,.doc,.docx"
-                                       style="display:none;" onchange="onCvFileChosen(this, 'mt_{{ t.key }}__{{ field.key }}')">
-                                <span class="kprof-char-count">PDF, DOC or DOCX, up to 5MB</span>
-                            </div>
-                            {% if profile.member_type_cv %}
-                            <div class="kprof-cv-current" id="mt_{{ t.key }}__{{ field.key }}_current">
-                                <i class="fas fa-file-alt"></i>
-                                <a href="{{ profile.member_type_cv.url }}" target="_blank" rel="noopener noreferrer">{{ profile.member_type_cv_display_name|default:'View current CV' }}</a>
-                                <button type="button" class="kprof-cv-remove" onclick="removeCv('mt_{{ t.key }}__{{ field.key }}')" title="Remove CV">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                            <input type="hidden" id="mt_{{ t.key }}__{{ field.key }}_clear" name="clear_cv" value="0">
-                            {% endif %}
-                        {% elif field.type == 'number' %}
-                            <input type="number" min="0" id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" value="{{ field.value }}" placeholder="{{ field.placeholder|default:'' }}">
-                        {% elif field.type == 'url' %}
-                            <input type="url" id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" value="{{ field.value }}" placeholder="https://…">
-                        {% else %}
-                            <input type="text" id="mt_{{ t.key }}__{{ field.key }}" name="mt_{{ t.key }}__{{ field.key }}" value="{{ field.value }}" maxlength="{{ field.max_length|default:150 }}" placeholder="{{ field.placeholder|default:'' }}">
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endfor %}
+                <a href="{% url 'onboarding' %}?edit=1" class="kprof-edit-link-card">
+                    <span class="kprof-edit-link-icon"><i class="fas fa-briefcase"></i></span>
+                    <span class="kprof-edit-link-text">
+                        <span class="title">
+                            {% if profile.member_type %}{{ profile.member_type_emoji }} {{ profile.member_type_label }}{% else %}What do you use KishiHub for?{% endif %}
+                        </span>
+                        <span class="subtitle">Update job seeking, business & other details</span>
+                    </span>
+                    <i class="fas fa-chevron-right"></i>
+                </a>
 
                 <div class="kprof-field">
                     <label for="editLocation">Location</label>
@@ -3236,28 +3222,6 @@ function updateBioCount() {
     if (bio && count) count.textContent = bio.value.length;
 }
 
-function onEditMemberTypeChange() {
-    const select = document.getElementById('editMemberType');
-    const selected = select ? select.value : '';
-    document.querySelectorAll('[data-mt-fieldset]').forEach(function (fs) {
-        fs.style.display = (fs.getAttribute('data-mt-fieldset') === selected) ? '' : 'none';
-    });
-}
-
-// Toggles the free-text "please specify" input next to any select_other
-// field (e.g. Skills) when the user picks "Other" from the dropdown.
-function onEditSelectOtherChange(selectEl) {
-    const otherInput = document.getElementById(selectEl.id + '__other');
-    if (!otherInput) return;
-    if (selectEl.value === 'Other') {
-        otherInput.style.display = '';
-        otherInput.focus();
-    } else {
-        otherInput.style.display = 'none';
-        otherInput.value = '';
-    }
-}
-
 function previewEditAvatar(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -3289,30 +3253,6 @@ function removeEditCover() {
     if (input) input.value = '';
     const clearFlag = document.getElementById('editClearCover');
     if (clearFlag) clearFlag.value = '1';
-}
-
-// Shows the chosen filename next to the "Choose file" button and cancels
-// any pending removal, since picking a new file supersedes a "remove" click.
-function onCvFileChosen(inputEl, baseId) {
-    const label = document.getElementById(baseId + '_label');
-    const file  = inputEl.files && inputEl.files[0];
-    if (label) label.textContent = file ? file.name : 'Choose file';
-    const clearFlag = document.getElementById(baseId + '_clear');
-    if (clearFlag) clearFlag.value = '0';
-    const current = document.getElementById(baseId + '_current');
-    if (current) current.style.display = file ? 'none' : '';
-}
-
-// Marks the existing CV for removal on save (no new file selected).
-function removeCv(baseId) {
-    const current = document.getElementById(baseId + '_current');
-    if (current) current.style.display = 'none';
-    const clearFlag = document.getElementById(baseId + '_clear');
-    if (clearFlag) clearFlag.value = '1';
-    const input = document.getElementById(baseId);
-    if (input) input.value = '';
-    const label = document.getElementById(baseId + '_label');
-    if (label) label.textContent = 'Choose file';
 }
 
 async function submitEditProfile(event) {
