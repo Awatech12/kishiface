@@ -15,39 +15,41 @@
 {% for item in posts_with_ads %}
 
   {% if item.type == 'business_suggestion' %}
-  {# ── Business to follow — styled identically to the "Suggested for you" sidebar row (.mfy-side-card / .mfy-sugg-row) ─────── #}
-  <div class="mfy-side-card mfy-business-suggestion" data-business-id="{{ item.data.page_id }}">
+  {# ── Page to follow — styled identically to the "Suggested for you" sidebar row (.mfy-side-card / .mfy-sugg-row), now listing up to 3 pages per card ─────── #}
+  <div class="mfy-side-card mfy-business-suggestion">
     <div class="mfy-side-card-header">
-      <span class="mfy-side-card-title"><i class="fas fa-store"></i> Business to follow</span>
-      <a href="{% url 'business_page_detail' item.data.slug %}" class="mfy-side-card-seeall">View</a>
+      <span class="mfy-side-card-title"><i class="fas fa-store"></i> Page to follow</span>
+      <a href="{% url 'business_pages_list' %}" class="mfy-side-card-seeall">See more</a>
     </div>
 
-    <div class="mfy-sugg-row">
-      <a href="{% url 'business_page_detail' item.data.slug %}">
-        {% if item.data.logo %}
-        <img src="{{ item.data.logo.url }}" alt="{{ item.data.name }}" class="mfy-sugg-avatar">
+    {% for biz in item.data %}
+    <div class="mfy-sugg-row" data-business-id="{{ biz.page_id }}">
+      <a href="{% url 'business_page_detail' biz.slug %}">
+        {% if biz.logo %}
+        <img src="{{ biz.logo.url }}" alt="{{ biz.name }}" class="mfy-sugg-avatar">
         {% else %}
         <span class="mfy-sugg-avatar" style="display:flex;align-items:center;justify-content:center;background:var(--mfy-bg);"><i class="fas fa-store"></i></span>
         {% endif %}
       </a>
-      <a href="{% url 'business_page_detail' item.data.slug %}" class="mfy-sugg-info" style="text-decoration:none;">
+      <a href="{% url 'business_page_detail' biz.slug %}" class="mfy-sugg-info" style="text-decoration:none;">
         <div class="mfy-sugg-name">
-          {{ item.data.name }}
-          {% if item.data.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+          {{ biz.name }}
+          {% if biz.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
         </div>
-        <div class="mfy-sugg-handle">{{ item.data.get_category_display|default:"Business Page" }}</div>
+        <div class="mfy-sugg-handle">{{ biz.get_category_display|default:"Business Page" }}</div>
       </a>
       <div class="mfy-sugg-actions">
         <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary"
-                onclick="mfyFollowBusiness('{{ item.data.slug }}','{{ item.data.name|escapejs }}')">
+                onclick="mfyFollowBusiness('{{ biz.slug }}','{{ biz.name|escapejs }}')">
           <i class="fas fa-store"></i> Follow
         </button>
         <button class="mfy-sugg-dismiss" aria-label="Dismiss suggestion"
-                onclick="this.closest('.mfy-business-suggestion').style.opacity='0'; setTimeout(()=>this.closest('.mfy-business-suggestion').remove(),250);">
+                onclick="this.closest('.mfy-sugg-row').style.opacity='0'; setTimeout(()=>this.closest('.mfy-sugg-row').remove(),250);">
           <i class="fas fa-times"></i>
         </button>
       </div>
     </div>
+    {% endfor %}
   </div>
 
   {% elif item.type == 'job' %}
@@ -400,50 +402,40 @@
   {% endwith %}
 
   {% elif item.type == 'people_suggestion' %}
-  {# ── Person suggestion — ranked by profession / skills / interests / location match ─────── #}
-  {% with u=item.data p=item.data.profile %}
-  <div class="mfy-user-suggestion" data-user-id="{{ u.id }}">
-    <div class="mfy-user-suggestion-header">
-      <div class="mfy-user-suggestion-badge">
-        <i class="fas fa-user-plus"></i> People to follow
-      </div>
+  {# ── People to follow — same design as "Page to follow" (.mfy-side-card / .mfy-sugg-row), listing up to 3 people per card ─────── #}
+  <div class="mfy-side-card mfy-people-suggestion">
+    <div class="mfy-side-card-header">
+      <span class="mfy-side-card-title"><i class="fas fa-user-plus"></i> People to follow</span>
+      <a href="{% url 'search' %}" class="mfy-side-card-seeall">See more</a>
     </div>
-    <div class="mfy-user-suggestion-content">
-      <div class="mfy-user-suggestion-profile">
-        <img src="{{ p.get_picture_url }}" alt="{{ u.username }}" class="mfy-user-suggestion-picture"
+
+    {% for u in item.data %}
+    {% with p=u.profile %}
+    <div class="mfy-sugg-row" data-user-id="{{ u.id }}">
+      <a href="{% url 'profile' u.username %}">
+        <img src="{{ p.get_picture_url }}" alt="{{ u.username }}" class="mfy-sugg-avatar"
              onerror="this.onerror=null;this.src='https://placehold.co/60x60/dbdbdb/8e8e8e?text=U';">
-        <div class="mfy-user-suggestion-details">
-          <div class="mfy-user-suggestion-name">
-            {{ p.full_name|default:u.username }}
-            {% if p.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="16" width="16" alt="✓" style="vertical-align:middle;" loading="lazy">{% endif %}
-          </div>
-          <div class="mfy-user-suggestion-username">@{{ u.username }}{% if p.profession %} · {{ p.profession }}{% endif %}</div>
-          {% if p.bio %}
-          <div class="mfy-user-suggestion-bio">{{ p.bio|truncatechars:80 }}</div>
-          {% endif %}
-          <div class="mfy-user-suggestion-meta">
-            {% if p.location %}
-            <span class="mfy-user-suggestion-meta-pill">
-              <i class="fas fa-map-marker-alt"></i>{{ p.location|truncatechars:26 }}
-            </span>
-            {% endif %}
-            {% if p.member_type_label %}
-            <span class="mfy-user-suggestion-meta-pill">{{ p.member_type_emoji }} {{ p.member_type_label }}</span>
-            {% endif %}
-          </div>
+      </a>
+      <a href="{% url 'profile' u.username %}" class="mfy-sugg-info" style="text-decoration:none;">
+        <div class="mfy-sugg-name">
+          {{ p.full_name|default:u.username }}
+          {% if p.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
         </div>
+        <div class="mfy-sugg-handle">@{{ u.username }}{% if p.profession %} · {{ p.profession }}{% endif %}</div>
+      </a>
+      <div class="mfy-sugg-actions">
+        <button class="mfy-sugg-follow-btn mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.username }}')">
+          <i class="fas fa-user-plus"></i> Follow
+        </button>
+        <button class="mfy-sugg-dismiss" aria-label="Dismiss suggestion"
+                onclick="this.closest('.mfy-sugg-row').style.opacity='0'; setTimeout(()=>this.closest('.mfy-sugg-row').remove(),250);">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
     </div>
-    <div class="mfy-user-suggestion-actions">
-      <button class="mfy-user-suggestion-btn-primary" onclick="mfyFollowUser('{{ u.username }}')">
-        <i class="fas fa-user-plus"></i> Follow
-      </button>
-      <a href="{% url 'profile' u.username %}" class="mfy-user-suggestion-btn-secondary">
-        <i class="fas fa-user"></i> View Profile
-      </a>
-    </div>
+    {% endwith %}
+    {% endfor %}
   </div>
-  {% endwith %}
 
   {% endif %}
 

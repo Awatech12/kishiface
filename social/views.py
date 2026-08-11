@@ -996,7 +996,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
                     ' '.join(u.profile.interests or []),
                 ])),
                 location_fn=lambda u: u.profile.location,
-                limit=2,
+                limit=3,
             )
     _people_injected = 0
     _MAX_PEOPLE_PER_PAGE = 1
@@ -1021,7 +1021,9 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         if (i % 8 == 6
                 and suggestion_businesses
                 and _business_injected < _max_business_this_page):
-            feed_items.append({'type': 'business_suggestion', 'data': suggestion_businesses.pop(0)})
+            _biz_group = suggestion_businesses[:3]
+            del suggestion_businesses[:3]
+            feed_items.append({'type': 'business_suggestion', 'data': _biz_group})
             _business_injected += 1
 
         # Business post (update) — highest-relevance ranked items lead
@@ -1062,7 +1064,9 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         if (i % 9 == 3
                 and people_pool
                 and _people_injected < _MAX_PEOPLE_PER_PAGE):
-            feed_items.append({'type': 'people_suggestion', 'data': people_pool.pop(0)})
+            _people_group = people_pool[:3]
+            del people_pool[:3]
+            feed_items.append({'type': 'people_suggestion', 'data': _people_group})
             _people_injected += 1
 
     return feed_items, next_cursor
