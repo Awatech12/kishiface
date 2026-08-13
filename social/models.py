@@ -2773,7 +2773,10 @@ class BusinessService(models.Model):
         ordering = ['order', '-created_at']
 
     def __str__(self):
-        return f'{self.title} — {self.business_page.name}'
+        # business_page is nullable (profile-owned services have no page),
+        # so never dereference it directly here — use the owner-agnostic
+        # helper instead, which falls back to the profile's username.
+        return f'{self.title} — {self.owner_name}'
 
     def clean(self):
         super().clean()
@@ -2810,6 +2813,12 @@ class BusinessService(models.Model):
     @property
     def owner_user(self):
         return self.business_page.owner if self.business_page_id else self.profile.user
+
+    @property
+    def owner_name(self):
+        if self.business_page_id:
+            return self.business_page.name
+        return self.profile.full_name or self.profile.user.username
 
 
 class BusinessPortfolioItem(models.Model):
@@ -2913,7 +2922,10 @@ class BusinessAchievement(models.Model):
         ordering = ['order', '-date_achieved', '-created_at']
 
     def __str__(self):
-        return f'{self.title} — {self.business_page.name}'
+        # business_page is nullable (profile-owned achievements have no
+        # page) — use the owner-agnostic helper, never business_page.name
+        # directly, or this raises AttributeError for profile-owned rows.
+        return f'{self.title} — {self.owner_name}'
 
     def clean(self):
         super().clean()
@@ -2949,6 +2961,12 @@ class BusinessAchievement(models.Model):
     @property
     def owner_user(self):
         return self.business_page.owner if self.business_page_id else self.profile.user
+
+    @property
+    def owner_name(self):
+        if self.business_page_id:
+            return self.business_page.name
+        return self.profile.full_name or self.profile.user.username
 
 
 # ─────────────────────────────────────────────────────────────────────────────

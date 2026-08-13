@@ -2018,6 +2018,13 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
 .kpp-modal-hint { font-size: 12.5px; color: var(--mfy-text-light); margin-bottom: 12px; }
 .kpp-field { margin-bottom: 12px; }
 .kpp-field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px; color: var(--mfy-text-light); }
+.kpp-field label .kpp-optional { font-weight: 400; color: var(--mfy-text-light); }
+.kpp-gov-notice {
+    display: flex; align-items: flex-start; gap: 8px;
+    background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+    font-size: 12.5px; line-height: 1.5; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px;
+}
+.kpp-gov-notice i { margin-top: 2px; }
 .kpp-input, .kpp-textarea, .kpp-select {
     width: 100%; border: 1px solid var(--mfy-border); border-radius: 8px; padding: 10px 12px;
     font-size: 14px; font-family: inherit; background: var(--mfy-white); color: var(--mfy-text);
@@ -2063,6 +2070,14 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
 }
 @media (min-width: 640px) { .kpp-comments-sheet { border-radius: 16px; } }
 .kpp-comment-list { flex: 1; overflow-y: auto; margin-bottom: 10px; min-height: 120px; }
+.kpp-comment-item { display: flex; gap: 10px; padding: 8px 0; }
+.kpp-comment-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--mfy-border); }
+.kpp-comment-body { flex: 1; min-width: 0; }
+.kpp-comment-bubble { background: var(--mfy-bg, #f0f2f5); border-radius: 14px; padding: 8px 12px; }
+.kpp-comment-author { font-size: 12.5px; font-weight: 700; color: var(--mfy-text); }
+.kpp-comment-text { font-size: 13.5px; color: var(--mfy-text); word-break: break-word; margin-top: 1px; }
+.kpp-comment-time { font-size: 11px; color: var(--mfy-text-light); margin: 4px 0 0 12px; }
+.kpp-comment-empty, .kpp-comment-error { font-size: 12.5px; color: var(--mfy-text-light); text-align: center; padding: 16px 0; }
 .kpp-comment-input-row { display: flex; gap: 8px; }
 .kpp-comment-input-row input {
     flex: 1; border: 1px solid var(--mfy-border); border-radius: 20px; padding: 9px 14px; font-size: 13px;
@@ -3571,8 +3586,28 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
                 <option value="hybrid">Hybrid</option>
             </select>
         </div>
+        <div class="kpp-field"><label>Posted As</label>
+            <select class="kpp-select" id="ppJobAdvertiser">
+                <option value="personal">🙋 Personal</option>
+                <option value="company_school">🏢 Company / School</option>
+                <option value="government">🏛️ Government</option>
+            </select>
+        </div>
+        <div class="kpp-field" id="ppJobGovNotice" style="display:none;">
+            <div class="kpp-gov-notice">
+                <i class="fas fa-circle-info"></i>
+                Tagging a post "Government" doesn't verify it. Only link to an official
+                .gov.ng portal, and applicants should always double-check independently.
+            </div>
+        </div>
+        <div class="kpp-field"><label>Company / Organisation <span class="kpp-optional">(optional)</span></label>
+            <input class="kpp-input" id="ppJobCompany" type="text" placeholder="e.g. Kishi Farms Ltd" maxlength="150">
+        </div>
         <div class="kpp-field"><label>Location</label>
             <input class="kpp-input" id="ppJobLocation" type="text" placeholder="{{ profile.location|default:'City, State' }}">
+        </div>
+        <div class="kpp-field"><label>Salary Range</label>
+            <input class="kpp-input" id="ppJobSalary" type="text" placeholder="e.g. ₦80,000–₦120,000/month">
         </div>
         <div class="kpp-field"><label>Description</label>
             <textarea class="kpp-textarea" id="ppJobDescription" placeholder="Describe the role…"></textarea>
@@ -3580,12 +3615,17 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
         <div class="kpp-field"><label>Requirements</label>
             <textarea class="kpp-textarea" id="ppJobRequirements" placeholder="Skills, experience, qualifications…"></textarea>
         </div>
-        <div class="kpp-field"><label>Salary Range</label>
-            <input class="kpp-input" id="ppJobSalary" type="text" placeholder="e.g. ₦80,000–₦120,000/month">
-        </div>
         <div class="kpp-field"><label>Contact Info</label>
             <input class="kpp-input" id="ppJobContact" type="text" placeholder="Email, phone or link" value="{{ profile.phone }}">
         </div>
+        <div class="kpp-field"><label>Application Link <span class="kpp-optional">(optional)</span></label>
+            <input class="kpp-input" id="ppJobApplyLink" type="url" placeholder="e.g. https://official-portal.gov.ng/apply" maxlength="500">
+        </div>
+        <div class="kpp-photo-pick" onclick="document.getElementById('ppJobImageInput').click()">
+            <i class="fas fa-camera"></i><span>Add a cover image (optional)</span>
+            <img id="ppJobImagePreview" style="display:none;">
+        </div>
+        <input type="file" id="ppJobImageInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;">
         <button type="button" class="kpp-modal-submit" id="ppJobSubmitBtn" onclick="submitProfileJob()">Post Job</button>
     </div>
 </div>
@@ -4412,7 +4452,24 @@ function switchProfileTab(evt, tabName) {
    tabs entirely and drops the viewer straight into the professional tabs (Posts,
    Skills & Details, Services, Portfolio, Achievements, Jobs, Products…). Share Profile
    is still available from the "More" (⋯) sheet. ── */
-let kprofIsProfessionalMode = false;
+const kprofModeStorageKey = 'kprofProfessionalMode:{{ user.username }}';
+let kprofIsProfessionalMode = (localStorage.getItem(kprofModeStorageKey) === '1');
+
+function kprofApplyProfileMode() {
+    document.body.classList.toggle('kprof-professional-mode', kprofIsProfessionalMode);
+
+    const icon  = document.getElementById('profModeToggleIcon');
+    const label = document.getElementById('profModeToggleLabel');
+
+    if (kprofIsProfessionalMode) {
+        if (icon) icon.className = 'fas fa-user';
+        if (label) label.textContent = 'Switch to Personal';
+    } else {
+        if (icon) icon.className = 'fas fa-briefcase';
+        if (label) label.textContent = 'Switch to Professional';
+    }
+}
+
 function toggleProfileMode() {
     const isOwner = {{ is_own_profile|yesno:"true,false" }};
     const isProfessional = {{ profile.is_professional|yesno:"true,false" }};
@@ -4422,20 +4479,16 @@ function toggleProfileMode() {
         return;
     }
     kprofIsProfessionalMode = !kprofIsProfessionalMode;
-    document.body.classList.toggle('kprof-professional-mode', kprofIsProfessionalMode);
+    localStorage.setItem(kprofModeStorageKey, kprofIsProfessionalMode ? '1' : '0');
+    kprofApplyProfileMode();
+    switchProfileTab(null, kprofIsProfessionalMode ? 'professional' : 'about');
+}
 
-    const icon  = document.getElementById('profModeToggleIcon');
-    const label = document.getElementById('profModeToggleLabel');
-
-    if (kprofIsProfessionalMode) {
-        if (icon) icon.className = 'fas fa-user';
-        if (label) label.textContent = 'Switch to Personal';
-        switchProfileTab(null, 'professional');
-    } else {
-        if (icon) icon.className = 'fas fa-briefcase';
-        if (label) label.textContent = 'Switch to Professional';
-        switchProfileTab(null, 'about');
-    }
+// Restore whichever mode this profile was last left in (persists across
+// reloads/navigation until the viewer explicitly switches it back).
+kprofApplyProfileMode();
+if (kprofIsProfessionalMode) {
+    switchProfileTab(null, 'professional');
 }
 
 function openMoreSheet()  { document.getElementById('moreOverlay')?.classList.add('open'); }
@@ -5087,16 +5140,36 @@ async function submitProfileProduct() {
 }
 
 /* ── Jobs ── */
+let ppJobImageFile = null;
 function openProfileJobModal() {
+    ppJobImageFile = null;
     document.getElementById('ppJobTitle').value = '';
+    document.getElementById('ppJobAdvertiser').value = 'personal';
+    document.getElementById('ppJobCompany').value = '';
     document.getElementById('ppJobLocation').value = '';
+    document.getElementById('ppJobSalary').value = '';
     document.getElementById('ppJobDescription').value = '';
     document.getElementById('ppJobRequirements').value = '';
-    document.getElementById('ppJobSalary').value = '';
+    document.getElementById('ppJobContact').value = '{{ profile.phone|escapejs }}';
+    document.getElementById('ppJobApplyLink').value = '';
+    document.getElementById('ppJobGovNotice').style.display = 'none';
+    const prev = document.getElementById('ppJobImagePreview');
+    prev.style.display = 'none'; prev.src = '';
     document.getElementById('jobOverlay')?.classList.add('open');
 }
 function closeProfileJobModal() { document.getElementById('jobOverlay')?.classList.remove('open'); }
 document.getElementById('jobOverlay')?.addEventListener('click', e => { if (e.target.id === 'jobOverlay') closeProfileJobModal(); });
+document.getElementById('ppJobAdvertiser')?.addEventListener('change', function () {
+    document.getElementById('ppJobGovNotice').style.display = this.value === 'government' ? 'flex' : 'none';
+});
+document.getElementById('ppJobImageInput')?.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    ppJobImageFile = f;
+    const prev = document.getElementById('ppJobImagePreview');
+    prev.src = URL.createObjectURL(f);
+    prev.style.display = 'block';
+});
 async function deleteProfileJob(jobId, title) {
     if (!await customConfirm(`Delete "${title}"? This cannot be undone.`)) return;
     try {
@@ -5124,11 +5197,15 @@ async function submitProfileJob() {
     fd.append('title', title);
     fd.append('category', document.getElementById('ppJobCategory').value);
     fd.append('work_mode', document.getElementById('ppJobWorkMode').value);
+    fd.append('advertiser_type', document.getElementById('ppJobAdvertiser').value);
+    fd.append('company', document.getElementById('ppJobCompany').value.trim());
     fd.append('location', document.getElementById('ppJobLocation').value.trim());
+    fd.append('salary_range', document.getElementById('ppJobSalary').value.trim());
     fd.append('description', description);
     fd.append('requirements', document.getElementById('ppJobRequirements').value.trim());
-    fd.append('salary_range', document.getElementById('ppJobSalary').value.trim());
     fd.append('contact_info', document.getElementById('ppJobContact').value.trim());
+    fd.append('apply_link', document.getElementById('ppJobApplyLink').value.trim());
+    if (ppJobImageFile) fd.append('cover_image', ppJobImageFile);
     const btn = document.getElementById('ppJobSubmitBtn');
     btn.disabled = true;
     try {
@@ -5316,6 +5393,31 @@ async function voteProfilePoll(postId, optionId, btn) {
 }
 
 /* ── Post comments ── */
+function ppEscapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : str;
+    return div.innerHTML;
+}
+function ppRenderComments(comments) {
+    const list = document.getElementById('ppCommentList');
+    if (!comments || !comments.length) {
+        list.innerHTML = '<p class="kpp-comment-empty">No comments yet. Be the first to comment!</p>';
+        return;
+    }
+    list.innerHTML = comments.map(c => `
+        <div class="kpp-comment-item">
+            <img class="kpp-comment-avatar" src="${ppEscapeHtml(c.avatar || '')}" alt="${ppEscapeHtml(c.author_name)}" onerror="this.style.visibility='hidden'">
+            <div class="kpp-comment-body">
+                <div class="kpp-comment-bubble">
+                    <div class="kpp-comment-author">${ppEscapeHtml(c.author_name)}</div>
+                    <div class="kpp-comment-text">${ppEscapeHtml(c.text)}</div>
+                </div>
+                <div class="kpp-comment-time">${ppEscapeHtml(c.time)}</div>
+            </div>
+        </div>
+    `).join('');
+    list.scrollTop = list.scrollHeight;
+}
 async function openProfilePostComments(postId) {
     const sheet = document.getElementById('ppCommentsSheet');
     sheet.dataset.postId = postId;
@@ -5324,10 +5426,10 @@ async function openProfilePostComments(postId) {
     list.innerHTML = '<p style="font-size:12.5px;color:var(--mfy-text-light);">Loading…</p>';
     try {
         const res = await fetch(`/posts/${postId}/comments/`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-        const html = await res.text();
-        list.innerHTML = html;
+        const data = await res.json();
+        ppRenderComments(data.comments);
     } catch (e) {
-        list.innerHTML = '<p style="font-size:12.5px;color:var(--mfy-text-light);">Could not load comments.</p>';
+        list.innerHTML = '<p class="kpp-comment-error">Could not load comments.</p>';
     }
 }
 function closeProfilePostComments() { document.getElementById('ppCommentsOverlay')?.classList.remove('open'); }

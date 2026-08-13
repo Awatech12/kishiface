@@ -854,7 +854,12 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         _ach_qs = BusinessAchievement.objects.select_related('business_page')
         if _seen_ach_ids:
             _ach_qs = _ach_qs.exclude(achievement_id__in=_seen_ach_ids)
-        _ach_candidates = list(_ach_qs.order_by('-created_at')[:40])
+        # BusinessAchievement.business_page is nullable (an achievement can
+        # instead belong to a personal `profile`, with no page). blob_fn/
+        # location_fn below assume a business_page on every candidate, so
+        # exclude profile-only achievements here rather than crashing —
+        # mirrors the same guard already used for _post_candidates above.
+        _ach_candidates = list(_ach_qs.filter(business_page__isnull=False).order_by('-created_at')[:40])
         _ach_pool = _ranked(
             _ach_candidates, keywords, location_tokens,
             blob_fn=lambda a: ' '.join(filter(None, [
@@ -1670,9 +1675,7 @@ def profile(request, username):
         (bool(profile.bio), 'Write an About summary'),
         (bool(profile.profession), 'Add a headline'),
         (bool(profile.location), 'Add your location'),
-        (bool(profile.website), 'Add a website'),
         (bool(profile.phone), 'Add a phone number'),
-        (business_page_count > 0, 'Create a business page'),
     ]
     completion_done = sum(1 for done, _ in completion_checks if done)
     profile_completion_pct = round(completion_done * 100 / len(completion_checks))
@@ -5526,9 +5529,12 @@ def business_post_comments(request, post_id):
         response = _card_comments_post(request, post, BusinessPostComment, 'post')
         if response.status_code == 200:
             # Notify the page owner someone commented, unless they commented
-            # on their own post.
+            # on their own post. BusinessNotification requires a business_page
+            # (non-nullable FK), so this only applies to page-owned posts —
+            # profile-owned posts (post.business_page_id is None) have no
+            # page to notify and are skipped rather than dereferencing None.
             try:
-                if post.business_page.owner != request.user:
+                if post.business_page_id and post.business_page.owner != request.user:
                     BusinessNotification.objects.create(
                         notif_type=BusinessNotification.NEW_COMMENT,
                         business_page=post.business_page,
