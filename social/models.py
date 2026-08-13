@@ -429,6 +429,20 @@ def validate_cv_extension(value):
 
 
 
+def _validate_single_owner(instance, page_field='business_page', profile_field='profile'):
+    """
+    Shared validation for professional-content models (services, portfolio
+    items, achievements, posts, …) that can be owned by EITHER a BusinessPage
+    OR a Profile directly, but never both and never neither.
+    """
+    page_id    = getattr(instance, f'{page_field}_id', None)
+    profile_id = getattr(instance, f'{profile_field}_id', None)
+    if page_id and profile_id:
+        raise ValidationError('This can belong to a Business Page or a Profile, not both.')
+    if not page_id and not profile_id:
+        raise ValidationError('This must belong to either a Business Page or a Profile.')
+
+
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     followings = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
@@ -507,6 +521,42 @@ class Profile(models.Model):
     member_type_cv_name   = models.CharField(max_length=255, blank=True, default='')
     onboarding_completed = models.BooleanField(default=False)
 
+    # ── Professional profile sections ────────────────────────────────────
+    # Mirrors BusinessPage.enabled_sections / sells_products so a user's own
+    # Profile can carry the same optional professional sections (Services,
+    # Portfolio, Projects, Achievements, Jobs) that used to live only on a
+    # BusinessPage. Which sections are suggested by default depends on the
+    # profile's member_type — see PROFESSIONAL_SECTION_DEFAULTS below.
+    PROFESSIONAL_SECTION_CHOICES = [
+        ('services',     'Services'),
+        ('portfolio',    'Portfolio'),
+        ('projects',     'Projects'),
+        ('achievements', 'Achievements'),
+        ('jobs',         'Jobs'),
+    ]
+    VALID_PROFESSIONAL_SECTIONS = {s[0] for s in PROFESSIONAL_SECTION_CHOICES}
+
+    # Suggested default sections per member_type — the profile owner can
+    # still turn any of these on/off from their profile settings.
+    PROFESSIONAL_SECTION_DEFAULTS = {
+        'skilled_professional': ['services', 'portfolio', 'achievements'],
+        'job_seeker':           [],
+        'business_owner':       ['services', 'jobs'],
+        'teacher_tutor':        ['services', 'achievements'],
+        'freelancer':           ['services', 'portfolio', 'projects'],
+        'artisan_technician':   ['services', 'portfolio', 'achievements'],
+        'service_provider':     ['services', 'jobs'],
+        'student_apprentice':   ['portfolio', 'projects', 'achievements'],
+        'employer_recruiter':   ['jobs'],
+        'other_professional':   ['services', 'portfolio', 'achievements'],
+    }
+
+    # Member types that default to selling products from their profile.
+    MEMBER_TYPES_SELLING_BY_DEFAULT = {'business_owner'}
+
+    sells_products   = models.BooleanField(default=False)
+    enabled_sections = models.JSONField(default=list, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     online = models.BooleanField(default=False)
 
@@ -550,6 +600,8 @@ class Profile(models.Model):
             validate_file_size(self.member_type_cv, max_size_mb=5)
         elif not self.member_type_cv:
             self.member_type_cv_name = ''
+
+        self.enabled_sections = self._sanitize_enabled_sections(self.enabled_sections)
 
         if self.website:
             try:
@@ -810,6 +862,82 @@ class Profile(models.Model):
 
     def get_member_type_value(self, key, default=''):
         return (self.member_type_data or {}).get(key, default)
+
+    # ── Professional section helpers ────────────────────────────────────
+    @classmethod
+    def _sanitize_enabled_sections(cls, raw):
+        """Keep only known, deduplicated optional-section keys."""
+        if not isinstance(raw, (list, tuple, set)):
+            return []
+        seen = []
+        for key in raw:
+            key = str(key).strip()
+            if key in cls.VALID_PROFESSIONAL_SECTIONS and key not in seen:
+                seen.append(key)
+        return seen
+
+    @classmethod
+    def default_sections_for(cls, member_type):
+        """The suggested optional sections for a given member_type."""
+        return list(cls.PROFESSIONAL_SECTION_DEFAULTS.get(member_type, []))
+
+    @property
+    def is_professional(self):
+        """True once the user has picked a member type / profession —
+        i.e. their profile has something to show in the Professional tab."""
+        return bool(self.member_type or self.profession)
+
+    @property
+    def show_products(self):
+        return bool(self.sells_products)
+
+    @property
+    def show_services(self):
+        return 'services' in (self.enabled_sections or [])
+
+    @property
+    def show_portfolio(self):
+        return 'portfolio' in (self.enabled_sections or [])
+
+    @property
+    def show_projects(self):
+        return 'projects' in (self.enabled_sections or [])
+
+    @property
+    def show_achievements(self):
+        return 'achievements' in (self.enabled_sections or [])
+
+    @property
+    def show_jobs_section(self):
+        return 'jobs' in (self.enabled_sections or [])
+
+    @property
+    def service_count(self):
+        return self.services.count()
+
+    @property
+    def portfolio_count(self):
+        return self.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PORTFOLIO).count()
+
+    @property
+    def project_count(self):
+        return self.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PROJECT).count()
+
+    @property
+    def achievement_count(self):
+        return self.achievements.count()
+
+    @property
+    def post_count(self):
+        return self.professional_posts.count()
+
+    @property
+    def product_count(self):
+        return self.user.products.count()
+
+    @property
+    def job_count(self):
+        return self.user.job_vacancies.count()
 
     # ── Personalized-feed helpers ──────────────────────────────────────────
     # A lightweight "who this person is / what they care about" keyword bag,
@@ -2619,7 +2747,12 @@ class BusinessService(models.Model):
     """A service offered by a professional/business page — e.g. 'Logo design',
     'AC repair', 'Home tutoring'. Shown in the optional Services section."""
     service_id    = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='services')
+    # A service belongs to EITHER a BusinessPage OR a user's Profile directly
+    # (never both, never neither) — see clean(). Profile-owned services are
+    # the default now; business_page stays for pages kept as a separate
+    # company/brand identity.
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='services', null=True, blank=True)
+    profile       = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='services', null=True, blank=True)
     title         = models.CharField(max_length=150)
     description   = models.TextField(blank=True, default='')
     price_text    = models.CharField(max_length=150, blank=True, default='',
@@ -2649,6 +2782,7 @@ class BusinessService(models.Model):
         self.price_text  = sanitize_text(self.price_text)
         if not self.title:
             raise ValidationError({'title': 'Service title is required.'})
+        _validate_single_owner(self)
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -2668,6 +2802,15 @@ class BusinessService(models.Model):
         except Exception:
             return ''
 
+    @property
+    def owner(self):
+        """Either the owning BusinessPage or the owning Profile."""
+        return self.business_page or self.profile
+
+    @property
+    def owner_user(self):
+        return self.business_page.owner if self.business_page_id else self.profile.user
+
 
 class BusinessPortfolioItem(models.Model):
     """A single Portfolio piece or Project shown on a professional page.
@@ -2681,7 +2824,8 @@ class BusinessPortfolioItem(models.Model):
     ]
 
     item_id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='portfolio_items')
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='portfolio_items', null=True, blank=True)
+    profile       = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='portfolio_items', null=True, blank=True)
     kind          = models.CharField(max_length=12, choices=KIND_CHOICES, default=KIND_PORTFOLIO, db_index=True)
     title         = models.CharField(max_length=150)
     description   = models.TextField(blank=True, default='')
@@ -2717,6 +2861,7 @@ class BusinessPortfolioItem(models.Model):
                 self.link_url = ''
         if not self.title:
             raise ValidationError({'title': 'Title is required.'})
+        _validate_single_owner(self)
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -2736,11 +2881,20 @@ class BusinessPortfolioItem(models.Model):
         except Exception:
             return ''
 
+    @property
+    def owner(self):
+        return self.business_page or self.profile
+
+    @property
+    def owner_user(self):
+        return self.business_page.owner if self.business_page_id else self.profile.user
+
 
 class BusinessAchievement(models.Model):
     """A certification, award, or milestone shown on a professional page."""
     achievement_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    business_page  = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='achievements')
+    business_page  = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='achievements', null=True, blank=True)
+    profile        = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='achievements', null=True, blank=True)
     title          = models.CharField(max_length=150)
     issuer         = models.CharField(max_length=150, blank=True, default='')
     description    = models.TextField(blank=True, default='')
@@ -2768,6 +2922,7 @@ class BusinessAchievement(models.Model):
         self.description = sanitize_text(self.description, 'about')
         if not self.title:
             raise ValidationError({'title': 'Achievement title is required.'})
+        _validate_single_owner(self)
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -2786,6 +2941,14 @@ class BusinessAchievement(models.Model):
             return self.image.url if self.image else ''
         except Exception:
             return ''
+
+    @property
+    def owner(self):
+        return self.business_page or self.profile
+
+    @property
+    def owner_user(self):
+        return self.business_page.owner if self.business_page_id else self.profile.user
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2833,7 +2996,8 @@ class BusinessPost(models.Model):
     ]
 
     post_id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='posts')
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='posts', null=True, blank=True)
+    profile       = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='professional_posts', null=True, blank=True)
     post_type     = models.CharField(max_length=10, choices=POST_TYPE_CHOICES, default=TYPE_TEXT, db_index=True)
     post_category = models.CharField(max_length=15, choices=POST_CATEGORY_CHOICES, default=CATEGORY_UPDATE, db_index=True)
     caption       = models.TextField(blank=True, default='')
@@ -2857,7 +3021,7 @@ class BusinessPost(models.Model):
         ordering = ['-is_pinned', '-created_at']
 
     def __str__(self):
-        return f'{self.get_post_type_display()} post by {self.business_page.name}'
+        return f'{self.get_post_type_display()} post by {self.owner_name}'
 
     def clean(self):
         super().clean()
@@ -2866,6 +3030,7 @@ class BusinessPost(models.Model):
         if self.post_category not in dict(self.POST_CATEGORY_CHOICES):
             self.post_category = self.CATEGORY_UPDATE
         self.caption = sanitize_text(self.caption, 'post_caption')
+        _validate_single_owner(self)
 
         if self.post_type == self.TYPE_TEXT and not self.caption:
             raise ValidationError({'caption': 'Text updates need some text.'})
@@ -2957,6 +3122,34 @@ class BusinessPost(models.Model):
             return f"{months} month{'s' if months != 1 else ''} ago"
         years = days_diff // 365
         return f"{years} year{'s' if years != 1 else ''} ago"
+
+    @property
+    def owner(self):
+        """Either the owning BusinessPage or the owning Profile."""
+        return self.business_page or self.profile
+
+    @property
+    def owner_user(self):
+        return self.business_page.owner if self.business_page_id else self.profile.user
+
+    @property
+    def owner_name(self):
+        if self.business_page_id:
+            return self.business_page.name
+        return self.profile.full_name or self.profile.user.username
+
+    @property
+    def owner_picture_url(self):
+        if self.business_page_id:
+            return self.business_page.get_logo_url
+        return self.profile.get_picture_url
+
+    @property
+    def owner_url_kwargs(self):
+        """Handy for templates that need to link back to whichever owner posted this."""
+        if self.business_page_id:
+            return {'type': 'page', 'slug': self.business_page.slug}
+        return {'type': 'profile', 'username': self.profile.user.username}
 
 
 class BusinessPostImage(models.Model):

@@ -1518,6 +1518,11 @@ def profile(request, username):
             'profile_completion_missing': [],
             'profile_skills': [],
             'user_reviews': [],
+            'professional_services': [], 'professional_portfolio': [],
+            'professional_projects': [], 'professional_achievements': [],
+            'professional_posts': [], 'professional_products': [],
+            'professional_jobs': [], 'suggested_professional_sections': [],
+            'professional_section_choices': Profile.PROFESSIONAL_SECTION_CHOICES,
         }
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, 'profile.html', context)
@@ -1678,6 +1683,36 @@ def profile(request, username):
             profile_skills.append(cat)
     profile_skills = profile_skills[:8]
 
+    # ── Professional profile sections (Services, Portfolio, Projects,
+    # Achievements, Jobs, Products, Posts) — these now live directly on the
+    # Profile, independent of any BusinessPage. Shown/hidden per-section via
+    # profile.show_services / show_portfolio / etc., which read
+    # profile.enabled_sections (defaults suggested from profile.member_type).
+    professional_services     = list(profile.services.filter(is_active=True)) if profile.show_services else []
+    professional_portfolio    = list(profile.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PORTFOLIO)) if profile.show_portfolio else []
+    professional_projects     = list(profile.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PROJECT)) if profile.show_projects else []
+    professional_achievements = list(profile.achievements.all()) if profile.show_achievements else []
+    professional_posts_qs = (
+        profile.professional_posts.prefetch_related('images', 'poll__options')
+        if profile.is_professional else BusinessPost.objects.none()
+    )
+    professional_posts = list(professional_posts_qs[:20])
+    professional_products = (
+        list(Market.objects.filter(product_owner=user, business_page__isnull=True).prefetch_related('images')[:20])
+        if profile.show_products else []
+    )
+    professional_jobs = (
+        list(JobVacancy.objects.filter(posted_by=user, business_page__isnull=True)[:20])
+        if profile.show_jobs_section else []
+    )
+    # Suggested (not-yet-enabled) sections, for the owner's "Add a section" prompt.
+    suggested_professional_sections = []
+    if is_own_profile and profile.member_type:
+        suggested_professional_sections = [
+            s for s in Profile.default_sections_for(profile.member_type)
+            if s not in (profile.enabled_sections or [])
+        ]
+
     context = {
         'user': user, 'profile': profile,
         'current_profile': request.user.profile if request.user.is_authenticated else None,
@@ -1711,6 +1746,15 @@ def profile(request, username):
         'viewer_business_page_count':   viewer_business_page_count,
         'viewer_primary_business_page': viewer_primary_business_page,
         'member_type_edit_schema': _member_type_edit_schema(profile) if request.user == user else [],
+        'professional_services':     professional_services,
+        'professional_portfolio':    professional_portfolio,
+        'professional_projects':     professional_projects,
+        'professional_achievements': professional_achievements,
+        'professional_posts':        professional_posts,
+        'professional_products':     professional_products,
+        'professional_jobs':         professional_jobs,
+        'suggested_professional_sections': suggested_professional_sections,
+        'professional_section_choices': Profile.PROFESSIONAL_SECTION_CHOICES,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1851,6 +1895,24 @@ def update_profile(request, username):
                     profile.member_type_cv = None
                     profile.member_type_cv_name = ''
                     profile_dirty = True
+
+            # ── Professional sections (Services, Portfolio, Projects,
+            # Achievements, Jobs) + "sells products" toggle. Only touched when
+            # explicitly submitted (the "Manage professional sections" panel
+            # on the profile page), so the main profile-edit form is unaffected.
+            if 'sections_submitted' in request.POST:
+                profile.enabled_sections = [
+                    s for s in request.POST.getlist('sections')
+                    if s in Profile.VALID_PROFESSIONAL_SECTIONS
+                ]
+                profile.sells_products = request.POST.get('sells_products') in ('1', 'true', 'on')
+                profile_dirty = True
+            elif member_type_submitted and member_type in {k for k, _ in MEMBER_TYPE_CHOICES} and not profile.enabled_sections:
+                # First time a member type is chosen — seed sensible defaults
+                # (the owner can still fine-tune them from "Manage sections").
+                profile.enabled_sections = Profile.default_sections_for(member_type)
+                profile.sells_products = member_type in Profile.MEMBER_TYPES_SELLING_BY_DEFAULT
+                profile_dirty = True
 
             if profile_dirty:
                 profile.save()
@@ -6326,9 +6388,9 @@ def business_post_create(request, slug):
 @login_required(login_url='/')
 @require_POST
 def business_post_delete(request, post_id):
-    """AJAX — delete a BusinessPost (page owner only)."""
+    """AJAX — delete a BusinessPost (page owner or profile owner only)."""
     post = get_object_or_404(BusinessPost, pk=post_id)
-    if post.business_page.owner != request.user:
+    if post.owner_user != request.user:
         return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
 
     if not settings.USE_CLOUDINARY:
@@ -6869,3 +6931,421 @@ def business_achievement_delete(request, achievement_id):
     achievement = get_object_or_404(BusinessAchievement, achievement_id=achievement_id, business_page__owner=request.user)
     achievement.delete()
     return JsonResponse({'success': True})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Profile — professional sections (Services, Portfolio, Projects,
+# Achievements, Posts, Products) owned directly by the user's Profile.
+# Mirrors the business_* equivalents above, but targets request.user.profile
+# instead of a BusinessPage — this is what lets any user manage professional
+# content straight from their own profile, with no BusinessPage required.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+@require_POST
+def profile_service_create(request):
+    """Owner adds a Service directly to their own profile."""
+    profile = request.user.profile
+    if not profile.show_services:
+        return JsonResponse({'success': False, 'error': 'Turn on the Services section first (Manage sections).'}, status=403)
+
+    title       = request.POST.get('title', '').strip()
+    description = request.POST.get('description', '').strip()
+    price_text  = request.POST.get('price_text', '').strip()
+    image       = request.FILES.get('image')
+
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Please give the service a title.'}, status=400)
+    if len(title) > 150:
+        return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
+    if image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+
+    try:
+        service = BusinessService.objects.create(
+            profile=profile, title=title, description=description,
+            price_text=price_text, image=image if image else None,
+        )
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'service': {
+            'service_id':  str(service.service_id),
+            'title':       service.title,
+            'description': service.description,
+            'price_text':  service.price_text,
+            'image_url':   service.get_image_url,
+        },
+        'service_count': profile.service_count,
+        'message': 'Service added! 🛠️',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_service_delete(request, service_id):
+    service = get_object_or_404(BusinessService, service_id=service_id, profile__user=request.user)
+    service.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_portfolio_create(request):
+    """Owner adds a Portfolio piece or a Project directly to their own profile."""
+    profile = request.user.profile
+
+    kind        = request.POST.get('kind', BusinessPortfolioItem.KIND_PORTFOLIO).strip()
+    if kind not in dict(BusinessPortfolioItem.KIND_CHOICES):
+        kind = BusinessPortfolioItem.KIND_PORTFOLIO
+    section_needed = 'portfolio' if kind == BusinessPortfolioItem.KIND_PORTFOLIO else 'projects'
+    if section_needed not in (profile.enabled_sections or []):
+        return JsonResponse({'success': False, 'error': 'Turn on that section first (Manage sections).'}, status=403)
+
+    title       = request.POST.get('title', '').strip()
+    description = request.POST.get('description', '').strip()
+    link_url    = request.POST.get('link_url', '').strip()
+    is_ongoing  = request.POST.get('is_ongoing') in ('1', 'true', 'on')
+    image       = request.FILES.get('image')
+
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Please give it a title.'}, status=400)
+    if len(title) > 150:
+        return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
+    if image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+
+    try:
+        item = BusinessPortfolioItem.objects.create(
+            profile=profile, kind=kind, title=title, description=description,
+            link_url=link_url, is_ongoing=is_ongoing if kind == BusinessPortfolioItem.KIND_PROJECT else False,
+            image=image if image else None,
+        )
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'item': {
+            'item_id':      str(item.item_id),
+            'kind':         item.kind,
+            'title':        item.title,
+            'description':  item.description,
+            'link_url':     item.link_url,
+            'is_ongoing':   item.is_ongoing,
+            'image_url':    item.get_image_url,
+        },
+        'portfolio_count': profile.portfolio_count,
+        'project_count':   profile.project_count,
+        'message': 'Added to your profile! ✨',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_portfolio_delete(request, item_id):
+    item = get_object_or_404(BusinessPortfolioItem, item_id=item_id, profile__user=request.user)
+    item.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_achievement_create(request):
+    """Owner adds an Achievement (award, certification, milestone) to their profile."""
+    profile = request.user.profile
+    if not profile.show_achievements:
+        return JsonResponse({'success': False, 'error': 'Turn on the Achievements section first (Manage sections).'}, status=403)
+
+    title         = request.POST.get('title', '').strip()
+    issuer        = request.POST.get('issuer', '').strip()
+    description   = request.POST.get('description', '').strip()
+    date_raw      = request.POST.get('date_achieved', '').strip()
+    image         = request.FILES.get('image')
+
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Please give the achievement a title.'}, status=400)
+    if len(title) > 150:
+        return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
+
+    date_achieved = None
+    if date_raw:
+        try:
+            date_achieved = datetime.strptime(date_raw, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Enter a valid date.'}, status=400)
+
+    if image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+
+    try:
+        achievement = BusinessAchievement.objects.create(
+            profile=profile, title=title, issuer=issuer, description=description,
+            date_achieved=date_achieved, image=image if image else None,
+        )
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'achievement': {
+            'achievement_id': str(achievement.achievement_id),
+            'title':          achievement.title,
+            'issuer':         achievement.issuer,
+            'description':    achievement.description,
+            'date_achieved':  achievement.date_achieved.isoformat() if achievement.date_achieved else '',
+            'image_url':      achievement.get_image_url,
+        },
+        'achievement_count': profile.achievement_count,
+        'message': 'Achievement added! 🏆',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_achievement_delete(request, achievement_id):
+    achievement = get_object_or_404(BusinessAchievement, achievement_id=achievement_id, profile__user=request.user)
+    achievement.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_post_create(request):
+    """AJAX — owner posts an image / video / text / poll update straight to their profile."""
+    profile = request.user.profile
+    if not profile.is_professional:
+        return JsonResponse({'success': False, 'error': 'Set your profession / member type first.'}, status=403)
+
+    post_type = request.POST.get('post_type', '').strip()
+    caption   = request.POST.get('caption', '').strip()
+    post_category = request.POST.get('post_category', BusinessPost.CATEGORY_UPDATE).strip()
+    if post_category not in dict(BusinessPost.POST_CATEGORY_CHOICES):
+        post_category = BusinessPost.CATEGORY_UPDATE
+
+    if post_type not in dict(BusinessPost.POST_TYPE_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Please choose a valid post type.'}, status=400)
+
+    if post_type == BusinessPost.TYPE_TEXT and not caption:
+        return JsonResponse({'success': False, 'error': 'Please write something to post.'}, status=400)
+
+    images, video, duration = [], None, None
+    option_texts, question, allow_multiple, closes_at = [], '', False, None
+
+    if post_type == BusinessPost.TYPE_IMAGE:
+        images = request.FILES.getlist('images')
+        if not images:
+            return JsonResponse({'success': False, 'error': 'Please attach at least one image.'}, status=400)
+        if len(images) > 10:
+            return JsonResponse({'success': False, 'error': 'You can attach up to 10 images per post.'}, status=400)
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        for img in images:
+            if img.content_type not in allowed_types:
+                return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+            if img.size > 10 * 1024 * 1024:
+                return JsonResponse({'success': False, 'error': 'Each image must be under 10 MB.'}, status=400)
+
+    elif post_type == BusinessPost.TYPE_VIDEO:
+        video = request.FILES.get('video')
+        if not video:
+            return JsonResponse({'success': False, 'error': 'Please attach a video.'}, status=400)
+        allowed_video_types = {'video/mp4', 'video/quicktime', 'video/webm', 'video/x-msvideo'}
+        if video.content_type not in allowed_video_types:
+            return JsonResponse({'success': False, 'error': 'Only MP4, MOV, WebM or AVI videos are allowed.'}, status=400)
+        if video.size > 100 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Video must be under 100 MB.'}, status=400)
+        raw_duration = request.POST.get('video_duration_seconds', '').strip()
+        if raw_duration:
+            try:
+                duration = int(float(raw_duration))
+            except ValueError:
+                duration = None
+        if duration is not None and not (BusinessPost.MIN_VIDEO_SECONDS <= duration <= BusinessPost.MAX_VIDEO_SECONDS):
+            return JsonResponse({
+                'success': False,
+                'error': f'Videos should be {BusinessPost.MIN_VIDEO_SECONDS}\u201390 seconds long.'
+            }, status=400)
+
+    elif post_type == BusinessPost.TYPE_POLL:
+        question = request.POST.get('poll_question', '').strip()
+        option_texts = [o.strip() for o in request.POST.getlist('poll_options') if o.strip()]
+        if not question:
+            return JsonResponse({'success': False, 'error': 'Please give your poll a question.'}, status=400)
+        if len(option_texts) < 2:
+            return JsonResponse({'success': False, 'error': 'Polls need at least 2 options.'}, status=400)
+        if len(option_texts) > 6:
+            return JsonResponse({'success': False, 'error': 'Polls can have up to 6 options.'}, status=400)
+        allow_multiple = request.POST.get('allow_multiple') in ('1', 'true', 'on')
+        raw_closes = request.POST.get('closes_at', '').strip()
+        if raw_closes:
+            parsed = django_parse_datetime(raw_closes)
+            if parsed:
+                closes_at = parsed if timezone.is_aware(parsed) else timezone.make_aware(parsed)
+
+    try:
+        post = BusinessPost(profile=profile, post_type=post_type, post_category=post_category, caption=caption)
+
+        if post_type == BusinessPost.TYPE_VIDEO:
+            post.video = video
+            if duration is not None:
+                post.video_duration_seconds = duration
+
+        post.save()
+
+        if post_type == BusinessPost.TYPE_IMAGE:
+            for idx, img in enumerate(images):
+                BusinessPostImage.objects.create(post=post, image=img, order=idx)
+
+        elif post_type == BusinessPost.TYPE_POLL:
+            poll = BusinessPostPoll.objects.create(
+                post=post, question=question, allow_multiple=allow_multiple, closes_at=closes_at,
+            )
+            for idx, text in enumerate(option_texts):
+                BusinessPostPollOption.objects.create(poll=poll, text=text, order=idx)
+
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    post = (
+        BusinessPost.objects.filter(pk=post.pk)
+        .prefetch_related('images', 'poll__options')
+        .first()
+    )
+    return JsonResponse({
+        'success': True,
+        'post': _serialize_business_post(post, viewer=request.user),
+        'post_count': profile.post_count,
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_product_upload(request):
+    """
+    Owner posts a new Market listing straight from their profile — no
+    BusinessPage required. Uses the same Market + MarketImage models as
+    business_product_upload, just without a business_page attached.
+    """
+    profile = request.user.profile
+    if not profile.sells_products:
+        return JsonResponse({
+            'success': False,
+            'errors': {'__all__': 'Products are turned off for your profile. Enable "Sell Products" in Manage sections to add listings.'},
+        }, status=403)
+
+    _rl_key  = f'ad_post:{request.user.id}'
+    _rl_hits = cache.get(_rl_key, 0)
+    if _rl_hits >= 10:
+        return JsonResponse({'success': False, 'errors': {'__all__': 'Too many listings posted. Please wait.'}}, status=429)
+    cache.set(_rl_key, _rl_hits + 1, timeout=3600)
+
+    name         = request.POST.get('product_name', '').strip()
+    price_raw    = request.POST.get('product_price', '').strip()
+    description  = request.POST.get('description', '').strip()
+    location     = request.POST.get('location', profile.location or 'Kishi, Oyo State').strip()
+    category     = request.POST.get('category', 'others').strip()
+    condition    = request.POST.get('product_condition', 'New').strip()
+    availability = request.POST.get('availability', 'Single Item').strip()
+    whatsapp     = request.POST.get('whatsapp_number', profile.phone or '').strip()
+    instagram    = request.POST.get('instagram_handle', '').strip()
+    twitter      = request.POST.get('twitter_handle', '').strip()
+
+    _VALID_CATEGORIES   = Market.VALID_CATEGORIES
+    _VALID_CONDITIONS   = {'New', 'Used', 'Used-Fair'}
+    _VALID_AVAILABILITY = {'Single Item', 'In Stock'}
+    if category     not in _VALID_CATEGORIES:   category     = 'others'
+    if condition    not in _VALID_CONDITIONS:   condition    = 'New'
+    if availability not in _VALID_AVAILABILITY: availability = 'Single Item'
+
+    errors = {}
+    if not name:
+        errors['product_name'] = 'Product name is required.'
+    if not price_raw:
+        errors['product_price'] = 'Price is required.'
+    else:
+        try:
+            price_val = int(float(price_raw))
+            if price_val < 0:
+                errors['product_price'] = 'Price cannot be negative.'
+        except (ValueError, TypeError):
+            errors['product_price'] = 'Enter a valid price.'
+    if not description:
+        errors['description'] = 'Description is required.'
+    if not whatsapp:
+        errors['whatsapp_number'] = 'WhatsApp number is required.'
+    if not request.FILES.getlist('images'):
+        errors['images'] = 'At least one image is required.'
+    if errors:
+        return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+    price_val = int(float(price_raw))
+
+    from social.models import sanitize_text as _sanitize
+    try:
+        product = Market.objects.create(
+            product_owner=request.user,
+            product_name=_sanitize(name, 'product_name'),
+            product_price=price_val,
+            product_location=_sanitize(location),
+            product_description=_sanitize(description, 'product_description'),
+            product_availability=availability,
+            product_category=category,
+            product_condition=condition,
+            whatsapp_number=whatsapp,
+            instagram_handle=instagram,
+            twitter_handle=twitter,
+            business_page=None,
+        )
+        for img_file in request.FILES.getlist('images')[:5]:
+            MarketImage.objects.create(product=product, product_image=img_file)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('profile_product_upload failed for user %s', request.user.id)
+        return JsonResponse({'success': False, 'errors': {'__all__': 'Something went wrong. Please try again.'}}, status=500)
+
+    first_img = product.images.first()
+    img_url   = first_img.product_image.url if first_img else 'https://placehold.co/400x400?text=No+Image'
+
+    return JsonResponse({
+        'success':    True,
+        'product_id': str(product.product_id),
+        'name':       product.product_name,
+        'price':      product.product_price,
+        'image_url':  img_url,
+        'detail_url': f'/product/{product.product_id}/',
+        'message':    'Listing uploaded successfully! 🔥',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_sections_update(request):
+    """AJAX — owner turns professional sections (Services, Portfolio,
+    Projects, Achievements, Jobs) and "sells products" on/off for their
+    own profile, independent of the main profile-edit form."""
+    profile = request.user.profile
+    profile.enabled_sections = [
+        s for s in request.POST.getlist('sections')
+        if s in Profile.VALID_PROFESSIONAL_SECTIONS
+    ]
+    profile.sells_products = request.POST.get('sells_products') in ('1', 'true', 'on')
+    profile.save()
+    return JsonResponse({
+        'success': True,
+        'enabled_sections': profile.enabled_sections,
+        'sells_products': profile.sells_products,
+    })

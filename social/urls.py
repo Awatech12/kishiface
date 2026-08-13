@@ -162,6 +162,19 @@ urlpatterns = [
     path('business/<slug:slug>/achievements/create/',   views.business_achievement_create, name='business_achievement_create'),
     path('achievements/<uuid:achievement_id>/delete/',  views.business_achievement_delete, name='business_achievement_delete'),
 
+    # ── Profile — professional sections (Services, Portfolio, Projects,
+    # Achievements, Posts, Products) owned directly by the user's Profile,
+    # no BusinessPage required ───────────────────────────────────────────
+    path('profile/sections/update/',                    views.profile_sections_update,     name='profile_sections_update'),
+    path('profile/services/create/',                    views.profile_service_create,      name='profile_service_create'),
+    path('profile/services/<uuid:service_id>/delete/',   views.profile_service_delete,      name='profile_service_delete'),
+    path('profile/portfolio/create/',                    views.profile_portfolio_create,    name='profile_portfolio_create'),
+    path('profile/portfolio/<uuid:item_id>/delete/',      views.profile_portfolio_delete,    name='profile_portfolio_delete'),
+    path('profile/achievements/create/',                  views.profile_achievement_create,  name='profile_achievement_create'),
+    path('profile/achievements/<uuid:achievement_id>/delete/', views.profile_achievement_delete, name='profile_achievement_delete'),
+    path('profile/posts/create/',                         views.profile_post_create,         name='profile_post_create'),
+    path('profile/products/upload/',                      views.profile_product_upload,      name='profile_product_upload'),
+
     # ── Profiles (catch-alls — must stay at the bottom) ───────────────────────
     path('block/<str:username>/',                    views.block_user,          name='block_user'),
     path('report/<str:username>/',                   views.report_user,         name='report_user'),
