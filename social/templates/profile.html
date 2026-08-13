@@ -1,5 +1,6 @@
 {% load static %}
 {% load humanize %}
+{% load time %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1666,6 +1667,26 @@
 .kpp-subpanel.active { display: block; }
 .kpp-add-row { margin-bottom: 12px; }
 
+/* Skills & Details subtab reuses .kprof-skills-wrap / .kprof-skill-chip / .kprof-type-row
+   etc. already defined earlier for the About tab — no new rules needed. */
+
+/* ── Personal ⇄ Professional profile mode toggle ── */
+body.kprof-professional-mode .kprof-tabs { display: none; }
+.kprof-mode-banner {
+    display: none; align-items: center; justify-content: space-between; gap: 10px;
+    background: linear-gradient(120deg, #0095f6, #0077d4); color: #fff;
+    border-radius: 12px; margin: 0 12px 16px; padding: 12px 16px;
+    font-size: 13px; font-weight: 600;
+}
+.kprof-mode-banner i { margin-right: 6px; }
+.kprof-mode-banner button {
+    background: rgba(255,255,255,0.18); border: none; color: #fff;
+    padding: 7px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+    white-space: nowrap;
+}
+.kprof-mode-banner button:hover { background: rgba(255,255,255,0.28); }
+body.kprof-professional-mode .kprof-mode-banner { display: flex; }
+
 .kpp-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px;
 }
@@ -2242,8 +2263,8 @@
             <button type="button" onclick="openEditSheet()" class="kprof-btn kprof-btn-primary">
                 <i class="fas fa-pen"></i> Edit Profile
             </button>
-            <button type="button" onclick="shareProfile()" class="kprof-btn kprof-btn-outline">
-                <i class="fas fa-share-square"></i> Share Profile
+            <button type="button" id="profModeToggleBtn" onclick="toggleProfileMode()" class="kprof-btn kprof-btn-outline">
+                <i class="fas fa-briefcase" id="profModeToggleIcon"></i> <span id="profModeToggleLabel">Switch to Professional</span>
             </button>
             <button type="button" onclick="openMoreSheet()" class="kprof-btn kprof-btn-icon" title="More" aria-label="More options">
                 <i class="fas fa-ellipsis-h"></i>
@@ -2255,6 +2276,9 @@
             <a href="{% url 'message' user.username %}" class="kprof-btn kprof-btn-outline" title="Message">
                 <i class="fas fa-paper-plane"></i> Message
             </a>
+            <button type="button" id="profModeToggleBtn" onclick="toggleProfileMode()" class="kprof-btn kprof-btn-outline">
+                <i class="fas fa-briefcase" id="profModeToggleIcon"></i> <span id="profModeToggleLabel">Switch to Professional</span>
+            </button>
             {% if not is_blocked %}
             <button type="button" onclick="openMoreSheet()" class="kprof-btn kprof-btn-icon" title="More" aria-label="More options">
                 <i class="fas fa-ellipsis-h"></i>
@@ -2288,13 +2312,16 @@
 </div>
 {% endif %}
 
+<!-- Shown only while viewing the professional-only mode; lets anyone jump back to the normal profile tabs -->
+<div class="kprof-mode-banner" id="profModeBanner">
+    <span><i class="fas fa-briefcase"></i> {% if is_own_profile %}Viewing your Professional Profile{% else %}Viewing {{ profile.full_name|default:user.username }}'s Professional Profile{% endif %}</span>
+    <button type="button" onclick="toggleProfileMode()">Switch to Personal</button>
+</div>
+
 <!-- Tabs -->
 <div class="kprof-tabs">
     <button type="button" class="kprof-tab active" data-tab="about" onclick="switchProfileTab(event, 'about')">
         <i class="far fa-user"></i> About
-    </button>
-    <button type="button" class="kprof-tab" data-tab="professional" onclick="switchProfileTab(event, 'professional')">
-        <i class="fas fa-briefcase"></i> Professional
     </button>
     <button type="button" class="kprof-tab" data-tab="pages" onclick="switchProfileTab(event, 'pages')">
         <i class="fas fa-store"></i> Pages
@@ -2548,7 +2575,7 @@
             <div class="kprof-activity-body">
                 <div class="kprof-activity-head">
                     <span class="kprof-activity-lead"><strong>{{ profile.full_name|default:user.username }}</strong> reviewed a product</span>
-                    <span class="kprof-activity-date">{{ review.created_at|date:"M d" }}</span>
+                    <span class="kprof-activity-date">{{ review.created_at|insta_timesince }}</span>
                 </div>
                 <a href="{% url 'product_detail' review.product.product_id %}" class="kprof-activity-product">{{ review.product.name }}</a>
                 <div class="kprof-activity-stars">
@@ -2593,6 +2620,9 @@
     </div>
 
     <div class="kpp-subtabs" role="tablist">
+        <button type="button" class="kpp-subtab" data-sub="skills" onclick="kppSwitchSub('skills', this)">
+            <i class="fas fa-graduation-cap"></i> Skills &amp; Details
+        </button>
         <button type="button" class="kpp-subtab active" data-sub="posts" onclick="kppSwitchSub('posts', this)">
             <i class="fas fa-stream"></i> Posts{% if professional_posts %}<span class="kpp-subtab-count">{{ professional_posts|length }}</span>{% endif %}
         </button>
@@ -2628,6 +2658,53 @@
         {% endif %}
     </div>
 
+    <!-- Skills & Details: the profile's full professional picture — skills/expertise chips
+         plus every field captured for their chosen profession (member type). Lives here so
+         it's still reachable when "Switch to Professional" hides the About tab entirely. -->
+    <div class="kpp-subpanel" id="kpp-sub-skills">
+        {% if profile_skills %}
+        <div class="kprof-listings-panel">
+            <div class="kprof-section-h"><h2>Skills &amp; Expertise</h2></div>
+            <div class="kprof-skills-wrap">
+                {% for skill in profile_skills %}
+                <span class="kprof-skill-chip"><i class="fas fa-check-circle"></i>{{ skill }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% if profile.member_type_display_fields %}
+        <div class="kprof-listings-panel">
+            <div class="kprof-section-h"><h2>{{ profile.member_type_emoji }} {{ profile.member_type_label }} Details</h2></div>
+            <div class="kprof-type-details">
+                {% for label, value in profile.member_type_display_fields %}
+                    {% if label == 'CV / Resume' %}
+                    <div class="kprof-type-row kprof-cv-current" style="margin-top:0;">
+                        <i class="fas fa-file-alt"></i>
+                        <a href="{{ value }}" target="_blank" rel="noopener noreferrer">{{ profile.member_type_cv_display_name|default:'View CV / Resume' }}</a>
+                        <i class="fas fa-external-link-alt" style="font-size:11px;color:var(--mfy-text-light);"></i>
+                    </div>
+                    {% else %}
+                    <div class="kprof-type-row"><span class="kprof-type-label">{{ label }}</span><span class="kprof-type-value">{{ value }}</span></div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% if not profile_skills and not profile.member_type_display_fields %}
+        <div class="kprof-empty">
+            <i class="fas fa-graduation-cap"></i>
+            {% if is_own_profile %}
+            <strong>No skills or details added yet</strong><br>
+            <small>Fill in your profession details from Edit Profile to showcase your skills and expertise here.</small>
+            <button type="button" class="kpp-setup-btn" onclick="openEditSheet()"><i class="fas fa-pen"></i> Add details</button>
+            {% else %}
+            <strong>No professional details yet</strong><br>
+            <small>{{ profile.full_name|default:user.username }} hasn't added skills or profession details.</small>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
     <!-- Posts -->
     <div class="kpp-subpanel active" id="kpp-sub-posts">
         {% if is_own_profile %}
@@ -2641,7 +2718,7 @@
                     <img class="kpp-post-avatar" src="{{ profile.get_picture_url }}" alt="">
                     <div class="kpp-post-head-body">
                         <div class="kpp-post-name">{{ profile.full_name|default:user.username }}</div>
-                        <div class="kpp-post-meta">{{ post.category_label }} · {{ post.time_posted }}</div>
+                        <div class="kpp-post-meta">{{ post.category_label }} · {{ post.created_at|insta_timesince }}</div>
                     </div>
                     {% if is_own_profile %}
                     <button type="button" class="kpp-post-del" onclick="deleteProfilePost('{{ post.post_id }}')" aria-label="Delete post"><i class="fas fa-trash"></i></button>
@@ -2867,6 +2944,7 @@
                   <div class="khj-jcard-meta">
                     {% if a.issuer %}<span class="khj-jcard-meta-txt"><i class="fas fa-award"></i>{{ a.issuer }}</span>{% endif %}
                     {% if a.date_achieved %}<span class="khj-jcard-meta-txt">{{ a.date_achieved }}</span>{% endif %}
+                    {% if a.created_at %}<span class="khj-jcard-meta-txt">Added {{ a.created_at|insta_timesince }}</span>{% endif %}
                   </div>
 
                   {% if a.description %}
@@ -2933,7 +3011,7 @@
                     {% if job.company %}<span class="khj-jcard-meta-txt"><i class="fas fa-building"></i>{{ job.company }}</span>{% endif %}
                     {% if job.location %}<span class="khj-jcard-meta-txt">{{ job.location }}</span>{% endif %}
                   </div>
-                  <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ job.created_at|naturaltime }}</div>
+                  <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ job.created_at|insta_timesince }}</div>
 
                   {# Insight pills — work mode / advertiser / status #}
                   <div class="khj-jcard-pills">
@@ -3033,7 +3111,7 @@
                             {% if product.product_location %}<span class="mfy-jcard-meta-txt">{{ product.product_location }}</span>{% endif %}
                             {% if product.product_availability %}<span class="mfy-jcard-meta-txt">{{ product.product_availability }}</span>{% endif %}
                         </div>
-                        <div class="mfy-jcard-time"><i class="far fa-clock"></i> {{ product.time_posted }}</div>
+                        <div class="mfy-jcard-time"><i class="far fa-clock"></i> {{ product.created_at|insta_timesince }}</div>
                     </div>
                 </a>
 
@@ -4327,6 +4405,37 @@ function switchProfileTab(evt, tabName) {
     document.querySelectorAll('.kprof-tab-panel').forEach(panel => {
         panel.classList.toggle('active', panel.id === `tab-${tabName}`);
     });
+}
+
+/* ── Personal ⇄ Professional profile mode (replaces "Share Profile" on the owner's own
+   profile). Switching to Professional hides the normal About/Pages/Followers/Following
+   tabs entirely and drops the viewer straight into the professional tabs (Posts,
+   Skills & Details, Services, Portfolio, Achievements, Jobs, Products…). Share Profile
+   is still available from the "More" (⋯) sheet. ── */
+let kprofIsProfessionalMode = false;
+function toggleProfileMode() {
+    const isOwner = {{ is_own_profile|yesno:"true,false" }};
+    const isProfessional = {{ profile.is_professional|yesno:"true,false" }};
+    if (!kprofIsProfessionalMode && !isProfessional && isOwner) {
+        toast('Choose your profession first to unlock your Professional profile.');
+        openEditSheet();
+        return;
+    }
+    kprofIsProfessionalMode = !kprofIsProfessionalMode;
+    document.body.classList.toggle('kprof-professional-mode', kprofIsProfessionalMode);
+
+    const icon  = document.getElementById('profModeToggleIcon');
+    const label = document.getElementById('profModeToggleLabel');
+
+    if (kprofIsProfessionalMode) {
+        if (icon) icon.className = 'fas fa-user';
+        if (label) label.textContent = 'Switch to Personal';
+        switchProfileTab(null, 'professional');
+    } else {
+        if (icon) icon.className = 'fas fa-briefcase';
+        if (label) label.textContent = 'Switch to Professional';
+        switchProfileTab(null, 'about');
+    }
 }
 
 function openMoreSheet()  { document.getElementById('moreOverlay')?.classList.add('open'); }
