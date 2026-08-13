@@ -803,7 +803,14 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     _post_candidates = list(
         _post_qs.filter(
             Q(business_page__in=followed_business_ids) | Q(created_at__gte=_recent_cutoff)
-        ).order_by('-created_at')[:60]
+        )
+        # BusinessPost.business_page is nullable (a post can instead be tied
+        # to a personal `profile`, i.e. a professional post with no page).
+        # This ranking block assumes a business_page on every candidate
+        # (blob_fn/location_fn/is_following all dereference it), so exclude
+        # profile-only posts here rather than crashing downstream.
+        .filter(business_page__isnull=False)
+        .order_by('-created_at')[:60]
     )
     _post_pool = [] if _is_market_filtered else _ranked(
         _post_candidates, keywords, location_tokens,
