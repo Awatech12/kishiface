@@ -429,20 +429,6 @@ def validate_cv_extension(value):
 
 
 
-def _validate_single_owner(instance, page_field='business_page', profile_field='profile'):
-    """
-    Shared validation for professional-content models (services, portfolio
-    items, achievements, posts, …) that can be owned by EITHER a BusinessPage
-    OR a Profile directly, but never both and never neither.
-    """
-    page_id    = getattr(instance, f'{page_field}_id', None)
-    profile_id = getattr(instance, f'{profile_field}_id', None)
-    if page_id and profile_id:
-        raise ValidationError('This can belong to a Business Page or a Profile, not both.')
-    if not page_id and not profile_id:
-        raise ValidationError('This must belong to either a Business Page or a Profile.')
-
-
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     followings = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
@@ -917,11 +903,11 @@ class Profile(models.Model):
 
     @property
     def portfolio_count(self):
-        return self.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PORTFOLIO).count()
+        return self.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PORTFOLIO).count()
 
     @property
     def project_count(self):
-        return self.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PROJECT).count()
+        return self.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PROJECT).count()
 
     @property
     def achievement_count(self):
@@ -2744,15 +2730,12 @@ class BusinessPage(models.Model):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class BusinessService(models.Model):
-    """A service offered by a professional/business page — e.g. 'Logo design',
-    'AC repair', 'Home tutoring'. Shown in the optional Services section."""
+    """A service offered by a BusinessPage — e.g. 'Logo design', 'AC repair',
+    'Home tutoring'. Shown in the optional Services section. Business-page
+    owned only — see ProfileService for the equivalent on a user's own
+    Profile; the two are entirely independent."""
     service_id    = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    # A service belongs to EITHER a BusinessPage OR a user's Profile directly
-    # (never both, never neither) — see clean(). Profile-owned services are
-    # the default now; business_page stays for pages kept as a separate
-    # company/brand identity.
-    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='services', null=True, blank=True)
-    profile       = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='services', null=True, blank=True)
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='services')
     title         = models.CharField(max_length=150)
     description   = models.TextField(blank=True, default='')
     price_text    = models.CharField(max_length=150, blank=True, default='',
@@ -2773,10 +2756,7 @@ class BusinessService(models.Model):
         ordering = ['order', '-created_at']
 
     def __str__(self):
-        # business_page is nullable (profile-owned services have no page),
-        # so never dereference it directly here — use the owner-agnostic
-        # helper instead, which falls back to the profile's username.
-        return f'{self.title} — {self.owner_name}'
+        return f'{self.title} — {self.business_page.name}'
 
     def clean(self):
         super().clean()
@@ -2785,7 +2765,6 @@ class BusinessService(models.Model):
         self.price_text  = sanitize_text(self.price_text)
         if not self.title:
             raise ValidationError({'title': 'Service title is required.'})
-        _validate_single_owner(self)
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -2807,17 +2786,82 @@ class BusinessService(models.Model):
 
     @property
     def owner(self):
-        """Either the owning BusinessPage or the owning Profile."""
-        return self.business_page or self.profile
+        return self.business_page
 
     @property
     def owner_user(self):
-        return self.business_page.owner if self.business_page_id else self.profile.user
+        return self.business_page.owner
 
     @property
     def owner_name(self):
-        if self.business_page_id:
-            return self.business_page.name
+        return self.business_page.name
+
+
+class ProfileService(models.Model):
+    """A service offered directly from a user's own Profile — e.g. 'Logo
+    design', 'AC repair', 'Home tutoring'. Shown in the optional Services
+    section. Profile-owned only, entirely independent of BusinessPage/
+    BusinessService."""
+    service_id  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile     = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='services')
+    title       = models.CharField(max_length=150)
+    description = models.TextField(blank=True, default='')
+    price_text  = models.CharField(max_length=150, blank=True, default='',
+                                    help_text='e.g. ₦15,000, Starting from ₦5,000/hr, or Negotiable')
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='profile_service_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='profile_service_images/', blank=True, null=True)
+
+    order      = models.PositiveSmallIntegerField(default=0)
+    is_active  = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ProfileService_Table'
+        ordering = ['order', '-created_at']
+
+    def __str__(self):
+        return f'{self.title} — {self.owner_name}'
+
+    def clean(self):
+        super().clean()
+        self.title       = sanitize_text(self.title)
+        self.description = sanitize_text(self.description, 'about')
+        self.price_text  = sanitize_text(self.price_text)
+        if not self.title:
+            raise ValidationError({'title': 'Service title is required.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
+    @property
+    def owner(self):
+        return self.profile
+
+    @property
+    def owner_user(self):
+        return self.profile.user
+
+    @property
+    def owner_name(self):
         return self.profile.full_name or self.profile.user.username
 
 
@@ -2833,8 +2877,7 @@ class BusinessPortfolioItem(models.Model):
     ]
 
     item_id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='portfolio_items', null=True, blank=True)
-    profile       = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='portfolio_items', null=True, blank=True)
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='portfolio_items')
     kind          = models.CharField(max_length=12, choices=KIND_CHOICES, default=KIND_PORTFOLIO, db_index=True)
     title         = models.CharField(max_length=150)
     description   = models.TextField(blank=True, default='')
@@ -2870,7 +2913,6 @@ class BusinessPortfolioItem(models.Model):
                 self.link_url = ''
         if not self.title:
             raise ValidationError({'title': 'Title is required.'})
-        _validate_single_owner(self)
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -2892,18 +2934,93 @@ class BusinessPortfolioItem(models.Model):
 
     @property
     def owner(self):
-        return self.business_page or self.profile
+        return self.business_page
 
     @property
     def owner_user(self):
-        return self.business_page.owner if self.business_page_id else self.profile.user
+        return self.business_page.owner
+
+
+class ProfilePortfolioItem(models.Model):
+    """A single Portfolio piece or Project shown directly on a user's own
+    Profile. Same shape as BusinessPortfolioItem but Profile-owned only,
+    entirely independent of BusinessPage."""
+    KIND_PORTFOLIO = 'portfolio'
+    KIND_PROJECT   = 'project'
+    KIND_CHOICES = [
+        (KIND_PORTFOLIO, 'Portfolio piece'),
+        (KIND_PROJECT,   'Project'),
+    ]
+
+    item_id     = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile     = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='portfolio_items')
+    kind        = models.CharField(max_length=12, choices=KIND_CHOICES, default=KIND_PORTFOLIO, db_index=True)
+    title       = models.CharField(max_length=150)
+    description = models.TextField(blank=True, default='')
+    link_url    = models.URLField(max_length=500, blank=True, default='')
+    is_ongoing  = models.BooleanField(default=False, help_text='Only meaningful for projects.')
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='profile_portfolio_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='profile_portfolio_images/', blank=True, null=True)
+
+    order      = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ProfilePortfolioItem_Table'
+        ordering = ['order', '-created_at']
+
+    def __str__(self):
+        return f'{self.title} ({self.get_kind_display()})'
+
+    def clean(self):
+        super().clean()
+        self.title       = sanitize_text(self.title)
+        self.description = sanitize_text(self.description, 'about')
+        if self.kind not in dict(self.KIND_CHOICES):
+            self.kind = self.KIND_PORTFOLIO
+        if self.link_url:
+            try:
+                self.link_url = validate_url(self.link_url)
+            except ValidationError:
+                self.link_url = ''
+        if not self.title:
+            raise ValidationError({'title': 'Title is required.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
+    @property
+    def owner(self):
+        return self.profile
+
+    @property
+    def owner_user(self):
+        return self.profile.user
 
 
 class BusinessAchievement(models.Model):
     """A certification, award, or milestone shown on a professional page."""
     achievement_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    business_page  = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='achievements', null=True, blank=True)
-    profile        = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='achievements', null=True, blank=True)
+    business_page  = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='achievements')
     title          = models.CharField(max_length=150)
     issuer         = models.CharField(max_length=150, blank=True, default='')
     description    = models.TextField(blank=True, default='')
@@ -2922,10 +3039,7 @@ class BusinessAchievement(models.Model):
         ordering = ['order', '-date_achieved', '-created_at']
 
     def __str__(self):
-        # business_page is nullable (profile-owned achievements have no
-        # page) — use the owner-agnostic helper, never business_page.name
-        # directly, or this raises AttributeError for profile-owned rows.
-        return f'{self.title} — {self.owner_name}'
+        return f'{self.title} — {self.business_page.name}'
 
     def clean(self):
         super().clean()
@@ -2934,7 +3048,6 @@ class BusinessAchievement(models.Model):
         self.description = sanitize_text(self.description, 'about')
         if not self.title:
             raise ValidationError({'title': 'Achievement title is required.'})
-        _validate_single_owner(self)
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -2956,16 +3069,78 @@ class BusinessAchievement(models.Model):
 
     @property
     def owner(self):
-        return self.business_page or self.profile
+        return self.business_page
 
     @property
     def owner_user(self):
-        return self.business_page.owner if self.business_page_id else self.profile.user
+        return self.business_page.owner
 
     @property
     def owner_name(self):
-        if self.business_page_id:
-            return self.business_page.name
+        return self.business_page.name
+
+
+class ProfileAchievement(models.Model):
+    """A certification, award, or milestone shown directly on a user's own
+    Profile. Profile-owned only, entirely independent of BusinessPage."""
+    achievement_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile        = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='achievements')
+    title          = models.CharField(max_length=150)
+    issuer         = models.CharField(max_length=150, blank=True, default='')
+    description    = models.TextField(blank=True, default='')
+    date_achieved  = models.DateField(blank=True, null=True)
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='profile_achievement_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='profile_achievement_images/', blank=True, null=True)
+
+    order      = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'ProfileAchievement_Table'
+        ordering = ['order', '-date_achieved', '-created_at']
+
+    def __str__(self):
+        return f'{self.title} — {self.owner_name}'
+
+    def clean(self):
+        super().clean()
+        self.title       = sanitize_text(self.title)
+        self.issuer      = sanitize_text(self.issuer)
+        self.description = sanitize_text(self.description, 'about')
+        if not self.title:
+            raise ValidationError({'title': 'Achievement title is required.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
+    @property
+    def owner(self):
+        return self.profile
+
+    @property
+    def owner_user(self):
+        return self.profile.user
+
+    @property
+    def owner_name(self):
         return self.profile.full_name or self.profile.user.username
 
 
@@ -2982,6 +3157,9 @@ class BusinessPost(models.Model):
       - text  : caption only, no media
       - poll  : caption used as an optional intro line; the actual question and
                 options live on the related BusinessPostPoll / BusinessPostPollOption
+
+    Business-page owned only — see ProfilePost for the equivalent posted
+    straight from a user's own Profile; the two are entirely independent.
     """
     TYPE_IMAGE = 'image'
     TYPE_VIDEO = 'video'
@@ -3014,8 +3192,7 @@ class BusinessPost(models.Model):
     ]
 
     post_id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='posts', null=True, blank=True)
-    profile       = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='professional_posts', null=True, blank=True)
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='posts')
     post_type     = models.CharField(max_length=10, choices=POST_TYPE_CHOICES, default=TYPE_TEXT, db_index=True)
     post_category = models.CharField(max_length=15, choices=POST_CATEGORY_CHOICES, default=CATEGORY_UPDATE, db_index=True)
     caption       = models.TextField(blank=True, default='')
@@ -3039,7 +3216,7 @@ class BusinessPost(models.Model):
         ordering = ['-is_pinned', '-created_at']
 
     def __str__(self):
-        return f'{self.get_post_type_display()} post by {self.owner_name}'
+        return f'{self.get_post_type_display()} post by {self.business_page.name}'
 
     def clean(self):
         super().clean()
@@ -3048,7 +3225,6 @@ class BusinessPost(models.Model):
         if self.post_category not in dict(self.POST_CATEGORY_CHOICES):
             self.post_category = self.CATEGORY_UPDATE
         self.caption = sanitize_text(self.caption, 'post_caption')
-        _validate_single_owner(self)
 
         if self.post_type == self.TYPE_TEXT and not self.caption:
             raise ValidationError({'caption': 'Text updates need some text.'})
@@ -3143,31 +3319,23 @@ class BusinessPost(models.Model):
 
     @property
     def owner(self):
-        """Either the owning BusinessPage or the owning Profile."""
-        return self.business_page or self.profile
+        return self.business_page
 
     @property
     def owner_user(self):
-        return self.business_page.owner if self.business_page_id else self.profile.user
+        return self.business_page.owner
 
     @property
     def owner_name(self):
-        if self.business_page_id:
-            return self.business_page.name
-        return self.profile.full_name or self.profile.user.username
+        return self.business_page.name
 
     @property
     def owner_picture_url(self):
-        if self.business_page_id:
-            return self.business_page.get_logo_url
-        return self.profile.get_picture_url
+        return self.business_page.get_logo_url
 
     @property
     def owner_url_kwargs(self):
-        """Handy for templates that need to link back to whichever owner posted this."""
-        if self.business_page_id:
-            return {'type': 'page', 'slug': self.business_page.slug}
-        return {'type': 'profile', 'username': self.profile.user.username}
+        return {'type': 'page', 'slug': self.business_page.slug}
 
 
 class BusinessPostImage(models.Model):
@@ -3357,6 +3525,387 @@ class BusinessPostComment(models.Model):
     class Meta:
         ordering = ['-created_at']
         db_table = 'BusinessPostComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on post {self.post_id}: {self.text[:50]}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ProfilePost — image / video / text / poll updates posted directly from a
+# user's own Profile. Mirrors BusinessPost field-for-field, but Profile-owned
+# only and entirely independent of BusinessPage/BusinessPost — separate
+# table, separate sub-models (images, poll, vibes, comments) below.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProfilePost(models.Model):
+    """
+    A single update posted directly to a user's own Profile feed. One of
+    four kinds:
+      - image : one or more photos (see ProfilePostImage), + optional caption
+      - video : a single short video (15–90s guideline, enforced client-side),
+                + optional caption
+      - text  : caption only, no media
+      - poll  : caption used as an optional intro line; the actual question and
+                options live on the related ProfilePostPoll / ProfilePostPollOption
+    """
+    TYPE_IMAGE = 'image'
+    TYPE_VIDEO = 'video'
+    TYPE_TEXT  = 'text'
+    TYPE_POLL  = 'poll'
+    POST_TYPE_CHOICES = [
+        (TYPE_IMAGE, 'Image'),
+        (TYPE_VIDEO, 'Video'),
+        (TYPE_TEXT,  'Text update'),
+        (TYPE_POLL,  'Poll'),
+    ]
+
+    MIN_VIDEO_SECONDS = 15
+    MAX_VIDEO_SECONDS = 90
+
+    CATEGORY_UPDATE       = 'update'
+    CATEGORY_WORK         = 'work'
+    CATEGORY_PROJECT      = 'project'
+    CATEGORY_TUTORIAL     = 'tutorial'
+    CATEGORY_ANNOUNCEMENT = 'announcement'
+    POST_CATEGORY_CHOICES = [
+        (CATEGORY_UPDATE,       'General Update'),
+        (CATEGORY_WORK,         'Work Update'),
+        (CATEGORY_PROJECT,      'Project'),
+        (CATEGORY_TUTORIAL,     'Tutorial'),
+        (CATEGORY_ANNOUNCEMENT, 'Announcement'),
+    ]
+
+    post_id       = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile       = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='professional_posts')
+    post_type     = models.CharField(max_length=10, choices=POST_TYPE_CHOICES, default=TYPE_TEXT, db_index=True)
+    post_category = models.CharField(max_length=15, choices=POST_CATEGORY_CHOICES, default=CATEGORY_UPDATE, db_index=True)
+    caption       = models.TextField(blank=True, default='')
+
+    if settings.USE_CLOUDINARY:
+        video = CloudinaryField('video', folder='profile_post_videos', resource_type='video', blank=True, null=True)
+    else:
+        video = models.FileField(upload_to='profile_post_videos/', blank=True, null=True)
+
+    video_duration_seconds = models.PositiveIntegerField(blank=True, null=True)
+
+    is_pinned  = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ProfilePost_Table'
+        ordering = ['-is_pinned', '-created_at']
+
+    def __str__(self):
+        return f'{self.get_post_type_display()} post by {self.owner_name}'
+
+    def clean(self):
+        super().clean()
+        if self.post_type not in dict(self.POST_TYPE_CHOICES):
+            raise ValidationError({'post_type': 'Invalid post type.'})
+        if self.post_category not in dict(self.POST_CATEGORY_CHOICES):
+            self.post_category = self.CATEGORY_UPDATE
+        self.caption = sanitize_text(self.caption, 'post_caption')
+
+        if self.post_type == self.TYPE_TEXT and not self.caption:
+            raise ValidationError({'caption': 'Text updates need some text.'})
+
+        if self.post_type == self.TYPE_VIDEO:
+            if self.video:
+                validate_file_extension(self.video)
+                validate_file_size(self.video, max_size_mb=100)
+            elif not self.pk:
+                raise ValidationError({'video': 'Please attach a video.'})
+
+        if self.video_duration_seconds is not None and self.video_duration_seconds < 0:
+            self.video_duration_seconds = None
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_video_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.video:
+                    pid = str(getattr(self.video, 'public_id', None) or self.video).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryVideo(pid).build_url(secure=True)
+                return ''
+            else:
+                return self.video.url if self.video else ''
+        except Exception:
+            return ''
+
+    @property
+    def video_duration_display(self):
+        secs = self.video_duration_seconds
+        if not secs:
+            return ''
+        m, s = divmod(int(secs), 60)
+        return f'{m}:{s:02d}' if m else f'0:{s:02d}'
+
+    @property
+    def vibe_count(self):
+        return self.vibes.count()
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+    @property
+    def category_label(self):
+        return dict(self.POST_CATEGORY_CHOICES).get(self.post_category, 'General Update')
+
+    @property
+    def top_vibe_emoji(self):
+        row = (
+            self.vibes.values('vibe_type')
+            .annotate(cnt=models.Count('id'))
+            .order_by('-cnt')
+            .first()
+        )
+        if not row:
+            return ''
+        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '')
+
+    @property
+    def time_posted(self):
+        now = timezone.localtime()
+        posted = timezone.localtime(self.created_at)
+        seconds = (now - posted).total_seconds()
+        if seconds < 60:
+            return 'Just now'
+        if seconds < 3600:
+            mins = int(seconds // 60)
+            return f"{mins} minute{'s' if mins != 1 else ''} ago"
+        days_diff = (now.date() - posted.date()).days
+        if days_diff == 0:
+            hours = int(seconds // 3600)
+            return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        if days_diff == 1:
+            return 'Yesterday'
+        if days_diff < 7:
+            return f'{days_diff} days ago'
+        if days_diff < 30:
+            weeks = days_diff // 7
+            return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+        if days_diff < 365:
+            months = days_diff // 30
+            return f"{months} month{'s' if months != 1 else ''} ago"
+        years = days_diff // 365
+        return f"{years} year{'s' if years != 1 else ''} ago"
+
+    @property
+    def owner(self):
+        return self.profile
+
+    @property
+    def owner_user(self):
+        return self.profile.user
+
+    @property
+    def owner_name(self):
+        return self.profile.full_name or self.profile.user.username
+
+    @property
+    def owner_picture_url(self):
+        return self.profile.get_picture_url
+
+    @property
+    def owner_url_kwargs(self):
+        return {'type': 'profile', 'username': self.profile.user.username}
+
+
+class ProfilePostImage(models.Model):
+    """One photo within an 'image' type ProfilePost — supports multi-image posts."""
+    image_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post     = models.ForeignKey(ProfilePost, on_delete=models.CASCADE, related_name='images')
+    order    = models.PositiveSmallIntegerField(default=0)
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='profile_post_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='profile_post_images/', blank=True, null=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def clean(self):
+        super().clean()
+        if self.image:
+            validate_file_extension(self.image)
+            validate_file_size(self.image, max_size_mb=10)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            else:
+                return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
+
+class ProfilePostPoll(models.Model):
+    """The poll attached to a 'poll' type ProfilePost — one per post."""
+    poll_id        = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post           = models.OneToOneField(ProfilePost, on_delete=models.CASCADE, related_name='poll')
+    question       = models.CharField(max_length=300)
+    allow_multiple = models.BooleanField(default=False, help_text='Let voters pick more than one option.')
+    closes_at      = models.DateTimeField(blank=True, null=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.question
+
+    def clean(self):
+        super().clean()
+        self.question = sanitize_text(self.question, 'poll_question')
+        if not self.question:
+            raise ValidationError({'question': 'A poll needs a question.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_closed(self):
+        return bool(self.closes_at and timezone.now() >= self.closes_at)
+
+    @property
+    def total_votes(self):
+        return ProfilePostPollVote.objects.filter(option__poll=self).values('user_id').distinct().count()
+
+    def voted_option_ids(self, user):
+        if not user or not user.is_authenticated:
+            return set()
+        return set(
+            ProfilePostPollVote.objects.filter(option__poll=self, user=user)
+            .values_list('option_id', flat=True)
+        )
+
+
+class ProfilePostPollOption(models.Model):
+    option_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    poll      = models.ForeignKey(ProfilePostPoll, on_delete=models.CASCADE, related_name='options')
+    text      = models.CharField(max_length=120)
+    order     = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.text
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'poll_option')
+        if not self.text:
+            raise ValidationError({'text': 'Option text is required.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def vote_count(self):
+        return self.votes.count()
+
+    def vote_pct(self, total_votes=None):
+        total = total_votes if total_votes is not None else self.poll.total_votes
+        if not total:
+            return 0
+        return round((self.vote_count / total) * 100)
+
+
+class ProfilePostPollVote(models.Model):
+    vote_id  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    option   = models.ForeignKey(ProfilePostPollOption, on_delete=models.CASCADE, related_name='votes')
+    user     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_poll_votes')
+    voted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['option', 'user'], name='unique_vote_per_option_per_user_profile'),
+        ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ProfilePostVibe / ProfilePostComment — reactions & comments on Profile
+# posts, mirroring BusinessPostVibe/BusinessPostComment so the existing
+# generic _card_vibe_* / _card_comments_* view helpers can be reused.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProfilePostVibe(models.Model):
+    """Vibe reactions on ProfilePost updates. One per user per post."""
+
+    FIRE   = 'fire'
+    REAL   = 'real'
+    VIBING = 'vibing'
+    DEAD   = 'dead'
+    CRINGE = 'cringe'
+    CHILL  = 'chill'
+    LOVE   = 'love'
+
+    VIBE_CHOICES = [
+        (FIRE,   '🔥 Fire'),
+        (REAL,   '💯 Real'),
+        (VIBING, '🎵 Vibing'),
+        (DEAD,   '😂 Dead'),
+        (CRINGE, '😬 Cringe'),
+        (CHILL,  '🧊 Chill'),
+        (LOVE,   '❤️ Love'),
+    ]
+
+    VIBE_EMOJIS = {FIRE:'🔥', REAL:'💯', VIBING:'🎵', DEAD:'😂', CRINGE:'😬', CHILL:'🧊', LOVE:'❤️'}
+    VIBE_COLORS = {FIRE:'#ff4500', REAL:'#ff0080', VIBING:'#3b82f6', DEAD:'#f59e0b', CRINGE:'#8b5cf6', CHILL:'#06b6d4', LOVE:'#e11d48'}
+
+    post       = models.ForeignKey(ProfilePost, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User,        on_delete=models.CASCADE, related_name='profile_post_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('post', 'user')
+        ordering = ['created_at']
+        db_table = 'ProfilePostVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on post {self.post_id}"
+
+
+class ProfilePostComment(models.Model):
+    """Comments on ProfilePost updates."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post       = models.ForeignKey(ProfilePost, on_delete=models.CASCADE, related_name='comments')
+    author     = models.ForeignKey(User,        on_delete=models.CASCADE, related_name='profile_post_comments')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'ProfilePostComment_Table'
 
     def __str__(self):
         return f"{self.author.username} on post {self.post_id}: {self.text[:50]}"

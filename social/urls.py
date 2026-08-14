@@ -173,6 +173,10 @@ urlpatterns = [
     path('profile/achievements/create/',                  views.profile_achievement_create,  name='profile_achievement_create'),
     path('profile/achievements/<uuid:achievement_id>/delete/', views.profile_achievement_delete, name='profile_achievement_delete'),
     path('profile/posts/create/',                         views.profile_post_create,         name='profile_post_create'),
+    path('profile/posts/<uuid:post_id>/delete/',          views.profile_post_delete,         name='profile_post_delete'),
+    path('profile/posts/<uuid:post_id>/vote/',            views.profile_post_poll_vote,      name='profile_post_poll_vote'),
+    path('profile/posts/<uuid:post_id>/vibe/',            views.profile_post_vibe,           name='profile_post_vibe'),
+    path('profile/posts/<uuid:post_id>/comments/',        views.profile_post_comments,       name='profile_post_comments'),
     path('profile/products/upload/',                      views.profile_product_upload,      name='profile_product_upload'),
 
     # ── Profiles (catch-alls — must stay at the bottom) ───────────────────────

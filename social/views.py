@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessAchievement
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessAchievement, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement
 from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES
 
@@ -804,12 +804,6 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         _post_qs.filter(
             Q(business_page__in=followed_business_ids) | Q(created_at__gte=_recent_cutoff)
         )
-        # BusinessPost.business_page is nullable (a post can instead be tied
-        # to a personal `profile`, i.e. a professional post with no page).
-        # This ranking block assumes a business_page on every candidate
-        # (blob_fn/location_fn/is_following all dereference it), so exclude
-        # profile-only posts here rather than crashing downstream.
-        .filter(business_page__isnull=False)
         .order_by('-created_at')[:60]
     )
     _post_pool = [] if _is_market_filtered else _ranked(
@@ -846,6 +840,53 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             _post.viewer_vibe = _mine.vibe_type
             _post.viewer_vibe_emoji = BusinessPostVibe.VIBE_EMOJIS.get(_mine.vibe_type, '')
 
+    # ── Profile posts (personal updates) — from followed users, plus a few
+    #    relevant posts from users not yet followed, mirroring the business
+    #    post pool above so ProfilePost updates surface in the feed too,
+    #    rendered with the exact same .kbiz-post-card layout. ────────────────
+    _pp_qs = (
+        ProfilePost.objects
+        .select_related('profile', 'profile__user')
+        .prefetch_related('images', 'poll__options__votes', 'vibes', 'comments')
+        .exclude(profile__user=user)
+    )
+    if _seen_post_ids:
+        _pp_qs = _pp_qs.exclude(post_id__in=_seen_post_ids)
+    _pp_candidates = list(
+        _pp_qs.filter(
+            Q(profile__user_id__in=following_ids_set) | Q(created_at__gte=_recent_cutoff)
+        )
+        .order_by('-created_at')[:60]
+    )
+    _pp_pool = [] if _is_market_filtered else _ranked(
+        _pp_candidates, keywords, location_tokens,
+        blob_fn=lambda p: ' '.join(filter(None, [
+            p.caption, p.category_label, p.profile.full_name,
+            p.profile.profession, p.profile.member_type_label,
+        ])),
+        location_fn=lambda p: p.profile.location,
+        created_fn=lambda p: p.created_at,
+        social_fn=lambda p: 4.0 if p.profile.user_id in following_ids_set else 0.0,
+        limit=6,
+    )
+    # Same per-post annotation as the business post pool above, so the
+    # ported kbiz-post-card partial can render profile posts identically.
+    for _pp in _pp_pool:
+        _pp.profile.is_following = _pp.profile.user_id in following_ids_set
+        if _pp.post_type == ProfilePost.TYPE_POLL and hasattr(_pp, 'poll'):
+            _poll = _pp.poll
+            _total = sum(o.vote_count for o in _poll.options.all())
+            _poll.viewer_total_votes = _total
+            _poll.viewer_voted_ids = _poll.voted_option_ids(user)
+            for _opt in _poll.options.all():
+                _opt.viewer_pct = _opt.vote_pct(_total)
+        _pp.viewer_vibe = None
+        _pp.viewer_vibe_emoji = ''
+        _mine = next((v for v in _pp.vibes.all() if v.user_id == user.pk), None)
+        if _mine:
+            _pp.viewer_vibe = _mine.vibe_type
+            _pp.viewer_vibe_emoji = ProfilePostVibe.VIBE_EMOJIS.get(_mine.vibe_type, '')
+
     # ── Business achievements — ranked the same way, so award/certification
     #    highlights surface in the feed for viewers with matching skills. ────
     _seen_ach_ids = set(str(i) for i in (_kwargs.get('seen_achievement_ids') or []) if i)
@@ -854,12 +895,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         _ach_qs = BusinessAchievement.objects.select_related('business_page')
         if _seen_ach_ids:
             _ach_qs = _ach_qs.exclude(achievement_id__in=_seen_ach_ids)
-        # BusinessAchievement.business_page is nullable (an achievement can
-        # instead belong to a personal `profile`, with no page). blob_fn/
-        # location_fn below assume a business_page on every candidate, so
-        # exclude profile-only achievements here rather than crashing —
-        # mirrors the same guard already used for _post_candidates above.
-        _ach_candidates = list(_ach_qs.filter(business_page__isnull=False).order_by('-created_at')[:40])
+        _ach_candidates = list(_ach_qs.order_by('-created_at')[:40])
         _ach_pool = _ranked(
             _ach_candidates, keywords, location_tokens,
             blob_fn=lambda a: ' '.join(filter(None, [
@@ -1025,7 +1061,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         # Category filter is active — fill the page with market cards only,
         # ignoring everything else so the grid is pure product results.
         _MAX_MARKET_PER_PAGE = page_size
-        _job_pool, _event_pool, _post_pool, people_pool, _ach_pool = [], [], [], [], []
+        _job_pool, _event_pool, _post_pool, _pp_pool, people_pool, _ach_pool = [], [], [], [], [], []
 
     feed_items = []
     for i in range(1, page_size + 1):
@@ -1038,9 +1074,13 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             feed_items.append({'type': 'business_suggestion', 'data': _biz_group})
             _business_injected += 1
 
-        # Business post (update) — highest-relevance ranked items lead
-        if i % 6 in (1, 4) and _post_pool:
+        # Business post (update) and Profile post (personal update) —
+        # alternating slots so both surface in the feed, highest-relevance
+        # ranked items lead within each pool.
+        if i % 6 == 1 and _post_pool:
             feed_items.append({'type': 'business_post', 'data': _post_pool.pop(0)})
+        if i % 6 == 4 and _pp_pool:
+            feed_items.append({'type': 'profile_post', 'data': _pp_pool.pop(0)})
 
         # Achievement highlight at slot 11 (every 10 slots, offset from suggestions)
         if (i % 10 == 1
@@ -1675,7 +1715,9 @@ def profile(request, username):
         (bool(profile.bio), 'Write an About summary'),
         (bool(profile.profession), 'Add a headline'),
         (bool(profile.location), 'Add your location'),
+        (bool(profile.website), 'Add a website'),
         (bool(profile.phone), 'Add a phone number'),
+        (business_page_count > 0, 'Create a business page'),
     ]
     completion_done = sum(1 for done, _ in completion_checks if done)
     profile_completion_pct = round(completion_done * 100 / len(completion_checks))
@@ -1699,14 +1741,25 @@ def profile(request, username):
     # profile.show_services / show_portfolio / etc., which read
     # profile.enabled_sections (defaults suggested from profile.member_type).
     professional_services     = list(profile.services.filter(is_active=True)) if profile.show_services else []
-    professional_portfolio    = list(profile.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PORTFOLIO)) if profile.show_portfolio else []
-    professional_projects     = list(profile.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PROJECT)) if profile.show_projects else []
+    professional_portfolio    = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PORTFOLIO)) if profile.show_portfolio else []
+    professional_projects     = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PROJECT)) if profile.show_projects else []
     professional_achievements = list(profile.achievements.all()) if profile.show_achievements else []
     professional_posts_qs = (
-        profile.professional_posts.prefetch_related('images', 'poll__options')
-        if profile.is_professional else BusinessPost.objects.none()
+        profile.professional_posts.prefetch_related('images', 'poll__options', 'vibes')
+        if profile.is_professional else ProfilePost.objects.none()
     )
     professional_posts = list(professional_posts_qs[:20])
+    # Annotate each post with the viewer's own reaction — same shape the
+    # business page's Posts tab uses — so the ported kbiz-vibe-popover
+    # markup can render identically without extra per-post queries.
+    for _pp in professional_posts:
+        _pp.viewer_vibe = None
+        _pp.viewer_vibe_emoji = ''
+        if request.user.is_authenticated:
+            _mine = next((v for v in _pp.vibes.all() if v.user_id == request.user.pk), None)
+            if _mine:
+                _pp.viewer_vibe = _mine.vibe_type
+                _pp.viewer_vibe_emoji = ProfilePostVibe.VIBE_EMOJIS.get(_mine.vibe_type, '')
     professional_products = (
         list(Market.objects.filter(product_owner=user, business_page__isnull=True).prefetch_related('images')[:20])
         if profile.show_products else []
@@ -1765,6 +1818,10 @@ def profile(request, username):
         'professional_jobs':         professional_jobs,
         'suggested_professional_sections': suggested_professional_sections,
         'professional_section_choices': Profile.PROFESSIONAL_SECTION_CHOICES,
+        'vibe_choices': [
+            {'type': t, 'emoji': ProfilePostVibe.VIBE_EMOJIS[t], 'label': label.split(' ', 1)[-1]}
+            for t, label in ProfilePostVibe.VIBE_CHOICES
+        ],
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -5529,12 +5586,9 @@ def business_post_comments(request, post_id):
         response = _card_comments_post(request, post, BusinessPostComment, 'post')
         if response.status_code == 200:
             # Notify the page owner someone commented, unless they commented
-            # on their own post. BusinessNotification requires a business_page
-            # (non-nullable FK), so this only applies to page-owned posts —
-            # profile-owned posts (post.business_page_id is None) have no
-            # page to notify and are skipped rather than dereferencing None.
+            # on their own post.
             try:
-                if post.business_page_id and post.business_page.owner != request.user:
+                if post.business_page.owner != request.user:
                     BusinessNotification.objects.create(
                         notif_type=BusinessNotification.NEW_COMMENT,
                         business_page=post.business_page,
@@ -6246,7 +6300,9 @@ def business_page_follow(request, slug):
 # Business page updates/feed — image, video, text, poll posts
 # =============================================================================
 
-def _serialize_business_post(post, viewer=None):
+def _serialize_professional_post(post, viewer=None):
+    """Serializes either a BusinessPost or a ProfilePost — the two share the
+    same post_type/post_category values, so this stays owner-agnostic."""
     data = {
         'post_id':    str(post.post_id),
         'post_type':  post.post_type,
@@ -6262,11 +6318,11 @@ def _serialize_business_post(post, viewer=None):
         'vibe_count':    post.vibe_count,
         'comment_count': post.comment_count,
     }
-    if post.post_type == BusinessPost.TYPE_IMAGE:
+    if post.post_type == 'image':
         data['images'] = [img.get_image_url for img in post.images.all()]
-    elif post.post_type == BusinessPost.TYPE_VIDEO:
+    elif post.post_type == 'video':
         data['video_url'] = post.get_video_url
-    elif post.post_type == BusinessPost.TYPE_POLL and hasattr(post, 'poll'):
+    elif post.post_type == 'poll' and hasattr(post, 'poll'):
         poll = post.poll
         total = sum(o.vote_count for o in poll.options.all())
         voted_ids = {str(i) for i in poll.voted_option_ids(viewer)} if viewer else set()
@@ -6393,7 +6449,7 @@ def business_post_create(request, slug):
     )
     return JsonResponse({
         'success': True,
-        'post': _serialize_business_post(post, viewer=request.user),
+        'post': _serialize_professional_post(post, viewer=request.user),
         'post_count': page.post_count,
     })
 
@@ -6979,7 +7035,7 @@ def profile_service_create(request):
             return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
 
     try:
-        service = BusinessService.objects.create(
+        service = ProfileService.objects.create(
             profile=profile, title=title, description=description,
             price_text=price_text, image=image if image else None,
         )
@@ -7003,7 +7059,7 @@ def profile_service_create(request):
 @login_required(login_url='/')
 @require_POST
 def profile_service_delete(request, service_id):
-    service = get_object_or_404(BusinessService, service_id=service_id, profile__user=request.user)
+    service = get_object_or_404(ProfileService, service_id=service_id, profile__user=request.user)
     service.delete()
     return JsonResponse({'success': True})
 
@@ -7014,10 +7070,10 @@ def profile_portfolio_create(request):
     """Owner adds a Portfolio piece or a Project directly to their own profile."""
     profile = request.user.profile
 
-    kind        = request.POST.get('kind', BusinessPortfolioItem.KIND_PORTFOLIO).strip()
-    if kind not in dict(BusinessPortfolioItem.KIND_CHOICES):
-        kind = BusinessPortfolioItem.KIND_PORTFOLIO
-    section_needed = 'portfolio' if kind == BusinessPortfolioItem.KIND_PORTFOLIO else 'projects'
+    kind        = request.POST.get('kind', ProfilePortfolioItem.KIND_PORTFOLIO).strip()
+    if kind not in dict(ProfilePortfolioItem.KIND_CHOICES):
+        kind = ProfilePortfolioItem.KIND_PORTFOLIO
+    section_needed = 'portfolio' if kind == ProfilePortfolioItem.KIND_PORTFOLIO else 'projects'
     if section_needed not in (profile.enabled_sections or []):
         return JsonResponse({'success': False, 'error': 'Turn on that section first (Manage sections).'}, status=403)
 
@@ -7039,9 +7095,9 @@ def profile_portfolio_create(request):
             return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
 
     try:
-        item = BusinessPortfolioItem.objects.create(
+        item = ProfilePortfolioItem.objects.create(
             profile=profile, kind=kind, title=title, description=description,
-            link_url=link_url, is_ongoing=is_ongoing if kind == BusinessPortfolioItem.KIND_PROJECT else False,
+            link_url=link_url, is_ongoing=is_ongoing if kind == ProfilePortfolioItem.KIND_PROJECT else False,
             image=image if image else None,
         )
     except _ModelValidationError as e:
@@ -7067,7 +7123,7 @@ def profile_portfolio_create(request):
 @login_required(login_url='/')
 @require_POST
 def profile_portfolio_delete(request, item_id):
-    item = get_object_or_404(BusinessPortfolioItem, item_id=item_id, profile__user=request.user)
+    item = get_object_or_404(ProfilePortfolioItem, item_id=item_id, profile__user=request.user)
     item.delete()
     return JsonResponse({'success': True})
 
@@ -7106,7 +7162,7 @@ def profile_achievement_create(request):
             return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
 
     try:
-        achievement = BusinessAchievement.objects.create(
+        achievement = ProfileAchievement.objects.create(
             profile=profile, title=title, issuer=issuer, description=description,
             date_achieved=date_achieved, image=image if image else None,
         )
@@ -7131,7 +7187,7 @@ def profile_achievement_create(request):
 @login_required(login_url='/')
 @require_POST
 def profile_achievement_delete(request, achievement_id):
-    achievement = get_object_or_404(BusinessAchievement, achievement_id=achievement_id, profile__user=request.user)
+    achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id, profile__user=request.user)
     achievement.delete()
     return JsonResponse({'success': True})
 
@@ -7146,20 +7202,20 @@ def profile_post_create(request):
 
     post_type = request.POST.get('post_type', '').strip()
     caption   = request.POST.get('caption', '').strip()
-    post_category = request.POST.get('post_category', BusinessPost.CATEGORY_UPDATE).strip()
-    if post_category not in dict(BusinessPost.POST_CATEGORY_CHOICES):
-        post_category = BusinessPost.CATEGORY_UPDATE
+    post_category = request.POST.get('post_category', ProfilePost.CATEGORY_UPDATE).strip()
+    if post_category not in dict(ProfilePost.POST_CATEGORY_CHOICES):
+        post_category = ProfilePost.CATEGORY_UPDATE
 
-    if post_type not in dict(BusinessPost.POST_TYPE_CHOICES):
+    if post_type not in dict(ProfilePost.POST_TYPE_CHOICES):
         return JsonResponse({'success': False, 'error': 'Please choose a valid post type.'}, status=400)
 
-    if post_type == BusinessPost.TYPE_TEXT and not caption:
+    if post_type == ProfilePost.TYPE_TEXT and not caption:
         return JsonResponse({'success': False, 'error': 'Please write something to post.'}, status=400)
 
     images, video, duration = [], None, None
     option_texts, question, allow_multiple, closes_at = [], '', False, None
 
-    if post_type == BusinessPost.TYPE_IMAGE:
+    if post_type == ProfilePost.TYPE_IMAGE:
         images = request.FILES.getlist('images')
         if not images:
             return JsonResponse({'success': False, 'error': 'Please attach at least one image.'}, status=400)
@@ -7172,7 +7228,7 @@ def profile_post_create(request):
             if img.size > 10 * 1024 * 1024:
                 return JsonResponse({'success': False, 'error': 'Each image must be under 10 MB.'}, status=400)
 
-    elif post_type == BusinessPost.TYPE_VIDEO:
+    elif post_type == ProfilePost.TYPE_VIDEO:
         video = request.FILES.get('video')
         if not video:
             return JsonResponse({'success': False, 'error': 'Please attach a video.'}, status=400)
@@ -7187,13 +7243,13 @@ def profile_post_create(request):
                 duration = int(float(raw_duration))
             except ValueError:
                 duration = None
-        if duration is not None and not (BusinessPost.MIN_VIDEO_SECONDS <= duration <= BusinessPost.MAX_VIDEO_SECONDS):
+        if duration is not None and not (ProfilePost.MIN_VIDEO_SECONDS <= duration <= ProfilePost.MAX_VIDEO_SECONDS):
             return JsonResponse({
                 'success': False,
-                'error': f'Videos should be {BusinessPost.MIN_VIDEO_SECONDS}\u201390 seconds long.'
+                'error': f'Videos should be {ProfilePost.MIN_VIDEO_SECONDS}\u201390 seconds long.'
             }, status=400)
 
-    elif post_type == BusinessPost.TYPE_POLL:
+    elif post_type == ProfilePost.TYPE_POLL:
         question = request.POST.get('poll_question', '').strip()
         option_texts = [o.strip() for o in request.POST.getlist('poll_options') if o.strip()]
         if not question:
@@ -7210,39 +7266,123 @@ def profile_post_create(request):
                 closes_at = parsed if timezone.is_aware(parsed) else timezone.make_aware(parsed)
 
     try:
-        post = BusinessPost(profile=profile, post_type=post_type, post_category=post_category, caption=caption)
+        post = ProfilePost(profile=profile, post_type=post_type, post_category=post_category, caption=caption)
 
-        if post_type == BusinessPost.TYPE_VIDEO:
+        if post_type == ProfilePost.TYPE_VIDEO:
             post.video = video
             if duration is not None:
                 post.video_duration_seconds = duration
 
         post.save()
 
-        if post_type == BusinessPost.TYPE_IMAGE:
+        if post_type == ProfilePost.TYPE_IMAGE:
             for idx, img in enumerate(images):
-                BusinessPostImage.objects.create(post=post, image=img, order=idx)
+                ProfilePostImage.objects.create(post=post, image=img, order=idx)
 
-        elif post_type == BusinessPost.TYPE_POLL:
-            poll = BusinessPostPoll.objects.create(
+        elif post_type == ProfilePost.TYPE_POLL:
+            poll = ProfilePostPoll.objects.create(
                 post=post, question=question, allow_multiple=allow_multiple, closes_at=closes_at,
             )
             for idx, text in enumerate(option_texts):
-                BusinessPostPollOption.objects.create(poll=poll, text=text, order=idx)
+                ProfilePostPollOption.objects.create(poll=poll, text=text, order=idx)
 
     except _ModelValidationError as e:
         return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
 
     post = (
-        BusinessPost.objects.filter(pk=post.pk)
+        ProfilePost.objects.filter(pk=post.pk)
         .prefetch_related('images', 'poll__options')
         .first()
     )
     return JsonResponse({
         'success': True,
-        'post': _serialize_business_post(post, viewer=request.user),
+        'post': _serialize_professional_post(post, viewer=request.user),
         'post_count': profile.post_count,
     })
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_post_delete(request, post_id):
+    """AJAX — delete a ProfilePost (profile owner only)."""
+    post = get_object_or_404(ProfilePost, pk=post_id, profile__user=request.user)
+
+    if not settings.USE_CLOUDINARY:
+        for img in post.images.all():
+            if img.image:
+                img.image.delete(save=False)
+        if post.video:
+            post.video.delete(save=False)
+    else:
+        try:
+            import cloudinary.uploader as _cu
+            for img in post.images.all():
+                if img.image:
+                    _cu.destroy(str(img.image))
+            if post.video:
+                _cu.destroy(str(post.video), resource_type='video')
+        except Exception:
+            pass
+
+    post.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_post_poll_vote(request, post_id):
+    """AJAX — cast (or change) a vote on a ProfilePost poll."""
+    post = get_object_or_404(ProfilePost.objects.select_related('poll'), pk=post_id)
+    if post.post_type != ProfilePost.TYPE_POLL or not hasattr(post, 'poll'):
+        return JsonResponse({'success': False, 'error': 'This post is not a poll.'}, status=400)
+
+    poll = post.poll
+    if poll.is_closed:
+        return JsonResponse({'success': False, 'error': 'This poll is closed.'}, status=400)
+
+    option_ids = request.POST.getlist('option_ids')
+    if not option_ids:
+        return JsonResponse({'success': False, 'error': 'Please select an option.'}, status=400)
+    if not poll.allow_multiple and len(option_ids) > 1:
+        return JsonResponse({'success': False, 'error': 'This poll only allows one choice.'}, status=400)
+
+    options = list(poll.options.filter(option_id__in=option_ids))
+    if len(options) != len(set(option_ids)):
+        return JsonResponse({'success': False, 'error': 'Invalid option selected.'}, status=400)
+
+    # Voting again replaces the viewer's previous choice(s) on this poll.
+    ProfilePostPollVote.objects.filter(option__poll=poll, user=request.user).delete()
+    for opt in options:
+        ProfilePostPollVote.objects.create(option=opt, user=request.user)
+
+    fresh_options = poll.options.all()
+    total = sum(o.vote_count for o in fresh_options)
+    return JsonResponse({
+        'success': True,
+        'poll': {
+            'total_votes': total,
+            'options': [
+                {'option_id': str(o.option_id), 'vote_count': o.vote_count, 'pct': o.vote_pct(total)}
+                for o in fresh_options
+            ],
+        },
+    })
+
+
+@login_required(login_url='/')
+def profile_post_vibe(request, post_id):
+    post = get_object_or_404(ProfilePost, pk=post_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, post, ProfilePostVibe, 'post')
+    return _card_vibe_toggle(request, post, ProfilePostVibe, 'post')
+
+
+@login_required(login_url='/')
+def profile_post_comments(request, post_id):
+    post = get_object_or_404(ProfilePost, pk=post_id)
+    if request.method == 'POST':
+        return _card_comments_post(request, post, ProfilePostComment, 'post')
+    return _card_comments_get(request, post, ProfilePostComment, 'post')
 
 
 @login_required(login_url='/')

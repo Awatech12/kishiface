@@ -3073,6 +3073,17 @@
             background: #eaf6ff; padding: 3px 9px; border-radius: 20px; margin: 0 14px 8px;
         }
 
+        /* Feed source tag — tells a unified home-feed card apart as coming
+           from a Business Page or a personal Profile update. */
+        .kbiz-post-source-tag {
+            display: inline-flex; align-items: center; gap: 3px;
+            font-size: 9.5px; font-weight: 700; letter-spacing: .2px;
+            padding: 1.5px 7px; border-radius: 20px; margin-left: 6px;
+            vertical-align: middle; white-space: nowrap;
+        }
+        .kbiz-post-source-tag.biz { color: #f97316; background: #fff1e6; }
+        .kbiz-post-source-tag.profile { color: var(--mfy-primary); background: #eaf6ff; }
+
         /* Poll */
         .kbiz-poll { padding: 4px 14px 14px; }
         .kbiz-poll-question { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: var(--mfy-text); }
@@ -3542,6 +3553,214 @@ async function submitBusinessComment(postId) {
     input.disabled = true;
     try {
         const res = await fetch(`/posts/${postId}/comments/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error); return; }
+
+        const list = document.getElementById(`commentList-${postId}`);
+        const empty = list.querySelector('.kbiz-comment-empty');
+        if (empty) empty.remove();
+        list.insertAdjacentHTML('beforeend', renderComment(data));
+        list.scrollTop = list.scrollHeight;
+        input.value = '';
+
+        const totalSlot = document.querySelector(`#kbiz-post-${postId} [data-comment-total]`);
+        if (totalSlot) totalSlot.textContent = `${data.count} comment${data.count === 1 ? '' : 's'}`;
+        const headerLabel = document.querySelector(`#commentsOverlay-${postId} [data-comment-total-label]`);
+        if (headerLabel) headerLabel.textContent = `${data.count} Comment${data.count === 1 ? '' : 's'}`;
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        input.disabled = false;
+        input.focus();
+    }
+}
+
+// ── Profile post cards in the feed — same .kbiz-post-card markup/behavior
+// as business posts above, wired to the /profile/posts/... endpoints so a
+// personal update reacts, comments, votes, and follows exactly like a
+// business page update does. ──────────────────────────────────────────────
+
+function profilePostFollowToggle(button, username, displayName) {
+    const wasFollowing = button.classList.contains('is-following');
+    const originalHTML = button.innerHTML;
+
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+
+    fetch(`/follow/${username}`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': CSRF_TOKEN,
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            showToast('Error: ' + (data.error || 'Could not update follow status.'), 'error');
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+            return;
+        }
+
+        const nowFollowing = data.action === 'followed';
+
+        // Keep every button for this person in sync across the feed.
+        document.querySelectorAll(`.kbiz-post-follow-btn[data-username="${username}"]`).forEach(btn => {
+            btn.classList.toggle('is-following', nowFollowing);
+            btn.innerHTML = nowFollowing
+                ? '<i class="fas fa-check"></i> Following'
+                : '<i class="fas fa-plus"></i> Follow';
+            btn.disabled = false;
+        });
+
+        showToast(
+            nowFollowing ? `You are now following ${displayName}` : `Unfollowed ${displayName}`,
+            nowFollowing ? 'success' : 'info'
+        );
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Something went wrong. Please try again.', 'error');
+        button.innerHTML = originalHTML;
+        button.classList.toggle('is-following', wasFollowing);
+        button.disabled = false;
+    });
+}
+
+async function voteProfilePostPoll(postId, optionId, btnEl) {
+    const pollEl = btnEl.closest('.kbiz-poll');
+    const allowMultiple = pollEl.dataset.allowMultiple === '1';
+    let optionIds = [optionId];
+
+    if (pollEl.querySelector('.kbiz-poll-option.voted') && allowMultiple) {
+        const voted = Array.from(pollEl.querySelectorAll('.kbiz-poll-option.voted')).map(b => b.dataset.optionId);
+        optionIds = voted.includes(optionId) ? voted.filter(id => id !== optionId) : [...voted, optionId];
+        if (!optionIds.length) optionIds = [optionId];
+    }
+
+    const formData = new FormData();
+    optionIds.forEach(id => formData.append('option_ids', id));
+
+    try {
+        const res = await fetch(`/profile/posts/${postId}/vote/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData,
+        });
+        const data = await res.json();
+        if (!data.success) { toast(data.error || 'Could not vote.'); return; }
+
+        const votedSet = new Set(optionIds);
+        pollEl.querySelectorAll('.kbiz-poll-option').forEach(optBtn => {
+            const stats = data.poll.options.find(o => o.option_id === optBtn.dataset.optionId);
+            if (!stats) return;
+            optBtn.querySelector('.kbiz-poll-option-fill').style.width = stats.pct + '%';
+            optBtn.querySelector('.kbiz-poll-option-pct').textContent = stats.pct + '%';
+            optBtn.classList.toggle('voted', votedSet.has(optBtn.dataset.optionId));
+        });
+        const meta = pollEl.querySelector('.kbiz-poll-meta');
+        if (meta) meta.textContent = `${data.poll.total_votes} vote${data.poll.total_votes === 1 ? '' : 's'}`;
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+async function reactToProfilePostCard(postId, vibeType, optBtn) {
+    const pop = optBtn.closest('.kbiz-vibe-popover');
+    pop.classList.remove('open');
+    const card = document.getElementById(`kbiz-post-${postId}`);
+    try {
+        const res = await fetch(`/profile/posts/${postId}/vibe/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vibe_type: vibeType }),
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error === 'login required' ? 'Please log in to react.' : data.error); return; }
+
+        const engageBtn = card.querySelector('[data-vibe-btn]');
+        const emojiSlot  = card.querySelector('[data-vibe-emoji]');
+        const totalSlot  = card.querySelector('[data-vibe-total]');
+        const EMOJIS = { fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊', love:'❤️' };
+
+        if (data.user_vibe) {
+            engageBtn.classList.add('reacted');
+            emojiSlot.innerHTML = EMOJIS[data.user_vibe] || '';
+        } else {
+            engageBtn.classList.remove('reacted');
+            emojiSlot.innerHTML = '<i class="far fa-heart"></i>';
+        }
+        if (totalSlot) totalSlot.textContent = data.total;
+
+        const topType = Object.entries(data.summary).sort((a, b) => b[1] - a[1])[0];
+        const summaryEmojiEl = card.querySelector('.kbiz-post-engage-summary .vibes .emoji');
+        if (topType) {
+            const emoji = EMOJIS[topType[0]] || '';
+            if (summaryEmojiEl) {
+                summaryEmojiEl.textContent = emoji;
+            } else {
+                const span = document.createElement('span');
+                span.className = 'emoji';
+                span.textContent = emoji;
+                card.querySelector('.kbiz-post-engage-summary .vibes').prepend(span);
+            }
+        } else if (summaryEmojiEl) {
+            summaryEmojiEl.remove();
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+async function toggleProfilePostCommentsPanel(postId) {
+    const overlay = document.getElementById(`commentsOverlay-${postId}`);
+    const panel = document.getElementById(`comments-${postId}`);
+    if (!overlay || !panel) return;
+    if (overlay.classList.contains('open')) { closeCommentsPanel(postId); return; }
+
+    document.querySelectorAll('.kbiz-comments-overlay.open').forEach(el => el.classList.remove('open'));
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    if (panel.dataset.loaded !== '1') {
+        panel.dataset.loaded = '1';
+        try {
+            const res = await fetch(`/profile/posts/${postId}/comments/`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json();
+            const list = document.getElementById(`commentList-${postId}`);
+            if (!data.comments || !data.comments.length) {
+                list.innerHTML = '<div class="kbiz-comment-empty">No comments yet — be the first!</div>';
+            } else {
+                list.innerHTML = data.comments.map(renderComment).join('');
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (_) {
+            const list = document.getElementById(`commentList-${postId}`);
+            if (list) list.innerHTML = '<div class="kbiz-comment-empty">Could not load comments.</div>';
+        }
+    }
+
+    setTimeout(() => {
+        const input = document.getElementById(`commentInput-${postId}`);
+        if (input && window.innerWidth >= 640) input.focus();
+    }, 200);
+}
+
+async function submitProfilePostCommentCard(postId) {
+    const input = document.getElementById(`commentInput-${postId}`);
+    const text = input.value.trim();
+    if (!text) return;
+    input.disabled = true;
+    try {
+        const res = await fetch(`/profile/posts/${postId}/comments/`, {
             method: 'POST',
             headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
