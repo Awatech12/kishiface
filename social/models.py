@@ -837,6 +837,66 @@ class Profile(models.Model):
         return out
 
     @property
+    def member_type_headline_field(self):
+        """
+        The schema field treated as this member type's 'headline' — i.e. the
+        single most identifying detail (e.g. Profession for a Skilled
+        Professional, Desired Job for a Job Seeker, Business Name for a
+        Business Owner). This is the field marked 'required' in
+        MEMBER_TYPE_SCHEMA, since every type defines exactly one. Falls back
+        to the first field if none are marked required.
+        """
+        fields = self.member_type_schema
+        for field in fields:
+            if field.get('required'):
+                return field
+        return fields[0] if fields else None
+
+    @property
+    def member_type_headline_value(self):
+        """The filled-in value of member_type_headline_field, or ''."""
+        field = self.member_type_headline_field
+        if not field:
+            return ''
+        return self.get_member_type_value(field['key'])
+
+    @property
+    def member_type_secondary_field(self):
+        """
+        A secondary supporting field for this type, preferring a
+        location-like field (location, business_location, coverage_area,
+        preferred_location, company_location) since that's the most useful
+        second detail to surface alongside the headline.
+        """
+        fields = self.member_type_schema
+        for field in fields:
+            if 'location' in field['key'] or field['key'] == 'coverage_area':
+                return field
+        return None
+
+    @property
+    def member_type_secondary_value(self):
+        """The filled-in value of member_type_secondary_field, or ''."""
+        field = self.member_type_secondary_field
+        if not field:
+            return ''
+        return self.get_member_type_value(field['key'])
+
+    @property
+    def kishihub_use_headline(self):
+        """
+        Short 'what this person uses KishiHub for' summary, meant for post
+        author sub-lines, e.g. 'Skilled Professional · Plumber'. Falls back
+        to just the member type label if the headline field isn't filled in,
+        and to legacy profession/location if no member type is set at all.
+        """
+        label = self.member_type_label
+        if not label:
+            return self.profession or ''
+        value = self.member_type_headline_value
+        return f'{label} · {value}' if value else label
+
+    @property
     def member_type_cv_display_name(self):
         """Human-friendly filename for the uploaded CV, falling back to the
         stored path's basename if no original filename was recorded."""
