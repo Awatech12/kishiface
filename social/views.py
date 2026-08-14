@@ -1822,6 +1822,7 @@ def profile(request, username):
             {'type': t, 'emoji': ProfilePostVibe.VIBE_EMOJIS[t], 'label': label.split(' ', 1)[-1]}
             for t, label in ProfilePostVibe.VIBE_CHOICES
         ],
+        'market_categories': Market.CATEGORY_CHOICES,
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':

@@ -2099,6 +2099,7 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
 .kpp-modal-hint { font-size: 12.5px; color: var(--mfy-text-light); margin-bottom: 12px; }
 .kpp-field { margin-bottom: 12px; }
 .kpp-field label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px; color: var(--mfy-text-light); }
+.kpp-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kpp-input, .kpp-textarea, .kpp-select {
     width: 100%; border: 1px solid var(--mfy-border); border-radius: 8px; padding: 10px 12px;
     font-size: 14px; font-family: inherit; background: var(--mfy-white); color: var(--mfy-text);
@@ -3688,13 +3689,49 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
         <div class="kpp-field"><label>Description</label>
             <textarea class="kpp-textarea" id="ppProductDesc" placeholder="Describe the item…"></textarea>
         </div>
+        <div class="kpp-row2">
+            <div class="kpp-field"><label>Category</label>
+                <select class="kpp-select" id="ppProductCategory">
+                    {% for cat_key, cat_label in market_categories %}
+                    <option value="{{ cat_key }}" {% if cat_key == 'others' %}selected{% endif %}>{{ cat_label }}</option>
+                    {% empty %}
+                    <option value="others" selected>Others</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="kpp-field"><label>Condition</label>
+                <select class="kpp-select" id="ppProductCondition">
+                    <option value="New">Brand New</option>
+                    <option value="Used">Used – Like New</option>
+                    <option value="Used-Fair">Used – Fair</option>
+                </select>
+            </div>
+        </div>
+        <div class="kpp-row2">
+            <div class="kpp-field"><label>Availability</label>
+                <select class="kpp-select" id="ppProductAvailability">
+                    <option value="Single Item">Single Item</option>
+                    <option value="In Stock">In Stock</option>
+                </select>
+            </div>
+            <div class="kpp-field"><label>Location</label>
+                <input class="kpp-input" id="ppProductLocation" type="text" placeholder="{{ profile.location|default:'City, State' }}">
+            </div>
+        </div>
         <div class="kpp-field"><label>WhatsApp number</label>
             <input class="kpp-input" id="ppProductWhatsapp" type="tel" placeholder="e.g. 08123456789" value="{{ profile.phone }}">
         </div>
-        <div class="kpp-field"><label>Location</label>
-            <input class="kpp-input" id="ppProductLocation" type="text" placeholder="{{ profile.location|default:'City, State' }}">
+        <div class="kpp-row2">
+            <div class="kpp-field"><label>Instagram Handle</label>
+                <input class="kpp-input" id="ppProductInstagram" type="text" placeholder="e.g. yourshop">
+            </div>
+            <div class="kpp-field"><label>Twitter / X Handle</label>
+                <input class="kpp-input" id="ppProductTwitter" type="text" placeholder="e.g. yourshop">
+            </div>
         </div>
-        <button type="button" class="kpp-modal-submit" id="ppProductSubmitBtn" onclick="submitProfileProduct()">Post Listing</button>
+        <button type="button" class="kpp-modal-submit" id="ppProductSubmitBtn" onclick="submitProfileProduct()">
+            <i class="fas fa-upload"></i> Post Listing
+        </button>
     </div>
 </div>
 
@@ -5177,6 +5214,11 @@ function openProfileProductModal() {
     document.getElementById('ppProductName').value = '';
     document.getElementById('ppProductPrice').value = '';
     document.getElementById('ppProductDesc').value = '';
+    document.getElementById('ppProductCategory').selectedIndex = 0;
+    document.getElementById('ppProductCondition').selectedIndex = 0;
+    document.getElementById('ppProductAvailability').selectedIndex = 0;
+    document.getElementById('ppProductInstagram').value = '';
+    document.getElementById('ppProductTwitter').value = '';
     ppRenderProductPhotoRow();
     document.getElementById('productOverlay')?.classList.add('open');
 }
@@ -5217,29 +5259,46 @@ async function submitProfileProduct() {
     fd.append('product_name', name);
     fd.append('product_price', price);
     fd.append('description', desc);
-    fd.append('whatsapp_number', whatsapp);
+    fd.append('category', document.getElementById('ppProductCategory').value);
+    fd.append('product_condition', document.getElementById('ppProductCondition').value);
+    fd.append('availability', document.getElementById('ppProductAvailability').value);
     fd.append('location', document.getElementById('ppProductLocation').value.trim());
+    fd.append('whatsapp_number', whatsapp);
+    fd.append('instagram_handle', document.getElementById('ppProductInstagram').value.trim());
+    fd.append('twitter_handle', document.getElementById('ppProductTwitter').value.trim());
     ppProductFiles.forEach(f => fd.append('images', f));
     const btn = document.getElementById('ppProductSubmitBtn');
     btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
     try {
         const res = await fetch('/profile/products/upload/', {
             method: 'POST', body: fd,
             headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
         });
+        if (!res.ok) {
+            let msg = `Upload failed (HTTP ${res.status}).`;
+            try {
+                const errData = await res.json();
+                if (errData.errors) msg = Object.values(errData.errors).join(' ');
+                else if (errData.error) msg = errData.error;
+            } catch (_) { /* response wasn't JSON, e.g. a 404/500 HTML page */ }
+            toast(msg);
+            return;
+        }
         const data = await res.json();
         if (data.success) {
             toast(data.message || 'Listing posted!');
             closeProfileProductModal();
             setTimeout(() => window.location.reload(), 500);
         } else {
-            const firstError = data.errors ? Object.values(data.errors)[0] : 'Could not post listing.';
-            toast(firstError);
+            const msg = data.errors ? Object.values(data.errors).join(' ') : (data.error || 'Could not post listing.');
+            toast(msg);
         }
     } catch (e) {
-        toast('Something went wrong.');
+        toast('Network error. Please try again.');
     } finally {
         btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Post Listing';
     }
 }
 
