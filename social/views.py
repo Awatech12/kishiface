@@ -7404,7 +7404,6 @@ def profile_product_upload(request):
     _rl_hits = cache.get(_rl_key, 0)
     if _rl_hits >= 10:
         return JsonResponse({'success': False, 'errors': {'__all__': 'Too many listings posted. Please wait.'}}, status=429)
-    cache.set(_rl_key, _rl_hits + 1, timeout=3600)
 
     name         = request.POST.get('product_name', '').strip()
     price_raw    = request.POST.get('product_price', '').strip()
@@ -7444,6 +7443,8 @@ def profile_product_upload(request):
         errors['images'] = 'At least one image is required.'
     if errors:
         return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+    cache.set(_rl_key, _rl_hits + 1, timeout=3600)
 
     price_val = int(float(price_raw))
 
