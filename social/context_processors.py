@@ -1,4 +1,4 @@
-from .models import Message, FollowNotification, BusinessNotification, EventNotification, Channel, BusinessPage
+from .models import Message, FollowNotification, ProfilePostNotification, BusinessNotification, EventNotification, Channel, BusinessPage
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
@@ -50,6 +50,9 @@ def follow_notifications_context(request):
             'total_follow_notifications': 0,
             'has_follow_notifications': False,
             'has_unread_follows': False,
+            'unread_profile_post_count': 0,
+            'recent_profile_post_notifications': [],
+            'has_unread_profile_post_notifications': False,
             'unread_business_count': 0,
             'recent_business_notifications': [],
             'has_unread_business_notifications': False,
@@ -74,6 +77,18 @@ def follow_notifications_context(request):
         total_follow_notifications = FollowNotification.objects.filter(
             to_user=request.user
         ).count()
+
+        # Reactions + comments on the user's own ProfilePost updates.
+        unread_profile_post_count = ProfilePostNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
+
+        recent_profile_post_notifications = (
+            ProfilePostNotification.objects
+            .filter(to_user=request.user)
+            .select_related('actor', 'actor__profile', 'post')
+            .order_by('-created_at')[:10]
+        )
 
         unread_business_count = BusinessNotification.objects.filter(
             to_user=request.user, is_read=False
@@ -103,13 +118,19 @@ def follow_notifications_context(request):
             'total_follow_notifications': total_follow_notifications,
             'has_follow_notifications':   total_follow_notifications > 0,
             'has_unread_follows':         unread_follow_count > 0,
+            'unread_profile_post_count':             unread_profile_post_count,
+            'recent_profile_post_notifications':     recent_profile_post_notifications,
+            'has_unread_profile_post_notifications': unread_profile_post_count > 0,
             'unread_business_count':              unread_business_count,
             'recent_business_notifications':      recent_business_notifications,
             'has_unread_business_notifications':  unread_business_count > 0,
             'unread_event_count':                 unread_event_count,
             'recent_event_notifications':         recent_event_notifications,
             'has_unread_event_notifications':     unread_event_count > 0,
-            'unread_notifications_total':  unread_follow_count + unread_business_count + unread_event_count,
+            'unread_notifications_total':  (
+                unread_follow_count + unread_profile_post_count
+                + unread_business_count + unread_event_count
+            ),
         }
     except Exception:
         return {
@@ -118,6 +139,9 @@ def follow_notifications_context(request):
             'total_follow_notifications': 0,
             'has_follow_notifications': False,
             'has_unread_follows': False,
+            'unread_profile_post_count': 0,
+            'recent_profile_post_notifications': [],
+            'has_unread_profile_post_notifications': False,
             'unread_business_count': 0,
             'recent_business_notifications': [],
             'has_unread_business_notifications': False,

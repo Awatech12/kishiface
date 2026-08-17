@@ -351,6 +351,7 @@
     .ks-user-name { font-size:14px; font-weight:600; color:var(--kvibe-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ks-user-handle { font-size:13px; color:var(--kvibe-muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ks-user-bio { font-size:12px; color:var(--kvibe-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ks-user-pro { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:var(--kvibe-primary); background:rgba(0,149,246,0.1); padding:2px 8px; border-radius:10px; margin-top:3px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ks-user-meta-right { flex-shrink:0; margin-left:10px; }
     .ks-follow-count { font-size:12px; color:var(--kvibe-muted); display:flex; align-items:center; gap:4px; }
 
@@ -930,7 +931,7 @@
 {% if query %}
 <nav class="ks-tabs show" id="ksTabs">
   <button class="ks-tab active" data-panel="all"      onclick="ksTab('all',this)">All</button>
-  <button class="ks-tab" data-panel="people"   onclick="ksTab('people',this)">People <span class="ks-tab-count">{{ users_total }}</span></button>
+  <button class="ks-tab" data-panel="people"   onclick="ksTab('people',this)">People &amp; Pros <span class="ks-tab-count">{{ users_total }}</span></button>
   <button class="ks-tab" data-panel="products" onclick="ksTab('products',this)">Products <span class="ks-tab-count">{{ products_total }}</span></button>
   <button class="ks-tab" data-panel="pages"    onclick="ksTab('pages',this)">Pages <span class="ks-tab-count">{{ pages_total }}</span></button>
   <button class="ks-tab" data-panel="jobs"     onclick="ksTab('jobs',this)">Jobs <span class="ks-tab-count">{{ jobs_total }}</span></button>
@@ -1049,7 +1050,7 @@
       <!-- ALL TAB -->
       <div class="ks-panel active" id="panel-all">
         {% if users %}
-        <div class="ks-section-label">People</div>
+        <div class="ks-section-label">People &amp; Professionals</div>
         {% for user in users|slice:":4" %}
           <a href="{% url 'profile' user.username %}" class="ks-user-row">
             <img src="{{ user.profile.get_picture_url }}" alt="{{ user.username }}" class="ks-user-avatar" loading="lazy"
@@ -1057,7 +1058,11 @@
             <div class="ks-user-info">
               <div class="ks-user-name">{{ user.username }}{% if user.profile.is_verify %} <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:11px;"></i>{% endif %}</div>
               {% if user.get_full_name %}<div class="ks-user-handle">{{ user.get_full_name }}</div>{% endif %}
-              {% if user.profile.bio %}<div class="ks-user-bio">{{ user.profile.bio|truncatechars:60 }}</div>{% endif %}
+              {% if user.profile.is_professional %}
+                <div class="ks-user-pro"><i class="fa-solid fa-briefcase"></i> {{ user.profile.kishihub_use_headline }}</div>
+              {% elif user.profile.bio %}
+                <div class="ks-user-bio">{{ user.profile.bio|truncatechars:60 }}</div>
+              {% endif %}
             </div>
             <div class="ks-user-meta-right"><span class="ks-follow-count"><i class="fa-solid fa-user-group"></i> {{ user.follower_count }}</span></div>
           </a>
@@ -1223,7 +1228,11 @@
             <div class="ks-user-info">
               <div class="ks-user-name">{{ user.username }}{% if user.profile.is_verify %} <i class="fa-solid fa-circle-check" style="color:var(--kvibe-primary);font-size:11px;"></i>{% endif %}</div>
               {% if user.get_full_name %}<div class="ks-user-handle">{{ user.get_full_name }}</div>{% endif %}
-              {% if user.profile.bio %}<div class="ks-user-bio">{{ user.profile.bio|truncatechars:80 }}</div>{% endif %}
+              {% if user.profile.is_professional %}
+                <div class="ks-user-pro"><i class="fa-solid fa-briefcase"></i> {{ user.profile.kishihub_use_headline }}</div>
+              {% elif user.profile.bio %}
+                <div class="ks-user-bio">{{ user.profile.bio|truncatechars:80 }}</div>
+              {% endif %}
             </div>
             <div class="ks-user-meta-right"><span class="ks-follow-count"><i class="fa-solid fa-user-group"></i> {{ user.follower_count }}</span></div>
           </a>
@@ -1686,14 +1695,15 @@ let ksSuggestAbort   = null;
 let ksSuggestIndex   = -1;
 
 const KS_TYPE_ICON = {
-  user:    'fa-solid fa-user',
-  product: 'fa-solid fa-basket-shopping',
-  page:    'fa-solid fa-shop',
-  job:     'fa-solid fa-briefcase',
-  event:   'fa-solid fa-calendar-days',
+  user:         'fa-solid fa-user',
+  professional: 'fa-solid fa-user-tie',
+  product:      'fa-solid fa-basket-shopping',
+  page:         'fa-solid fa-shop',
+  job:          'fa-solid fa-briefcase',
+  event:        'fa-solid fa-calendar-days',
 };
 const KS_TYPE_LABEL = {
-  user: 'Person', product: 'Product', page: 'Page', job: 'Job', event: 'Event',
+  user: 'Person', professional: 'Professional', product: 'Product', page: 'Page', job: 'Job', event: 'Event',
 };
 
 function ksSuggestOnInput() {

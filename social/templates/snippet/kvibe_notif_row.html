@@ -1,11 +1,8 @@
 {% load static %}
 {% load humanize %}
 
-{% comment %}
-  Inject badge styles once per page — guard prevents duplicates when
-  this row is rendered multiple times (e.g. real-time WS stream).
-{% endcomment %}
-{% if not kvibe_notif_styles_loaded %}
+
+{% if n.is_first_row %}
 <style id="kvibe-notif-row-styles">
 .kvibe-notif-wrapper {
     position: relative;
@@ -105,11 +102,13 @@
 <div class="kvibe-notif-wrapper {% if not n.is_read %}kvibe-unread{% endif %}"
      id="kvibe-notif-{{ n.group_id }}">
 
+  
     <div class="kvibe-notif-item"
          onclick="kvibeNotifClick(event,
                   '{{ n.type }}',
                   '{% if n.post %}{{ n.post.post_id }}{% endif %}',
-                  '{{ n.latest_actor.username }}')">
+                  '{{ n.latest_actor.username }}',
+                  '{{ request.user.username }}')">
 
         {# ── Avatar + type badge ─────────────────────────────────────── #}
         <div class="kvibe-avatar-wrap">
@@ -212,9 +211,10 @@
 
         {% if n.type == 'follow' %}
             {# Follow / Following toggle #}
-            <button class="kvibe-follow-btn btn-follow"
-                    onclick="event.stopPropagation(); kvibeFollowFromNotif({{ n.latest_actor.id }}, this)">
-                Follow
+            <button class="kvibe-follow-btn {% if n.is_following_back %}btn-following{% else %}btn-follow{% endif %}"
+                    data-username="{{ n.latest_actor.username }}"
+                    onclick="event.stopPropagation(); kvibeFollowFromNotif(this)">
+                {% if n.is_following_back %}Following{% else %}Follow{% endif %}
             </button>
 
         {% elif n.post %}
@@ -224,10 +224,8 @@
                      src="{{ n.post.images.first.image.url }}"
                      alt="post"
                      loading="lazy">
-            {% elif n.post.video_file %}
+            {% elif n.post.video %}
                 <div class="kvibe-thumb-placeholder"><i class="fas fa-play"></i></div>
-            {% elif n.post.file %}
-                <div class="kvibe-thumb-placeholder"><i class="fas fa-music"></i></div>
             {% else %}
                 <div class="kvibe-thumb-placeholder"><i class="fas fa-align-left"></i></div>
             {% endif %}

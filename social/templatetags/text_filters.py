@@ -156,6 +156,78 @@ def format_message_text(text):
 
 
 @register.filter
+def format_caption_text(text):
+    """
+    Formatting for post captions (business page posts, profile posts).
+    Handles: BB codes ([b] [i] [u]), @mentions, #hashtags, URLs, line breaks.
+    No <p> wrapping — the caption's CSS already relies on white-space: pre-wrap.
+    "See more" truncation is handled client-side (CSS line-clamp + JS toggle)
+    so full HTML links/hashtags never get cut off mid-tag.
+    """
+    if not text:
+        return ""
+
+    # 1. Normalise line endings
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+    # 2. BB codes
+    text = re.sub(r'\[b\](.*?)\[/b\]', r'<strong>\1</strong>', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'\[i\](.*?)\[/i\]', r'<em>\1</em>',         text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'\[u\](.*?)\[/u\]', r'<u>\1</u>',           text, flags=re.IGNORECASE | re.DOTALL)
+
+    # 3. URLs (before mentions/hashtags so # and @ inside URLs are untouched).
+    #    Match the whole run of non-space/quote/bracket characters greedily,
+    #    then peel off trailing sentence punctuation (. , ! ? : ;) in the
+    #    replacement step so "check https://example.com/page." links the full
+    #    path and leaves just the period outside — a trailing lookahead here
+    #    can't do this correctly since it has to reject whitespace as a valid
+    #    stopping point, which cuts the last real character off every URL.
+    url_pattern = r'(https?://[^\s<>"\']+|www\.[^\s<>"\']+)'
+    def replace_url(match):
+        url = match.group(0)
+        trailing = ''
+        while url and url[-1] in '.,!?:;':
+            trailing = url[-1] + trailing
+            url = url[:-1]
+        if not url:
+            return match.group(0)
+        href = url if url.startswith(('http://', 'https://')) else 'http://' + url
+        return f'<a href="{href}" target="_blank" rel="noopener noreferrer" class="kf-url-link">{url}</a>' + trailing
+    text = re.sub(url_pattern, replace_url, text)
+
+    # 4. @mentions — Django usernames can contain letters/digits/underscore
+    #    plus . @ + - (the default username charset), so grab the whole run
+    #    of those characters, then peel off trailing punctuation that isn't
+    #    actually part of a real username (e.g. the period ending a sentence
+    #    in "thanks @jane."). This lets both dotted usernames like
+    #    "@jane.doe" and a plain "@jane" followed by punctuation resolve
+    #    correctly, instead of only ever matching \w and silently failing.
+    def replace_mention(match):
+        candidate = match.group(1)
+        trailing = ''
+        while candidate:
+            if User.objects.filter(username=candidate).exists():
+                return f'<a href="/{candidate}/" class="kf-mention-link">@{candidate}</a>' + trailing
+            if candidate[-1] in '.@+-':
+                trailing = candidate[-1] + trailing
+                candidate = candidate[:-1]
+                continue
+            break
+        return match.group(0)
+    text = re.sub(r'@([\w.@+-]+)', replace_mention, text)
+
+    # 5. #hashtags
+    def replace_hashtag(match):
+        tag = match.group(1)
+        return f'<a href="/hashtag/{tag}/" class="kf-hashtag">#{tag}</a>'
+    text = re.sub(r'#(\w+)', replace_hashtag, text)
+
+    # 6. Line breaks
+    text = text.replace('\n', '<br>')
+
+    return mark_safe(text)
+
+@register.filter
 def truncate_with_ellipsis(text, length=150):
     if not text or len(text) <= length:
         return text

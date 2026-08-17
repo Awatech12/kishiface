@@ -125,7 +125,7 @@
                      id="kishiface-business-notif-{{ bn.id }}"
                      data-type="{{ bn.notif_type }}"
                      data-business-notif-id="{{ bn.id }}">
-                    <a href="{% if bn.notif_type == 'new_follower' %}/business/{{ bn.business_page.slug }}/{% elif bn.notif_type == 'new_comment' %}/business/{{ bn.business_page.slug }}/#kbiz-post-{{ bn.post.post_id }}{% else %}/product/{{ bn.product.product_id }}/{% endif %}"
+                    <a href="{% if bn.notif_type == 'new_follower' %}/business/{{ bn.business_page.slug }}/{% elif bn.notif_type == 'new_comment' or bn.notif_type == 'new_vibe' %}/business/{{ bn.business_page.slug }}/#kbiz-post-{{ bn.post.post_id }}{% else %}/product/{{ bn.product.product_id }}/{% endif %}"
                        style="display:flex;align-items:center;gap:12px;padding:12px 48px 12px 16px;">
                         {% if bn.notif_type == 'new_follower' %}
                             <img src="{{ bn.actor.profile.picture.url }}" alt="{{ bn.actor.username }}"
@@ -141,6 +141,15 @@
                             <span>
                                 <strong>{{ bn.actor.username }}</strong> commented on your
                                 {{ bn.business_page.name }} update
+                                <span style="display:block;font-size:12px;color:#8e8e8e;">{{ bn.created_at|naturaltime }}</span>
+                            </span>
+                        {% elif bn.notif_type == 'new_vibe' %}
+                            <img src="{{ bn.actor.profile.picture.url }}" alt="{{ bn.actor.username }}"
+                                 style="width:44px;height:44px;border-radius:50%;object-fit:cover;">
+                            <span>
+                                <strong>{{ bn.actor.username }}</strong> vibed
+                                {% if bn.vibe_type == 'fire' %}🔥{% elif bn.vibe_type == 'real' %}💯{% elif bn.vibe_type == 'vibing' %}🎵{% elif bn.vibe_type == 'dead' %}😂{% elif bn.vibe_type == 'cringe' %}😬{% elif bn.vibe_type == 'chill' %}🧊{% elif bn.vibe_type == 'love' %}❤️{% else %}✨{% endif %}
+                                on your {{ bn.business_page.name }} update
                                 <span style="display:block;font-size:12px;color:#8e8e8e;">{{ bn.created_at|naturaltime }}</span>
                             </span>
                         {% else %}
@@ -205,54 +214,21 @@
             {% if today_notifications %}
                 <div class="kishiface-section-title" data-section="today">Today</div>
                 {% for n in today_notifications %}
-                    <div class="kishiface-notification-wrapper"
-                         id="kishiface-notif-{{ n.group_id }}"
-                         data-group-id="{{ n.group_id }}"
-                         data-type="{{ n.type }}"
-                         data-actor-id="{{ n.latest_actor.id }}"
-                         {% if n.post %}data-post-id="{{ n.post.post_id }}"{% endif %}
-                         {% if n.follow_id %}data-follow-id="{{ n.follow_id }}"{% endif %}>
-                        {% include "snippet/activity_item.html" with n=n %}
-                        <button class="kishiface-remove-btn" aria-label="Dismiss" onclick="kishifaceRemove(this)">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
+                    {% include "snippet/kvibe_notif_item.html" with n=n %}
                 {% endfor %}
             {% endif %}
 
             {% if week_notifications %}
                 <div class="kishiface-section-title" data-section="week">This Week</div>
                 {% for n in week_notifications %}
-                    <div class="kishiface-notification-wrapper"
-                         id="kishiface-notif-{{ n.group_id }}"
-                         data-group-id="{{ n.group_id }}"
-                         data-type="{{ n.type }}"
-                         data-actor-id="{{ n.latest_actor.id }}"
-                         {% if n.post %}data-post-id="{{ n.post.post_id }}"{% endif %}
-                         {% if n.follow_id %}data-follow-id="{{ n.follow_id }}"{% endif %}>
-                        {% include "snippet/activity_item.html" with n=n %}
-                        <button class="kishiface-remove-btn" aria-label="Dismiss" onclick="kishifaceRemove(this)">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
+                    {% include "snippet/kvibe_notif_item.html" with n=n %}
                 {% endfor %}
             {% endif %}
 
             {% if earlier_notifications %}
                 <div class="kishiface-section-title" data-section="earlier">Earlier</div>
                 {% for n in earlier_notifications %}
-                    <div class="kishiface-notification-wrapper"
-                         id="kishiface-notif-{{ n.group_id }}"
-                         data-group-id="{{ n.group_id }}"
-                         data-type="{{ n.type }}"
-                         data-actor-id="{{ n.latest_actor.id }}"
-                         {% if n.post %}data-post-id="{{ n.post.post_id }}"{% endif %}
-                         {% if n.follow_id %}data-follow-id="{{ n.follow_id }}"{% endif %}>
-                        {% include "snippet/activity_item.html" with n=n %}
-                        <button class="kishiface-remove-btn" aria-label="Dismiss" onclick="kishifaceRemove(this)">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
+                    {% include "snippet/kvibe_notif_item.html" with n=n %}
                 {% endfor %}
             {% endif %}
 
@@ -306,12 +282,13 @@
             var hasItem = false;
             while (next) {
                 if (next.classList.contains('kishiface-section-title')) break;
-                if (next.classList.contains('kishiface-notification-wrapper')) { hasItem = true; break; }
+                if (next.classList.contains('kishiface-notification-wrapper') ||
+                    next.classList.contains('kvibe-notif-wrapper')) { hasItem = true; break; }
                 next = next.nextElementSibling;
             }
             if (!hasItem) title.remove();
         });
-        if (!list.querySelector('.kishiface-notification-wrapper')) {
+        if (!list.querySelector('.kishiface-notification-wrapper, .kvibe-notif-wrapper')) {
             list.innerHTML =
                 '<div class="kishiface-empty-notifications" id="kishiface-empty-state">' +
                 '<div class="kishiface-empty-icon"><i class="far fa-bell"></i></div>' +
@@ -395,11 +372,92 @@
     /* ── Mark all read ───────────────────────────────────────────────── */
     window.kishifaceMarkAllRead = function () {
         doPost('/notifications/mark-all-read/', {}).then(function () {
-            document.querySelectorAll('.kishiface-unread')
-                    .forEach(function (el) { el.classList.remove('kishiface-unread'); });
-            document.querySelectorAll('.kishiface-unread-dot')
+            document.querySelectorAll('.kishiface-unread, .kvibe-unread')
+                    .forEach(function (el) { el.classList.remove('kishiface-unread', 'kvibe-unread'); });
+            document.querySelectorAll('.kishiface-unread-dot, .kvibe-unread-dot')
                     .forEach(function (d) { d.remove(); });
         });
+    };
+
+    /* ── Notification row click ─────────────────────────────────────────
+       'follow' rows jump to the person who followed you. 'like'/'comment'
+       rows are always about one of your own posts, so they jump to your
+       own profile, anchored to that post (id="kpp-post-<id>" inside the
+       Professional tab's Posts subtab — see profile.html's deep-link
+       handler, which reveals that tab/subtab for this exact hash). ────── */
+    window.kvibeNotifClick = function (event, type, postId, actorUsername, ownerUsername) {
+        if (type === 'follow') {
+            if (actorUsername) window.location.href = '/' + actorUsername + '/';
+            return;
+        }
+        if (!ownerUsername) return;
+        window.location.href = postId
+            ? '/' + ownerUsername + '/#kpp-post-' + postId
+            : '/' + ownerUsername + '/';
+    };
+
+    /* ── Dismiss button — follow notification rows (snippet/kvibe_notif_row.html) ── */
+    window.kvibeRemoveFollow = function (followId, btn) {
+        var wrapper  = btn.closest('.kvibe-notif-wrapper');
+        var origHtml = btn.innerHTML;
+
+        btn.innerHTML = '<i class="fas fa-circle-notch kishiface-spin"></i>';
+        btn.disabled  = true;
+
+        doPost('/notifications/delete-group/', { follow_id: followId })
+            .then(function (data) {
+                if (data.status === 'success' && wrapper) { slideOut(wrapper); }
+                else { btn.innerHTML = origHtml; btn.disabled = false; }
+            })
+            .catch(function () { btn.innerHTML = origHtml; btn.disabled = false; });
+    };
+
+    /* ── Dismiss button — reserved for future post-based activity rows
+       (likes/comments/reposts/mentions/replies) rendered via kvibe_notif_row ── */
+    window.kvibeRemoveNotif = function (postId, type, btn) {
+        var wrapper  = btn.closest('.kvibe-notif-wrapper');
+        var origHtml = btn.innerHTML;
+
+        btn.innerHTML = '<i class="fas fa-circle-notch kishiface-spin"></i>';
+        btn.disabled  = true;
+
+        doPost('/notifications/delete-group/', { post_id: postId, notification_type: type })
+            .then(function (data) {
+                if (data.status === 'success' && wrapper) { slideOut(wrapper); }
+                else { btn.innerHTML = origHtml; btn.disabled = false; }
+            })
+            .catch(function () { btn.innerHTML = origHtml; btn.disabled = false; });
+    };
+
+    /* ── Follow-back toggle from inside a follow-notification row ──────── */
+    window.kvibeFollowFromNotif = function (btn) {
+        var username = btn.dataset.username;
+        if (!username || btn.disabled) return;
+
+        btn.disabled = true;
+        var origText = btn.textContent;
+        btn.textContent = '…';
+
+        fetch('/follow/' + username, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                btn.disabled = false;
+                if (!data.success) { btn.textContent = origText; return; }
+                if (data.action === 'followed') {
+                    btn.textContent = 'Following';
+                    btn.classList.remove('btn-follow');
+                    btn.classList.add('btn-following');
+                } else {
+                    btn.textContent = 'Follow';
+                    btn.classList.remove('btn-following');
+                    btn.classList.add('btn-follow');
+                }
+            })
+            .catch(function () { btn.disabled = false; btn.textContent = origText; });
     };
 
 }());

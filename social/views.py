@@ -5,7 +5,7 @@ import socket
 
 from html import escape as html_escape, unescape as html_unescape
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
-from .models import FollowNotification, BusinessNotification
+from .models import FollowNotification, BusinessNotification, ProfilePostNotification
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
@@ -78,6 +78,8 @@ def _clean_apply_link(raw):
         return '', 'Please enter a valid application link (starting with http:// or https://).'
 from django.db.models import Q
 from django.db.models import Count, Max, Min
+from django.db.models import Case, When, Value, IntegerField, TextField
+from django.db.models.functions import Cast
 from django.core.paginator import Paginator
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -2159,10 +2161,24 @@ def follow(request, username):
         current_profile.followings.add(other_profile)
         action = 'followed'
         messages.info(request, 'Following')
+
+        # Create (or refresh, if this pair unfollowed/refollowed before) the
+        # follow notification for the person being followed.
+        notif, created = FollowNotification.objects.get_or_create(
+            from_user=request.user, to_user=other_user,
+        )
+        if not created:
+            notif.is_read = False
+            notif.created_at = timezone.now()
+            notif.save(update_fields=['is_read', 'created_at'])
     else:
         current_profile.followings.remove(other_profile)
         action = 'unfollowed'
         messages.info(request, 'unFollowing')
+
+        # Drop the stale notification — it no longer reflects a real
+        # relationship, so it shouldn't linger in the recipient's activity.
+        FollowNotification.objects.filter(from_user=request.user, to_user=other_user).delete()
 
     if is_ajax:
         return JsonResponse({
@@ -2218,17 +2234,77 @@ def following_list(request, username):
 
 
 def _search_users_qs(query):
-    return (
-        User.objects.filter(
-            Q(username__icontains=query) |
-            Q(first_name__icontains=query) |
-            Q(last_name__icontains=query) |
-            Q(profile__bio__icontains=query)
+    """
+    People / professionals search.
+
+    Matches on username/name/bio as before, plus:
+      - Profile.profession (free-text headline, e.g. "Plumber")
+      - Profile.member_type_data — the JSON blob holding every onboarding
+        field (skills, services offered, years of experience, subjects,
+        trades, desired job, etc. — see MEMBER_TYPE_SCHEMA), cast to text
+        so a query like "electrical wiring" or "web development" matches
+        whatever field it lives in without hardcoding per-type keys.
+      - Profile.member_type itself, matched against the *label* of each
+        member type (e.g. searching "freelancer" or "job seeker" finds
+        everyone onboarded under that type).
+
+    Results are ranked via `_relevance` so an exact profession/skill match
+    (e.g. profession == "Plumber", or a member_type_data value that exactly
+    equals the query) is boosted above a loose substring match, which in
+    turn is boosted above a plain username/bio hit.
+    """
+    q = (query or '').strip()
+
+    # Member types whose display label contains the query, e.g. searching
+    # "job seeker" should surface everyone with member_type='job_seeker'
+    # even though the word "seeker" isn't stored anywhere on the row.
+    matching_member_types = [
+        key for key, cfg in MEMBER_TYPE_SCHEMA.items()
+        if q and q.lower() in cfg['label'].lower()
+    ] or ['__none__']  # sentinel so `__in=[]` doesn't silently match everything
+
+    mtd_text = Cast('profile__member_type_data', output_field=TextField())
+    # A JSON string value is serialized wrapped in double quotes, so
+    # searching for `"query"` approximates an *exact* value match (e.g.
+    # profession/skill == query) rather than a loose substring hit.
+    exact_value_marker = f'"{q}"'
+
+    qs = (
+        User.objects
+        .annotate(_mtd_text=mtd_text)
+        .filter(
+            Q(username__icontains=q) |
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q) |
+            Q(profile__bio__icontains=q) |
+            Q(profile__profession__icontains=q) |
+            Q(_mtd_text__icontains=q) |
+            Q(profile__member_type__in=matching_member_types)
         )
         .select_related('profile')
-        .annotate(follower_count=Count('profile__followers', distinct=True))
+        .annotate(
+            follower_count=Count('profile__followers', distinct=True),
+            _relevance=Case(
+                # Exact profession / skill / member-type-field match — top of results.
+                When(profile__profession__iexact=q, then=Value(100)),
+                When(_mtd_text__icontains=exact_value_marker, then=Value(90)),
+                When(username__iexact=q, then=Value(85)),
+                # Starts-with matches next.
+                When(profile__profession__istartswith=q, then=Value(75)),
+                When(username__istartswith=q, then=Value(65)),
+                # Member-type label match (e.g. "freelancer", "job seeker").
+                When(profile__member_type__in=matching_member_types, then=Value(60)),
+                # Loose substring matches on profession / member_type_data.
+                When(profile__profession__icontains=q, then=Value(55)),
+                When(_mtd_text__icontains=q, then=Value(45)),
+                default=Value(20),
+                output_field=IntegerField(),
+            ),
+        )
         .distinct()
+        .order_by('-_relevance', '-follower_count', 'username')
     )
+    return qs
 
 
 def _search_products_qs(query):
@@ -2458,17 +2534,7 @@ def search_users_partial(request):
     page  = max(1, int(request.GET.get('page', 1) or 1))
     offset = (page - 1) * _PAGE
 
-    users_qs = (
-        User.objects.filter(
-            Q(username__icontains=query) |
-            Q(first_name__icontains=query) |
-            Q(last_name__icontains=query) |
-            Q(profile__bio__icontains=query)
-        )
-        .select_related('profile')
-        .annotate(follower_count=Count('profile__followers', distinct=True))
-        .distinct()
-    )
+    users_qs = _search_users_qs(query)
     total = users_qs.count()
     users = users_qs[offset: offset + _PAGE]
     has_more = (offset + _PAGE) < total
@@ -2640,14 +2706,24 @@ def search_suggestions_v0(request):
 
     for u in users:
         pic = ''
+        is_pro = False
+        sub = u.get_full_name() or 'User'
         try:
-            pic = u.profile.get_picture_url
+            prof = u.profile
+            pic = prof.get_picture_url
+            if prof.is_professional:
+                # e.g. "Skilled Professional · Plumber" — surfaces the
+                # profession/skill match right in the suggestion dropdown.
+                headline = prof.kishihub_use_headline
+                if headline:
+                    sub = headline
+                    is_pro = True
         except Exception:
-            pic = ''
+            pass
         results.append({
-            'type':  'user',
+            'type':  'professional' if is_pro else 'user',
             'label': u.username,
-            'sub':   u.get_full_name() or 'User',
+            'sub':   sub,
             'image': pic,
             'url':   reverse('profile', args=[u.username]),
         })
@@ -3335,13 +3411,132 @@ def fetch_link_preview(request):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _build_activity_notification_entries(user):
+    """
+    Builds the flat, newest-first list of 'n' dicts shown in the
+    Today / This Week / Earlier sections of the notification page:
+    personal follows, plus reactions and comments on the user's own
+    ProfilePost updates.
+
+    Each dict matches the shape snippet/kvibe_notif_item.html (and, in
+    turn, snippet/kvibe_notif_row.html) know how to render:
+        group_id, type, latest_actor, post, follow_id, is_read, created_at,
+        others_count, vibe_type, vibe_emoji, is_following_back
+
+    Reaction/comment rows on the same post are grouped into a single entry
+    (latest actor + "and N others"), the way Instagram-style feeds collapse
+    repeat activity on one post instead of listing every single tap.
+    """
+    following_ids = set(
+        user.profile.followings.values_list('pk', flat=True)
+    )
+
+    entries = []
+
+    # ── Follows ──────────────────────────────────────────────────────────
+    follow_qs = (
+        FollowNotification.objects
+        .filter(to_user=user)
+        .select_related('from_user', 'from_user__profile')
+        .order_by('-created_at')[:50]
+    )
+    for fn in follow_qs:
+        entries.append({
+            'group_id': f'follow-{fn.pk}',
+            'type': 'follow',
+            'latest_actor': fn.from_user,
+            'post': None,
+            'follow_id': fn.pk,
+            'is_read': fn.is_read,
+            'created_at': fn.created_at,
+            'others_count': 0,
+            'vibe_type': '',
+            'vibe_emoji': '',
+            # Lets the row show "Following" instead of "Follow" when the
+            # recipient already follows this person back.
+            'is_following_back': fn.from_user.profile.pk in following_ids,
+        })
+
+    # ── Reactions & comments on the user's own posts ────────────────────
+    post_notif_qs = (
+        ProfilePostNotification.objects
+        .filter(to_user=user)
+        .select_related('actor', 'actor__profile', 'post')
+        .order_by('-created_at')[:100]
+    )
+
+    grouped = {}
+    group_order = []
+    for pn in post_notif_qs:
+        key = (pn.post_id, pn.notif_type)
+        if key not in grouped:
+            grouped[key] = {
+                'group_id': f'profilepost-{pn.notif_type}-{pn.post_id}',
+                'type': 'like' if pn.notif_type == ProfilePostNotification.NEW_VIBE else 'comment',
+                'latest_actor': pn.actor,
+                'post': pn.post,
+                'follow_id': None,
+                'is_read': pn.is_read,
+                'created_at': pn.created_at,
+                'vibe_type': pn.vibe_type,
+                'vibe_emoji': ProfilePostVibe.VIBE_EMOJIS.get(pn.vibe_type, ''),
+                'is_following_back': False,
+                '_actor_ids': {pn.actor_id},
+            }
+            group_order.append(key)
+        else:
+            g = grouped[key]
+            g['_actor_ids'].add(pn.actor_id)
+            if not pn.is_read:
+                g['is_read'] = False
+
+    for key in group_order:
+        g = grouped[key]
+        g['others_count'] = max(len(g.pop('_actor_ids')) - 1, 0)
+        entries.append(g)
+
+    entries.sort(key=lambda e: e['created_at'], reverse=True)
+
+    # Only the very first rendered row should inline the shared
+    # <style id="kvibe-notif-row-styles"> block (avoids duplicate <style>
+    # tags with the same id when many rows are rendered).
+    for i, entry in enumerate(entries):
+        entry['is_first_row'] = (i == 0)
+
+    return entries
+
+
+def _bucket_notifications_by_recency(entries):
+    """Splits a list of 'n' dicts (ordered newest-first) into
+    today / this-week / earlier buckets, based on created_at."""
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = now - timedelta(days=7)
+
+    today_notifications, week_notifications, earlier_notifications = [], [], []
+    for entry in entries:
+        created_at = entry['created_at']
+        if created_at >= today_start:
+            today_notifications.append(entry)
+        elif created_at >= week_start:
+            week_notifications.append(entry)
+        else:
+            earlier_notifications.append(entry)
+
+    return today_notifications, week_notifications, earlier_notifications
+
 
 @login_required(login_url='/')
 def notification_list(request):
-    from .models import FollowNotification as _FN
-    _FN.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
+    FollowNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
+    ProfilePostNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
     BusinessNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
     EventNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
+
+    activity_entries = _build_activity_notification_entries(request.user)
+    today_notifications, week_notifications, earlier_notifications = (
+        _bucket_notifications_by_recency(activity_entries)
+    )
 
     business_notifications = (
         BusinessNotification.objects
@@ -3355,6 +3550,9 @@ def notification_list(request):
     )
 
     context = {
+        'today_notifications': today_notifications,
+        'week_notifications': week_notifications,
+        'earlier_notifications': earlier_notifications,
         'business_notifications': business_notifications,
         'event_notifications': event_notifications,
     }
@@ -3370,6 +3568,9 @@ def notification_partial(request):
         unread_follow_count = FollowNotification.objects.filter(
             to_user=request.user, is_read=False
         ).count()
+        unread_profile_post_count = ProfilePostNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
         unread_business_count = BusinessNotification.objects.filter(
             to_user=request.user, is_read=False
         ).count()
@@ -3378,10 +3579,12 @@ def notification_partial(request):
         ).count()
     else:
         unread_follow_count = 0
+        unread_profile_post_count = 0
         unread_business_count = 0
         unread_event_count = 0
     return render(request, 'snippet/notification_count.html', {
         'unread_follow_count': unread_follow_count,
+        'unread_profile_post_count': unread_profile_post_count,
         'unread_business_count': unread_business_count,
         'unread_event_count': unread_event_count,
     })
@@ -3444,6 +3647,30 @@ def delete_notification_group(request):
 
         return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
 
+    # ── Grouped reaction/comment notification on one of the user's own
+    #    ProfilePost updates. 'notification_type' is the display type used
+    #    by snippet/kvibe_notif_row.html ('like' or 'comment'); dismissing
+    #    it clears every actor's row in that group at once, matching how
+    #    the group is shown as a single entry. ──────────────────────────
+    post_id = data.get('post_id')
+    notification_type = data.get('notification_type')
+    if post_id and notification_type:
+        model_notif_type = {
+            'like': ProfilePostNotification.NEW_VIBE,
+            'comment': ProfilePostNotification.NEW_COMMENT,
+        }.get(notification_type)
+
+        if not model_notif_type:
+            return JsonResponse({'status': 'error', 'message': 'Invalid notification_type'}, status=400)
+
+        deleted_count, _ = ProfilePostNotification.objects.filter(
+            post_id=post_id,
+            notif_type=model_notif_type,
+            to_user=request.user,
+        ).delete()
+
+        return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
+
     return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
 
 
@@ -3451,6 +3678,9 @@ def delete_notification_group(request):
 @require_POST
 def mark_all_notifications_read(request):
     FollowNotification.objects.filter(
+        to_user=request.user, is_read=False
+    ).update(is_read=True)
+    ProfilePostNotification.objects.filter(
         to_user=request.user, is_read=False
     ).update(is_read=True)
     BusinessNotification.objects.filter(
@@ -5577,7 +5807,44 @@ def business_post_vibe(request, post_id):
     post = get_object_or_404(BusinessPost, pk=post_id)
     if request.method == 'GET':
         return _card_vibe_get(request, post, BusinessPostVibe, 'post')
-    return _card_vibe_toggle(request, post, BusinessPostVibe, 'post')
+
+    response = _card_vibe_toggle(request, post, BusinessPostVibe, 'post')
+
+    if response.status_code == 200 and post.business_page.owner != request.user:
+        try:
+            data = json.loads(response.content)
+            user_vibe = data.get('user_vibe')
+            if user_vibe:
+                # One reaction notification per (post, actor) — re-vibing
+                # (or switching vibe types) refreshes it instead of spamming
+                # a new row for every tap.
+                notif, created = BusinessNotification.objects.get_or_create(
+                    notif_type=BusinessNotification.NEW_VIBE,
+                    business_page=post.business_page,
+                    actor=request.user,
+                    post=post,
+                    defaults={'to_user': post.business_page.owner, 'vibe_type': user_vibe},
+                )
+                if not created:
+                    notif.vibe_type  = user_vibe
+                    notif.is_read    = False
+                    notif.created_at = timezone.now()
+                    notif.save(update_fields=['vibe_type', 'is_read', 'created_at'])
+            else:
+                # Un-reacting removes the notification entirely.
+                BusinessNotification.objects.filter(
+                    notif_type=BusinessNotification.NEW_VIBE,
+                    business_page=post.business_page,
+                    actor=request.user,
+                    post=post,
+                ).delete()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'Failed to sync vibe notification for post %s', post.pk
+            )
+
+    return response
 
 
 @login_required(login_url='/')
@@ -7375,14 +7642,65 @@ def profile_post_vibe(request, post_id):
     post = get_object_or_404(ProfilePost, pk=post_id)
     if request.method == 'GET':
         return _card_vibe_get(request, post, ProfilePostVibe, 'post')
-    return _card_vibe_toggle(request, post, ProfilePostVibe, 'post')
+
+    response = _card_vibe_toggle(request, post, ProfilePostVibe, 'post')
+
+    if response.status_code == 200 and post.profile.user != request.user:
+        try:
+            data = json.loads(response.content)
+            user_vibe = data.get('user_vibe')
+            if user_vibe:
+                # One reaction notification per (post, actor) — re-vibing
+                # (or switching vibe types) refreshes it instead of spamming
+                # a new row for every tap.
+                notif, created = ProfilePostNotification.objects.get_or_create(
+                    notif_type=ProfilePostNotification.NEW_VIBE,
+                    post=post,
+                    actor=request.user,
+                    defaults={'to_user': post.profile.user, 'vibe_type': user_vibe},
+                )
+                if not created:
+                    notif.vibe_type  = user_vibe
+                    notif.is_read    = False
+                    notif.created_at = timezone.now()
+                    notif.save(update_fields=['vibe_type', 'is_read', 'created_at'])
+            else:
+                # Un-reacting removes the notification entirely.
+                ProfilePostNotification.objects.filter(
+                    notif_type=ProfilePostNotification.NEW_VIBE,
+                    post=post,
+                    actor=request.user,
+                ).delete()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'Failed to sync vibe notification for post %s', post.pk
+            )
+
+    return response
 
 
 @login_required(login_url='/')
 def profile_post_comments(request, post_id):
     post = get_object_or_404(ProfilePost, pk=post_id)
     if request.method == 'POST':
-        return _card_comments_post(request, post, ProfilePostComment, 'post')
+        response = _card_comments_post(request, post, ProfilePostComment, 'post')
+        if response.status_code == 200 and post.profile.user != request.user:
+            try:
+                comment = ProfilePostComment.objects.filter(post=post, author=request.user).latest('created_at')
+                ProfilePostNotification.objects.create(
+                    notif_type=ProfilePostNotification.NEW_COMMENT,
+                    post=post,
+                    actor=request.user,
+                    to_user=post.profile.user,
+                    comment=comment,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception(
+                    'Failed to create comment notification for post %s', post.pk
+                )
+        return response
     return _card_comments_get(request, post, ProfilePostComment, 'post')
 
 

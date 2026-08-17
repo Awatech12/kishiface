@@ -1095,6 +1095,8 @@ class BusinessNotification(models.Model):
       - 'new_follower' → sent to the page owner when someone joins/follows the page.
       - 'new_product'  → sent to every follower of the page when the owner
                           uploads a new product/listing.
+      - 'new_comment'  → sent to the page owner when someone comments on a post.
+      - 'new_vibe'     → sent to the page owner when someone reacts to a post.
     Kept separate from FollowNotification (which is strictly for personal
     profile follows) since a BusinessPage can have many followers and many
     products, and a single user can trigger many of these over time.
@@ -1102,10 +1104,12 @@ class BusinessNotification(models.Model):
     NEW_FOLLOWER = 'new_follower'
     NEW_PRODUCT  = 'new_product'
     NEW_COMMENT  = 'new_comment'
+    NEW_VIBE     = 'new_vibe'
     NOTIF_TYPE_CHOICES = [
         (NEW_FOLLOWER, 'New page follower'),
         (NEW_PRODUCT,  'New product'),
         (NEW_COMMENT,  'New comment on a post'),
+        (NEW_VIBE,     'New reaction on a post'),
     ]
 
     notif_type    = models.CharField(max_length=20, choices=NOTIF_TYPE_CHOICES, db_index=True)
@@ -1113,7 +1117,8 @@ class BusinessNotification(models.Model):
         'BusinessPage', on_delete=models.CASCADE, related_name='notifications'
     )
     # actor: the user who triggered the notification —
-    #   the follower for 'new_follower', the page owner for 'new_product'.
+    #   the follower for 'new_follower', the page owner for 'new_product',
+    #   the commenter/reactor for 'new_comment'/'new_vibe'.
     actor = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='sent_business_notifications'
     )
@@ -1130,7 +1135,11 @@ class BusinessNotification(models.Model):
     post = models.ForeignKey(
         'BusinessPost', on_delete=models.CASCADE, null=True, blank=True,
         related_name='comment_notifications',
-        help_text='Set for new_comment notifications only.'
+        help_text='Set for new_comment / new_vibe notifications only.'
+    )
+    vibe_type = models.CharField(
+        max_length=10, blank=True, default='',
+        help_text='Set for new_vibe notifications only (e.g. "fire", "love").'
     )
     is_read    = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1146,6 +1155,10 @@ class BusinessNotification(models.Model):
     def __str__(self):
         if self.notif_type == self.NEW_FOLLOWER:
             return f"{self.actor.username} joined {self.business_page.name}"
+        if self.notif_type == self.NEW_COMMENT:
+            return f"{self.actor.username} commented on {self.business_page.name}'s post"
+        if self.notif_type == self.NEW_VIBE:
+            return f"{self.actor.username} vibed {self.vibe_type} on {self.business_page.name}'s post"
         return f"{self.business_page.name} posted a new product: {self.product}"
 
 
@@ -3969,3 +3982,63 @@ class ProfilePostComment(models.Model):
 
     def __str__(self):
         return f"{self.author.username} on post {self.post_id}: {self.text[:50]}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ProfilePostNotification — reaction/comment notifications for personal
+# ProfilePost updates, mirroring BusinessNotification's new_comment/new_vibe
+# handling but scoped to a user's own profile feed instead of a BusinessPage.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProfilePostNotification(models.Model):
+    """
+    Notifications tied to a ProfilePost (a personal profile update):
+      - 'new_vibe'    → sent to the post owner when someone reacts to their post.
+      - 'new_comment' → sent to the post owner when someone comments on their post.
+    A single actor can only have one active 'new_vibe' row per post (their
+    reaction is refreshed in place if they change/re-apply it); comments
+    always create a fresh row since each comment is a distinct event.
+    """
+    NEW_VIBE    = 'new_vibe'
+    NEW_COMMENT = 'new_comment'
+    NOTIF_TYPE_CHOICES = [
+        (NEW_VIBE,    'New reaction'),
+        (NEW_COMMENT, 'New comment'),
+    ]
+
+    notif_type = models.CharField(max_length=20, choices=NOTIF_TYPE_CHOICES, db_index=True)
+    post = models.ForeignKey(
+        ProfilePost, on_delete=models.CASCADE, related_name='notifications'
+    )
+    # actor: the user who reacted or commented.
+    actor = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='sent_profile_post_notifications'
+    )
+    # to_user: the post owner — the recipient of the notification.
+    to_user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='profile_post_notifications'
+    )
+    vibe_type = models.CharField(
+        max_length=10, blank=True, default='',
+        help_text='Set for new_vibe notifications only (e.g. "fire", "love").'
+    )
+    comment = models.ForeignKey(
+        ProfilePostComment, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='notifications',
+        help_text='Set for new_comment notifications only.'
+    )
+    is_read    = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'ProfilePostNotification_Table'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['to_user', 'is_read']),
+            models.Index(fields=['post', 'notif_type']),
+        ]
+
+    def __str__(self):
+        if self.notif_type == self.NEW_VIBE:
+            return f"{self.actor.username} vibed {self.vibe_type} on post {self.post_id}"
+        return f"{self.actor.username} commented on post {self.post_id}"
