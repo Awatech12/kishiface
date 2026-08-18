@@ -3081,12 +3081,54 @@
         .kf-caption-seemore:hover { color: var(--mfy-text); }
 
         .kbiz-post-media { width: 100%; background: #000; }
-        .kbiz-post-media img, .kbiz-post-media video { width: 100%; max-height: 520px; object-fit: contain; display: block; background: #000; }
+        .kbiz-post-media video { width: 100%; max-height: 520px; object-fit: contain; display: block; background: #000; }
+        /* LinkedIn-style media grid: 1 = full width, 2 = side-by-side, 3 = big+stacked pair, 4+ = 2x2 with "+N" on the 4th tile */
         .kbiz-post-media-grid { display: grid; gap: 2px; }
+        .kbiz-post-media-grid .kf-media-tile { position: relative; overflow: hidden; cursor: pointer; background: #f0f0f0; }
+        .kbiz-post-media-grid .kf-media-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .kbiz-post-media-grid.n1 { grid-template-columns: 1fr; }
-        .kbiz-post-media-grid.n2 { grid-template-columns: 1fr 1fr; }
-        .kbiz-post-media-grid.n3, .kbiz-post-media-grid.nmany { grid-template-columns: 1fr 1fr; }
-        .kbiz-post-media-grid img { width: 100%; height: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; background: #f0f0f0; }
+        .kbiz-post-media-grid.n1 .kf-media-tile { max-height: 520px; }
+        .kbiz-post-media-grid.n1 .kf-media-tile img { max-height: 520px; object-fit: contain; background: #000; }
+        .kbiz-post-media-grid.n2 { grid-template-columns: 1fr 1fr; height: 300px; }
+        .kbiz-post-media-grid.n3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; height: 320px; }
+        .kbiz-post-media-grid.n3 .kf-media-tile:nth-child(1) { grid-row: 1 / 3; }
+        .kbiz-post-media-grid.n4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: 320px; }
+        .kf-media-more-overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.55); color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 28px; font-weight: 600; letter-spacing: 0.3px;
+        }
+        /* Lightbox */
+        .kf-lightbox-overlay {
+            display: none; position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,0.92); align-items: center; justify-content: center;
+        }
+        .kf-lightbox-overlay.active { display: flex; }
+        .kf-lightbox-content { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .kf-lightbox-content img { max-width: 90vw; max-height: 88vh; object-fit: contain; user-select: none; }
+        .kf-lightbox-close {
+            position: absolute; top: 16px; right: 20px; width: 40px; height: 40px; border: none; border-radius: 50%;
+            background: rgba(255,255,255,0.12); color: #fff; font-size: 20px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; z-index: 2;
+        }
+        .kf-lightbox-close:hover { background: rgba(255,255,255,0.22); }
+        .kf-lightbox-nav {
+            position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border: none; border-radius: 50%;
+            background: rgba(255,255,255,0.12); color: #fff; font-size: 18px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; z-index: 2;
+        }
+        .kf-lightbox-nav:hover { background: rgba(255,255,255,0.22); }
+        .kf-lightbox-prev { left: 16px; }
+        .kf-lightbox-next { right: 16px; }
+        .kf-lightbox-counter {
+            position: absolute; top: 18px; left: 20px; color: #fff; font-size: 14px; font-weight: 500;
+            background: rgba(255,255,255,0.12); padding: 4px 12px; border-radius: 14px;
+        }
+        @media (max-width: 640px) {
+            .kf-lightbox-nav { width: 36px; height: 36px; font-size: 15px; }
+            .kf-lightbox-prev { left: 6px; }
+            .kf-lightbox-next { right: 6px; }
+        }
 
         /* ── LinkedIn-style video player (replaces the bare native <video controls>) ── */
         .kbiz-video-wrap { position: relative; width: 100%; background: #000; cursor: pointer; user-select: none; }
@@ -3908,6 +3950,55 @@ function kfToggleCaption(btn) {
 document.addEventListener('DOMContentLoaded', function () { kfInitCaptionClamp(document); });
 document.body.addEventListener('htmx:afterSwap', function (e) { kfInitCaptionClamp(e.target); });
 
+// ── Post media lightbox: click any grid image to view full-size with prev/next nav ──
+let kfLightboxImages = [];
+let kfLightboxIndex = 0;
+
+function kfOpenLightbox(scriptId, startIndex) {
+    const el = document.getElementById(scriptId);
+    if (!el) return;
+    try {
+        kfLightboxImages = JSON.parse(el.textContent);
+    } catch (e) {
+        return;
+    }
+    if (!kfLightboxImages || !kfLightboxImages.length) return;
+    kfLightboxIndex = startIndex || 0;
+    kfRenderLightbox();
+    document.getElementById('kfLightboxOverlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function kfRenderLightbox() {
+    const img = document.getElementById('kfLightboxImg');
+    img.src = kfLightboxImages[kfLightboxIndex];
+    document.getElementById('kfLightboxCounter').textContent = (kfLightboxIndex + 1) + ' / ' + kfLightboxImages.length;
+    const multi = kfLightboxImages.length > 1;
+    document.getElementById('kfLightboxPrev').style.display = multi ? 'flex' : 'none';
+    document.getElementById('kfLightboxNext').style.display = multi ? 'flex' : 'none';
+    document.getElementById('kfLightboxCounter').style.display = multi ? 'block' : 'none';
+}
+
+function kfLightboxNav(dir, evt) {
+    if (evt) evt.stopPropagation();
+    if (!kfLightboxImages.length) return;
+    kfLightboxIndex = (kfLightboxIndex + dir + kfLightboxImages.length) % kfLightboxImages.length;
+    kfRenderLightbox();
+}
+
+function kfCloseLightbox() {
+    document.getElementById('kfLightboxOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', function (e) {
+    const overlay = document.getElementById('kfLightboxOverlay');
+    if (!overlay || !overlay.classList.contains('active')) return;
+    if (e.key === 'Escape') kfCloseLightbox();
+    if (e.key === 'ArrowLeft') kfLightboxNav(-1);
+    if (e.key === 'ArrowRight') kfLightboxNav(1);
+});
+
 // ── LinkedIn-style in-feed video player: click-to-play/pause, tap-to-mute,
 // autoplay-muted while ~60% in view (paused off-screen), thin progress bar.
 // Re-runs safely on newly loaded feed posts (infinite scroll / htmx swaps). ──
@@ -3970,6 +4061,17 @@ document.addEventListener('DOMContentLoaded', function () { kbizInitVideoPlayers
 document.body.addEventListener('htmx:afterSwap', function (e) { kbizInitVideoPlayers(e.target); });
 
 </script>
+
+<!-- Post media lightbox (shared by all post grids on this page) -->
+<div class="kf-lightbox-overlay" id="kfLightboxOverlay" onclick="kfCloseLightbox()">
+    <div class="kf-lightbox-content" onclick="event.stopPropagation()">
+        <span class="kf-lightbox-counter" id="kfLightboxCounter"></span>
+        <button type="button" class="kf-lightbox-close" onclick="kfCloseLightbox()" aria-label="Close"><i class="fas fa-times"></i></button>
+        <button type="button" class="kf-lightbox-nav kf-lightbox-prev" id="kfLightboxPrev" onclick="kfLightboxNav(-1, event)" aria-label="Previous image"><i class="fas fa-chevron-left"></i></button>
+        <img id="kfLightboxImg" src="" alt="">
+        <button type="button" class="kf-lightbox-nav kf-lightbox-next" id="kfLightboxNext" onclick="kfLightboxNav(1, event)" aria-label="Next image"><i class="fas fa-chevron-right"></i></button>
+    </div>
+</div>
 
 </body>
 </html>

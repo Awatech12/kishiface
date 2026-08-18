@@ -514,6 +514,8 @@ class Profile(models.Model):
     # BusinessPage. Which sections are suggested by default depends on the
     # profile's member_type — see PROFESSIONAL_SECTION_DEFAULTS below.
     PROFESSIONAL_SECTION_CHOICES = [
+        ('experience',   'Experience'),
+        ('education',    'Education'),
         ('services',     'Services'),
         ('portfolio',    'Portfolio'),
         ('projects',     'Projects'),
@@ -525,16 +527,16 @@ class Profile(models.Model):
     # Suggested default sections per member_type — the profile owner can
     # still turn any of these on/off from their profile settings.
     PROFESSIONAL_SECTION_DEFAULTS = {
-        'skilled_professional': ['services', 'portfolio', 'achievements'],
-        'job_seeker':           [],
-        'business_owner':       ['services', 'jobs'],
-        'teacher_tutor':        ['services', 'achievements'],
-        'freelancer':           ['services', 'portfolio', 'projects'],
-        'artisan_technician':   ['services', 'portfolio', 'achievements'],
-        'service_provider':     ['services', 'jobs'],
-        'student_apprentice':   ['portfolio', 'projects', 'achievements'],
-        'employer_recruiter':   ['jobs'],
-        'other_professional':   ['services', 'portfolio', 'achievements'],
+        'skilled_professional': ['experience', 'education', 'services', 'portfolio', 'achievements'],
+        'job_seeker':           ['experience', 'education'],
+        'business_owner':       ['experience', 'services', 'jobs'],
+        'teacher_tutor':        ['experience', 'education', 'services', 'achievements'],
+        'freelancer':           ['experience', 'services', 'portfolio', 'projects'],
+        'artisan_technician':   ['experience', 'services', 'portfolio', 'achievements'],
+        'service_provider':     ['experience', 'services', 'jobs'],
+        'student_apprentice':   ['education', 'portfolio', 'projects', 'achievements'],
+        'employer_recruiter':   ['experience', 'jobs'],
+        'other_professional':   ['experience', 'education', 'services', 'portfolio', 'achievements'],
     }
 
     # Member types that default to selling products from their profile.
@@ -938,6 +940,14 @@ class Profile(models.Model):
         return bool(self.sells_products)
 
     @property
+    def show_experience(self):
+        return 'experience' in (self.enabled_sections or [])
+
+    @property
+    def show_education(self):
+        return 'education' in (self.enabled_sections or [])
+
+    @property
     def show_services(self):
         return 'services' in (self.enabled_sections or [])
 
@@ -956,6 +966,14 @@ class Profile(models.Model):
     @property
     def show_jobs_section(self):
         return 'jobs' in (self.enabled_sections or [])
+
+    @property
+    def experience_count(self):
+        return self.experiences.count()
+
+    @property
+    def education_count(self):
+        return self.education_history.count()
 
     @property
     def service_count(self):
@@ -3080,6 +3098,181 @@ class ProfilePortfolioItem(models.Model):
             return self.image.url if self.image else ''
         except Exception:
             return ''
+
+    @property
+    def owner(self):
+        return self.profile
+
+    @property
+    def owner_user(self):
+        return self.profile.user
+
+
+class ProfileExperience(models.Model):
+    """A single work-history entry (role at a company) shown on a user's own
+    Profile, LinkedIn-style — with an optional company logo image."""
+    EMPLOYMENT_FULL_TIME = 'full_time'
+    EMPLOYMENT_PART_TIME = 'part_time'
+    EMPLOYMENT_INTERNSHIP = 'internship'
+    EMPLOYMENT_FREELANCE = 'freelance'
+    EMPLOYMENT_CONTRACT = 'contract'
+    EMPLOYMENT_VOLUNTEER = 'volunteer'
+    EMPLOYMENT_TYPE_CHOICES = [
+        (EMPLOYMENT_FULL_TIME,  'Full-time'),
+        (EMPLOYMENT_PART_TIME,  'Part-time'),
+        (EMPLOYMENT_INTERNSHIP, 'Internship'),
+        (EMPLOYMENT_FREELANCE,  'Freelance'),
+        (EMPLOYMENT_CONTRACT,   'Contract'),
+        (EMPLOYMENT_VOLUNTEER,  'Volunteer'),
+    ]
+
+    experience_id   = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile         = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='experiences')
+    title           = models.CharField(max_length=150, help_text='Role / position, e.g. Software Engineer Intern')
+    company_name    = models.CharField(max_length=150)
+    employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPE_CHOICES, blank=True, default='')
+    location        = models.CharField(max_length=150, blank=True, default='')
+    description     = models.TextField(blank=True, default='')
+    start_date      = models.DateField(blank=True, null=True)
+    end_date        = models.DateField(blank=True, null=True)
+    is_current      = models.BooleanField(default=False)
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='profile_experience_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='profile_experience_images/', blank=True, null=True)
+
+    order      = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ProfileExperience_Table'
+        ordering = ['order', '-is_current', '-start_date', '-created_at']
+
+    def __str__(self):
+        return f'{self.title} @ {self.company_name}'
+
+    def clean(self):
+        super().clean()
+        self.title        = sanitize_text(self.title)
+        self.company_name = sanitize_text(self.company_name)
+        self.location      = sanitize_text(self.location)
+        self.description   = sanitize_text(self.description, 'about')
+        if self.employment_type not in dict(self.EMPLOYMENT_TYPE_CHOICES) and self.employment_type:
+            self.employment_type = ''
+        if not self.title:
+            raise ValidationError({'title': 'Title is required.'})
+        if not self.company_name:
+            raise ValidationError({'company_name': 'Company name is required.'})
+        if self.is_current:
+            self.end_date = None
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
+    @property
+    def duration_label(self):
+        """e.g. 'Jul 2026 - Present' — mirrors LinkedIn's date-range line."""
+        if not self.start_date:
+            return ''
+        start = self.start_date.strftime('%b %Y')
+        end = 'Present' if self.is_current else (self.end_date.strftime('%b %Y') if self.end_date else '')
+        return f'{start} - {end}' if end else start
+
+    @property
+    def owner(self):
+        return self.profile
+
+    @property
+    def owner_user(self):
+        return self.profile.user
+
+
+class ProfileEducation(models.Model):
+    """A single education entry (school / degree) shown on a user's own
+    Profile, LinkedIn-style — with an optional institution logo image."""
+    education_id    = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile          = models.ForeignKey('Profile', on_delete=models.CASCADE, related_name='education_history')
+    school_name      = models.CharField(max_length=150)
+    degree           = models.CharField(max_length=150, blank=True, default='')
+    field_of_study   = models.CharField(max_length=150, blank=True, default='')
+    grade            = models.CharField(max_length=50, blank=True, default='')
+    description      = models.TextField(blank=True, default='')
+    start_date       = models.DateField(blank=True, null=True)
+    end_date         = models.DateField(blank=True, null=True)
+    is_current       = models.BooleanField(default=False)
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='profile_education_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='profile_education_images/', blank=True, null=True)
+
+    order      = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ProfileEducation_Table'
+        ordering = ['order', '-is_current', '-start_date', '-created_at']
+
+    def __str__(self):
+        return f'{self.school_name} — {self.degree}' if self.degree else self.school_name
+
+    def clean(self):
+        super().clean()
+        self.school_name    = sanitize_text(self.school_name)
+        self.degree         = sanitize_text(self.degree)
+        self.field_of_study = sanitize_text(self.field_of_study)
+        self.grade           = sanitize_text(self.grade)
+        self.description     = sanitize_text(self.description, 'about')
+        if not self.school_name:
+            raise ValidationError({'school_name': 'School / institution name is required.'})
+        if self.is_current:
+            self.end_date = None
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            return self.image.url if self.image else ''
+        except Exception:
+            return ''
+
+    @property
+    def duration_label(self):
+        if not self.start_date and not self.end_date:
+            return ''
+        start = self.start_date.strftime('%b %Y') if self.start_date else ''
+        end = 'Present' if self.is_current else (self.end_date.strftime('%b %Y') if self.end_date else '')
+        if start and end:
+            return f'{start} - {end}'
+        return start or end
 
     @property
     def owner(self):

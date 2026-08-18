@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessAchievement, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessAchievement, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation
 from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES
 
@@ -364,6 +364,195 @@ def register(request):
 # Onboarding — "What do you use Marketfy for?"
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _collect_indexed_entries(post, files, prefix):
+    """Collect indexed form-array entries like 'experience-0-title',
+    'experience-0-image', 'experience-1-title' ... (from onboarding's
+    repeatable Experience/Education rows) into an ordered list of dicts:
+    [{'title': ..., 'image': <UploadedFile>, ...}, {...}]. Text fields
+    come from `post`, file fields from `files`; a field present in both
+    (shouldn't normally happen) prefers the file. Unknown prefixes just
+    return an empty list.
+    """
+    pattern = re.compile(r'^' + re.escape(prefix) + r'-(\d+)-(.+)$')
+    entries = {}
+    for key in post.keys():
+        m = pattern.match(key)
+        if not m:
+            continue
+        idx, field = m.group(1), m.group(2)
+        entries.setdefault(idx, {})[field] = post.get(key)
+    for key in files.keys():
+        m = pattern.match(key)
+        if not m:
+            continue
+        idx, field = m.group(1), m.group(2)
+        entries.setdefault(idx, {})[field] = files.get(key)
+    return [entries[k] for k in sorted(entries.keys(), key=int)]
+
+
+def _create_onboarding_experience_entries(profile, request):
+    """Creates or updates ProfileExperience rows from onboarding Step 3's
+    repeatable 'experience-<n>-...' fields. Rows carrying an 'id' field that
+    matches a row already owned by this profile are updated in place (this
+    is how re-running onboarding via ?edit=1 shows previous entries
+    pre-filled and lets them be edited rather than duplicated); rows
+    without a matching id are created as new. Any existing row that isn't
+    resubmitted (e.g. removed via the trash button in the UI) is deleted.
+    Rows missing a title or company are silently skipped — this step is
+    optional, so partial rows shouldn't block finishing onboarding.
+    Returns the number of rows newly created."""
+    created = 0
+    kept_ids = set()
+    for entry in _collect_indexed_entries(request.POST, request.FILES, 'experience'):
+        title = (entry.get('title') or '').strip()
+        company_name = (entry.get('company_name') or '').strip()
+        if not title or not company_name:
+            continue
+
+        employment_type = (entry.get('employment_type') or '').strip()
+        if employment_type not in dict(ProfileExperience.EMPLOYMENT_TYPE_CHOICES):
+            employment_type = ''
+        is_current = str(entry.get('is_current') or '') in ('1', 'true', 'on')
+
+        start_date = None
+        start_raw = (entry.get('start_date') or '').strip()
+        if start_raw:
+            try:
+                start_date = datetime.strptime(start_raw, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = None
+
+        end_date = None
+        if not is_current:
+            end_raw = (entry.get('end_date') or '').strip()
+            if end_raw:
+                try:
+                    end_date = datetime.strptime(end_raw, '%Y-%m-%d').date()
+                except ValueError:
+                    end_date = None
+
+        image = entry.get('image') or None
+        if image is not None:
+            allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+            if getattr(image, 'content_type', None) not in allowed_types or image.size > 10 * 1024 * 1024:
+                image = None
+
+        entry_id = (entry.get('id') or '').strip()
+        existing = None
+        if entry_id:
+            existing = ProfileExperience.objects.filter(profile=profile, experience_id=entry_id).first()
+
+        try:
+            if existing:
+                existing.title = title[:150]
+                existing.company_name = company_name[:150]
+                existing.employment_type = employment_type
+                existing.location = (entry.get('location') or '').strip()[:150]
+                existing.description = (entry.get('description') or '').strip()
+                existing.start_date = start_date
+                existing.end_date = end_date
+                existing.is_current = is_current
+                if image is not None:
+                    existing.image = image
+                existing.save()
+                kept_ids.add(existing.pk)
+            else:
+                new_row = ProfileExperience.objects.create(
+                    profile=profile, title=title[:150], company_name=company_name[:150],
+                    employment_type=employment_type, location=(entry.get('location') or '').strip()[:150],
+                    description=(entry.get('description') or '').strip(),
+                    start_date=start_date, end_date=end_date, is_current=is_current,
+                    image=image,
+                )
+                created += 1
+                kept_ids.add(new_row.pk)
+        except _ModelValidationError:
+            continue
+
+    profile.experiences.exclude(pk__in=kept_ids).delete()
+    return created
+
+
+def _create_onboarding_education_entries(profile, request):
+    """Creates or updates ProfileEducation rows from onboarding Step 3's
+    repeatable 'education-<n>-...' fields. Rows carrying an 'id' field that
+    matches a row already owned by this profile are updated in place (this
+    is how re-running onboarding via ?edit=1 shows previous entries
+    pre-filled and lets them be edited rather than duplicated); rows
+    without a matching id are created as new. Any existing row that isn't
+    resubmitted (e.g. removed via the trash button in the UI) is deleted.
+    Rows missing a school name are silently skipped. Returns the number of
+    rows newly created."""
+    created = 0
+    kept_ids = set()
+    for entry in _collect_indexed_entries(request.POST, request.FILES, 'education'):
+        school_name = (entry.get('school_name') or '').strip()
+        if not school_name:
+            continue
+
+        is_current = str(entry.get('is_current') or '') in ('1', 'true', 'on')
+
+        start_date = None
+        start_raw = (entry.get('start_date') or '').strip()
+        if start_raw:
+            try:
+                start_date = datetime.strptime(start_raw, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = None
+
+        end_date = None
+        if not is_current:
+            end_raw = (entry.get('end_date') or '').strip()
+            if end_raw:
+                try:
+                    end_date = datetime.strptime(end_raw, '%Y-%m-%d').date()
+                except ValueError:
+                    end_date = None
+
+        image = entry.get('image') or None
+        if image is not None:
+            allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+            if getattr(image, 'content_type', None) not in allowed_types or image.size > 10 * 1024 * 1024:
+                image = None
+
+        entry_id = (entry.get('id') or '').strip()
+        existing = None
+        if entry_id:
+            existing = ProfileEducation.objects.filter(profile=profile, education_id=entry_id).first()
+
+        try:
+            if existing:
+                existing.school_name = school_name[:150]
+                existing.degree = (entry.get('degree') or '').strip()[:150]
+                existing.field_of_study = (entry.get('field_of_study') or '').strip()[:150]
+                existing.grade = (entry.get('grade') or '').strip()[:50]
+                existing.description = (entry.get('description') or '').strip()
+                existing.start_date = start_date
+                existing.end_date = end_date
+                existing.is_current = is_current
+                if image is not None:
+                    existing.image = image
+                existing.save()
+                kept_ids.add(existing.pk)
+            else:
+                new_row = ProfileEducation.objects.create(
+                    profile=profile, school_name=school_name[:150],
+                    degree=(entry.get('degree') or '').strip()[:150],
+                    field_of_study=(entry.get('field_of_study') or '').strip()[:150],
+                    grade=(entry.get('grade') or '').strip()[:50],
+                    description=(entry.get('description') or '').strip(),
+                    start_date=start_date, end_date=end_date, is_current=is_current,
+                    image=image,
+                )
+                created += 1
+                kept_ids.add(new_row.pk)
+        except _ModelValidationError:
+            continue
+
+    profile.education_history.exclude(pk__in=kept_ids).delete()
+    return created
+
+
 @login_required(login_url='/')
 def onboarding(request):
     profile = request.user.profile
@@ -371,6 +560,12 @@ def onboarding(request):
     # Already done — nothing to do here (unless they explicitly want to change it).
     if profile.onboarding_completed and request.method == 'GET' and request.GET.get('edit') != '1':
         return redirect('home')
+
+    # Previously-saved Experience/Education rows — passed to every render of
+    # this view so Step 3 shows them pre-filled instead of blank when the
+    # owner is re-running onboarding (e.g. ?edit=1) to update their profile.
+    existing_experience = list(profile.experiences.all()) if profile.pk else []
+    existing_education = list(profile.education_history.all()) if profile.pk else []
 
     if request.method == 'POST':
         if request.POST.get('skip') == '1':
@@ -386,6 +581,9 @@ def onboarding(request):
             return render(request, 'onboarding.html', {
                 'member_type_schema': _member_type_edit_schema(profile),
                 'selected_type': member_type,
+                'employment_type_choices': ProfileExperience.EMPLOYMENT_TYPE_CHOICES,
+                'existing_experience': existing_experience,
+                'existing_education': existing_education,
             })
 
         raw_data = {}
@@ -410,10 +608,23 @@ def onboarding(request):
                 'member_type_schema': _member_type_edit_schema(profile),
                 'selected_type': member_type,
                 'submitted': raw_data,
+                'employment_type_choices': ProfileExperience.EMPLOYMENT_TYPE_CHOICES,
+                'existing_experience': existing_experience,
+                'existing_education': existing_education,
             })
 
         profile.member_type = member_type
         profile.member_type_data = cleaned
+
+        # Seed sensible default professional sections (Experience, Education,
+        # Services, Portfolio, Achievements, Jobs, etc.) for this member
+        # type — mirrors the same seeding the profile-edit form does, so a
+        # brand-new profile isn't left with every section switched off.
+        # Only seeds once: if the owner already customized their sections
+        # (e.g. re-running onboarding via ?edit=1), their choices are kept.
+        if not profile.enabled_sections:
+            profile.enabled_sections = Profile.default_sections_for(member_type)
+            profile.sells_products = member_type in Profile.MEMBER_TYPES_SELLING_BY_DEFAULT
 
         cv_file = request.FILES.get('cv')
         if cv_file:
@@ -430,7 +641,25 @@ def onboarding(request):
                     'member_type_schema': _member_type_edit_schema(profile),
                     'selected_type': member_type,
                     'submitted': raw_data,
+                    'employment_type_choices': ProfileExperience.EMPLOYMENT_TYPE_CHOICES,
+                    'existing_experience': existing_experience,
+                    'existing_education': existing_education,
                 })
+
+        # ── Step 3 (optional): repeatable Experience / Education rows ──────
+        # profile already has a pk (it's an existing OneToOne row), so these
+        # FK creates are safe even though profile.save() hasn't run yet.
+        exp_created = _create_onboarding_experience_entries(profile, request)
+        edu_created = _create_onboarding_education_entries(profile, request)
+        # Make sure whatever the owner actually filled in during Step 3 is
+        # visible, even if it isn't a default section for their member type
+        # (e.g. a Business Owner who still added their education history).
+        sections = list(profile.enabled_sections or [])
+        if exp_created and 'experience' not in sections:
+            sections.append('experience')
+        if edu_created and 'education' not in sections:
+            sections.append('education')
+        profile.enabled_sections = sections
 
         profile.onboarding_completed = True
         profile.save()
@@ -441,7 +670,11 @@ def onboarding(request):
     return render(request, 'onboarding.html', {
         'member_type_schema': _member_type_edit_schema(profile),
         'selected_type': profile.member_type,
+        'employment_type_choices': ProfileExperience.EMPLOYMENT_TYPE_CHOICES,
+        'existing_experience': existing_experience,
+        'existing_education': existing_education,
     })
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1572,6 +1805,7 @@ def profile(request, username):
             'profile_completion_missing': [],
             'profile_skills': [],
             'user_reviews': [],
+            'professional_experience': [], 'professional_education': [],
             'professional_services': [], 'professional_portfolio': [],
             'professional_projects': [], 'professional_achievements': [],
             'professional_posts': [], 'professional_products': [],
@@ -1742,6 +1976,8 @@ def profile(request, username):
     # Profile, independent of any BusinessPage. Shown/hidden per-section via
     # profile.show_services / show_portfolio / etc., which read
     # profile.enabled_sections (defaults suggested from profile.member_type).
+    professional_experience   = list(profile.experiences.all()) if profile.show_experience else []
+    professional_education    = list(profile.education_history.all()) if profile.show_education else []
     professional_services     = list(profile.services.filter(is_active=True)) if profile.show_services else []
     professional_portfolio    = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PORTFOLIO)) if profile.show_portfolio else []
     professional_projects     = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PROJECT)) if profile.show_projects else []
@@ -1811,6 +2047,8 @@ def profile(request, username):
         'viewer_business_page_count':   viewer_business_page_count,
         'viewer_primary_business_page': viewer_primary_business_page,
         'member_type_edit_schema': _member_type_edit_schema(profile) if request.user == user else [],
+        'professional_experience':   professional_experience,
+        'professional_education':    professional_education,
         'professional_services':     professional_services,
         'professional_portfolio':    professional_portfolio,
         'professional_projects':     professional_projects,
@@ -7393,6 +7631,170 @@ def profile_portfolio_create(request):
 def profile_portfolio_delete(request, item_id):
     item = get_object_or_404(ProfilePortfolioItem, item_id=item_id, profile__user=request.user)
     item.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_experience_create(request):
+    """Owner adds a work-experience entry (role @ company) to their profile,
+    LinkedIn-style, with an optional company logo image."""
+    profile = request.user.profile
+    if not profile.show_experience:
+        return JsonResponse({'success': False, 'error': 'Turn on the Experience section first (Manage sections).'}, status=403)
+
+    title           = request.POST.get('title', '').strip()
+    company_name    = request.POST.get('company_name', '').strip()
+    employment_type = request.POST.get('employment_type', '').strip()
+    location        = request.POST.get('location', '').strip()
+    description     = request.POST.get('description', '').strip()
+    is_current      = request.POST.get('is_current') in ('1', 'true', 'on')
+    start_raw       = request.POST.get('start_date', '').strip()
+    end_raw         = request.POST.get('end_date', '').strip()
+    image           = request.FILES.get('image')
+
+    if not title:
+        return JsonResponse({'success': False, 'error': 'Please add a title / role.'}, status=400)
+    if len(title) > 150:
+        return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
+    if not company_name:
+        return JsonResponse({'success': False, 'error': 'Please add a company name.'}, status=400)
+    if employment_type and employment_type not in dict(ProfileExperience.EMPLOYMENT_TYPE_CHOICES):
+        employment_type = ''
+
+    start_date = None
+    if start_raw:
+        try:
+            start_date = datetime.strptime(start_raw, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Enter a valid start date.'}, status=400)
+
+    end_date = None
+    if not is_current and end_raw:
+        try:
+            end_date = datetime.strptime(end_raw, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Enter a valid end date.'}, status=400)
+
+    if image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+
+    try:
+        exp = ProfileExperience.objects.create(
+            profile=profile, title=title, company_name=company_name,
+            employment_type=employment_type, location=location, description=description,
+            start_date=start_date, end_date=end_date, is_current=is_current,
+            image=image if image else None,
+        )
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'experience': {
+            'experience_id':   str(exp.experience_id),
+            'title':           exp.title,
+            'company_name':    exp.company_name,
+            'employment_type': exp.get_employment_type_display() if exp.employment_type else '',
+            'location':        exp.location,
+            'description':     exp.description,
+            'duration_label':  exp.duration_label,
+            'image_url':       exp.get_image_url,
+        },
+        'experience_count': profile.experience_count,
+        'message': 'Experience added! 💼',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_experience_delete(request, experience_id):
+    exp = get_object_or_404(ProfileExperience, experience_id=experience_id, profile__user=request.user)
+    exp.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_education_create(request):
+    """Owner adds an education entry (school / degree) to their profile,
+    LinkedIn-style, with an optional institution logo image."""
+    profile = request.user.profile
+    if not profile.show_education:
+        return JsonResponse({'success': False, 'error': 'Turn on the Education section first (Manage sections).'}, status=403)
+
+    school_name    = request.POST.get('school_name', '').strip()
+    degree         = request.POST.get('degree', '').strip()
+    field_of_study = request.POST.get('field_of_study', '').strip()
+    grade          = request.POST.get('grade', '').strip()
+    description    = request.POST.get('description', '').strip()
+    is_current     = request.POST.get('is_current') in ('1', 'true', 'on')
+    start_raw      = request.POST.get('start_date', '').strip()
+    end_raw        = request.POST.get('end_date', '').strip()
+    image          = request.FILES.get('image')
+
+    if not school_name:
+        return JsonResponse({'success': False, 'error': 'Please add a school / institution name.'}, status=400)
+    if len(school_name) > 150:
+        return JsonResponse({'success': False, 'error': 'School name must be 150 characters or fewer.'}, status=400)
+
+    start_date = None
+    if start_raw:
+        try:
+            start_date = datetime.strptime(start_raw, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Enter a valid start date.'}, status=400)
+
+    end_date = None
+    if not is_current and end_raw:
+        try:
+            end_date = datetime.strptime(end_raw, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Enter a valid end date.'}, status=400)
+
+    if image:
+        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+        if image.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
+        if image.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+
+    try:
+        edu = ProfileEducation.objects.create(
+            profile=profile, school_name=school_name, degree=degree,
+            field_of_study=field_of_study, grade=grade, description=description,
+            start_date=start_date, end_date=end_date, is_current=is_current,
+            image=image if image else None,
+        )
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'education': {
+            'education_id':   str(edu.education_id),
+            'school_name':    edu.school_name,
+            'degree':         edu.degree,
+            'field_of_study': edu.field_of_study,
+            'grade':          edu.grade,
+            'description':    edu.description,
+            'duration_label': edu.duration_label,
+            'image_url':      edu.get_image_url,
+        },
+        'education_count': profile.education_count,
+        'message': 'Education added! 🎓',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_education_delete(request, education_id):
+    edu = get_object_or_404(ProfileEducation, education_id=education_id, profile__user=request.user)
+    edu.delete()
     return JsonResponse({'success': True})
 
 

@@ -122,6 +122,7 @@
         .ob-field input[type="text"],
         .ob-field input[type="number"],
         .ob-field input[type="url"],
+        .ob-field input[type="date"],
         .ob-field input[type="file"],
         .ob-field select,
         .ob-field textarea {
@@ -188,6 +189,43 @@
         .ob-step { display: none; }
         .ob-step.active { display: block; }
 
+        /* Step 3 — repeatable Experience / Education entry cards */
+        .ob-entry-section { margin-bottom: 24px; }
+        .ob-entry-section-head {
+            font-size: 14px; font-weight: 700; margin-bottom: 12px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .ob-entry-section-head i { color: var(--khb-primary); }
+        .ob-entry-card {
+            background: var(--khb-white); border: 1.5px solid var(--khb-border);
+            border-radius: 12px; padding: 16px; margin-bottom: 12px;
+        }
+        .ob-entry-head {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .ob-entry-title { font-size: 13.5px; font-weight: 700; color: var(--khb-text-light); }
+        .ob-entry-title i { margin-right: 5px; color: var(--khb-primary); }
+        .ob-entry-remove {
+            background: none; border: none; color: var(--khb-error);
+            font-size: 14px; cursor: pointer; padding: 4px 6px;
+        }
+        .ob-add-entry-btn {
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            width: 100%; background: var(--khb-white);
+            border: 1.5px dashed var(--khb-primary); border-radius: 10px;
+            color: var(--khb-primary); font-size: 13.5px; font-weight: 600;
+            padding: 11px; cursor: pointer;
+        }
+        .ob-photo-pick {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+            position: relative; overflow: hidden;
+            height: 84px; border-radius: 10px; border: 1.5px dashed var(--khb-border);
+            color: var(--khb-text-light); font-size: 12px; cursor: pointer; margin-bottom: 12px;
+        }
+        .ob-photo-pick i { font-size: 18px; }
+        .ob-photo-pick img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
         @media (max-width: 420px) {
             .ob-types { grid-template-columns: repeat(2, 1fr); }
         }
@@ -203,6 +241,7 @@
     <div class="ob-progress">
         <span class="dot active" data-step-dot="1"></span>
         <span class="dot" data-step-dot="2"></span>
+        <span class="dot" data-step-dot="3"></span>
     </div>
 
     {% if messages %}
@@ -324,11 +363,226 @@
             {% endfor %}
 
             <div class="ob-continue-bar">
+                <button type="button" class="ob-btn" id="step2ContinueBtn">Continue</button>
+            </div>
+        </div>
+
+        <!-- ── Step 3: work experience & education (optional, repeatable) ── -->
+        <div class="ob-step" data-step="3">
+            <div class="ob-header" style="text-align:left; margin-bottom:18px;">
+                <h1 style="font-size:18px;">Add your experience &amp; education</h1>
+                <p>Optional — you can always add more from your profile later.</p>
+            </div>
+
+            <div class="ob-entry-section">
+                <div class="ob-entry-section-head">
+                    <i class="fas fa-briefcase"></i> Work Experience
+                </div>
+                <div id="experienceContainer">
+                    {% for exp in existing_experience %}
+                    <div class="ob-entry-card" data-entry>
+                        <div class="ob-entry-head">
+                            <span class="ob-entry-title"><i class="fas fa-briefcase"></i> Experience</span>
+                            <button type="button" class="ob-entry-remove" onclick="removeObEntry(this)"><i class="fas fa-trash"></i></button>
+                        </div>
+                        <input type="hidden" data-field="id" value="{{ exp.experience_id }}">
+                        <div class="ob-photo-pick" data-entry-photo-pick>
+                            <i class="fas fa-building"></i><span>{% if exp.get_image_url %}Change company logo{% else %}Add company logo (optional){% endif %}</span>
+                            <img data-entry-photo-preview {% if exp.get_image_url %}src="{{ exp.get_image_url }}" style="display:block;"{% else %}style="display:none;"{% endif %}>
+                        </div>
+                        <input type="file" data-entry-photo-input accept="image/*" style="display:none;">
+                        <div class="ob-field"><label>Job Title <span class="req">*</span></label>
+                            <input type="text" data-field="title" maxlength="150" placeholder="e.g. Software Engineer Intern" value="{{ exp.title }}">
+                        </div>
+                        <div class="ob-field"><label>Company Name <span class="req">*</span></label>
+                            <input type="text" data-field="company_name" maxlength="150" placeholder="e.g. EvolveSpark Services and Solutions" value="{{ exp.company_name }}">
+                        </div>
+                        <div class="ob-field"><label>Employment Type</label>
+                            <select data-field="employment_type">
+                                <option value="">Select…</option>
+                                {% for val, label in employment_type_choices %}
+                                <option value="{{ val }}" {% if exp.employment_type == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="ob-field"><label>Location</label>
+                            <input type="text" data-field="location" maxlength="150" placeholder="e.g. Lagos, Nigeria · Remote" value="{{ exp.location }}">
+                        </div>
+                        <div class="ob-hour-row">
+                            <div class="ob-hour-col">
+                                <label class="ob-subtle-label">Start Date</label>
+                                <input type="date" data-field="start_date" value="{{ exp.start_date|date:'Y-m-d' }}">
+                            </div>
+                            <div class="ob-hour-col">
+                                <label class="ob-subtle-label">End Date</label>
+                                <input type="date" data-field="end_date" value="{{ exp.end_date|date:'Y-m-d' }}" {% if exp.is_current %}disabled{% endif %}>
+                            </div>
+                        </div>
+                        <label class="ob-checkbox-row" style="margin-top:10px;">
+                            <input type="checkbox" data-field="is_current" onchange="onObCurrentToggle(this)" {% if exp.is_current %}checked{% endif %}> I currently work here
+                        </label>
+                        <div class="ob-field" style="margin-top:12px;"><label>Description</label>
+                            <textarea data-field="description" placeholder="What did/do you work on?">{{ exp.description }}</textarea>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" class="ob-add-entry-btn" onclick="addObEntry('experience')">
+                    <i class="fas fa-plus"></i> Add work experience
+                </button>
+            </div>
+
+            <div class="ob-entry-section">
+                <div class="ob-entry-section-head">
+                    <i class="fas fa-university"></i> Education
+                </div>
+                <div id="educationContainer">
+                    {% for edu in existing_education %}
+                    <div class="ob-entry-card" data-entry>
+                        <div class="ob-entry-head">
+                            <span class="ob-entry-title"><i class="fas fa-university"></i> Education</span>
+                            <button type="button" class="ob-entry-remove" onclick="removeObEntry(this)"><i class="fas fa-trash"></i></button>
+                        </div>
+                        <input type="hidden" data-field="id" value="{{ edu.education_id }}">
+                        <div class="ob-photo-pick" data-entry-photo-pick>
+                            <i class="fas fa-university"></i><span>{% if edu.get_image_url %}Change institution logo{% else %}Add institution logo (optional){% endif %}</span>
+                            <img data-entry-photo-preview {% if edu.get_image_url %}src="{{ edu.get_image_url }}" style="display:block;"{% else %}style="display:none;"{% endif %}>
+                        </div>
+                        <input type="file" data-entry-photo-input accept="image/*" style="display:none;">
+                        <div class="ob-field"><label>School / Institution <span class="req">*</span></label>
+                            <input type="text" data-field="school_name" maxlength="150" placeholder="e.g. Sir Chhotu Ram Institute of Engineering and Technology" value="{{ edu.school_name }}">
+                        </div>
+                        <div class="ob-field"><label>Degree</label>
+                            <input type="text" data-field="degree" maxlength="150" placeholder="e.g. Bachelor of Technology" value="{{ edu.degree }}">
+                        </div>
+                        <div class="ob-field"><label>Field of Study</label>
+                            <input type="text" data-field="field_of_study" maxlength="150" placeholder="e.g. Computer Engineering" value="{{ edu.field_of_study }}">
+                        </div>
+                        <div class="ob-hour-row">
+                            <div class="ob-hour-col">
+                                <label class="ob-subtle-label">Start Date</label>
+                                <input type="date" data-field="start_date" value="{{ edu.start_date|date:'Y-m-d' }}">
+                            </div>
+                            <div class="ob-hour-col">
+                                <label class="ob-subtle-label">End Date</label>
+                                <input type="date" data-field="end_date" value="{{ edu.end_date|date:'Y-m-d' }}" {% if edu.is_current %}disabled{% endif %}>
+                            </div>
+                        </div>
+                        <label class="ob-checkbox-row" style="margin-top:10px;">
+                            <input type="checkbox" data-field="is_current" onchange="onObCurrentToggle(this)" {% if edu.is_current %}checked{% endif %}> I currently study here
+                        </label>
+                        <div class="ob-field" style="margin-top:12px;"><label>Grade</label>
+                            <input type="text" data-field="grade" maxlength="50" placeholder="e.g. CGPA: 8.6/10 or 96.4%" value="{{ edu.grade }}">
+                        </div>
+                        <div class="ob-field"><label>Description</label>
+                            <textarea data-field="description" placeholder="Activities, societies, notes…">{{ edu.description }}</textarea>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" class="ob-add-entry-btn" onclick="addObEntry('education')">
+                    <i class="fas fa-plus"></i> Add education
+                </button>
+            </div>
+
+            <div class="ob-continue-bar">
                 <button type="submit" class="ob-btn">Finish</button>
+                <button type="button" class="ob-btn secondary" id="step3BackBtn" style="width:100%; margin-top:6px;">Back</button>
             </div>
         </div>
     </form>
 </div>
+
+<!-- ── Entry templates (cloned by JS — kept out of the form's initial DOM
+     so unused rows never submit empty fields) ───────────────────────────── -->
+<template id="experienceEntryTemplate">
+    <div class="ob-entry-card" data-entry>
+        <div class="ob-entry-head">
+            <span class="ob-entry-title"><i class="fas fa-briefcase"></i> Experience</span>
+            <button type="button" class="ob-entry-remove" onclick="removeObEntry(this)"><i class="fas fa-trash"></i></button>
+        </div>
+        <div class="ob-photo-pick" data-entry-photo-pick>
+            <i class="fas fa-building"></i><span>Add company logo (optional)</span>
+            <img data-entry-photo-preview style="display:none;">
+        </div>
+        <input type="file" data-entry-photo-input accept="image/*" style="display:none;">
+        <div class="ob-field"><label>Job Title <span class="req">*</span></label>
+            <input type="text" data-field="title" maxlength="150" placeholder="e.g. Software Engineer Intern">
+        </div>
+        <div class="ob-field"><label>Company Name <span class="req">*</span></label>
+            <input type="text" data-field="company_name" maxlength="150" placeholder="e.g. EvolveSpark Services and Solutions">
+        </div>
+        <div class="ob-field"><label>Employment Type</label>
+            <select data-field="employment_type">
+                <option value="">Select…</option>
+                {% for val, label in employment_type_choices %}
+                <option value="{{ val }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="ob-field"><label>Location</label>
+            <input type="text" data-field="location" maxlength="150" placeholder="e.g. Lagos, Nigeria · Remote">
+        </div>
+        <div class="ob-hour-row">
+            <div class="ob-hour-col">
+                <label class="ob-subtle-label">Start Date</label>
+                <input type="date" data-field="start_date">
+            </div>
+            <div class="ob-hour-col">
+                <label class="ob-subtle-label">End Date</label>
+                <input type="date" data-field="end_date">
+            </div>
+        </div>
+        <label class="ob-checkbox-row" style="margin-top:10px;">
+            <input type="checkbox" data-field="is_current" onchange="onObCurrentToggle(this)"> I currently work here
+        </label>
+        <div class="ob-field" style="margin-top:12px;"><label>Description</label>
+            <textarea data-field="description" placeholder="What did/do you work on?"></textarea>
+        </div>
+    </div>
+</template>
+
+<template id="educationEntryTemplate">
+    <div class="ob-entry-card" data-entry>
+        <div class="ob-entry-head">
+            <span class="ob-entry-title"><i class="fas fa-university"></i> Education</span>
+            <button type="button" class="ob-entry-remove" onclick="removeObEntry(this)"><i class="fas fa-trash"></i></button>
+        </div>
+        <div class="ob-photo-pick" data-entry-photo-pick>
+            <i class="fas fa-university"></i><span>Add institution logo (optional)</span>
+            <img data-entry-photo-preview style="display:none;">
+        </div>
+        <input type="file" data-entry-photo-input accept="image/*" style="display:none;">
+        <div class="ob-field"><label>School / Institution <span class="req">*</span></label>
+            <input type="text" data-field="school_name" maxlength="150" placeholder="e.g. Sir Chhotu Ram Institute of Engineering and Technology">
+        </div>
+        <div class="ob-field"><label>Degree</label>
+            <input type="text" data-field="degree" maxlength="150" placeholder="e.g. Bachelor of Technology">
+        </div>
+        <div class="ob-field"><label>Field of Study</label>
+            <input type="text" data-field="field_of_study" maxlength="150" placeholder="e.g. Computer Engineering">
+        </div>
+        <div class="ob-hour-row">
+            <div class="ob-hour-col">
+                <label class="ob-subtle-label">Start Date</label>
+                <input type="date" data-field="start_date">
+            </div>
+            <div class="ob-hour-col">
+                <label class="ob-subtle-label">End Date</label>
+                <input type="date" data-field="end_date">
+            </div>
+        </div>
+        <label class="ob-checkbox-row" style="margin-top:10px;">
+            <input type="checkbox" data-field="is_current" onchange="onObCurrentToggle(this)"> I currently study here
+        </label>
+        <div class="ob-field" style="margin-top:12px;"><label>Grade</label>
+            <input type="text" data-field="grade" maxlength="50" placeholder="e.g. CGPA: 8.6/10 or 96.4%">
+        </div>
+        <div class="ob-field"><label>Description</label>
+            <textarea data-field="description" placeholder="Activities, societies, notes…"></textarea>
+        </div>
+    </div>
+</template>
 
 <script>
 (function () {
@@ -336,7 +590,10 @@
     var memberTypeIn  = document.getElementById('memberTypeInput');
     var step1         = document.querySelector('.ob-step[data-step="1"]');
     var step2         = document.querySelector('.ob-step[data-step="2"]');
+    var step3         = document.querySelector('.ob-step[data-step="3"]');
     var step1Continue = document.getElementById('step1ContinueBtn');
+    var step2Continue = document.getElementById('step2ContinueBtn');
+    var step3Back     = document.getElementById('step3BackBtn');
     var changeTypeBtn = document.getElementById('changeTypeBtn');
     var selectedEmoji = document.getElementById('selectedEmoji');
     var selectedLabel = document.getElementById('selectedLabel');
@@ -369,6 +626,7 @@
     function goToStep(n) {
         step1.classList.toggle('active', n === 1);
         step2.classList.toggle('active', n === 2);
+        step3.classList.toggle('active', n === 3);
         dots.forEach(function (d) {
             d.classList.toggle('active', d.getAttribute('data-step-dot') == n);
         });
@@ -382,6 +640,14 @@
 
     changeTypeBtn.addEventListener('click', function () {
         goToStep(1);
+    });
+
+    step2Continue.addEventListener('click', function () {
+        goToStep(3);
+    });
+
+    step3Back.addEventListener('click', function () {
+        goToStep(2);
     });
 
     // Pre-select if server rendered a selected_type (e.g. validation error re-render)
@@ -411,6 +677,77 @@ function onOnboardingSelectOtherChange(select) {
     otherInput.style.display = (select.value === 'Other') ? '' : 'none';
     if (select.value !== 'Other') otherInput.value = '';
 }
+
+/* ── Step 3: repeatable Experience / Education entries ──────────────────
+   Existing entries (when editing/updating an already-onboarded profile)
+   are server-rendered directly into #experienceContainer / #educationContainer
+   with their saved values already filled in — wireObEntry() below just
+   gives those cards `name` attributes and photo-pick wiring, the same way
+   addObEntry() does for freshly-cloned blank rows. This is what makes the
+   previous details show up pre-filled instead of forcing a re-entry from
+   scratch. */
+var obEntryCounters = {
+    experience: document.querySelectorAll('#experienceContainer [data-entry]').length,
+    education: document.querySelectorAll('#educationContainer [data-entry]').length
+};
+
+function wireObEntry(card, kind, idx) {
+    card.querySelectorAll('[data-field]').forEach(function (el) {
+        el.name = kind + '-' + idx + '-' + el.getAttribute('data-field');
+    });
+
+    var photoInput = card.querySelector('[data-entry-photo-input]');
+    var pick       = card.querySelector('[data-entry-photo-pick]');
+    var preview    = card.querySelector('[data-entry-photo-preview]');
+    if (photoInput) {
+        photoInput.name = kind + '-' + idx + '-image';
+        pick.addEventListener('click', function () { photoInput.click(); });
+        photoInput.addEventListener('change', function (e) {
+            var f = e.target.files[0];
+            if (!f) return;
+            preview.src = URL.createObjectURL(f);
+            preview.style.display = 'block';
+        });
+    }
+}
+
+function addObEntry(kind) {
+    var tpl = document.getElementById(kind + 'EntryTemplate');
+    var container = document.getElementById(kind + 'Container');
+    if (!tpl || !container) return;
+
+    var idx = obEntryCounters[kind]++;
+    var frag = tpl.content.cloneNode(true);
+    var card = frag.querySelector('[data-entry]');
+
+    wireObEntry(card, kind, idx);
+    container.appendChild(frag);
+}
+
+function removeObEntry(btn) {
+    var card = btn.closest('[data-entry]');
+    if (card) card.remove();
+}
+
+function onObCurrentToggle(box) {
+    var card = box.closest('[data-entry]');
+    var endInput = card ? card.querySelector('[data-field="end_date"]') : null;
+    if (endInput) endInput.disabled = box.checked;
+}
+
+// Wire up naming + photo-pick handlers for any pre-filled existing entries.
+['experience', 'education'].forEach(function (kind) {
+    var container = document.getElementById(kind + 'Container');
+    if (!container) return;
+    var cards = container.querySelectorAll('[data-entry]');
+    cards.forEach(function (card, idx) { wireObEntry(card, kind, idx); });
+});
+
+// If a section has no existing entries, start it with one blank row so it
+// doesn't look empty. When editing an already-onboarded profile, the
+// existing entries rendered above take that spot instead.
+if (obEntryCounters.experience === 0) addObEntry('experience');
+if (obEntryCounters.education === 0) addObEntry('education');
 </script>
 </body>
 </html>
