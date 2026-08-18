@@ -591,6 +591,239 @@
   </article>
   {% endwith %}
 
+  {% elif item.type == 'profile_achievement' %}
+  {# ── Personal achievement — old .khj-jcard layout (image, chip, seller row, meta, footer) kept exactly as before, now with a Follow button + posted-time added to the header, plus reactions/comments (kbiz-post-engage-summary/bar + comments sheet) appended below, wired to the achievement's own endpoints via reactToFeedItem/toggleFeedItemComments ─────── #}
+  {% with a=item.data pf=item.data.profile %}
+  <article class="khj-jcard" id="kbiz-achievement-{{ a.achievement_id }}">
+    <div class="khj-jrow">
+
+      <a href="{% url 'profile' pf.user.username %}" class="khj-jcard-img-link">
+        <div class="khj-jcard-img-wrap">
+          <img src="{{ a.get_image_url|default:'https://placehold.co/600x400/fff7e6/f59e0b?text=Achievement' }}"
+               alt="{{ a.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img loaded">
+        </div>
+        <span class="khj-jcard-type-chip" style="--pill-color:#f59e0b;"><i class="fas fa-trophy"></i> Achievement</span>
+      </a>
+
+      <div class="khj-jcard-body">
+        <a href="{% url 'profile' pf.user.username %}" class="khj-jcard-body-link">
+          <span class="khj-jcard-name">{{ a.title }}</span>
+        </a>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <a href="{% url 'profile' pf.user.username %}" class="khj-jcard-seller" onclick="event.stopPropagation()">
+            <img src="{{ pf.get_picture_url }}" alt="{{ pf.full_name|default:pf.user.username }}" class="khj-jcard-seller-avatar"
+                 onerror="this.onerror=null;this.src='https://placehold.co/40x40/fff7e6/f59e0b?text={{ pf.user.username|first|upper }}';">
+            <span class="khj-jcard-seller-name">{{ pf.full_name|default:pf.user.username|truncatechars:20 }}</span>
+            {% if pf.is_verify %}<i class="fas fa-circle-check khj-jcard-seller-badge" title="Verified"></i>{% endif %}
+          </a>
+          {% if request.user.is_authenticated and pf.user != request.user %}
+          <button type="button"
+                  class="kbiz-post-follow-btn {% if pf.is_following %}is-following{% endif %}"
+                  data-username="{{ pf.user.username }}"
+                  onclick="event.stopPropagation(); profilePostFollowToggle(this, '{{ pf.user.username }}', '{{ pf.full_name|default:pf.user.username|escapejs }}')">
+              {% if pf.is_following %}
+                <i class="fas fa-check"></i> Following
+              {% else %}
+                <i class="fas fa-plus"></i> Follow
+              {% endif %}
+          </button>
+          {% endif %}
+        </div>
+
+        <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ a.created_at|insta_timesince }}</div>
+
+        <div class="khj-jcard-meta">
+          {% if a.issuer %}<span class="khj-jcard-meta-txt"><i class="fas fa-award"></i>{{ a.issuer }}</span>{% endif %}
+          {% if a.date_achieved %}<span class="khj-jcard-meta-txt">{{ a.date_achieved }}</span>{% endif %}
+        </div>
+        {% if a.description %}
+        <div class="khj-jcard-meta">
+          <span class="khj-jcard-meta-txt">{{ a.description|truncatechars:120 }}</span>
+        </div>
+        {% endif %}
+
+        <div class="khj-jcard-footer">
+          <a href="{% url 'profile' pf.user.username %}" class="khj-view-btn">View Profile</a>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="kbiz-post-engage-summary">
+        <span class="vibes">
+            {% if a.vibe_count %}<span class="vibe-icon"><i class="fas fa-heart"></i></span>{% endif %}
+            {% if a.top_vibe_emoji %}<span class="emoji">{{ a.top_vibe_emoji }}</span>{% endif %}
+            <span data-vibe-total>{{ a.vibe_count }}</span>
+        </span>
+        <span class="comment-link" data-comment-total onclick="toggleFeedItemComments('achievement', '{{ a.achievement_id }}')">{{ a.comment_count }} comment{{ a.comment_count|pluralize }}</span>
+    </div>
+
+    <div class="kbiz-post-engage-bar" style="position:relative;">
+        <button type="button" class="kbiz-post-engage-btn {% if a.viewer_vibe %}reacted{% endif %}"
+                data-vibe-btn
+                onclick="toggleVibePopover(this)">
+            <span data-vibe-emoji>{% if a.viewer_vibe %}{{ a.viewer_vibe_emoji }}{% else %}<i class="far fa-heart"></i>{% endif %}</span>
+            React
+        </button>
+        <div class="kbiz-vibe-popover" data-vibe-popover>
+            {% for v in vibe_choices %}
+            <button type="button" title="{{ v.label }}" onclick="reactToFeedItem('achievement', '{{ a.achievement_id }}', '{{ v.type }}', this)">{{ v.emoji }}</button>
+            {% endfor %}
+        </div>
+        <button type="button" class="kbiz-post-engage-btn" onclick="toggleFeedItemComments('achievement', '{{ a.achievement_id }}')">
+            <i class="far fa-comment"></i> Comment
+        </button>
+    </div>
+
+    <!-- Comments: bottom sheet (mobile) / pop-up modal (desktop) -->
+    <div class="kbiz-comments-overlay" id="commentsOverlay-achievement-{{ a.achievement_id }}" onclick="if(event.target===this) closeFeedItemComments('achievement', '{{ a.achievement_id }}')">
+        <div class="kbiz-comments-sheet" id="comments-achievement-{{ a.achievement_id }}" data-loaded="0" role="dialog" aria-modal="true" aria-label="Comments">
+            <div class="kbiz-comments-sheet-handle"></div>
+            <div class="kbiz-comments-header">
+                <span class="kbiz-comments-header-title" data-comment-total-label>{{ a.comment_count }} Comment{{ a.comment_count|pluralize }}</span>
+                <button class="kbiz-comments-close" onclick="closeFeedItemComments('achievement', '{{ a.achievement_id }}')" aria-label="Close comments">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </div>
+            <div class="kbiz-comments-body">
+                <div class="kbiz-comment-list" id="commentList-achievement-{{ a.achievement_id }}">
+                    <div class="kbiz-comment-empty">Loading comments…</div>
+                </div>
+            </div>
+            <div class="kbiz-comments-footer">
+                <img src="{{ request.user.profile.get_picture_url }}" alt=""
+                     onerror="this.onerror=null;this.src='https://placehold.co/56x56/dbdbdb/888?text=%20';">
+                <div class="kbiz-comment-input-row">
+                    <input type="text" id="commentInput-achievement-{{ a.achievement_id }}" placeholder="Write a comment…"
+                           onkeydown="if(event.key==='Enter'){submitFeedItemComment('achievement', '{{ a.achievement_id }}');}">
+                    <button class="kbiz-comment-send" onclick="submitFeedItemComment('achievement', '{{ a.achievement_id }}')" aria-label="Send comment">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+  </article>
+  {% endwith %}
+
+  {% elif item.type == 'portfolio' %}
+  {# ── Personal portfolio piece / project — same .kbiz-post-card layout as a normal profile post (feed_posts_partial's 'profile_post' block above), `kind` drives the badge label. Reactions & comments are wired to the item's own endpoints (profile_portfolio_vibe/comments) via the generic reactToFeedItem/toggleFeedItemComments JS helpers ─────── #}
+  {% with pi=item.data pf=item.data.profile %}
+  <article class="khj-jcard" id="kbiz-portfolio-{{ pi.item_id }}">
+    <div class="khj-jrow">
+
+      <a href="{% if pi.link_url %}{{ pi.link_url }}{% else %}{% url 'profile' pf.user.username %}{% endif %}"
+         class="khj-jcard-img-link" {% if pi.link_url %}target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"{% endif %}>
+        <div class="khj-jcard-img-wrap">
+          <img src="{{ pi.get_image_url|default:'https://placehold.co/600x400/eef2ff/6366f1?text=Portfolio' }}"
+               alt="{{ pi.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img loaded">
+        </div>
+        <span class="khj-jcard-type-chip" style="--pill-color:#6366f1;">
+          {% if pi.kind == 'project' %}<i class="fas fa-diagram-project"></i> Project{% if pi.is_ongoing %} · Ongoing{% endif %}
+          {% else %}<i class="fas fa-briefcase"></i> Portfolio{% endif %}
+        </span>
+      </a>
+
+      <div class="khj-jcard-body">
+        <a href="{% if pi.link_url %}{{ pi.link_url }}{% else %}{% url 'profile' pf.user.username %}{% endif %}"
+           class="khj-jcard-body-link" {% if pi.link_url %}target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"{% endif %}>
+          <span class="khj-jcard-name">{{ pi.title }}</span>
+        </a>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <a href="{% url 'profile' pf.user.username %}" class="khj-jcard-seller" onclick="event.stopPropagation()">
+            <img src="{{ pf.get_picture_url }}" alt="{{ pf.full_name|default:pf.user.username }}" class="khj-jcard-seller-avatar"
+                 onerror="this.onerror=null;this.src='https://placehold.co/40x40/eef2ff/6366f1?text={{ pf.user.username|first|upper }}';">
+            <span class="khj-jcard-seller-name">{{ pf.full_name|default:pf.user.username|truncatechars:20 }}</span>
+            {% if pf.is_verify %}<i class="fas fa-circle-check khj-jcard-seller-badge" title="Verified"></i>{% endif %}
+          </a>
+          {% if request.user.is_authenticated and pf.user != request.user %}
+          <button type="button"
+                  class="kbiz-post-follow-btn {% if pf.is_following %}is-following{% endif %}"
+                  data-username="{{ pf.user.username }}"
+                  onclick="event.stopPropagation(); profilePostFollowToggle(this, '{{ pf.user.username }}', '{{ pf.full_name|default:pf.user.username|escapejs }}')">
+              {% if pf.is_following %}
+                <i class="fas fa-check"></i> Following
+              {% else %}
+                <i class="fas fa-plus"></i> Follow
+              {% endif %}
+          </button>
+          {% endif %}
+        </div>
+
+        <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ pi.created_at|insta_timesince }}</div>
+
+        {% if pi.description %}
+        <div class="khj-jcard-meta">
+          <span class="khj-jcard-meta-txt">{{ pi.description|truncatechars:120 }}</span>
+        </div>
+        {% endif %}
+
+        <div class="khj-jcard-footer">
+          <a href="{% url 'profile' pf.user.username %}" class="khj-view-btn">View Profile</a>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="kbiz-post-engage-summary">
+        <span class="vibes">
+            {% if pi.vibe_count %}<span class="vibe-icon"><i class="fas fa-heart"></i></span>{% endif %}
+            {% if pi.top_vibe_emoji %}<span class="emoji">{{ pi.top_vibe_emoji }}</span>{% endif %}
+            <span data-vibe-total>{{ pi.vibe_count }}</span>
+        </span>
+        <span class="comment-link" data-comment-total onclick="toggleFeedItemComments('portfolio', '{{ pi.item_id }}')">{{ pi.comment_count }} comment{{ pi.comment_count|pluralize }}</span>
+    </div>
+
+    <div class="kbiz-post-engage-bar" style="position:relative;">
+        <button type="button" class="kbiz-post-engage-btn {% if pi.viewer_vibe %}reacted{% endif %}"
+                data-vibe-btn
+                onclick="toggleVibePopover(this)">
+            <span data-vibe-emoji>{% if pi.viewer_vibe %}{{ pi.viewer_vibe_emoji }}{% else %}<i class="far fa-heart"></i>{% endif %}</span>
+            React
+        </button>
+        <div class="kbiz-vibe-popover" data-vibe-popover>
+            {% for v in vibe_choices %}
+            <button type="button" title="{{ v.label }}" onclick="reactToFeedItem('portfolio', '{{ pi.item_id }}', '{{ v.type }}', this)">{{ v.emoji }}</button>
+            {% endfor %}
+        </div>
+        <button type="button" class="kbiz-post-engage-btn" onclick="toggleFeedItemComments('portfolio', '{{ pi.item_id }}')">
+            <i class="far fa-comment"></i> Comment
+        </button>
+    </div>
+
+    <!-- Comments: bottom sheet (mobile) / pop-up modal (desktop) -->
+    <div class="kbiz-comments-overlay" id="commentsOverlay-portfolio-{{ pi.item_id }}" onclick="if(event.target===this) closeFeedItemComments('portfolio', '{{ pi.item_id }}')">
+        <div class="kbiz-comments-sheet" id="comments-portfolio-{{ pi.item_id }}" data-loaded="0" role="dialog" aria-modal="true" aria-label="Comments">
+            <div class="kbiz-comments-sheet-handle"></div>
+            <div class="kbiz-comments-header">
+                <span class="kbiz-comments-header-title" data-comment-total-label>{{ pi.comment_count }} Comment{{ pi.comment_count|pluralize }}</span>
+                <button class="kbiz-comments-close" onclick="closeFeedItemComments('portfolio', '{{ pi.item_id }}')" aria-label="Close comments">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </div>
+            <div class="kbiz-comments-body">
+                <div class="kbiz-comment-list" id="commentList-portfolio-{{ pi.item_id }}">
+                    <div class="kbiz-comment-empty">Loading comments…</div>
+                </div>
+            </div>
+            <div class="kbiz-comments-footer">
+                <img src="{{ request.user.profile.get_picture_url }}" alt=""
+                     onerror="this.onerror=null;this.src='https://placehold.co/56x56/dbdbdb/888?text=%20';">
+                <div class="kbiz-comment-input-row">
+                    <input type="text" id="commentInput-portfolio-{{ pi.item_id }}" placeholder="Write a comment…"
+                           onkeydown="if(event.key==='Enter'){submitFeedItemComment('portfolio', '{{ pi.item_id }}');}">
+                    <button class="kbiz-comment-send" onclick="submitFeedItemComment('portfolio', '{{ pi.item_id }}')" aria-label="Send comment">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+  </article>
+  {% endwith %}
+
   {% elif item.type == 'people_suggestion' %}
   {# ── People to follow — same design as "Page to follow" (.mfy-side-card / .mfy-sugg-row), listing up to 3 people per card ─────── #}
   <div class="mfy-side-card mfy-people-suggestion">

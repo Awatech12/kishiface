@@ -3923,6 +3923,155 @@ async function submitProfilePostCommentCard(postId) {
     }
 }
 
+// ── Achievement / Portfolio / Project cards in the feed — same
+// .kbiz-post-card markup & behavior as profile posts above, keyed by "kind"
+// and wired to that item's own reaction/comment endpoints so an achievement
+// or portfolio/project highlight reacts and comments exactly like a normal
+// profile post. ─────────────────────────────────────────────────────────────
+const FEED_ITEM_URL_MAP = {
+    achievement: { vibe: id => `/profile/achievements/${id}/vibe/`, comments: id => `/profile/achievements/${id}/comments/` },
+    portfolio:   { vibe: id => `/profile/portfolio/${id}/vibe/`,    comments: id => `/profile/portfolio/${id}/comments/` },
+};
+
+function feedItemCardId(kind, itemId) {
+    return `kbiz-${kind}-${itemId}`;
+}
+
+async function reactToFeedItem(kind, itemId, vibeType, optBtn) {
+    const pop = optBtn.closest('.kbiz-vibe-popover');
+    pop.classList.remove('open');
+    const card = document.getElementById(feedItemCardId(kind, itemId));
+    if (!card) return;
+    try {
+        const res = await fetch(FEED_ITEM_URL_MAP[kind].vibe(itemId), {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vibe_type: vibeType }),
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error === 'login required' ? 'Please log in to react.' : data.error); return; }
+
+        const engageBtn = card.querySelector('[data-vibe-btn]');
+        const emojiSlot  = card.querySelector('[data-vibe-emoji]');
+        const totalSlot  = card.querySelector('[data-vibe-total]');
+        const EMOJIS = { fire:'🔥', real:'💯', vibing:'🎵', dead:'😂', cringe:'😬', chill:'🧊', love:'❤️' };
+
+        if (data.user_vibe) {
+            engageBtn.classList.add('reacted');
+            emojiSlot.innerHTML = EMOJIS[data.user_vibe] || '';
+        } else {
+            engageBtn.classList.remove('reacted');
+            emojiSlot.innerHTML = '<i class="far fa-heart"></i>';
+        }
+        if (totalSlot) totalSlot.textContent = data.total;
+
+        const topType = Object.entries(data.summary).sort((a, b) => b[1] - a[1])[0];
+        const summaryEmojiEl = card.querySelector('.kbiz-post-engage-summary .vibes .emoji');
+        if (topType) {
+            const emoji = EMOJIS[topType[0]] || '';
+            if (summaryEmojiEl) {
+                summaryEmojiEl.textContent = emoji;
+            } else {
+                const span = document.createElement('span');
+                span.className = 'emoji';
+                span.textContent = emoji;
+                card.querySelector('.kbiz-post-engage-summary .vibes').prepend(span);
+            }
+        } else if (summaryEmojiEl) {
+            summaryEmojiEl.remove();
+        }
+
+        const vibesWrap = card.querySelector('.kbiz-post-engage-summary .vibes');
+        const vibeIcon = vibesWrap?.querySelector('.vibe-icon');
+        if (data.total > 0 && !vibeIcon && vibesWrap) {
+            const span = document.createElement('span');
+            span.className = 'vibe-icon';
+            span.innerHTML = '<i class="fas fa-heart"></i>';
+            vibesWrap.prepend(span);
+        } else if (data.total == 0 && vibeIcon) {
+            vibeIcon.remove();
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    }
+}
+
+async function toggleFeedItemComments(kind, itemId) {
+    const overlay = document.getElementById(`commentsOverlay-${kind}-${itemId}`);
+    const panel = document.getElementById(`comments-${kind}-${itemId}`);
+    if (!overlay || !panel) return;
+    if (overlay.classList.contains('open')) { closeFeedItemComments(kind, itemId); return; }
+
+    document.querySelectorAll('.kbiz-comments-overlay.open').forEach(el => el.classList.remove('open'));
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    if (panel.dataset.loaded !== '1') {
+        panel.dataset.loaded = '1';
+        try {
+            const res = await fetch(FEED_ITEM_URL_MAP[kind].comments(itemId), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json();
+            const list = document.getElementById(`commentList-${kind}-${itemId}`);
+            if (!data.comments || !data.comments.length) {
+                list.innerHTML = '<div class="kbiz-comment-empty">No comments yet — be the first!</div>';
+            } else {
+                list.innerHTML = data.comments.map(renderComment).join('');
+                list.scrollTop = list.scrollHeight;
+            }
+        } catch (_) {
+            const list = document.getElementById(`commentList-${kind}-${itemId}`);
+            if (list) list.innerHTML = '<div class="kbiz-comment-empty">Could not load comments.</div>';
+        }
+    }
+
+    setTimeout(() => {
+        const input = document.getElementById(`commentInput-${kind}-${itemId}`);
+        if (input && window.innerWidth >= 640) input.focus();
+    }, 200);
+}
+
+function closeFeedItemComments(kind, itemId) {
+    const overlay = document.getElementById(`commentsOverlay-${kind}-${itemId}`);
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+async function submitFeedItemComment(kind, itemId) {
+    const input = document.getElementById(`commentInput-${kind}-${itemId}`);
+    const text = input.value.trim();
+    if (!text) return;
+    input.disabled = true;
+    try {
+        const res = await fetch(FEED_ITEM_URL_MAP[kind].comments(itemId), {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error); return; }
+
+        const list = document.getElementById(`commentList-${kind}-${itemId}`);
+        const empty = list.querySelector('.kbiz-comment-empty');
+        if (empty) empty.remove();
+        list.insertAdjacentHTML('beforeend', renderComment(data));
+        list.scrollTop = list.scrollHeight;
+        input.value = '';
+
+        const totalSlot = document.querySelector(`#${feedItemCardId(kind, itemId)} [data-comment-total]`);
+        if (totalSlot) totalSlot.textContent = `${data.count} comment${data.count === 1 ? '' : 's'}`;
+        const headerLabel = document.querySelector(`#commentsOverlay-${kind}-${itemId} [data-comment-total-label]`);
+        if (headerLabel) headerLabel.textContent = `${data.count} Comment${data.count === 1 ? '' : 's'}`;
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        input.disabled = false;
+        input.focus();
+    }
+}
+
 // ── "See more" caption clamping — works for kf-formatted captions (links,
 // hashtags, mentions) without ever cutting HTML mid-tag, and re-runs on any
 // newly loaded feed posts (infinite scroll / htmx swaps). ──────────────────

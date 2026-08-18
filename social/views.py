@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessAchievement, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessAchievement, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, ProfileAchievementVibe, ProfileAchievementComment, ProfileExperienceVibe, ProfileExperienceComment, ProfileEducationVibe, ProfileEducationComment, ProfileServiceVibe, ProfileServiceComment
 from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES
 
@@ -1145,6 +1145,95 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     _ach_injected = 0
     _MAX_ACH_PER_PAGE = 1
 
+    # ── Personal profile achievements — certs/awards/milestones posted
+    #    directly on a user's own Profile (not a BusinessPage). Ranked the
+    #    same way as business achievements so they surface in the feed too;
+    #    only pulled from profiles that have the Achievements section on. ───
+    _seen_pach_ids = set(str(i) for i in (_kwargs.get('seen_profile_achievement_ids') or []) if i)
+    _pach_pool = []
+    if not _is_market_filtered:
+        _pach_qs = (
+            ProfileAchievement.objects
+            .select_related('profile', 'profile__user')
+            .prefetch_related('vibes')
+            .exclude(profile__user=user)
+        )
+        if _seen_pach_ids:
+            _pach_qs = _pach_qs.exclude(achievement_id__in=_seen_pach_ids)
+        _pach_candidates = [
+            a for a in _pach_qs.order_by('-created_at')[:60]
+            if a.profile.show_achievements
+        ][:40]
+        _pach_pool = _ranked(
+            _pach_candidates, keywords, location_tokens,
+            blob_fn=lambda a: ' '.join(filter(None, [
+                a.title, a.issuer, a.description, a.owner_name,
+                a.profile.profession,
+            ])),
+            location_fn=lambda a: a.profile.location,
+            created_fn=lambda a: a.created_at,
+            social_fn=lambda a: 4.0 if a.profile.user_id in following_ids_set else 0.0,
+            limit=2,
+        )
+    # Same per-item annotation as the profile post pool above, so the
+    # ported kbiz-post-card partial can render achievement cards identically
+    # (follow button state + the viewer's own reaction, if any).
+    for _pa in _pach_pool:
+        _pa.profile.is_following = _pa.profile.user_id in following_ids_set
+        _pa.viewer_vibe = None
+        _pa.viewer_vibe_emoji = ''
+        _mine = next((v for v in _pa.vibes.all() if v.user_id == user.pk), None)
+        if _mine:
+            _pa.viewer_vibe = _mine.vibe_type
+            _pa.viewer_vibe_emoji = ProfilePostVibe.VIBE_EMOJIS.get(_mine.vibe_type, '')
+    _pach_injected = 0
+    _MAX_PACH_PER_PAGE = 1
+
+    # ── Personal portfolio pieces & projects — same model, split by `kind`,
+    #    posted directly on a user's own Profile. Only pulled from profiles
+    #    that have the matching Portfolio/Projects section switched on. ─────
+    _seen_port_ids = set(str(i) for i in (_kwargs.get('seen_portfolio_ids') or []) if i)
+    _port_pool = []
+    if not _is_market_filtered:
+        _port_qs = (
+            ProfilePortfolioItem.objects
+            .select_related('profile', 'profile__user')
+            .prefetch_related('vibes')
+            .exclude(profile__user=user)
+        )
+        if _seen_port_ids:
+            _port_qs = _port_qs.exclude(item_id__in=_seen_port_ids)
+        _port_candidates = []
+        for _pi in _port_qs.order_by('-created_at')[:60]:
+            if _pi.kind == ProfilePortfolioItem.KIND_PROJECT and _pi.profile.show_projects:
+                _port_candidates.append(_pi)
+            elif _pi.kind == ProfilePortfolioItem.KIND_PORTFOLIO and _pi.profile.show_portfolio:
+                _port_candidates.append(_pi)
+        _port_candidates = _port_candidates[:40]
+        _port_pool = _ranked(
+            _port_candidates, keywords, location_tokens,
+            blob_fn=lambda p: ' '.join(filter(None, [
+                p.title, p.description, p.profile.full_name, p.profile.profession,
+            ])),
+            location_fn=lambda p: p.profile.location,
+            created_fn=lambda p: p.created_at,
+            social_fn=lambda p: 4.0 if p.profile.user_id in following_ids_set else 0.0,
+            limit=2,
+        )
+    # Same per-item annotation as the profile post pool above, so the
+    # ported kbiz-post-card partial can render portfolio/project cards
+    # identically (follow button state + the viewer's own reaction, if any).
+    for _pi2 in _port_pool:
+        _pi2.profile.is_following = _pi2.profile.user_id in following_ids_set
+        _pi2.viewer_vibe = None
+        _pi2.viewer_vibe_emoji = ''
+        _mine = next((v for v in _pi2.vibes.all() if v.user_id == user.pk), None)
+        if _mine:
+            _pi2.viewer_vibe = _mine.vibe_type
+            _pi2.viewer_vibe_emoji = ProfilePostVibe.VIBE_EMOJIS.get(_mine.vibe_type, '')
+    _port_injected = 0
+    _MAX_PORT_PER_PAGE = 1
+
     # ── Market product pool ───────────────────────────────────────────────────
     _seen_market_ids = set(str(i) for i in (seen_market_ids or []))
     # Exclude products the user has already saved to their wishlist so they
@@ -1297,6 +1386,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         # ignoring everything else so the grid is pure product results.
         _MAX_MARKET_PER_PAGE = page_size
         _job_pool, _event_pool, _post_pool, _pp_pool, people_pool, _ach_pool = [], [], [], [], [], []
+        _pach_pool, _port_pool = [], []
 
     feed_items = []
     for i in range(1, page_size + 1):
@@ -1323,6 +1413,20 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
                 and _ach_injected < _MAX_ACH_PER_PAGE):
             feed_items.append({'type': 'achievement', 'data': _ach_pool.pop(0)})
             _ach_injected += 1
+
+        # Personal profile achievement at slot 4 (every 10 slots)
+        if (i % 10 == 4
+                and _pach_pool
+                and _pach_injected < _MAX_PACH_PER_PAGE):
+            feed_items.append({'type': 'profile_achievement', 'data': _pach_pool.pop(0)})
+            _pach_injected += 1
+
+        # Personal portfolio piece / project at slot 8 (every 10 slots)
+        if (i % 10 == 8
+                and _port_pool
+                and _port_injected < _MAX_PORT_PER_PAGE):
+            feed_items.append({'type': 'portfolio', 'data': _port_pool.pop(0)})
+            _port_injected += 1
 
         # Market ad — fills most slots (1,2,3,4,5,6 of every 10) normally,
         # or every slot when a category filter is active.
@@ -1976,12 +2080,26 @@ def profile(request, username):
     # Profile, independent of any BusinessPage. Shown/hidden per-section via
     # profile.show_services / show_portfolio / etc., which read
     # profile.enabled_sections (defaults suggested from profile.member_type).
-    professional_experience   = list(profile.experiences.all()) if profile.show_experience else []
-    professional_education    = list(profile.education_history.all()) if profile.show_education else []
-    professional_services     = list(profile.services.filter(is_active=True)) if profile.show_services else []
-    professional_portfolio    = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PORTFOLIO)) if profile.show_portfolio else []
-    professional_projects     = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PROJECT)) if profile.show_projects else []
-    professional_achievements = list(profile.achievements.all()) if profile.show_achievements else []
+    professional_experience   = list(profile.experiences.prefetch_related('vibes')) if profile.show_experience else []
+    professional_education    = list(profile.education_history.prefetch_related('vibes')) if profile.show_education else []
+    professional_services     = list(profile.services.filter(is_active=True).prefetch_related('vibes')) if profile.show_services else []
+    professional_portfolio    = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PORTFOLIO).prefetch_related('vibes')) if profile.show_portfolio else []
+    professional_projects     = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PROJECT).prefetch_related('vibes')) if profile.show_projects else []
+    professional_achievements = list(profile.achievements.prefetch_related('vibes')) if profile.show_achievements else []
+
+    # Annotate each of these sub-items with the viewer's own reaction — same
+    # shape as the professional_posts annotation below — so their engagement
+    # bars can render a filled-in reaction without an extra query per card.
+    for _items in (professional_experience, professional_education, professional_services,
+                   professional_portfolio, professional_projects, professional_achievements):
+        for _it in _items:
+            _it.viewer_vibe = None
+            _it.viewer_vibe_emoji = ''
+            if request.user.is_authenticated:
+                _mine = next((v for v in _it.vibes.all() if v.user_id == request.user.pk), None)
+                if _mine:
+                    _it.viewer_vibe = _mine.vibe_type
+                    _it.viewer_vibe_emoji = ProfilePostVibe.VIBE_EMOJIS.get(_mine.vibe_type, '')
     professional_posts_qs = (
         profile.professional_posts.prefetch_related('images', 'poll__options', 'vibes')
         if profile.is_professional else ProfilePost.objects.none()
@@ -6109,6 +6227,97 @@ def business_post_comments(request, post_id):
                 )
         return response
     return _card_comments_get(request, post, BusinessPostComment, 'post')
+
+
+# ── Profile — Portfolio / Project reactions & comments ─────────────────────
+
+@login_required(login_url='/')
+def profile_portfolio_vibe(request, item_id):
+    item = get_object_or_404(ProfilePortfolioItem, item_id=item_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, item, ProfilePortfolioItemVibe, 'item')
+    return _card_vibe_toggle(request, item, ProfilePortfolioItemVibe, 'item')
+
+
+@login_required(login_url='/')
+def profile_portfolio_comments(request, item_id):
+    item = get_object_or_404(ProfilePortfolioItem, item_id=item_id)
+    if request.method == 'POST':
+        return _card_comments_post(request, item, ProfilePortfolioItemComment, 'item')
+    return _card_comments_get(request, item, ProfilePortfolioItemComment, 'item')
+
+
+# ── Profile — Achievement reactions & comments ──────────────────────────────
+
+@login_required(login_url='/')
+def profile_achievement_vibe(request, achievement_id):
+    achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, achievement, ProfileAchievementVibe, 'achievement')
+    return _card_vibe_toggle(request, achievement, ProfileAchievementVibe, 'achievement')
+
+
+@login_required(login_url='/')
+def profile_achievement_comments(request, achievement_id):
+    achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id)
+    if request.method == 'POST':
+        return _card_comments_post(request, achievement, ProfileAchievementComment, 'achievement')
+    return _card_comments_get(request, achievement, ProfileAchievementComment, 'achievement')
+
+
+# ── Profile — Experience reactions & comments ───────────────────────────────
+
+@login_required(login_url='/')
+def profile_experience_vibe(request, experience_id):
+    experience = get_object_or_404(ProfileExperience, experience_id=experience_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, experience, ProfileExperienceVibe, 'experience')
+    return _card_vibe_toggle(request, experience, ProfileExperienceVibe, 'experience')
+
+
+@login_required(login_url='/')
+def profile_experience_comments(request, experience_id):
+    experience = get_object_or_404(ProfileExperience, experience_id=experience_id)
+    if request.method == 'POST':
+        return _card_comments_post(request, experience, ProfileExperienceComment, 'experience')
+    return _card_comments_get(request, experience, ProfileExperienceComment, 'experience')
+
+
+# ── Profile — Education reactions & comments ────────────────────────────────
+
+@login_required(login_url='/')
+def profile_education_vibe(request, education_id):
+    education = get_object_or_404(ProfileEducation, education_id=education_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, education, ProfileEducationVibe, 'education')
+    return _card_vibe_toggle(request, education, ProfileEducationVibe, 'education')
+
+
+@login_required(login_url='/')
+def profile_education_comments(request, education_id):
+    education = get_object_or_404(ProfileEducation, education_id=education_id)
+    if request.method == 'POST':
+        return _card_comments_post(request, education, ProfileEducationComment, 'education')
+    return _card_comments_get(request, education, ProfileEducationComment, 'education')
+
+
+# ── Profile — Service reactions & comments ──────────────────────────────────
+
+@login_required(login_url='/')
+def profile_service_vibe(request, service_id):
+    service = get_object_or_404(ProfileService, service_id=service_id)
+    if request.method == 'GET':
+        return _card_vibe_get(request, service, ProfileServiceVibe, 'service')
+    return _card_vibe_toggle(request, service, ProfileServiceVibe, 'service')
+
+
+@login_required(login_url='/')
+def profile_service_comments(request, service_id):
+    service = get_object_or_404(ProfileService, service_id=service_id)
+    if request.method == 'POST':
+        return _card_comments_post(request, service, ProfileServiceComment, 'service')
+    return _card_comments_get(request, service, ProfileServiceComment, 'service')
+
 
 # =============================================================================
 # ADMIN DASHBOARD VIEWS

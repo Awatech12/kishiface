@@ -2955,6 +2955,19 @@ class ProfileService(models.Model):
     def owner_name(self):
         return self.profile.full_name or self.profile.user.username
 
+    @property
+    def vibe_count(self):
+        return self.vibes.count()
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+    @property
+    def top_vibe_emoji(self):
+        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
+        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
+
 
 class BusinessPortfolioItem(models.Model):
     """A single Portfolio piece or Project shown on a professional page.
@@ -3107,6 +3120,19 @@ class ProfilePortfolioItem(models.Model):
     def owner_user(self):
         return self.profile.user
 
+    @property
+    def vibe_count(self):
+        return self.vibes.count()
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+    @property
+    def top_vibe_emoji(self):
+        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
+        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
+
 
 class ProfileExperience(models.Model):
     """A single work-history entry (role at a company) shown on a user's own
@@ -3203,6 +3229,19 @@ class ProfileExperience(models.Model):
     def owner_user(self):
         return self.profile.user
 
+    @property
+    def vibe_count(self):
+        return self.vibes.count()
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+    @property
+    def top_vibe_emoji(self):
+        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
+        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
+
 
 class ProfileEducation(models.Model):
     """A single education entry (school / degree) shown on a user's own
@@ -3281,6 +3320,19 @@ class ProfileEducation(models.Model):
     @property
     def owner_user(self):
         return self.profile.user
+
+    @property
+    def vibe_count(self):
+        return self.vibes.count()
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+    @property
+    def top_vibe_emoji(self):
+        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
+        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
 
 
 class BusinessAchievement(models.Model):
@@ -3408,6 +3460,19 @@ class ProfileAchievement(models.Model):
     @property
     def owner_name(self):
         return self.profile.full_name or self.profile.user.username
+
+    @property
+    def vibe_count(self):
+        return self.vibes.count()
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+    @property
+    def top_vibe_emoji(self):
+        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
+        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4235,3 +4300,210 @@ class ProfilePostNotification(models.Model):
         if self.notif_type == self.NEW_VIBE:
             return f"{self.actor.username} vibed {self.vibe_type} on post {self.post_id}"
         return f"{self.actor.username} commented on post {self.post_id}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reactions & comments for the other Profile sub-sections — Portfolio/Projects,
+# Achievements, Experience, Education, Services. Same vibe/comment shape as
+# ProfilePostVibe/ProfilePostComment (reusing its VIBE_CHOICES/VIBE_EMOJIS) so
+# the existing _card_vibe_* / _card_comments_* view helpers work unchanged.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProfilePortfolioItemVibe(models.Model):
+    """Vibe reactions on a ProfilePortfolioItem (portfolio piece or project)."""
+    item       = models.ForeignKey(ProfilePortfolioItem, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_portfolio_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=ProfilePostVibe.VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('item', 'user')
+        ordering = ['created_at']
+        db_table = 'ProfilePortfolioItemVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on portfolio item {self.item_id}"
+
+
+class ProfilePortfolioItemComment(models.Model):
+    """Comments on a ProfilePortfolioItem (portfolio piece or project)."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    item       = models.ForeignKey(ProfilePortfolioItem, on_delete=models.CASCADE, related_name='comments')
+    author     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_portfolio_comments')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'ProfilePortfolioItemComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on portfolio item {self.item_id}: {self.text[:50]}"
+
+
+class ProfileAchievementVibe(models.Model):
+    """Vibe reactions on a ProfileAchievement."""
+    achievement = models.ForeignKey(ProfileAchievement, on_delete=models.CASCADE, related_name='vibes')
+    user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_achievement_vibes')
+    vibe_type   = models.CharField(max_length=10, choices=ProfilePostVibe.VIBE_CHOICES)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('achievement', 'user')
+        ordering = ['created_at']
+        db_table = 'ProfileAchievementVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on achievement {self.achievement_id}"
+
+
+class ProfileAchievementComment(models.Model):
+    """Comments on a ProfileAchievement."""
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    achievement = models.ForeignKey(ProfileAchievement, on_delete=models.CASCADE, related_name='comments')
+    author      = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_achievement_comments')
+    text        = models.TextField()
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'ProfileAchievementComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on achievement {self.achievement_id}: {self.text[:50]}"
+
+
+class ProfileExperienceVibe(models.Model):
+    """Vibe reactions on a ProfileExperience entry."""
+    experience = models.ForeignKey(ProfileExperience, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_experience_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=ProfilePostVibe.VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('experience', 'user')
+        ordering = ['created_at']
+        db_table = 'ProfileExperienceVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on experience {self.experience_id}"
+
+
+class ProfileExperienceComment(models.Model):
+    """Comments on a ProfileExperience entry."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    experience = models.ForeignKey(ProfileExperience, on_delete=models.CASCADE, related_name='comments')
+    author     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_experience_comments')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'ProfileExperienceComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on experience {self.experience_id}: {self.text[:50]}"
+
+
+class ProfileEducationVibe(models.Model):
+    """Vibe reactions on a ProfileEducation entry."""
+    education  = models.ForeignKey(ProfileEducation, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_education_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=ProfilePostVibe.VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('education', 'user')
+        ordering = ['created_at']
+        db_table = 'ProfileEducationVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on education {self.education_id}"
+
+
+class ProfileEducationComment(models.Model):
+    """Comments on a ProfileEducation entry."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    education  = models.ForeignKey(ProfileEducation, on_delete=models.CASCADE, related_name='comments')
+    author     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_education_comments')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'ProfileEducationComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on education {self.education_id}: {self.text[:50]}"
+
+
+class ProfileServiceVibe(models.Model):
+    """Vibe reactions on a ProfileService."""
+    service    = models.ForeignKey(ProfileService, on_delete=models.CASCADE, related_name='vibes')
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_service_vibes')
+    vibe_type  = models.CharField(max_length=10, choices=ProfilePostVibe.VIBE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('service', 'user')
+        ordering = ['created_at']
+        db_table = 'ProfileServiceVibe_Table'
+
+    def __str__(self):
+        return f"{self.user.username} vibed {self.vibe_type} on service {self.service_id}"
+
+
+class ProfileServiceComment(models.Model):
+    """Comments on a ProfileService."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    service    = models.ForeignKey(ProfileService, on_delete=models.CASCADE, related_name='comments')
+    author     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_service_comments')
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        self.text = sanitize_text(self.text, 'comment')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'ProfileServiceComment_Table'
+
+    def __str__(self):
+        return f"{self.author.username} on service {self.service_id}: {self.text[:50]}"
