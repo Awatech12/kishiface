@@ -1,7 +1,12 @@
 {% load static %}
 {% load humanize %}
 
-
+{% comment %}
+  Inject badge styles once per page — guard prevents duplicates when
+  this row is rendered multiple times (e.g. real-time WS stream).
+  n.is_first_row is set by the view for exactly one row in the rendered
+  list, so the shared <style> block is only ever emitted once.
+{% endcomment %}
 {% if n.is_first_row %}
 <style id="kvibe-notif-row-styles">
 .kvibe-notif-wrapper {
@@ -102,11 +107,11 @@
 <div class="kvibe-notif-wrapper {% if not n.is_read %}kvibe-unread{% endif %}"
      id="kvibe-notif-{{ n.group_id }}">
 
-  
+   
     <div class="kvibe-notif-item"
          onclick="kvibeNotifClick(event,
                   '{{ n.type }}',
-                  '{% if n.post %}{{ n.post.post_id }}{% endif %}',
+                  '{{ n.anchor_id }}',
                   '{{ n.latest_actor.username }}',
                   '{{ request.user.username }}')">
 
@@ -162,20 +167,20 @@
 
                 {% if n.type == 'like' %}
                     {% if n.others_count == 1 %}
-                        &nbsp;and <strong>1 other</strong> vibed {{ n.vibe_emoji|default:"✨" }}{% if n.vibe_type %} <strong>{{ n.vibe_type|capfirst }}</strong>{% endif %} your post.
+                        &nbsp;and <strong>1 other</strong> vibed {{ n.vibe_emoji|default:"✨" }}{% if n.vibe_type %} <strong>{{ n.vibe_type|capfirst }}</strong>{% endif %} your {{ n.section_label|default:"post" }}.
                     {% elif n.others_count > 1 %}
-                        &nbsp;and <strong>{{ n.others_count }} others</strong> vibed {{ n.vibe_emoji|default:"✨" }}{% if n.vibe_type %} <strong>{{ n.vibe_type|capfirst }}</strong>{% endif %} your post.
+                        &nbsp;and <strong>{{ n.others_count }} others</strong> vibed {{ n.vibe_emoji|default:"✨" }}{% if n.vibe_type %} <strong>{{ n.vibe_type|capfirst }}</strong>{% endif %} your {{ n.section_label|default:"post" }}.
                     {% else %}
-                        &nbsp;vibed {{ n.vibe_emoji|default:"✨" }}{% if n.vibe_type %} <strong>{{ n.vibe_type|capfirst }}</strong>{% endif %} your post.
+                        &nbsp;vibed {{ n.vibe_emoji|default:"✨" }}{% if n.vibe_type %} <strong>{{ n.vibe_type|capfirst }}</strong>{% endif %} your {{ n.section_label|default:"post" }}.
                     {% endif %}
 
                 {% elif n.type == 'comment' %}
                     {% if n.others_count == 1 %}
-                        &nbsp;and <strong>1 other</strong> commented on your post.
+                        &nbsp;and <strong>1 other</strong> commented on your {{ n.section_label|default:"post" }}.
                     {% elif n.others_count > 1 %}
-                        &nbsp;and <strong>{{ n.others_count }} others</strong> commented on your post.
+                        &nbsp;and <strong>{{ n.others_count }} others</strong> commented on your {{ n.section_label|default:"post" }}.
                     {% else %}
-                        &nbsp;commented on your post.
+                        &nbsp;commented on your {{ n.section_label|default:"post" }}.
                     {% endif %}
 
                 {% elif n.type == 'repost' %}
@@ -229,6 +234,26 @@
             {% else %}
                 <div class="kvibe-thumb-placeholder"><i class="fas fa-align-left"></i></div>
             {% endif %}
+
+        {% elif n.item %}
+      
+            {% if n.item.get_image_url %}
+                <img class="kvibe-thumb"
+                     src="{{ n.item.get_image_url }}"
+                     alt="{{ n.section_label }}"
+                     loading="lazy">
+            {% else %}
+                <div class="kvibe-thumb-placeholder">
+                    <i class="fas
+                        {% if n.item_section == 'portfolio' %}fa-briefcase
+                        {% elif n.item_section == 'achievement' %}fa-trophy
+                        {% elif n.item_section == 'experience' %}fa-building
+                        {% elif n.item_section == 'education' %}fa-graduation-cap
+                        {% elif n.item_section == 'service' %}fa-toolbox
+                        {% else %}fa-align-left
+                        {% endif %}"></i>
+                </div>
+            {% endif %}
         {% endif %}
 
         {# Unread blue dot #}
@@ -242,8 +267,10 @@
     <button class="kvibe-remove-btn" aria-label="Dismiss"
         {% if n.type == 'follow' %}
             onclick="kvibeRemoveFollow({{ n.follow_id }}, this)"
+        {% elif n.item %}
+            onclick="kvibeRemoveNotif('', '{{ n.item_section }}', '{{ n.item.pk }}', '{{ n.type }}', this)"
         {% else %}
-            onclick="kvibeRemoveNotif('{{ n.post.post_id }}', '{{ n.type }}', this)"
+            onclick="kvibeRemoveNotif('{{ n.post.post_id }}', '', '', '{{ n.type }}', this)"
         {% endif %}
     >
         <i class="fas fa-times"></i>

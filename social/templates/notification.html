@@ -381,18 +381,20 @@
 
     /* ── Notification row click ─────────────────────────────────────────
        'follow' rows jump to the person who followed you. 'like'/'comment'
-       rows are always about one of your own posts, so they jump to your
-       own profile, anchored to that post (id="kpp-post-<id>" inside the
-       Professional tab's Posts subtab — see profile.html's deep-link
-       handler, which reveals that tab/subtab for this exact hash). ────── */
-    window.kvibeNotifClick = function (event, type, postId, actorUsername, ownerUsername) {
+       rows are always about one of your own posts or profile items, so
+       they jump to your own profile, anchored to the source card's id
+       (anchorId — e.g. "kpp-post-<id>" for posts, "kpp-portfolio-<id>",
+       "kpp-achievement-<id>", etc. for the other sections). See
+       profile.html's deep-link handler, which reveals the right
+       tab/subtab for any of these hashes. ────── */
+    window.kvibeNotifClick = function (event, type, anchorId, actorUsername, ownerUsername) {
         if (type === 'follow') {
             if (actorUsername) window.location.href = '/' + actorUsername + '/';
             return;
         }
         if (!ownerUsername) return;
-        window.location.href = postId
-            ? '/' + ownerUsername + '/#kpp-post-' + postId
+        window.location.href = anchorId
+            ? '/' + ownerUsername + '/#' + anchorId
             : '/' + ownerUsername + '/';
     };
 
@@ -412,16 +414,22 @@
             .catch(function () { btn.innerHTML = origHtml; btn.disabled = false; });
     };
 
-    /* ── Dismiss button — reserved for future post-based activity rows
-       (likes/comments/reposts/mentions/replies) rendered via kvibe_notif_row ── */
-    window.kvibeRemoveNotif = function (postId, type, btn) {
+    /* ── Dismiss button — post-based and profile-item-based activity rows
+       (likes/comments on posts, or on Portfolio/Project, Achievement,
+       Experience, Education, Service items) rendered via kvibe_notif_row.
+       Exactly one of postId / (itemSection + itemId) is non-empty. ────── */
+    window.kvibeRemoveNotif = function (postId, itemSection, itemId, type, btn) {
         var wrapper  = btn.closest('.kvibe-notif-wrapper');
         var origHtml = btn.innerHTML;
 
         btn.innerHTML = '<i class="fas fa-circle-notch kishiface-spin"></i>';
         btn.disabled  = true;
 
-        doPost('/notifications/delete-group/', { post_id: postId, notification_type: type })
+        var payload = itemSection
+            ? { item_section: itemSection, item_id: itemId, notification_type: type }
+            : { post_id: postId, notification_type: type };
+
+        doPost('/notifications/delete-group/', payload)
             .then(function (data) {
                 if (data.status === 'success' && wrapper) { slideOut(wrapper); }
                 else { btn.innerHTML = origHtml; btn.disabled = false; }

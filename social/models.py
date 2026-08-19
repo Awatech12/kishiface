@@ -4507,3 +4507,167 @@ class ProfileServiceComment(models.Model):
 
     def __str__(self):
         return f"{self.author.username} on service {self.service_id}: {self.text[:50]}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ProfileItemNotification — reaction/comment notifications for the profile's
+# other sub-sections: Portfolio/Project, Achievement, Experience, Education,
+# and Service. Mirrors ProfilePostNotification's new_vibe/new_comment
+# handling, but a single model covers all five sections instead of one
+# model per section — exactly one of the five target FKs below is set per
+# row, matching which section the notification belongs to.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ProfileItemNotification(models.Model):
+    """
+    Notifications tied to one of a profile's "extra" sections:
+      - 'new_vibe'    → sent to the item owner when someone reacts to it.
+      - 'new_comment' → sent to the item owner when someone comments on it.
+    A single actor can only have one active 'new_vibe' row per item (their
+    reaction is refreshed in place if they change/re-apply it); comments
+    always create a fresh row since each comment is a distinct event.
+    """
+    NEW_VIBE    = 'new_vibe'
+    NEW_COMMENT = 'new_comment'
+    NOTIF_TYPE_CHOICES = [
+        (NEW_VIBE,    'New reaction'),
+        (NEW_COMMENT, 'New comment'),
+    ]
+
+    PORTFOLIO   = 'portfolio'
+    ACHIEVEMENT = 'achievement'
+    EXPERIENCE  = 'experience'
+    EDUCATION   = 'education'
+    SERVICE     = 'service'
+    SECTION_CHOICES = [
+        (PORTFOLIO,   'Portfolio / Project'),
+        (ACHIEVEMENT, 'Achievement'),
+        (EXPERIENCE,  'Experience'),
+        (EDUCATION,   'Education'),
+        (SERVICE,     'Service'),
+    ]
+
+    # Card id prefix + subtab name used to build a deep link back to the
+    # source item on the profile page (kept here so views/templates never
+    # have to hard-code this mapping in more than one place).
+    _ANCHOR_PREFIX = {
+        PORTFOLIO:   'kpp-portfolio-',
+        ACHIEVEMENT: 'kpp-achievement-',
+        EXPERIENCE:  'kpp-experience-',
+        EDUCATION:   'kpp-education-',
+        SERVICE:     'kpp-service-',
+    }
+    _SECTION_LABEL = {
+        PORTFOLIO:   'portfolio piece',
+        ACHIEVEMENT: 'achievement',
+        EXPERIENCE:  'experience',
+        EDUCATION:   'education entry',
+        SERVICE:     'service',
+    }
+
+    notif_type = models.CharField(max_length=20, choices=NOTIF_TYPE_CHOICES, db_index=True)
+    section    = models.CharField(max_length=20, choices=SECTION_CHOICES, db_index=True)
+
+    # Exactly one of these is set, matching `section`.
+    portfolio_item = models.ForeignKey(
+        ProfilePortfolioItem, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='notifications'
+    )
+    achievement = models.ForeignKey(
+        ProfileAchievement, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='notifications'
+    )
+    experience = models.ForeignKey(
+        ProfileExperience, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='notifications'
+    )
+    education = models.ForeignKey(
+        ProfileEducation, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='notifications'
+    )
+    service = models.ForeignKey(
+        ProfileService, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='notifications'
+    )
+
+    # actor: the user who reacted or commented.
+    actor = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='sent_profile_item_notifications'
+    )
+    # to_user: the item's owner — the recipient of the notification.
+    to_user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='profile_item_notifications'
+    )
+    vibe_type = models.CharField(
+        max_length=10, blank=True, default='',
+        help_text='Set for new_vibe notifications only (e.g. "fire", "love").'
+    )
+    is_read    = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'ProfileItemNotification_Table'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['to_user', 'is_read']),
+            models.Index(fields=['section', 'notif_type']),
+        ]
+
+    def __str__(self):
+        verb = 'vibed' if self.notif_type == self.NEW_VIBE else 'commented on'
+        return f"{self.actor.username} {verb} {self.get_section_display()} {self.target_id}"
+
+    @property
+    def target(self):
+        """Whichever of the five FKs is set for this row."""
+        return (
+            self.portfolio_item or self.achievement or self.experience
+            or self.education or self.service
+        )
+
+    @property
+    def target_id(self):
+        t = self.target
+        return t.pk if t else None
+
+    @property
+    def target_label(self):
+        """Human-readable title for the source item, regardless of section
+        (ProfileEducation uses `school_name` instead of `title`)."""
+        t = self.target
+        if not t:
+            return ''
+        return getattr(t, 'title', None) or getattr(t, 'school_name', '')
+
+    @property
+    def target_image_url(self):
+        t = self.target
+        return t.get_image_url if t else ''
+
+    @property
+    def section_label(self):
+        return self._SECTION_LABEL.get(self.section, self.section)
+
+    @property
+    def anchor_id(self):
+        """DOM id of the source card on the profile page, e.g.
+        'kpp-portfolio-<uuid>' — matches the ids rendered in profile.html
+        and the PROFILE_ITEM_URL_MAP.card() ids used there."""
+        t = self.target
+        if not t:
+            return ''
+        return f'{self._ANCHOR_PREFIX.get(self.section, "")}{t.pk}'
+
+    @property
+    def subtab(self):
+        """Which Professional-tab subtab the item lives in. Portfolio items
+        live in either the 'portfolio' or 'projects' subtab depending on
+        their `kind`; every other section maps 1:1 to its own subtab."""
+        if self.section == self.PORTFOLIO:
+            t = self.target
+            return 'projects' if (t and t.kind == ProfilePortfolioItem.KIND_PROJECT) else 'portfolio'
+        if self.section == self.ACHIEVEMENT:
+            return 'achievements'
+        if self.section == self.SERVICE:
+            return 'services'
+        return self.section  # 'experience' / 'education'

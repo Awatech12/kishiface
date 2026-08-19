@@ -5,7 +5,7 @@ import socket
 
 from html import escape as html_escape, unescape as html_unescape
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
-from .models import FollowNotification, BusinessNotification, ProfilePostNotification
+from .models import FollowNotification, BusinessNotification, ProfilePostNotification, ProfileItemNotification
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
@@ -1389,6 +1389,10 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         _pach_pool, _port_pool = [], []
 
     feed_items = []
+    # Achievement / profile-achievement / portfolio cards all pull from the
+    # same visual family — guard against two of them landing back-to-back by
+    # requiring at least one other feed item between any two of this trio.
+    _SPECIAL_CARD_TYPES = {'achievement', 'profile_achievement', 'portfolio'}
     for i in range(1, page_size + 1):
         # Business page suggestion at slot 6 (every 8 slots)
         if (i % 8 == 6
@@ -1407,26 +1411,34 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         if i % 6 == 4 and _pp_pool:
             feed_items.append({'type': 'profile_post', 'data': _pp_pool.pop(0)})
 
+        _last_type = feed_items[-1]['type'] if feed_items else None
+
         # Achievement highlight at slot 11 (every 10 slots, offset from suggestions)
         if (i % 10 == 1
                 and _ach_pool
-                and _ach_injected < _MAX_ACH_PER_PAGE):
+                and _ach_injected < _MAX_ACH_PER_PAGE
+                and _last_type not in _SPECIAL_CARD_TYPES):
             feed_items.append({'type': 'achievement', 'data': _ach_pool.pop(0)})
             _ach_injected += 1
+            _last_type = 'achievement'
 
         # Personal profile achievement at slot 4 (every 10 slots)
         if (i % 10 == 4
                 and _pach_pool
-                and _pach_injected < _MAX_PACH_PER_PAGE):
+                and _pach_injected < _MAX_PACH_PER_PAGE
+                and _last_type not in _SPECIAL_CARD_TYPES):
             feed_items.append({'type': 'profile_achievement', 'data': _pach_pool.pop(0)})
             _pach_injected += 1
+            _last_type = 'profile_achievement'
 
         # Personal portfolio piece / project at slot 8 (every 10 slots)
         if (i % 10 == 8
                 and _port_pool
-                and _port_injected < _MAX_PORT_PER_PAGE):
+                and _port_injected < _MAX_PORT_PER_PAGE
+                and _last_type not in _SPECIAL_CARD_TYPES):
             feed_items.append({'type': 'portfolio', 'data': _port_pool.pop(0)})
             _port_injected += 1
+            _last_type = 'portfolio'
 
         # Market ad — fills most slots (1,2,3,4,5,6 of every 10) normally,
         # or every slot when a category filter is active.
@@ -1459,6 +1471,23 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             del people_pool[:3]
             feed_items.append({'type': 'people_suggestion', 'data': _people_group})
             _people_injected += 1
+
+    # ── Randomize final ordering ────────────────────────────────────────────
+    # The slot-based build above only controls *how many* of each card type
+    # appear and paces them across virtual slots — it still produced a fairly
+    # fixed shape (e.g. a business/profile post always leading). Shuffle the
+    # assembled list so every card type (posts, achievements, portfolio,
+    # projects, jobs, events, suggestions…) can land anywhere, then repair
+    # any achievement/profile_achievement/portfolio pair that ended up
+    # adjacent so that constraint still holds after the shuffle.
+    random.shuffle(feed_items)
+    for _idx in range(1, len(feed_items)):
+        if (feed_items[_idx]['type'] in _SPECIAL_CARD_TYPES
+                and feed_items[_idx - 1]['type'] in _SPECIAL_CARD_TYPES):
+            for _j in range(_idx + 1, len(feed_items)):
+                if feed_items[_j]['type'] not in _SPECIAL_CARD_TYPES:
+                    feed_items[_idx], feed_items[_j] = feed_items[_j], feed_items[_idx]
+                    break
 
     return feed_items, next_cursor
 
@@ -3772,16 +3801,18 @@ def _build_activity_notification_entries(user):
     Builds the flat, newest-first list of 'n' dicts shown in the
     Today / This Week / Earlier sections of the notification page:
     personal follows, plus reactions and comments on the user's own
-    ProfilePost updates.
+    ProfilePost updates and on the user's own Portfolio/Project,
+    Achievement, Experience, Education, and Service items.
 
     Each dict matches the shape snippet/kvibe_notif_item.html (and, in
     turn, snippet/kvibe_notif_row.html) know how to render:
-        group_id, type, latest_actor, post, follow_id, is_read, created_at,
+        group_id, type, latest_actor, post, item, item_section, anchor_id,
+        subtab, section_label, follow_id, is_read, created_at,
         others_count, vibe_type, vibe_emoji, is_following_back
 
-    Reaction/comment rows on the same post are grouped into a single entry
-    (latest actor + "and N others"), the way Instagram-style feeds collapse
-    repeat activity on one post instead of listing every single tap.
+    Reaction/comment rows on the same post/item are grouped into a single
+    entry (latest actor + "and N others"), the way Instagram-style feeds
+    collapse repeat activity on one post instead of listing every single tap.
     """
     following_ids = set(
         user.profile.followings.values_list('pk', flat=True)
@@ -3824,13 +3855,18 @@ def _build_activity_notification_entries(user):
     grouped = {}
     group_order = []
     for pn in post_notif_qs:
-        key = (pn.post_id, pn.notif_type)
+        key = ('post', pn.post_id, pn.notif_type)
         if key not in grouped:
             grouped[key] = {
                 'group_id': f'profilepost-{pn.notif_type}-{pn.post_id}',
                 'type': 'like' if pn.notif_type == ProfilePostNotification.NEW_VIBE else 'comment',
                 'latest_actor': pn.actor,
                 'post': pn.post,
+                'item': None,
+                'item_section': '',
+                'anchor_id': f'kpp-post-{pn.post_id}',
+                'subtab': 'posts',
+                'section_label': 'post',
                 'follow_id': None,
                 'is_read': pn.is_read,
                 'created_at': pn.created_at,
@@ -3844,6 +3880,46 @@ def _build_activity_notification_entries(user):
             g = grouped[key]
             g['_actor_ids'].add(pn.actor_id)
             if not pn.is_read:
+                g['is_read'] = False
+
+    # ── Reactions & comments on the user's own Portfolio/Project,
+    #    Achievement, Experience, Education, and Service items ──────────
+    item_notif_qs = (
+        ProfileItemNotification.objects
+        .filter(to_user=user)
+        .select_related(
+            'actor', 'actor__profile',
+            'portfolio_item', 'achievement', 'experience', 'education', 'service',
+        )
+        .order_by('-created_at')[:100]
+    )
+
+    for inx in item_notif_qs:
+        key = ('item', inx.section, inx.target_id, inx.notif_type)
+        if key not in grouped:
+            grouped[key] = {
+                'group_id': f'profileitem-{inx.section}-{inx.notif_type}-{inx.target_id}',
+                'type': 'like' if inx.notif_type == ProfileItemNotification.NEW_VIBE else 'comment',
+                'latest_actor': inx.actor,
+                'post': None,
+                'item': inx.target,
+                'item_section': inx.section,
+                'anchor_id': inx.anchor_id,
+                'subtab': inx.subtab,
+                'section_label': inx.section_label,
+                'follow_id': None,
+                'is_read': inx.is_read,
+                'created_at': inx.created_at,
+                'vibe_type': inx.vibe_type,
+                'vibe_emoji': ProfilePostVibe.VIBE_EMOJIS.get(inx.vibe_type, ''),
+                'is_following_back': False,
+                '_actor_ids': {inx.actor_id},
+            }
+            group_order.append(key)
+        else:
+            g = grouped[key]
+            g['_actor_ids'].add(inx.actor_id)
+            if not inx.is_read:
                 g['is_read'] = False
 
     for key in group_order:
@@ -3886,6 +3962,7 @@ def _bucket_notifications_by_recency(entries):
 def notification_list(request):
     FollowNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
     ProfilePostNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
+    ProfileItemNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
     BusinessNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
     EventNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
 
@@ -3927,6 +4004,9 @@ def notification_partial(request):
         unread_profile_post_count = ProfilePostNotification.objects.filter(
             to_user=request.user, is_read=False
         ).count()
+        unread_profile_item_count = ProfileItemNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
         unread_business_count = BusinessNotification.objects.filter(
             to_user=request.user, is_read=False
         ).count()
@@ -3936,11 +4016,13 @@ def notification_partial(request):
     else:
         unread_follow_count = 0
         unread_profile_post_count = 0
+        unread_profile_item_count = 0
         unread_business_count = 0
         unread_event_count = 0
     return render(request, 'snippet/notification_count.html', {
         'unread_follow_count': unread_follow_count,
         'unread_profile_post_count': unread_profile_post_count,
+        'unread_profile_item_count': unread_profile_item_count,
         'unread_business_count': unread_business_count,
         'unread_event_count': unread_event_count,
     })
@@ -4027,6 +4109,39 @@ def delete_notification_group(request):
 
         return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
 
+    # ── Grouped reaction/comment notification on one of the user's own
+    #    Portfolio/Project, Achievement, Experience, Education, or Service
+    #    items — same one-entry-per-group dismissal as the ProfilePost
+    #    case above, keyed off (section, target item) instead of a post. ──
+    item_section = data.get('item_section')
+    item_id = data.get('item_id')
+    if item_section and item_id and notification_type:
+        model_notif_type = {
+            'like': ProfileItemNotification.NEW_VIBE,
+            'comment': ProfileItemNotification.NEW_COMMENT,
+        }.get(notification_type)
+
+        valid_sections = dict(ProfileItemNotification.SECTION_CHOICES)
+        if not model_notif_type or item_section not in valid_sections:
+            return JsonResponse({'status': 'error', 'message': 'Invalid notification_type'}, status=400)
+
+        fk_field = {
+            ProfileItemNotification.PORTFOLIO:   'portfolio_item_id',
+            ProfileItemNotification.ACHIEVEMENT: 'achievement_id',
+            ProfileItemNotification.EXPERIENCE:  'experience_id',
+            ProfileItemNotification.EDUCATION:   'education_id',
+            ProfileItemNotification.SERVICE:     'service_id',
+        }[item_section]
+
+        deleted_count, _ = ProfileItemNotification.objects.filter(
+            section=item_section,
+            notif_type=model_notif_type,
+            to_user=request.user,
+            **{fk_field: item_id},
+        ).delete()
+
+        return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
+
     return JsonResponse({'status': 'error', 'message': 'Missing data'}, status=400)
 
 
@@ -4037,6 +4152,9 @@ def mark_all_notifications_read(request):
         to_user=request.user, is_read=False
     ).update(is_read=True)
     ProfilePostNotification.objects.filter(
+        to_user=request.user, is_read=False
+    ).update(is_read=True)
+    ProfileItemNotification.objects.filter(
         to_user=request.user, is_read=False
     ).update(is_read=True)
     BusinessNotification.objects.filter(
@@ -6117,6 +6235,75 @@ def _card_comments_post(request, obj, CommentCls, fk_field):
     })
 
 
+def _notify_profile_item_vibe(request, item, section, notif_fk_field, response):
+    """
+    Generic vibe-notification sync for the profile's 'extra' sections
+    (Portfolio/Project, Achievement, Experience, Education, Service).
+    Mirrors profile_post_vibe / business_post_vibe's get-or-create-or-delete
+    pattern, but keyed off ProfileItemNotification's `section` field plus
+    whichever of its five target FKs applies (`notif_fk_field`, e.g.
+    'portfolio_item', 'achievement', ...).
+    """
+    if response.status_code != 200:
+        return
+    owner = item.owner_user
+    if owner == request.user:
+        return
+    try:
+        data = json.loads(response.content)
+        user_vibe = data.get('user_vibe')
+        lookup = {
+            'notif_type': ProfileItemNotification.NEW_VIBE,
+            'section': section,
+            'actor': request.user,
+            notif_fk_field: item,
+        }
+        if user_vibe:
+            # One reaction notification per (item, actor) — re-vibing
+            # (or switching vibe types) refreshes it instead of spamming
+            # a new row for every tap.
+            notif, created = ProfileItemNotification.objects.get_or_create(
+                **lookup, defaults={'to_user': owner, 'vibe_type': user_vibe},
+            )
+            if not created:
+                notif.vibe_type  = user_vibe
+                notif.is_read    = False
+                notif.created_at = timezone.now()
+                notif.save(update_fields=['vibe_type', 'is_read', 'created_at'])
+        else:
+            # Un-reacting removes the notification entirely.
+            ProfileItemNotification.objects.filter(**lookup).delete()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            'Failed to sync vibe notification for %s %s', section, getattr(item, 'pk', None)
+        )
+
+
+def _notify_profile_item_comment(request, item, section, notif_fk_field, response):
+    """Generic comment-notification creation counterpart to
+    _notify_profile_item_vibe — notifies the item owner unless they
+    commented on their own item."""
+    if response.status_code != 200:
+        return
+    owner = item.owner_user
+    if owner == request.user:
+        return
+    try:
+        ProfileItemNotification.objects.create(
+            notif_type=ProfileItemNotification.NEW_COMMENT,
+            section=section,
+            actor=request.user,
+            to_user=owner,
+            **{notif_fk_field: item},
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            'Failed to create comment notification for %s %s', section, getattr(item, 'pk', None)
+        )
+
+
 # ── Job vacancy reactions ──────────────────────────────────────────────────────
 
 @login_required(login_url='/')
@@ -6236,14 +6423,18 @@ def profile_portfolio_vibe(request, item_id):
     item = get_object_or_404(ProfilePortfolioItem, item_id=item_id)
     if request.method == 'GET':
         return _card_vibe_get(request, item, ProfilePortfolioItemVibe, 'item')
-    return _card_vibe_toggle(request, item, ProfilePortfolioItemVibe, 'item')
+    response = _card_vibe_toggle(request, item, ProfilePortfolioItemVibe, 'item')
+    _notify_profile_item_vibe(request, item, ProfileItemNotification.PORTFOLIO, 'portfolio_item', response)
+    return response
 
 
 @login_required(login_url='/')
 def profile_portfolio_comments(request, item_id):
     item = get_object_or_404(ProfilePortfolioItem, item_id=item_id)
     if request.method == 'POST':
-        return _card_comments_post(request, item, ProfilePortfolioItemComment, 'item')
+        response = _card_comments_post(request, item, ProfilePortfolioItemComment, 'item')
+        _notify_profile_item_comment(request, item, ProfileItemNotification.PORTFOLIO, 'portfolio_item', response)
+        return response
     return _card_comments_get(request, item, ProfilePortfolioItemComment, 'item')
 
 
@@ -6254,14 +6445,18 @@ def profile_achievement_vibe(request, achievement_id):
     achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id)
     if request.method == 'GET':
         return _card_vibe_get(request, achievement, ProfileAchievementVibe, 'achievement')
-    return _card_vibe_toggle(request, achievement, ProfileAchievementVibe, 'achievement')
+    response = _card_vibe_toggle(request, achievement, ProfileAchievementVibe, 'achievement')
+    _notify_profile_item_vibe(request, achievement, ProfileItemNotification.ACHIEVEMENT, 'achievement', response)
+    return response
 
 
 @login_required(login_url='/')
 def profile_achievement_comments(request, achievement_id):
     achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id)
     if request.method == 'POST':
-        return _card_comments_post(request, achievement, ProfileAchievementComment, 'achievement')
+        response = _card_comments_post(request, achievement, ProfileAchievementComment, 'achievement')
+        _notify_profile_item_comment(request, achievement, ProfileItemNotification.ACHIEVEMENT, 'achievement', response)
+        return response
     return _card_comments_get(request, achievement, ProfileAchievementComment, 'achievement')
 
 
@@ -6272,14 +6467,18 @@ def profile_experience_vibe(request, experience_id):
     experience = get_object_or_404(ProfileExperience, experience_id=experience_id)
     if request.method == 'GET':
         return _card_vibe_get(request, experience, ProfileExperienceVibe, 'experience')
-    return _card_vibe_toggle(request, experience, ProfileExperienceVibe, 'experience')
+    response = _card_vibe_toggle(request, experience, ProfileExperienceVibe, 'experience')
+    _notify_profile_item_vibe(request, experience, ProfileItemNotification.EXPERIENCE, 'experience', response)
+    return response
 
 
 @login_required(login_url='/')
 def profile_experience_comments(request, experience_id):
     experience = get_object_or_404(ProfileExperience, experience_id=experience_id)
     if request.method == 'POST':
-        return _card_comments_post(request, experience, ProfileExperienceComment, 'experience')
+        response = _card_comments_post(request, experience, ProfileExperienceComment, 'experience')
+        _notify_profile_item_comment(request, experience, ProfileItemNotification.EXPERIENCE, 'experience', response)
+        return response
     return _card_comments_get(request, experience, ProfileExperienceComment, 'experience')
 
 
@@ -6290,14 +6489,18 @@ def profile_education_vibe(request, education_id):
     education = get_object_or_404(ProfileEducation, education_id=education_id)
     if request.method == 'GET':
         return _card_vibe_get(request, education, ProfileEducationVibe, 'education')
-    return _card_vibe_toggle(request, education, ProfileEducationVibe, 'education')
+    response = _card_vibe_toggle(request, education, ProfileEducationVibe, 'education')
+    _notify_profile_item_vibe(request, education, ProfileItemNotification.EDUCATION, 'education', response)
+    return response
 
 
 @login_required(login_url='/')
 def profile_education_comments(request, education_id):
     education = get_object_or_404(ProfileEducation, education_id=education_id)
     if request.method == 'POST':
-        return _card_comments_post(request, education, ProfileEducationComment, 'education')
+        response = _card_comments_post(request, education, ProfileEducationComment, 'education')
+        _notify_profile_item_comment(request, education, ProfileItemNotification.EDUCATION, 'education', response)
+        return response
     return _card_comments_get(request, education, ProfileEducationComment, 'education')
 
 
@@ -6308,14 +6511,18 @@ def profile_service_vibe(request, service_id):
     service = get_object_or_404(ProfileService, service_id=service_id)
     if request.method == 'GET':
         return _card_vibe_get(request, service, ProfileServiceVibe, 'service')
-    return _card_vibe_toggle(request, service, ProfileServiceVibe, 'service')
+    response = _card_vibe_toggle(request, service, ProfileServiceVibe, 'service')
+    _notify_profile_item_vibe(request, service, ProfileItemNotification.SERVICE, 'service', response)
+    return response
 
 
 @login_required(login_url='/')
 def profile_service_comments(request, service_id):
     service = get_object_or_404(ProfileService, service_id=service_id)
     if request.method == 'POST':
-        return _card_comments_post(request, service, ProfileServiceComment, 'service')
+        response = _card_comments_post(request, service, ProfileServiceComment, 'service')
+        _notify_profile_item_comment(request, service, ProfileItemNotification.SERVICE, 'service', response)
+        return response
     return _card_comments_get(request, service, ProfileServiceComment, 'service')
 
 

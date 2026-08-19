@@ -549,13 +549,14 @@
   <article class="khj-jcard" id="feed-achievement-{{ a.achievement_id }}">
     <div class="khj-jrow">
 
-      <a href="{% url 'business_page_detail' page.slug %}" class="khj-jcard-img-link">
+      <div class="khj-jcard-img-link" style="cursor:zoom-in;" onclick="kfOpenLightbox('kf-imgs-achievement-{{ a.achievement_id }}', 0)">
         <div class="khj-jcard-img-wrap">
           <img src="{{ a.get_image_url|default:'https://placehold.co/600x400/fff7e6/f59e0b?text=Achievement' }}"
                alt="{{ a.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img loaded">
         </div>
         <span class="khj-jcard-type-chip" style="--pill-color:#f59e0b;"><i class="fas fa-trophy"></i> Achievement</span>
-      </a>
+      </div>
+      <script type="application/json" id="kf-imgs-achievement-{{ a.achievement_id }}">["{{ a.get_image_url|default:'https://placehold.co/600x400/fff7e6/f59e0b?text=Achievement'|escapejs }}"]</script>
 
       <div class="khj-jcard-body">
         <a href="{% url 'business_page_detail' page.slug %}" class="khj-jcard-body-link">
@@ -595,43 +596,62 @@
   {# ── Personal achievement — old .khj-jcard layout (image, chip, seller row, meta, footer) kept exactly as before, now with a Follow button + posted-time added to the header, plus reactions/comments (kbiz-post-engage-summary/bar + comments sheet) appended below, wired to the achievement's own endpoints via reactToFeedItem/toggleFeedItemComments ─────── #}
   {% with a=item.data pf=item.data.profile %}
   <article class="khj-jcard" id="kbiz-achievement-{{ a.achievement_id }}">
+
+    <div class="kbiz-post-top">
+        <a href="{% url 'profile' pf.user.username %}" class="kbiz-post-author" style="text-decoration:none;">
+            <img src="{{ pf.get_picture_url|default:'https://placehold.co/68x68/f59e0b/ffffff?text=U' }}" alt="{{ pf.full_name|default:pf.user.username }}"
+                 onerror="this.onerror=null;this.src='https://placehold.co/68x68/f59e0b/ffffff?text=U';">
+            <div style="min-width:0;">
+                <div class="kbiz-post-author-name">
+                  {{ pf.full_name|default:pf.user.username }}
+                  {% if pf.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="13" width="13" alt="✓" style="vertical-align:middle;" loading="lazy">{% endif %}
+                  <span class="kbiz-post-source-tag profile"><i class="fas fa-trophy" style="font-size:8px;"></i> Achievement</span>
+                </div>
+                <div class="kbiz-post-time">
+                    <i class="far fa-clock"></i> {{ a.created_at|insta_timesince }}
+                    <i class="fas fa-earth-americas" style="font-size:9px;"></i>
+                </div>
+                {% if pf.member_type_label %}
+                <div class="kbiz-post-author-sub">
+                    <i class="fas fa-briefcase" style="font-size:9px;opacity:.7;"></i> {{ pf.member_type_label }}{% if pf.member_type_headline_value %}<span class="kbiz-post-author-sep">·</span>{{ pf.member_type_headline_value }}{% endif %}{% if pf.member_type_secondary_value %} <span class="kbiz-post-author-sep">|</span> <i class="fas fa-location-dot" style="font-size:9px;opacity:.7;"></i> {{ pf.member_type_secondary_value }}{% endif %}
+                </div>
+                {% elif pf.profession or pf.location %}
+                <div class="kbiz-post-author-sub">
+                    {% if pf.profession %}<i class="fas fa-briefcase" style="font-size:9px;opacity:.7;"></i> {{ pf.profession }}{% endif %}{% if pf.profession and pf.location %} <span class="kbiz-post-author-sep">|</span> {% endif %}{% if pf.location %}<i class="fas fa-location-dot" style="font-size:9px;opacity:.7;"></i> {{ pf.location }}{% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </a>
+
+        {% if request.user.is_authenticated and pf.user != request.user %}
+        <button type="button"
+                class="kbiz-post-follow-btn {% if pf.is_following %}is-following{% endif %}"
+                data-username="{{ pf.user.username }}"
+                onclick="profilePostFollowToggle(this, '{{ pf.user.username }}', '{{ pf.full_name|default:pf.user.username|escapejs }}')">
+            {% if pf.is_following %}
+              <i class="fas fa-check"></i> Following
+            {% else %}
+              <i class="fas fa-plus"></i> Follow
+            {% endif %}
+        </button>
+        {% endif %}
+    </div>
+
     <div class="khj-jrow">
 
-      <a href="{% url 'profile' pf.user.username %}" class="khj-jcard-img-link">
+      <div class="khj-jcard-img-link" style="cursor:zoom-in;" onclick="kfOpenLightbox('kf-imgs-p-achievement-{{ a.achievement_id }}', 0)">
         <div class="khj-jcard-img-wrap">
           <img src="{{ a.get_image_url|default:'https://placehold.co/600x400/fff7e6/f59e0b?text=Achievement' }}"
                alt="{{ a.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img loaded">
         </div>
         <span class="khj-jcard-type-chip" style="--pill-color:#f59e0b;"><i class="fas fa-trophy"></i> Achievement</span>
-      </a>
+      </div>
+      <script type="application/json" id="kf-imgs-p-achievement-{{ a.achievement_id }}">["{{ a.get_image_url|default:'https://placehold.co/600x400/fff7e6/f59e0b?text=Achievement'|escapejs }}"]</script>
 
       <div class="khj-jcard-body">
         <a href="{% url 'profile' pf.user.username %}" class="khj-jcard-body-link">
           <span class="khj-jcard-name">{{ a.title }}</span>
         </a>
-
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <a href="{% url 'profile' pf.user.username %}" class="khj-jcard-seller" onclick="event.stopPropagation()">
-            <img src="{{ pf.get_picture_url }}" alt="{{ pf.full_name|default:pf.user.username }}" class="khj-jcard-seller-avatar"
-                 onerror="this.onerror=null;this.src='https://placehold.co/40x40/fff7e6/f59e0b?text={{ pf.user.username|first|upper }}';">
-            <span class="khj-jcard-seller-name">{{ pf.full_name|default:pf.user.username|truncatechars:20 }}</span>
-            {% if pf.is_verify %}<i class="fas fa-circle-check khj-jcard-seller-badge" title="Verified"></i>{% endif %}
-          </a>
-          {% if request.user.is_authenticated and pf.user != request.user %}
-          <button type="button"
-                  class="kbiz-post-follow-btn {% if pf.is_following %}is-following{% endif %}"
-                  data-username="{{ pf.user.username }}"
-                  onclick="event.stopPropagation(); profilePostFollowToggle(this, '{{ pf.user.username }}', '{{ pf.full_name|default:pf.user.username|escapejs }}')">
-              {% if pf.is_following %}
-                <i class="fas fa-check"></i> Following
-              {% else %}
-                <i class="fas fa-plus"></i> Follow
-              {% endif %}
-          </button>
-          {% endif %}
-        </div>
-
-        <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ a.created_at|insta_timesince }}</div>
 
         <div class="khj-jcard-meta">
           {% if a.issuer %}<span class="khj-jcard-meta-txt"><i class="fas fa-award"></i>{{ a.issuer }}</span>{% endif %}
@@ -711,10 +731,52 @@
   {# ── Personal portfolio piece / project — same .kbiz-post-card layout as a normal profile post (feed_posts_partial's 'profile_post' block above), `kind` drives the badge label. Reactions & comments are wired to the item's own endpoints (profile_portfolio_vibe/comments) via the generic reactToFeedItem/toggleFeedItemComments JS helpers ─────── #}
   {% with pi=item.data pf=item.data.profile %}
   <article class="khj-jcard" id="kbiz-portfolio-{{ pi.item_id }}">
+
+    <div class="kbiz-post-top">
+        <a href="{% url 'profile' pf.user.username %}" class="kbiz-post-author" style="text-decoration:none;">
+            <img src="{{ pf.get_picture_url|default:'https://placehold.co/68x68/6366f1/ffffff?text=U' }}" alt="{{ pf.full_name|default:pf.user.username }}"
+                 onerror="this.onerror=null;this.src='https://placehold.co/68x68/6366f1/ffffff?text=U';">
+            <div style="min-width:0;">
+                <div class="kbiz-post-author-name">
+                  {{ pf.full_name|default:pf.user.username }}
+                  {% if pf.is_verify %}<img src="{% static 'images/verify1.jpg' %}" height="13" width="13" alt="✓" style="vertical-align:middle;" loading="lazy">{% endif %}
+                  <span class="kbiz-post-source-tag profile">
+                    {% if pi.kind == 'project' %}<i class="fas fa-diagram-project" style="font-size:8px;"></i> Project{% else %}<i class="fas fa-briefcase" style="font-size:8px;"></i> Portfolio{% endif %}
+                  </span>
+                </div>
+                <div class="kbiz-post-time">
+                    <i class="far fa-clock"></i> {{ pi.created_at|insta_timesince }}
+                    <i class="fas fa-earth-americas" style="font-size:9px;"></i>
+                </div>
+                {% if pf.member_type_label %}
+                <div class="kbiz-post-author-sub">
+                    <i class="fas fa-briefcase" style="font-size:9px;opacity:.7;"></i> {{ pf.member_type_label }}{% if pf.member_type_headline_value %}<span class="kbiz-post-author-sep">·</span>{{ pf.member_type_headline_value }}{% endif %}{% if pf.member_type_secondary_value %} <span class="kbiz-post-author-sep">|</span> <i class="fas fa-location-dot" style="font-size:9px;opacity:.7;"></i> {{ pf.member_type_secondary_value }}{% endif %}
+                </div>
+                {% elif pf.profession or pf.location %}
+                <div class="kbiz-post-author-sub">
+                    {% if pf.profession %}<i class="fas fa-briefcase" style="font-size:9px;opacity:.7;"></i> {{ pf.profession }}{% endif %}{% if pf.profession and pf.location %} <span class="kbiz-post-author-sep">|</span> {% endif %}{% if pf.location %}<i class="fas fa-location-dot" style="font-size:9px;opacity:.7;"></i> {{ pf.location }}{% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </a>
+
+        {% if request.user.is_authenticated and pf.user != request.user %}
+        <button type="button"
+                class="kbiz-post-follow-btn {% if pf.is_following %}is-following{% endif %}"
+                data-username="{{ pf.user.username }}"
+                onclick="profilePostFollowToggle(this, '{{ pf.user.username }}', '{{ pf.full_name|default:pf.user.username|escapejs }}')">
+            {% if pf.is_following %}
+              <i class="fas fa-check"></i> Following
+            {% else %}
+              <i class="fas fa-plus"></i> Follow
+            {% endif %}
+        </button>
+        {% endif %}
+    </div>
+
     <div class="khj-jrow">
 
-      <a href="{% if pi.link_url %}{{ pi.link_url }}{% else %}{% url 'profile' pf.user.username %}{% endif %}"
-         class="khj-jcard-img-link" {% if pi.link_url %}target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"{% endif %}>
+      <div class="khj-jcard-img-link" style="cursor:zoom-in;" onclick="kfOpenLightbox('kf-imgs-portfolio-{{ pi.item_id }}', 0)">
         <div class="khj-jcard-img-wrap">
           <img src="{{ pi.get_image_url|default:'https://placehold.co/600x400/eef2ff/6366f1?text=Portfolio' }}"
                alt="{{ pi.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img loaded">
@@ -723,36 +785,14 @@
           {% if pi.kind == 'project' %}<i class="fas fa-diagram-project"></i> Project{% if pi.is_ongoing %} · Ongoing{% endif %}
           {% else %}<i class="fas fa-briefcase"></i> Portfolio{% endif %}
         </span>
-      </a>
+      </div>
+      <script type="application/json" id="kf-imgs-portfolio-{{ pi.item_id }}">["{{ pi.get_image_url|default:'https://placehold.co/600x400/eef2ff/6366f1?text=Portfolio'|escapejs }}"]</script>
 
       <div class="khj-jcard-body">
         <a href="{% if pi.link_url %}{{ pi.link_url }}{% else %}{% url 'profile' pf.user.username %}{% endif %}"
            class="khj-jcard-body-link" {% if pi.link_url %}target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()"{% endif %}>
           <span class="khj-jcard-name">{{ pi.title }}</span>
         </a>
-
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <a href="{% url 'profile' pf.user.username %}" class="khj-jcard-seller" onclick="event.stopPropagation()">
-            <img src="{{ pf.get_picture_url }}" alt="{{ pf.full_name|default:pf.user.username }}" class="khj-jcard-seller-avatar"
-                 onerror="this.onerror=null;this.src='https://placehold.co/40x40/eef2ff/6366f1?text={{ pf.user.username|first|upper }}';">
-            <span class="khj-jcard-seller-name">{{ pf.full_name|default:pf.user.username|truncatechars:20 }}</span>
-            {% if pf.is_verify %}<i class="fas fa-circle-check khj-jcard-seller-badge" title="Verified"></i>{% endif %}
-          </a>
-          {% if request.user.is_authenticated and pf.user != request.user %}
-          <button type="button"
-                  class="kbiz-post-follow-btn {% if pf.is_following %}is-following{% endif %}"
-                  data-username="{{ pf.user.username }}"
-                  onclick="event.stopPropagation(); profilePostFollowToggle(this, '{{ pf.user.username }}', '{{ pf.full_name|default:pf.user.username|escapejs }}')">
-              {% if pf.is_following %}
-                <i class="fas fa-check"></i> Following
-              {% else %}
-                <i class="fas fa-plus"></i> Follow
-              {% endif %}
-          </button>
-          {% endif %}
-        </div>
-
-        <div class="khj-jcard-time"><i class="far fa-clock"></i> Posted {{ pi.created_at|insta_timesince }}</div>
 
         {% if pi.description %}
         <div class="khj-jcard-meta">

@@ -1,4 +1,4 @@
-from .models import Message, FollowNotification, ProfilePostNotification, BusinessNotification, EventNotification, Channel, BusinessPage
+from .models import Message, FollowNotification, ProfilePostNotification, ProfileItemNotification, BusinessNotification, EventNotification, Channel, BusinessPage
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
@@ -53,6 +53,9 @@ def follow_notifications_context(request):
             'unread_profile_post_count': 0,
             'recent_profile_post_notifications': [],
             'has_unread_profile_post_notifications': False,
+            'unread_profile_item_count': 0,
+            'recent_profile_item_notifications': [],
+            'has_unread_profile_item_notifications': False,
             'unread_business_count': 0,
             'recent_business_notifications': [],
             'has_unread_business_notifications': False,
@@ -90,6 +93,22 @@ def follow_notifications_context(request):
             .order_by('-created_at')[:10]
         )
 
+        # Reactions + comments on the user's own Portfolio/Project,
+        # Achievement, Experience, Education, and Service items.
+        unread_profile_item_count = ProfileItemNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
+
+        recent_profile_item_notifications = (
+            ProfileItemNotification.objects
+            .filter(to_user=request.user)
+            .select_related(
+                'actor', 'actor__profile',
+                'portfolio_item', 'achievement', 'experience', 'education', 'service',
+            )
+            .order_by('-created_at')[:10]
+        )
+
         unread_business_count = BusinessNotification.objects.filter(
             to_user=request.user, is_read=False
         ).count()
@@ -121,6 +140,9 @@ def follow_notifications_context(request):
             'unread_profile_post_count':             unread_profile_post_count,
             'recent_profile_post_notifications':     recent_profile_post_notifications,
             'has_unread_profile_post_notifications': unread_profile_post_count > 0,
+            'unread_profile_item_count':             unread_profile_item_count,
+            'recent_profile_item_notifications':     recent_profile_item_notifications,
+            'has_unread_profile_item_notifications': unread_profile_item_count > 0,
             'unread_business_count':              unread_business_count,
             'recent_business_notifications':      recent_business_notifications,
             'has_unread_business_notifications':  unread_business_count > 0,
@@ -129,6 +151,7 @@ def follow_notifications_context(request):
             'has_unread_event_notifications':     unread_event_count > 0,
             'unread_notifications_total':  (
                 unread_follow_count + unread_profile_post_count
+                + unread_profile_item_count
                 + unread_business_count + unread_event_count
             ),
         }
@@ -142,6 +165,9 @@ def follow_notifications_context(request):
             'unread_profile_post_count': 0,
             'recent_profile_post_notifications': [],
             'has_unread_profile_post_notifications': False,
+            'unread_profile_item_count': 0,
+            'recent_profile_item_notifications': [],
+            'has_unread_profile_item_notifications': False,
             'unread_business_count': 0,
             'recent_business_notifications': [],
             'has_unread_business_notifications': False,
