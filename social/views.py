@@ -588,14 +588,16 @@ def onboarding(request):
 
         raw_data = {}
         for field in MEMBER_TYPE_SCHEMA[member_type]['fields']:
+            key = field['key']
+            posted_name = f'mt_{member_type}__{key}'
             if field['type'] == 'days_hours':
-                raw_data[field['key'] + '__days'] = request.POST.getlist(field['key'] + '__days')
-                raw_data[field['key'] + '__open'] = request.POST.get(field['key'] + '__open', '')
-                raw_data[field['key'] + '__close'] = request.POST.get(field['key'] + '__close', '')
+                raw_data[key + '__days'] = request.POST.getlist(posted_name + '__days')
+                raw_data[key + '__open'] = request.POST.get(posted_name + '__open', '')
+                raw_data[key + '__close'] = request.POST.get(posted_name + '__close', '')
                 continue
-            raw_data[field['key']] = request.POST.get(field['key'], '')
+            raw_data[key] = request.POST.get(posted_name, '')
             if field['type'] == 'select_other':
-                raw_data[field['key'] + '__other'] = request.POST.get(field['key'] + '__other', '')
+                raw_data[key + '__other'] = request.POST.get(posted_name + '__other', '')
         cleaned = sanitize_member_type_data(member_type, raw_data)
 
         required_missing = [
@@ -626,7 +628,11 @@ def onboarding(request):
             profile.enabled_sections = Profile.default_sections_for(member_type)
             profile.sells_products = member_type in Profile.MEMBER_TYPES_SELLING_BY_DEFAULT
 
-        cv_file = request.FILES.get('cv')
+        cv_field_name = next(
+            (f'mt_{member_type}__{f["key"]}' for f in MEMBER_TYPE_SCHEMA[member_type]['fields'] if f['type'] == 'file'),
+            None
+        )
+        cv_file = request.FILES.get(cv_field_name) if cv_field_name else None
         if cv_file:
             try:
                 ext = os.path.splitext(cv_file.name)[1].lower()
@@ -8644,3 +8650,4 @@ def profile_sections_update(request):
         'enabled_sections': profile.enabled_sections,
         'sells_products': profile.sells_products,
     })
+
