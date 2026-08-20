@@ -5001,6 +5001,38 @@ async function deleteBusinessAchievement(achievementId) {
         toast('Network error. Please try again.');
     }
 }
+
+/* ── Auto-open Post / Product composer from footer "Create" modal ──
+   Footer links to /business/<slug>/?open_post=1 or ?open_product=1 so the
+   composer opens immediately on arrival (including right after this page
+   was just created via business_page_create). Only meaningful for the
+   owner, and the flag is stripped from the URL right after so a refresh
+   or back-navigation doesn't reopen it. */
+{% if is_owner %}
+document.addEventListener('DOMContentLoaded', function () {
+    var params = new URLSearchParams(window.location.search);
+    var shouldOpenPost    = params.get('open_post') === '1';
+    var shouldOpenProduct = params.get('open_product') === '1';
+
+    if (shouldOpenPost && typeof openPostModal === 'function') {
+        openPostModal();
+    } else if (shouldOpenProduct) {
+        {% if page.show_products %}
+        if (typeof openModal === 'function') openModal();
+        {% else %}
+        toast('Products are turned off for this page. Enable "Sell Products" in Edit Page first.');
+        {% endif %}
+    }
+
+    if (shouldOpenPost || shouldOpenProduct) {
+        params.delete('open_post');
+        params.delete('open_product');
+        var newQuery = params.toString();
+        var newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '') + window.location.hash;
+        window.history.replaceState({}, '', newUrl);
+    }
+});
+{% endif %}
 </script>
 </body>
 </html>

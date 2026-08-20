@@ -6737,6 +6737,33 @@ function kbizInitVideoPlayers(scope) {
 }
 document.addEventListener('DOMContentLoaded', function () { kbizInitVideoPlayers(document); });
 
+/* ── Auto-open Post / Product composer from footer "Create" modal ──
+   Footer links to /<username>/?open_post=1 or ?open_product=1 so the
+   composer opens immediately on arrival. Only meaningful on your own
+   profile, and the flag is stripped from the URL right after so a
+   refresh or back-navigation doesn't reopen it. */
+{% if is_own_profile %}
+document.addEventListener('DOMContentLoaded', function () {
+    var params = new URLSearchParams(window.location.search);
+    var shouldOpenPost    = params.get('open_post') === '1';
+    var shouldOpenProduct = params.get('open_product') === '1';
+
+    if (shouldOpenPost && typeof openProfilePostModal === 'function') {
+        openProfilePostModal();
+    } else if (shouldOpenProduct && typeof openProfileProductModal === 'function') {
+        openProfileProductModal();
+    }
+
+    if (shouldOpenPost || shouldOpenProduct) {
+        params.delete('open_post');
+        params.delete('open_product');
+        var newQuery = params.toString();
+        var newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '') + window.location.hash;
+        window.history.replaceState({}, '', newUrl);
+    }
+});
+{% endif %}
+
 </script>
 
 <!-- Post media lightbox (shared by all post grids on this page) -->

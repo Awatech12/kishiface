@@ -186,6 +186,28 @@
       font-weight: 500;
     }
 
+    /* === POST DESTINATION SUB-SHEET (Profile vs Business) === */
+    .post-dest-options {
+      display: flex;
+      justify-content: space-evenly;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .post-dest-back {
+      background: none;
+      border: none;
+      color: var(--nav-icon-color);
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 0 14px;
+      padding: 4px 0;
+      cursor: pointer;
+    }
+
     /* === MOBILE-ONLY VISIBILITY === */
     /* Hide the bottom nav by default (tablet/desktop) */
     .bottom-nav {
@@ -253,18 +275,17 @@
   <div class="create-modal" role="dialog" aria-modal="true" aria-labelledby="createModalTitle">
     <div class="create-modal-handle"></div>
     <p class="create-modal-title" id="createModalTitle">What would you like to post?</p>
-    <div class="create-modal-options">
-      {% if viewer_primary_business_page %}
-      <a href="{% url 'business_page_detail' slug=viewer_primary_business_page.slug %}" class="create-option">
+
+    <!-- Main options -->
+    <div class="create-modal-options" id="createOptionsPanel">
+      <a href="#" class="create-option" id="postOptionBtn">
+        <span class="create-option-icon"><i class="fas fa-pen-to-square"></i></span>
+        <span class="create-option-label">Post</span>
+      </a>
+      <a href="#" class="create-option" id="productOptionBtn">
         <span class="create-option-icon"><i class="fas fa-tag"></i></span>
         <span class="create-option-label">Product</span>
       </a>
-      {% else %}
-      <a href="{% url 'business_page_create' %}" class="create-option">
-        <span class="create-option-icon"><i class="fas fa-tag"></i></span>
-        <span class="create-option-label">Product</span>
-      </a>
-      {% endif %}
       <a href="{% url 'job_vacancy' %}" class="create-option">
         <span class="create-option-icon"><i class="fas fa-briefcase"></i></span>
         <span class="create-option-label">Job</span>
@@ -273,6 +294,58 @@
         <span class="create-option-icon"><i class="fas fa-calendar-plus"></i></span>
         <span class="create-option-label">Event</span>
       </a>
+    </div>
+
+    <!-- Product destination sub-sheet: which product — Profile or Business -->
+    <div id="productDestPanel" style="display:none;">
+      <button type="button" class="post-dest-back" id="productDestBackBtn">
+        <i class="fas fa-arrow-left"></i> Back
+      </button>
+      <div class="post-dest-options">
+        {% if user.is_authenticated %}
+        <a href="{% url 'profile' username=user.username %}?open_product=1" class="create-option">
+          <span class="create-option-icon"><i class="fas fa-user"></i></span>
+          <span class="create-option-label">Profile Product</span>
+        </a>
+        {% endif %}
+        {% if viewer_primary_business_page %}
+        <a href="{% url 'business_page_detail' slug=viewer_primary_business_page.slug %}?open_product=1" class="create-option">
+          <span class="create-option-icon"><i class="fas fa-store"></i></span>
+          <span class="create-option-label">Business Product</span>
+        </a>
+        {% else %}
+        <a href="{% url 'business_page_create' %}?next_intent=open_product" class="create-option">
+          <span class="create-option-icon"><i class="fas fa-store"></i></span>
+          <span class="create-option-label">Create Business Page</span>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Post destination sub-sheet: which post — Profile or Business -->
+    <div id="postDestPanel" style="display:none;">
+      <button type="button" class="post-dest-back" id="postDestBackBtn">
+        <i class="fas fa-arrow-left"></i> Back
+      </button>
+      <div class="post-dest-options">
+        {% if user.is_authenticated %}
+        <a href="{% url 'profile' username=user.username %}?open_post=1" class="create-option">
+          <span class="create-option-icon"><i class="fas fa-user"></i></span>
+          <span class="create-option-label">Profile Post</span>
+        </a>
+        {% endif %}
+        {% if viewer_primary_business_page %}
+        <a href="{% url 'business_page_detail' slug=viewer_primary_business_page.slug %}?open_post=1" class="create-option">
+          <span class="create-option-icon"><i class="fas fa-store"></i></span>
+          <span class="create-option-label">Business Post</span>
+        </a>
+        {% else %}
+        <a href="{% url 'business_page_create' %}?next_intent=open_post" class="create-option">
+          <span class="create-option-icon"><i class="fas fa-store"></i></span>
+          <span class="create-option-label">Create Business Page</span>
+        </a>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>
@@ -342,6 +415,7 @@
     if (createNavBtn && createModalOverlay) {
       createNavBtn.addEventListener('click', function (e) {
         e.preventDefault();
+        showMainOptions();
         openCreateModal();
       });
 
@@ -355,6 +429,65 @@
       // Close on Escape (useful for desktop testing)
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closeCreateModal();
+      });
+    }
+
+    // ── Post option: choose Profile Post vs Business Post ─────────────────
+    var postOptionBtn    = document.getElementById('postOptionBtn');
+    var productOptionBtn = document.getElementById('productOptionBtn');
+    var createOptionsPanel = document.getElementById('createOptionsPanel');
+    var postDestPanel    = document.getElementById('postDestPanel');
+    var postDestBackBtn  = document.getElementById('postDestBackBtn');
+    var productDestPanel     = document.getElementById('productDestPanel');
+    var productDestBackBtn   = document.getElementById('productDestBackBtn');
+    var createModalTitle = document.getElementById('createModalTitle');
+
+    // All sub-sheets, so showMainOptions can hide whichever is open.
+    var subPanels = [postDestPanel, productDestPanel].filter(Boolean);
+
+    function showMainOptions() {
+      if (!createOptionsPanel) return;
+      createOptionsPanel.style.display = 'flex';
+      subPanels.forEach(function (panel) { panel.style.display = 'none'; });
+      createModalTitle.textContent = 'What would you like to post?';
+    }
+
+    function showSubPanel(panel, title) {
+      if (!createOptionsPanel || !panel) return;
+      createOptionsPanel.style.display = 'none';
+      subPanels.forEach(function (p) { p.style.display = 'none'; });
+      panel.style.display = 'block';
+      createModalTitle.textContent = title;
+    }
+
+    function wireDestinationOption(optionBtn, destPanel, title) {
+      if (!optionBtn || !destPanel) return;
+      optionBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        // If the destination sheet only has one option, skip straight to it.
+        var destLinks = destPanel.querySelectorAll('.create-option');
+        if (destLinks.length === 1) {
+          window.location.href = destLinks[0].getAttribute('href');
+          return;
+        }
+        showSubPanel(destPanel, title);
+      });
+    }
+
+    wireDestinationOption(postOptionBtn, postDestPanel, 'Post to Profile or Business?');
+    wireDestinationOption(productOptionBtn, productDestPanel, 'List on Profile or Business?');
+
+    if (postDestBackBtn) {
+      postDestBackBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        showMainOptions();
+      });
+    }
+
+    if (productDestBackBtn) {
+      productDestBackBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        showMainOptions();
       });
     }
 

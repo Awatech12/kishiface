@@ -7062,7 +7062,11 @@ def business_page_create(request):
             })
 
         messages.success(request, f'"{page.name}" is live! 🎉')
-        return redirect('business_page_detail', slug=page.slug)
+        next_intent = request.POST.get('next_intent', '').strip()
+        redirect_url = reverse('business_page_detail', kwargs={'slug': page.slug})
+        if next_intent in ('open_post', 'open_product'):
+            redirect_url += f'?{next_intent}=1'
+        return redirect(redirect_url)
 
     return render(request, 'business_page_create.html', {
         'categories':         BusinessPage.CATEGORY_CHOICES,
