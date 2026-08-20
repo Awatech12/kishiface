@@ -3149,9 +3149,24 @@
         }
         .kbiz-video-mutebtn:hover { background: rgba(0,0,0,.72); }
         .kbiz-video-duration {
-            position: absolute; bottom: 12px; left: 10px; padding: 2px 8px; border-radius: 4px;
+            position: absolute; top: 10px; right: 10px; padding: 2px 8px; border-radius: 4px;
             background: rgba(0,0,0,.55); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .2px;
+            font-variant-numeric: tabular-nums; pointer-events: none;
         }
+        .kbiz-video-seek {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 38px; height: 38px; border-radius: 50%; background: rgba(0,0,0,.45);
+            color: #fff; border: none; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; cursor: pointer; opacity: 0; transition: opacity .15s, background .15s;
+            line-height: 1;
+        }
+        .kbiz-video-seek i { font-size: 14px; }
+        .kbiz-video-seek span { font-size: 8px; font-weight: 700; margin-top: 1px; }
+        .kbiz-video-seek:hover { background: rgba(0,0,0,.7); }
+        .kbiz-video-seek-back { left: 12px; }
+        .kbiz-video-seek-fwd { right: 12px; }
+        .kbiz-video-wrap:hover .kbiz-video-seek,
+        .kbiz-video-wrap.is-playing .kbiz-video-seek { opacity: 1; }
         .kbiz-video-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.25); }
         .kbiz-video-progress-fill { height: 100%; width: 0%; background: var(--mfy-primary); }
 
@@ -4161,6 +4176,9 @@ function kbizInitVideoPlayers(scope) {
         const playBtn = wrap.querySelector('.kbiz-video-playbtn, .kpp-video-playbtn');
         const muteBtn = wrap.querySelector('.kbiz-video-mutebtn, .kpp-video-mutebtn');
         const fill = wrap.querySelector('.kbiz-video-progress-fill, .kpp-video-progress-fill');
+        const durationEl = wrap.querySelector('[data-kbiz-duration], [data-kpp-duration], .kbiz-video-duration, .kpp-video-duration');
+        const seekBackBtn = wrap.querySelector('.kbiz-video-seek-back, .kpp-video-seek-back');
+        const seekFwdBtn = wrap.querySelector('.kbiz-video-seek-fwd, .kpp-video-seek-fwd');
         if (!video) return;
 
         const setPlayIcon = () => {
@@ -4173,10 +4191,28 @@ function kbizInitVideoPlayers(scope) {
         };
         setMuteIcon();
 
+        const formatTime = (sec) => {
+            if (!isFinite(sec) || sec < 0) sec = 0;
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return m + ':' + (s < 10 ? '0' : '') + s;
+        };
+        const updateDurationLabel = () => {
+            if (!durationEl || !video.duration) return;
+            durationEl.textContent = formatTime(video.currentTime) + ' / ' + formatTime(video.duration);
+        };
+        const seekBy = (delta) => {
+            if (!video.duration) return;
+            video.currentTime = Math.min(Math.max(0, video.currentTime + delta), video.duration);
+            updateDurationLabel();
+        };
+
         video.addEventListener('play', function () { wrap.classList.add('is-playing'); setPlayIcon(); });
         video.addEventListener('pause', function () { wrap.classList.remove('is-playing'); setPlayIcon(); });
+        video.addEventListener('loadedmetadata', updateDurationLabel);
         video.addEventListener('timeupdate', function () {
             if (fill && video.duration) fill.style.width = ((video.currentTime / video.duration) * 100) + '%';
+            updateDurationLabel();
         });
 
         wrap.addEventListener('click', function (e) {
@@ -4188,6 +4224,18 @@ function kbizInitVideoPlayers(scope) {
                 e.stopPropagation();
                 video.muted = !video.muted;
                 setMuteIcon();
+            });
+        }
+        if (seekBackBtn) {
+            seekBackBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                seekBy(-5);
+            });
+        }
+        if (seekFwdBtn) {
+            seekFwdBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                seekBy(5);
             });
         }
 

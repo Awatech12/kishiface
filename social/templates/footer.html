@@ -388,8 +388,11 @@
       }
     });
 
-    // Always show nav on touch/click (UX improvement)
+    // Always show nav on touch/click (UX improvement) — but not while a
+    // comments sheet is open, otherwise tapping/typing inside the sheet
+    // would keep pulling the nav back into view.
     function showNav() {
+      if (document.querySelector('.kbiz-comments-overlay.open')) return;
       if (!isNavVisible) {
         bottomNav.classList.remove('hidden');
         isNavVisible = true;
@@ -397,6 +400,39 @@
     }
     document.addEventListener('touchstart', showNav);
     document.addEventListener('mousedown', showNav);
+
+    // ── Hide nav while a post's comment sheet/modal is open ────────────────
+    // Comment sheets (business posts, profile posts, achievements,
+    // portfolio items, etc.) all share the `.kbiz-comments-overlay` class
+    // and get an `open` class toggled on them when shown/hidden. Watch for
+    // that so the bottom nav gets out of the way whenever any of them opens,
+    // regardless of which "open comments" function triggered it.
+    var navHiddenForComments = false;
+    var wasNavVisibleBeforeComments = true;
+
+    function syncNavWithComments() {
+      var anyCommentsOpen = !!document.querySelector('.kbiz-comments-overlay.open');
+
+      if (anyCommentsOpen && !navHiddenForComments) {
+        navHiddenForComments = true;
+        wasNavVisibleBeforeComments = isNavVisible;
+        bottomNav.classList.add('hidden');
+        isNavVisible = false;
+      } else if (!anyCommentsOpen && navHiddenForComments) {
+        navHiddenForComments = false;
+        if (wasNavVisibleBeforeComments) {
+          bottomNav.classList.remove('hidden');
+          isNavVisible = true;
+        }
+      }
+    }
+
+    var commentsNavObserver = new MutationObserver(syncNavWithComments);
+    commentsNavObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class'],
+      subtree: true
+    });
 
     // ── Create options modal ────────────────────────────────────────────
     var createNavBtn     = document.getElementById('createNavBtn');

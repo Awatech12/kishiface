@@ -267,6 +267,11 @@
         .kprof-member-type-cta i.fa-chevron-right { font-size: 10px; color: var(--mfy-primary); }
         /* Username is de-emphasized and pushed further down the stack, not immediately under the name */
         .kprof-username { font-size: 13px; color: var(--mfy-text-light); font-weight: 400; margin: 6px 0 0; }
+        .kprof-details-line { font-size: 13px; color: var(--mfy-text-light); font-weight: 400; margin: 6px 0 0; }
+        .kprof-school-line { font-size: 15px; color: var(--mfy-text); font-weight: 400; margin: 2px 0 0; line-height: 1.4; }
+        .kprof-inline-details { font-size: 15px; color: var(--mfy-text); font-weight: 400; margin: 2px 0 0; line-height: 1.4; }
+        .kprof-inline-item:not(:last-child)::after { content: " || "; color: var(--mfy-text-light); }
+        .kprof-location-line { font-size: 14px; color: var(--mfy-text-light); font-weight: 400; margin: 2px 0 0; }
         .kprof-type-details { margin-top: 6px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 4px; }
         .kprof-type-row { font-size: 13px; display: flex; gap: 6px; }
         .kprof-type-label { color: var(--mfy-text-light); font-weight: 600; min-width: 110px; flex-shrink: 0; }
@@ -1744,20 +1749,6 @@
 
 /* ── Personal ⇄ Professional profile mode toggle ── */
 body.kprof-professional-mode .kprof-tabs { display: none; }
-.kprof-mode-banner {
-    display: none; align-items: center; justify-content: space-between; gap: 10px;
-    background: linear-gradient(120deg, #0095f6, #0077d4); color: #fff;
-    border-radius: 12px; margin: 0 12px 16px; padding: 12px 16px;
-    font-size: 13px; font-weight: 600;
-}
-.kprof-mode-banner i { margin-right: 6px; }
-.kprof-mode-banner button {
-    background: rgba(255,255,255,0.18); border: none; color: #fff;
-    padding: 7px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer;
-    white-space: nowrap;
-}
-.kprof-mode-banner button:hover { background: rgba(255,255,255,0.28); }
-body.kprof-professional-mode .kprof-mode-banner { display: flex; }
 
 .kpp-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px;
@@ -2210,9 +2201,24 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
 }
 .kpp-video-mutebtn:hover { background: rgba(0,0,0,.72); }
 .kpp-video-duration {
-    position: absolute; bottom: 12px; left: 10px; padding: 2px 8px; border-radius: 4px;
+    position: absolute; top: 10px; right: 10px; padding: 2px 8px; border-radius: 4px;
     background: rgba(0,0,0,.55); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .2px;
+    font-variant-numeric: tabular-nums; pointer-events: none;
 }
+.kpp-video-seek {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 38px; height: 38px; border-radius: 50%; background: rgba(0,0,0,.45);
+    color: #fff; border: none; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; cursor: pointer; opacity: 0; transition: opacity .15s, background .15s;
+    line-height: 1;
+}
+.kpp-video-seek i { font-size: 14px; }
+.kpp-video-seek span { font-size: 8px; font-weight: 700; margin-top: 1px; }
+.kpp-video-seek:hover { background: rgba(0,0,0,.7); }
+.kpp-video-seek-back { left: 12px; }
+.kpp-video-seek-fwd { right: 12px; }
+.kpp-video-wrap:hover .kpp-video-seek,
+.kpp-video-wrap.is-playing .kpp-video-seek { opacity: 1; }
 .kpp-video-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.25); }
 .kpp-video-progress-fill { height: 100%; width: 0%; background: var(--mfy-primary); }
 
@@ -2512,8 +2518,16 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
         </div>
     {% endif %}
 
-    <!-- Username, de-emphasized and pushed down beneath the identity/location details -->
-    <div class="kprof-username">@{{ user.username }}</div>
+    <!-- Business page, experience, school, projects, achievements, skills — single horizontal line
+         separated by "||", matching the LinkedIn-style headline format. Dates are included where the
+         underlying data has them (experience/education date range, achievement year). Items are wrapped
+         in spans so CSS can add the "||" separator only between items that actually render. -->
+    <div class="kprof-inline-details">{% if business_page_previews %}<span class="kprof-inline-item">{{ business_page_previews.0.page.name }} · {{ business_page_previews.0.page.get_category_display }}</span>{% endif %}{% if profile.show_experience and professional_experience %}<span class="kprof-inline-item">{{ professional_experience.0.title }}{% if professional_experience.0.company_name %} at {{ professional_experience.0.company_name }}{% endif %}{% if professional_experience.0.start_date %} ({{ professional_experience.0.start_date|date:"Y" }}–{% if professional_experience.0.is_current %}Present{% elif professional_experience.0.end_date %}{{ professional_experience.0.end_date|date:"Y" }}{% endif %}){% endif %}</span>{% endif %}{% if profile.show_education and professional_education %}<span class="kprof-inline-item">{{ professional_education.0.school_name }}{% if professional_education.0.start_date %} ({{ professional_education.0.start_date|date:"Y" }}–{% if professional_education.0.is_current %}Present{% elif professional_education.0.end_date %}{{ professional_education.0.end_date|date:"Y" }}{% endif %}){% endif %}</span>{% endif %}{% if profile.show_projects and professional_projects %}<span class="kprof-inline-item">{{ professional_projects.0.title }}{% if professional_projects.0.is_ongoing %} (Ongoing){% endif %}</span>{% endif %}{% if profile.show_achievements and professional_achievements %}<span class="kprof-inline-item">{{ professional_achievements.0.title }}{% if professional_achievements.0.date_achieved %} ({{ professional_achievements.0.date_achieved|date:"Y" }}){% endif %}</span>{% endif %}{% if profile_skills %}<span class="kprof-inline-item">{{ profile_skills|slice:":4"|join:" · " }}</span>{% endif %}</div>
+    {% if profile.location %}
+    <div class="kprof-location-line">{{ profile.location }}</div>
+    {% elif profile.member_type_secondary_value %}
+    <div class="kprof-location-line">{{ profile.member_type_secondary_value }}</div>
+    {% endif %}
 
     <!-- Connections summary, single line like LinkedIn ("2,932 followers · 512 following · 3 pages") -->
     <div class="kprof-stats-line">
@@ -2596,12 +2610,6 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
     <div class="kprof-strength-done"><i class="fas fa-circle-check"></i> Your profile is complete — nice work!</div>
 </div>
 {% endif %}
-
-<!-- Shown only while viewing the professional-only mode; lets anyone jump back to the normal profile tabs -->
-<div class="kprof-mode-banner" id="profModeBanner">
-    <span><i class="fas fa-briefcase"></i> {% if is_own_profile %}Viewing your Professional Profile{% else %}Viewing {{ profile.full_name|default:user.username }}'s Professional Profile{% endif %}</span>
-    <button type="button" onclick="toggleProfileMode()">Switch to Personal</button>
-</div>
 
 <!-- Tabs -->
 <div class="kprof-tabs">
@@ -3275,7 +3283,9 @@ body.kprof-professional-mode .kprof-mode-banner { display: flex; }
                         <video src="{{ post.get_video_url }}" playsinline preload="metadata" muted loop></video>
                         <button type="button" class="kpp-video-playbtn" aria-label="Play video"><i class="fas fa-play"></i></button>
                         <button type="button" class="kpp-video-mutebtn" aria-label="Toggle sound"><i class="fas fa-volume-mute"></i></button>
-                        {% if post.video_duration_display %}<span class="kpp-video-duration">{{ post.video_duration_display }}</span>{% endif %}
+                        <button type="button" class="kpp-video-seek kpp-video-seek-back" aria-label="Rewind 5 seconds"><i class="fas fa-rotate-left"></i><span>5</span></button>
+                        <button type="button" class="kpp-video-seek kpp-video-seek-fwd" aria-label="Forward 5 seconds"><i class="fas fa-rotate-right"></i><span>5</span></button>
+                        {% if post.video_duration_display %}<span class="kpp-video-duration" data-kpp-duration>{{ post.video_duration_display }}</span>{% endif %}
                         <div class="kpp-video-progress"><div class="kpp-video-progress-fill"></div></div>
                     </div>
                 </div>
@@ -6712,6 +6722,9 @@ function kbizInitVideoPlayers(scope) {
         const playBtn = wrap.querySelector('.kpp-video-playbtn, .kbiz-video-playbtn');
         const muteBtn = wrap.querySelector('.kpp-video-mutebtn, .kbiz-video-mutebtn');
         const fill = wrap.querySelector('.kpp-video-progress-fill, .kbiz-video-progress-fill');
+        const durationEl = wrap.querySelector('[data-kpp-duration], [data-kbiz-duration], .kpp-video-duration, .kbiz-video-duration');
+        const seekBackBtn = wrap.querySelector('.kpp-video-seek-back, .kbiz-video-seek-back');
+        const seekFwdBtn = wrap.querySelector('.kpp-video-seek-fwd, .kbiz-video-seek-fwd');
         if (!video) return;
 
         const setPlayIcon = () => {
@@ -6724,10 +6737,28 @@ function kbizInitVideoPlayers(scope) {
         };
         setMuteIcon();
 
+        const formatTime = (sec) => {
+            if (!isFinite(sec) || sec < 0) sec = 0;
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return m + ':' + (s < 10 ? '0' : '') + s;
+        };
+        const updateDurationLabel = () => {
+            if (!durationEl || !video.duration) return;
+            durationEl.textContent = formatTime(video.currentTime) + ' / ' + formatTime(video.duration);
+        };
+        const seekBy = (delta) => {
+            if (!video.duration) return;
+            video.currentTime = Math.min(Math.max(0, video.currentTime + delta), video.duration);
+            updateDurationLabel();
+        };
+
         video.addEventListener('play', function () { wrap.classList.add('is-playing'); setPlayIcon(); });
         video.addEventListener('pause', function () { wrap.classList.remove('is-playing'); setPlayIcon(); });
+        video.addEventListener('loadedmetadata', updateDurationLabel);
         video.addEventListener('timeupdate', function () {
             if (fill && video.duration) fill.style.width = ((video.currentTime / video.duration) * 100) + '%';
+            updateDurationLabel();
         });
 
         wrap.addEventListener('click', function (e) {
@@ -6739,6 +6770,18 @@ function kbizInitVideoPlayers(scope) {
                 e.stopPropagation();
                 video.muted = !video.muted;
                 setMuteIcon();
+            });
+        }
+        if (seekBackBtn) {
+            seekBackBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                seekBy(-5);
+            });
+        }
+        if (seekFwdBtn) {
+            seekFwdBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                seekBy(5);
             });
         }
 
