@@ -78,6 +78,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'certifications',    'label': 'Certifications',     'type': 'text',      'max_length': 300},
             {'key': 'pricing',           'label': 'Pricing',            'type': 'text',      'max_length': 200, 'placeholder': 'e.g. ₦5,000/hr or Negotiable'},
             {'key': 'contact',           'label': 'Contact',            'type': 'text',      'max_length': 150},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
         ],
     },
     'job_seeker': {
@@ -110,6 +111,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'opening_hours',        'label': 'Opening Hours',        'type': 'days_hours'},
             {'key': 'website',              'label': 'Website',              'type': 'url'},
             {'key': 'business_description', 'label': 'Business Description', 'type': 'textarea', 'max_length': 1000},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
         ],
     },
     'teacher_tutor': {
@@ -125,6 +127,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'location',        'label': 'Location',         'type': 'text',   'max_length': 200},
             {'key': 'rate',            'label': 'Rate',             'type': 'text',   'max_length': 150, 'placeholder': 'e.g. ₦3,000/hr'},
             {'key': 'availability',    'label': 'Availability',     'type': 'days_hours'},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
         ],
     },
     'freelancer': {
@@ -142,6 +145,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'availability',     'label': 'Availability',     'type': 'select',   'choices': ['Full-time', 'Part-time', 'Project-based']},
             {'key': 'work_mode',        'label': 'Work Mode',        'type': 'select',   'choices': ['Remote', 'Hybrid', 'On-site']},
             {'key': 'tools_used',       'label': 'Tools Used',       'type': 'text',     'max_length': 300},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
         ],
     },
     'artisan_technician': {
@@ -160,6 +164,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'availability',     'label': 'Availability',      'type': 'select',   'choices': ['Full-time', 'Part-time', 'Weekends only', 'By appointment']},
             {'key': 'pricing',          'label': 'Pricing',           'type': 'text',     'max_length': 200},
             {'key': 'certifications',   'label': 'Certifications',    'type': 'text',     'max_length': 300},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
         ],
     },
     'service_provider': {
@@ -174,6 +179,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'pricing',           'label': 'Pricing',           'type': 'text',   'max_length': 200},
             {'key': 'contact',           'label': 'Contact',           'type': 'text',   'max_length': 150},
             {'key': 'license_permit',    'label': 'License / Permit',  'type': 'text',   'max_length': 200},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
         ],
     },
     'student_apprentice': {
@@ -189,6 +195,7 @@ MEMBER_TYPE_SCHEMA = {
                          'Welding', 'Plumbing', 'Digital marketing']},
             {'key': 'availability',     'label': 'Availability',       'type': 'days_hours'},
             {'key': 'interests',        'label': 'Interests',          'type': 'text', 'max_length': 300},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
         ],
     },
     'employer_recruiter': {
@@ -203,6 +210,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'company_location', 'label': 'Company Location',  'type': 'text',     'max_length': 200},
             {'key': 'website',          'label': 'Website',           'type': 'url'},
             {'key': 'contact',          'label': 'Contact',           'type': 'text',     'max_length': 150},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
         ],
     },
     'other_professional': {
@@ -216,6 +224,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'services',    'label': 'Services',        'type': 'text',     'max_length': 300},
             {'key': 'location',    'label': 'Location',        'type': 'text',     'max_length': 200},
             {'key': 'contact',     'label': 'Contact',         'type': 'text',     'max_length': 150},
+            {'key': 'cv',                 'label': 'CV / Resume',        'type': 'file'},
         ],
     },
 }
@@ -662,7 +671,15 @@ class Profile(models.Model):
         return False
 
     def save(self, *args, **kwargs):
-        self.full_clean()
+        # member_type_cv is excluded here: it's already validated at upload
+        # time (in the onboarding/update_profile views, and via the
+        # _committed-guarded check below). Re-validating it on every save
+        # via full_clean() checks the *already-stored* file, and some
+        # storage backends (e.g. Cloudinary, for raw/document uploads)
+        # strip the extension from the stored filename -- which permanently
+        # fails validate_cv_extension and blocks all future saves for that
+        # user, even ones unrelated to the CV.
+        self.full_clean(exclude=['member_type_cv'])
         if self.location:
             self.location = self.location.strip().title()
         
