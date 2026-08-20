@@ -5603,6 +5603,18 @@ function kppSwitchSub(name, btn) {
     panel.querySelectorAll('.kpp-subpanel').forEach(p => p.classList.toggle('active', p.id === `kpp-sub-${name}`));
 }
 
+/* ── Reload-and-return-to-subtab: the various "Add ..." modals (Portfolio,
+   Project, Achievement, Experience, Education, ...) reload the page after
+   a successful create so the new card renders from fresh server data.
+   A plain reload() drops the user back on whatever subtab is marked
+   "active" in the HTML (Posts) since no hash is set. Stash the subtab we
+   want in sessionStorage before reloading, and restore it on
+   DOMContentLoaded below, so the user lands back where they were. ── */
+function ppReloadToSub(subName) {
+    try { sessionStorage.setItem('kpp_pending_sub', subName); } catch (e) {}
+    setTimeout(() => window.location.reload(), 500);
+}
+
 /* ── Deep-link support: reaction/comment notifications send you to
    /<username>/#kpp-post-<id> (posts) or /<username>/#kpp-<section>-<id>
    for the profile's other sections — Portfolio ("portfolio"), Project
@@ -5627,6 +5639,15 @@ var PROFILE_ITEM_ANCHOR_SUBTABS = {
 };
 
 document.addEventListener('DOMContentLoaded', function () {
+    var pendingSub = sessionStorage.getItem('kpp_pending_sub');
+    if (pendingSub) {
+        sessionStorage.removeItem('kpp_pending_sub');
+        kprofIsProfessionalMode = true;
+        localStorage.setItem(KPROF_MODE_KEY, 'professional');
+        applyProfileModeUI(true, { switchTab: true });
+        kppSwitchSub(pendingSub, document.querySelector(`.kpp-subtab[data-sub="${pendingSub}"]`));
+    }
+
     var hash = window.location.hash;
     if (!hash) return;
 
@@ -5728,7 +5749,7 @@ async function submitProfileService() {
         if (data.success) {
             toast(data.message || 'Service added!');
             closeProfileServiceModal();
-            setTimeout(() => window.location.reload(), 500);
+            ppReloadToSub('services');
         } else {
             toast(data.error || 'Could not add service.');
         }
@@ -5798,7 +5819,7 @@ async function submitProfilePortfolio() {
         if (data.success) {
             toast(data.message || 'Added!');
             closeProfilePortfolioModal();
-            setTimeout(() => window.location.reload(), 500);
+            ppReloadToSub(ppPortfolioKind === 'project' ? 'projects' : 'portfolio');
         } else {
             toast(data.error || 'Could not add this.');
         }
@@ -5874,7 +5895,7 @@ async function submitProfileExperience() {
         if (data.success) {
             toast(data.message || 'Experience added!');
             closeProfileExperienceModal();
-            setTimeout(() => window.location.reload(), 500);
+            ppReloadToSub('experience');
         } else {
             toast(data.error || 'Could not add experience.');
         }
@@ -5948,7 +5969,7 @@ async function submitProfileEducation() {
         if (data.success) {
             toast(data.message || 'Education added!');
             closeProfileEducationModal();
-            setTimeout(() => window.location.reload(), 500);
+            ppReloadToSub('education');
         } else {
             toast(data.error || 'Could not add education.');
         }
@@ -6013,7 +6034,7 @@ async function submitProfileAchievement() {
         if (data.success) {
             toast(data.message || 'Achievement added!');
             closeProfileAchievementModal();
-            setTimeout(() => window.location.reload(), 500);
+            ppReloadToSub('achievements');
         } else {
             toast(data.error || 'Could not add achievement.');
         }
@@ -6119,7 +6140,7 @@ async function submitProfileProduct() {
         if (data.success) {
             toast(data.message || 'Listing posted!');
             closeProfileProductModal();
-            setTimeout(() => window.location.reload(), 500);
+            ppReloadToSub('products');
         } else {
             const msg = data.errors ? Object.values(data.errors).join(' ') : (data.error || 'Could not post listing.');
             toast(msg);
@@ -6186,7 +6207,7 @@ async function submitProfileJob() {
         if (data.success) {
             toast('Job posted! 🎉');
             closeProfileJobModal();
-            setTimeout(() => window.location.reload(), 500);
+            ppReloadToSub('jobs');
         } else {
             toast(data.error || 'Could not post job.');
         }

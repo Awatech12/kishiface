@@ -584,8 +584,18 @@ class Profile(models.Model):
             self.member_type_data = {}
 
         if self.member_type_cv and hasattr(self.member_type_cv, 'name'):
-            validate_cv_extension(self.member_type_cv)
-            validate_file_size(self.member_type_cv, max_size_mb=5)
+            # Only re-validate when a *new* file was just assigned this
+            # request (FieldFile._committed is False for an unsaved
+            # assignment, True for a value that's already persisted).
+            # Without this guard, every unrelated profile save (cover
+            # photo, bio, etc.) re-ran extension validation against the
+            # already-stored CV, and storage backends that don't keep the
+            # original extension in the saved file name (e.g. Cloudinary
+            # for raw/document uploads) made that re-check fail forever,
+            # blocking all future profile updates.
+            if not self.member_type_cv._committed:
+                validate_cv_extension(self.member_type_cv)
+                validate_file_size(self.member_type_cv, max_size_mb=5)
         elif not self.member_type_cv:
             self.member_type_cv_name = ''
 
