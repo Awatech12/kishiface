@@ -8650,3 +8650,4 @@ def profile_sections_update(request):
         'enabled_sections': profile.enabled_sections,
         'sells_products': profile.sells_products,
     })
+
