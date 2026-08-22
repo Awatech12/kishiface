@@ -201,6 +201,78 @@
         }
         @media (max-width: 767px) { .kprof-header { border-radius: 0; margin: 0 0 12px; } }
 
+        /* ── Profile strength card (owner only) ── */
+        .kprof-strength-card {
+            background: var(--mfy-white);
+            padding: 18px 24px;
+            border-radius: 16px;
+            margin: 0 12px 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.03);
+            position: relative;
+            cursor: pointer;
+        }
+        @media (max-width: 767px) { .kprof-strength-card { border-radius: 0; margin: 0 0 12px; } }
+        .kprof-strength-top {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .kprof-strength-label {
+            font-size: 15px; font-weight: 700; color: var(--mfy-text);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .kprof-strength-label i { color: var(--mfy-primary); font-size: 14px; }
+        .kprof-strength-pct { font-size: 15px; font-weight: 800; color: var(--mfy-primary); }
+        .kprof-strength-bar {
+            height: 8px; border-radius: 99px; background: #e9ecef; overflow: hidden;
+        }
+        .kprof-strength-fill {
+            height: 100%; border-radius: 99px;
+            background: linear-gradient(90deg, var(--mfy-primary), #00c6ff);
+            transition: width 0.4s ease;
+        }
+
+        /* Popup revealed on hover / click / focus — replaces the old always-visible chips */
+        .kprof-strength-popup {
+            position: absolute;
+            left: 24px; right: 24px;
+            top: calc(100% - 6px);
+            background: var(--mfy-white);
+            border: 1px solid var(--mfy-border);
+            border-radius: 12px;
+            box-shadow: 0 10px 28px rgba(0,0,0,.12);
+            padding: 14px 16px;
+            z-index: 20;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-6px);
+            transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+            cursor: default;
+        }
+        @media (max-width: 767px) { .kprof-strength-popup { left: 12px; right: 12px; } }
+        .kprof-strength-card:hover .kprof-strength-popup,
+        .kprof-strength-card:focus-within .kprof-strength-popup,
+        .kprof-strength-popup.kprof-strength-popup-show {
+            opacity: 1; visibility: visible; transform: translateY(0);
+        }
+        .kprof-strength-popup-hint {
+            font-size: 12px; color: var(--mfy-text-light); font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .kprof-strength-missing {
+            display: flex; flex-wrap: wrap; gap: 8px;
+        }
+        .kprof-strength-missing span {
+            background: #fff3e0; color: #e65100;
+            font-size: 12.5px; font-weight: 500;
+            padding: 5px 12px; border-radius: 20px;
+            border: 1px solid #ffe0b2;
+        }
+        .kprof-strength-done {
+            font-size: 13.5px; color: #555;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .kprof-strength-done i { color: #16a34a; }
+
         .kprof-avatar-row { margin-bottom: 14px; }
         .kprof-avatar-wrap { position: relative; flex-shrink: 0; margin-top: -56px; display: inline-block; }
         .kprof-avatar {
@@ -2562,6 +2634,81 @@ body.kprof-professional-mode .kprof-tabs { display: none; }
         {% endif %}
     </div>
 </div>
+
+{% if is_own_profile %}
+{% with p=profile %}
+<!-- ── Profile strength card ── -->
+<div class="kprof-strength-card" id="kprofStrengthCard" tabindex="0" role="button"
+     aria-label="Profile strength — hover or click to see what's missing"
+     onclick="toggleStrengthPopup(event)">
+    <div class="kprof-strength-top">
+        <span class="kprof-strength-label"><i class="fas fa-bolt"></i> Profile strength</span>
+        <span class="kprof-strength-pct" id="kprofStrengthPct"></span>
+    </div>
+    <div class="kprof-strength-bar"><div class="kprof-strength-fill" id="kprofStrengthFill"></div></div>
+
+    <div class="kprof-strength-popup" id="kprofStrengthPopup">
+        <div class="kprof-strength-missing" id="kprofStrengthMissing"></div>
+        <div class="kprof-strength-done" id="kprofStrengthDone" style="display:none;">
+            <i class="fas fa-circle-check"></i> Your profile is complete — nice work!
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    // Click/tap toggles the popup on touch devices (no :hover); clicking
+    // a missing-field chip (or the popup itself) opens the edit sheet.
+    window.toggleStrengthPopup = function(e) {
+        var popup = document.getElementById('kprofStrengthPopup');
+        if (popup.contains(e.target)) {
+            openEditSheet();
+            return;
+        }
+        popup.classList.toggle('kprof-strength-popup-show');
+    };
+    document.addEventListener('click', function(e) {
+        var card = document.getElementById('kprofStrengthCard');
+        var popup = document.getElementById('kprofStrengthPopup');
+        if (card && popup && !card.contains(e.target)) {
+            popup.classList.remove('kprof-strength-popup-show');
+        }
+    });
+})();
+(function() {
+    // Same signal used across the platform: the fields a viewer needs
+    // filled in to identify and reach this person.
+    var missingFields = [];
+    {% if not p.full_name %} missingFields.push('Full name'); {% endif %}
+    {% if not p.phone %}     missingFields.push('Phone number'); {% endif %}
+    {% if not p.location %}  missingFields.push('Location'); {% endif %}
+    {% if not p.address %}   missingFields.push('Address'); {% endif %}
+
+    var totalFields = 4;
+    var filledFields = totalFields - missingFields.length;
+    var pct = Math.round((filledFields / totalFields) * 100);
+
+    var pctEl = document.getElementById('kprofStrengthPct');
+    var fillEl = document.getElementById('kprofStrengthFill');
+    var missingEl = document.getElementById('kprofStrengthMissing');
+    var doneEl = document.getElementById('kprofStrengthDone');
+
+    pctEl.textContent = pct + '%';
+    fillEl.style.width = pct + '%';
+
+    if (missingFields.length > 0) {
+        missingEl.innerHTML = missingFields.map(function(f) {
+            return '<span>' + f + '</span>';
+        }).join('');
+        missingEl.style.display = 'flex';
+        doneEl.style.display = 'none';
+    } else {
+        missingEl.style.display = 'none';
+        doneEl.style.display = 'flex';
+    }
+})();
+</script>
+{% endwith %}
+{% endif %}
 
 <!-- Tabs -->
 <div class="kprof-tabs">

@@ -1527,6 +1527,13 @@
       .mfy-desktop-only {
         display: block;
       }
+
+      /* People you may know already shows in the right sidebar on desktop,
+         so hide the in-feed user suggestion cards to avoid duplication. */
+      .mfy-main-feed > .mfy-user-suggestion,
+      .mfy-main-feed > .mfy-people-suggestion {
+        display: none !important;
+      }
       
       .mfy-bottom-nav {
         display: none !important;
@@ -1966,39 +1973,21 @@
 
           {% if primary_business_page %}
           <!-- ── Your business page ──────────────────────────────────── -->
-          <div class="mfy-mybiz-card">
-            <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-mybiz-header">
-              {% if primary_business_page.get_logo_url %}
-              <img src="{{ primary_business_page.get_logo_url }}" alt="{{ primary_business_page.name }}" class="mfy-mybiz-logo">
-              {% else %}
-              <span class="mfy-mybiz-logo"><i class="fas fa-store"></i></span>
-              {% endif %}
-              <div class="mfy-mybiz-info">
-                <div class="mfy-mybiz-label">Your business page</div>
-                <div class="mfy-mybiz-name">
-                  {{ primary_business_page.name }}
-                  {% if primary_business_page.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
-                </div>
-              </div>
+          <div class="mfy-side-card">
+            <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-shortcut-row">
+              <span class="mfy-shortcut-icon">
+                {% if primary_business_page.get_logo_url %}
+                <img src="{{ primary_business_page.get_logo_url }}" alt="{{ primary_business_page.name }}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                {% else %}
+                <i class="fas fa-store"></i>
+                {% endif %}
+              </span>
+              <span class="mfy-shortcut-label">
+                {{ primary_business_page.name }}
+                {% if primary_business_page.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+              </span>
+              <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
             </a>
-            <div class="mfy-mybiz-stats">
-              <div class="mfy-mybiz-stat">
-                <span class="mfy-mybiz-stat-num">{{ primary_business_page.follower_count }}</span>
-                <span class="mfy-mybiz-stat-label">Followers</span>
-              </div>
-              <div class="mfy-mybiz-stat">
-                <span class="mfy-mybiz-stat-num">{{ primary_business_page.listing_count }}</span>
-                <span class="mfy-mybiz-stat-label">Products</span>
-              </div>
-            </div>
-            <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-mybiz-btn">
-              <i class="fas fa-store"></i> Manage Page
-            </a>
-            {% if user_business_page_count > 1 %}
-            {% with extra=user_business_page_count|add:"-1" %}
-            <a href="{% url 'business_pages_mine' %}" class="mfy-mybiz-more">+{{ extra }} more page{{ extra|pluralize }}</a>
-            {% endwith %}
-            {% endif %}
           </div>
           {% else %}
           <!-- ── Grow your business ──────────────────────────────────── -->
@@ -2009,45 +1998,6 @@
             <span class="mfy-grow-card-illustration">🏪</span>
           </div>
           {% endif %}
-
-          <!-- ── Followers / Following Tab Panel (kept for full network browsing) ── -->
-          <div class="mfy-sidebar-social">
-
-            <!-- Tab Nav -->
-            <div class="mfy-sidebar-tabs">
-              <button class="mfy-sidebar-tab active" data-tab="following"
-                      onclick="mfySwitchTab('following', this); mfyLoadConnectionsOnce('following')">
-                Following
-                <span class="mfy-sidebar-tab-count">{{ sidebar_following_count }}</span>
-              </button>
-              <button class="mfy-sidebar-tab" data-tab="followers"
-                      onclick="mfySwitchTab('followers', this); mfyLoadConnectionsOnce('followers')">
-                Followers
-                <span class="mfy-sidebar-tab-count">{{ sidebar_follower_count }}</span>
-              </button>
-            </div>
-
-            <!-- Following List (HTMX paginated) -->
-            <div class="mfy-sidebar-tab-panel active" id="mfy-tab-following">
-              <div id="mfy-following-list"
-                   hx-get="{% url 'sidebar_connections' %}?type=following&page=1"
-                   hx-trigger="load"
-                   hx-swap="innerHTML"
-                   hx-indicator="#mfy-following-spinner">
-                <div id="mfy-following-spinner" class="mfy-conn-spinner htmx-indicator">
-                  <i class="fas fa-circle-notch fa-spin"></i>
-                </div>
-              </div>
-            </div>
-
-            <!-- Followers List (HTMX paginated) -->
-            <div class="mfy-sidebar-tab-panel" id="mfy-tab-followers">
-              <div id="mfy-followers-list">
-                <!-- loaded lazily when tab is first activated -->
-              </div>
-            </div>
-
-          </div><!-- end .mfy-sidebar-social -->
 
         </div><!-- end .mfy-side-stack -->
       </aside>
@@ -2099,39 +2049,21 @@
 
       {% if primary_business_page %}
       <!-- ── Your business page ──────────────────────────────────── -->
-      <div class="mfy-mybiz-card">
-        <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-mybiz-header">
-          {% if primary_business_page.get_logo_url %}
-          <img src="{{ primary_business_page.get_logo_url }}" alt="{{ primary_business_page.name }}" class="mfy-mybiz-logo">
-          {% else %}
-          <span class="mfy-mybiz-logo"><i class="fas fa-store"></i></span>
-          {% endif %}
-          <div class="mfy-mybiz-info">
-            <div class="mfy-mybiz-label">Your business page</div>
-            <div class="mfy-mybiz-name">
-              {{ primary_business_page.name }}
-              {% if primary_business_page.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
-            </div>
-          </div>
+      <div class="mfy-side-card" style="margin-bottom: 16px;">
+        <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-shortcut-row">
+          <span class="mfy-shortcut-icon">
+            {% if primary_business_page.get_logo_url %}
+            <img src="{{ primary_business_page.get_logo_url }}" alt="{{ primary_business_page.name }}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+            {% else %}
+            <i class="fas fa-store"></i>
+            {% endif %}
+          </span>
+          <span class="mfy-shortcut-label">
+            {{ primary_business_page.name }}
+            {% if primary_business_page.is_verified %}<img src="{% static 'images/verify1.jpg' %}" height="12" width="12" alt="✓" loading="lazy">{% endif %}
+          </span>
+          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
         </a>
-        <div class="mfy-mybiz-stats">
-          <div class="mfy-mybiz-stat">
-            <span class="mfy-mybiz-stat-num">{{ primary_business_page.follower_count }}</span>
-            <span class="mfy-mybiz-stat-label">Followers</span>
-          </div>
-          <div class="mfy-mybiz-stat">
-            <span class="mfy-mybiz-stat-num">{{ primary_business_page.listing_count }}</span>
-            <span class="mfy-mybiz-stat-label">Products</span>
-          </div>
-        </div>
-        <a href="{% url 'business_page_detail' primary_business_page.slug %}" class="mfy-mybiz-btn">
-          <i class="fas fa-store"></i> Manage Page
-        </a>
-        {% if user_business_page_count > 1 %}
-        {% with extra=user_business_page_count|add:"-1" %}
-        <a href="{% url 'business_pages_mine' %}" class="mfy-mybiz-more">+{{ extra }} more page{{ extra|pluralize }}</a>
-        {% endwith %}
-        {% endif %}
       </div>
       {% else %}
       <!-- ── Grow your business ──────────────────────────────────── -->
@@ -2142,41 +2074,6 @@
         <span class="mfy-grow-card-illustration">🏪</span>
       </div>
       {% endif %}
-
-      <div class="mfy-sidebar-social" style="margin-bottom: 16px;">
-        <div class="mfy-sidebar-tabs">
-          <button class="mfy-sidebar-tab active" data-tab="mob-following"
-                  onclick="mfySwitchTab('mob-following', this); mfyLoadConnectionsOnce('mob-following')">
-            Following
-            <span class="mfy-sidebar-tab-count">{{ sidebar_following_count }}</span>
-          </button>
-          <button class="mfy-sidebar-tab" data-tab="mob-followers"
-                  onclick="mfySwitchTab('mob-followers', this); mfyLoadConnectionsOnce('mob-followers')">
-            Followers
-            <span class="mfy-sidebar-tab-count">{{ sidebar_follower_count }}</span>
-          </button>
-        </div>
-
-        <!-- Following List (HTMX paginated) -->
-        <div class="mfy-sidebar-tab-panel active" id="mfy-tab-mob-following">
-          <div id="mfy-mob-following-list"
-               hx-get="{% url 'sidebar_connections' %}?type=following&page=1"
-               hx-trigger="revealed"
-               hx-swap="innerHTML"
-               hx-indicator="#mfy-mob-following-spinner">
-            <div id="mfy-mob-following-spinner" class="mfy-conn-spinner htmx-indicator">
-              <i class="fas fa-circle-notch fa-spin"></i>
-            </div>
-          </div>
-        </div>
-
-        <!-- Followers List (HTMX paginated) -->
-        <div class="mfy-sidebar-tab-panel" id="mfy-tab-mob-followers">
-          <div id="mfy-mob-followers-list">
-            <!-- loaded lazily when tab is first activated -->
-          </div>
-        </div>
-      </div>
 
     </div><!-- end .mfy-mobile-sidebar-body -->
   </aside>
