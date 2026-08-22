@@ -162,6 +162,11 @@ urlpatterns = [
     path('business/<slug:slug>/achievements/create/',   views.business_achievement_create, name='business_achievement_create'),
     path('achievements/<uuid:achievement_id>/delete/',  views.business_achievement_delete, name='business_achievement_delete'),
 
+    # ── Business Page — Reviews & Ratings ───────────────────────────────────
+    path('business/<slug:slug>/reviews/create/',        views.business_review_create,      name='business_review_create'),
+    path('reviews/<uuid:review_id>/reply/',             views.business_review_reply,       name='business_review_reply'),
+    path('reviews/<uuid:review_id>/delete/',            views.business_review_delete,      name='business_review_delete'),
+
     # ── Profile — professional sections (Services, Portfolio, Projects,
     # Achievements, Posts, Products) owned directly by the user's Profile,
     # no BusinessPage required ───────────────────────────────────────────

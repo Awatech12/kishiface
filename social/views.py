@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessAchievement, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, ProfileAchievementVibe, ProfileAchievementComment, ProfileExperienceVibe, ProfileExperienceComment, ProfileEducationVibe, ProfileEducationComment, ProfileServiceVibe, ProfileServiceComment
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, ProfileAchievementVibe, ProfileAchievementComment, ProfileExperienceVibe, ProfileExperienceComment, ProfileEducationVibe, ProfileEducationComment, ProfileServiceVibe, ProfileServiceComment
 from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES
 
@@ -7109,12 +7109,22 @@ def business_page_detail(request, slug):
     # ── Optional professional-page sections ─────────────────────────────────
     services = BusinessService.objects.filter(business_page=page, is_active=True).order_by('order', '-created_at') \
         if (page.show_services or is_owner) else BusinessService.objects.none()
-    portfolio_items = BusinessPortfolioItem.objects.filter(business_page=page, kind=BusinessPortfolioItem.KIND_PORTFOLIO).order_by('order', '-created_at') \
+    portfolio_items = BusinessPortfolioItem.objects.filter(business_page=page, kind=BusinessPortfolioItem.KIND_PORTFOLIO).order_by('order', '-created_at').prefetch_related('extra_images') \
         if (page.show_portfolio or is_owner) else BusinessPortfolioItem.objects.none()
-    project_items = BusinessPortfolioItem.objects.filter(business_page=page, kind=BusinessPortfolioItem.KIND_PROJECT).order_by('order', '-created_at') \
+    project_items = BusinessPortfolioItem.objects.filter(business_page=page, kind=BusinessPortfolioItem.KIND_PROJECT).order_by('order', '-created_at').prefetch_related('extra_images') \
         if (page.show_projects or is_owner) else BusinessPortfolioItem.objects.none()
     achievements = BusinessAchievement.objects.filter(business_page=page).order_by('order', '-date_achieved', '-created_at') \
         if (page.show_achievements or is_owner) else BusinessAchievement.objects.none()
+
+    # ── Reviews & Ratings ────────────────────────────────────────────────
+    reviews = (
+        BusinessReview.objects.filter(business_page=page)
+        .select_related('user', 'user__profile')
+        .order_by('-created_at')
+    )
+    viewer_review = None
+    if request.user.is_authenticated:
+        viewer_review = reviews.filter(user=request.user).first()
 
     posts = (
         BusinessPost.objects.filter(business_page=page)
@@ -7179,6 +7189,10 @@ def business_page_detail(request, slug):
         'project_count':     project_items.count(),
         'achievements':      achievements,
         'achievement_count': achievements.count(),
+        'reviews':           reviews,
+        'review_list_count': reviews.count(),
+        'viewer_review':     viewer_review,
+        'review_rating_choices': BusinessReview.RATING_CHOICES,
         'vibe_choices': [
             {'type': t, 'emoji': BusinessPostVibe.VIBE_EMOJIS[t], 'label': label.split(' ', 1)[-1]}
             for t, label in BusinessPostVibe.VIBE_CHOICES
@@ -7193,8 +7207,10 @@ def business_page_detail(request, slug):
         'is_open_now':       page.is_open_now,
         'today_hours':       page.today_hours,
         'hours_display':     page.hours_display,
-        'average_rating':    page.average_rating,
-        'review_count':      page.review_count,
+        'average_rating':    page.overall_average_rating,
+        'review_count':      page.overall_review_count,
+        'has_verified_contact': page.has_verified_contact,
+        'completed_work_count': page.completed_work_count,
         'viewer_primary_business_page': viewer_primary_business_page,
     })
 
@@ -7824,6 +7840,9 @@ def business_portfolio_create(request, slug):
     link_url    = request.POST.get('link_url', '').strip()
     is_ongoing  = request.POST.get('is_ongoing') in ('1', 'true', 'on')
     image       = request.FILES.get('image')
+    # Additional gallery photos — a completed project/portfolio piece can
+    # showcase several images beyond the single cover `image`.
+    extra_images = request.FILES.getlist('images')[:9]
 
     if kind not in dict(BusinessPortfolioItem.KIND_CHOICES):
         kind = BusinessPortfolioItem.KIND_PORTFOLIO
@@ -7831,12 +7850,13 @@ def business_portfolio_create(request, slug):
         return JsonResponse({'success': False, 'error': 'Please give it a title.'}, status=400)
     if len(title) > 150:
         return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
-    if image:
-        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
-        if image.content_type not in allowed_types:
+
+    allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+    for _img in ([image] if image else []) + extra_images:
+        if _img.content_type not in allowed_types:
             return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
-        if image.size > 10 * 1024 * 1024:
-            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
+        if _img.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'Each image must be under 10 MB.'}, status=400)
 
     try:
         item = BusinessPortfolioItem.objects.create(
@@ -7844,6 +7864,8 @@ def business_portfolio_create(request, slug):
             link_url=link_url, is_ongoing=is_ongoing if kind == BusinessPortfolioItem.KIND_PROJECT else False,
             image=image if image else None,
         )
+        for _order, _img in enumerate(extra_images):
+            BusinessPortfolioImage.objects.create(item=item, image=_img, order=_order)
     except _ModelValidationError as e:
         return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
 
@@ -7857,6 +7879,7 @@ def business_portfolio_create(request, slug):
             'link_url':     item.link_url,
             'is_ongoing':   item.is_ongoing,
             'image_url':    item.get_image_url,
+            'gallery':      item.gallery_urls,
         },
         'portfolio_count': page.portfolio_count,
         'project_count':   page.project_count,
@@ -7932,6 +7955,106 @@ def business_achievement_delete(request, achievement_id):
     achievement = get_object_or_404(BusinessAchievement, achievement_id=achievement_id, business_page__owner=request.user)
     achievement.delete()
     return JsonResponse({'success': True})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Business Page — Reviews & Ratings. Customers rate/review the page itself
+# (separate from ProductReview, which is scoped to a single Market listing);
+# the page owner can post one public reply per review.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+@require_POST
+def business_review_create(request, slug):
+    """Logged-in customer rates/reviews a business page. One review per
+    (page, user) — posting again edits the existing review in place."""
+    page = get_object_or_404(BusinessPage, slug=slug, is_active=True)
+
+    if page.owner == request.user:
+        return JsonResponse({'success': False, 'error': 'You cannot review your own business page.'}, status=400)
+
+    rating_raw = request.POST.get('rating', '').strip()
+    comment    = request.POST.get('comment', '').strip()
+
+    try:
+        rating = int(rating_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Please choose a star rating.'}, status=400)
+    if rating not in dict(BusinessReview.RATING_CHOICES):
+        return JsonResponse({'success': False, 'error': 'Rating must be between 1 and 5.'}, status=400)
+    if len(comment) > 2000:
+        return JsonResponse({'success': False, 'error': 'Review must be 2000 characters or fewer.'}, status=400)
+
+    try:
+        review, created = BusinessReview.objects.get_or_create(
+            business_page=page, user=request.user,
+            defaults={'rating': rating, 'comment': comment},
+        )
+        if not created:
+            review.rating    = rating
+            review.comment   = comment
+            review.is_edited = True
+            review.save()
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'review': {
+            'review_id':   str(review.review_id),
+            'rating':      review.rating,
+            'comment':     review.comment,
+            'is_edited':   review.is_edited,
+            'reviewer_name': request.user.profile.full_name or request.user.username,
+            'reviewer_pic':  request.user.profile.picture.url if request.user.profile.picture else '',
+        },
+        'average_rating': page.overall_average_rating,
+        'review_count':   page.overall_review_count,
+        'message': 'Thanks for your review! ⭐',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_review_reply(request, review_id):
+    """Page owner posts (or edits) a single public reply to a review."""
+    review = get_object_or_404(BusinessReview, review_id=review_id, business_page__owner=request.user)
+    reply = request.POST.get('reply', '').strip()
+    if not reply:
+        return JsonResponse({'success': False, 'error': 'Write a reply first.'}, status=400)
+    if len(reply) > 2000:
+        return JsonResponse({'success': False, 'error': 'Reply must be 2000 characters or fewer.'}, status=400)
+
+    review.owner_reply = reply
+    review.owner_reply_at = timezone.now()
+    try:
+        review.save()
+    except _ModelValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'owner_reply': review.owner_reply,
+        'owner_reply_at': review.owner_reply_at.isoformat(),
+        'message': 'Reply posted.',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_review_delete(request, review_id):
+    """A reviewer can remove their own review; the page owner can remove any
+    review left on their page."""
+    review = get_object_or_404(BusinessReview, review_id=review_id)
+    if review.user != request.user and review.business_page.owner != request.user:
+        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
+    page = review.business_page
+    review.delete()
+    return JsonResponse({
+        'success': True,
+        'average_rating': page.overall_average_rating,
+        'review_count':   page.overall_review_count,
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -8650,4 +8773,3 @@ def profile_sections_update(request):
         'enabled_sections': profile.enabled_sections,
         'sells_products': profile.sells_products,
     })
-

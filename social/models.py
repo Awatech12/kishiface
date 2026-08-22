@@ -2791,9 +2791,50 @@ class BusinessPage(models.Model):
     def review_count(self):
         return ProductReview.objects.filter(product__business_page=self).count()
 
+    # ── Direct business reviews (BusinessReview) — customers rating the
+    # business itself, independent of any single product purchase ─────────
+    @property
+    def business_review_average_rating(self):
+        result = self.reviews.aggregate(avg=models.Avg('rating'))['avg']
+        return round(result, 1) if result else 0
+
+    @property
+    def business_review_count(self):
+        return self.reviews.count()
+
+    # ── Combined rating shown in the page header — blends direct business
+    # reviews with per-product reviews so a page with either (or both) still
+    # shows one clear trust signal. ─────────────────────────────────────────
+    @property
+    def overall_review_count(self):
+        return self.business_review_count + self.review_count
+
+    @property
+    def overall_average_rating(self):
+        biz_avg  = self.business_review_average_rating
+        biz_n    = self.business_review_count
+        prod_avg = self.average_rating
+        prod_n   = self.review_count
+        total = biz_n + prod_n
+        if not total:
+            return 0
+        weighted = (biz_avg * biz_n) + (prod_avg * prod_n)
+        return round(weighted / total, 1)
+
     @property
     def post_count(self):
         return self.posts.count()
+
+    # ── Trust & verification signals shown in the header/About section ────
+    @property
+    def has_verified_contact(self):
+        return bool(self.phone or self.email)
+
+    @property
+    def completed_work_count(self):
+        """Rough "proof of work" count for trust badges — finished
+        portfolio pieces/projects plus services on offer."""
+        return self.portfolio_items.count() + self.services.count()
 
     # ── Professional page sections ───────────────────────────────────────────
     @property
@@ -3070,6 +3111,64 @@ class BusinessPortfolioItem(models.Model):
     @property
     def owner_user(self):
         return self.business_page.owner
+
+    @property
+    def gallery_urls(self):
+        """Cover image (if any) followed by every extra gallery image —
+        used to render a multi-image portfolio/project showcase."""
+        urls = []
+        if self.get_image_url:
+            urls.append(self.get_image_url)
+        urls.extend(img.get_image_url for img in self.extra_images.all() if img.get_image_url)
+        return urls
+
+    @property
+    def image_count(self):
+        return len(self.gallery_urls)
+
+
+class BusinessPortfolioImage(models.Model):
+    """An additional photo within a Portfolio piece or Project — supports
+    showcasing completed work with multiple images alongside the item's
+    single cover `image`."""
+    image_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    item     = models.ForeignKey(BusinessPortfolioItem, on_delete=models.CASCADE, related_name='extra_images')
+    order    = models.PositiveSmallIntegerField(default=0)
+
+    if settings.USE_CLOUDINARY:
+        image = CloudinaryField('image', folder='business_portfolio_images', blank=True, null=True)
+    else:
+        image = models.ImageField(upload_to='business_portfolio_images/', blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'BusinessPortfolioImage_Table'
+        ordering = ['order', 'created_at']
+
+    def clean(self):
+        super().clean()
+        if self.image:
+            validate_file_extension(self.image)
+            validate_file_size(self.image, max_size_mb=10)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def get_image_url(self):
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                import cloudinary
+                if self.image:
+                    pid = str(getattr(self.image, 'public_id', None) or self.image).strip()
+                    if pid and pid not in ('', 'None'):
+                        return cloudinary.CloudinaryImage(pid).build_url(secure=True)
+                return ''
+            return self.image.url if self.image else ''
+        except Exception:
+            return ''
 
 
 class ProfilePortfolioItem(models.Model):
@@ -3423,6 +3522,65 @@ class BusinessAchievement(models.Model):
     @property
     def owner_name(self):
         return self.business_page.name
+
+
+class BusinessReview(models.Model):
+    """A star rating + written review left by a customer directly on a
+    BusinessPage (as opposed to ProductReview, which is scoped to a single
+    Market listing). One review per (business_page, user) — the reviewer can
+    edit their own, and the page owner can post a single public reply."""
+    RATING_CHOICES = [
+        (1, '1 – Poor'),
+        (2, '2 – Fair'),
+        (3, '3 – Good'),
+        (4, '4 – Very Good'),
+        (5, '5 – Excellent'),
+    ]
+
+    review_id     = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business_page = models.ForeignKey(BusinessPage, on_delete=models.CASCADE, related_name='reviews')
+    user          = models.ForeignKey(User, on_delete=models.CASCADE, related_name='business_page_reviews')
+    rating        = models.PositiveSmallIntegerField(choices=RATING_CHOICES)
+    comment       = models.TextField(max_length=2000, blank=True, default='')
+    is_edited     = models.BooleanField(default=False)
+
+    owner_reply    = models.TextField(max_length=2000, blank=True, default='')
+    owner_reply_at = models.DateTimeField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'BusinessReview_Table'
+        ordering = ['-created_at']
+        unique_together = ('business_page', 'user')
+        indexes = [
+            models.Index(fields=['business_page', '-created_at'], name='bizreview_page_time_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username} rated {self.business_page.name} {self.rating}★'
+
+    def clean(self):
+        super().clean()
+        self.comment = sanitize_text(self.comment, 'comment')
+        self.owner_reply = sanitize_text(self.owner_reply, 'comment')
+        if self.rating not in dict(self.RATING_CHOICES):
+            raise ValidationError({'rating': 'Rating must be between 1 and 5.'})
+        if self.business_page_id and self.business_page.owner_id == self.user_id:
+            raise ValidationError('You cannot review your own business page.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def star_range(self):
+        return range(1, 6)
+
+    @property
+    def has_owner_reply(self):
+        return bool(self.owner_reply)
 
 
 class ProfileAchievement(models.Model):
