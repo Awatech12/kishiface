@@ -1,0 +1,90 @@
+{% load humanize %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <link rel="shortcut icon" href="{% static 'images/logo.jpg' %}" type="image/x-icon">
+  <title>Applications Dashboard · KishiHub Jobs</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    :root {
+      --khub-bg: #fafafa; --khub-white: #ffffff; --khub-text: #262626;
+      --khub-text-light: #8e8e8e; --khub-primary: #0095f6; --khub-border: #dbdbdb;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:var(--khub-bg); color:var(--khub-text); padding-bottom:40px; }
+    a { color:inherit; text-decoration:none; }
+
+    .jap-wrap { max-width:760px; margin:0 auto; padding:16px 14px; }
+    .jap-header { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+    .jap-back-btn { width:36px; height:36px; border-radius:50%; background:var(--khub-white); border:1px solid var(--khub-border); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+    .jap-title { font-size:19px; font-weight:800; }
+
+    .jap-stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+    @media (max-width:480px) { .jap-stats-grid { grid-template-columns:repeat(2,1fr); } }
+    .jap-stat-card { background:var(--khub-white); border:1px solid var(--khub-border); border-radius:14px; padding:14px; text-align:center; }
+    .jap-stat-num { font-size:22px; font-weight:800; color:var(--khub-primary); }
+    .jap-stat-label { font-size:11.5px; color:var(--khub-text-light); margin-top:2px; }
+
+    .jap-job-card { background:var(--khub-white); border:1px solid var(--khub-border); border-radius:16px; padding:14px; margin-bottom:12px; }
+    .jap-job-title { font-size:15px; font-weight:700; }
+    .jap-job-meta { font-size:12px; color:var(--khub-text-light); margin-top:2px; }
+    .jap-job-pills { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+    .jap-job-pill { font-size:11.5px; font-weight:700; padding:5px 10px; border-radius:12px; background:var(--khub-bg); }
+    .jap-job-actions { display:flex; gap:8px; }
+    .jap-btn { flex:1; padding:9px; border-radius:20px; font-size:12.5px; font-weight:700; text-align:center; border:1px solid var(--khub-border); background:var(--khub-white); cursor:pointer; }
+    .jap-btn.primary { background:var(--khub-primary); border-color:var(--khub-primary); color:#fff; }
+
+    .jap-empty { text-align:center; padding:60px 20px; color:var(--khub-text-light); }
+    .jap-empty i { font-size:40px; margin-bottom:12px; display:block; }
+  </style>
+</head>
+<body>
+
+<div class="jap-wrap">
+  <div class="jap-header">
+    <a href="{% url 'job_vacancy' %}" class="jap-back-btn"><i class="fas fa-arrow-left"></i></a>
+    <div class="jap-title">Applications Dashboard</div>
+  </div>
+
+  <div class="jap-stats-grid">
+    <div class="jap-stat-card"><div class="jap-stat-num">{{ overall.total_applicants }}</div><div class="jap-stat-label">Total Applicants</div></div>
+    <div class="jap-stat-card"><div class="jap-stat-num">{{ overall.new_applications }}</div><div class="jap-stat-label">New Applications</div></div>
+    <div class="jap-stat-card"><div class="jap-stat-num">{{ overall.shortlisted }}</div><div class="jap-stat-label">Shortlisted</div></div>
+    <div class="jap-stat-card"><div class="jap-stat-num">{{ overall.interviews }}</div><div class="jap-stat-label">Interviews</div></div>
+    <div class="jap-stat-card"><div class="jap-stat-num">{{ overall.selected }}</div><div class="jap-stat-label">Selected</div></div>
+  </div>
+
+  {% if jobs_with_stats %}
+    {% for row in jobs_with_stats %}
+      <div class="jap-job-card">
+        <div class="jap-job-title">{{ row.job.title }}</div>
+        <div class="jap-job-meta">{{ row.job.get_category_display }} · Posted {{ row.job.created_at|naturaltime }}</div>
+        <div class="jap-job-pills">
+          <span class="jap-job-pill">{{ row.total }} applicant{{ row.total|pluralize }}</span>
+          {% if row.new %}<span class="jap-job-pill">{{ row.new }} new</span>{% endif %}
+          {% if row.shortlisted %}<span class="jap-job-pill">{{ row.shortlisted }} shortlisted</span>{% endif %}
+          {% if row.interview %}<span class="jap-job-pill">{{ row.interview }} interview</span>{% endif %}
+          {% if row.selected %}<span class="jap-job-pill">{{ row.selected }} selected</span>{% endif %}
+        </div>
+        <div class="jap-job-actions">
+          <a href="{% url 'job_applicants' row.job.id %}" class="jap-btn primary">Manage Applicants</a>
+          <a href="{% url 'job_detail' row.job.id %}" class="jap-btn">View Job</a>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="jap-empty">
+      <i class="fas fa-briefcase"></i>
+      <strong>You haven't posted any jobs yet</strong><br>
+      <a href="{% url 'job_vacancy' %}" style="color:var(--khub-primary);font-weight:600;">Post a job →</a>
+    </div>
+  {% endif %}
+</div>
+
+</body>
+</html>

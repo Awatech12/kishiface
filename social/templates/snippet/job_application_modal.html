@@ -1,0 +1,57 @@
+{% load static %}
+{% load post_tags %}
+<!-- Job Application modal — reuses .jbd-modal / .jbd-form-group / .jbd-submit-btn
+     styles already defined in job_details.html, so no extra CSS is needed here. -->
+<div class="jbd-modal-overlay" id="japApplyModal">
+  <div class="jbd-modal">
+    <div class="jbd-modal-header">
+      <h2><i class="fas fa-file-circle-check" style="color:var(--khub-primary);"></i> Apply for this job</h2>
+      <button type="button" class="jbd-modal-close" onclick="japCloseApplyModal()">&times;</button>
+    </div>
+
+    <div class="jbd-form-group">
+      <label>Applicant</label>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;">
+        <img src="{{ request.user|safe_pic_url }}" alt="{{ request.user.username }}"
+             style="width:38px;height:38px;border-radius:50%;object-fit:cover;"
+             onerror="this.src='https://placehold.co/38x38/dbdbdb/8e8e8e?text=U';">
+        <div>
+          <div style="font-weight:700;font-size:14px;">{{ request.user.get_full_name|default:request.user.username }}</div>
+          {% if request.user.profile.profession %}
+            <div style="font-size:12.5px;color:var(--khub-text-light);">{{ request.user.profile.profession }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="jbd-form-group">
+      <label>Cover Letter <span style="font-weight:400;">(required)</span></label>
+      <textarea id="japCoverLetter" maxlength="5000" placeholder="Tell the employer why you're a great fit for this role…" style="min-height:120px;"></textarea>
+    </div>
+
+    <div class="jbd-form-group">
+      <label>Resume / CV {% if request.user.profile.member_type_cv %}<span style="font-weight:400;">(optional — your profile CV will be used if you skip this)</span>{% else %}<span style="font-weight:400;">(required — .pdf, .doc, or .docx)</span>{% endif %}</label>
+      <input type="file" id="japResume" accept=".pdf,.doc,.docx">
+      {% if request.user.profile.member_type_cv %}
+        <div style="font-size:12px;color:var(--khub-text-light);margin-top:6px;">
+          <i class="fas fa-paperclip"></i> On file: <a href="{{ request.user.profile.member_type_cv.url }}" target="_blank" rel="noopener noreferrer">{{ request.user.profile.member_type_cv_name|default:"Profile CV" }}</a>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="jbd-form-group">
+      <label>Portfolio Link <span style="font-weight:400;">(optional)</span></label>
+      <input type="url" id="japPortfolio" placeholder="https://yourportfolio.com">
+    </div>
+
+    <div class="jbd-form-group">
+      <label>Additional Message <span style="font-weight:400;">(optional)</span></label>
+      <textarea id="japExtraMessage" maxlength="2000" placeholder="Anything else you'd like the employer to know?"></textarea>
+    </div>
+
+    <div class="jbd-form-error" id="japFormError"></div>
+    <button type="button" class="jbd-submit-btn" id="japSubmitBtn" onclick="japSubmitApplication()">
+      Submit Application <span class="jbd-spinner" id="japSubmitSpinner"></span>
+    </button>
+  </div>
+</div>

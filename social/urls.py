@@ -121,6 +121,17 @@ urlpatterns = [
     path('jobs/<uuid:job_id>/vibe/',           views.job_vibe,        name='job_vibe'),
     path('jobs/<uuid:job_id>/comments/',       views.job_comments,    name='job_comments'),
 
+    # ── Job Applications — job seeker ───────────────────────────────────────
+    path('jobs/<uuid:job_id>/apply/',                  views.job_application_create,         name='job_application_create'),
+    path('applications/<uuid:application_id>/withdraw/', views.job_application_withdraw,     name='job_application_withdraw'),
+    path('applications/<uuid:application_id>/',        views.job_application_detail,         name='job_application_detail'),
+    path('applications/mine/',                          views.my_applications,                name='my_applications'),
+
+    # ── Job Applications — employer ─────────────────────────────────────────
+    path('jobs/<uuid:job_id>/applicants/',             views.job_applicants,                 name='job_applicants'),
+    path('applications/<uuid:application_id>/status/', views.job_application_update_status,  name='job_application_update_status'),
+    path('applications/dashboard/',                     views.employer_applications_dashboard, name='employer_applications_dashboard'),
+
     # ── Social event reactions ─────────────────────────────────────────────────
     path('events/<int:event_id>/vibe/',        views.event_vibe,      name='event_vibe'),
     path('events/<int:event_id>/comments/',    views.event_comments,  name='event_comments'),

@@ -631,11 +631,33 @@
       {% if is_owner %}
         <button type="button" class="jbd-owner-btn" onclick="jbdOpenEdit()"><i class="fas fa-pen"></i> Edit</button>
         <button type="button" class="jbd-owner-btn danger" onclick="jbdOpenDelete()"><i class="fas fa-trash-alt"></i> Delete</button>
+        <a href="{% url 'job_applicants' job.id %}" class="jbd-owner-btn">
+          <i class="fas fa-users"></i> Applicants
+          {% if job.applications.count %}<span class="jbd-applicant-count">{{ job.applications.count }}</span>{% endif %}
+        </a>
       {% else %}
         {% if job.is_open %}
           {% if request.user.is_authenticated %}
-            <button type="button" class="jbd-primary-btn" onclick="jbdOpenDmModal()">
-              <i class="fas fa-paper-plane"></i> Apply / Message Poster
+            {% if my_application %}
+              {% if my_application.status == 'withdrawn' %}
+                <button type="button" class="jbd-owner-btn" disabled style="opacity:.6;">
+                  <i class="fas fa-ban"></i> Application withdrawn
+                </button>
+              {% else %}
+                <a href="{% url 'my_applications' %}" class="jbd-primary-btn" style="background: {{ my_application.status_color }};">
+                  {{ my_application.status_emoji }} Applied — {{ my_application.get_status_display }}
+                </a>
+                <button type="button" class="jbd-owner-btn danger" onclick="japWithdraw('{{ my_application.id }}')">
+                  <i class="fas fa-rotate-left"></i> Withdraw
+                </button>
+              {% endif %}
+            {% else %}
+              <button type="button" class="jbd-primary-btn" onclick="japOpenApplyModal()">
+                <i class="fas fa-file-circle-check"></i> Apply Now
+              </button>
+            {% endif %}
+            <button type="button" class="jbd-owner-btn" onclick="jbdOpenDmModal()">
+              <i class="fas fa-paper-plane"></i> Message Poster
             </button>
           {% else %}
             <a href="{% url 'index' %}" class="jbd-primary-btn">
@@ -646,6 +668,10 @@
       {% endif %}
       <button class="jbd-share-btn" onclick="jbdCopyLink()"><i class="fas fa-share"></i></button>
     </div>
+
+    <style>
+      .jbd-applicant-count { background: var(--khub-primary); color: #fff; font-size: 11px; font-weight: 700; border-radius: 10px; padding: 1px 7px; margin-left: 4px; }
+    </style>
 
     {% if not job.is_open %}
       <div class="jbd-full-badge"><i class="fas fa-circle-exclamation"></i> This vacancy is no longer accepting applicants.</div>
@@ -775,6 +801,10 @@
   </div>
 </div>
 
+{% if not is_owner and request.user.is_authenticated and job.is_open and not my_application %}
+  {% include 'snippet/job_application_modal.html' %}
+{% endif %}
+
 {% if is_owner %}
 <!-- Edit modal -->
 <div class="jbd-modal-overlay" id="jbdEditModal">
@@ -894,6 +924,90 @@
   function getCsrf() {
     var meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.content : '';
+  }
+
+  var JAP_JOB_ID = '{{ job.id }}';
+
+  function japOpenApplyModal() {
+    var modal = document.getElementById('japApplyModal');
+    if (!modal) return;
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function japCloseApplyModal() {
+    var modal = document.getElementById('japApplyModal');
+    if (modal) modal.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  async function japSubmitApplication() {
+    var coverLetter = document.getElementById('japCoverLetter').value.trim();
+    var portfolio   = document.getElementById('japPortfolio').value.trim();
+    var extraMsg    = document.getElementById('japExtraMessage').value.trim();
+    var resumeInput = document.getElementById('japResume');
+    var errEl = document.getElementById('japFormError');
+    var btn = document.getElementById('japSubmitBtn');
+    var sp  = document.getElementById('japSubmitSpinner');
+    errEl.style.display = 'none';
+
+    if (!coverLetter) {
+      errEl.textContent = 'Please write a short cover letter.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    var fd = new FormData();
+    fd.append('cover_letter', coverLetter);
+    fd.append('portfolio_link', portfolio);
+    fd.append('additional_message', extraMsg);
+    if (resumeInput && resumeInput.files[0]) {
+      fd.append('resume', resumeInput.files[0]);
+    }
+
+    btn.disabled = true;
+    if (sp) sp.style.display = 'inline-block';
+
+    try {
+      const res = await fetch(`/jobs/${JAP_JOB_ID}/apply/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrf(), 'X-Requested-With': 'XMLHttpRequest' },
+        body: fd,
+      });
+      const data = await res.json();
+      if (data.success) {
+        japCloseApplyModal();
+        jbdToast('✅ Application submitted!', '#0095f6');
+        setTimeout(function () { window.location.reload(); }, 900);
+      } else {
+        errEl.textContent = data.error || 'Could not submit application.';
+        errEl.style.display = 'block';
+      }
+    } catch (_) {
+      errEl.textContent = 'Network error. Please try again.';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      if (sp) sp.style.display = 'none';
+    }
+  }
+
+  async function japWithdraw(applicationId) {
+    if (!confirm('Withdraw your application for this job? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/applications/${applicationId}/withdraw/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrf(), 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        jbdToast('Application withdrawn.', '#0095f6');
+        setTimeout(function () { window.location.reload(); }, 700);
+      } else {
+        jbdToast(data.error || 'Could not withdraw.', '#e03131');
+      }
+    } catch (_) {
+      jbdToast('Network error. Please try again.', '#e03131');
+    }
   }
 
   function jbdToast(msg, color) {
@@ -1093,6 +1207,7 @@
     if (e.key === 'Escape') {
       jbdCloseImageModal();
       jbdCloseDmModal();
+      japCloseApplyModal();
       {% if is_owner %}
       jbdCloseEdit();
       jbdCloseDelete();

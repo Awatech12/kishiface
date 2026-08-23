@@ -1,0 +1,96 @@
+{% load humanize %}
+{% load post_tags %}
+<!-- Rendered into a modal (#japDetailModal) already present on the page
+     that includes it (my_applications.html / job_applicants.html). Uses
+     the shared .jap-* classes defined on those pages. -->
+<div class="jap-detail">
+  <div class="jap-detail-header">
+    <span class="jap-status-pill" style="--st-color:{{ application.status_color }};">
+      {{ application.status_emoji }} {{ application.get_status_display }}
+    </span>
+    <span class="jap-detail-date">Applied {{ application.applied_at|naturaltime }}</span>
+  </div>
+
+  <h3 class="jap-detail-job">{{ application.job.title }}</h3>
+  <div class="jap-detail-sub">
+    {% if application.job.company %}{{ application.job.company }} · {% endif %}{{ application.job.get_category_display }}
+  </div>
+
+  {% if is_employer_view %}
+    <div class="jap-detail-applicant">
+      <img src="{{ application.applicant|safe_pic_url }}" alt="{{ application.applicant.username }}"
+           onerror="this.src='https://placehold.co/48x48/dbdbdb/8e8e8e?text=U';">
+      <div>
+        <a href="{% url 'profile' application.applicant.username %}" target="_blank" class="jap-detail-applicant-name">
+          {{ application.applicant.get_full_name|default:application.applicant.username }}
+        </a>
+        {% if application.applicant.profile.profession %}
+          <div class="jap-detail-applicant-sub">{{ application.applicant.profile.profession }}</div>
+        {% endif %}
+        {% with skills=application.applicant.profile.member_type_data.skills %}
+          {% if skills %}<div class="jap-detail-applicant-sub">Skills: {{ skills }}</div>{% endif %}
+        {% endwith %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="jap-detail-section">
+    <div class="jap-detail-label">Cover Letter</div>
+    <div class="jap-detail-body">{{ application.cover_letter|linebreaksbr }}</div>
+  </div>
+
+  {% if application.additional_message %}
+    <div class="jap-detail-section">
+      <div class="jap-detail-label">Additional Message</div>
+      <div class="jap-detail-body">{{ application.additional_message|linebreaksbr }}</div>
+    </div>
+  {% endif %}
+
+  <div class="jap-detail-links">
+    {% if application.resume %}
+      <a href="{{ application.resume_url }}" target="_blank" rel="noopener noreferrer" class="jap-detail-link">
+        <i class="fas fa-file-arrow-down"></i> {{ application.resume_name|default:"Resume / CV" }}
+      </a>
+    {% elif application.applicant.profile.member_type_cv %}
+      <a href="{{ application.applicant.profile.member_type_cv.url }}" target="_blank" rel="noopener noreferrer" class="jap-detail-link">
+        <i class="fas fa-file-arrow-down"></i> {{ application.applicant.profile.member_type_cv_name|default:"Profile CV" }}
+      </a>
+    {% endif %}
+    {% if application.portfolio_link %}
+      <a href="{{ application.portfolio_link }}" target="_blank" rel="noopener noreferrer" class="jap-detail-link">
+        <i class="fas fa-link"></i> Portfolio
+      </a>
+    {% endif %}
+    {% if is_employer_view %}
+      <a href="{% url 'profile' application.applicant.username %}#professional" target="_blank" class="jap-detail-link">
+        <i class="fas fa-id-badge"></i> Full Profile
+      </a>
+    {% endif %}
+  </div>
+
+  {% if is_employer_view and application.status != 'withdrawn' %}
+    <div class="jap-detail-section">
+      <div class="jap-detail-label">Change Status</div>
+      <div class="jap-status-actions">
+        {% for value, label in status_choices %}
+          {% if value in application.EMPLOYER_SETTABLE_STATUSES %}
+            <button type="button"
+                    class="jap-status-btn {% if application.status == value %}active{% endif %}"
+                    onclick="japChangeStatus('{{ application.id }}', '{{ value }}', this)">
+              {{ label }}
+            </button>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <a href="{% url 'message' application.applicant.username %}?job={{ application.job.id }}" class="jap-contact-btn">
+      <i class="fas fa-paper-plane"></i> Contact Applicant
+    </a>
+  {% endif %}
+
+  {% if not is_employer_view and application.status != 'withdrawn' and application.status != 'rejected' %}
+    <button type="button" class="jap-withdraw-btn" onclick="japWithdrawFromDetail('{{ application.id }}')">
+      <i class="fas fa-rotate-left"></i> Withdraw Application
+    </button>
+  {% endif %}
+</div>

@@ -1,4 +1,4 @@
-from .models import Message, FollowNotification, ProfilePostNotification, ProfileItemNotification, BusinessNotification, EventNotification, Channel, BusinessPage
+from .models import Message, FollowNotification, ProfilePostNotification, ProfileItemNotification, BusinessNotification, EventNotification, JobApplicationNotification, Channel, BusinessPage
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
@@ -62,6 +62,9 @@ def follow_notifications_context(request):
             'unread_event_count': 0,
             'recent_event_notifications': [],
             'has_unread_event_notifications': False,
+            'unread_job_application_count': 0,
+            'recent_job_application_notifications': [],
+            'has_unread_job_application_notifications': False,
             'unread_notifications_total': 0,
         }
 
@@ -131,6 +134,17 @@ def follow_notifications_context(request):
             .order_by('-created_at')[:10]
         )
 
+        unread_job_application_count = JobApplicationNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
+
+        recent_job_application_notifications = (
+            JobApplicationNotification.objects
+            .filter(to_user=request.user)
+            .select_related('actor', 'actor__profile', 'application', 'application__job')
+            .order_by('-created_at')[:10]
+        )
+
         return {
             'unread_follow_count':        unread_follow_count,
             'recent_follows':             recent_follows,
@@ -149,10 +163,14 @@ def follow_notifications_context(request):
             'unread_event_count':                 unread_event_count,
             'recent_event_notifications':         recent_event_notifications,
             'has_unread_event_notifications':     unread_event_count > 0,
+            'unread_job_application_count':             unread_job_application_count,
+            'recent_job_application_notifications':     recent_job_application_notifications,
+            'has_unread_job_application_notifications': unread_job_application_count > 0,
             'unread_notifications_total':  (
                 unread_follow_count + unread_profile_post_count
                 + unread_profile_item_count
                 + unread_business_count + unread_event_count
+                + unread_job_application_count
             ),
         }
     except Exception:
@@ -174,6 +192,9 @@ def follow_notifications_context(request):
             'unread_event_count': 0,
             'recent_event_notifications': [],
             'has_unread_event_notifications': False,
+            'unread_job_application_count': 0,
+            'recent_job_application_notifications': [],
+            'has_unread_job_application_notifications': False,
             'unread_notifications_total': 0,
         }
 

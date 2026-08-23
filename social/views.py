@@ -5,13 +5,13 @@ import socket
 
 from html import escape as html_escape, unescape as html_unescape
 from django.shortcuts import render, redirect, get_object_or_404, HttpResponse
-from .models import FollowNotification, BusinessNotification, ProfilePostNotification, ProfileItemNotification
+from .models import FollowNotification, BusinessNotification, ProfilePostNotification, ProfileItemNotification, JobApplicationNotification
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, ProfileAchievementVibe, ProfileAchievementComment, ProfileExperienceVibe, ProfileExperienceComment, ProfileEducationVibe, ProfileEducationComment, ProfileServiceVibe, ProfileServiceComment
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, ProfileAchievementVibe, ProfileAchievementComment, ProfileExperienceVibe, ProfileExperienceComment, ProfileEducationVibe, ProfileEducationComment, ProfileServiceVibe, ProfileServiceComment, JobApplication
 from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES
 
@@ -3971,6 +3971,7 @@ def notification_list(request):
     ProfileItemNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
     BusinessNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
     EventNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
+    JobApplicationNotification.objects.filter(to_user=request.user, is_read=False).update(is_read=True)
 
     activity_entries = _build_activity_notification_entries(request.user)
     today_notifications, week_notifications, earlier_notifications = (
@@ -3987,6 +3988,11 @@ def notification_list(request):
         .filter(to_user=request.user)
         .select_related('event', 'actor')[:30]
     )
+    job_application_notifications = (
+        JobApplicationNotification.objects
+        .filter(to_user=request.user)
+        .select_related('application', 'application__job', 'actor')[:30]
+    )
 
     context = {
         'today_notifications': today_notifications,
@@ -3994,6 +4000,7 @@ def notification_list(request):
         'earlier_notifications': earlier_notifications,
         'business_notifications': business_notifications,
         'event_notifications': event_notifications,
+        'job_application_notifications': job_application_notifications,
     }
 
     if request.GET.get('panel') == '1':
@@ -4019,18 +4026,23 @@ def notification_partial(request):
         unread_event_count = EventNotification.objects.filter(
             to_user=request.user, is_read=False
         ).count()
+        unread_job_application_count = JobApplicationNotification.objects.filter(
+            to_user=request.user, is_read=False
+        ).count()
     else:
         unread_follow_count = 0
         unread_profile_post_count = 0
         unread_profile_item_count = 0
         unread_business_count = 0
         unread_event_count = 0
+        unread_job_application_count = 0
     return render(request, 'snippet/notification_count.html', {
         'unread_follow_count': unread_follow_count,
         'unread_profile_post_count': unread_profile_post_count,
         'unread_profile_item_count': unread_profile_item_count,
         'unread_business_count': unread_business_count,
         'unread_event_count': unread_event_count,
+        'unread_job_application_count': unread_job_application_count,
     })
 
 
@@ -4086,6 +4098,21 @@ def delete_notification_group(request):
 
         deleted_count, _ = EventNotification.objects.filter(
             pk=event_notif_id,
+            to_user=request.user,
+        ).delete()
+
+        return JsonResponse({'status': 'success', 'deleted_count': deleted_count})
+
+    # ── Job application notification (applied / status_changed / withdrawn) ──
+    job_application_notif_id = data.get('job_application_notif_id')
+    if job_application_notif_id is not None:
+        try:
+            job_application_notif_id = int(job_application_notif_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid job_application_notif_id'}, status=400)
+
+        deleted_count, _ = JobApplicationNotification.objects.filter(
+            pk=job_application_notif_id,
             to_user=request.user,
         ).delete()
 
@@ -5901,6 +5928,10 @@ def job_detail(request, job_id):
 
     is_owner = request.user.is_authenticated and request.user == job.posted_by
 
+    my_application = None
+    if request.user.is_authenticated and not is_owner:
+        my_application = JobApplication.objects.filter(job=job, applicant=request.user).first()
+
     context = {
         'job':             job,
         'related_jobs':    related_jobs,
@@ -5913,6 +5944,7 @@ def job_detail(request, job_id):
         'vibe_data':       vibe_data,
         'comments':        comments,
         'comments_count':  comments_count,
+        'my_application':  my_application,
     }
     return render(request, 'job_details.html', context)
 
@@ -6326,6 +6358,304 @@ def job_comments(request, job_id):
     if request.method == 'POST':
         return _card_comments_post(request, job, JobComment, 'job')
     return _card_comments_get(request, job, JobComment, 'job')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job Applications — job seeker side
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _notify_job_application(notif_type, application, actor, to_user, old_status='', new_status=''):
+    """Creates a JobApplicationNotification. Never raises — a notification
+    failure should never block the underlying apply/withdraw/status action."""
+    try:
+        JobApplicationNotification.objects.create(
+            notif_type=notif_type,
+            application=application,
+            actor=actor,
+            to_user=to_user,
+            old_status=old_status,
+            new_status=new_status,
+        )
+    except Exception:
+        pass
+
+
+@login_required(login_url='/')
+@require_POST
+def job_application_create(request, job_id):
+    """AJAX — submit a new application to a JobVacancy."""
+    job = get_object_or_404(JobVacancy, id=job_id)
+
+    if job.posted_by_id == request.user.id:
+        return JsonResponse({'success': False, 'error': 'You cannot apply to your own vacancy.'}, status=400)
+
+    if not job.is_open:
+        return JsonResponse({'success': False, 'error': 'This vacancy is no longer accepting applicants.'}, status=400)
+
+    if JobApplication.objects.filter(job=job, applicant=request.user).exists():
+        return JsonResponse({'success': False, 'error': 'You have already applied to this job.', 'error_code': 'duplicate'}, status=400)
+
+    cover_letter      = request.POST.get('cover_letter', '').strip()
+    additional_message = request.POST.get('additional_message', '').strip()
+    portfolio_link    = request.POST.get('portfolio_link', '').strip()
+    resume_file       = request.FILES.get('resume')
+
+    if not cover_letter:
+        return JsonResponse({'success': False, 'error': 'A cover letter is required.'}, status=400)
+
+    # Applicant needs a resume attached to the application. Reuse the CV
+    # already on their profile (member_type_cv) if they don't upload a
+    # fresh one this time.
+    profile = request.user.profile
+    if not resume_file and not profile.member_type_cv:
+        return JsonResponse({
+            'success': False,
+            'error': 'Please attach a resume/CV, or add one to your profile first.',
+        }, status=400)
+
+    if portfolio_link:
+        try:
+            portfolio_link = validate_url(portfolio_link)
+        except ValidationError:
+            return JsonResponse({'success': False, 'error': 'Please enter a valid portfolio URL.'}, status=400)
+
+    application = JobApplication(
+        job=job,
+        applicant=request.user,
+        cover_letter=cover_letter,
+        additional_message=additional_message,
+        portfolio_link=portfolio_link,
+    )
+
+    if resume_file:
+        application.resume = resume_file
+        application.resume_name = resume_file.name
+    else:
+        # Fall back to the profile CV — best-effort; if the storage
+        # backend can't share the file reference we just leave it blank
+        # and the employer can still see the applicant's profile CV link.
+        application.resume_name = profile.member_type_cv_name or 'Resume from profile'
+
+    try:
+        application.full_clean(exclude=['resume'] if not resume_file else [])
+    except ValidationError as e:
+        return JsonResponse({'success': False, 'error': '; '.join(e.messages) if hasattr(e, 'messages') else str(e)}, status=400)
+
+    application.save()
+
+    _notify_job_application(
+        JobApplicationNotification.APPLIED, application,
+        actor=request.user, to_user=job.posted_by,
+    )
+
+    return JsonResponse({
+        'success': True,
+        'application': {
+            'id': str(application.id),
+            'status': application.status,
+            'status_label': application.get_status_display(),
+        },
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def job_application_withdraw(request, application_id):
+    """AJAX — applicant withdraws their own application."""
+    application = get_object_or_404(JobApplication, id=application_id, applicant=request.user)
+
+    if application.status == JobApplication.WITHDRAWN:
+        return JsonResponse({'success': False, 'error': 'This application is already withdrawn.'}, status=400)
+
+    application.withdraw()
+
+    _notify_job_application(
+        JobApplicationNotification.WITHDRAWN, application,
+        actor=request.user, to_user=application.job.posted_by,
+    )
+
+    return JsonResponse({'success': True, 'status': application.status, 'status_label': application.get_status_display()})
+
+
+@login_required(login_url='/')
+def my_applications(request):
+    """Job-seeker dashboard — 'My Applications', with a status filter."""
+    status_filter = request.GET.get('status', 'all').strip()
+
+    qs = (
+        JobApplication.objects
+        .filter(applicant=request.user)
+        .select_related('job', 'job__posted_by', 'job__business_page')
+    )
+
+    valid_statuses = dict(JobApplication.STATUS_CHOICES)
+    if status_filter != 'all' and status_filter in valid_statuses:
+        qs = qs.filter(status=status_filter)
+
+    total_count = JobApplication.objects.filter(applicant=request.user).count()
+    status_filters = []
+    for value, label in JobApplication.STATUS_CHOICES:
+        if value == JobApplication.WITHDRAWN:
+            continue
+        status_filters.append({
+            'value': value,
+            'label': label,
+            'count': JobApplication.objects.filter(applicant=request.user, status=value).count(),
+        })
+
+    paginator = Paginator(qs, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'my_applications.html', {
+        'applications': page_obj,
+        'status_filter': status_filter,
+        'total_count': total_count,
+        'status_filters': status_filters,
+    })
+
+
+@login_required(login_url='/')
+def job_application_detail(request, application_id):
+    """AJAX partial — full application detail for the 'View application' action,
+    usable by either the applicant or the job owner."""
+    application = get_object_or_404(
+        JobApplication.objects.select_related('job', 'applicant', 'applicant__profile'),
+        id=application_id,
+    )
+
+    if request.user != application.applicant and request.user != application.job.posted_by:
+        return JsonResponse({'success': False, 'error': 'Not authorised to view this application.'}, status=403)
+
+    return render(request, 'snippet/job_application_detail_partial.html', {
+        'application': application,
+        'is_employer_view': request.user == application.job.posted_by,
+        'status_choices': JobApplication.STATUS_CHOICES,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job Applications — employer side
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def job_applicants(request, job_id):
+    """Employer view — applicants for a single job, with status filter."""
+    job = get_object_or_404(JobVacancy, id=job_id)
+
+    if job.posted_by_id != request.user.id:
+        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403) if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect('job_detail', job_id=job_id)
+
+    status_filter = request.GET.get('status', 'all').strip()
+    qs = (
+        JobApplication.objects
+        .filter(job=job)
+        .select_related('applicant', 'applicant__profile')
+    )
+    valid_statuses = dict(JobApplication.STATUS_CHOICES)
+    if status_filter != 'all' and status_filter in valid_statuses:
+        qs = qs.filter(status=status_filter)
+
+    total_count = JobApplication.objects.filter(job=job).count()
+    status_filters = [
+        {'value': value, 'label': label, 'count': JobApplication.objects.filter(job=job, status=value).count()}
+        for value, label in JobApplication.STATUS_CHOICES
+    ]
+
+    return render(request, 'job_applicants.html', {
+        'job': job,
+        'applications': qs,
+        'status_filter': status_filter,
+        'total_count': total_count,
+        'status_filters': status_filters,
+        'status_choices': JobApplication.STATUS_CHOICES,
+    })
+
+
+@login_required(login_url='/')
+def employer_applications_dashboard(request):
+    """Employer dashboard — all of the user's jobs with applicant stats."""
+    jobs = (
+        JobVacancy.objects
+        .filter(posted_by=request.user)
+        .select_related('business_page')
+        .annotate(
+            total_applicants=Count('applications', distinct=True),
+        )
+        .order_by('-created_at')
+    )
+
+    job_ids = list(jobs.values_list('id', flat=True))
+    apps_qs = JobApplication.objects.filter(job_id__in=job_ids)
+
+    per_job_status = {}
+    for row in apps_qs.values('job_id', 'status').annotate(cnt=Count('id')):
+        per_job_status.setdefault(row['job_id'], {})[row['status']] = row['cnt']
+
+    jobs_with_stats = []
+    for job in jobs:
+        s = per_job_status.get(job.id, {})
+        jobs_with_stats.append({
+            'job': job,
+            'total': job.total_applicants,
+            'new': s.get(JobApplication.APPLIED, 0),
+            'shortlisted': s.get(JobApplication.SHORTLISTED, 0),
+            'interview': s.get(JobApplication.INTERVIEW, 0),
+            'selected': s.get(JobApplication.SELECTED, 0),
+        })
+
+    overall = {
+        'total_applicants': apps_qs.count(),
+        'new_applications': apps_qs.filter(status=JobApplication.APPLIED).count(),
+        'shortlisted':       apps_qs.filter(status=JobApplication.SHORTLISTED).count(),
+        'interviews':        apps_qs.filter(status=JobApplication.INTERVIEW).count(),
+        'selected':          apps_qs.filter(status=JobApplication.SELECTED).count(),
+    }
+
+    return render(request, 'employer_applications_dashboard.html', {
+        'jobs_with_stats': jobs_with_stats,
+        'overall': overall,
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def job_application_update_status(request, application_id):
+    """AJAX — employer changes an application's status."""
+    application = get_object_or_404(
+        JobApplication.objects.select_related('job', 'applicant'),
+        id=application_id,
+    )
+
+    if application.job.posted_by_id != request.user.id:
+        return JsonResponse({'success': False, 'error': 'Not authorised to manage this application.'}, status=403)
+
+    new_status = request.POST.get('status', '').strip()
+    if new_status not in JobApplication.EMPLOYER_SETTABLE_STATUSES:
+        return JsonResponse({'success': False, 'error': 'Invalid status.'}, status=400)
+
+    if application.status == JobApplication.WITHDRAWN:
+        return JsonResponse({'success': False, 'error': 'This application was withdrawn by the applicant.'}, status=400)
+
+    old_status = application.status
+    if old_status == new_status:
+        return JsonResponse({'success': True, 'status': new_status, 'status_label': application.get_status_display(), 'unchanged': True})
+
+    application.status = new_status
+    application.status_updated_at = timezone.now()
+    application.save(update_fields=['status', 'status_updated_at', 'updated_at'])
+
+    _notify_job_application(
+        JobApplicationNotification.STATUS_CHANGED, application,
+        actor=request.user, to_user=application.applicant,
+        old_status=old_status, new_status=new_status,
+    )
+
+    return JsonResponse({
+        'success': True,
+        'status': application.status,
+        'status_label': application.get_status_display(),
+        'status_color': application.status_color,
+    })
 
 
 # ── Social event reactions ─────────────────────────────────────────────────────

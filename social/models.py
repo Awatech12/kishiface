@@ -2387,6 +2387,194 @@ class JobComment(models.Model):
 
 
 # =============================================================================
+# JobApplication — a job seeker's application to a JobVacancy
+# =============================================================================
+
+class JobApplication(models.Model):
+    """
+    One application by `applicant` to `job`. A user may only have a single
+    application per job (enforced by unique_together below) — withdrawing
+    keeps the row (status becomes WITHDRAWN) instead of deleting it, so the
+    "applied once" rule holds even after a withdrawal.
+    """
+
+    APPLIED       = 'applied'
+    UNDER_REVIEW  = 'under_review'
+    SHORTLISTED   = 'shortlisted'
+    INTERVIEW     = 'interview'
+    SELECTED      = 'selected'
+    REJECTED      = 'rejected'
+    WITHDRAWN     = 'withdrawn'
+
+    STATUS_CHOICES = [
+        (APPLIED,      'Applied'),
+        (UNDER_REVIEW, 'Under Review'),
+        (SHORTLISTED,  'Shortlisted'),
+        (INTERVIEW,    'Interview'),
+        (SELECTED,     'Selected'),
+        (REJECTED,     'Rejected'),
+        (WITHDRAWN,    'Withdrawn'),
+    ]
+
+    # Statuses an employer is allowed to move an application *into* via the
+    # status-change endpoint. WITHDRAWN is applicant-only (via withdraw());
+    # employers can't "un-withdraw" or set it directly.
+    EMPLOYER_SETTABLE_STATUSES = {
+        UNDER_REVIEW, SHORTLISTED, INTERVIEW, SELECTED, REJECTED,
+    }
+
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job        = models.ForeignKey(JobVacancy, on_delete=models.CASCADE, related_name='applications')
+    applicant  = models.ForeignKey(User, on_delete=models.CASCADE, related_name='job_applications')
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=APPLIED, db_index=True)
+
+    cover_letter        = models.TextField()
+    portfolio_link       = models.URLField(max_length=500, blank=True, default='')
+    additional_message   = models.TextField(blank=True, default='')
+
+    if settings.USE_CLOUDINARY:
+        resume = CloudinaryField(
+            'raw', resource_type='raw', folder='job_applications/resumes',
+            blank=True, null=True,
+        )
+    else:
+        resume = models.FileField(upload_to='job_applications/resumes/', blank=True, null=True)
+    resume_name = models.CharField(max_length=255, blank=True, default='')
+
+    applied_at        = models.DateTimeField(auto_now_add=True)
+    updated_at        = models.DateTimeField(auto_now=True)
+    status_updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'JobApplication_Table'
+        ordering = ['-applied_at']
+        unique_together = ('job', 'applicant')
+        indexes = [
+            models.Index(fields=['job', 'status']),
+            models.Index(fields=['applicant', 'status']),
+        ]
+
+    def __str__(self):
+        return f'{self.applicant.username} → {self.job.title} [{self.get_status_display()}]'
+
+    def clean(self):
+        super().clean()
+        self.cover_letter      = sanitize_text(self.cover_letter, 'product_description')
+        self.additional_message = sanitize_text(self.additional_message, 'product_description')
+        self.resume_name       = sanitize_text(self.resume_name)
+
+        if self.portfolio_link:
+            try:
+                self.portfolio_link = validate_url(self.portfolio_link)
+            except ValidationError:
+                self.portfolio_link = ''
+
+        valid_statuses = [c[0] for c in self.STATUS_CHOICES]
+        if self.status not in valid_statuses:
+            self.status = self.APPLIED
+
+        # Same _committed guard used on Profile.member_type_cv — only
+        # re-validate the file when a *new* upload is attached this
+        # request, not on every unrelated save (status changes etc).
+        if self.resume and hasattr(self.resume, 'name') and hasattr(self.resume, '_committed'):
+            if not self.resume._committed:
+                validate_cv_extension(self.resume)
+                validate_file_size(self.resume, max_size_mb=5)
+
+    def save(self, *args, **kwargs):
+        self.full_clean(exclude=['resume'])
+        if self.resume and hasattr(self.resume, '_committed') and not self.resume._committed:
+            validate_cv_extension(self.resume)
+            validate_file_size(self.resume, max_size_mb=5)
+        super().save(*args, **kwargs)
+
+    def withdraw(self):
+        self.status = self.WITHDRAWN
+        self.status_updated_at = timezone.now()
+        self.save(update_fields=['status', 'status_updated_at', 'updated_at'])
+
+    @property
+    def is_active(self):
+        return self.status not in (self.WITHDRAWN, self.REJECTED)
+
+    @property
+    def status_emoji(self):
+        return {
+            self.APPLIED:      '📨',
+            self.UNDER_REVIEW: '🔍',
+            self.SHORTLISTED:  '⭐',
+            self.INTERVIEW:    '🗣️',
+            self.SELECTED:     '✅',
+            self.REJECTED:     '❌',
+            self.WITHDRAWN:    '↩️',
+        }.get(self.status, '📨')
+
+    @property
+    def status_color(self):
+        return {
+            self.APPLIED:      '#0095f6',
+            self.UNDER_REVIEW: '#b45309',
+            self.SHORTLISTED:  '#7c3aed',
+            self.INTERVIEW:    '#0f766e',
+            self.SELECTED:     '#16a34a',
+            self.REJECTED:     '#e03131',
+            self.WITHDRAWN:    '#64748b',
+        }.get(self.status, '#0095f6')
+
+    @property
+    def resume_url(self):
+        return self.resume.url if self.resume else ''
+
+
+# =============================================================================
+# JobApplicationNotification — notifications for the apply/status pipeline
+# =============================================================================
+
+class JobApplicationNotification(models.Model):
+    """
+    Notifications tied to a JobApplication:
+      - 'applied'         → sent to the job owner when someone applies.
+      - 'status_changed'  → sent to the applicant whenever the employer
+                              changes the application status (includes
+                              shortlisted / interview / selected / rejected).
+      - 'withdrawn'       → sent to the job owner when an applicant withdraws.
+    """
+    APPLIED         = 'applied'
+    STATUS_CHANGED  = 'status_changed'
+    WITHDRAWN       = 'withdrawn'
+    NOTIF_TYPE_CHOICES = [
+        (APPLIED,        'New application'),
+        (STATUS_CHANGED, 'Application status changed'),
+        (WITHDRAWN,      'Application withdrawn'),
+    ]
+
+    notif_type  = models.CharField(max_length=20, choices=NOTIF_TYPE_CHOICES, db_index=True)
+    application = models.ForeignKey(JobApplication, on_delete=models.CASCADE, related_name='notifications')
+    actor       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_job_application_notifications')
+    to_user     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='job_application_notifications')
+    old_status  = models.CharField(max_length=20, blank=True, default='')
+    new_status  = models.CharField(max_length=20, blank=True, default='')
+    is_read     = models.BooleanField(default=False)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'JobApplicationNotification_Table'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['to_user', 'is_read']),
+            models.Index(fields=['application', 'notif_type']),
+        ]
+
+    def __str__(self):
+        if self.notif_type == self.APPLIED:
+            return f'{self.actor.username} applied for {self.application.job.title}'
+        if self.notif_type == self.WITHDRAWN:
+            return f'{self.actor.username} withdrew from {self.application.job.title}'
+        return f'{self.application.job.title} status → {self.get_new_status_display() if self.new_status else self.new_status}'
+
+
+# =============================================================================
 # EventVibe / EventComment — reactions on SocialEvent feed cards
 # =============================================================================
 
