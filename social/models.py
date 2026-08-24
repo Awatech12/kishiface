@@ -780,6 +780,31 @@ class Profile(models.Model):
 
         return 'https://placehold.co/40x40/dbdbdb/8e8e8e?text=U'
 
+    # ── Has the user actually uploaded a photo? ──────────────────
+    @property
+    def has_custom_picture(self):
+        """True once the user has uploaded a real profile photo, as
+        opposed to still sitting on the default placeholder avatar.
+        get_picture_url always returns *some* URL (it falls back to the
+        default), so it can't be used to detect "no photo set" — this
+        checks the same public_id/blank conditions get_picture_url does,
+        just to report presence instead of building a URL. Used by
+        Profile Strength."""
+        try:
+            if getattr(settings, 'USE_CLOUDINARY', False):
+                pic = self.picture
+                public_id = None
+                if hasattr(pic, 'public_id') and pic.public_id:
+                    public_id = str(pic.public_id).strip()
+                elif pic and str(pic).strip() not in ('', 'None'):
+                    public_id = str(pic).strip()
+                return bool(public_id) and public_id != 'logo_iowyea'
+            else:
+                pic = self.picture
+                return bool(pic) and getattr(pic, 'name', '') not in ('', 'male.png')
+        except Exception:
+            return False
+
     # ── Cover photo URL helper ─────────────────────────────────────
     @property
     def get_cover_url(self):
@@ -3211,19 +3236,6 @@ class ProfileService(models.Model):
     def owner_name(self):
         return self.profile.full_name or self.profile.user.username
 
-    @property
-    def vibe_count(self):
-        return self.vibes.count()
-
-    @property
-    def comment_count(self):
-        return self.comments.count()
-
-    @property
-    def top_vibe_emoji(self):
-        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
-        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
-
 
 class BusinessPortfolioItem(models.Model):
     """A single Portfolio piece or Project shown on a professional page.
@@ -3543,19 +3555,6 @@ class ProfileExperience(models.Model):
     def owner_user(self):
         return self.profile.user
 
-    @property
-    def vibe_count(self):
-        return self.vibes.count()
-
-    @property
-    def comment_count(self):
-        return self.comments.count()
-
-    @property
-    def top_vibe_emoji(self):
-        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
-        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
-
 
 class ProfileEducation(models.Model):
     """A single education entry (school / degree) shown on a user's own
@@ -3634,19 +3633,6 @@ class ProfileEducation(models.Model):
     @property
     def owner_user(self):
         return self.profile.user
-
-    @property
-    def vibe_count(self):
-        return self.vibes.count()
-
-    @property
-    def comment_count(self):
-        return self.comments.count()
-
-    @property
-    def top_vibe_emoji(self):
-        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
-        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
 
 
 class BusinessAchievement(models.Model):
@@ -3833,19 +3819,6 @@ class ProfileAchievement(models.Model):
     @property
     def owner_name(self):
         return self.profile.full_name or self.profile.user.username
-
-    @property
-    def vibe_count(self):
-        return self.vibes.count()
-
-    @property
-    def comment_count(self):
-        return self.comments.count()
-
-    @property
-    def top_vibe_emoji(self):
-        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
-        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
 
 
 # ─────────────────────────────────────────────────────────────────────────────

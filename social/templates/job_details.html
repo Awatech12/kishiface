@@ -231,16 +231,6 @@
     }
     .jbd-owner-btn.danger { border-color: #dc2626; color: #dc2626; }
 
-    .jbd-share-btn {
-      padding: 11px 20px;
-      border-radius: 24px;
-      font-size: 14px;
-      font-weight: 700;
-      border: 1.5px solid var(--khub-border);
-      background: var(--khub-white);
-      cursor: pointer;
-    }
-
     .jbd-full-badge {
       font-size: 13px;
       color: #b91c1c;
@@ -261,23 +251,6 @@
     .jbd-badge.workmode   { background: color-mix(in srgb, var(--wm-color, var(--khub-primary)) 14%, white); color: var(--wm-color, var(--khub-primary)); }
     .jbd-badge.advertiser { background: color-mix(in srgb, var(--adv-color, var(--khub-primary)) 14%, white); color: var(--adv-color, var(--khub-primary)); }
     .jbd-badge.closed    { background: #fef2f2; color: #b91c1c; }
-
-    /* ─── Vibes ─── */
-    .jbd-vibe-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0 4px; }
-    .jbd-vibe-btn {
-      display: inline-flex; align-items: center; gap: 5px;
-      border: 1px solid var(--khub-border);
-      background: #fff;
-      border-radius: 20px;
-      padding: 5px 11px;
-      font-size: 12.5px; font-weight: 600;
-      color: var(--khub-text);
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .jbd-vibe-btn:hover { border-color: var(--khub-primary); }
-    .jbd-vibe-btn.active { border-color: var(--vibe-color, var(--khub-primary)); background: color-mix(in srgb, var(--vibe-color, var(--khub-primary)) 12%, white); color: var(--vibe-color, var(--khub-primary)); }
-    .jbd-vibe-total { font-size: 12px; color: var(--khub-text-light); padding: 2px 0 6px; }
 
     /* ─── Tabs ─── */
     .jbd-tabs {
@@ -590,13 +563,6 @@
       <span>Posted {{ job.created_at|naturaltime }}</span>
     </div>
 
-    {% if job.apply_link %}
-      <div class="jbd-info-row">
-        <i class="fas fa-arrow-up-right-from-square"></i>
-        <span><a href="{{ job.apply_link }}" target="_blank" rel="noopener noreferrer nofollow">{{ job.apply_link }}</a></span>
-      </div>
-    {% endif %}
-
     <div class="jbd-badges">
       <span class="jbd-badge type">{{ job.category_emoji }} {{ job.get_category_display }}</span>
       <span class="jbd-badge workmode" style="--wm-color: {{ job.work_mode_color }};">{{ job.work_mode_emoji }} {{ job.get_work_mode_display }}</span>
@@ -614,18 +580,6 @@
         {% if poster.online %}<span class="jbd-online-dot" title="Online"></span>{% endif %}
       </span>
     </a>
-
-    <div class="jbd-vibe-bar" id="jbdVibeBar">
-      {% for v in vibe_data %}
-        <button type="button" class="jbd-vibe-btn {% if v.active %}active{% endif %}"
-                style="--vibe-color: {{ v.color }};"
-                data-vibe="{{ v.value }}"
-                onclick="jbdToggleVibe('{{ v.value }}', this)">
-          {{ v.emoji }} <span class="jbd-vibe-count">{{ v.count }}</span>
-        </button>
-      {% endfor %}
-    </div>
-    <div class="jbd-vibe-total"><span id="jbdVibeTotal">{{ vibe_total }}</span> reaction{{ vibe_total|pluralize }}</div>
 
     <div class="jbd-actions">
       {% if is_owner %}
@@ -656,9 +610,6 @@
                 <i class="fas fa-file-circle-check"></i> Apply Now
               </button>
             {% endif %}
-            <button type="button" class="jbd-owner-btn" onclick="jbdOpenDmModal()">
-              <i class="fas fa-paper-plane"></i> Message Poster
-            </button>
           {% else %}
             <a href="{% url 'index' %}" class="jbd-primary-btn">
               <i class="fas fa-right-to-bracket"></i> Log In to Apply
@@ -666,7 +617,6 @@
           {% endif %}
         {% endif %}
       {% endif %}
-      <button class="jbd-share-btn" onclick="jbdCopyLink()"><i class="fas fa-share"></i></button>
     </div>
 
     <style>
@@ -781,24 +731,6 @@
 <div class="jbd-image-modal-overlay" id="jbdImageModalOverlay" onclick="jbdCloseImageModal()">
   <button type="button" class="jbd-image-modal-close" onclick="jbdCloseImageModal(); event.stopPropagation();">&times;</button>
   <img id="jbdModalImage" src="" alt="Job cover">
-</div>
-
-<!-- DM / Apply modal -->
-<div class="jbd-modal-overlay" id="jbdDmModal">
-  <div class="jbd-modal">
-    <div class="jbd-modal-header">
-      <h2><i class="fas fa-paper-plane" style="color:var(--khub-primary);"></i> Message the Poster</h2>
-      <button type="button" class="jbd-modal-close" onclick="jbdCloseDmModal()">&times;</button>
-    </div>
-    <div class="jbd-form-group">
-      <label>Your message</label>
-      <textarea id="jbdDmText" class="jbd-comment-input" style="min-height:130px;width:100%;border-radius:12px;" maxlength="1000" oninput="jbdDmCharCount(this)"></textarea>
-      <div class="jbd-char-count" id="jbdDmCharCount">0 / 1000</div>
-    </div>
-    <button type="button" class="jbd-submit-btn" id="jbdDmSendBtn" onclick="jbdSendDm()">
-      <i class="fas fa-paper-plane"></i> Send <span class="jbd-spinner" id="jbdDmSpinner"></span>
-    </button>
-  </div>
 </div>
 
 {% if not is_owner and request.user.is_authenticated and job.is_open and not my_application %}
@@ -1067,32 +999,6 @@
     document.body.style.overflow = '';
   }
 
-  // ── Vibe reactions ──
-  async function jbdToggleVibe(vibeType, btn) {
-    {% if not request.user.is_authenticated %}
-      jbdToast('⚠️ Please log in to react.', '#e03131');
-      return;
-    {% endif %}
-    try {
-      const res = await fetch(`/jobs/${JBD_JOB_ID}/vibe/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-        body: JSON.stringify({ vibe_type: vibeType }),
-      });
-      const data = await res.json();
-      if (!res.ok) { jbdToast('⚠️ ' + (data.error || 'Could not react.'), '#e03131'); return; }
-
-      document.querySelectorAll('#jbdVibeBar .jbd-vibe-btn').forEach(function (b) {
-        var v = b.dataset.vibe;
-        b.classList.toggle('active', data.user_vibe === v);
-        b.querySelector('.jbd-vibe-count').textContent = data.summary[v] || 0;
-      });
-      document.getElementById('jbdVibeTotal').textContent = data.total;
-    } catch (_) {
-      jbdToast('⚠️ Network error. Please try again.', '#e03131');
-    }
-  }
-
   // ── Comments ──
   async function jbdSubmitComment() {
     var ta  = document.getElementById('jbdCommentInput');
@@ -1139,74 +1045,9 @@
     }
   }
 
-  // ── DM / Apply modal ──
-  function jbdOpenDmModal() {
-    var modal = document.getElementById('jbdDmModal');
-    if (!modal) return;
-    var ta = document.getElementById('jbdDmText');
-    if (ta && !ta.value.trim()) {
-      ta.value = "Hi! I'm interested in this vacancy:\n💼 " + _jbdJobTitle + "\n🔗 " + JBD_SHARE_URL + "\n\nIs this position still open?";
-      jbdDmCharCount(ta);
-    }
-    modal.classList.add('open');
-    document.body.style.overflow = 'hidden';
-  }
-  function jbdCloseDmModal() {
-    document.getElementById('jbdDmModal').classList.remove('open');
-    document.body.style.overflow = '';
-  }
-  function jbdDmCharCount(ta) {
-    var count = ta.value.length;
-    var el = document.getElementById('jbdDmCharCount');
-    if (!el) return;
-    el.textContent = count + ' / 1000';
-    el.classList.toggle('over', count >= 950);
-  }
-
-  async function jbdSendDm() {
-    var ta  = document.getElementById('jbdDmText');
-    var btn = document.getElementById('jbdDmSendBtn');
-    var sp  = document.getElementById('jbdDmSpinner');
-    var msg = ta ? ta.value.trim() : '';
-
-    if (!msg) { jbdToast('⚠️ Please write a message first.', '#e03131'); ta && ta.focus(); return; }
-
-    btn.disabled = true;
-    if (sp) sp.style.display = 'inline-block';
-
-    try {
-      const res = await fetch('{% url "send_message" job.posted_by.username %}', {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': getCsrf(),
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: JSON.stringify({ message: msg, job_id: JBD_JOB_ID }),
-      });
-      const data = await res.json();
-
-      if (data.status === 'success') {
-        jbdCloseDmModal();
-        jbdToast('Message sent!', '#0095f6');
-        setTimeout(function () {
-          window.location.href = '{% url "message" job.posted_by.username %}?job={{ job.id }}';
-        }, 700);
-        return;
-      }
-      jbdToast(data.message || '⚠️ Could not send message.', '#e03131');
-    } catch (_) {
-      jbdToast('⚠️ Network error. Please try again.', '#e03131');
-    } finally {
-      btn.disabled = false;
-      if (sp) sp.style.display = 'none';
-    }
-  }
-
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       jbdCloseImageModal();
-      jbdCloseDmModal();
       japCloseApplyModal();
       {% if is_owner %}
       jbdCloseEdit();

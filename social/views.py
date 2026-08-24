@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, ProfileAchievementVibe, ProfileAchievementComment, ProfileExperienceVibe, ProfileExperienceComment, ProfileEducationVibe, ProfileEducationComment, ProfileServiceVibe, ProfileServiceComment, JobApplication
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, JobApplication
 from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES
 
@@ -2115,18 +2115,19 @@ def profile(request, username):
     # Profile, independent of any BusinessPage. Shown/hidden per-section via
     # profile.show_services / show_portfolio / etc., which read
     # profile.enabled_sections (defaults suggested from profile.member_type).
-    professional_experience   = list(profile.experiences.prefetch_related('vibes')) if profile.show_experience else []
-    professional_education    = list(profile.education_history.prefetch_related('vibes')) if profile.show_education else []
-    professional_services     = list(profile.services.filter(is_active=True).prefetch_related('vibes')) if profile.show_services else []
+    professional_experience   = list(profile.experiences.all())                              if profile.show_experience   else []
+    professional_education    = list(profile.education_history.all())                        if profile.show_education    else []
+    professional_services     = list(profile.services.filter(is_active=True))                if profile.show_services     else []
     professional_portfolio    = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PORTFOLIO).prefetch_related('vibes')) if profile.show_portfolio else []
-    professional_projects     = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PROJECT).prefetch_related('vibes')) if profile.show_projects else []
-    professional_achievements = list(profile.achievements.prefetch_related('vibes')) if profile.show_achievements else []
+    professional_projects     = list(profile.portfolio_items.filter(kind=ProfilePortfolioItem.KIND_PROJECT).prefetch_related('vibes'))   if profile.show_projects  else []
+    professional_achievements = list(profile.achievements.all())                             if profile.show_achievements else []
 
-    # Annotate each of these sub-items with the viewer's own reaction — same
+    # Annotate Portfolio/Project items with the viewer's own reaction — same
     # shape as the professional_posts annotation below — so their engagement
     # bars can render a filled-in reaction without an extra query per card.
-    for _items in (professional_experience, professional_education, professional_services,
-                   professional_portfolio, professional_projects, professional_achievements):
+    # Experience, Education, Services, and Achievements are professional
+    # record/listing cards, not social content, so they carry no reactions.
+    for _items in (professional_portfolio, professional_projects):
         for _it in _items:
             _it.viewer_vibe = None
             _it.viewer_vibe_emoji = ''
@@ -6774,94 +6775,6 @@ def profile_portfolio_comments(request, item_id):
     return _card_comments_get(request, item, ProfilePortfolioItemComment, 'item')
 
 
-# ── Profile — Achievement reactions & comments ──────────────────────────────
-
-@login_required(login_url='/')
-def profile_achievement_vibe(request, achievement_id):
-    achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id)
-    if request.method == 'GET':
-        return _card_vibe_get(request, achievement, ProfileAchievementVibe, 'achievement')
-    response = _card_vibe_toggle(request, achievement, ProfileAchievementVibe, 'achievement')
-    _notify_profile_item_vibe(request, achievement, ProfileItemNotification.ACHIEVEMENT, 'achievement', response)
-    return response
-
-
-@login_required(login_url='/')
-def profile_achievement_comments(request, achievement_id):
-    achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id)
-    if request.method == 'POST':
-        response = _card_comments_post(request, achievement, ProfileAchievementComment, 'achievement')
-        _notify_profile_item_comment(request, achievement, ProfileItemNotification.ACHIEVEMENT, 'achievement', response)
-        return response
-    return _card_comments_get(request, achievement, ProfileAchievementComment, 'achievement')
-
-
-# ── Profile — Experience reactions & comments ───────────────────────────────
-
-@login_required(login_url='/')
-def profile_experience_vibe(request, experience_id):
-    experience = get_object_or_404(ProfileExperience, experience_id=experience_id)
-    if request.method == 'GET':
-        return _card_vibe_get(request, experience, ProfileExperienceVibe, 'experience')
-    response = _card_vibe_toggle(request, experience, ProfileExperienceVibe, 'experience')
-    _notify_profile_item_vibe(request, experience, ProfileItemNotification.EXPERIENCE, 'experience', response)
-    return response
-
-
-@login_required(login_url='/')
-def profile_experience_comments(request, experience_id):
-    experience = get_object_or_404(ProfileExperience, experience_id=experience_id)
-    if request.method == 'POST':
-        response = _card_comments_post(request, experience, ProfileExperienceComment, 'experience')
-        _notify_profile_item_comment(request, experience, ProfileItemNotification.EXPERIENCE, 'experience', response)
-        return response
-    return _card_comments_get(request, experience, ProfileExperienceComment, 'experience')
-
-
-# ── Profile — Education reactions & comments ────────────────────────────────
-
-@login_required(login_url='/')
-def profile_education_vibe(request, education_id):
-    education = get_object_or_404(ProfileEducation, education_id=education_id)
-    if request.method == 'GET':
-        return _card_vibe_get(request, education, ProfileEducationVibe, 'education')
-    response = _card_vibe_toggle(request, education, ProfileEducationVibe, 'education')
-    _notify_profile_item_vibe(request, education, ProfileItemNotification.EDUCATION, 'education', response)
-    return response
-
-
-@login_required(login_url='/')
-def profile_education_comments(request, education_id):
-    education = get_object_or_404(ProfileEducation, education_id=education_id)
-    if request.method == 'POST':
-        response = _card_comments_post(request, education, ProfileEducationComment, 'education')
-        _notify_profile_item_comment(request, education, ProfileItemNotification.EDUCATION, 'education', response)
-        return response
-    return _card_comments_get(request, education, ProfileEducationComment, 'education')
-
-
-# ── Profile — Service reactions & comments ──────────────────────────────────
-
-@login_required(login_url='/')
-def profile_service_vibe(request, service_id):
-    service = get_object_or_404(ProfileService, service_id=service_id)
-    if request.method == 'GET':
-        return _card_vibe_get(request, service, ProfileServiceVibe, 'service')
-    response = _card_vibe_toggle(request, service, ProfileServiceVibe, 'service')
-    _notify_profile_item_vibe(request, service, ProfileItemNotification.SERVICE, 'service', response)
-    return response
-
-
-@login_required(login_url='/')
-def profile_service_comments(request, service_id):
-    service = get_object_or_404(ProfileService, service_id=service_id)
-    if request.method == 'POST':
-        response = _card_comments_post(request, service, ProfileServiceComment, 'service')
-        _notify_profile_item_comment(request, service, ProfileItemNotification.SERVICE, 'service', response)
-        return response
-    return _card_comments_get(request, service, ProfileServiceComment, 'service')
-
-
 # =============================================================================
 # ADMIN DASHBOARD VIEWS
 # Add these to the bottom of your existing views.py
@@ -7867,10 +7780,14 @@ def business_pages_list(request):
         qs = qs.filter(category=category)
     paginator = Paginator(qs, 24)
     page_obj  = paginator.get_page(request.GET.get('page'))
+    followed_page_ids = set(
+        BusinessPage.objects.filter(followers=request.user).values_list('page_id', flat=True)
+    )
     return render(request, 'business_pages_list.html', {
         'pages':      page_obj,
         'categories': BusinessPage.CATEGORY_CHOICES,
         'active_cat': category,
+        'followed_page_ids': followed_page_ids,
     })
 
 
