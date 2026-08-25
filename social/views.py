@@ -95,7 +95,6 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime as django_parse_datetime
 import json as _json
 from datetime import datetime, timedelta
-import random
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.contrib.contenttypes.models import ContentType
 from django.views.decorators.http import require_POST, require_GET
@@ -897,15 +896,34 @@ def _profile_feed_signal(user, profile):
     return keywords, location_tokens
 
 
+def _recency_score(created_at):
+    """Newer content ranks higher. Shared by every scorer below so
+    freshness is weighted consistently across content types."""
+    if not created_at:
+        return 0.0
+    age_days = (timezone.now() - created_at).total_seconds() / 86400
+    if age_days <= 1:
+        return 3.0
+    elif age_days <= 3:
+        return 2.2
+    elif age_days <= 7:
+        return 1.5
+    elif age_days <= 30:
+        return 0.6
+    return 0.0
+
+
 def _content_score(keywords, location_tokens, text_blob, item_location=None,
                     created_at=None, keyword_weight=2.0, social_boost=0.0):
     """
-    Generic relevance score for one feed candidate:
+    Generic relevance score for feed candidates without a dedicated
+    type-specific scorer (business page suggestions, achievements,
+    portfolio pieces, market products, events):
       + keyword overlap with the viewer's profile/interest signal
       + a bonus when the item's location matches the viewer's location
       + recency (newer content ranks higher)
       + an optional social_boost (e.g. from a followed page/user)
-      + a small jitter so near-ties don't always resolve the same way
+    Purely deterministic — same inputs always produce the same ranking.
     """
     text_tokens = Profile._tokenize(text_blob)
     overlap = len(keywords & text_tokens) if keywords else 0
@@ -914,24 +932,14 @@ def _content_score(keywords, location_tokens, text_blob, item_location=None,
     if location_tokens and item_location and (Profile._tokenize(item_location) & location_tokens):
         loc_score = 2.5
 
-    recency = 0.0
-    if created_at:
-        age_days = (timezone.now() - created_at).total_seconds() / 86400
-        if age_days <= 1:
-            recency = 3.0
-        elif age_days <= 3:
-            recency = 2.2
-        elif age_days <= 7:
-            recency = 1.5
-        elif age_days <= 30:
-            recency = 0.6
-
-    return (overlap * keyword_weight) + loc_score + recency + social_boost + random.random() * 0.4
+    return (overlap * keyword_weight) + loc_score + _recency_score(created_at) + social_boost
 
 
 def _ranked(pool, keywords, location_tokens, blob_fn, location_fn=None, created_fn=None,
             social_fn=None, limit=None):
-    """Score every item in `pool` and return it sorted best-first (optionally truncated)."""
+    """Score every item in `pool` with `_content_score` and return it sorted
+    best-first (optionally truncated). Ties keep the pool's original order
+    (Python's sort is stable), so pass candidates pre-ordered by recency."""
     scored = []
     for obj in pool:
         blob = blob_fn(obj)
@@ -942,6 +950,102 @@ def _ranked(pool, keywords, location_tokens, blob_fn, location_fn=None, created_
     scored.sort(key=lambda t: t[0], reverse=True)
     ranked_objs = [obj for _, obj in scored]
     return ranked_objs[:limit] if limit else ranked_objs
+
+
+def _score_job(profile, job, keywords, location_tokens):
+    """
+    Job relevance for a viewer, weighted per the professional-relevance
+    spec: skills > desired job title > profession > location > work mode
+    > experience > salary, plus recency and an employer -> professional
+    boost when the poster has explicitly signalled 'Hiring'.
+    """
+    req_blob = ' '.join(filter(None, [
+        job.title, job.requirements, job.description, job.get_category_display(),
+    ]))
+    req_tokens = Profile._tokenize(req_blob)
+
+    score = 0.0
+    score += 5.0 * len(profile.skills_tokens & req_tokens)
+    score += 4.0 * len(profile.desired_job_tokens & Profile._tokenize(job.title))
+    score += 3.0 * len(Profile._tokenize(profile.profession) & req_tokens)
+    if location_tokens and Profile._tokenize(job.location) & location_tokens:
+        score += 2.5
+    if profile.work_mode_pref and profile.work_mode_pref == (job.work_mode or '').lower():
+        score += 2.0
+    if profile.experience_tokens & req_tokens:
+        score += 1.5
+    if profile.salary_tokens and Profile._tokenize(job.salary_range) & profile.salary_tokens:
+        score += 1.0
+    # Light fallback so jobs still surface for viewers with a thin profile.
+    score += 1.0 * len(keywords & req_tokens)
+
+    # Employer -> professional matching: a vacancy from a poster whose own
+    # profile intent is "Hiring" ranks a bit higher for a viewer whose
+    # intent is "Looking for Job".
+    poster_profile = getattr(job.posted_by, 'profile', None)
+    if (profile.intent == Profile.INTENT_LOOKING_FOR_JOB
+            and poster_profile and poster_profile.intent == Profile.INTENT_HIRING):
+        score += 2.0
+
+    return score + _recency_score(job.created_at)
+
+
+def _score_person(viewer_profile, candidate_profile, keywords, location_tokens):
+    """
+    People/service relevance, weighted per spec: profession > skills >
+    location > intent compatibility (employer <-> job seeker, either <->
+    someone looking for clients/work), plus a light bio/interest overlap.
+    """
+    cand_blob = ' '.join(filter(None, [
+        candidate_profile.profession, candidate_profile.member_type_label,
+        candidate_profile.bio, ' '.join(candidate_profile.interests or []),
+    ]))
+    cand_tokens = Profile._tokenize(cand_blob)
+
+    score = 0.0
+    score += 4.0 * len(Profile._tokenize(viewer_profile.profession) & Profile._tokenize(candidate_profile.profession))
+    score += 3.5 * len(viewer_profile.skills_tokens & candidate_profile.skills_tokens)
+    if location_tokens and candidate_profile.feed_location_tokens & location_tokens:
+        score += 2.5
+    score += 1.0 * len(keywords & cand_tokens)
+
+    v_intent, c_intent = viewer_profile.intent, candidate_profile.intent
+    if v_intent and c_intent:
+        if {v_intent, c_intent} == {Profile.INTENT_HIRING, Profile.INTENT_LOOKING_FOR_JOB}:
+            score += 3.0
+            # Employer -> professional: boost further when the employer's
+            # "hiring for" text matches this candidate's skills.
+            if viewer_profile.hiring_for_tokens & candidate_profile.skills_tokens:
+                score += 2.0
+        elif Profile.INTENT_LOOKING_FOR_CLIENTS in (v_intent, c_intent):
+            score += 1.0
+
+    return score + _recency_score(getattr(candidate_profile, 'created_at', None))
+
+
+def _post_engagement(post):
+    """Vibe + comment count, read off already-prefetched related managers
+    (no extra query)."""
+    try:
+        return len(post.vibes.all()) + len(post.comments.all())
+    except Exception:
+        return 0
+
+
+def _score_post(profile, keywords, location_tokens, text_blob, author_location,
+                 created_at, is_followed, engagement):
+    """
+    Post relevance, weighted per spec: followed author > profession/skills
+    overlap > engagement > freshness.
+    """
+    text_tokens = Profile._tokenize(text_blob)
+    score = 6.0 if is_followed else 0.0
+    score += 2.5 * len(keywords & text_tokens)
+    score += 2.0 * len(profile.skills_tokens & text_tokens)
+    if location_tokens and author_location and (Profile._tokenize(author_location) & location_tokens):
+        score += 1.0
+    score += min(engagement, 20) * 0.15
+    return score + _recency_score(created_at)
 
 
 
@@ -1010,13 +1114,14 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     )
     if _seen_biz_ids:
         business_pool_qs = business_pool_qs.exclude(page_id__in=_seen_biz_ids)
-    business_pool_count = business_pool_qs.count()
     suggestion_businesses = []
-    if business_pool_count > 0 and not _is_market_filtered:
-        sb_offset = random.randint(0, max(0, business_pool_count - 24))
+    if not _is_market_filtered:
+        # Deterministic candidate window (most recently created pages
+        # first) instead of a random offset — relevance ranking below
+        # decides the actual order, this just bounds the query.
         _biz_candidates = list(
             business_pool_qs.select_related('owner')
-            .order_by('page_id')[sb_offset: sb_offset + 24]
+            .order_by('-created_at')[:40]
         )
         suggestion_businesses = _ranked(
             _biz_candidates, keywords, location_tokens,
@@ -1047,17 +1152,27 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         )
         .order_by('-created_at')[:60]
     )
-    _post_pool = [] if _is_market_filtered else _ranked(
-        _post_candidates, keywords, location_tokens,
-        blob_fn=lambda p: ' '.join(filter(None, [
-            p.caption, p.get_post_category_display(), p.business_page.name,
-            p.business_page.get_category_display(),
-        ])),
-        location_fn=lambda p: p.business_page.location,
-        created_fn=lambda p: p.created_at,
-        social_fn=lambda p: 4.0 if p.business_page_id in followed_business_ids else 0.0,
-        limit=6,
-    )
+    _post_pool = []
+    if not _is_market_filtered:
+        _scored_posts = [
+            (
+                _score_post(
+                    profile, keywords, location_tokens,
+                    text_blob=' '.join(filter(None, [
+                        p.caption, p.get_post_category_display(), p.business_page.name,
+                        p.business_page.get_category_display(),
+                    ])),
+                    author_location=p.business_page.location,
+                    created_at=p.created_at,
+                    is_followed=p.business_page_id in followed_business_ids,
+                    engagement=_post_engagement(p),
+                ),
+                p,
+            )
+            for p in _post_candidates
+        ]
+        _scored_posts.sort(key=lambda t: t[0], reverse=True)
+        _post_pool = [p for _, p in _scored_posts[:6]]
     # Attach each poll's total vote count + the viewer's own selected option
     # ids, plus the viewer's own reaction — same annotation the business
     # page's own Posts tab does — so the ported kbiz-post-card partial can
@@ -1099,17 +1214,27 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         )
         .order_by('-created_at')[:60]
     )
-    _pp_pool = [] if _is_market_filtered else _ranked(
-        _pp_candidates, keywords, location_tokens,
-        blob_fn=lambda p: ' '.join(filter(None, [
-            p.caption, p.category_label, p.profile.full_name,
-            p.profile.profession, p.profile.member_type_label,
-        ])),
-        location_fn=lambda p: p.profile.location,
-        created_fn=lambda p: p.created_at,
-        social_fn=lambda p: 4.0 if p.profile.user_id in following_ids_set else 0.0,
-        limit=6,
-    )
+    _pp_pool = []
+    if not _is_market_filtered:
+        _scored_pp = [
+            (
+                _score_post(
+                    profile, keywords, location_tokens,
+                    text_blob=' '.join(filter(None, [
+                        p.caption, p.category_label, p.profile.full_name,
+                        p.profile.profession, p.profile.member_type_label,
+                    ])),
+                    author_location=p.profile.location,
+                    created_at=p.created_at,
+                    is_followed=p.profile.user_id in following_ids_set,
+                    engagement=_post_engagement(p),
+                ),
+                p,
+            )
+            for p in _pp_candidates
+        ]
+        _scored_pp.sort(key=lambda t: t[0], reverse=True)
+        _pp_pool = [p for _, p in _scored_pp[:6]]
     # Same per-post annotation as the business post pool above, so the
     # ported kbiz-post-card partial can render profile posts identically.
     for _pp in _pp_pool:
@@ -1255,12 +1380,13 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         _market_qs = _market_qs.exclude(product_id__in=_wishlisted_ids)
     if _is_market_filtered:
         _market_qs = _market_qs.filter(product_category=market_category)
-    _market_count = _market_qs.count()
 
     if _is_market_filtered:
         # Deterministic, offset-based paging so scrolling a filtered category
         # walks through every matching product exactly once instead of
-        # re-randomizing a single page each time.
+        # re-randomizing a single page each time. .count() is genuinely
+        # needed here — it drives next_cursor / whether more pages exist.
+        _market_count = _market_qs.count()
         _safe_offset = max(0, market_offset)
         _market_pool = list(
             _market_qs
@@ -1273,81 +1399,74 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         if _next_market_offset < _market_count:
             next_cursor = _next_market_offset
     else:
-        _market_fetch_n = 24
-        if _market_count > 0:
-            _rand_offset = random.randint(0, max(0, _market_count - _market_fetch_n))
-            _market_candidates = list(
-                _market_qs
-                .select_related('product_owner', 'product_owner__profile')
-                .prefetch_related('images')
-                [_rand_offset: _rand_offset + _market_fetch_n]
-            )
-            _market_pool = _ranked(
-                _market_candidates, keywords, location_tokens,
-                blob_fn=lambda m: ' '.join(filter(None, [
-                    m.product_name, m.product_description, m.category_label,
-                ])),
-                location_fn=lambda m: m.product_location,
-                created_fn=lambda m: m.posted_on,
-                limit=8,
-            )
+        # Lower-priority content type — the main feed's relevance ranking
+        # is driven by posts/jobs/people first; products are a supporting
+        # pool, so a bounded, recency-ordered candidate window (no count(),
+        # no random offset) is enough.
+        _market_candidates = list(
+            _market_qs
+            .select_related('product_owner', 'product_owner__profile')
+            .prefetch_related('images')
+            .order_by('-posted_on')[:24]
+        )
+        _market_pool = _ranked(
+            _market_candidates, keywords, location_tokens,
+            blob_fn=lambda m: ' '.join(filter(None, [
+                m.product_name, m.product_description, m.category_label,
+            ])),
+            location_fn=lambda m: m.product_location,
+            created_fn=lambda m: m.posted_on,
+            limit=8,
+        )
     _market_injected = 0
-    _MAX_MARKET_PER_PAGE = 6
+    _MAX_MARKET_PER_PAGE = 3  # reduced — products are supporting content, not the feed's main draw
 
-    # ── Job vacancy pool — ranked by profession/skills/location match ────────
+    # ── Job vacancy pool — ranked by skills > desired job > profession >
+    #    location > work mode > experience > salary (see _score_job) ────────
     _today = _dt_feed.date.today()
     _seen_job_ids = set(str(i) for i in (seen_job_ids or []))
     _job_pool = []
     if not _is_market_filtered:
-        _job_qs = JobVacancy.objects.filter(is_open=True).select_related('posted_by', 'business_page')
+        _job_qs = (
+            JobVacancy.objects.filter(is_open=True)
+            .select_related('posted_by', 'posted_by__profile', 'business_page')
+        )
         if _seen_job_ids:
             _job_qs = _job_qs.exclude(id__in=_seen_job_ids)
-        _job_count = _job_qs.count()
-        if _job_count > 0:
-            _job_offset = random.randint(0, max(0, _job_count - 20))
-            _job_candidates = list(_job_qs.order_by('-created_at')[_job_offset: _job_offset + 20])
-            _job_pool = _ranked(
-                _job_candidates, keywords, location_tokens,
-                blob_fn=lambda j: ' '.join(filter(None, [
-                    j.title, j.description, j.requirements, j.company,
-                    j.get_category_display(), j.get_work_mode_display(),
-                ])),
-                location_fn=lambda j: j.location,
-                created_fn=lambda j: j.created_at,
-                limit=3,
-            )
+        _job_candidates = list(_job_qs.order_by('-created_at')[:40])
+        _scored_jobs = [(_score_job(profile, j, keywords, location_tokens), j) for j in _job_candidates]
+        _scored_jobs.sort(key=lambda t: t[0], reverse=True)
+        _job_pool = [j for _, j in _scored_jobs[:3]]
     _job_injected = 0
     _MAX_JOB_PER_PAGE = 2
 
-    # ── Social event pool — ranked by type/skills/location match ─────────────
+    # ── Social event pool — lower priority; ranked by type/skills/location ──
     _seen_event_ids = set(str(i) for i in (seen_event_ids or []))
     _event_pool = []
     if not _is_market_filtered:
         _event_base_qs = SocialEvent.objects.filter(date__gte=_today, is_cancelled=False)
         if _seen_event_ids:
             _event_base_qs = _event_base_qs.exclude(id__in=_seen_event_ids)
-        _event_count = _event_base_qs.count()
-        if _event_count > 0:
-            _event_offset = random.randint(0, max(0, _event_count - 12))
-            _event_candidates = list(
-                _event_base_qs
-                .select_related('created_by', 'created_by__profile')
-                .order_by('date')
-                [_event_offset: _event_offset + 12]
-            )
-            _event_pool = _ranked(
-                _event_candidates, keywords, location_tokens,
-                blob_fn=lambda e: ' '.join(filter(None, [
-                    e.title, e.description, e.get_event_type_display(),
-                ])),
-                location_fn=lambda e: e.location,
-                created_fn=lambda e: e.created_at,
-                limit=2,
-            )
+        _event_candidates = list(
+            _event_base_qs
+            .select_related('created_by', 'created_by__profile')
+            .order_by('date')[:20]
+        )
+        _event_pool = _ranked(
+            _event_candidates, keywords, location_tokens,
+            blob_fn=lambda e: ' '.join(filter(None, [
+                e.title, e.description, e.get_event_type_display(),
+            ])),
+            location_fn=lambda e: e.location,
+            created_fn=lambda e: e.created_at,
+            limit=2,
+        )
     _event_injected = 0
     _MAX_EVENT_PER_PAGE = 1
 
-    # ── People suggestions — ranked by profession/skills/interests/location ──
+    # ── People/service suggestions — ranked by profession > skills >
+    #    location > intent (employer <-> job seeker / looking-for-clients);
+    #    see _score_person. ─────────────────────────────────────────────────
     _seen_people_ids = set()
     for i in (seen_people_ids or []):
         try:
@@ -1362,20 +1481,15 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         )
         if _seen_people_ids:
             _people_qs = _people_qs.exclude(id__in=_seen_people_ids)
-        _people_count = _people_qs.count()
-        if _people_count > 0:
-            _people_offset = random.randint(0, max(0, _people_count - 24))
-            _people_candidates = list(_people_qs.order_by('id')[_people_offset: _people_offset + 24])
-            _people_candidates = [u for u in _people_candidates if hasattr(u, 'profile')]
-            people_pool = _ranked(
-                _people_candidates, keywords, location_tokens,
-                blob_fn=lambda u: ' '.join(filter(None, [
-                    u.profile.profession, u.profile.member_type_label, u.profile.bio,
-                    ' '.join(u.profile.interests or []),
-                ])),
-                location_fn=lambda u: u.profile.location,
-                limit=3,
-            )
+        _people_candidates = [
+            u for u in _people_qs.order_by('-id')[:40] if hasattr(u, 'profile')
+        ]
+        _scored_people = [
+            (_score_person(profile, u.profile, keywords, location_tokens), u)
+            for u in _people_candidates
+        ]
+        _scored_people.sort(key=lambda t: t[0], reverse=True)
+        people_pool = [u for _, u in _scored_people[:3]]
     _people_injected = 0
     _MAX_PEOPLE_PER_PAGE = 1
 
@@ -1446,9 +1560,10 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             _port_injected += 1
             _last_type = 'portfolio'
 
-        # Market ad — fills most slots (1,2,3,4,5,6 of every 10) normally,
-        # or every slot when a category filter is active.
-        _market_slot_match = True if _is_market_filtered else (i % 10 in (2, 3, 5, 6, 8, 9))
+        # Market ad — a supporting pool, not the main draw: 3 of every 10
+        # slots normally (matching the reduced _MAX_MARKET_PER_PAGE), or
+        # every slot when a category filter is active.
+        _market_slot_match = True if _is_market_filtered else (i % 10 in (2, 5, 8))
         if (_market_slot_match
                 and _market_pool
                 and _market_injected < _MAX_MARKET_PER_PAGE):
@@ -1478,23 +1593,11 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             feed_items.append({'type': 'people_suggestion', 'data': _people_group})
             _people_injected += 1
 
-    # ── Randomize final ordering ────────────────────────────────────────────
-    # The slot-based build above only controls *how many* of each card type
-    # appear and paces them across virtual slots — it still produced a fairly
-    # fixed shape (e.g. a business/profile post always leading). Shuffle the
-    # assembled list so every card type (posts, achievements, portfolio,
-    # projects, jobs, events, suggestions…) can land anywhere, then repair
-    # any achievement/profile_achievement/portfolio pair that ended up
-    # adjacent so that constraint still holds after the shuffle.
-    random.shuffle(feed_items)
-    for _idx in range(1, len(feed_items)):
-        if (feed_items[_idx]['type'] in _SPECIAL_CARD_TYPES
-                and feed_items[_idx - 1]['type'] in _SPECIAL_CARD_TYPES):
-            for _j in range(_idx + 1, len(feed_items)):
-                if feed_items[_j]['type'] not in _SPECIAL_CARD_TYPES:
-                    feed_items[_idx], feed_items[_j] = feed_items[_j], feed_items[_idx]
-                    break
-
+    # feed_items is already in final order: relevance-ranked within each
+    # pool, interleaved deterministically across virtual slots for type
+    # diversity (no post-hoc shuffle — the slot spacing above is what keeps
+    # any one content type, including the achievement/portfolio trio, from
+    # clustering together, while still ranking by relevance first).
     return feed_items, next_cursor
 
 
@@ -1549,7 +1652,7 @@ def home(request):
         .exclude(owner=request.user)
         .exclude(page_id__in=followed_business_ids)
         .select_related('owner')
-        .order_by('?')[:24]
+        .order_by('-created_at')[:40]
     )
     suggested_pages = _ranked(
         _sidebar_page_candidates, _sidebar_keywords, _sidebar_location_tokens,
@@ -1562,23 +1665,21 @@ def home(request):
         limit=3,
     )
 
-    # ── Right-sidebar "People you may know" — ranked the same way ────────────
-    _sidebar_people_candidates = list(
-        User.objects.exclude(id__in=following_ids)
+    # ── Right-sidebar "People you may know" — profession/skills/location/
+    #    intent ranked, same scorer as the main feed's people pool ──────────
+    _sidebar_people_candidates = [
+        u for u in User.objects.exclude(id__in=following_ids)
                .exclude(id=request.user.id)
                .select_related('profile')
-               .order_by('?')[:24]
-    )
-    _sidebar_people_candidates = [u for u in _sidebar_people_candidates if hasattr(u, 'profile')]
-    users = _ranked(
-        _sidebar_people_candidates, _sidebar_keywords, _sidebar_location_tokens,
-        blob_fn=lambda u: ' '.join(filter(None, [
-            u.profile.profession, u.profile.member_type_label, u.profile.bio,
-            ' '.join(u.profile.interests or []),
-        ])),
-        location_fn=lambda u: u.profile.location,
-        limit=3,
-    )
+               .order_by('-id')[:40]
+        if hasattr(u, 'profile')
+    ]
+    _scored_sidebar_people = [
+        (_score_person(profile, u.profile, _sidebar_keywords, _sidebar_location_tokens), u)
+        for u in _sidebar_people_candidates
+    ]
+    _scored_sidebar_people.sort(key=lambda t: t[0], reverse=True)
+    users = [u for _, u in _scored_sidebar_people[:3]]
 
     # Attach "X and Y other mutual connections" info to each suggestion for
     # the "People you may know" sidebar widget (mirrors the profile page's
@@ -1895,11 +1996,20 @@ def profile(request, username):
     viewer_following_ids    = list(viewer_profile.followings.values_list('user', flat=True))
     viewer_following_count  = viewer_profile.followings.count()
     viewer_follower_count   = viewer_profile.followers.count()
-    sidebar_suggested_users = list(
-        User.objects.exclude(id__in=viewer_following_ids)
+    _sidebar_su_candidates = [
+        u for u in User.objects.exclude(id__in=viewer_following_ids)
                .exclude(id=request.user.id)
-               .order_by('?')[:3]
-    )
+               .select_related('profile')
+               .order_by('-id')[:40]
+        if hasattr(u, 'profile')
+    ]
+    _viewer_kw, _viewer_loc = _profile_feed_signal(request.user, viewer_profile)
+    _scored_su = [
+        (_score_person(viewer_profile, u.profile, _viewer_kw, _viewer_loc), u)
+        for u in _sidebar_su_candidates
+    ]
+    _scored_su.sort(key=lambda t: t[0], reverse=True)
+    sidebar_suggested_users = [u for _, u in _scored_su[:3]]
 
     # ── Viewer's own business page — for the "Grow your business" /
     # "Your business page" sidebar widget (always about request.user).
@@ -2235,6 +2345,22 @@ def update_profile(request, username):
     profile = request.user.profile
 
     if request.method == 'POST':
+        # ── Per-section "submitted" flags ───────────────────────────────
+        # The profile edit UI is split into several independent modals
+        # (Basic info, About, Skills & Expertise, Details, Languages —
+        # mirroring the Experience/Education/Achievement modals). Each modal
+        # only posts its own fields, so every field below is gated behind a
+        # hidden "<section>_submitted" marker unique to its modal's form.
+        # Without this, a field absent from one modal's POST (e.g. "bio"
+        # when the Details modal is submitted) would fall back to '' and
+        # silently wipe whatever was already saved.
+        fname_present    = 'fname' in request.POST
+        lname_present    = 'lname' in request.POST
+        address_present  = 'address' in request.POST
+        about_submitted   = 'about_submitted'   in request.POST
+        skills_submitted  = 'skills_submitted'  in request.POST
+        details_submitted = 'details_submitted' in request.POST
+
         fname            = request.POST.get('fname', '').strip()
         lname            = request.POST.get('lname', '').strip()
         phone            = request.POST.get('phone', '').strip()
@@ -2252,6 +2378,21 @@ def update_profile(request, username):
         show_dob         = 'show_dob'    in request.POST
         # Kishi community fields
         profession       = request.POST.get('profession',       '').strip()
+
+        # Languages — submitted as a JSON string built client-side from the
+        # chip editor: [{"name": "English", "proficiency": "fluent"}, ...].
+        # Only touched when the field was actually present in the form, so
+        # requests that don't include the editor (none currently, but kept
+        # consistent with the member_type pattern) can't silently wipe it.
+        languages_submitted = 'languages' in request.POST
+        languages_parsed = []
+        if languages_submitted:
+            try:
+                raw_languages = _json.loads(request.POST.get('languages', '[]'))
+                if isinstance(raw_languages, list):
+                    languages_parsed = raw_languages
+            except (ValueError, TypeError):
+                languages_parsed = []
 
         # Member type (only touched if the edit form actually included it —
         # the main profile-edit form doesn't, onboarding/its own "edit" link do)
@@ -2280,33 +2421,52 @@ def update_profile(request, username):
         try:
             profile_dirty = False
 
-            # Save name fields independently (don't require both)
-            if fname is not None:
+            # Save name fields independently (don't require both), only
+            # when the submitting modal actually included them.
+            if fname_present:
                 user.first_name = fname
                 profile_dirty = True  # triggers full_name sync via profile.save()
-            if lname is not None:
+            if lname_present:
                 user.last_name = lname
                 profile_dirty = True
-            if fname is not None or lname is not None:
+            if fname_present or lname_present:
                 user.save()
 
-            profile.phone    = phone;            profile_dirty = True
-            profile.address  = address;          profile_dirty = True
-            profile.location = location;         profile_dirty = True
-            profile.bio      = bio;              profile_dirty = True
-            profile.website  = website;          profile_dirty = True
-            if privacy_level:      profile.privacy_level  = privacy_level;    profile_dirty = True
-            if gender is not None: profile.gender         = gender;           profile_dirty = True
-            if dob_changed:        profile.date_of_birth  = date_of_birth;    profile_dirty = True
+            if address_present:
+                profile.address = address
+                profile_dirty = True
 
-            # Always update visibility toggles (checkbox — present/absent)
-            profile.show_gender = show_gender
-            profile.show_dob    = show_dob
-            profile_dirty = True
+            if privacy_level:
+                profile.privacy_level = privacy_level
+                profile_dirty = True
 
-            # Kishi community fields — always write (empty string clears the field)
-            profile.profession       = profession
-            profile_dirty = True
+            # About modal — bio only
+            if about_submitted:
+                profile.bio = bio
+                profile_dirty = True
+
+            # Skills & Expertise modal — profession (empty clears the field)
+            if skills_submitted:
+                profile.profession = profession
+                profile_dirty = True
+
+            # Details modal — location/phone/website/gender/DOB + their
+            # visibility toggles, all submitted together.
+            if details_submitted:
+                profile.phone    = phone
+                profile.location = location
+                profile.website  = website
+                if gender is not None:
+                    profile.gender = gender
+                if dob_changed:
+                    profile.date_of_birth = date_of_birth
+                profile.show_gender = show_gender
+                profile.show_dob    = show_dob
+                profile_dirty = True
+
+            if languages_submitted:
+                profile.languages = languages_parsed  # cleaned/validated in Profile.clean()
+                profile_dirty = True
 
             if member_type_submitted:
                 valid_types = {k for k, _ in MEMBER_TYPE_CHOICES}
@@ -2427,6 +2587,7 @@ def update_profile(request, username):
                         'show_dob':        profile.show_dob,
                         'profession':      profile.profession,
                         'member_type':     profile.member_type,
+                        'languages':       profile.languages,
                     },
                     'message': 'Profile updated successfully!'
                 })
@@ -5082,11 +5243,20 @@ def wishlist_view(request):
     viewer_following_ids    = list(viewer_profile.followings.values_list('user', flat=True))
     viewer_following_count  = viewer_profile.followings.count()
     viewer_follower_count   = viewer_profile.followers.count()
-    sidebar_suggested_users = list(
-        User.objects.exclude(id__in=viewer_following_ids)
+    _sidebar_su_candidates = [
+        u for u in User.objects.exclude(id__in=viewer_following_ids)
                .exclude(id=request.user.id)
-               .order_by('?')[:3]
-    )
+               .select_related('profile')
+               .order_by('-id')[:40]
+        if hasattr(u, 'profile')
+    ]
+    _viewer_kw, _viewer_loc = _profile_feed_signal(request.user, viewer_profile)
+    _scored_su = [
+        (_score_person(viewer_profile, u.profile, _viewer_kw, _viewer_loc), u)
+        for u in _sidebar_su_candidates
+    ]
+    _scored_su.sort(key=lambda t: t[0], reverse=True)
+    sidebar_suggested_users = [u for _, u in _scored_su[:3]]
 
     # ── Viewer's own business page — for the "Your business page" /
     # "Grow your business" sidebar widget.

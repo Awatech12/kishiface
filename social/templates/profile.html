@@ -343,6 +343,11 @@
         .kprof-school-line { font-size: 15px; color: var(--mfy-text); font-weight: 400; margin: 2px 0 0; line-height: 1.4; }
         .kprof-inline-details { font-size: 15px; color: var(--mfy-text); font-weight: 400; margin: 2px 0 0; line-height: 1.4; }
         .kprof-inline-item:not(:last-child)::after { content: " || "; color: var(--mfy-text-light); }
+        /* Quick-glance skills|experience|education|location line under the name */
+        .kprof-quicksummary { font-size: 13px; color: var(--mfy-text-light); display: flex; flex-wrap: wrap; row-gap: 4px; margin-bottom: 6px; }
+        .kprof-quicksummary .kprof-inline-item { display: inline-flex; align-items: center; gap: 5px; }
+        .kprof-quicksummary .kprof-inline-item i { font-size: 11px; color: var(--mfy-primary); }
+        .kprof-quicksummary .kprof-inline-item:not(:last-child)::after { content: " | "; margin-left: 8px; color: var(--mfy-border); font-weight: 400; }
         .kprof-location-line { font-size: 14px; color: var(--mfy-text-light); font-weight: 400; margin: 2px 0 0; }
         .kprof-type-details { margin-top: 6px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 4px; }
         .kprof-type-row { font-size: 13px; display: flex; gap: 6px; }
@@ -432,15 +437,42 @@
         .kprof-icon-btn:hover { background: var(--mfy-bg); }
         .kprof-icon-btn.subtle { color: var(--mfy-text-light); font-size: 14px; }
 
-        /* ── Skills / expertise chips ── */
+        /* ── Skills / expertise chips (flat gray pill, matches Services chips) ── */
         .kprof-skills-wrap { display: flex; flex-wrap: wrap; gap: 10px; }
         .kprof-skill-chip {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 8px 14px; background: var(--mfy-white);
-            border: 1.5px solid var(--mfy-border); border-radius: 20px;
-            font-size: 13px; font-weight: 700; color: var(--mfy-text);
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 9px 16px; background: #eef0f2;
+            border: none; border-radius: 20px;
+            font-size: 14px; font-weight: 400; color: var(--mfy-text);
         }
-        .kprof-skill-chip i { color: var(--mfy-primary); font-size: 11px; }
+        .kprof-lang-level { color: var(--mfy-text-light); font-weight: 400; }
+
+        /* ── Languages chip editor (Edit Profile sheet) ── */
+        .kprof-lang-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+        .kprof-lang-chip-edit {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 10px; background: var(--mfy-white);
+            border: 1.5px solid var(--mfy-border); border-radius: 16px;
+            font-size: 12.5px; font-weight: 700; color: var(--mfy-text);
+        }
+        .kprof-lang-chip-edit button {
+            border: none; background: none; color: var(--mfy-text-light);
+            font-size: 15px; line-height: 1; cursor: pointer; padding: 0 0 0 2px;
+        }
+        .kprof-lang-chip-edit button:hover { color: #e0245e; }
+        .kprof-lang-add-row { display: flex; gap: 8px; }
+        .kprof-lang-add-row input[type="text"] {
+            flex: 1 1 auto; min-width: 0; padding: 10px 12px;
+            border: 1.5px solid var(--mfy-border); border-radius: 10px; font-size: 14px;
+        }
+        .kprof-lang-add-row select {
+            flex: 0 0 auto; padding: 10px 8px; border: 1.5px solid var(--mfy-border);
+            border-radius: 10px; font-size: 13px; background: var(--mfy-white); max-width: 150px;
+        }
+        .kprof-lang-add-btn {
+            flex: 0 0 auto; width: 40px; border: none; border-radius: 10px;
+            background: var(--mfy-primary); color: #fff; font-size: 15px; cursor: pointer;
+        }
 
         /* ── LinkedIn-style entry row (icon avatar + title/subtitle), used for member-type details ── */
         .kprof-entry-row { display: flex; gap: 12px; padding: 4px 0; }
@@ -2497,10 +2529,30 @@
         {% if profile.is_verify %}<i class="fas fa-check-circle"></i>{% endif %}
     </div>
 
-    <!-- Headline sits directly beneath the name, LinkedIn-style -->
-    {% if profile.profession %}<div class="kprof-profession">{{ profile.profession }}</div>{% endif %}
+    <!-- Headline — single pipe-separated line combining the profession/title
+         with top skills, e.g. "Frontend Developer || Tech Enthusiast || Web3
+         Enthusiast", matching the reference layout. -->
+    {% if profile.profession or profile_skills %}
+    <div class="kprof-inline-details">
+        {% if profile.profession %}<span class="kprof-inline-item">{{ profile.profession }}</span>{% endif %}
+        {% for skill in profile_skills %}
+        <span class="kprof-inline-item">{{ skill }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
 
-    <!-- Secondary line (school/org equivalent), directly under the headline like LinkedIn -->
+    <!-- School line sits directly under the headline, LinkedIn-style -->
+    {% if professional_education %}
+    <div class="kprof-school-line">{{ professional_education.0.school_name }}</div>
+    {% endif %}
+
+    <!-- Location line sits directly under the school line, LinkedIn-style -->
+    {% if profile.location %}
+    <div class="kprof-location-line">{{ profile.location }}</div>
+    {% elif profile.member_type_secondary_value %}
+    <div class="kprof-location-line">{{ profile.member_type_secondary_value }}</div>
+    {% endif %}
+
     {% if profile.member_type %}
         <div class="kprof-member-type">
             <span>{{ profile.member_type_emoji }} {{ profile.member_type_label }}</span>
@@ -2521,16 +2573,6 @@
         <div class="kprof-private">
             <i class="fas fa-lock"></i> This account's details are private.
         </div>
-    {% endif %}
-
-    <!-- Business page, experience, school, projects, achievements, skills — single horizontal line
-         separated by "||", matching the LinkedIn-style headline format. Dates are included where the
-         underlying data has them (experience/education date range, achievement year). Items are wrapped
-         in spans so CSS can add the "||" separator only between items that actually render. -->
-    {% if profile.location %}
-    <div class="kprof-location-line">{{ profile.location }}</div>
-    {% elif profile.member_type_secondary_value %}
-    <div class="kprof-location-line">{{ profile.member_type_secondary_value }}</div>
     {% endif %}
 
     <!-- Connections summary, single line like LinkedIn ("2,932 followers · 512 following · 3 pages") -->
@@ -2856,7 +2898,7 @@
             <h2>About</h2>
             {% if is_own_profile %}
             <div class="kprof-section-h-actions">
-                <button type="button" class="kprof-icon-btn" onclick="openEditSheet()" aria-label="Edit about"><i class="fas fa-pen"></i></button>
+                <button type="button" class="kprof-icon-btn" onclick="openProfileAboutModal()" aria-label="Edit about"><i class="fas fa-pen"></i></button>
             </div>
             {% endif %}
         </div>
@@ -2869,7 +2911,7 @@
             <button type="button" class="kprof-dashed-close" aria-label="Dismiss"><i class="fas fa-times"></i></button>
         </div>
         <div class="kprof-dashed-text">Add a short bio so people know who you are and what you do.</div>
-        <button type="button" class="kprof-dashed-add-btn" onclick="openEditSheet()"><i class="fas fa-plus"></i> Add about</button>
+        <button type="button" class="kprof-dashed-add-btn" onclick="openProfileAboutModal()"><i class="fas fa-plus"></i> Add about</button>
     </div>
     {% endif %}
 
@@ -2879,7 +2921,7 @@
             <h2>Details</h2>
             {% if is_own_profile %}
             <div class="kprof-section-h-actions">
-                <button type="button" class="kprof-icon-btn" onclick="openEditSheet()" aria-label="Edit details"><i class="fas fa-pen"></i></button>
+                <button type="button" class="kprof-icon-btn" onclick="openProfileDetailsModal()" aria-label="Edit details"><i class="fas fa-pen"></i></button>
             </div>
             {% endif %}
         </div>
@@ -2892,7 +2934,7 @@
             {% endif %}
             {% if profile.phone %}
             <div class="kprof-details-row">
-                <span class="kprof-details-icon chip-ph"><i class="fas fa-phone"></i></span>
+                <span class="kprof-details-icon"><i class="fas fa-phone"></i></span>
                 <span class="kprof-details-text"><span class="kprof-details-label">Phone number:</span><span class="kprof-details-value"><a href="tel:{{ profile.phone }}">{{ profile.phone }}</a></span></span>
             </div>
             {% endif %}
@@ -2904,7 +2946,7 @@
             {% endif %}
             {% if profile.safe_website %}
             <div class="kprof-details-row">
-                <span class="kprof-details-icon chip-web"><i class="fas fa-globe"></i></span>
+                <span class="kprof-details-icon"><i class="fas fa-globe"></i></span>
                 <span class="kprof-details-text"><span class="kprof-details-label">Website:</span><span class="kprof-details-value"><a href="{{ profile.safe_website }}" target="_blank" rel="noopener noreferrer">{{ profile.display_website }}</a></span></span>
             </div>
             {% endif %}
@@ -3033,13 +3075,13 @@
         <h2>Skills &amp; Expertise</h2>
         {% if is_own_profile %}
         <div class="kprof-section-h-actions">
-            <button type="button" class="kprof-icon-btn" onclick="openEditSheet()" aria-label="Edit skills"><i class="fas fa-pen"></i></button>
+            <button type="button" class="kprof-icon-btn" onclick="openProfileSkillsModal()" aria-label="Edit skills"><i class="fas fa-pen"></i></button>
         </div>
         {% endif %}
     </div>
     <div class="kprof-skills-wrap">
         {% for skill in profile_skills %}
-        <span class="kprof-skill-chip"><i class="fas fa-check-circle"></i>{{ skill }}</span>
+        <span class="kprof-skill-chip">{{ skill }}</span>
         {% endfor %}
     </div>
 </div>
@@ -3050,7 +3092,40 @@
         <button type="button" class="kprof-dashed-close" aria-label="Dismiss"><i class="fas fa-times"></i></button>
     </div>
     <div class="kprof-dashed-text">Add skills so people know what you're good at.</div>
-    <button type="button" class="kprof-dashed-add-btn" onclick="openEditSheet()"><i class="fas fa-plus"></i> Add skills</button>
+    <button type="button" class="kprof-dashed-add-btn" onclick="openProfileSkillsModal()"><i class="fas fa-plus"></i> Add skills</button>
+</div>
+{% endif %}
+
+<!-- ── Languages — which languages this person can serve clients/employers
+     in, with proficiency, LinkedIn-style. Helps people judge fit for
+     cross-language work before reaching out. ── -->
+{% if profile.languages %}
+<div class="kprof-listings-panel">
+    <div class="kprof-section-h">
+        <h2>Languages</h2>
+        {% if is_own_profile %}
+        <div class="kprof-section-h-actions">
+            <button type="button" class="kprof-icon-btn" onclick="openProfileLanguagesModal()" aria-label="Edit languages"><i class="fas fa-pen"></i></button>
+        </div>
+        {% endif %}
+    </div>
+    <div class="kprof-skills-wrap">
+        {% for lang in profile.languages %}
+        <span class="kprof-skill-chip">
+            {{ lang.name }}
+            {% if lang.proficiency %}<span class="kprof-lang-level">· {{ lang.proficiency }}</span>{% endif %}
+        </span>
+        {% endfor %}
+    </div>
+</div>
+{% elif is_own_profile and profile.is_professional %}
+<div class="kprof-dashed-card">
+    <div class="kprof-dashed-head">
+        <h2>Languages</h2>
+        <button type="button" class="kprof-dashed-close" aria-label="Dismiss"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="kprof-dashed-text">Add the languages you can offer service in.</div>
+    <button type="button" class="kprof-dashed-add-btn" onclick="openProfileLanguagesModal()"><i class="fas fa-plus"></i> Add languages</button>
 </div>
 {% endif %}
 
@@ -3708,17 +3783,6 @@
                     </div>
                 </div>
 
-                <div class="kprof-field">
-                    <label for="editBio">Bio</label>
-                    <textarea id="editBio" name="bio" maxlength="300" oninput="updateBioCount()">{{ profile.bio }}</textarea>
-                    <div class="kprof-char-count"><span id="editBioCount">0</span>/300</div>
-                </div>
-
-                <div class="kprof-field">
-                    <label for="editProfession">Profession</label>
-                    <input type="text" id="editProfession" name="profession" value="{{ profile.profession }}" maxlength="150" placeholder="e.g. Fashion designer">
-                </div>
-
                 <a href="{% url 'onboarding' %}?edit=1" class="kprof-edit-link-card">
                     <span class="kprof-edit-link-icon"><i class="fas fa-briefcase"></i></span>
                     <span class="kprof-edit-link-text">
@@ -3729,22 +3793,6 @@
                     </span>
                     <i class="fas fa-chevron-right"></i>
                 </a>
-
-                <div class="kprof-field">
-                    <label for="editLocation">Location</label>
-                    <input type="text" id="editLocation" name="location" value="{{ profile.location }}" maxlength="200">
-                </div>
-
-                <div class="kprof-field-row">
-                    <div class="kprof-field">
-                        <label for="editPhone">Phone</label>
-                        <input type="tel" id="editPhone" name="phone" value="{{ profile.phone }}" maxlength="20" placeholder="+234...">
-                    </div>
-                    <div class="kprof-field">
-                        <label for="editWebsite">Website</label>
-                        <input type="text" id="editWebsite" name="website" value="{{ profile.website }}" maxlength="500" placeholder="yoursite.com">
-                    </div>
-                </div>
 
                 <div class="kprof-field">
                     <label for="editAddress">Address</label>
@@ -3758,23 +3806,6 @@
                 </label>
                 {% endif %}
 
-                <div class="kprof-field-row">
-                    <div class="kprof-field">
-                        <label for="editGender">Gender</label>
-                        <select id="editGender" name="gender">
-                            <option value="" {% if not profile.gender %}selected{% endif %}>Prefer not to say</option>
-                            <option value="male" {% if profile.gender == 'male' %}selected{% endif %}>Male</option>
-                            <option value="female" {% if profile.gender == 'female' %}selected{% endif %}>Female</option>
-                            <option value="non_binary" {% if profile.gender == 'non_binary' %}selected{% endif %}>Non-binary</option>
-                            <option value="prefer_not_to_say" {% if profile.gender == 'prefer_not_to_say' %}selected{% endif %}>Prefer not to say</option>
-                        </select>
-                    </div>
-                    <div class="kprof-field">
-                        <label for="editDob">Date of birth</label>
-                        <input type="date" id="editDob" name="date_of_birth" value="{{ profile.date_of_birth|date:'Y-m-d' }}">
-                    </div>
-                </div>
-
                 <div class="kprof-field">
                     <label for="editPrivacy">Who can see your profile details</label>
                     <select id="editPrivacy" name="privacy_level">
@@ -3782,21 +3813,6 @@
                         <option value="followers_only" {% if profile.privacy_level == 'followers_only' %}selected{% endif %}>Followers only</option>
                         <option value="private" {% if profile.privacy_level == 'private' %}selected{% endif %}>Nobody (Hidden)</option>
                     </select>
-                </div>
-
-                <div class="kprof-toggle-row">
-                    <span>Show gender on profile</span>
-                    <label class="kprof-switch">
-                        <input type="checkbox" name="show_gender" {% if profile.show_gender %}checked{% endif %}>
-                        <span class="kprof-switch-slider"></span>
-                    </label>
-                </div>
-                <div class="kprof-toggle-row" style="border-bottom:none;">
-                    <span>Show date of birth on profile</span>
-                    <label class="kprof-switch">
-                        <input type="checkbox" name="show_dob" {% if profile.show_dob %}checked{% endif %}>
-                        <span class="kprof-switch-slider"></span>
-                    </label>
                 </div>
             </div>
 
@@ -3809,6 +3825,102 @@
 {% endif %}
 
 {% if is_own_profile %}
+<!-- ── Edit About modal (owner only) ── -->
+<div class="kpp-overlay" id="aboutOverlay">
+    <div class="kpp-modal">
+        <div class="kpp-modal-head"><h3>Edit About</h3><button type="button" class="kpp-modal-close" onclick="closeProfileAboutModal()">&times;</button></div>
+        <div class="kpp-field">
+            <label>Bio</label>
+            <textarea class="kpp-textarea" id="ppAboutBio" maxlength="300" placeholder="Tell people who you are and what you do." oninput="updatePpAboutCount()">{{ profile.bio }}</textarea>
+            <div class="kprof-char-count"><span id="ppAboutBioCount">0</span>/300</div>
+        </div>
+        <button type="button" class="kpp-modal-submit" id="ppAboutSubmitBtn" onclick="submitProfileAbout()">Save</button>
+    </div>
+</div>
+
+<!-- ── Edit Skills & Expertise modal (owner only) ── -->
+<div class="kpp-overlay" id="skillsOverlay">
+    <div class="kpp-modal">
+        <div class="kpp-modal-head"><h3>Edit Skills &amp; Expertise</h3><button type="button" class="kpp-modal-close" onclick="closeProfileSkillsModal()">&times;</button></div>
+        <div class="kpp-field">
+            <label>Profession</label>
+            <input class="kpp-input" id="ppSkillsProfession" type="text" value="{{ profile.profession }}" maxlength="150" placeholder="e.g. Fashion designer">
+        </div>
+        <button type="button" class="kpp-modal-submit" id="ppSkillsSubmitBtn" onclick="submitProfileSkills()">Save</button>
+    </div>
+</div>
+
+<!-- ── Edit Languages modal (owner only) ── -->
+<div class="kpp-overlay" id="languagesOverlay">
+    <div class="kpp-modal">
+        <div class="kpp-modal-head"><h3>Edit Languages</h3><button type="button" class="kpp-modal-close" onclick="closeProfileLanguagesModal()">&times;</button></div>
+        <div class="kpp-field">
+            <label>Languages</label>
+            <div class="kprof-lang-chips" id="langChipsWrap"></div>
+            <div class="kprof-lang-add-row">
+                <input type="text" id="langNameInput" placeholder="e.g. English" maxlength="60">
+                <select id="langProficiencyInput">
+                    {% for p in profile.LANGUAGE_PROFICIENCY_CHOICES %}
+                    <option value="{{ p }}" {% if p == 'Conversational' %}selected{% endif %}>{{ p }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" class="kprof-lang-add-btn" onclick="addLanguageChip()"><i class="fas fa-plus"></i></button>
+            </div>
+            <input type="hidden" id="languagesInput" value="[]">
+            {{ profile.languages|json_script:"languagesInitialData" }}
+        </div>
+        <button type="button" class="kpp-modal-submit" id="ppLanguagesSubmitBtn" onclick="submitProfileLanguages()">Save</button>
+    </div>
+</div>
+
+<!-- ── Edit Details modal (owner only) ── -->
+<div class="kpp-overlay" id="detailsOverlay">
+    <div class="kpp-modal">
+        <div class="kpp-modal-head"><h3>Edit Details</h3><button type="button" class="kpp-modal-close" onclick="closeProfileDetailsModal()">&times;</button></div>
+        <div class="kpp-field">
+            <label>Location</label>
+            <input class="kpp-input" id="ppDetailsLocation" type="text" value="{{ profile.location }}" maxlength="200">
+        </div>
+        <div class="kpp-row2">
+            <div class="kpp-field"><label>Phone</label>
+                <input class="kpp-input" id="ppDetailsPhone" type="tel" value="{{ profile.phone }}" maxlength="20" placeholder="+234...">
+            </div>
+            <div class="kpp-field"><label>Website</label>
+                <input class="kpp-input" id="ppDetailsWebsite" type="text" value="{{ profile.website }}" maxlength="500" placeholder="yoursite.com">
+            </div>
+        </div>
+        <div class="kpp-row2">
+            <div class="kpp-field"><label>Gender</label>
+                <select class="kpp-input" id="ppDetailsGender">
+                    <option value="" {% if not profile.gender %}selected{% endif %}>Prefer not to say</option>
+                    <option value="male" {% if profile.gender == 'male' %}selected{% endif %}>Male</option>
+                    <option value="female" {% if profile.gender == 'female' %}selected{% endif %}>Female</option>
+                    <option value="non_binary" {% if profile.gender == 'non_binary' %}selected{% endif %}>Non-binary</option>
+                    <option value="prefer_not_to_say" {% if profile.gender == 'prefer_not_to_say' %}selected{% endif %}>Prefer not to say</option>
+                </select>
+            </div>
+            <div class="kpp-field"><label>Date of birth</label>
+                <input class="kpp-input" id="ppDetailsDob" type="date" value="{{ profile.date_of_birth|date:'Y-m-d' }}">
+            </div>
+        </div>
+        <div class="kprof-toggle-row">
+            <span>Show gender on profile</span>
+            <label class="kprof-switch">
+                <input type="checkbox" id="ppDetailsShowGender" {% if profile.show_gender %}checked{% endif %}>
+                <span class="kprof-switch-slider"></span>
+            </label>
+        </div>
+        <div class="kprof-toggle-row" style="border-bottom:none;">
+            <span>Show date of birth on profile</span>
+            <label class="kprof-switch">
+                <input type="checkbox" id="ppDetailsShowDob" {% if profile.show_dob %}checked{% endif %}>
+                <span class="kprof-switch-slider"></span>
+            </label>
+        </div>
+        <button type="button" class="kpp-modal-submit" id="ppDetailsSubmitBtn" onclick="submitProfileDetails()">Save</button>
+    </div>
+</div>
+
 <!-- ── Add Service modal (owner only) ── -->
 <div class="kpp-overlay" id="serviceOverlay">
     <div class="kpp-modal">
@@ -4929,7 +5041,6 @@ document.addEventListener('click', function (e) {
 function openEditSheet() {
     document.getElementById('editOverlay')?.classList.add('open');
     document.body.style.overflow = 'hidden';
-    updateBioCount();
 }
 function closeEditSheet() {
     document.getElementById('editOverlay')?.classList.remove('open');
@@ -4939,11 +5050,215 @@ document.getElementById('editOverlay')?.addEventListener('click', e => {
     if (e.target.id === 'editOverlay') closeEditSheet();
 });
 
-function updateBioCount() {
-    const bio = document.getElementById('editBio');
-    const count = document.getElementById('editBioCount');
+/* ── Edit About modal ── */
+function updatePpAboutCount() {
+    const bio = document.getElementById('ppAboutBio');
+    const count = document.getElementById('ppAboutBioCount');
     if (bio && count) count.textContent = bio.value.length;
 }
+function openProfileAboutModal() {
+    const bio = document.getElementById('ppAboutBio');
+    if (bio) bio.value = "{{ profile.bio|escapejs }}";
+    updatePpAboutCount();
+    document.getElementById('aboutOverlay')?.classList.add('open');
+}
+function closeProfileAboutModal() { document.getElementById('aboutOverlay')?.classList.remove('open'); }
+async function submitProfileAbout() {
+    const btn = document.getElementById('ppAboutSubmitBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const fd = new FormData();
+        fd.append('about_submitted', '1');
+        fd.append('bio', document.getElementById('ppAboutBio')?.value.trim() || '');
+        const res = await fetch(UPDATE_PROFILE_URL, {
+            method: 'POST', body: fd,
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast(data.message || 'About updated!');
+            closeProfileAboutModal();
+            setTimeout(() => location.reload(), 700);
+        } else {
+            toast(data.error || 'Could not update About.');
+        }
+    } catch (err) {
+        console.error('submitProfileAbout failed:', err);
+        toast('Something went wrong. Please try again.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+/* ── Edit Skills & Expertise modal ── */
+function openProfileSkillsModal() {
+    document.getElementById('ppSkillsProfession').value = "{{ profile.profession|escapejs }}";
+    document.getElementById('skillsOverlay')?.classList.add('open');
+}
+function closeProfileSkillsModal() { document.getElementById('skillsOverlay')?.classList.remove('open'); }
+async function submitProfileSkills() {
+    const btn = document.getElementById('ppSkillsSubmitBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const fd = new FormData();
+        fd.append('skills_submitted', '1');
+        fd.append('profession', document.getElementById('ppSkillsProfession')?.value.trim() || '');
+        const res = await fetch(UPDATE_PROFILE_URL, {
+            method: 'POST', body: fd,
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast(data.message || 'Skills updated!');
+            closeProfileSkillsModal();
+            setTimeout(() => location.reload(), 700);
+        } else {
+            toast(data.error || 'Could not update skills.');
+        }
+    } catch (err) {
+        console.error('submitProfileSkills failed:', err);
+        toast('Something went wrong. Please try again.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+/* ── Edit Details modal ── */
+function openProfileDetailsModal() {
+    document.getElementById('detailsOverlay')?.classList.add('open');
+}
+function closeProfileDetailsModal() { document.getElementById('detailsOverlay')?.classList.remove('open'); }
+async function submitProfileDetails() {
+    const btn = document.getElementById('ppDetailsSubmitBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const fd = new FormData();
+        fd.append('details_submitted', '1');
+        fd.append('location', document.getElementById('ppDetailsLocation')?.value.trim() || '');
+        fd.append('phone', document.getElementById('ppDetailsPhone')?.value.trim() || '');
+        fd.append('website', document.getElementById('ppDetailsWebsite')?.value.trim() || '');
+        fd.append('gender', document.getElementById('ppDetailsGender')?.value || '');
+        fd.append('date_of_birth', document.getElementById('ppDetailsDob')?.value || '');
+        if (document.getElementById('ppDetailsShowGender')?.checked) fd.append('show_gender', '1');
+        if (document.getElementById('ppDetailsShowDob')?.checked) fd.append('show_dob', '1');
+        const res = await fetch(UPDATE_PROFILE_URL, {
+            method: 'POST', body: fd,
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast(data.message || 'Details updated!');
+            closeProfileDetailsModal();
+            setTimeout(() => location.reload(), 700);
+        } else {
+            toast(data.error || 'Could not update details.');
+        }
+    } catch (err) {
+        console.error('submitProfileDetails failed:', err);
+        toast('Something went wrong. Please try again.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+/* ── Edit Languages modal ── */
+function openProfileLanguagesModal() {
+    initLanguageChips();
+    document.getElementById('languagesOverlay')?.classList.add('open');
+}
+function closeProfileLanguagesModal() { document.getElementById('languagesOverlay')?.classList.remove('open'); }
+async function submitProfileLanguages() {
+    const btn = document.getElementById('ppLanguagesSubmitBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const fd = new FormData();
+        fd.append('languages', document.getElementById('languagesInput')?.value || '[]');
+        const res = await fetch(UPDATE_PROFILE_URL, {
+            method: 'POST', body: fd,
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast(data.message || 'Languages updated!');
+            closeProfileLanguagesModal();
+            setTimeout(() => location.reload(), 700);
+        } else {
+            toast(data.error || 'Could not update languages.');
+        }
+    } catch (err) {
+        console.error('submitProfileLanguages failed:', err);
+        toast('Something went wrong. Please try again.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// ── Languages chip editor (in the Edit Languages modal) ──────────────────────
+// Keeps a small in-memory list in sync with a hidden JSON input (#languagesInput)
+// that rides along with the rest of the form on submit — no separate save call.
+let langChipsState = [];
+
+function initLanguageChips() {
+    const dataEl = document.getElementById('languagesInitialData');
+    try {
+        langChipsState = dataEl ? JSON.parse(dataEl.textContent) : [];
+        if (!Array.isArray(langChipsState)) langChipsState = [];
+    } catch (_) {
+        langChipsState = [];
+    }
+    renderLanguageChips();
+}
+
+function renderLanguageChips() {
+    const wrap = document.getElementById('langChipsWrap');
+    const hidden = document.getElementById('languagesInput');
+    if (!wrap || !hidden) return;
+    wrap.innerHTML = langChipsState.map((lang, i) => `
+        <span class="kprof-lang-chip-edit">
+            ${escapeHtmlLang(lang.name)}<span class="kprof-lang-level">· ${escapeHtmlLang(lang.proficiency)}</span>
+            <button type="button" onclick="removeLanguageChip(${i})" aria-label="Remove ${escapeHtmlLang(lang.name)}">&times;</button>
+        </span>
+    `).join('');
+    hidden.value = JSON.stringify(langChipsState);
+}
+
+function escapeHtmlLang(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+
+function addLanguageChip() {
+    const nameInput = document.getElementById('langNameInput');
+    const profSelect = document.getElementById('langProficiencyInput');
+    if (!nameInput || !profSelect) return;
+    const name = nameInput.value.trim();
+    if (!name) { nameInput.focus(); return; }
+    if (langChipsState.some(l => l.name.toLowerCase() === name.toLowerCase())) {
+        nameInput.value = '';
+        return; // already added
+    }
+    if (langChipsState.length >= 12) return; // matches server-side cap
+    langChipsState.push({ name: name, proficiency: profSelect.value });
+    nameInput.value = '';
+    renderLanguageChips();
+}
+
+function removeLanguageChip(index) {
+    langChipsState.splice(index, 1);
+    renderLanguageChips();
+}
+
+// Add on Enter inside the language name input, same as clicking the + button.
+document.addEventListener('DOMContentLoaded', function() {
+    const nameInput = document.getElementById('langNameInput');
+    if (nameInput) {
+        nameInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); addLanguageChip(); }
+        });
+    }
+    initLanguageChips();
+});
 
 function previewEditAvatar(event) {
     const file = event.target.files && event.target.files[0];
@@ -6219,6 +6534,10 @@ document.getElementById('portfolioOverlay')?.addEventListener('click', e => { if
 document.getElementById('experienceOverlay')?.addEventListener('click', e => { if (e.target.id === 'experienceOverlay') closeProfileExperienceModal(); });
 document.getElementById('educationOverlay')?.addEventListener('click', e => { if (e.target.id === 'educationOverlay') closeProfileEducationModal(); });
 document.getElementById('achievementOverlay')?.addEventListener('click', e => { if (e.target.id === 'achievementOverlay') closeProfileAchievementModal(); });
+document.getElementById('aboutOverlay')?.addEventListener('click', e => { if (e.target.id === 'aboutOverlay') closeProfileAboutModal(); });
+document.getElementById('skillsOverlay')?.addEventListener('click', e => { if (e.target.id === 'skillsOverlay') closeProfileSkillsModal(); });
+document.getElementById('detailsOverlay')?.addEventListener('click', e => { if (e.target.id === 'detailsOverlay') closeProfileDetailsModal(); });
+document.getElementById('languagesOverlay')?.addEventListener('click', e => { if (e.target.id === 'languagesOverlay') closeProfileLanguagesModal(); });
 document.getElementById('productOverlay')?.addEventListener('click', e => { if (e.target.id === 'productOverlay') closeProfileProductModal(); });
 document.getElementById('postOverlay')?.addEventListener('click', e => { if (e.target.id === 'postOverlay') closeProfilePostModal(); });
 

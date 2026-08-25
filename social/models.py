@@ -506,6 +506,18 @@ class Profile(models.Model):
     # personalize the home feed. Stored as a plain JSON list of strings.
     interests = models.JSONField(default=list, blank=True)
 
+    # ── Languages (professional service signal) ───────────────────────────
+    # Free-form list of languages the user can communicate in, each with an
+    # optional proficiency level — mirrors a LinkedIn-style "Languages"
+    # section so clients/employers/collaborators can judge fit for
+    # cross-language work at a glance. Stored as a JSON list of
+    # {'name': str, 'proficiency': str} dicts.
+    # Kept as plain, already-display-ready strings (not slug/label pairs) so
+    # templates can print an item's proficiency directly with no lookup.
+    LANGUAGE_PROFICIENCY_CHOICES = ['Native', 'Fluent', 'Professional', 'Conversational', 'Basic']
+    LANGUAGE_PROFICIENCY_DEFAULT = 'Conversational'
+    languages = models.JSONField(default=list, blank=True)
+
     # ── Member type / onboarding ("What do you use Marketfy for?") ──────
     member_type          = models.CharField(max_length=30, choices=MEMBER_TYPE_CHOICES, blank=True, default='')
     member_type_data     = models.JSONField(default=dict, blank=True)
@@ -583,6 +595,35 @@ class Profile(models.Model):
             self.interests = cleaned_interests
         else:
             self.interests = []
+
+        # Languages — list of {'name', 'proficiency'} dicts, deduplicated by
+        # case-insensitive name and capped so the section stays scannable.
+        # Accepts plain strings too (defaults to 'conversational') so older
+        # or hand-built payloads don't get silently dropped.
+        if isinstance(self.languages, (list, tuple)):
+            valid_proficiencies = {p.lower(): p for p in self.LANGUAGE_PROFICIENCY_CHOICES}
+            cleaned_languages = []
+            seen_names = set()
+            for entry in self.languages:
+                if isinstance(entry, dict):
+                    name = sanitize_text(str(entry.get('name', '') or ''))[:60]
+                    proficiency_raw = str(entry.get('proficiency', '') or '').strip().lower()
+                else:
+                    name = sanitize_text(str(entry))[:60]
+                    proficiency_raw = ''
+                if not name:
+                    continue
+                dedupe_key = name.lower()
+                if dedupe_key in seen_names:
+                    continue
+                proficiency = valid_proficiencies.get(proficiency_raw, self.LANGUAGE_PROFICIENCY_DEFAULT)
+                seen_names.add(dedupe_key)
+                cleaned_languages.append({'name': name, 'proficiency': proficiency})
+                if len(cleaned_languages) >= 12:
+                    break
+            self.languages = cleaned_languages
+        else:
+            self.languages = []
 
         valid_member_types = [c[0] for c in MEMBER_TYPE_CHOICES]
         if self.member_type and self.member_type not in valid_member_types:
@@ -963,6 +1004,19 @@ class Profile(models.Model):
     def get_member_type_value(self, key, default=''):
         return (self.member_type_data or {}).get(key, default)
 
+    @property
+    def languages_display(self):
+        """Languages formatted as ['English · Fluent', 'French · Basic'] for
+        simple, no-logic template rendering (chips, headline, etc.)."""
+        out = []
+        for entry in (self.languages or []):
+            name = entry.get('name', '')
+            if not name:
+                continue
+            proficiency = entry.get('proficiency', '')
+            out.append(f'{name} · {proficiency}' if proficiency else name)
+        return out
+
     # ── Professional section helpers ────────────────────────────────────
     @classmethod
     def _sanitize_enabled_sections(cls, raw):
@@ -1088,6 +1142,83 @@ class Profile(models.Model):
     @property
     def feed_location_tokens(self):
         return self._tokenize(self.location)
+
+    # ── Intent signal — "Looking for Job" / "Hiring" / "Looking for
+    #    Clients/Work" — derived from member_type, used both as a feed
+    #    badge and as a ranking boost (employer <-> professional matching,
+    #    job-seeker <-> job matching). ───────────────────────────────────
+    INTENT_LOOKING_FOR_JOB     = 'looking_for_job'
+    INTENT_HIRING              = 'hiring'
+    INTENT_LOOKING_FOR_CLIENTS = 'looking_for_clients'
+    INTENT_LABELS = {
+        INTENT_LOOKING_FOR_JOB:     'Looking for Job',
+        INTENT_HIRING:              'Hiring',
+        INTENT_LOOKING_FOR_CLIENTS: 'Looking for Clients/Work',
+    }
+    INTENT_BY_MEMBER_TYPE = {
+        'job_seeker':           INTENT_LOOKING_FOR_JOB,
+        'student_apprentice':   INTENT_LOOKING_FOR_JOB,
+        'employer_recruiter':   INTENT_HIRING,
+        'business_owner':       INTENT_HIRING,
+        'freelancer':           INTENT_LOOKING_FOR_CLIENTS,
+        'skilled_professional': INTENT_LOOKING_FOR_CLIENTS,
+        'artisan_technician':   INTENT_LOOKING_FOR_CLIENTS,
+        'service_provider':     INTENT_LOOKING_FOR_CLIENTS,
+        'teacher_tutor':        INTENT_LOOKING_FOR_CLIENTS,
+    }
+
+    @property
+    def intent(self):
+        """'looking_for_job' / 'hiring' / 'looking_for_clients', or '' when
+        this member type carries no clear intent."""
+        return self.INTENT_BY_MEMBER_TYPE.get(self.member_type, '')
+
+    @property
+    def intent_label(self):
+        return self.INTENT_LABELS.get(self.intent, '')
+
+    # ── Granular feed-ranking signals ───────────────────────────────────
+    # feed_keywords/feed_location_tokens above are a flat bag used for
+    # generic content (posts, achievements, portfolio). Type-specific
+    # ranking (jobs, people/services) needs each signal on its own so it
+    # can be weighted individually — pulled straight out of
+    # member_type_data, whichever onboarding schema the user filled in.
+    @property
+    def skills_tokens(self):
+        raw = self.get_member_type_value('skills') or self.get_member_type_value('skills_learning')
+        return self._tokenize(raw)
+
+    @property
+    def desired_job_tokens(self):
+        raw = (self.get_member_type_value('desired_job')
+               or self.get_member_type_value('trade')
+               or self.get_member_type_value('service_type')
+               or self.get_member_type_value('subjects'))
+        return self._tokenize(raw)
+
+    @property
+    def work_mode_pref(self):
+        return (self.get_member_type_value('work_mode') or '').strip().lower()
+
+    @property
+    def salary_tokens(self):
+        raw = (self.get_member_type_value('expected_salary')
+               or self.get_member_type_value('rate')
+               or self.get_member_type_value('pricing'))
+        return self._tokenize(raw)
+
+    @property
+    def experience_tokens(self):
+        raw = self.get_member_type_value('years_experience') or self.get_member_type_value('experience')
+        return self._tokenize(raw)
+
+    @property
+    def hiring_for_tokens(self):
+        """What an employer/recruiter or business owner is hiring for —
+        matched against job-seeker/professional skills for employer ->
+        professional suggestions."""
+        raw = self.get_member_type_value('hiring_for') or self.get_member_type_value('products_services')
+        return self._tokenize(raw)
 
 
 class UserReport(models.Model):
