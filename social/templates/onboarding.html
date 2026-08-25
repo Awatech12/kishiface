@@ -1,4 +1,4 @@
- {% load static %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -300,20 +300,21 @@
                             <option value="{{ choice }}" {% if field.value == choice %}selected{% endif %}>{{ choice }}</option>
                             {% endfor %}
                         </select>
-                    {% elif field.type == 'select_other' %}
-                        <select name="{{ fname }}" id="id_{{ fname }}" onchange="onOnboardingSelectOtherChange(this)">
-                            <option value="">Select…</option>
+                    {% elif field.type == 'skills_multi' %}
+                        <div class="ob-days-grid" data-skills-grid>
                             {% for choice in field.choices %}
-                            <option value="{{ choice }}" {% if field.select_value == choice %}selected{% endif %}>{{ choice }}</option>
+                            <label class="ob-day-chip{% if choice in field.selected_values %} checked{% endif %}">
+                                <input type="checkbox" name="{{ fname }}" value="{{ choice }}" {% if choice in field.selected_values %}checked{% endif %}>
+                                <span>{{ choice }}</span>
+                            </label>
                             {% endfor %}
-                            <option value="Other" {% if field.select_value == 'Other' %}selected{% endif %}>Other</option>
-                        </select>
+                        </div>
                         <input type="text" name="{{ fname }}__other" id="id_{{ fname }}__other"
                                class="ob-select-other-input"
                                value="{{ field.other_value }}"
                                maxlength="{{ field.max_length|default:300 }}"
-                               placeholder="Please specify"
-                               style="{% if field.select_value != 'Other' %}display:none;{% endif %}margin-top:8px;">
+                               placeholder="Other skills, comma-separated"
+                               style="margin-top:8px;">
                     {% elif field.type == 'days_hours' %}
                         <div class="ob-days-grid" data-days-grid>
                             {% for day in field.day_choices %}
@@ -361,6 +362,21 @@
                 </div>
                 {% endwith %}
                 {% endfor %}
+
+                <!-- "What I'm Looking For" — choices specific to this member
+                     type; name is scoped per-type so switching types on this
+                     form doesn't carry over a stale selection. -->
+                <div class="ob-field">
+                    <label>What are you looking for?</label>
+                    <div class="ob-days-grid">
+                        {% for key, label in cfg.looking_for_choices %}
+                        <label class="ob-day-chip{% if key in profile.looking_for and selected_type == cfg.key %} checked{% endif %}">
+                            <input type="checkbox" name="looking_for__{{ cfg.key }}" value="{{ key }}" {% if key in profile.looking_for and selected_type == cfg.key %}checked{% endif %}>
+                            <span>{{ label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
             {% endfor %}
 
@@ -753,4 +769,3 @@ if (obEntryCounters.education === 0) addObEntry('education');
 </script>
 </body>
 </html>
-

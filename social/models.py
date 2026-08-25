@@ -66,7 +66,7 @@ MEMBER_TYPE_SCHEMA = {
         'blurb': 'Trade or licensed skill — e.g. plumber, electrician, hairstylist',
         'fields': [
             {'key': 'profession',        'label': 'Profession',         'type': 'text',     'max_length': 150, 'required': True, 'placeholder': 'e.g. Plumber'},
-            {'key': 'skills',            'label': 'Skills',             'type': 'select_other', 'max_length': 300,
+            {'key': 'skills',            'label': 'Skills',             'type': 'skills_multi', 'max_length': 300,
              'choices': ['Plumbing', 'Electrical wiring', 'Carpentry', 'Welding', 'Painting', 'Tiling',
                          'AC repair', 'Generator repair', 'Hairdressing', 'Barbing', 'Makeup artistry']},
             {'key': 'years_experience',  'label': 'Years of Experience','type': 'number'},
@@ -87,7 +87,7 @@ MEMBER_TYPE_SCHEMA = {
         'blurb': 'Looking for employment',
         'fields': [
             {'key': 'desired_job',        'label': 'Desired Job',        'type': 'text',     'max_length': 150, 'required': True},
-            {'key': 'skills',             'label': 'Skills',             'type': 'select_other', 'max_length': 300,
+            {'key': 'skills',             'label': 'Skills',             'type': 'skills_multi', 'max_length': 300,
              'choices': ['Customer service', 'Sales', 'Accounting', 'Data entry', 'Graphic design', 'Writing',
                          'Marketing', 'IT support', 'Teaching', 'Driving']},
             {'key': 'education',          'label': 'Education',          'type': 'text',     'max_length': 200},
@@ -135,7 +135,7 @@ MEMBER_TYPE_SCHEMA = {
         'emoji': '🧑\u200d💻',
         'blurb': 'Independent, project-based work — often remote',
         'fields': [
-            {'key': 'skills',           'label': 'Skills',           'type': 'select_other', 'max_length': 300, 'required': True,
+            {'key': 'skills',           'label': 'Skills',           'type': 'skills_multi', 'max_length': 300, 'required': True,
              'choices': ['Web development', 'Graphic design', 'Content writing', 'Video editing',
                          'Social media management', 'Virtual assistance', 'Translation', 'Photography',
                          'UI/UX design', 'Digital marketing']},
@@ -154,7 +154,7 @@ MEMBER_TYPE_SCHEMA = {
         'blurb': 'Hands-on trade or repair work',
         'fields': [
             {'key': 'trade',            'label': 'Trade',             'type': 'text',     'max_length': 150, 'required': True, 'placeholder': 'e.g. Carpentry, GSM repair'},
-            {'key': 'skills',           'label': 'Skills',            'type': 'select_other', 'max_length': 300,
+            {'key': 'skills',           'label': 'Skills',            'type': 'skills_multi', 'max_length': 300,
              'choices': ['Carpentry', 'GSM/Phone repair', 'Electronics repair', 'Shoemaking', 'Tailoring',
                          'Welding', 'Auto mechanic', 'Refrigeration']},
             {'key': 'years_experience', 'label': 'Years of Experience','type': 'number'},
@@ -190,7 +190,7 @@ MEMBER_TYPE_SCHEMA = {
             {'key': 'institution',      'label': 'Institution',        'type': 'text', 'max_length': 200, 'required': True},
             {'key': 'field_of_study',   'label': 'Field of Study',     'type': 'text', 'max_length': 200},
             {'key': 'level',            'label': 'Level / Year',       'type': 'text', 'max_length': 100, 'placeholder': 'e.g. 300 Level, Year 2 apprentice'},
-            {'key': 'skills_learning',  'label': 'Skills Learning',    'type': 'select_other', 'max_length': 300,
+            {'key': 'skills_learning',  'label': 'Skills Learning',    'type': 'skills_multi', 'max_length': 300,
              'choices': ['Coding/Programming', 'Graphic design', 'Tailoring', 'Catering', 'Hairdressing',
                          'Welding', 'Plumbing', 'Digital marketing']},
             {'key': 'availability',     'label': 'Availability',       'type': 'days_hours'},
@@ -219,7 +219,7 @@ MEMBER_TYPE_SCHEMA = {
         'blurb': "Doesn't fit the categories above",
         'fields': [
             {'key': 'description', 'label': 'What do you do?', 'type': 'textarea', 'max_length': 1000, 'required': True},
-            {'key': 'skills',      'label': 'Skills',          'type': 'select_other', 'max_length': 300,
+            {'key': 'skills',      'label': 'Skills',          'type': 'skills_multi', 'max_length': 300,
              'choices': ['Customer service', 'Public speaking', 'Project management', 'Research']},
             {'key': 'services',    'label': 'Services',        'type': 'text',     'max_length': 300},
             {'key': 'location',    'label': 'Location',        'type': 'text',     'max_length': 200},
@@ -230,6 +230,68 @@ MEMBER_TYPE_SCHEMA = {
 }
 
 MEMBER_TYPE_CHOICES = [(key, cfg['label']) for key, cfg in MEMBER_TYPE_SCHEMA.items()]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# "What I'm Looking For" — a short, member-type-aware statement of intent
+# (job, hiring, clients, collaborators, etc.), shown on the profile and
+# editable from the same edit UI as everything else. Kept as its own small
+# schema (rather than free text) so it stays scannable and filterable, the
+# same way member_type_data does for the bigger onboarding fields.
+# Each entry is (key, label). A generic fallback list is used for profiles
+# with no member_type set yet.
+# ─────────────────────────────────────────────────────────────────────────────
+LOOKING_FOR_SCHEMA = {
+    'skilled_professional': [('clients', 'Clients / customers'), ('jobs', 'Full-time or contract work'), ('collaboration', 'Collaboration opportunities')],
+    'job_seeker':           [('job', 'A job'), ('internship', 'An internship'), ('mentorship', 'Mentorship')],
+    'business_owner':       [('customers', 'Customers'), ('hiring', 'Hiring talent'), ('partnerships', 'Business partnerships'), ('investors', 'Investors')],
+    'teacher_tutor':        [('students', 'Students'), ('teaching_jobs', 'Teaching opportunities'), ('collaboration', 'Collaboration with other educators')],
+    'freelancer':           [('freelance_work', 'Freelance work'), ('clients', 'Clients'), ('collaboration', 'Collaboration opportunities')],
+    'artisan_technician':   [('clients', 'Clients / customers'), ('jobs', 'Full-time or contract work')],
+    'service_provider':     [('clients', 'Clients / customers'), ('partnerships', 'Business partnerships')],
+    'student_apprentice':   [('internship', 'Internships'), ('mentorship', 'Mentorship'), ('entry_level_jobs', 'Entry-level jobs')],
+    'employer_recruiter':   [('candidates', 'Candidates to hire'), ('partnerships', 'Recruitment partnerships')],
+    'other_professional':   [('opportunities', 'Opportunities'), ('collaboration', 'Collaboration')],
+}
+LOOKING_FOR_GENERIC_CHOICES = [
+    ('job', 'A job'), ('hiring', 'Hiring'), ('freelance_work', 'Freelance work'),
+    ('clients', 'Clients'), ('business_opportunities', 'Business opportunities'),
+    ('collaboration', 'Collaboration'), ('students_customers', 'Students / customers'),
+]
+LOOKING_FOR_LABELS = dict(LOOKING_FOR_GENERIC_CHOICES)
+for _choices in LOOKING_FOR_SCHEMA.values():
+    LOOKING_FOR_LABELS.update(dict(_choices))
+
+
+def _clean_skills_list(choices, selected_raw, other_raw):
+    """
+    Shared cleaner for 'skills_multi' fields — used both by
+    sanitize_member_type_data (full onboarding/member-type submit) and by
+    Profile.set_skills (targeted skills-only edit from the profile-edit UI),
+    so there's exactly one place that defines what a valid skill looks like.
+    `selected_raw` is the list of checked known-choice values; `other_raw` is
+    either a list of extra free-text skills or a comma-separated string of
+    them. Returns a deduplicated (case-insensitive) list of plain strings,
+    capped at 20.
+    """
+    if isinstance(selected_raw, str):
+        selected_raw = [selected_raw] if selected_raw else []
+    if isinstance(other_raw, (list, tuple)):
+        other_items = [str(s).strip() for s in other_raw if str(s).strip()]
+    else:
+        other_raw = '' if other_raw is None else str(other_raw)
+        other_items = [s.strip() for s in other_raw.split(',') if s.strip()]
+
+    cleaned_skills = []
+    for item in list(selected_raw) + other_items:
+        item = sanitize_text(str(item))[:60]
+        if not item:
+            continue
+        if item.lower() in {s.lower() for s in cleaned_skills}:
+            continue
+        cleaned_skills.append(item)
+        if len(cleaned_skills) >= 20:
+            break
+    return cleaned_skills
 
 
 def sanitize_member_type_data(member_type, raw_data):
@@ -249,6 +311,19 @@ def sanitize_member_type_data(member_type, raw_data):
         ftype = field['type']
         if ftype == 'file':
             # Files are stored on their own model field(s), not in the JSON blob.
+            continue
+
+        if ftype == 'skills_multi':
+            # Multiple checkbox-selected skills from this field's `choices`,
+            # plus optional free-text "other" skills the user typed in
+            # (comma-separated). Stored as a deduplicated JSON list of
+            # plain strings — this is the real "Skills" data shown as chips
+            # on the profile, not something derived from profession/category.
+            selected_raw = raw_data.get(key, [])
+            other_raw = raw_data.get(key + '__other', '')
+            cleaned_skills = _clean_skills_list(field.get('choices', []), selected_raw, other_raw)
+            if cleaned_skills:
+                cleaned[key] = cleaned_skills
             continue
 
         if ftype == 'days_hours':
@@ -307,16 +382,6 @@ def sanitize_member_type_data(member_type, raw_data):
         elif ftype == 'select':
             choices = field.get('choices', [])
             if value not in choices:
-                continue
-        elif ftype == 'select_other':
-            choices = field.get('choices', [])
-            if value == 'Other':
-                other_raw = raw_data.get(key + '__other', '')
-                other_raw = '' if other_raw is None else str(other_raw).strip()
-                if not other_raw:
-                    continue
-                value = sanitize_text(other_raw)[: field.get('max_length', 300)]
-            elif value not in choices:
                 continue
         cleaned[key] = value
 
@@ -521,6 +586,12 @@ class Profile(models.Model):
     # ── Member type / onboarding ("What do you use Marketfy for?") ──────
     member_type          = models.CharField(max_length=30, choices=MEMBER_TYPE_CHOICES, blank=True, default='')
     member_type_data     = models.JSONField(default=dict, blank=True)
+
+    # ── "What I'm Looking For" — structured intent, see LOOKING_FOR_SCHEMA.
+    # Stored as a list of choice keys (usually one, but a profile can select
+    # more than one) so it can be displayed/edited/filtered without parsing
+    # free text.
+    looking_for           = models.JSONField(default=list, blank=True)
     member_type_cv        = models.FileField(
         upload_to='member_type/cv/', null=True, blank=True,
         validators=[validate_cv_extension],
@@ -582,6 +653,22 @@ class Profile(models.Model):
         self.full_name    = sanitize_text(self.full_name)
         self.address      = sanitize_text(self.address)
         self.profession      = sanitize_text(self.profession,      'profession')
+
+        # "What I'm Looking For" — keep only keys valid for this profile's
+        # current member type (falling back to the generic list if no
+        # member_type is set), deduplicated and capped.
+        valid_looking_for = dict(LOOKING_FOR_SCHEMA.get(self.member_type, LOOKING_FOR_GENERIC_CHOICES))
+        if isinstance(self.looking_for, (list, tuple)):
+            cleaned_looking_for = []
+            for key in self.looking_for:
+                key = str(key).strip()
+                if key in valid_looking_for and key not in cleaned_looking_for:
+                    cleaned_looking_for.append(key)
+                if len(cleaned_looking_for) >= 3:
+                    break
+            self.looking_for = cleaned_looking_for
+        else:
+            self.looking_for = []
 
         # Interests — keep a short, sanitized list of plain strings only.
         if isinstance(self.interests, (list, tuple)):
@@ -915,18 +1002,43 @@ class Profile(models.Model):
     def member_type_emoji(self):
         return MEMBER_TYPE_SCHEMA.get(self.member_type, {}).get('emoji', '')
 
+    # Keys that get their own dedicated profile section (Skills chips, or
+    # the "What I Do" summary) and so are left out of
+    # member_type_display_fields / member_type_headline to avoid showing
+    # the same information twice.
+    _SKILLS_FIELD_KEYS = {'skills', 'skills_learning'}
+    _DISPLAY_FIELD_EXCLUDE = _SKILLS_FIELD_KEYS | {
+        'business_description', 'services_offered', 'products_services',
+        'hiring_for', 'description', 'experience',
+    }
+
+    @staticmethod
+    def _format_mtd_value(value):
+        """member_type_data values are usually plain strings, but
+        'skills_multi' fields store a list — format either into a display
+        string with no per-caller special-casing needed."""
+        if isinstance(value, (list, tuple)):
+            return ', '.join(str(v) for v in value if v)
+        return value
+
     @property
     def member_type_display_fields(self):
         """
         List of (label, value) pairs for this profile's filled-in type-specific
-        fields, for rendering on the profile page. Skips empty values.
+        fields, for rendering on the profile page. Skips empty values, the
+        skills field, and whichever field is already shown as the headline /
+        What I Do sentence (see _DISPLAY_FIELD_EXCLUDE) — so nothing repeats.
         """
         data = self.member_type_data or {}
+        headline_field = self.member_type_headline_field
+        skip_keys = self._DISPLAY_FIELD_EXCLUDE | ({headline_field['key']} if headline_field else set())
         out = []
         for field in self.member_type_schema:
+            if field['key'] in skip_keys:
+                continue
             value = data.get(field['key'], '')
             if value:
-                out.append((field['label'], value))
+                out.append((field['label'], self._format_mtd_value(value)))
         if self.member_type_cv:
             out.append(('CV / Resume', self.member_type_cv.url))
         return out
@@ -943,7 +1055,10 @@ class Profile(models.Model):
         """
         fields = self.member_type_schema
         for field in fields:
-            if field.get('required'):
+            if field.get('required') and field['key'] not in self._SKILLS_FIELD_KEYS:
+                return field
+        for field in fields:
+            if field['key'] not in self._SKILLS_FIELD_KEYS:
                 return field
         return fields[0] if fields else None
 
@@ -953,7 +1068,7 @@ class Profile(models.Model):
         field = self.member_type_headline_field
         if not field:
             return ''
-        return self.get_member_type_value(field['key'])
+        return self._format_mtd_value(self.get_member_type_value(field['key']))
 
     @property
     def member_type_secondary_field(self):
@@ -1004,6 +1119,102 @@ class Profile(models.Model):
     def get_member_type_value(self, key, default=''):
         return (self.member_type_data or {}).get(key, default)
 
+    # ── Real Skills — the user's actual selected/entered skills, not
+    #    anything derived from profession or business category. ──────────
+    @property
+    def skills_list(self):
+        """The skills this profile actually selected/entered during
+        onboarding or profile editing (member_type_data['skills'] or
+        ['skills_learning'] for students), as a clean list of strings for
+        chip display. Never derived from profession or business category."""
+        raw = self.get_member_type_value('skills') or self.get_member_type_value('skills_learning')
+        if isinstance(raw, (list, tuple)):
+            return [str(s) for s in raw if s]
+        if raw:
+            return [raw]
+        return []
+
+    @property
+    def skills_schema_field(self):
+        """The schema field dict for this profile's skills-type field
+        ('skills' or 'skills_learning'), or None if the current member type
+        has no skills field at all (e.g. Business Owner)."""
+        for field in self.member_type_schema:
+            if field['type'] == 'skills_multi':
+                return field
+        return None
+
+    def set_skills(self, selected, other_text=''):
+        """Updates only the skills entry inside member_type_data, leaving
+        every other member_type_data field untouched — used by the compact
+        Skills edit modal so it doesn't have to resubmit (and risk wiping)
+        the rest of the onboarding data. Returns False if this profile's
+        member type has no skills field to update. Caller is responsible
+        for calling save()."""
+        field = self.skills_schema_field
+        if not field:
+            return False
+        cleaned = _clean_skills_list(field.get('choices', []), selected, other_text)
+        data = dict(self.member_type_data or {})
+        if cleaned:
+            data[field['key']] = cleaned
+        else:
+            data.pop(field['key'], None)
+        self.member_type_data = data
+        return True
+
+    # ── "What I'm Looking For" ────────────────────────────────────────────
+    @property
+    def looking_for_field_choices(self):
+        """The (key, label) choices this profile can currently pick from
+        for 'What I'm Looking For', based on its member type."""
+        return LOOKING_FOR_SCHEMA.get(self.member_type, LOOKING_FOR_GENERIC_CHOICES)
+
+    @property
+    def looking_for_display(self):
+        """Human-readable labels for this profile's selected
+        'What I'm Looking For' choices."""
+        labels = dict(self.looking_for_field_choices) or LOOKING_FOR_LABELS
+        return [LOOKING_FOR_LABELS.get(key, labels.get(key, key)) for key in (self.looking_for or [])]
+
+    # ── "What I Do" — a short, natural-language description of what this
+    #    profile does, phrased per member type so it reads like a real
+    #    sentence ("I own Acme Ltd", "I teach Mathematics, English") rather
+    #    than a raw field dump. Falls back to a type-specific description
+    #    field, then the bio, for member types with no sentence template. ──
+    _WHAT_I_DO_SENTENCE_TEMPLATES = {
+        'business_owner': 'I own {headline}',
+        'teacher_tutor':   'I teach {headline}',
+    }
+    _WHAT_I_DO_KEYS = (
+        'business_description', 'services_offered', 'products_services',
+        'hiring_for', 'description', 'experience',
+    )
+
+    @property
+    def what_i_do_headline(self):
+        """Headline to show above the What I Do description. Omitted for
+        member types with a sentence template above, since the sentence
+        already includes the headline (e.g. the business name)."""
+        if self.member_type in self._WHAT_I_DO_SENTENCE_TEMPLATES:
+            return ''
+        return self.member_type_headline_value or self.profession
+
+    @property
+    def what_i_do_summary(self):
+        template = self._WHAT_I_DO_SENTENCE_TEMPLATES.get(self.member_type)
+        if template:
+            headline = self.member_type_headline_value
+            if headline:
+                return template.format(headline=headline)[:220]
+        data = self.member_type_data or {}
+        for key in self._WHAT_I_DO_KEYS:
+            value = data.get(key)
+            if value:
+                value = self._format_mtd_value(value)
+                return value[:220]
+        return (self.bio or '')[:220]
+
     @property
     def languages_display(self):
         """Languages formatted as ['English · Fluent', 'French · Basic'] for
@@ -1034,6 +1245,32 @@ class Profile(models.Model):
     def default_sections_for(cls, member_type):
         """The suggested optional sections for a given member_type."""
         return list(cls.PROFESSIONAL_SECTION_DEFAULTS.get(member_type, []))
+
+    # ── Profile completion — single source of truth ─────────────────────
+    # Used by the profile page (owner-only nudge) and mirrored 1:1 by the
+    # JS in profile.html for the edit-sheet live preview. Keep the two in
+    # sync if this list ever changes. Prioritizes meaningful professional
+    # information over vanity items (no "create a business page" here).
+    def profile_completion(self):
+        """Returns (percent: int, missing: list[str]) — each check is worth
+        an equal share of the total."""
+        checks = [
+            (self.has_custom_picture, 'Add a profile photo'),
+            (bool(self.full_name or (self.user.first_name if self.user_id else '')), 'Add your name'),
+            (bool(self.member_type_headline_value or self.profession), 'Add a headline'),
+            (bool(self.skills_list), 'Add your skills'),
+            (bool(self.location), 'Add your location'),
+            (bool(self.bio or self.what_i_do_summary), 'Describe what you do'),
+            (bool(self.looking_for), "Add what you're looking for"),
+        ]
+        if self.show_experience or self.show_education:
+            has_exp_or_edu = self.experiences.exists() or self.education_history.exists()
+            checks.append((has_exp_or_edu, 'Add your experience or education'))
+
+        done = sum(1 for ok, _ in checks if ok)
+        pct = round(done * 100 / len(checks)) if checks else 0
+        missing = [label for ok, label in checks if not ok][:3]
+        return pct, missing
 
     @property
     def is_professional(self):
@@ -1185,8 +1422,10 @@ class Profile(models.Model):
     # member_type_data, whichever onboarding schema the user filled in.
     @property
     def skills_tokens(self):
-        raw = self.get_member_type_value('skills') or self.get_member_type_value('skills_learning')
-        return self._tokenize(raw)
+        tokens = set()
+        for skill in self.skills_list:
+            tokens |= self._tokenize(skill)
+        return tokens
 
     @property
     def desired_job_tokens(self):

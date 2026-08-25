@@ -13,7 +13,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, JobApplication
 from social.models import validate_url
-from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES
+from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES, LOOKING_FOR_SCHEMA, LOOKING_FOR_GENERIC_CHOICES
 
 
 def _member_type_edit_schema(profile):
@@ -30,17 +30,14 @@ def _member_type_edit_schema(profile):
             f = dict(field)
             saved_value = data.get(field['key'], '')
             f['value'] = saved_value
-            if field['type'] == 'select_other':
+            if field['type'] == 'skills_multi':
+                # saved_value is a list of skill strings. Split it back into
+                # "matches a known choice" (pre-check that checkbox) vs
+                # "free-text extra skill" (pre-fill the other-skills box).
                 choices = field.get('choices', [])
-                if saved_value in choices:
-                    f['select_value'] = saved_value
-                    f['other_value'] = ''
-                elif saved_value:
-                    f['select_value'] = 'Other'
-                    f['other_value'] = saved_value
-                else:
-                    f['select_value'] = ''
-                    f['other_value'] = ''
+                saved_list = saved_value if isinstance(saved_value, list) else ([saved_value] if saved_value else [])
+                f['selected_values'] = [s for s in saved_list if s in choices]
+                f['other_value'] = ', '.join(s for s in saved_list if s not in choices)
             elif field['type'] == 'days_hours':
                 # Parse the stored "Mon, Wed · 9:00 AM – 5:00 PM"-style string
                 # back into its parts so the form can pre-select them.
@@ -62,7 +59,12 @@ def _member_type_edit_schema(profile):
                 f['open_value'] = open_value
                 f['close_value'] = close_value
             fields.append(f)
-        out.append({'key': key, 'label': cfg['label'], 'emoji': cfg['emoji'], 'blurb': cfg['blurb'], 'fields': fields})
+        out.append({
+            'key': key, 'label': cfg['label'], 'emoji': cfg['emoji'], 'blurb': cfg['blurb'], 'fields': fields,
+            # Attached per-type so the template can render the "What I'm
+            # Looking For" checkboxes without a second dynamic lookup.
+            'looking_for_choices': LOOKING_FOR_SCHEMA.get(key, LOOKING_FOR_GENERIC_CHOICES),
+        })
     return out
 from django.core.exceptions import ValidationError as _ModelValidationError
 
@@ -594,9 +596,11 @@ def onboarding(request):
                 raw_data[key + '__open'] = request.POST.get(posted_name + '__open', '')
                 raw_data[key + '__close'] = request.POST.get(posted_name + '__close', '')
                 continue
-            raw_data[key] = request.POST.get(posted_name, '')
-            if field['type'] == 'select_other':
+            if field['type'] == 'skills_multi':
+                raw_data[key] = request.POST.getlist(posted_name)
                 raw_data[key + '__other'] = request.POST.get(posted_name + '__other', '')
+                continue
+            raw_data[key] = request.POST.get(posted_name, '')
         cleaned = sanitize_member_type_data(member_type, raw_data)
 
         required_missing = [
@@ -616,6 +620,12 @@ def onboarding(request):
 
         profile.member_type = member_type
         profile.member_type_data = cleaned
+
+        # "What I'm Looking For" — read only the checkboxes for the member
+        # type actually being submitted (each fieldset has its own
+        # looking_for__<type> name so switching types on this form doesn't
+        # leak a stale selection from a previously-viewed fieldset).
+        profile.looking_for = request.POST.getlist(f'looking_for__{member_type}')
 
         # Seed sensible default professional sections (Experience, Education,
         # Services, Portfolio, Achievements, Jobs, etc.) for this member
@@ -2053,6 +2063,13 @@ def profile(request, username):
             'profile_completion_pct': 0,
             'profile_completion_missing': [],
             'profile_skills': [],
+            'looking_for_display': [],
+            'looking_for_choices': [],
+            'looking_for_selected': set(),
+            'what_i_do_summary': '',
+            'skills_schema_field': None,
+            'skills_selected_values': [],
+            'skills_other_value': '',
             'user_reviews': [],
             'professional_experience': [], 'professional_education': [],
             'professional_services': [], 'professional_portfolio': [],
@@ -2190,35 +2207,17 @@ def profile(request, username):
     for product in saved_products:
         product.like_count = wishlist_counts.get(product.product_id, 0)
 
-    # ── LinkedIn-style "profile strength" meter (owner-only nudge) ───────────
-    # Each of these fields contributes equally toward a completeness score,
-    # mirroring LinkedIn's profile-strength bar. Missing items are surfaced
-    # as quick "Add X" prompts that deep-link into the edit sheet.
-    completion_checks = [
-        (bool(profile.picture), 'Add a profile photo'),
-        (bool(profile.cover_photo), 'Add a cover photo'),
-        (bool(profile.bio), 'Write an About summary'),
-        (bool(profile.profession), 'Add a headline'),
-        (bool(profile.location), 'Add your location'),
-        (bool(profile.website), 'Add a website'),
-        (bool(profile.phone), 'Add a phone number'),
-        (business_page_count > 0, 'Create a business page'),
-    ]
-    completion_done = sum(1 for done, _ in completion_checks if done)
-    profile_completion_pct = round(completion_done * 100 / len(completion_checks))
-    profile_completion_missing = [label for done, label in completion_checks if not done][:3]
+    # ── Profile completion meter (owner-only nudge) ──────────────────────────
+    # Single source of truth lives on Profile.profile_completion() so the
+    # same weights/logic apply everywhere (see models.py) — no business
+    # page factor, prioritizes photo/headline/skills/location/what-you-do/
+    # what-you're-looking-for/relevant experience-education.
+    profile_completion_pct, profile_completion_missing = profile.profile_completion()
 
-    # ── LinkedIn-style "skills" chips ─────────────────────────────────────────
-    # There's no dedicated skills model, so we surface the closest real signal:
-    # the user's stated profession plus the categories of businesses they run.
-    profile_skills = []
-    if profile.profession:
-        profile_skills.append(profile.profession)
-    for preview in business_page_previews:
-        cat = preview['page'].get_category_display()
-        if cat and cat not in profile_skills:
-            profile_skills.append(cat)
-    profile_skills = profile_skills[:8]
+    # ── Real Skills — the user's actual selected/entered skills from
+    # onboarding/profile editing (never derived from profession or business
+    # category — see Profile.skills_list).
+    profile_skills = profile.skills_list
 
     # ── Professional profile sections (Services, Portfolio, Projects,
     # Achievements, Jobs, Products, Posts) — these now live directly on the
@@ -2327,6 +2326,13 @@ def profile(request, username):
             for t, label in ProfilePostVibe.VIBE_CHOICES
         ],
         'market_categories': Market.CATEGORY_CHOICES,
+        'looking_for_display': profile.looking_for_display,
+        'looking_for_choices': profile.looking_for_field_choices,
+        'looking_for_selected': set(profile.looking_for or []),
+        'what_i_do_summary': profile.what_i_do_summary,
+        'skills_schema_field': profile.skills_schema_field,
+        'skills_selected_values': [s for s in profile.skills_list if s in (profile.skills_schema_field or {}).get('choices', [])],
+        'skills_other_value': ', '.join(s for s in profile.skills_list if s not in (profile.skills_schema_field or {}).get('choices', [])),
     }
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -2359,7 +2365,9 @@ def update_profile(request, username):
         address_present  = 'address' in request.POST
         about_submitted   = 'about_submitted'   in request.POST
         skills_submitted  = 'skills_submitted'  in request.POST
+        skills_data_submitted = 'skills_data_submitted' in request.POST
         details_submitted = 'details_submitted' in request.POST
+        looking_for_submitted = 'looking_for_submitted' in request.POST
 
         fname            = request.POST.get('fname', '').strip()
         lname            = request.POST.get('lname', '').strip()
@@ -2450,6 +2458,20 @@ def update_profile(request, username):
                 profile.profession = profession
                 profile_dirty = True
 
+            # Real Skills chips — targeted update of just member_type_data's
+            # skills entry (leaves every other onboarding field untouched).
+            if skills_data_submitted:
+                skills_selected = request.POST.getlist('skills_data')
+                skills_other = request.POST.get('skills_data__other', '')
+                if profile.set_skills(skills_selected, skills_other):
+                    profile_dirty = True
+
+            # "What I'm Looking For" — validated/capped against this
+            # profile's member-type-specific choices in Profile.clean().
+            if looking_for_submitted:
+                profile.looking_for = request.POST.getlist('looking_for')
+                profile_dirty = True
+
             # Details modal — location/phone/website/gender/DOB + their
             # visibility toggles, all submitted together.
             if details_submitted:
@@ -2490,9 +2512,11 @@ def update_profile(request, username):
                             raw_data[key + '__open'] = request.POST.get(posted_name + '__open', '')
                             raw_data[key + '__close'] = request.POST.get(posted_name + '__close', '')
                             continue
-                        raw_data[key] = request.POST.get(posted_name, '')
-                        if field['type'] == 'select_other':
+                        if field['type'] == 'skills_multi':
+                            raw_data[key] = request.POST.getlist(posted_name)
                             raw_data[key + '__other'] = request.POST.get(posted_name + '__other', '')
+                            continue
+                        raw_data[key] = request.POST.get(posted_name, '')
                     profile.member_type = member_type
                     profile.member_type_data = sanitize_member_type_data(member_type, raw_data)
 
