@@ -502,6 +502,21 @@ def validate_cv_extension(value):
             )
 
 
+CERTIFICATE_ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png']
+
+
+def validate_certificate_extension(value):
+    """Restrict certificate/result uploads (WAEC, NECO, etc.) to document or
+    scanned-image formats — same server-side-vs-client-hint reasoning as
+    validate_cv_extension above."""
+    if value and hasattr(value, 'name'):
+        ext = os.path.splitext(value.name)[1].lower()
+        if ext not in CERTIFICATE_ALLOWED_EXTENSIONS:
+            raise ValidationError(
+                f'Document must be a {", ".join(CERTIFICATE_ALLOWED_EXTENSIONS)} file, not "{ext}".'
+            )
+
+
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -2708,6 +2723,27 @@ class EventNotification(models.Model):
 
 # ─── Job Vacancy ─────────────────────────────────────────────────────────────
 
+# ── Requestable applicant documents ─────────────────────────────────────────
+# Shared by JobVacancy (what the poster asks for) and JobApplicationDocument
+# (what the applicant actually attaches). Keeping this as an explicit,
+# selective list — rather than a free-for-all "attach anything" uploader —
+# means a poster picks exactly which results/certificates they need, and an
+# applicant sees a clearly labelled slot for each one.
+JOB_DOCUMENT_TYPE_CHOICES = [
+    ('waec',                   'WAEC Result'),
+    ('neco',                   'NECO Result'),
+    ('nabteb',                 'NABTEB Result'),
+    ('degree_certificate',     'Degree Certificate'),
+    ('hnd_nd_certificate',     'HND / ND Certificate'),
+    ('nysc_certificate',       'NYSC Certificate'),
+    ('birth_certificate',      'Birth Certificate'),
+    ('international_passport', 'International Passport'),
+    ('other',                  'Other Certificate / Document'),
+]
+JOB_DOCUMENT_TYPE_VALUES = [c[0] for c in JOB_DOCUMENT_TYPE_CHOICES]
+JOB_DOCUMENT_TYPE_LABELS = dict(JOB_DOCUMENT_TYPE_CHOICES)
+
+
 class JobVacancy(models.Model):
     CAT_GIG          = 'gig'
     CAT_FULLTIME     = 'fulltime'
@@ -2768,6 +2804,14 @@ class JobVacancy(models.Model):
                                     help_text='Optional external link — official portal, application form, etc.')
     salary_range = models.CharField(max_length=100, blank=True, default='',
                                     help_text='e.g. ₦80,000–₦120,000/month or "Negotiable"')
+    required_documents = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text=(
+            'Comma-separated codes for the specific results/certificates this '
+            'poster wants applicants to attach (e.g. "waec,neco,degree_certificate"). '
+            'Valid codes come from JOB_DOCUMENT_TYPE_CHOICES.'
+        ),
+    )
     if settings.USE_CLOUDINARY:
         cover_image = CloudinaryField('image', folder='job_covers', blank=True, null=True)
     else:
@@ -2802,6 +2846,17 @@ class JobVacancy(models.Model):
                 self.apply_link = validate_url(self.apply_link)
             except ValidationError:
                 self.apply_link = ''
+
+        # Keep only recognised, de-duplicated document codes — this field
+        # drives which upload slots show up on the application modal, so it
+        # must never contain arbitrary/unsanitised text.
+        if self.required_documents:
+            codes = [c.strip() for c in self.required_documents.split(',') if c.strip()]
+            seen = []
+            for code in codes:
+                if code in JOB_DOCUMENT_TYPE_VALUES and code not in seen:
+                    seen.append(code)
+            self.required_documents = ','.join(seen)
 
     @property
     def category_emoji(self):
@@ -2856,6 +2911,21 @@ class JobVacancy(models.Model):
     @property
     def is_government_advertiser(self):
         return self.advertiser_type == self.ADV_GOVERNMENT
+
+    # ── Requested-documents helpers ─────────────────────────────────────────
+    @property
+    def required_documents_list(self):
+        """Ordered list of valid document codes this poster is requesting."""
+        if not self.required_documents:
+            return []
+        codes = [c.strip() for c in self.required_documents.split(',') if c.strip()]
+        return [c for c in codes if c in JOB_DOCUMENT_TYPE_VALUES]
+
+    @property
+    def required_documents_display(self):
+        """[(code, label), ...] for the requested document codes — used to
+        render one selective upload slot per requested document."""
+        return [(code, JOB_DOCUMENT_TYPE_LABELS.get(code, code)) for code in self.required_documents_list]
 
 
 # =============================================================================
@@ -3063,6 +3133,72 @@ class JobApplication(models.Model):
     @property
     def resume_url(self):
         return self.resume.url if self.resume else ''
+
+
+# =============================================================================
+# JobApplicationDocument — one requested certificate/result attached by the
+# applicant (WAEC, NECO, degree certificate, etc). Kept as its own row per
+# document — rather than a single generic attachment — so the poster's
+# selective list of requested documents maps to individually labelled,
+# individually viewable files on the employer's side.
+# =============================================================================
+
+class JobApplicationDocument(models.Model):
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    application = models.ForeignKey(JobApplication, on_delete=models.CASCADE, related_name='documents')
+
+    doc_type  = models.CharField(max_length=30, choices=JOB_DOCUMENT_TYPE_CHOICES)
+    # Only used when doc_type == 'other' — the applicant's own label for
+    # whatever extra certificate they've attached (e.g. "Driving Licence").
+    doc_label = models.CharField(max_length=100, blank=True, default='')
+
+    if settings.USE_CLOUDINARY:
+        file = CloudinaryField(
+            'raw', resource_type='raw', folder='job_applications/documents',
+            blank=True, null=True,
+        )
+    else:
+        file = models.FileField(upload_to='job_applications/documents/', blank=True, null=True)
+    original_name = models.CharField(max_length=255, blank=True, default='')
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'JobApplicationDocument_Table'
+        ordering = ['doc_type', 'uploaded_at']
+
+    def __str__(self):
+        return f'{self.application.applicant.username} — {self.display_label}'
+
+    def clean(self):
+        super().clean()
+        self.doc_label     = sanitize_text(self.doc_label)
+        self.original_name = sanitize_text(self.original_name)
+
+        if self.doc_type not in JOB_DOCUMENT_TYPE_VALUES:
+            raise ValidationError('Invalid document type.')
+
+        if self.file and hasattr(self.file, 'name') and hasattr(self.file, '_committed'):
+            if not self.file._committed:
+                validate_certificate_extension(self.file)
+                validate_file_size(self.file, max_size_mb=5)
+
+    def save(self, *args, **kwargs):
+        self.full_clean(exclude=['file'])
+        if self.file and hasattr(self.file, '_committed') and not self.file._committed:
+            validate_certificate_extension(self.file)
+            validate_file_size(self.file, max_size_mb=5)
+        super().save(*args, **kwargs)
+
+    @property
+    def display_label(self):
+        if self.doc_type == 'other' and self.doc_label:
+            return self.doc_label
+        return JOB_DOCUMENT_TYPE_LABELS.get(self.doc_type, self.doc_type)
+
+    @property
+    def file_url(self):
+        return self.file.url if self.file else ''
 
 
 # =============================================================================

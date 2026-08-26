@@ -11,9 +11,9 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, JobApplication
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, JobApplication, JobApplicationDocument, JOB_DOCUMENT_TYPE_VALUES, JOB_DOCUMENT_TYPE_LABELS
 from social.models import validate_url
-from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES, LOOKING_FOR_SCHEMA, LOOKING_FOR_GENERIC_CHOICES
+from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES, LOOKING_FOR_SCHEMA, LOOKING_FOR_GENERIC_CHOICES, validate_certificate_extension
 
 
 def _member_type_edit_schema(profile):
@@ -6215,6 +6215,7 @@ def job_vacancy_create(request):
     salary_range    = html_escape(request.POST.get('salary_range', '').strip())
     cover_image     = request.FILES.get('cover_image')
     page_slug       = request.POST.get('business_page', '').strip()
+    required_docs   = [d for d in request.POST.getlist('required_documents') if d in JOB_DOCUMENT_TYPE_VALUES]
 
     if not title:
         return JsonResponse({'success': False, 'error': 'Job title is required.'}, status=400)
@@ -6258,6 +6259,7 @@ def job_vacancy_create(request):
         apply_link      = apply_link,
         salary_range    = salary_range,
         business_page   = business_page,
+        required_documents = ','.join(required_docs),
     )
 
     if cover_image:
@@ -6308,6 +6310,7 @@ def job_vacancy_edit(request, job_id):
     is_open         = request.POST.get('is_open', '1').strip() == '1'
     cover_image     = request.FILES.get('cover_image')
     page_slug       = request.POST.get('business_page', None)
+    required_docs   = [d for d in request.POST.getlist('required_documents') if d in JOB_DOCUMENT_TYPE_VALUES]
 
     if not title:
         return JsonResponse({'success': False, 'error': 'Job title is required.'}, status=400)
@@ -6350,6 +6353,7 @@ def job_vacancy_edit(request, job_id):
     job.apply_link      = apply_link
     job.salary_range    = salary_range
     job.is_open         = is_open
+    job.required_documents = ','.join(required_docs)
 
     if cover_image:
         allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
@@ -6624,6 +6628,23 @@ def job_application_create(request, job_id):
     if not cover_letter:
         return JsonResponse({'success': False, 'error': 'A cover letter is required.'}, status=400)
 
+    # Selective, per-document uploads — one slot per document the poster
+    # requested (WAEC, NECO, degree certificate, etc), keyed as doc_<code>
+    # in the multipart form. 'other' is always optional; every other
+    # requested code must be attached before the application can go through.
+    required_codes = job.required_documents_list
+    doc_files = {}
+    for code in required_codes:
+        f = request.FILES.get(f'doc_{code}')
+        if code != 'other' and not f:
+            return JsonResponse({
+                'success': False,
+                'error': f'Please attach your {JOB_DOCUMENT_TYPE_LABELS.get(code, code)}.',
+            }, status=400)
+        if f:
+            doc_files[code] = f
+    other_label = html_escape(request.POST.get('other_document_label', '').strip())
+
     # Applicant needs a resume attached to the application. Reuse the CV
     # already on their profile (member_type_cv) if they don't upload a
     # fresh one this time.
@@ -6663,6 +6684,26 @@ def job_application_create(request, job_id):
         return JsonResponse({'success': False, 'error': '; '.join(e.messages) if hasattr(e, 'messages') else str(e)}, status=400)
 
     application.save()
+
+    for code, f in doc_files.items():
+        doc = JobApplicationDocument(
+            application=application,
+            doc_type=code,
+            doc_label=other_label if code == 'other' else '',
+            original_name=f.name,
+        )
+        doc.file = f
+        try:
+            doc.full_clean(exclude=['file'])
+            validate_certificate_extension(f)
+            validate_file_size(f, max_size_mb=5)
+        except ValidationError as e:
+            application.delete()
+            return JsonResponse({
+                'success': False,
+                'error': '; '.join(e.messages) if hasattr(e, 'messages') else str(e),
+            }, status=400)
+        doc.save()
 
     _notify_job_application(
         JobApplicationNotification.APPLIED, application,
@@ -6740,7 +6781,7 @@ def job_application_detail(request, application_id):
     """AJAX partial — full application detail for the 'View application' action,
     usable by either the applicant or the job owner."""
     application = get_object_or_404(
-        JobApplication.objects.select_related('job', 'applicant', 'applicant__profile'),
+        JobApplication.objects.select_related('job', 'applicant', 'applicant__profile').prefetch_related('documents'),
         id=application_id,
     )
 

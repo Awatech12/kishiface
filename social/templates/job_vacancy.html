@@ -876,6 +876,30 @@
 
     .khj-form-group textarea { resize: vertical; min-height: 90px; }
 
+    .khj-doc-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .khj-doc-check {
+      display: inline-flex !important;
+      align-items: center;
+      gap: 6px;
+      width: auto !important;
+      padding: 7px 12px !important;
+      border: 1px solid var(--khub-border);
+      border-radius: 16px;
+      font-size: 12.5px;
+      font-weight: 600;
+      text-transform: none !important;
+      letter-spacing: 0 !important;
+      color: var(--khub-text) !important;
+      cursor: pointer;
+      user-select: none;
+    }
+    .khj-doc-check input { width: auto !important; padding: 0 !important; margin: 0; accent-color: var(--khub-primary); }
+    .khj-doc-check:has(input:checked) { border-color: var(--khub-primary); background: rgba(0,149,246,0.08); }
+
     .khj-image-preview-wrap {
       position: relative;
       margin-top: 8px;
@@ -1309,6 +1333,7 @@
           "contact_info":    "{{ job.contact_info|escapejs }}",
           "apply_link":      "{{ job.apply_link|escapejs }}",
           "salary_range":    "{{ job.salary_range|escapejs }}",
+          "required_documents": [{% for code in job.required_documents_list %}"{{ code }}"{% if not forloop.last %},{% endif %}{% endfor %}],
           "is_open":         {{ job.is_open|yesno:"true,false" }}
         }
         </script>
@@ -1545,6 +1570,21 @@
     </div>
 
     <div class="khj-form-group">
+      <label>Documents to Request from Applicants <span class="khj-optional">(optional — select only what applicants for THIS role need to attach)</span></label>
+      <div class="khj-doc-checks" id="khjDocChecks">
+        <label class="khj-doc-check"><input type="checkbox" class="khjDocOpt" value="waec"> WAEC Result</label>
+        <label class="khj-doc-check"><input type="checkbox" class="khjDocOpt" value="neco"> NECO Result</label>
+        <label class="khj-doc-check"><input type="checkbox" class="khjDocOpt" value="nabteb"> NABTEB Result</label>
+        <label class="khj-doc-check"><input type="checkbox" class="khjDocOpt" value="degree_certificate"> Degree Certificate</label>
+        <label class="khj-doc-check"><input type="checkbox" class="khjDocOpt" value="hnd_nd_certificate"> HND / ND Certificate</label>
+        <label class="khj-doc-check"><input type="checkbox" class="khjDocOpt" value="nysc_certificate"> NYSC Certificate</label>
+        <label class="khj-doc-check"><input type="checkbox" class="khjDocOpt" value="birth_certificate"> Birth Certificate</label>
+        <label class="khj-doc-check"><input type="checkbox" class="khjDocOpt" value="international_passport"> International Passport</label>
+        <label class="khj-doc-check"><input type="checkbox" class="khjDocOpt" value="other"> Other Certificate</label>
+      </div>
+    </div>
+
+    <div class="khj-form-group">
       <label>How to Apply / Contact Info *</label>
       <input type="text" id="khjFContact" placeholder="e.g. Call 0801234567 or email jobs@example.com" maxlength="300">
     </div>
@@ -1762,6 +1802,7 @@
   const fImage      = document.getElementById('khjFImage');
   const fIsOpen     = document.getElementById('khjFIsOpen');
   const govNotice   = document.getElementById('khjGovNotice');
+  const docCheckboxes = document.querySelectorAll('.khjDocOpt');
 
   function updateGovNotice() {
     govNotice.style.display = fAdvertiser.value === 'government' ? 'flex' : 'none';
@@ -1786,6 +1827,7 @@
     formError.style.display = 'none';
     removeCover = false;
     statusRow.style.display = 'none';
+    docCheckboxes.forEach(cb => cb.checked = false);
     updateGovNotice();
   }
 
@@ -1819,6 +1861,8 @@
     fContact.value    = d.contact_info;
     fApplyLink.value  = d.apply_link || '';
     fIsOpen.checked   = d.is_open;
+    var reqDocs = d.required_documents || [];
+    docCheckboxes.forEach(cb => { cb.checked = reqDocs.indexOf(cb.value) !== -1; });
     updateGovNotice();
 
     statusRow.style.display = 'block';
@@ -1887,6 +1931,7 @@
     fd.append('requirements',    fReqs.value.trim());
     fd.append('contact_info',    contact);
     fd.append('apply_link',      fApplyLink.value.trim());
+    docCheckboxes.forEach(cb => { if (cb.checked) fd.append('required_documents', cb.value); });
     if (currentMode === 'edit') fd.append('is_open', fIsOpen.checked ? '1' : '0');
     if (fImage.files[0]) fd.append('cover_image', fImage.files[0]);
 
