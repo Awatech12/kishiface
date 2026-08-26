@@ -1560,6 +1560,48 @@ class Profile(models.Model):
         raw = self.get_member_type_value('hiring_for') or self.get_member_type_value('products_services')
         return self._tokenize(raw)
 
+    # ── Explicit "What I'm Looking For" signal ──────────────────────────
+    # `looking_for` (see LOOKING_FOR_SCHEMA) is a short list of keys the
+    # user explicitly picked — a stronger, self-declared intent than the
+    # member_type-derived `intent` above. Bucketed into the same three
+    # broad directions (job / hiring / clients) plus a catch-all
+    # collaboration bucket, and a token bag for matching the keys' label
+    # text against job/post/candidate content the same way skills_tokens
+    # does. Feed scorers weight this above the coarser `intent` signal.
+    LOOKING_FOR_JOB_KEYS = {
+        'job', 'jobs', 'internship', 'entry_level_jobs', 'teaching_jobs',
+        'freelance_work', 'mentorship',
+    }
+    LOOKING_FOR_HIRING_KEYS = {'hiring', 'candidates'}
+    LOOKING_FOR_CLIENT_KEYS = {'clients', 'customers', 'students', 'students_customers'}
+    LOOKING_FOR_COLLAB_KEYS = {
+        'collaboration', 'partnerships', 'investors', 'business_opportunities',
+        'opportunities',
+    }
+
+    @property
+    def looking_for_tokens(self):
+        tokens = set()
+        for key in (self.looking_for or []):
+            tokens |= self._tokenize(LOOKING_FOR_LABELS.get(key, key))
+        return tokens
+
+    @property
+    def looking_for_wants_job(self):
+        return bool(set(self.looking_for or []) & self.LOOKING_FOR_JOB_KEYS)
+
+    @property
+    def looking_for_wants_hiring(self):
+        return bool(set(self.looking_for or []) & self.LOOKING_FOR_HIRING_KEYS)
+
+    @property
+    def looking_for_wants_clients(self):
+        return bool(set(self.looking_for or []) & self.LOOKING_FOR_CLIENT_KEYS)
+
+    @property
+    def looking_for_wants_collab(self):
+        return bool(set(self.looking_for or []) & self.LOOKING_FOR_COLLAB_KEYS)
+
 
 class UserReport(models.Model):
     REASON_CHOICES = [

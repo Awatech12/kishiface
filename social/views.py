@@ -965,9 +965,10 @@ def _ranked(pool, keywords, location_tokens, blob_fn, location_fn=None, created_
 def _score_job(profile, job, keywords, location_tokens):
     """
     Job relevance for a viewer, weighted per the professional-relevance
-    spec: skills > desired job title > profession > location > work mode
-    > experience > salary, plus recency and an employer -> professional
-    boost when the poster has explicitly signalled 'Hiring'.
+    spec: explicit "Looking for a job" signal > skills > desired job
+    title > profession > location > work mode > experience > salary,
+    plus recency and an employer -> professional boost when the poster
+    has explicitly signalled 'Hiring'.
     """
     req_blob = ' '.join(filter(None, [
         job.title, job.requirements, job.description, job.get_category_display(),
@@ -989,6 +990,14 @@ def _score_job(profile, job, keywords, location_tokens):
     # Light fallback so jobs still surface for viewers with a thin profile.
     score += 1.0 * len(keywords & req_tokens)
 
+    # Explicit "What I'm Looking For" signal — a user-declared job intent
+    # (picked from LOOKING_FOR_SCHEMA) is a stronger signal than the
+    # coarse member_type-derived `intent` used below, so it gets its own
+    # boost plus a token-overlap match against the job's own content.
+    if profile.looking_for_wants_job:
+        score += 3.5
+    score += 1.5 * len(profile.looking_for_tokens & req_tokens)
+
     # Employer -> professional matching: a vacancy from a poster whose own
     # profile intent is "Hiring" ranks a bit higher for a viewer whose
     # intent is "Looking for Job".
@@ -1003,8 +1012,9 @@ def _score_job(profile, job, keywords, location_tokens):
 def _score_person(viewer_profile, candidate_profile, keywords, location_tokens):
     """
     People/service relevance, weighted per spec: profession > skills >
-    location > intent compatibility (employer <-> job seeker, either <->
-    someone looking for clients/work), plus a light bio/interest overlap.
+    location > member type > intent compatibility (employer <-> job
+    seeker, either <-> someone looking for clients/work) > explicit
+    "What I'm Looking For" match, plus a light bio/interest overlap.
     """
     cand_blob = ' '.join(filter(None, [
         candidate_profile.profession, candidate_profile.member_type_label,
@@ -1019,6 +1029,11 @@ def _score_person(viewer_profile, candidate_profile, keywords, location_tokens):
         score += 2.5
     score += 1.0 * len(keywords & cand_tokens)
 
+    # Type of member — same member_type is a direct "people like you"
+    # signal, on top of the profession/skills overlap above.
+    if viewer_profile.member_type and viewer_profile.member_type == candidate_profile.member_type:
+        score += 1.0
+
     v_intent, c_intent = viewer_profile.intent, candidate_profile.intent
     if v_intent and c_intent:
         if {v_intent, c_intent} == {Profile.INTENT_HIRING, Profile.INTENT_LOOKING_FOR_JOB}:
@@ -1029,6 +1044,16 @@ def _score_person(viewer_profile, candidate_profile, keywords, location_tokens):
                 score += 2.0
         elif Profile.INTENT_LOOKING_FOR_CLIENTS in (v_intent, c_intent):
             score += 1.0
+
+    # Explicit "What I'm Looking For" signal — self-declared intent, so
+    # it's weighted above the coarser member_type-derived `intent` above.
+    # Token overlap catches general alignment (e.g. both picked
+    # "collaboration"); the hiring<->job pairing is the clearest
+    # complementary match and gets its own boost.
+    score += 2.0 * len(viewer_profile.looking_for_tokens & candidate_profile.looking_for_tokens)
+    if ((viewer_profile.looking_for_wants_hiring and candidate_profile.looking_for_wants_job)
+            or (viewer_profile.looking_for_wants_job and candidate_profile.looking_for_wants_hiring)):
+        score += 3.5
 
     return score + _recency_score(getattr(candidate_profile, 'created_at', None))
 
@@ -1046,12 +1071,13 @@ def _score_post(profile, keywords, location_tokens, text_blob, author_location,
                  created_at, is_followed, engagement):
     """
     Post relevance, weighted per spec: followed author > profession/skills
-    overlap > engagement > freshness.
+    overlap > "What I'm Looking For" overlap > engagement > freshness.
     """
     text_tokens = Profile._tokenize(text_blob)
     score = 6.0 if is_followed else 0.0
     score += 2.5 * len(keywords & text_tokens)
     score += 2.0 * len(profile.skills_tokens & text_tokens)
+    score += 1.5 * len(profile.looking_for_tokens & text_tokens)
     if location_tokens and author_location and (Profile._tokenize(author_location) & location_tokens):
         score += 1.0
     score += min(engagement, 20) * 0.15

@@ -120,6 +120,37 @@
         /* Desktop-only components */
         .mfy-desktop-only { display: none; }
 
+        /* ===== Desktop-native Create modal =====
+           footer.html's Create modal is styled as a mobile bottom sheet. When it's
+           opened from the desktop sidebar we add the "mfy-desktop-create-mode"
+           class (see script below) so it instead behaves like a normal centered
+           dialog. Mobile behavior is completely untouched — these rules only ever
+           apply when that extra class is present. (Matches home.html.) */
+        .create-modal-overlay.mfy-desktop-create-mode {
+            align-items: center;
+        }
+
+        .create-modal.mfy-desktop-create-mode {
+            width: 90%;
+            max-width: 440px;
+            border-radius: 20px;
+            padding: 28px 24px;
+            transform: scale(0.96);
+            opacity: 0;
+            transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .create-modal-overlay.mfy-desktop-create-mode.open .create-modal.mfy-desktop-create-mode {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        /* The drag handle only makes sense on a mobile bottom sheet */
+        .create-modal.mfy-desktop-create-mode .create-modal-handle {
+            display: none;
+        }
+
         /* Right column that holds the existing profile content */
         .kprof-main-col {
             flex: 1;
@@ -392,16 +423,15 @@
            slightly larger and more relaxed than the in-panel bio so it reads as
            a proper introduction rather than a dense detail row. */
         .kprof-header-bio {
-            font-size: 15.5px; line-height: 1.65; color: var(--mfy-text);
+            font-size: 13px; line-height: 1.5; color: var(--mfy-text);
             font-weight: 400; letter-spacing: 0.1px;
             white-space: pre-line; max-width: 560px;
-            margin: 10px 0 2px; padding-left: 12px;
-            border-left: 3px solid var(--mfy-primary);
+            margin: 4px 0 0; padding: 0;
         }
-        .kprof-header-bio-wrap { display: flex; align-items: flex-start; gap: 6px; }
+        .kprof-header-bio-wrap { display: flex; align-items: flex-start; gap: 4px; }
         .kprof-header-bio-edit {
-            width: 28px; height: 28px; margin-top: 10px; flex-shrink: 0;
-            font-size: 12px; color: var(--mfy-text-light);
+            width: 24px; height: 24px; margin-top: 3px; flex-shrink: 0;
+            font-size: 11px; color: var(--mfy-text-light);
             background: none; border: none; cursor: pointer;
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
         }
@@ -473,14 +503,13 @@
         .kprof-icon-btn:hover { background: var(--mfy-bg); }
         .kprof-icon-btn.subtle { color: var(--mfy-text-light); font-size: 14px; }
 
-        /* ── Skills / expertise chips (flat gray pill, matches Services chips) ── */
-        .kprof-skills-wrap { display: flex; flex-wrap: wrap; gap: 10px; }
-        .kprof-skill-chip {
-            display: inline-flex; align-items: center; gap: 4px;
-            padding: 9px 16px; background: #eef0f2;
-            border: none; border-radius: 20px;
+        /* ── Skills / What I'm Looking For / Languages — plain bullet-separated
+           text list (no chip pills) ── */
+        .kprof-plain-list {
             font-size: 14px; font-weight: 400; color: var(--mfy-text);
+            line-height: 1.6;
         }
+        .kprof-plain-list .kprof-plain-sep { color: var(--mfy-text-light); margin: 0 8px; }
         .kprof-lang-level { color: var(--mfy-text-light); font-weight: 400; }
 
         /* ── Languages chip editor (Edit Profile sheet) ── */
@@ -2456,11 +2485,11 @@
 <main class="mfy-container">
 <div class="mfy-desktop-layout">
 
-  <!-- Left Sidebar - Main Navigation (Desktop) -->
+  <!-- Left Sidebar - Main Navigation (Desktop) — matches home.html -->
   <aside class="mfy-left-sidebar mfy-desktop-only">
     <div class="mfy-desktop-nav">
       <!-- Home -->
-      <a href="{% url 'home' %}" class="mfy-desktop-nav-item" title="Home">
+      <a href="{% url 'home' %}" class="mfy-desktop-nav-item {% if request.path == '/home/' %}active{% endif %}" title="Home">
         <div class="mfy-desktop-nav-icon">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-width="2" d="M3 12l9-9 9 9M4 10v10h16V10" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2469,45 +2498,69 @@
         <span class="mfy-desktop-nav-label">Home</span>
       </a>
 
-      <!-- Search -->
-      <a href="{% url 'search' %}" class="mfy-desktop-nav-item" title="Search">
+      <!-- Explore -->
+      <a href="{% url 'search' %}" class="mfy-desktop-nav-item {% if request.path == '/search' %}active{% endif %}" title="Explore">
         <div class="mfy-desktop-nav-icon">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-        <span class="mfy-desktop-nav-label">Search</span>
+        <span class="mfy-desktop-nav-label">Explore</span>
       </a>
 
-      <!-- Notifications -->
-      <a href="{% url 'notification_list' %}" class="mfy-desktop-nav-item" title="Notifications">
+      <!-- Marketplace -->
+      <a href="{% url 'market' %}" class="mfy-desktop-nav-item {% if request.path == '/market' %}active{% endif %}" title="Marketplace">
         <div class="mfy-desktop-nav-icon">
-          <i class="fa-regular fa-bell" style="font-size: 20px; color: var(--mfy-text-light);"></i>
-          {% if unread_notifications_count and unread_notifications_count > 0 %}
-          <span class="mfy-desktop-notification-badge">{{ unread_notifications_count }}</span>
-          {% endif %}
+          <i class="fas fa-shopping-bag" style="font-size: 18px; color: var(--mfy-text-light);"></i>
         </div>
-        <span class="mfy-desktop-nav-label">Alerts</span>
+        <span class="mfy-desktop-nav-label">Marketplace</span>
       </a>
 
-      <!-- Profile / My Business -->
-      <a href="{% url 'business_pages_mine' %}" class="mfy-desktop-nav-item" title="Profile">
+      <!-- Create (opens the same Post / Product / Job / Event modal used on mobile) -->
+      <button type="button"
+              class="mfy-desktop-nav-item"
+              id="desktopCreateNavBtn"
+              title="Create"
+              style="background:none;border:none;cursor:pointer;width:100%;text-align:left;">
         <div class="mfy-desktop-nav-icon">
-          <i class="fa-regular fa-user" style="font-size: 20px; color: var(--mfy-text-light);"></i>
+          <i class="fas fa-plus-square" style="font-size: 18px; color: var(--mfy-text-light);"></i>
         </div>
-        <span class="mfy-desktop-nav-label">My Business</span>
+        <span class="mfy-desktop-nav-label">Create</span>
+      </button>
+
+      <!-- Jobs -->
+      <a href="{% url 'job_vacancy' %}" class="mfy-desktop-nav-item {% if '/jobs' in request.path %}active{% endif %}" title="Jobs">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fas fa-briefcase" style="font-size: 18px; color: var(--mfy-text-light);"></i>
+        </div>
+        <span class="mfy-desktop-nav-label">Jobs</span>
       </a>
 
-      <!-- Logout -->
-      <a href="#" class="mfy-desktop-nav-item logout" title="Log Out" id="desktopLogoutIcon">
+      <!-- Businesses (public directory) -->
+      <a href="{% url 'business_pages_list' %}" class="mfy-desktop-nav-item {% if request.path == '/business/' %}active{% endif %}" title="Businesses">
         <div class="mfy-desktop-nav-icon">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-          </svg>
+          <i class="fas fa-store" style="font-size: 18px; color: var(--mfy-text-light);"></i>
         </div>
-        <span class="mfy-desktop-nav-label">Logout</span>
+        <span class="mfy-desktop-nav-label">Businesses</span>
       </a>
+
+      <!-- Saved Items -->
+      <a href="{% url 'wishlist' %}" class="mfy-desktop-nav-item {% if request.path == '/wishlist/' %}active{% endif %}" title="Saved Items">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-regular fa-bookmark" style="font-size: 18px; color: var(--mfy-text-light);"></i>
+        </div>
+        <span class="mfy-desktop-nav-label">Saved Items</span>
+      </a>
+
+      <!-- Services -->
+      <a href="{% url 'services' %}" class="mfy-desktop-nav-item {% if request.path == '/services' %}active{% endif %}" title="Services">
+        <div class="mfy-desktop-nav-icon">
+          <i class="fa-solid fa-briefcase" style="font-size: 18px; color: var(--mfy-text-light);"></i>
+        </div>
+        <span class="mfy-desktop-nav-label">Services</span>
+      </a>
+
     </div>
   </aside>
 
@@ -3090,10 +3143,8 @@
         </div>
         {% endif %}
     </div>
-    <div class="kprof-skills-wrap">
-        {% for skill in profile_skills %}
-        <span class="kprof-skill-chip">{{ skill }}</span>
-        {% endfor %}
+    <div class="kprof-plain-list">
+        {% for skill in profile_skills %}<span>{{ skill }}</span>{% if not forloop.last %}<span class="kprof-plain-sep">•</span>{% endif %}{% endfor %}
     </div>
 </div>
 {% elif is_own_profile and profile.skills_schema_field %}
@@ -3120,10 +3171,8 @@
         </div>
         {% endif %}
     </div>
-    <div class="kprof-skills-wrap">
-        {% for label in looking_for_display %}
-        <span class="kprof-skill-chip kprof-looking-for-chip">{{ label }}</span>
-        {% endfor %}
+    <div class="kprof-plain-list">
+        {% for label in looking_for_display %}<span>{{ label }}</span>{% if not forloop.last %}<span class="kprof-plain-sep">•</span>{% endif %}{% endfor %}
     </div>
 </div>
 {% elif is_own_profile and profile.member_type %}
@@ -3151,13 +3200,8 @@
         </div>
         {% endif %}
     </div>
-    <div class="kprof-skills-wrap">
-        {% for lang in profile.languages %}
-        <span class="kprof-skill-chip">
-            {{ lang.name }}
-            {% if lang.proficiency %}<span class="kprof-lang-level">· {{ lang.proficiency }}</span>{% endif %}
-        </span>
-        {% endfor %}
+    <div class="kprof-plain-list">
+        {% for lang in profile.languages %}<span>{{ lang.name }}{% if lang.proficiency %} <span class="kprof-lang-level">({{ lang.proficiency }})</span>{% endif %}</span>{% if not forloop.last %}<span class="kprof-plain-sep">•</span>{% endif %}{% endfor %}
     </div>
 </div>
 {% elif is_own_profile and profile.is_professional %}
@@ -4340,86 +4384,6 @@
   <aside class="mfy-right-sidebar mfy-desktop-only">
     <div class="mfy-side-stack">
 
-      <!-- ── Profile summary card (logged-in viewer, not the profile being viewed) ── -->
-      <div class="mfy-profile-card">
-        <div class="mfy-profile-card-top">
-          <img src="{{ request.user.profile.get_picture_url }}" alt="{{ request.user.username }}" class="mfy-profile-card-avatar">
-          <div class="mfy-profile-card-name-wrap">
-            <div class="mfy-profile-card-name">
-              {{ request.user.profile.full_name|default:request.user.username }}
-              {% if request.user.profile.is_verify %}
-              <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" loading="lazy">
-              {% endif %}
-            </div>
-            <div class="mfy-profile-card-username">@{{ request.user.username }}</div>
-          </div>
-        </div>
-
-        <div class="mfy-profile-card-stats">
-          <a href="{% url 'profile' request.user.username %}" class="mfy-profile-card-stat">
-            <span class="mfy-profile-card-stat-num">{{ request.user.products.count }}</span>
-            <span class="mfy-profile-card-stat-label">Listings</span>
-          </a>
-          <a href="{% url 'following' request.user.username %}" class="mfy-profile-card-stat">
-            <span class="mfy-profile-card-stat-num">{{ viewer_following_count }}</span>
-            <span class="mfy-profile-card-stat-label">Following</span>
-          </a>
-          <a href="{% url 'followers' request.user.username %}" class="mfy-profile-card-stat">
-            <span class="mfy-profile-card-stat-num">{{ viewer_follower_count }}</span>
-            <span class="mfy-profile-card-stat-label">Followers</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- ── Shortcuts ────────────────────────────────────────── -->
-      <div class="mfy-side-card">
-        <div class="mfy-side-card-header">
-          <span class="mfy-side-card-title">Shortcuts</span>
-          <a href="{% url 'profile' request.user.username %}" class="mfy-side-card-seeall">See all</a>
-        </div>
-
-        {% if viewer_primary_business_page %}
-        <a href="{% url 'business_page_detail' viewer_primary_business_page.slug %}" class="mfy-shortcut-row">
-          <span class="mfy-shortcut-icon"><i class="fa-solid fa-list-ul"></i></span>
-          <span class="mfy-shortcut-label">My Listings</span>
-          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-        </a>
-        {% else %}
-        <a href="{% url 'business_page_create' %}" class="mfy-shortcut-row">
-          <span class="mfy-shortcut-icon"><i class="fa-solid fa-list-ul"></i></span>
-          <span class="mfy-shortcut-label">My Listings</span>
-          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-        </a>
-        {% endif %}
-        <a href="{% url 'wishlist' %}" class="mfy-shortcut-row">
-          <span class="mfy-shortcut-icon"><i class="fa-regular fa-bookmark"></i></span>
-          <span class="mfy-shortcut-label">Saved Items</span>
-          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-        </a>
-        <a href="{% url 'following' request.user.username %}" class="mfy-shortcut-row">
-          <span class="mfy-shortcut-icon"><i class="fa-solid fa-user-plus"></i></span>
-          <span class="mfy-shortcut-label">Following</span>
-          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-        </a>
-        <a href="{% url 'services' %}" class="mfy-shortcut-row">
-          <span class="mfy-shortcut-icon"><i class="fa-solid fa-briefcase"></i></span>
-          <span class="mfy-shortcut-label">Services</span>
-          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-        </a>
-        <a href="{% url 'business_pages_list' %}" class="mfy-shortcut-row">
-          <span class="mfy-shortcut-icon"><i class="fas fa-store"></i></span>
-          <span class="mfy-shortcut-label">Businesses Directory</span>
-          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-        </a>
-        {% if request.user.is_staff or request.user.is_superuser %}
-        <a href="{% url 'admin_dashboard' %}" class="mfy-shortcut-row">
-          <span class="mfy-shortcut-icon"><i class="fas fa-shield-alt"></i></span>
-          <span class="mfy-shortcut-label">Dashboard</span>
-          <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-        </a>
-        {% endif %}
-      </div>
-
       <!-- ── Suggested for you (users) ───────────────────────────── -->
       {% if sidebar_suggested_users %}
       <div class="mfy-side-card">
@@ -4592,6 +4556,10 @@
 </div><!-- /.mfy-desktop-layout -->
 </main>
 
+<div class="mfy-mobile-footer-only">
+  {% include 'footer.html' %}
+</div>
+
 <!-- ===== MOBILE "MORE" SIDEBAR TOGGLE BUTTON ===== -->
 <button class="mfy-mobile-sidebar-toggle" id="mfy-mobile-sidebar-toggle" onclick="mfyOpenMobileSidebar()" aria-label="Open sidebar">
   <i class="fas fa-chevron-left"></i>
@@ -4611,86 +4579,6 @@
   </div>
 
   <div class="mfy-mobile-sidebar-body">
-
-    <!-- ── Profile summary card (logged-in viewer) ─────────────── -->
-    <div class="mfy-profile-card">
-      <div class="mfy-profile-card-top">
-        <img src="{{ request.user.profile.get_picture_url }}" alt="{{ request.user.username }}" class="mfy-profile-card-avatar">
-        <div class="mfy-profile-card-name-wrap">
-          <div class="mfy-profile-card-name">
-            {{ request.user.profile.full_name|default:request.user.username }}
-            {% if request.user.profile.is_verify %}
-            <img src="{% static 'images/verify1.jpg' %}" height="14" width="14" alt="✓" loading="lazy">
-            {% endif %}
-          </div>
-          <div class="mfy-profile-card-username">@{{ request.user.username }}</div>
-        </div>
-      </div>
-
-      <div class="mfy-profile-card-stats">
-        <a href="{% url 'profile' request.user.username %}" class="mfy-profile-card-stat">
-          <span class="mfy-profile-card-stat-num">{{ request.user.products.count }}</span>
-          <span class="mfy-profile-card-stat-label">Listings</span>
-        </a>
-        <a href="{% url 'following' request.user.username %}" class="mfy-profile-card-stat">
-          <span class="mfy-profile-card-stat-num">{{ viewer_following_count }}</span>
-          <span class="mfy-profile-card-stat-label">Following</span>
-        </a>
-        <a href="{% url 'followers' request.user.username %}" class="mfy-profile-card-stat">
-          <span class="mfy-profile-card-stat-num">{{ viewer_follower_count }}</span>
-          <span class="mfy-profile-card-stat-label">Followers</span>
-        </a>
-      </div>
-    </div>
-
-    <!-- ── Shortcuts ────────────────────────────────────────── -->
-    <div class="mfy-side-card">
-      <div class="mfy-side-card-header">
-        <span class="mfy-side-card-title">Shortcuts</span>
-        <a href="{% url 'profile' request.user.username %}" class="mfy-side-card-seeall">See all</a>
-      </div>
-
-      {% if viewer_primary_business_page %}
-      <a href="{% url 'business_page_detail' viewer_primary_business_page.slug %}" class="mfy-shortcut-row">
-        <span class="mfy-shortcut-icon"><i class="fa-solid fa-list-ul"></i></span>
-        <span class="mfy-shortcut-label">My Listings</span>
-        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-      </a>
-      {% else %}
-      <a href="{% url 'business_page_create' %}" class="mfy-shortcut-row">
-        <span class="mfy-shortcut-icon"><i class="fa-solid fa-list-ul"></i></span>
-        <span class="mfy-shortcut-label">My Listings</span>
-        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-      </a>
-      {% endif %}
-      <a href="{% url 'wishlist' %}" class="mfy-shortcut-row">
-        <span class="mfy-shortcut-icon"><i class="fa-regular fa-bookmark"></i></span>
-        <span class="mfy-shortcut-label">Saved Items</span>
-        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-      </a>
-      <a href="{% url 'following' request.user.username %}" class="mfy-shortcut-row">
-        <span class="mfy-shortcut-icon"><i class="fa-solid fa-user-plus"></i></span>
-        <span class="mfy-shortcut-label">Following</span>
-        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-      </a>
-      <a href="{% url 'services' %}" class="mfy-shortcut-row">
-        <span class="mfy-shortcut-icon"><i class="fa-solid fa-briefcase"></i></span>
-        <span class="mfy-shortcut-label">Services</span>
-        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-      </a>
-      <a href="{% url 'business_pages_list' %}" class="mfy-shortcut-row">
-        <span class="mfy-shortcut-icon"><i class="fas fa-store"></i></span>
-        <span class="mfy-shortcut-label">Businesses Directory</span>
-        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-      </a>
-      {% if request.user.is_staff or request.user.is_superuser %}
-      <a href="{% url 'admin_dashboard' %}" class="mfy-shortcut-row">
-        <span class="mfy-shortcut-icon"><i class="fas fa-shield-alt"></i></span>
-        <span class="mfy-shortcut-label">Dashboard</span>
-        <i class="fas fa-chevron-right mfy-shortcut-chevron"></i>
-      </a>
-      {% endif %}
-    </div>
 
     <!-- ── Suggested for you (users) ───────────────────────────── -->
     {% if sidebar_suggested_users %}
@@ -6868,6 +6756,41 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 {% endif %}
+
+// ── Desktop sidebar "Create" button — reuses the exact Post / Product / Job /
+// Event modal that footer.html already builds and wires up for mobile, so
+// there's only one modal, one set of options, and one place to maintain it.
+// (Mirrors home.html so behavior is consistent across pages.) ──
+document.addEventListener('DOMContentLoaded', function () {
+    var desktopCreateBtn = document.getElementById('desktopCreateNavBtn');
+    var mobileCreateBtn  = document.getElementById('createNavBtn');
+    var createOverlay    = document.getElementById('createModalOverlay');
+    var createModal      = createOverlay ? createOverlay.querySelector('.create-modal') : null;
+
+    if (desktopCreateBtn && mobileCreateBtn) {
+        desktopCreateBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            // Mark the modal as desktop-triggered so it renders as a
+            // centered dialog instead of a mobile bottom sheet.
+            if (createOverlay) createOverlay.classList.add('mfy-desktop-create-mode');
+            if (createModal) createModal.classList.add('mfy-desktop-create-mode');
+            mobileCreateBtn.click();
+        });
+    }
+
+    // Once the modal closes, strip the desktop styling again so it doesn't
+    // stick around if the mobile bottom-nav Create button is used next
+    // (e.g. after resizing the window).
+    if (createOverlay) {
+        var createModeObserver = new MutationObserver(function () {
+            if (!createOverlay.classList.contains('open') && createOverlay.classList.contains('mfy-desktop-create-mode')) {
+                createOverlay.classList.remove('mfy-desktop-create-mode');
+                if (createModal) createModal.classList.remove('mfy-desktop-create-mode');
+            }
+        });
+        createModeObserver.observe(createOverlay, { attributes: true, attributeFilter: ['class'] });
+    }
+});
 
 </script>
 
