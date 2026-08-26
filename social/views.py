@@ -362,7 +362,7 @@ def register(request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Onboarding — "What do you use Marketfy for?"
+# Onboarding — "What do you use KishiHub for?"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _collect_indexed_entries(post, files, prefix):

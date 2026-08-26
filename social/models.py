@@ -35,7 +35,7 @@ MAX_TEXT_LENGTHS = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Member Type / Onboarding — "What do you use Marketfy for?"
+# Member Type / Onboarding — "What do you use KishiHub for?"
 # One flexible schema instead of 10 separate models: each type has its own
 # list of fields, stored together in Profile.member_type_data (JSONField).
 # ─────────────────────────────────────────────────────────────────────────────
@@ -583,7 +583,7 @@ class Profile(models.Model):
     LANGUAGE_PROFICIENCY_DEFAULT = 'Conversational'
     languages = models.JSONField(default=list, blank=True)
 
-    # ── Member type / onboarding ("What do you use Marketfy for?") ──────
+    # ── Member type / onboarding ("What do you use KishiHub for?") ──────
     member_type          = models.CharField(max_length=30, choices=MEMBER_TYPE_CHOICES, blank=True, default='')
     member_type_data     = models.JSONField(default=dict, blank=True)
 
@@ -1002,15 +1002,12 @@ class Profile(models.Model):
     def member_type_emoji(self):
         return MEMBER_TYPE_SCHEMA.get(self.member_type, {}).get('emoji', '')
 
-    # Keys that get their own dedicated profile section (Skills chips, or
-    # the "What I Do" summary) and so are left out of
-    # member_type_display_fields / member_type_headline to avoid showing
-    # the same information twice.
+    # Keys that get their own dedicated profile section (Skills chips) and
+    # so are always left out of member_type_display_fields — the full
+    # exclusion set (including every key the What I Do sentence composer
+    # below might use) is defined as _DISPLAY_FIELD_EXCLUDE further down,
+    # once that composer's field list is in view.
     _SKILLS_FIELD_KEYS = {'skills', 'skills_learning'}
-    _DISPLAY_FIELD_EXCLUDE = _SKILLS_FIELD_KEYS | {
-        'business_description', 'services_offered', 'products_services',
-        'hiring_for', 'description', 'experience',
-    }
 
     @staticmethod
     def _format_mtd_value(value):
@@ -1178,41 +1175,140 @@ class Profile(models.Model):
         return [LOOKING_FOR_LABELS.get(key, labels.get(key, key)) for key in (self.looking_for or [])]
 
     # ── "What I Do" — a short, natural-language description of what this
-    #    profile does, phrased per member type so it reads like a real
-    #    sentence ("I own Acme Ltd", "I teach Mathematics, English") rather
-    #    than a raw field dump. Falls back to a type-specific description
-    #    field, then the bio, for member types with no sentence template. ──
-    _WHAT_I_DO_SENTENCE_TEMPLATES = {
-        'business_owner': 'I own {headline}',
-        'teacher_tutor':   'I teach {headline}',
-    }
+    #    profile does, composed per member type from the actual fields the
+    #    user filled in / selected (never a generic placeholder). Each
+    #    branch degrades gracefully: it uses the richest combination of
+    #    fields available and falls back to a shorter sentence, then to a
+    #    generic description field, then to the bio, if some fields are
+    #    missing. ──────────────────────────────────────────────────────────
     _WHAT_I_DO_KEYS = (
         'business_description', 'services_offered', 'products_services',
         'hiring_for', 'description', 'experience',
     )
+    # Every member_type_data key referenced by any branch below, plus the
+    # generic fallback keys — excluded from the Details list so nothing the
+    # What I Do sentence already says gets repeated there.
+    _DISPLAY_FIELD_EXCLUDE = {
+        'skills', 'skills_learning',
+        'business_name', 'business_category',
+        'subjects', 'teaching_level',
+        'profession', 'desired_job',
+        'trade', 'service_type', 'coverage_area',
+        'institution', 'field_of_study',
+        'company_name', 'hiring_for',
+        'description',
+        'business_description', 'services_offered', 'products_services', 'experience',
+    }
 
     @property
     def what_i_do_headline(self):
-        """Headline to show above the What I Do description. Omitted for
-        member types with a sentence template above, since the sentence
-        already includes the headline (e.g. the business name)."""
-        if self.member_type in self._WHAT_I_DO_SENTENCE_TEMPLATES:
+        """Headline to show above the What I Do description. Left blank for
+        any onboarded member type, since what_i_do_summary already composes
+        a full sentence that includes it — only used as a fallback for
+        profiles with no member_type set yet."""
+        if self.member_type in MEMBER_TYPE_SCHEMA:
             return ''
-        return self.member_type_headline_value or self.profession
+        return self.profession
 
     @property
     def what_i_do_summary(self):
-        template = self._WHAT_I_DO_SENTENCE_TEMPLATES.get(self.member_type)
-        if template:
-            headline = self.member_type_headline_value
-            if headline:
-                return template.format(headline=headline)[:220]
+        mt = self.member_type
         data = self.member_type_data or {}
+        skills = self.skills_list
+        skills_text = ', '.join(skills[:3])
+
+        if mt == 'business_owner':
+            name = data.get('business_name', '')
+            category = data.get('business_category', '')
+            if name and category:
+                return f"I own {name}, a {category} business."[:220]
+            if name:
+                return f"I own {name}."[:220]
+
+        elif mt == 'teacher_tutor':
+            subjects = data.get('subjects', '')
+            level = data.get('teaching_level', '')
+            if subjects and level:
+                return f"I teach {subjects} at the {level} level."[:220]
+            if subjects:
+                return f"I teach {subjects}."[:220]
+
+        elif mt == 'skilled_professional':
+            profession = data.get('profession', '')
+            if profession and skills:
+                return f"I work as a {profession}, specializing in {skills_text}."[:220]
+            if profession:
+                return f"I work as a {profession}."[:220]
+
+        elif mt == 'job_seeker':
+            desired = data.get('desired_job', '')
+            if desired and skills:
+                return f"I'm looking for work as a {desired}, with skills in {skills_text}."[:220]
+            if desired:
+                return f"I'm looking for work as a {desired}."[:220]
+
+        elif mt == 'freelancer':
+            services = self._format_mtd_value(data.get('services_offered', ''))
+            if skills and services:
+                return f"I'm a freelancer offering {skills_text}. {services}"[:220]
+            if skills:
+                return f"I'm a freelancer offering {skills_text} services."[:220]
+            if services:
+                return services[:220]
+
+        elif mt == 'artisan_technician':
+            trade = data.get('trade', '')
+            if trade and skills:
+                return f"I work as a {trade}, skilled in {skills_text}."[:220]
+            if trade:
+                return f"I work as a {trade}."[:220]
+
+        elif mt == 'service_provider':
+            service_type = data.get('service_type', '')
+            coverage = data.get('coverage_area', '')
+            if service_type and coverage:
+                return f"I provide {service_type} services within {coverage}."[:220]
+            if service_type:
+                return f"I provide {service_type} services."[:220]
+
+        elif mt == 'student_apprentice':
+            institution = data.get('institution', '')
+            field_of_study = data.get('field_of_study', '')
+            if field_of_study and institution:
+                sentence = f"I'm studying {field_of_study} at {institution}."
+            elif institution:
+                sentence = f"I'm a student at {institution}."
+            elif field_of_study:
+                sentence = f"I'm studying {field_of_study}."
+            else:
+                sentence = ''
+            if skills:
+                sentence = (sentence + f" Currently learning {skills_text}.").strip()
+            if sentence:
+                return sentence[:220]
+
+        elif mt == 'employer_recruiter':
+            company = data.get('company_name', '')
+            hiring_for = self._format_mtd_value(data.get('hiring_for', ''))
+            if company and hiring_for:
+                return f"I'm hiring on behalf of {company}. Currently hiring for {hiring_for}"[:220]
+            if company:
+                return f"I'm hiring on behalf of {company}."[:220]
+
+        elif mt == 'other_professional':
+            description = self._format_mtd_value(data.get('description', ''))
+            if description and skills:
+                return f"{description} Skilled in {skills_text}."[:220]
+            if description:
+                return description[:220]
+
+        # Generic fallback — a member type with a missing required field, or
+        # no member_type at all: use whichever description-shaped field is
+        # filled in, then the bio.
         for key in self._WHAT_I_DO_KEYS:
             value = data.get(key)
             if value:
-                value = self._format_mtd_value(value)
-                return value[:220]
+                return self._format_mtd_value(value)[:220]
         return (self.bio or '')[:220]
 
     @property
@@ -1258,11 +1354,16 @@ class Profile(models.Model):
             (self.has_custom_picture, 'Add a profile photo'),
             (bool(self.full_name or (self.user.first_name if self.user_id else '')), 'Add your name'),
             (bool(self.member_type_headline_value or self.profession), 'Add a headline'),
-            (bool(self.skills_list), 'Add your skills'),
             (bool(self.location), 'Add your location'),
             (bool(self.bio or self.what_i_do_summary), 'Describe what you do'),
             (bool(self.looking_for), "Add what you're looking for"),
         ]
+        # Only count "Add your skills" for member types whose schema actually
+        # has a skills field (e.g. not Business Owner) — otherwise those
+        # profiles could never reach 100%, and the popup would nudge them
+        # toward a field they have no way to fill in.
+        if self.skills_schema_field:
+            checks.append((bool(self.skills_list), 'Add your skills'))
         if self.show_experience or self.show_education:
             has_exp_or_edu = self.experiences.exists() or self.education_history.exists()
             checks.append((has_exp_or_edu, 'Add your experience or education'))

@@ -8,7 +8,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="csrf-token" content="{{ csrf_token }}">
-    <title>{{ profile.full_name|default:user.username }} (@{{ user.username }}) | Marketfy</title>
+    <title>{{ profile.full_name|default:user.username }} (@{{ user.username }}) | KishiHub</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" defer></script>
     <style>
@@ -342,6 +342,14 @@
         .kprof-username { font-size: 13px; color: var(--mfy-text-light); font-weight: 400; margin: 6px 0 0; }
         .kprof-details-line { font-size: 13px; color: var(--mfy-text-light); font-weight: 400; margin: 6px 0 0; }
         .kprof-school-line { font-size: 15px; color: var(--mfy-text); font-weight: 400; margin: 2px 0 0; line-height: 1.4; }
+        /* Quick-glance meta line (joined date, portfolio/website link, etc.) shown
+           right under the identity line, in place of the old school line. */
+        .kprof-meta-line { font-size: 13.5px; color: var(--mfy-text-light); font-weight: 400; margin: 4px 0 0; line-height: 1.4; display: flex; flex-wrap: wrap; align-items: center; gap: 0; }
+        .kprof-meta-item { display: inline-flex; align-items: center; gap: 5px; }
+        .kprof-meta-item i { font-size: 11px; color: var(--mfy-text-light); }
+        .kprof-meta-item:not(:last-child)::after { content: "·"; margin: 0 7px; color: var(--mfy-text-light); }
+        .kprof-meta-item a { color: var(--mfy-primary); text-decoration: none; font-weight: 600; }
+        .kprof-meta-item a:hover { text-decoration: underline; }
         .kprof-inline-details { font-size: 15px; color: var(--mfy-text); font-weight: 400; margin: 2px 0 0; line-height: 1.4; }
         .kprof-inline-item:not(:last-child)::after { content: " || "; color: var(--mfy-text-light); }
 
@@ -380,6 +388,24 @@
         .kprof-details-value a { color: var(--mfy-primary); text-decoration: none; }
         .kprof-details-value a:hover { text-decoration: underline; }
         .kprof-bio { font-size: 14px; color: var(--mfy-text); line-height: 1.6; margin-bottom: 10px; white-space: pre-line; max-width: 520px; }
+        /* Bio, shown directly in the header above the followers/following line —
+           slightly larger and more relaxed than the in-panel bio so it reads as
+           a proper introduction rather than a dense detail row. */
+        .kprof-header-bio {
+            font-size: 15.5px; line-height: 1.65; color: var(--mfy-text);
+            font-weight: 400; letter-spacing: 0.1px;
+            white-space: pre-line; max-width: 560px;
+            margin: 10px 0 2px; padding-left: 12px;
+            border-left: 3px solid var(--mfy-primary);
+        }
+        .kprof-header-bio-wrap { display: flex; align-items: flex-start; gap: 6px; }
+        .kprof-header-bio-edit {
+            width: 28px; height: 28px; margin-top: 10px; flex-shrink: 0;
+            font-size: 12px; color: var(--mfy-text-light);
+            background: none; border: none; cursor: pointer;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        }
+        .kprof-header-bio-edit:hover { background: var(--mfy-bg); color: var(--mfy-primary); }
 
         /* Single LinkedIn-style connections line: "2,932 followers · 512 following · 3 pages" */
         .kprof-stats-line { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 10px; font-size: 14px; }
@@ -1970,6 +1996,7 @@
     border: 1px solid var(--mfy-border, #eee);
 }
 .kpp-li-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
+.kprof-zoomable { cursor: zoom-in; }
 .kpp-li-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .kpp-li-title { font-size: 15px; font-weight: 700; color: var(--mfy-text); line-height: 1.35; }
 .kpp-li-subtitle { font-size: 13.5px; color: var(--mfy-text); opacity: 0.85; margin-top: 1px; }
@@ -2571,14 +2598,24 @@
     {% endif %}
     {% endwith %}
 
-    <!-- School line sits directly under the identity line, LinkedIn-style -->
-    {% if professional_education %}
-    <div class="kprof-school-line">{{ professional_education.0.school_name }}</div>
+    <!-- Quick-glance meta line sits directly under the identity line, in place
+         of the old school line: joined date + portfolio/website link, since
+         these are the details visitors most want at a glance. Location is
+         already covered above in the identity line. -->
+    {% if user.date_joined or profile.safe_website %}
+    <div class="kprof-meta-line">
+        {% if user.date_joined %}
+        <span class="kprof-meta-item"><i class="fas fa-calendar-alt"></i> Joined {{ user.date_joined|date:"F Y" }}</span>
+        {% endif %}
+        {% if profile.safe_website %}
+        <span class="kprof-meta-item"><i class="fas fa-link"></i> <a href="{{ profile.safe_website }}" target="_blank" rel="noopener noreferrer">{{ profile.display_website }}</a></span>
+        {% endif %}
+    </div>
     {% endif %}
 
     {% if not profile.member_type and is_own_profile %}
         <a href="{% url 'onboarding' %}?edit=1" class="kprof-member-type-cta">
-            <i class="fas fa-briefcase"></i> Add what you use Marketfy for
+            <i class="fas fa-briefcase"></i> Add what you use KishiHub for
             <i class="fas fa-chevron-right"></i>
         </a>
     {% elif profile.member_type and is_own_profile %}
@@ -2591,6 +2628,17 @@
         <div class="kprof-private">
             <i class="fas fa-lock"></i> This account's details are private.
         </div>
+    {% endif %}
+
+    <!-- Bio, moved up here from the About tab so it reads as a proper
+         introduction right in the header, before the connection counts. -->
+    {% if can_view_details and profile.bio %}
+    <div class="kprof-header-bio-wrap">
+        <div class="kprof-header-bio">{{ profile.bio }}</div>
+        {% if is_own_profile %}
+        <button type="button" class="kprof-icon-btn kprof-header-bio-edit" onclick="openProfileAboutModal()" aria-label="Edit about"><i class="fas fa-pen"></i></button>
+        {% endif %}
+    </div>
     {% endif %}
 
     <!-- Connections summary, single line like LinkedIn ("2,932 followers · 512 following · 3 pages") -->
@@ -2858,19 +2906,7 @@
 <div class="kprof-tab-panel active" id="tab-about">
 
 {% if can_view_details %}
-    {% if profile.bio %}
-    <div class="kprof-listings-panel">
-        <div class="kprof-section-h">
-            <h2>About</h2>
-            {% if is_own_profile %}
-            <div class="kprof-section-h-actions">
-                <button type="button" class="kprof-icon-btn" onclick="openProfileAboutModal()" aria-label="Edit about"><i class="fas fa-pen"></i></button>
-            </div>
-            {% endif %}
-        </div>
-        <div class="kprof-bio">{{ profile.bio }}</div>
-    </div>
-    {% elif is_own_profile %}
+    {% if not profile.bio and is_own_profile %}
     <div class="kprof-dashed-card">
         <div class="kprof-dashed-head">
             <h2>About</h2>
@@ -2900,7 +2936,7 @@
     </div>
     {% endif %}
 
-    {% if profile.location or profile.phone or profile.safe_website or profile.show_gender or profile.show_dob or user.date_joined %}
+    {% if profile.location or profile.phone or profile.show_gender or profile.show_dob %}
     <div class="kprof-listings-panel">
         <div class="kprof-section-h">
             <h2>Details</h2>
@@ -2929,22 +2965,10 @@
                 <span class="kprof-details-text"><span class="kprof-details-label">Gender:</span><span class="kprof-details-value">{{ profile.get_gender_display }}</span></span>
             </div>
             {% endif %}
-            {% if profile.safe_website %}
-            <div class="kprof-details-row">
-                <span class="kprof-details-icon"><i class="fas fa-globe"></i></span>
-                <span class="kprof-details-text"><span class="kprof-details-label">Website:</span><span class="kprof-details-value"><a href="{{ profile.safe_website }}" target="_blank" rel="noopener noreferrer">{{ profile.display_website }}</a></span></span>
-            </div>
-            {% endif %}
             {% if profile.show_dob and profile.date_of_birth %}
             <div class="kprof-details-row">
                 <span class="kprof-details-icon"><i class="fas fa-birthday-cake"></i></span>
                 <span class="kprof-details-text"><span class="kprof-details-label">Date of birth:</span><span class="kprof-details-value">{{ profile.date_of_birth|date:"M d, Y" }}</span></span>
-            </div>
-            {% endif %}
-            {% if user.date_joined %}
-            <div class="kprof-details-row">
-                <span class="kprof-details-icon"><i class="fas fa-calendar-alt"></i></span>
-                <span class="kprof-details-text"><span class="kprof-details-label">Joined date:</span><span class="kprof-details-value">{{ user.date_joined|date:"F Y" }}</span></span>
             </div>
             {% endif %}
         </div>
@@ -2968,7 +2992,8 @@
         <article class="kpp-li-row" id="kpp-experience-{{ exp.experience_id }}">
             <div class="kpp-li-logo-wrap">
                 <img src="{{ exp.get_image_url|default:'https://placehold.co/120x120/eef2ff/4f46e5?text=%F0%9F%92%BC' }}"
-                     alt="{{ exp.company_name }}" loading="lazy" class="kpp-li-logo"
+                     alt="{{ exp.company_name }}" loading="lazy" class="kpp-li-logo kprof-zoomable"
+                     onclick="kprofOpenImageModal(this.src)"
                      onerror="this.onerror=null;this.src='https://placehold.co/120x120/eef2ff/4f46e5?text=%F0%9F%92%BC';">
             </div>
             <div class="kpp-li-body">
@@ -3018,7 +3043,8 @@
         <article class="kpp-li-row" id="kpp-education-{{ edu.education_id }}">
             <div class="kpp-li-logo-wrap">
                 <img src="{{ edu.get_image_url|default:'https://placehold.co/120x120/f0fdf4/16a34a?text=%F0%9F%8E%93' }}"
-                     alt="{{ edu.school_name }}" loading="lazy" class="kpp-li-logo"
+                     alt="{{ edu.school_name }}" loading="lazy" class="kpp-li-logo kprof-zoomable"
+                     onclick="kprofOpenImageModal(this.src)"
                      onerror="this.onerror=null;this.src='https://placehold.co/120x120/f0fdf4/16a34a?text=%F0%9F%8E%93';">
             </div>
             <div class="kpp-li-body">
@@ -3106,7 +3132,7 @@
         <h2>What I'm Looking For</h2>
         <button type="button" class="kprof-dashed-close" aria-label="Dismiss"><i class="fas fa-times"></i></button>
     </div>
-    <div class="kprof-dashed-text">Let people know what you're on Marketfy for — a job, clients, collaborators...</div>
+    <div class="kprof-dashed-text">Let people know what you're on KishiHub for — a job, clients, collaborators...</div>
     <button type="button" class="kprof-dashed-add-btn" onclick="openProfileLookingForModal()"><i class="fas fa-plus"></i> Add what I'm looking for</button>
 </div>
 {% endif %}
@@ -3181,36 +3207,30 @@
         </div>
         {% endif %}
     </div>
-    <div class="kbiz-jobs-list" id="kppAchievementsGrid">
+    <div class="kpp-li-list" id="kppAchievementsGrid">
         {% for a in professional_achievements %}
-        <article class="khj-jcard" id="kpp-achievement-{{ a.achievement_id }}">
-          <div class="khj-jrow">
-            <div class="khj-jcard-img-link">
-              <div class="khj-jcard-img-wrap">
-                <img src="{{ a.get_image_url|default:'https://placehold.co/600x400/fff7e6/f59e0b?text=Achievement' }}"
-                     alt="{{ a.title }}" loading="lazy" onload="this.classList.add('loaded')" class="khj-jcard-img">
-              </div>
+        <article class="kpp-li-row" id="kpp-achievement-{{ a.achievement_id }}">
+            <div class="kpp-li-logo-wrap">
+                <img src="{{ a.get_image_url|default:'https://placehold.co/120x120/fff7e6/f59e0b?text=%F0%9F%8F%86' }}"
+                     alt="{{ a.title }}" loading="lazy" class="kpp-li-logo kprof-zoomable"
+                     onclick="kprofOpenImageModal(this.src)"
+                     onerror="this.onerror=null;this.src='https://placehold.co/120x120/fff7e6/f59e0b?text=%F0%9F%8F%86';">
             </div>
-            <div class="khj-jcard-body">
-              <span class="khj-jcard-name">{{ a.title }}</span>
-              <div class="khj-jcard-meta">
-                {% if a.issuer %}<span class="khj-jcard-meta-txt"><i class="fas fa-award"></i>{{ a.issuer }}</span>{% endif %}
-                {% if a.date_achieved %}<span class="khj-jcard-meta-txt">{{ a.date_achieved }}</span>{% endif %}
-              </div>
-              {% if a.description %}
-              <div class="khj-jcard-meta">
-                <span class="khj-jcard-meta-txt">{{ a.description|truncatechars:120 }}</span>
-              </div>
-              {% endif %}
+            <div class="kpp-li-body">
+                <span class="kpp-li-title">{{ a.title }}</span>
+                {% if a.issuer %}<span class="kpp-li-subtitle">{{ a.issuer }}</span>{% endif %}
+                <span class="kpp-li-meta">
+                    {% if a.date_achieved %}{{ a.date_achieved }}{% endif %}
+                </span>
+                {% if a.description %}<p class="kpp-li-desc">{{ a.description|truncatechars:120 }}</p>{% endif %}
+                {% if is_own_profile %}
+                <div class="kpp-li-owner-row">
+                    <button class="khj-owner-btn del" onclick="deleteProfileAchievement('{{ a.achievement_id }}')">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
+                {% endif %}
             </div>
-          </div>
-          {% if is_own_profile %}
-          <div class="khj-jcard-owner-row">
-            <button class="khj-owner-btn del" onclick="deleteProfileAchievement('{{ a.achievement_id }}')">
-                <i class="fas fa-trash"></i> Delete
-            </button>
-          </div>
-          {% endif %}
         </article>
         {% endfor %}
     </div>
@@ -3879,7 +3899,7 @@
             <input class="kpp-input" id="ppSkillsOther" type="text" maxlength="200" value="{{ skills_other_value }}" placeholder="Other skills, comma-separated" style="margin-top:8px;">
         </div>
         {% elif is_own_profile %}
-        <div class="kpp-field-hint">Choose what you use Marketfy for in <a href="{% url 'onboarding' %}?edit=1">your professional info</a> to unlock a skills list.</div>
+        <div class="kpp-field-hint">Choose what you use KishiHub for in <a href="{% url 'onboarding' %}?edit=1">your professional info</a> to unlock a skills list.</div>
         {% endif %}
         <button type="button" class="kpp-modal-submit" id="ppSkillsSubmitBtn" onclick="submitProfileSkills()">Save</button>
     </div>
@@ -4553,7 +4573,7 @@
               <div class="kprof-suggest-invite-icon"><i class="fas fa-store"></i></div>
               <div class="kprof-suggest-invite-text">
                   <strong>Discover businesses</strong>
-                  <span>Browse more pages on Marketfy</span>
+                  <span>Browse more pages on KishiHub</span>
               </div>
           </a>
 
@@ -4561,7 +4581,7 @@
               <a href="{% url 'services' %}">Services</a> ·
               <a href="{% url 'business_pages_list' %}">Businesses</a> ·
               <a href="{% url 'search' %}">Explore</a><br>
-              © {% now "Y" %} Marketfy
+              © {% now "Y" %} KishiHub
           </div>
       </div>
       {% endif %}
@@ -5507,7 +5527,7 @@ async function toggleFollow() {
 /* ── Share Profile (Web Share API with clipboard fallback) ── */
 async function shareProfile() {
     const shareData = {
-        title: `${TARGET_USERNAME} on Marketfy`,
+        title: `${TARGET_USERNAME} on KishiHub`,
         url: window.location.href,
     };
     try {
@@ -6708,6 +6728,18 @@ function kfLightboxNav(dir, evt) {
 function kfCloseLightbox() {
     document.getElementById('kfLightboxOverlay').classList.remove('active');
     document.body.style.overflow = '';
+}
+
+// ── Single-image modal for profile cards (Experience / Education / Achievements
+// logo thumbnails). Reuses the same lightbox overlay/markup as the post grid,
+// just with a single image and no prev/next nav. ──
+function kprofOpenImageModal(src) {
+    if (!src) return;
+    kfLightboxImages = [src];
+    kfLightboxIndex = 0;
+    kfRenderLightbox();
+    document.getElementById('kfLightboxOverlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
 }
 
 document.addEventListener('keydown', function (e) {
