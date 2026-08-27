@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.postgres.indexes import GinIndex
 from cloudinary.models import CloudinaryField
 from django.contrib.auth.models import User
 from django.conf import settings
@@ -657,6 +658,10 @@ class Profile(models.Model):
 
     class Meta:
         db_table = 'Profile_Table'
+        indexes = [
+            GinIndex(fields=['bio'], name='profile_bio_trgm', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['profession'], name='profile_prof_trgm', opclasses=['gin_trgm_ops']),
+        ]
 
     def __str__(self):
         return self.user.username
@@ -1829,7 +1834,18 @@ class Message(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
-    
+
+    class Meta:
+        indexes = [
+            # Conversation thread + "recent DM partners" queries filter by
+            # one side of the pair and sort by created_at — this table grows
+            # unbounded, so a compound index on both directions matters.
+            models.Index(fields=['sender', 'receiver', '-created_at'], name='message_sender_recv_idx'),
+            models.Index(fields=['receiver', 'sender', '-created_at'], name='message_recv_sender_idx'),
+            # Unread-count badge queries.
+            models.Index(fields=['receiver', 'is_read'], name='message_recv_unread_idx'),
+        ]
+
     @property
     def chat_date_label(self):
         message_date = self.created_at.date()
@@ -2135,7 +2151,24 @@ class Market(models.Model):
         on_delete=models.SET_NULL, related_name='market_listings',
     )
     posted_on = models.DateTimeField(auto_now_add=True)
-    
+
+    class Meta:
+        indexes = [
+            # Category browse pages filter by category and sort by recency —
+            # this was a full-table scan sorted at read time; now index-only.
+            models.Index(fields=['product_category', '-posted_on'], name='market_cat_posted_idx'),
+            # Home/marketplace feed candidate pool ordering.
+            models.Index(fields=['-posted_on'], name='market_posted_idx'),
+            models.Index(fields=['product_owner', '-posted_on'], name='market_owner_posted_idx'),
+            # Trigram indexes so `icontains` search on these fields uses an
+            # index instead of a sequential scan once the table has millions
+            # of rows. Requires the Postgres pg_trgm extension — see the
+            # migration note in SCALABILITY_AUDIT.md.
+            GinIndex(fields=['product_name'], name='market_name_trgm', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['product_description'], name='market_desc_trgm', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['product_location'], name='market_loc_trgm', opclasses=['gin_trgm_ops']),
+        ]
+
     def clean(self):
         super().clean()
         self.product_name = sanitize_text(self.product_name, 'product_name')
@@ -2577,6 +2610,12 @@ class SocialEvent(models.Model):
     class Meta:
         db_table  = 'SocialEvent_Table'
         ordering  = ['date', 'time']
+        indexes = [
+            models.Index(fields=['is_cancelled', 'date'], name='event_active_date_idx'),
+            GinIndex(fields=['title'], name='event_title_trgm', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['description'], name='event_desc_trgm', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['location'], name='event_loc_trgm', opclasses=['gin_trgm_ops']),
+        ]
 
     def __str__(self):
         return f'{self.title} ({self.get_event_type_display()}) — {self.date}'
@@ -2828,6 +2867,13 @@ class JobVacancy(models.Model):
     class Meta:
         db_table = 'JobVacancy_Table'
         ordering = ['-created_at']
+        indexes = [
+            # Open-jobs listing sorted by recency — the common browse query.
+            models.Index(fields=['is_open', '-created_at'], name='job_open_created_idx'),
+            GinIndex(fields=['title'], name='job_title_trgm', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['description'], name='job_desc_trgm', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['location'], name='job_loc_trgm', opclasses=['gin_trgm_ops']),
+        ]
 
     def __str__(self):
         return f'{self.title} [{self.get_category_display()}] — {self.posted_by.username}'
@@ -3328,86 +3374,32 @@ class BusinessPage(models.Model):
         ('fashion',      'Fashion & Apparel'),
         ('electronics',  'Electronics & Tech'),
         ('beauty',       'Beauty & Wellness'),
-        ('education',    'Education & Training'),
         ('services',     'Professional Services'),
         ('agriculture',  'Agriculture & Farming'),
-        ('real_estate',  'Real Estate & Property'),
         ('logistics',    'Logistics & Delivery'),
-        ('auto',         'Automobiles & Vehicles'),
+        ('education',    'Education & Training'),
         ('others',       'Others'),
     ]
 
-    # ─────────────────────────────────────────────────────────────────────
-    # Page type / profession — what kind of professional or business this
-    # page represents. Drives which optional sections (Services, Portfolio,
-    # Projects, Achievements, Jobs, Products) are suggested by default.
-    # Mirrors the shape of MEMBER_TYPE_SCHEMA above, but scoped to Pages.
-    # ─────────────────────────────────────────────────────────────────────
-    PAGE_TYPE_BUSINESS     = 'business'
-    PAGE_TYPE_FREELANCER   = 'freelancer'
-    PAGE_TYPE_DEVELOPER    = 'developer'
-    PAGE_TYPE_TEACHER      = 'teacher'
-    PAGE_TYPE_ARTISAN      = 'artisan'
-    PAGE_TYPE_SERVICE      = 'service_provider'
-    PAGE_TYPE_CREATIVE     = 'creative'
-    PAGE_TYPE_STUDENT      = 'student'
-    PAGE_TYPE_SKILLED      = 'skilled_professional'
-    PAGE_TYPE_OTHER        = 'other'
-
-    PAGE_TYPE_CHOICES = [
-        (PAGE_TYPE_BUSINESS,   'Business Owner'),
-        (PAGE_TYPE_FREELANCER, 'Freelancer'),
-        (PAGE_TYPE_DEVELOPER,  'Developer / Tech Professional'),
-        (PAGE_TYPE_TEACHER,    'Teacher / Tutor'),
-        (PAGE_TYPE_ARTISAN,    'Artisan / Technician'),
-        (PAGE_TYPE_SERVICE,    'Service Provider'),
-        (PAGE_TYPE_CREATIVE,   'Creative / Artist'),
-        (PAGE_TYPE_STUDENT,    'Student'),
-        (PAGE_TYPE_SKILLED,    'Skilled Professional'),
-        (PAGE_TYPE_OTHER,      'Other Professional'),
+    # Payment methods commonly accepted by Nigerian SMEs — stored as a plain
+    # list on `payment_methods`, e.g. ["cash", "transfer", "pos"].
+    PAYMENT_METHOD_CHOICES = [
+        ('cash',     'Cash'),
+        ('transfer', 'Bank Transfer'),
+        ('pos',      'POS'),
+        ('card',     'Card'),
     ]
-
-    # Which optional sections make sense by default for each page type.
-    # The page owner can still turn any of these on/off at creation or edit.
-    PAGE_TYPE_SECTION_DEFAULTS = {
-        PAGE_TYPE_BUSINESS:   ['services', 'jobs'],
-        PAGE_TYPE_FREELANCER: ['services', 'portfolio', 'projects'],
-        PAGE_TYPE_DEVELOPER:  ['services', 'portfolio', 'projects', 'achievements'],
-        PAGE_TYPE_TEACHER:    ['services', 'achievements'],
-        PAGE_TYPE_ARTISAN:    ['services', 'portfolio', 'achievements'],
-        PAGE_TYPE_SERVICE:    ['services', 'jobs'],
-        PAGE_TYPE_CREATIVE:   ['portfolio', 'projects', 'achievements'],
-        PAGE_TYPE_STUDENT:    ['portfolio', 'projects', 'achievements'],
-        PAGE_TYPE_SKILLED:    ['services', 'portfolio', 'achievements'],
-        PAGE_TYPE_OTHER:      ['services', 'portfolio', 'projects', 'achievements', 'jobs'],
-    }
-
-    # Page types that default to selling products, since most professional
-    # pages (tutors, freelancers, artisans providing services…) don't.
-    PAGE_TYPES_SELLING_BY_DEFAULT = {PAGE_TYPE_BUSINESS}
-
-    OPTIONAL_SECTION_CHOICES = [
-        ('services',     'Services'),
-        ('portfolio',    'Portfolio'),
-        ('projects',     'Projects'),
-        ('achievements', 'Achievements'),
-        ('jobs',         'Jobs'),
-    ]
-    VALID_OPTIONAL_SECTIONS = {s[0] for s in OPTIONAL_SECTION_CHOICES}
+    VALID_PAYMENT_METHODS = {p[0] for p in PAYMENT_METHOD_CHOICES}
 
     page_id     = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='business_pages')
     name        = models.CharField(max_length=150)
     slug        = models.SlugField(max_length=160, unique=True)
     category    = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='others')
-    page_type   = models.CharField(max_length=25, choices=PAGE_TYPE_CHOICES, default=PAGE_TYPE_BUSINESS, db_index=True)
-    # Products are opt-in: only professionals/businesses that actually sell
-    # physical or digital products should see the Products tab & be able to
-    # post Market listings from this page.
+    # Products are opt-in: only businesses that actually sell physical or
+    # digital products should see the Products tab & be able to post Market
+    # listings from this page.
     sells_products   = models.BooleanField(default=True)
-    # Which optional sections (see OPTIONAL_SECTION_CHOICES) are turned on
-    # for this page. Stored as a plain list, e.g. ["services", "portfolio"].
-    enabled_sections = models.JSONField(default=list, blank=True)
     tagline     = models.CharField(max_length=200, blank=True, default='')
     description = models.TextField(blank=True, default='')
     location    = models.CharField(max_length=200, blank=True, default='')
@@ -3424,25 +3416,27 @@ class BusinessPage(models.Model):
                                    help_text='Full page URL')
     twitter     = models.CharField(max_length=100, blank=True, default='',
                                    help_text='Username or @handle')
-    tiktok      = models.CharField(max_length=100, blank=True, default='',
+    telegram    = models.CharField(max_length=100, blank=True, default='',
                                    help_text='Username or @handle')
     followers   = models.ManyToManyField(User, blank=True, related_name='followed_business_pages')
     is_verified = models.BooleanField(default=False)
     is_active   = models.BooleanField(default=True)
 
-    # ── Business hours ───────────────────────────────────────────────────────
-    # Stored as {"mon": {"open": "09:00", "close": "18:00", "closed": false}, ...}
-    # A missing/empty dict means hours haven't been set for that page yet.
-    DAY_CHOICES = [
-        ('mon', 'Monday'), ('tue', 'Tuesday'), ('wed', 'Wednesday'),
-        ('thu', 'Thursday'), ('fri', 'Friday'), ('sat', 'Saturday'), ('sun', 'Sunday'),
-    ]
-    DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+    # ── Business hours (simplified) ──────────────────────────────────────────
+    # A single open/close time applies every day, unless the page is open
+    # around the clock. Empty open_time/close_time means hours haven't been
+    # set for this page yet.
+    open_time  = models.CharField(max_length=10, blank=True, default='09:00')
+    close_time = models.CharField(max_length=10, blank=True, default='18:00')
+    is_24hrs   = models.BooleanField(default=False)
 
-    business_hours = models.JSONField(
-        default=dict, blank=True,
-        help_text='Per-day opening hours, e.g. {"mon": {"open": "09:00", "close": "18:00", "closed": false}}',
-    )
+    # ── Nigerian-specific business details ───────────────────────────────────
+    registration_number = models.CharField(max_length=20, blank=True, default='',
+                                   help_text='RC Number or BN')
+    delivery_available = models.BooleanField(default=False)
+    pickup_available   = models.BooleanField(default=True)
+    payment_methods    = models.JSONField(default=list, blank=True,
+                                   help_text='Cash, Transfer, POS, etc.')
 
     if settings.USE_CLOUDINARY:
         logo        = CloudinaryField('logo',        folder='business_logos',  blank=True, null=True)
@@ -3457,6 +3451,12 @@ class BusinessPage(models.Model):
     class Meta:
         db_table = 'BusinessPage_Table'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['is_active', 'category', '-created_at'], name='bizpage_active_cat_idx'),
+            GinIndex(fields=['name'], name='bizpage_name_trgm', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['description'], name='bizpage_desc_trgm', opclasses=['gin_trgm_ops']),
+            GinIndex(fields=['location'], name='bizpage_loc_trgm', opclasses=['gin_trgm_ops']),
+        ]
 
     def __str__(self):
         return f'{self.name} (@{self.slug})'
@@ -3497,49 +3497,35 @@ class BusinessPage(models.Model):
             self.instagram = re.sub(r'[^a-zA-Z0-9._]', '', self.instagram.lstrip('@').strip())[:100]
         if self.twitter:
             self.twitter = re.sub(r'[^a-zA-Z0-9._]', '', self.twitter.lstrip('@').strip())[:100]
-        if self.tiktok:
-            self.tiktok = re.sub(r'[^a-zA-Z0-9._]', '', self.tiktok.lstrip('@').strip())[:100]
-        self.business_hours = self._sanitize_business_hours(self.business_hours)
-        if self.page_type not in dict(self.PAGE_TYPE_CHOICES):
-            self.page_type = self.PAGE_TYPE_BUSINESS
-        self.enabled_sections = self._sanitize_enabled_sections(self.enabled_sections)
+        if self.telegram:
+            self.telegram = re.sub(r'[^a-zA-Z0-9._]', '', self.telegram.lstrip('@').strip())[:100]
+        self.registration_number = re.sub(r'[^a-zA-Z0-9/\-]', '', (self.registration_number or '').strip())[:20]
+        self.open_time, self.close_time = self._sanitize_hours(self.open_time, self.close_time)
+        self.payment_methods = self._sanitize_payment_methods(self.payment_methods)
 
     @classmethod
-    def _sanitize_enabled_sections(cls, raw):
-        """Keep only known, deduplicated optional-section keys."""
+    def _sanitize_payment_methods(cls, raw):
+        """Keep only known, deduplicated payment-method keys."""
         if not isinstance(raw, (list, tuple, set)):
             return []
         seen = []
         for key in raw:
             key = str(key).strip()
-            if key in cls.VALID_OPTIONAL_SECTIONS and key not in seen:
+            if key in cls.VALID_PAYMENT_METHODS and key not in seen:
                 seen.append(key)
         return seen
 
     @classmethod
-    def default_sections_for(cls, page_type):
-        """The suggested optional sections for a given page type."""
-        return list(cls.PAGE_TYPE_SECTION_DEFAULTS.get(page_type, cls.PAGE_TYPE_SECTION_DEFAULTS[cls.PAGE_TYPE_OTHER]))
-
-    @classmethod
-    def _sanitize_business_hours(cls, raw):
-        """Keep only known day keys with valid HH:MM open/close values."""
-        if not isinstance(raw, dict):
-            return {}
+    def _sanitize_hours(cls, open_v, close_v):
+        """Keep open/close as valid HH:MM strings, falling back to defaults."""
         time_re = re.compile(r'^([01]\d|2[0-3]):[0-5]\d$')
-        clean = {}
-        for day in cls.DAY_ORDER:
-            entry = raw.get(day)
-            if not isinstance(entry, dict):
-                continue
-            closed = bool(entry.get('closed'))
-            open_v = str(entry.get('open', '') or '').strip()
-            close_v = str(entry.get('close', '') or '').strip()
-            if closed or not time_re.match(open_v) or not time_re.match(close_v):
-                clean[day] = {'open': '', 'close': '', 'closed': True}
-            else:
-                clean[day] = {'open': open_v, 'close': close_v, 'closed': False}
-        return clean
+        open_v = str(open_v or '').strip()
+        close_v = str(close_v or '').strip()
+        if not time_re.match(open_v):
+            open_v = '09:00'
+        if not time_re.match(close_v):
+            close_v = '18:00'
+        return open_v, close_v
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -3591,53 +3577,38 @@ class BusinessPage(models.Model):
         except Exception:
             return ''
 
-    # ── Business hours helpers ───────────────────────────────────────────────
-    @property
-    def has_business_hours(self):
-        return any(not v.get('closed') for v in (self.business_hours or {}).values())
-
-    def get_hours_for_day(self, day_key):
-        return (self.business_hours or {}).get(day_key, {'open': '', 'close': '', 'closed': True})
-
-    @property
-    def today_hours(self):
-        day_key = self.DAY_ORDER[timezone.localtime().weekday()]
-        return self.get_hours_for_day(day_key)
-
+    # ── Business hours helpers (simplified) ──────────────────────────────────
     @property
     def is_open_now(self):
-        """True = open, False = closed, None = no hours configured for today."""
-        hours = self.today_hours
-        if not hours or hours.get('closed') or not hours.get('open') or not hours.get('close'):
-            return False if self.has_business_hours else None
-        now_t = timezone.localtime().time()
+        """True = open, False = closed. 24hrs pages are always open."""
+        if self.is_24hrs:
+            return True
         try:
-            open_t  = datetime.strptime(hours['open'],  '%H:%M').time()
-            close_t = datetime.strptime(hours['close'], '%H:%M').time()
+            open_t  = datetime.strptime(self.open_time,  '%H:%M').time()
+            close_t = datetime.strptime(self.close_time, '%H:%M').time()
         except (ValueError, TypeError):
             return None
+        now_t = timezone.localtime().time()
         if open_t <= close_t:
             return open_t <= now_t <= close_t
         # Overnight hours, e.g. 18:00 → 02:00
         return now_t >= open_t or now_t <= close_t
 
     @property
-    def hours_display(self):
-        """Ordered list for template display: [{key, label, open, close, closed}, ...]."""
-        labels = dict(self.DAY_CHOICES)
-        today_key = self.DAY_ORDER[timezone.localtime().weekday()]
-        out = []
-        for key in self.DAY_ORDER:
-            h = self.get_hours_for_day(key)
-            out.append({
-                'key': key,
-                'label': labels[key],
-                'open': h.get('open', ''),
-                'close': h.get('close', ''),
-                'closed': h.get('closed', True),
-                'is_today': key == today_key,
-            })
-        return out
+    def operating_hours_display(self):
+        """Simple display string, e.g. 'Open 24 Hours' or '9:00 AM - 6:00 PM'."""
+        if self.is_24hrs:
+            return 'Open 24 Hours'
+
+        def _fmt(t):
+            try:
+                return datetime.strptime(t, '%H:%M').strftime('%-I:%M %p')
+            except (ValueError, TypeError):
+                try:
+                    return datetime.strptime(t, '%H:%M').strftime('%I:%M %p').lstrip('0')
+                except (ValueError, TypeError):
+                    return t
+        return f'{_fmt(self.open_time)} - {_fmt(self.close_time)}'
 
     # ── Average page rating ──────────────────────────────────────────────────
     # Derived from ProductReview entries left on this page's Market listings —
@@ -3692,56 +3663,28 @@ class BusinessPage(models.Model):
     def has_verified_contact(self):
         return bool(self.phone or self.email)
 
-    @property
-    def completed_work_count(self):
-        """Rough "proof of work" count for trust badges — finished
-        portfolio pieces/projects plus services on offer."""
-        return self.portfolio_items.count() + self.services.count()
-
-    # ── Professional page sections ───────────────────────────────────────────
-    @property
-    def page_type_label(self):
-        return dict(self.PAGE_TYPE_CHOICES).get(self.page_type, 'Business Owner')
-
+    # ── Business page sections ───────────────────────────────────────────────
+    # Services and Jobs are always available — no per-page toggle needed.
     @property
     def show_products(self):
         return bool(self.sells_products)
 
     @property
     def show_services(self):
-        return 'services' in (self.enabled_sections or [])
-
-    @property
-    def show_portfolio(self):
-        return 'portfolio' in (self.enabled_sections or [])
-
-    @property
-    def show_projects(self):
-        return 'projects' in (self.enabled_sections or [])
-
-    @property
-    def show_achievements(self):
-        return 'achievements' in (self.enabled_sections or [])
+        return True
 
     @property
     def show_jobs_section(self):
-        return 'jobs' in (self.enabled_sections or [])
+        return True
 
     @property
     def service_count(self):
         return self.services.count()
 
     @property
-    def portfolio_count(self):
-        return self.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PORTFOLIO).count()
-
-    @property
-    def project_count(self):
-        return self.portfolio_items.filter(kind=BusinessPortfolioItem.KIND_PROJECT).count()
-
-    @property
-    def achievement_count(self):
-        return self.achievements.count()
+    def payment_methods_display(self):
+        labels = dict(self.PAYMENT_METHOD_CHOICES)
+        return [labels.get(m, m) for m in (self.payment_methods or [])]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

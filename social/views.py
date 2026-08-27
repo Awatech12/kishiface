@@ -894,11 +894,9 @@ def _profile_feed_signal(user, profile):
     keywords = set(profile.feed_keywords)
     location_tokens = set(profile.feed_location_tokens)
 
-    for cat, ptype in BusinessPage.objects.filter(followers=user).values_list('category', 'page_type'):
+    for cat, in BusinessPage.objects.filter(followers=user).values_list('category'):
         if cat:
             keywords.add(str(cat).lower())
-        if ptype:
-            keywords.add(str(ptype).lower())
 
     for prof in profile.followings.exclude(user=user).values_list('profession', flat=True)[:100]:
         keywords |= Profile._tokenize(prof)
@@ -1163,7 +1161,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             _biz_candidates, keywords, location_tokens,
             blob_fn=lambda bp: ' '.join(filter(None, [
                 bp.name, bp.tagline, bp.description,
-                bp.get_category_display(), bp.get_page_type_display(),
+                bp.get_category_display(),
             ])),
             location_fn=lambda bp: bp.location,
             created_fn=lambda bp: bp.created_at,
@@ -1675,47 +1673,77 @@ def home(request):
     user_business_page_count = user_business_pages.count()
     primary_business_page = user_business_pages.first()
 
-    # ── Right-sidebar "Suggested for you" — business pages, ranked by
-    #    relevance to this viewer's profession/skills/interests/location ────
-    _sidebar_keywords, _sidebar_location_tokens = _profile_feed_signal(request.user, profile)
+    # ── Right-sidebar "Suggested for you" / "People you may know" ───────────
+    # Both blocks score up to 40 candidates in Python on every single call —
+    # fine at low volume, but at scale this is real CPU + several queries on
+    # every home-page load for every user. The ranking only needs to feel
+    # fresh, not be recomputed every request, so we cache the *ranked id
+    # order* per user for a few minutes and re-fetch live objects on a hit.
+    # Cache miss falls through to the exact original computation, so
+    # behavior is unchanged — only the cost on repeat visits drops.
+    _sidebar_cache_key = f'home:sidebar_suggestions:{request.user.id}'
+    _cached_sidebar_ids = cache.get(_sidebar_cache_key)
 
-    followed_business_ids = set(
-        BusinessPage.objects.filter(followers=request.user).values_list('page_id', flat=True)
-    )
-    _sidebar_page_candidates = list(
-        BusinessPage.objects
-        .filter(is_active=True)
-        .exclude(owner=request.user)
-        .exclude(page_id__in=followed_business_ids)
-        .select_related('owner')
-        .order_by('-created_at')[:40]
-    )
-    suggested_pages = _ranked(
-        _sidebar_page_candidates, _sidebar_keywords, _sidebar_location_tokens,
-        blob_fn=lambda bp: ' '.join(filter(None, [
-            bp.name, bp.tagline, bp.description,
-            bp.get_category_display(), bp.get_page_type_display(),
-        ])),
-        location_fn=lambda bp: bp.location,
-        created_fn=lambda bp: bp.created_at,
-        limit=3,
-    )
+    if _cached_sidebar_ids is not None:
+        _suggested_page_ids, _suggested_people_ids = _cached_sidebar_ids
 
-    # ── Right-sidebar "People you may know" — profession/skills/location/
-    #    intent ranked, same scorer as the main feed's people pool ──────────
-    _sidebar_people_candidates = [
-        u for u in User.objects.exclude(id__in=following_ids)
-               .exclude(id=request.user.id)
-               .select_related('profile')
-               .order_by('-id')[:40]
-        if hasattr(u, 'profile')
-    ]
-    _scored_sidebar_people = [
-        (_score_person(profile, u.profile, _sidebar_keywords, _sidebar_location_tokens), u)
-        for u in _sidebar_people_candidates
-    ]
-    _scored_sidebar_people.sort(key=lambda t: t[0], reverse=True)
-    users = [u for _, u in _scored_sidebar_people[:3]]
+        _page_order = {pid: i for i, pid in enumerate(_suggested_page_ids)}
+        suggested_pages = sorted(
+            BusinessPage.objects.filter(page_id__in=_suggested_page_ids).select_related('owner'),
+            key=lambda p: _page_order.get(p.page_id, 999),
+        )
+
+        _user_order = {uid: i for i, uid in enumerate(_suggested_people_ids)}
+        users = sorted(
+            User.objects.filter(id__in=_suggested_people_ids).select_related('profile'),
+            key=lambda u: _user_order.get(u.id, 999),
+        )
+    else:
+        _sidebar_keywords, _sidebar_location_tokens = _profile_feed_signal(request.user, profile)
+
+        followed_business_ids = set(
+            BusinessPage.objects.filter(followers=request.user).values_list('page_id', flat=True)
+        )
+        _sidebar_page_candidates = list(
+            BusinessPage.objects
+            .filter(is_active=True)
+            .exclude(owner=request.user)
+            .exclude(page_id__in=followed_business_ids)
+            .select_related('owner')
+            .order_by('-created_at')[:40]
+        )
+        suggested_pages = _ranked(
+            _sidebar_page_candidates, _sidebar_keywords, _sidebar_location_tokens,
+            blob_fn=lambda bp: ' '.join(filter(None, [
+                bp.name, bp.tagline, bp.description,
+                bp.get_category_display(),
+            ])),
+            location_fn=lambda bp: bp.location,
+            created_fn=lambda bp: bp.created_at,
+            limit=3,
+        )
+
+        # ── "People you may know" — profession/skills/location/intent
+        #    ranked, same scorer as the main feed's people pool ────────────
+        _sidebar_people_candidates = [
+            u for u in User.objects.exclude(id__in=following_ids)
+                   .exclude(id=request.user.id)
+                   .select_related('profile')
+                   .order_by('-id')[:40]
+            if hasattr(u, 'profile')
+        ]
+        _scored_sidebar_people = [
+            (_score_person(profile, u.profile, _sidebar_keywords, _sidebar_location_tokens), u)
+            for u in _sidebar_people_candidates
+        ]
+        _scored_sidebar_people.sort(key=lambda t: t[0], reverse=True)
+        users = [u for _, u in _scored_sidebar_people[:3]]
+
+        cache.set(
+            _sidebar_cache_key,
+            ([p.page_id for p in suggested_pages], [u.id for u in users]),
+            600,  # 10 minutes — a relevance suggestion, not real-time data
+        )
 
     # Attach "X and Y other mutual connections" info to each suggestion for
     # the "People you may know" sidebar widget (mirrors the profile page's
@@ -7432,23 +7460,19 @@ def handler500(request):
 _HOURS_TIME_RE = re.compile(r'^([01]\d|2[0-3]):[0-5]\d$')
 
 
-def _parse_business_hours_from_post(post_data):
+def _parse_simple_hours_from_post(post_data, fallback_open='09:00', fallback_close='18:00'):
     """
-    Build a sanitized business_hours dict from per-day POST fields:
-    hours_<day>_open, hours_<day>_close, hours_<day>_closed ('on' checkbox).
-    Invalid or incomplete rows are simply marked closed rather than raising.
+    Build sanitized (open_time, close_time, is_24hrs) values from the
+    simplified hours fields: open_time, close_time, is_24hrs ('on' checkbox).
     """
-    from social.models import BusinessPage
-    hours = {}
-    for day in BusinessPage.DAY_ORDER:
-        closed = post_data.get(f'hours_{day}_closed') == 'on'
-        open_v = post_data.get(f'hours_{day}_open', '').strip()
-        close_v = post_data.get(f'hours_{day}_close', '').strip()
-        if closed or not open_v or not close_v or not _HOURS_TIME_RE.match(open_v) or not _HOURS_TIME_RE.match(close_v):
-            hours[day] = {'open': '', 'close': '', 'closed': True}
-        else:
-            hours[day] = {'open': open_v, 'close': close_v, 'closed': False}
-    return hours
+    is_24hrs = post_data.get('is_24hrs') == 'on'
+    open_v = post_data.get('open_time', '').strip()
+    close_v = post_data.get('close_time', '').strip()
+    if not _HOURS_TIME_RE.match(open_v):
+        open_v = fallback_open
+    if not _HOURS_TIME_RE.match(close_v):
+        close_v = fallback_close
+    return open_v, close_v, is_24hrs
 
 
 @login_required(login_url='/')
@@ -7509,11 +7533,11 @@ def business_page_create(request):
                 **_create_context_extra,
             })
 
-        # page_type, sells_products, enabled_sections, tagline, social links
-        # and business_hours are intentionally left at their model defaults
-        # here — the page is simplified at creation, and the owner can fill
-        # any of these in later from Edit Page. This keeps those fields (and
-        # any data already on older pages) fully intact.
+        # sells_products, tagline, social links, hours and the Nigerian
+        # business details (registration number, delivery/pickup, payment
+        # methods) are intentionally left at their model defaults here — the
+        # page is simplified at creation, and the owner can fill any of
+        # these in later from Edit Page.
         page = BusinessPage(
             owner=request.user, name=name, category=category,
             description=description, location=location,
@@ -7681,12 +7705,11 @@ def business_page_detail(request, slug):
         'job_categories':    JobVacancy.CATEGORY_CHOICES,
         'wishlist_ids':      wishlist_ids,
         'is_open_now':       page.is_open_now,
-        'today_hours':       page.today_hours,
-        'hours_display':     page.hours_display,
+        'operating_hours_display': page.operating_hours_display,
         'average_rating':    page.overall_average_rating,
         'review_count':      page.overall_review_count,
         'has_verified_contact': page.has_verified_contact,
-        'completed_work_count': page.completed_work_count,
+        'payment_methods_display': page.payment_methods_display,
         'viewer_primary_business_page': viewer_primary_business_page,
     })
 
@@ -7956,14 +7979,8 @@ def business_page_edit(request, slug):
     if request.method == 'POST':
         page.name        = request.POST.get('name', page.name).strip()
         page.category    = request.POST.get('category', page.category).strip()
-        posted_page_type = request.POST.get('page_type', page.page_type).strip()
-        if posted_page_type in dict(BusinessPage.PAGE_TYPE_CHOICES):
-            page.page_type = posted_page_type
         if 'sells_products' in request.POST:
             page.sells_products = request.POST.get('sells_products') in ('1', 'true', 'on')
-        # The edit form always renders the sections checkbox group, so an
-        # empty list here means the owner deliberately unchecked everything.
-        page.enabled_sections = [s for s in request.POST.getlist('sections') if s in BusinessPage.VALID_OPTIONAL_SECTIONS]
         page.tagline     = request.POST.get('tagline', '').strip()
         page.description = request.POST.get('description', '').strip()
         page.location    = request.POST.get('location', '').strip()
@@ -7975,8 +7992,17 @@ def business_page_edit(request, slug):
         page.youtube     = request.POST.get('youtube', '').strip()
         page.facebook    = request.POST.get('facebook', '').strip()
         page.twitter     = request.POST.get('twitter', '').strip()
-        page.tiktok      = request.POST.get('tiktok', '').strip()
-        page.business_hours = _parse_business_hours_from_post(request.POST)
+        page.telegram    = request.POST.get('telegram', '').strip()
+        page.open_time, page.close_time, page.is_24hrs = _parse_simple_hours_from_post(
+            request.POST, fallback_open=page.open_time, fallback_close=page.close_time,
+        )
+        # ── Nigerian-specific business details ───────────────────────────
+        page.registration_number = request.POST.get('registration_number', '').strip()
+        page.delivery_available  = request.POST.get('delivery_available') in ('1', 'true', 'on')
+        page.pickup_available    = request.POST.get('pickup_available') in ('1', 'true', 'on')
+        page.payment_methods     = [
+            m for m in request.POST.getlist('payment_methods') if m in BusinessPage.VALID_PAYMENT_METHODS
+        ]
         if request.FILES.get('logo'):        page.logo        = request.FILES['logo']
         if request.FILES.get('cover_photo'): page.cover_photo = request.FILES['cover_photo']
         try:
@@ -7988,12 +8014,7 @@ def business_page_edit(request, slug):
 
     return render(request, 'business_page_edit.html', {
         'page': page, 'categories': BusinessPage.CATEGORY_CHOICES,
-        'day_choices': BusinessPage.DAY_CHOICES,
-        'hours_display': page.hours_display,
-        'page_type_choices': BusinessPage.PAGE_TYPE_CHOICES,
-        'section_choices': BusinessPage.OPTIONAL_SECTION_CHOICES,
-        'page_type_defaults_json': _json.dumps(BusinessPage.PAGE_TYPE_SECTION_DEFAULTS),
-        'page_types_selling_json': _json.dumps(list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT)),
+        'payment_method_choices': BusinessPage.PAYMENT_METHOD_CHOICES,
     })
 
 
@@ -8305,135 +8326,6 @@ def business_service_create(request, slug):
 def business_service_delete(request, service_id):
     service = get_object_or_404(BusinessService, service_id=service_id, business_page__owner=request.user)
     service.delete()
-    return JsonResponse({'success': True})
-
-
-@login_required(login_url='/')
-@require_POST
-def business_portfolio_create(request, slug):
-    """Owner adds a Portfolio piece or a Project to their professional page."""
-    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
-
-    kind        = request.POST.get('kind', BusinessPortfolioItem.KIND_PORTFOLIO).strip()
-    title       = request.POST.get('title', '').strip()
-    description = request.POST.get('description', '').strip()
-    link_url    = request.POST.get('link_url', '').strip()
-    is_ongoing  = request.POST.get('is_ongoing') in ('1', 'true', 'on')
-    image       = request.FILES.get('image')
-    # Additional gallery photos — a completed project/portfolio piece can
-    # showcase several images beyond the single cover `image`.
-    extra_images = request.FILES.getlist('images')[:9]
-
-    if kind not in dict(BusinessPortfolioItem.KIND_CHOICES):
-        kind = BusinessPortfolioItem.KIND_PORTFOLIO
-    if not title:
-        return JsonResponse({'success': False, 'error': 'Please give it a title.'}, status=400)
-    if len(title) > 150:
-        return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
-
-    allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
-    for _img in ([image] if image else []) + extra_images:
-        if _img.content_type not in allowed_types:
-            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
-        if _img.size > 10 * 1024 * 1024:
-            return JsonResponse({'success': False, 'error': 'Each image must be under 10 MB.'}, status=400)
-
-    try:
-        item = BusinessPortfolioItem.objects.create(
-            business_page=page, kind=kind, title=title, description=description,
-            link_url=link_url, is_ongoing=is_ongoing if kind == BusinessPortfolioItem.KIND_PROJECT else False,
-            image=image if image else None,
-        )
-        for _order, _img in enumerate(extra_images):
-            BusinessPortfolioImage.objects.create(item=item, image=_img, order=_order)
-    except _ModelValidationError as e:
-        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
-
-    return JsonResponse({
-        'success': True,
-        'item': {
-            'item_id':      str(item.item_id),
-            'kind':         item.kind,
-            'title':        item.title,
-            'description':  item.description,
-            'link_url':     item.link_url,
-            'is_ongoing':   item.is_ongoing,
-            'image_url':    item.get_image_url,
-            'gallery':      item.gallery_urls,
-        },
-        'portfolio_count': page.portfolio_count,
-        'project_count':   page.project_count,
-        'message': 'Added to your page! ✨',
-    })
-
-
-@login_required(login_url='/')
-@require_POST
-def business_portfolio_delete(request, item_id):
-    item = get_object_or_404(BusinessPortfolioItem, item_id=item_id, business_page__owner=request.user)
-    item.delete()
-    return JsonResponse({'success': True})
-
-
-@login_required(login_url='/')
-@require_POST
-def business_achievement_create(request, slug):
-    """Owner adds an Achievement (award, certification, milestone) to their page."""
-    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
-
-    title         = request.POST.get('title', '').strip()
-    issuer        = request.POST.get('issuer', '').strip()
-    description   = request.POST.get('description', '').strip()
-    date_raw      = request.POST.get('date_achieved', '').strip()
-    image         = request.FILES.get('image')
-
-    if not title:
-        return JsonResponse({'success': False, 'error': 'Please give the achievement a title.'}, status=400)
-    if len(title) > 150:
-        return JsonResponse({'success': False, 'error': 'Title must be 150 characters or fewer.'}, status=400)
-
-    date_achieved = None
-    if date_raw:
-        try:
-            date_achieved = datetime.strptime(date_raw, '%Y-%m-%d').date()
-        except ValueError:
-            return JsonResponse({'success': False, 'error': 'Enter a valid date.'}, status=400)
-
-    if image:
-        allowed_types = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
-        if image.content_type not in allowed_types:
-            return JsonResponse({'success': False, 'error': 'Only JPEG, PNG, WebP or GIF images are allowed.'}, status=400)
-        if image.size > 10 * 1024 * 1024:
-            return JsonResponse({'success': False, 'error': 'Image must be under 10 MB.'}, status=400)
-
-    try:
-        achievement = BusinessAchievement.objects.create(
-            business_page=page, title=title, issuer=issuer, description=description,
-            date_achieved=date_achieved, image=image if image else None,
-        )
-    except _ModelValidationError as e:
-        return JsonResponse({'success': False, 'error': '; '.join(_flatten_validation_error(e))}, status=400)
-
-    return JsonResponse({
-        'success': True,
-        'achievement': {
-            'achievement_id': str(achievement.achievement_id),
-            'title':          achievement.title,
-            'issuer':         achievement.issuer,
-            'description':    achievement.description,
-            'date_achieved':  achievement.date_achieved.isoformat() if achievement.date_achieved else '',
-            'image_url':      achievement.get_image_url,
-        },
-        'achievement_count': page.achievement_count,
-        'message': 'Achievement added! 🏆',
-    })
-
-
-@login_required(login_url='/')
-@require_POST
-def business_achievement_delete(request, achievement_id):
-    achievement = get_object_or_404(BusinessAchievement, achievement_id=achievement_id, business_page__owner=request.user)
-    achievement.delete()
     return JsonResponse({'success': True})
 
 

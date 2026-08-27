@@ -165,13 +165,9 @@ urlpatterns = [
     path('posts/<uuid:post_id>/vibe/',                  views.business_post_vibe,        name='business_post_vibe'),
     path('posts/<uuid:post_id>/comments/',              views.business_post_comments,    name='business_post_comments'),
 
-    # ── Business Page — optional professional sections ─────────────────────
+    # ── Business Page — Services ────────────────────────────────────────────
     path('business/<slug:slug>/services/create/',       views.business_service_create,     name='business_service_create'),
     path('services/<uuid:service_id>/delete/',          views.business_service_delete,     name='business_service_delete'),
-    path('business/<slug:slug>/portfolio/create/',      views.business_portfolio_create,   name='business_portfolio_create'),
-    path('portfolio/<uuid:item_id>/delete/',            views.business_portfolio_delete,   name='business_portfolio_delete'),
-    path('business/<slug:slug>/achievements/create/',   views.business_achievement_create, name='business_achievement_create'),
-    path('achievements/<uuid:achievement_id>/delete/',  views.business_achievement_delete, name='business_achievement_delete'),
 
     # ── Business Page — Reviews & Ratings ───────────────────────────────────
     path('business/<slug:slug>/reviews/create/',        views.business_review_create,      name='business_review_create'),

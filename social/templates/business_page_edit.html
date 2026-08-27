@@ -171,15 +171,7 @@
         .kbiz-toast.show { opacity: 1; }
 
         /* ── Business hours ── */
-        .kbiz-hours-row {
-            display: flex; align-items: center; gap: 10px;
-            padding: 9px 0; border-bottom: 1px solid var(--mfy-border);
-        }
-        .kbiz-hours-row:last-child { border-bottom: none; }
-        .kbiz-hours-day {
-            width: 78px; flex-shrink: 0; font-size: 13px; font-weight: 700;
-        }
-        .kbiz-hours-toggle { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .kbiz-hours-toggle { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-bottom: 4px; }
         .kbiz-hours-toggle label { font-size: 11px; color: var(--mfy-text-light); font-weight: 600; }
         .kbiz-hours-times { display: flex; align-items: center; gap: 6px; flex: 1; }
         .kbiz-hours-time {
@@ -189,7 +181,6 @@
             color: var(--mfy-text); background: var(--mfy-white);
         }
         .kbiz-hours-times span { font-size: 12px; color: var(--mfy-text-light); }
-        .kbiz-hours-row.is-closed .kbiz-hours-time { opacity: .4; pointer-events: none; }
 
         .kbiz-hint { font-size: 12.5px; color: var(--mfy-text-light); margin: -8px 0 14px; line-height: 1.4; }
 
@@ -351,22 +342,58 @@
         <i class="fas fa-clock" style="color:var(--mfy-primary)"></i>
         Business Hours
     </p>
-    <div class="kbiz-field" id="hoursList">
-        {% for row in hours_display %}
-        <div class="kbiz-hours-row {% if row.closed %}is-closed{% endif %}" data-day="{{ row.key }}">
-            <span class="kbiz-hours-day">{{ row.label|slice:":3" }}</span>
-            <div class="kbiz-hours-toggle">
-                <input type="checkbox" id="open_{{ row.key }}" onchange="toggleHoursRow('{{ row.key }}')" {% if not row.closed %}checked{% endif %}>
-                <label for="open_{{ row.key }}">Open</label>
-            </div>
-            <div class="kbiz-hours-times">
-                <input class="kbiz-hours-time" type="time" name="hours_{{ row.key }}_open" id="hours_{{ row.key }}_open_input" value="{{ row.open }}">
-                <span>–</span>
-                <input class="kbiz-hours-time" type="time" name="hours_{{ row.key }}_close" id="hours_{{ row.key }}_close_input" value="{{ row.close }}">
-            </div>
-            <input type="hidden" name="hours_{{ row.key }}_closed" id="hours_{{ row.key }}_closed" value="{% if row.closed %}on{% else %}{% endif %}">
+    <div class="kbiz-field">
+        <div class="kbiz-hours-toggle" style="margin-bottom:10px;">
+            <input type="checkbox" id="is24hrs" name="is_24hrs" {% if page.is_24hrs %}checked{% endif %}
+                   onchange="toggle24hrs()">
+            <label for="is24hrs">Open 24 Hours</label>
         </div>
-        {% endfor %}
+        <div class="kbiz-hours-times" id="hoursTimesRow" {% if page.is_24hrs %}style="opacity:.4;pointer-events:none;"{% endif %}>
+            <input class="kbiz-hours-time" type="time" name="open_time" id="open_time_input" value="{{ page.open_time }}">
+            <span>–</span>
+            <input class="kbiz-hours-time" type="time" name="close_time" id="close_time_input" value="{{ page.close_time }}">
+        </div>
+    </div>
+
+    <!-- Nigerian Business Details -->
+    <p class="kbiz-section-title">
+        <i class="fas fa-store-alt" style="color:var(--mfy-primary)"></i>
+        Business Details
+    </p>
+
+    <div class="kbiz-field">
+        <label class="kbiz-label">Registration Number</label>
+        <input class="kbiz-input" name="registration_number" type="text"
+               placeholder="RC Number or BN"
+               value="{{ page.registration_number }}" maxlength="20">
+    </div>
+
+    <div class="kbiz-row-2">
+        <div class="kbiz-field">
+            <label class="kbiz-hours-toggle">
+                <input type="checkbox" name="delivery_available" {% if page.delivery_available %}checked{% endif %}>
+                <span style="font-size:13px; font-weight:600;">Delivery Available</span>
+            </label>
+        </div>
+        <div class="kbiz-field">
+            <label class="kbiz-hours-toggle">
+                <input type="checkbox" name="pickup_available" {% if page.pickup_available %}checked{% endif %}>
+                <span style="font-size:13px; font-weight:600;">Pickup Available</span>
+            </label>
+        </div>
+    </div>
+
+    <div class="kbiz-field">
+        <label class="kbiz-label">Payment Methods</label>
+        <div style="display:flex; flex-wrap:wrap; gap:14px;">
+            {% for val, label in payment_method_choices %}
+            <label class="kbiz-hours-toggle">
+                <input type="checkbox" name="payment_methods" value="{{ val }}"
+                       {% if val in page.payment_methods %}checked{% endif %}>
+                <span style="font-size:13px; font-weight:600;">{{ label }}</span>
+            </label>
+            {% endfor %}
+        </div>
     </div>
 
     <!-- Social Media -->
@@ -407,11 +434,11 @@
         </div>
         <div class="kbiz-field">
             <label class="kbiz-label">
-                <i class="fab fa-tiktok"></i> TikTok
+                <i class="fab fa-telegram" style="color:#26a5e4"></i> Telegram
             </label>
-            <input class="kbiz-input" name="tiktok" type="text"
+            <input class="kbiz-input" name="telegram" type="text"
                    placeholder="@username"
-                   value="{{ page.tiktok }}" maxlength="100">
+                   value="{{ page.telegram }}" maxlength="100">
             <div class="kbiz-field-hint">Handle only, e.g. mybusiness</div>
         </div>
     </div>
@@ -484,20 +511,12 @@ document.getElementById('logoInput').addEventListener('change', function () {
     toast('Logo selected — save to apply.');
 });
 
-// ── Business hours toggle ─────────────────────────────────────────────────────
-function toggleHoursRow(dayKey) {
-    const row      = document.querySelector(`.kbiz-hours-row[data-day="${dayKey}"]`);
-    const checkbox = document.getElementById(`open_${dayKey}`);
-    const closedIn = document.getElementById(`hours_${dayKey}_closed`);
-    const isOpen   = checkbox.checked;
-    row.classList.toggle('is-closed', !isOpen);
-    closedIn.value = isOpen ? '' : 'on';
-    if (isOpen) {
-        const openInput  = document.getElementById(`hours_${dayKey}_open_input`);
-        const closeInput = document.getElementById(`hours_${dayKey}_close_input`);
-        if (!openInput.value)  openInput.value  = '09:00';
-        if (!closeInput.value) closeInput.value = '18:00';
-    }
+// ── 24hrs toggle ───────────────────────────────────────────────────────────────
+function toggle24hrs() {
+    const checked = document.getElementById('is24hrs').checked;
+    const row = document.getElementById('hoursTimesRow');
+    row.style.opacity = checked ? '.4' : '1';
+    row.style.pointerEvents = checked ? 'none' : 'auto';
 }
 
 // ── Prevent double submit ─────────────────────────────────────────────────────
