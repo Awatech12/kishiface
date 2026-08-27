@@ -7453,83 +7453,55 @@ def _parse_business_hours_from_post(post_data):
 
 @login_required(login_url='/')
 def business_page_create(request):
+    """
+    Simplified Business Page creation. A Business Page always represents a
+    business/brand/organization — there is no "page type" concept here
+    (that lives on the user's Professional Profile instead). Products,
+    Services, Jobs, Reviews and social/contact extras are all things the
+    owner adds/edits *after* the page exists (via "+ Add Product", "Edit
+    Page → Contact & Social Links", "Edit Page → Business Information",
+    etc.) rather than choices made during creation.
+    """
     from social.models import BusinessPage
     if BusinessPage.objects.filter(owner=request.user).count() >= 3:
         messages.error(request, 'You can create up to 3 business pages.')
         return redirect('business_pages_mine')
 
+    _create_context_extra = {
+        'categories': BusinessPage.CATEGORY_CHOICES,
+    }
+
     if request.method == 'POST':
         name        = request.POST.get('name', '').strip()
         category    = request.POST.get('category', 'others').strip()
-        page_type   = request.POST.get('page_type', BusinessPage.PAGE_TYPE_BUSINESS).strip()
-        tagline     = request.POST.get('tagline', '').strip()
         description = request.POST.get('description', '').strip()
         location    = request.POST.get('location', '').strip()
         website     = request.POST.get('website', '').strip()
         whatsapp    = request.POST.get('whatsapp', '').strip()
         phone       = request.POST.get('phone', '').strip()
         email_val   = request.POST.get('email', '').strip()
-        instagram   = request.POST.get('instagram', '').strip()
-        youtube     = request.POST.get('youtube', '').strip()
-        facebook    = request.POST.get('facebook', '').strip()
-        twitter     = request.POST.get('twitter', '').strip()
-        tiktok      = request.POST.get('tiktok', '').strip()
 
         errors = {}
         if not name:
-            errors['name'] = 'Business name is required.'
+            errors['name'] = 'Page name is required.'
         elif len(name) > 150:
             errors['name'] = 'Name must be 150 characters or fewer.'
         if category not in {c[0] for c in BusinessPage.CATEGORY_CHOICES}:
             category = 'others'
-        if page_type not in dict(BusinessPage.PAGE_TYPE_CHOICES):
-            page_type = BusinessPage.PAGE_TYPE_BUSINESS
 
-        # Products are opt-in — "sells_products" checkbox on the form.
-        # Falls back to the page type's sensible default when the field is
-        # simply missing (e.g. JS-disabled client), but an explicit "0"
-        # from the toggle always wins.
-        if 'sells_products' in request.POST:
-            sells_products = request.POST.get('sells_products') in ('1', 'true', 'on')
-        else:
-            sells_products = page_type in BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT
-
-        # Optional sections — checkboxes named "sections". Falls back to the
-        # page type's defaults when the owner hasn't touched any checkboxes.
-        posted_sections = [s for s in request.POST.getlist('sections') if s in BusinessPage.VALID_OPTIONAL_SECTIONS]
-        enabled_sections = posted_sections if posted_sections else BusinessPage.default_sections_for(page_type)
-
-        # Pre-sanitize URL fields BEFORE they hit BusinessPage.full_clean()'s
+        # Pre-sanitize the website URL BEFORE it hits BusinessPage.full_clean()'s
         # built-in field validators. full_clean() runs clean_fields() (strict
-        # Django URLField/EmailField validation on the RAW value) before it
-        # runs our custom clean() method, which is where https:// normally
-        # gets prepended. Without this, "yourbusiness.com" (no scheme) fails
+        # Django URLField validation on the RAW value) before it runs our
+        # custom clean() method, which is where https:// normally gets
+        # prepended. Without this, "yourbusiness.com" (no scheme) fails
         # validation before clean() ever has a chance to fix it up, save()
         # raises, and the page silently fails to create.
-        for _field_name, _val in (('website', website), ('youtube', youtube), ('facebook', facebook)):
-            if _val:
-                try:
-                    fixed = validate_url(_val)
-                except _ModelValidationError:
-                    errors[_field_name] = 'Please enter a valid URL.'
-                    fixed = ''
-                if _field_name == 'website':
-                    website = fixed
-                elif _field_name == 'youtube':
-                    youtube = fixed
-                else:
-                    facebook = fixed
-
-        _create_context_extra = {
-            'categories':          BusinessPage.CATEGORY_CHOICES,
-            'day_choices':         BusinessPage.DAY_CHOICES,
-            'page_type_choices':   BusinessPage.PAGE_TYPE_CHOICES,
-            'section_choices':     BusinessPage.OPTIONAL_SECTION_CHOICES,
-            'page_type_defaults':  BusinessPage.PAGE_TYPE_SECTION_DEFAULTS,
-            'page_types_selling':  list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT),
-            'page_type_defaults_json': _json.dumps(BusinessPage.PAGE_TYPE_SECTION_DEFAULTS),
-            'page_types_selling_json': _json.dumps(list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT)),
-        }
+        if website:
+            try:
+                website = validate_url(website)
+            except _ModelValidationError:
+                errors['website'] = 'Please enter a valid URL.'
+                website = ''
 
         if errors:
             return render(request, 'business_page_create.html', {
@@ -7537,15 +7509,15 @@ def business_page_create(request):
                 **_create_context_extra,
             })
 
-        business_hours = _parse_business_hours_from_post(request.POST)
-
+        # page_type, sells_products, enabled_sections, tagline, social links
+        # and business_hours are intentionally left at their model defaults
+        # here — the page is simplified at creation, and the owner can fill
+        # any of these in later from Edit Page. This keeps those fields (and
+        # any data already on older pages) fully intact.
         page = BusinessPage(
-            owner=request.user, name=name, category=category, page_type=page_type,
-            sells_products=sells_products, enabled_sections=enabled_sections,
-            tagline=tagline, description=description, location=location,
+            owner=request.user, name=name, category=category,
+            description=description, location=location,
             website=website, whatsapp=whatsapp, phone=phone, email=email_val,
-            instagram=instagram, youtube=youtube, facebook=facebook,
-            twitter=twitter, tiktok=tiktok, business_hours=business_hours,
         )
         if request.FILES.get('logo'):        page.logo        = request.FILES['logo']
         if request.FILES.get('cover_photo'): page.cover_photo = request.FILES['cover_photo']
@@ -7578,16 +7550,7 @@ def business_page_create(request):
             redirect_url += f'?{next_intent}=1'
         return redirect(redirect_url)
 
-    return render(request, 'business_page_create.html', {
-        'categories':         BusinessPage.CATEGORY_CHOICES,
-        'day_choices':        BusinessPage.DAY_CHOICES,
-        'page_type_choices':  BusinessPage.PAGE_TYPE_CHOICES,
-        'section_choices':    BusinessPage.OPTIONAL_SECTION_CHOICES,
-        'page_type_defaults': BusinessPage.PAGE_TYPE_SECTION_DEFAULTS,
-        'page_types_selling': list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT),
-        'page_type_defaults_json': _json.dumps(BusinessPage.PAGE_TYPE_SECTION_DEFAULTS),
-        'page_types_selling_json': _json.dumps(list(BusinessPage.PAGE_TYPES_SELLING_BY_DEFAULT)),
-    })
+    return render(request, 'business_page_create.html', _create_context_extra)
 
 
 @login_required(login_url='/')
@@ -7610,15 +7573,14 @@ def business_page_detail(request, slug):
         jobs = jobs.filter(is_open=True)
     jobs = jobs.order_by('-created_at')
 
-    # ── Optional professional-page sections ─────────────────────────────────
-    services = BusinessService.objects.filter(business_page=page, is_active=True).order_by('order', '-created_at') \
-        if (page.show_services or is_owner) else BusinessService.objects.none()
-    portfolio_items = BusinessPortfolioItem.objects.filter(business_page=page, kind=BusinessPortfolioItem.KIND_PORTFOLIO).order_by('order', '-created_at').prefetch_related('extra_images') \
-        if (page.show_portfolio or is_owner) else BusinessPortfolioItem.objects.none()
-    project_items = BusinessPortfolioItem.objects.filter(business_page=page, kind=BusinessPortfolioItem.KIND_PROJECT).order_by('order', '-created_at').prefetch_related('extra_images') \
-        if (page.show_projects or is_owner) else BusinessPortfolioItem.objects.none()
-    achievements = BusinessAchievement.objects.filter(business_page=page).order_by('order', '-date_achieved', '-created_at') \
-        if (page.show_achievements or is_owner) else BusinessAchievement.objects.none()
+    # ── Business Page sections ───────────────────────────────────────────
+    # Simplified model: Services and Jobs are always available to the owner
+    # to manage, and are only shown to public visitors once they actually
+    # have content — no manual "enable this section" step required.
+    # (Portfolio/Projects/Achievements are no longer part of the main
+    # Business Page navigation — see instructions — so they're not queried
+    # here. Their models/views/URLs are untouched for any other usage.)
+    services = BusinessService.objects.filter(business_page=page, is_active=True).order_by('order', '-created_at')
 
     # ── Reviews & Ratings ────────────────────────────────────────────────
     reviews = (
@@ -7676,25 +7638,35 @@ def business_page_detail(request, slug):
             .first()
         )
 
+    service_count = services.count()
+    listing_count_val = listings.count()
+    job_count_val = jobs.count()
+    review_list_count_val = reviews.count()
+
+    # ── Section visibility — hidden from public visitors when empty, always
+    # available to the owner so they can add the page's first item. ────────
+    show_products_tab = is_owner or listing_count_val > 0
+    show_services_tab = is_owner or service_count > 0
+    show_jobs_tab     = is_owner or job_count_val > 0
+    show_reviews_tab  = is_owner or review_list_count_val > 0
+
     return render(request, 'business_page_detail.html', {
         'page':              page,
         'listings':          listings,
         'jobs':              jobs,
-        'job_count':         jobs.count(),
+        'job_count':         job_count_val,
         'posts':             posts,
         'post_count':        posts.count(),
         'post_type_choices': BusinessPost.POST_TYPE_CHOICES,
         'post_category_choices': BusinessPost.POST_CATEGORY_CHOICES,
         'services':          services,
-        'service_count':     services.count(),
-        'portfolio_items':   portfolio_items,
-        'portfolio_count':   portfolio_items.count(),
-        'project_items':     project_items,
-        'project_count':     project_items.count(),
-        'achievements':      achievements,
-        'achievement_count': achievements.count(),
+        'service_count':     service_count,
+        'show_products_tab': show_products_tab,
+        'show_services_tab': show_services_tab,
+        'show_jobs_tab':     show_jobs_tab,
+        'show_reviews_tab':  show_reviews_tab,
         'reviews':           reviews,
-        'review_list_count': reviews.count(),
+        'review_list_count': review_list_count_val,
         'viewer_review':     viewer_review,
         'review_rating_choices': BusinessReview.RATING_CHOICES,
         'vibe_choices': [
