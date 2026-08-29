@@ -3,6 +3,7 @@
 import django.contrib.postgres.indexes
 from django.conf import settings
 from django.db import migrations, models
+from django.contrib.postgres.operations import TrigramExtension
 
 
 class Migration(migrations.Migration):
@@ -13,96 +14,205 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # Enable PostgreSQL pg_trgm extension before creating
+        # indexes that use gin_trgm_ops.
+        TrigramExtension(),
+
         migrations.AddIndex(
             model_name='businesspage',
-            index=models.Index(fields=['is_active', 'category', '-created_at'], name='bizpage_active_cat_idx'),
+            index=models.Index(
+                fields=['is_active', 'category', '-created_at'],
+                name='bizpage_active_cat_idx',
+            ),
         ),
+
         migrations.AddIndex(
             model_name='businesspage',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['name'], name='bizpage_name_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['name'],
+                name='bizpage_name_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='businesspage',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['description'], name='bizpage_desc_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['description'],
+                name='bizpage_desc_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='businesspage',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['location'], name='bizpage_loc_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['location'],
+                name='bizpage_loc_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='jobvacancy',
-            index=models.Index(fields=['is_open', '-created_at'], name='job_open_created_idx'),
+            index=models.Index(
+                fields=['is_open', '-created_at'],
+                name='job_open_created_idx',
+            ),
         ),
+
         migrations.AddIndex(
             model_name='jobvacancy',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['title'], name='job_title_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['title'],
+                name='job_title_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='jobvacancy',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['description'], name='job_desc_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['description'],
+                name='job_desc_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='jobvacancy',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['location'], name='job_loc_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['location'],
+                name='job_loc_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='market',
-            index=models.Index(fields=['product_category', '-posted_on'], name='market_cat_posted_idx'),
+            index=models.Index(
+                fields=['product_category', '-posted_on'],
+                name='market_cat_posted_idx',
+            ),
         ),
+
         migrations.AddIndex(
             model_name='market',
-            index=models.Index(fields=['-posted_on'], name='market_posted_idx'),
+            index=models.Index(
+                fields=['-posted_on'],
+                name='market_posted_idx',
+            ),
         ),
+
         migrations.AddIndex(
             model_name='market',
-            index=models.Index(fields=['product_owner', '-posted_on'], name='market_owner_posted_idx'),
+            index=models.Index(
+                fields=['product_owner', '-posted_on'],
+                name='market_owner_posted_idx',
+            ),
         ),
+
         migrations.AddIndex(
             model_name='market',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['product_name'], name='market_name_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['product_name'],
+                name='market_name_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='market',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['product_description'], name='market_desc_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['product_description'],
+                name='market_desc_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='market',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['product_location'], name='market_loc_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['product_location'],
+                name='market_loc_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='message',
-            index=models.Index(fields=['sender', 'receiver', '-created_at'], name='message_sender_recv_idx'),
+            index=models.Index(
+                fields=['sender', 'receiver', '-created_at'],
+                name='message_sender_recv_idx',
+            ),
         ),
+
         migrations.AddIndex(
             model_name='message',
-            index=models.Index(fields=['receiver', 'sender', '-created_at'], name='message_recv_sender_idx'),
+            index=models.Index(
+                fields=['receiver', 'sender', '-created_at'],
+                name='message_recv_sender_idx',
+            ),
         ),
+
         migrations.AddIndex(
             model_name='message',
-            index=models.Index(fields=['receiver', 'is_read'], name='message_recv_unread_idx'),
+            index=models.Index(
+                fields=['receiver', 'is_read'],
+                name='message_recv_unread_idx',
+            ),
         ),
+
         migrations.AddIndex(
             model_name='profile',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['bio'], name='profile_bio_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['bio'],
+                name='profile_bio_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='profile',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['profession'], name='profile_prof_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['profession'],
+                name='profile_prof_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='socialevent',
-            index=models.Index(fields=['is_cancelled', 'date'], name='event_active_date_idx'),
+            index=models.Index(
+                fields=['is_cancelled', 'date'],
+                name='event_active_date_idx',
+            ),
         ),
+
         migrations.AddIndex(
             model_name='socialevent',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['title'], name='event_title_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['title'],
+                name='event_title_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='socialevent',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['description'], name='event_desc_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['description'],
+                name='event_desc_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
+
         migrations.AddIndex(
             model_name='socialevent',
-            index=django.contrib.postgres.indexes.GinIndex(fields=['location'], name='event_loc_trgm', opclasses=['gin_trgm_ops']),
+            index=django.contrib.postgres.indexes.GinIndex(
+                fields=['location'],
+                name='event_loc_trgm',
+                opclasses=['gin_trgm_ops'],
+            ),
         ),
     ]
