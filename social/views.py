@@ -1639,6 +1639,14 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # item of that type first.
     _max_business_this_page = 1 if not _is_market_filtered else 0
     _business_injected = 0
+    # Which slot the "Page to follow" suggestion lands in. Previously this
+    # was a fixed slot (i % 8 == 6), which in practice made it the very
+    # first rendered card whenever the other pools (posts, market, jobs…)
+    # were sparse — business pages are almost always available, so it
+    # consistently won the race to be first. Picking a random slot each
+    # time it's built means it can land anywhere across the page instead
+    # of camping the top spot.
+    _biz_suggestion_slot = _random_feed.randint(1, page_size) if suggestion_businesses else None
 
     if _is_market_filtered:
         # Category filter is active — fill the page with market cards only,
@@ -1653,8 +1661,8 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
     # requiring at least one other feed item between any two of this trio.
     _SPECIAL_CARD_TYPES = {'achievement', 'profile_achievement', 'portfolio'}
     for i in range(1, page_size + 1):
-        # Business page suggestion at slot 6 (every 8 slots)
-        if (i % 8 == 6
+        # Business page suggestion — randomized slot (see _biz_suggestion_slot)
+        if (i == _biz_suggestion_slot
                 and suggestion_businesses
                 and _business_injected < _max_business_this_page):
             _biz_group = suggestion_businesses[:3]
@@ -1767,10 +1775,23 @@ def home(request):
     # Optional market category filter (?market_category=phones, etc.)
     market_category = request.GET.get('market_category', 'all')
 
-    # First page of the feed (market ads, jobs, events, user suggestions)
-    feed, next_cursor = _get_feed_page(
-        request.user, following_ids, market_category=market_category
-    )
+    # First page of the feed (market ads, jobs, events, user suggestions).
+    # Building this page runs ~10 separate DB-backed pools (posts, market,
+    # jobs, events, achievements, portfolio, people, page suggestions, …)
+    # plus Python-side relevance scoring over each — real cost on every
+    # single home-page load/refresh. Like the sidebar suggestions below,
+    # the feed only needs to feel fresh, not be recomputed on every
+    # request, so the first page is cached per user/category for a short
+    # window and served straight from cache on repeat loads within it.
+    _feed_cache_key = f'home:feed_page1:{request.user.id}:{market_category}'
+    _cached_feed = cache.get(_feed_cache_key)
+    if _cached_feed is not None:
+        feed, next_cursor = _cached_feed
+    else:
+        feed, next_cursor = _get_feed_page(
+            request.user, following_ids, market_category=market_category
+        )
+        cache.set(_feed_cache_key, (feed, next_cursor), 45)
 
     # Only pass counts — lists are loaded lazily via HTMX
     sidebar_following_count = profile.followings.count()
