@@ -80,7 +80,7 @@ def _clean_apply_link(raw):
         return '', 'Please enter a valid application link (starting with http:// or https://).'
 from django.db.models import Q
 from django.db.models import Count, Max, Min
-from django.db.models import Case, When, Value, IntegerField, TextField
+from django.db.models import Case, When, Value, IntegerField, TextField, F
 from django.db.models.functions import Cast
 from django.core.paginator import Paginator
 from asgiref.sync import async_to_sync
@@ -2168,9 +2168,16 @@ def profile(request, username):
     )
     business_page_count = business_pages.count()
 
+    # `market_listings` is prefetched above, but the original code called
+    # .order_by('-posted_on').first() on it, which builds a *new* queryset
+    # with different ordering — that bypasses the prefetch cache and issues
+    # one extra query per business page. Since each page normally owns a
+    # small number of listings, picking the max in Python reuses the
+    # prefetched list and keeps this to the 2 queries already paid for above.
     business_page_previews = []
     for page in business_pages:
-        featured_listing = page.market_listings.order_by('-posted_on').first()
+        listings = list(page.market_listings.all())  # reuses prefetch cache
+        featured_listing = max(listings, key=lambda m: m.posted_on) if listings else None
         business_page_previews.append({
             'page': page,
             'listing': featured_listing,
@@ -4445,34 +4452,70 @@ def mark_all_notifications_read(request):
 
 @login_required(login_url='/')
 def inbox(request):
-    conversations = {}
-    all_messages = Message.objects.filter(
-        Q(sender=request.user) | Q(receiver=request.user)
+    # PREVIOUS BEHAVIOR (critical bottleneck): loaded every message this user
+    # has ever sent/received into Python just to discover conversation
+    # partners (unbounded — grows without limit for active users), then ran
+    # 2 more queries per partner (last message + unread count). At scale
+    # this is O(all messages) + O(2 * partners) per page load.
+    #
+    # NEW BEHAVIOR: written to be portable across database backends —
+    # Postgres' DISTINCT ON (Django's .distinct(field)) is NOT supported on
+    # SQLite/MySQL, so this uses a GROUP BY (Max) instead, which every
+    # backend supports. Total: 3 queries, regardless of how many messages
+    # the user has ever exchanged (vs. 1 unbounded scan + 2-per-partner
+    # before).
+    other_user_expr = Case(
+        When(sender=request.user, then=F('receiver_id')),
+        default=F('sender_id'),
+        output_field=IntegerField(),
     )
-    conversation_partners = set()
-    for msg in all_messages:
-        other_user = msg.sender if msg.sender != request.user else msg.receiver
-        conversation_partners.add(other_user)
-    
-    for partner in conversation_partners:
-        last_message = Message.objects.filter(
-            Q(sender=request.user, receiver=partner) |
-            Q(sender=partner, receiver=request.user)
-        ).order_by('-created_at').first()
-        
-        if last_message:
-            unread_count = Message.objects.filter(
-                sender=partner, receiver=request.user, is_read=False
-            ).count()
-            conversations[partner] = {'last_message': last_message, 'unread_count': unread_count}
-    
+    base_qs = (
+        Message.objects
+        .filter(Q(sender=request.user) | Q(receiver=request.user))
+        .annotate(other_user_id=other_user_expr)
+    )
+
+    # Step 1: latest timestamp per partner (a portable GROUP BY, not DISTINCT ON).
+    latest_ts_by_partner = {
+        row['other_user_id']: row['latest']
+        for row in base_qs.values('other_user_id').annotate(latest=Max('created_at'))
+    }
+
+    # Step 2: fetch the actual message rows for those (partner, timestamp) pairs.
+    last_messages_qs = Message.objects.none()
+    if latest_ts_by_partner:
+        pair_filter = Q()
+        for other_user_id, ts in latest_ts_by_partner.items():
+            pair_filter |= Q(other_user_id=other_user_id, created_at=ts)
+        last_messages_qs = base_qs.filter(pair_filter).select_related('sender', 'receiver')
+
+    unread_counts = dict(
+        Message.objects
+        .filter(receiver=request.user, is_read=False)
+        .values('sender_id')
+        .annotate(n=Count('id'))
+        .values_list('sender_id', 'n')
+    )
+
+    conversations = {}
+    for msg in last_messages_qs:
+        partner = msg.sender if msg.sender_id != request.user.id else msg.receiver
+        # Guards against the rare tie where two partners' latest messages
+        # land on the exact same timestamp and both match one Q clause.
+        if partner in conversations and conversations[partner]['last_message'].id > msg.id:
+            continue
+        conversations[partner] = {
+            'last_message': msg,
+            'unread_count': unread_counts.get(partner.id, 0),
+        }
+
     sorted_conversations = sorted(
         conversations.items(),
         key=lambda x: x[1]['last_message'].created_at,
         reverse=True
     )
-    
-    contacts = conversation_partners
+
+    contacts = set(conversations.keys())
     return render(request, 'inbox.html', {
         'conversations': dict(sorted_conversations),
         'contacts': contacts,
@@ -4714,21 +4757,47 @@ def channel(request, channel_id):
     from social.models import ChannelMessageReaction
     from django.db.models import Count as _Count
 
-    channel_messages_qs = ChannelMessage.objects.filter(
-        channel=channel_obj
-    ).select_related('author', 'author__profile', 'reply_to', 'reply_to__author').order_by('created_at')
+    # PREVIOUS BEHAVIOR (critical): loaded the channel's *entire* message
+    # history with no limit — unbounded growth for a long-lived channel —
+    # then ran 2 extra queries per message (reaction summary + "my
+    # reaction"). A channel with 100k messages meant 100k+ rows loaded into
+    # Python and ~200k extra queries on a single page load.
+    #
+    # NEW BEHAVIOR: only the most recent page of messages loads (indexed,
+    # bounded), and reactions for that page are fetched in exactly 2 batch
+    # queries total instead of 2-per-message.
+    #
+    # BEHAVIOR DIFFERENCE: older messages are no longer rendered on initial
+    # load. If the UI needs infinite scrollback, pair this with a
+    # cursor-paginated "load earlier messages" endpoint (same pattern as
+    # `feed_load_more`) rather than reverting to loading full history.
+    _CHANNEL_MSG_PAGE_SIZE = 50
+    channel_messages = list(reversed(
+        ChannelMessage.objects.filter(channel=channel_obj)
+        .select_related('author', 'author__profile', 'reply_to', 'reply_to__author')
+        .order_by('-created_at')[:_CHANNEL_MSG_PAGE_SIZE]
+    ))
+
+    message_ids = [m.id for m in channel_messages]
+    reactions_by_msg = {}
+    for row in (ChannelMessageReaction.objects
+                .filter(message_id__in=message_ids)
+                .values('message_id', 'emoji')
+                .annotate(count=_Count('id'))):
+        reactions_by_msg.setdefault(row['message_id'], {})[row['emoji']] = row['count']
+
+    my_reactions = dict(
+        ChannelMessageReaction.objects
+        .filter(message_id__in=message_ids, user=request.user)
+        .values_list('message_id', 'emoji')
+    )
 
     grouped_messages = {}
-    for msg in channel_messages_qs:
+    for msg in channel_messages:
+        msg.reactions_summary = reactions_by_msg.get(msg.id, {})
+        msg.my_reaction = my_reactions.get(msg.id)
         date_label = msg.chat_date_label
-        if date_label not in grouped_messages:
-            grouped_messages[date_label] = []
-        # Attach reaction summary and current user's reaction
-        reactions_qs = ChannelMessageReaction.objects.filter(message=msg).values('emoji').annotate(count=_Count('id'))
-        msg.reactions_summary = {row['emoji']: row['count'] for row in reactions_qs}
-        user_rxn = ChannelMessageReaction.objects.filter(message=msg, user=request.user).first()
-        msg.my_reaction = user_rxn.emoji if user_rxn else None
-        grouped_messages[date_label].append(msg)
+        grouped_messages.setdefault(date_label, []).append(msg)
 
     subscribed_channels = Channel.objects.filter(subscriber=request.user)
     total_unread = sum(ch.unread_count_for_user(request.user) for ch in subscribed_channels)
@@ -6782,7 +6851,15 @@ def my_applications(request):
     if status_filter != 'all' and status_filter in valid_statuses:
         qs = qs.filter(status=status_filter)
 
-    total_count = JobApplication.objects.filter(applicant=request.user).count()
+    # Was: 1 query for total_count + 1 count() query per status (7 queries
+    # total). Now: a single grouped aggregate covers every status at once.
+    _status_counts = dict(
+        JobApplication.objects.filter(applicant=request.user)
+        .values('status')
+        .annotate(n=Count('id'))
+        .values_list('status', 'n')
+    )
+    total_count = sum(_status_counts.values())
     status_filters = []
     for value, label in JobApplication.STATUS_CHOICES:
         if value == JobApplication.WITHDRAWN:
@@ -6790,7 +6867,7 @@ def my_applications(request):
         status_filters.append({
             'value': value,
             'label': label,
-            'count': JobApplication.objects.filter(applicant=request.user, status=value).count(),
+            'count': _status_counts.get(value, 0),
         })
 
     paginator = Paginator(qs, 15)

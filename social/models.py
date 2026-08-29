@@ -1980,6 +1980,17 @@ class ChannelMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     link_preview = models.JSONField(null=True, blank=True)
 
+    class Meta:
+        # Every channel-history read filters by channel and orders by
+        # created_at (most recent first for the initial page, ascending
+        # for scrollback) — this table has no bound on growth for a
+        # long-lived channel, so this composite index is what keeps the
+        # `channel()` view's "most recent 50" query an index scan instead
+        # of a sequential scan + sort as history grows into the millions.
+        indexes = [
+            models.Index(fields=['channel', '-created_at'], name='chanmsg_channel_created_idx'),
+        ]
+
     def clean(self):
         super().clean()
         self.message = sanitize_text(self.message, 'content')
