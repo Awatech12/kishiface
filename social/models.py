@@ -3430,6 +3430,10 @@ class BusinessPage(models.Model):
     telegram    = models.CharField(max_length=100, blank=True, default='',
                                    help_text='Username or @handle')
     followers   = models.ManyToManyField(User, blank=True, related_name='followed_business_pages')
+    # Page admins — trusted users the owner has delegated day-to-day
+    # management to (posting, listings, jobs, services) without handing over
+    # ownership itself. See `is_user_admin()` below for the combined check.
+    admins      = models.ManyToManyField(User, blank=True, related_name='admin_business_pages')
     is_verified = models.BooleanField(default=False)
     is_active   = models.BooleanField(default=True)
 
@@ -3549,6 +3553,13 @@ class BusinessPage(models.Model):
             self.slug = slug
         self.full_clean()
         super().save(*args, **kwargs)
+
+    def is_user_admin(self, user):
+        """True if `user` is the page owner or one of its delegated admins.
+        Anonymous/unauthenticated users are never admins."""
+        if not user or not getattr(user, 'is_authenticated', False):
+            return False
+        return user.pk == self.owner_id or self.admins.filter(pk=user.pk).exists()
 
     @property
     def follower_count(self):

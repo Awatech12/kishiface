@@ -102,6 +102,71 @@ from django.contrib.contenttypes.models import ContentType
 from django.views.decorators.http import require_POST, require_GET
 from django.core.cache import cache
 import cloudinary
+from functools import wraps
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Business Page permissions — owner-or-admin access control
+# ─────────────────────────────────────────────────────────────────────────────
+
+def page_owner_or_admin_required(get_page=None):
+    """
+    Restricts a view to a BusinessPage's owner or one of its delegated
+    admins (see BusinessPage.is_user_admin). On success, the resolved page
+    is passed to the view as a `page` keyword argument, so the view never
+    has to fetch it again.
+
+    By default the page is resolved from a `slug` URL kwarg — the common
+    case for views like `/business/<slug>/posts/create/`:
+
+        @page_owner_or_admin_required()
+        def business_post_create(request, page):
+            ...
+
+    Some views (e.g. `/posts/<uuid:post_id>/delete/`) are keyed by an
+    unrelated object's id rather than the page's slug. For those, pass
+    `get_page` — a callable of (request, *args, **kwargs) that returns the
+    relevant BusinessPage (or raises Http404):
+
+        @page_owner_or_admin_required(
+            get_page=lambda request, *a, **kw:
+                get_object_or_404(BusinessPost, pk=kw['post_id']).business_page
+        )
+        def business_post_delete(request, post_id, page):
+            ...
+
+    Unauthorized requests get a 403 JSON response for AJAX/XHR requests, or
+    an error message + redirect back to the page for regular requests.
+    """
+    def _default_get_page(request, *args, **kwargs):
+        return get_object_or_404(BusinessPage, slug=kwargs['slug'])
+
+    resolve_page = get_page or _default_get_page
+
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            page = resolve_page(request, *args, **kwargs)
+
+            if not page.is_user_admin(request.user):
+                is_ajax = (
+                    request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+                    or request.headers.get('Content-Type', '').startswith('application/json')
+                )
+                if is_ajax:
+                    return JsonResponse(
+                        {'success': False, 'error': 'Not authorised for that business page.'},
+                        status=403,
+                    )
+                messages.error(request, "You don't have permission to do that.")
+                return redirect('business_page_detail', slug=page.slug)
+
+            kwargs.pop('slug', None)
+            kwargs['page'] = page
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
+    return decorator
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Registration helpers — compiled once, reused by view + AJAX endpoints
@@ -1287,6 +1352,46 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             _pp.viewer_vibe = _mine.vibe_type
             _pp.viewer_vibe_emoji = ProfilePostVibe.VIBE_EMOJIS.get(_mine.vibe_type, '')
 
+    # ── Viewer's own posts — the pool above deliberately excludes the
+    #    viewer, so without this their own updates would never appear in
+    #    their own feed. Pulled separately, marked `is_mine`, and injected
+    #    at a much lower rate (see _MAX_OWN_PER_PAGE below) — the feed
+    #    should mostly surface others' content, with an occasional "Mine"
+    #    card so the viewer sees their own post landed. Picked randomly
+    #    from a recent window rather than always the latest, so repeat
+    #    visits don't keep surfacing the same one post. ───────────────────
+    import random as _random_feed
+    _own_qs = (
+        ProfilePost.objects
+        .filter(profile__user=user)
+        .select_related('profile', 'profile__user')
+        .prefetch_related('images', 'poll__options__votes', 'vibes', 'comments')
+    )
+    if _seen_post_ids:
+        _own_qs = _own_qs.exclude(post_id__in=_seen_post_ids)
+    _own_pool = []
+    if not _is_market_filtered:
+        _own_candidates = list(_own_qs.order_by('-created_at')[:20])
+        _own_pool = _random_feed.sample(_own_candidates, min(2, len(_own_candidates)))
+    for _op in _own_pool:
+        _op.is_mine = True
+        _op.profile.is_following = False  # follow button is hidden for own posts anyway
+        if _op.post_type == ProfilePost.TYPE_POLL and hasattr(_op, 'poll'):
+            _poll = _op.poll
+            _total = sum(o.vote_count for o in _poll.options.all())
+            _poll.viewer_total_votes = _total
+            _poll.viewer_voted_ids = _poll.voted_option_ids(user)
+            for _opt in _poll.options.all():
+                _opt.viewer_pct = _opt.vote_pct(_total)
+        _op.viewer_vibe = None
+        _op.viewer_vibe_emoji = ''
+        _mine_vibe = next((v for v in _op.vibes.all() if v.user_id == user.pk), None)
+        if _mine_vibe:
+            _op.viewer_vibe = _mine_vibe.vibe_type
+            _op.viewer_vibe_emoji = ProfilePostVibe.VIBE_EMOJIS.get(_mine_vibe.vibe_type, '')
+    _own_injected = 0
+    _MAX_OWN_PER_PAGE = 1
+
     # ── Business achievements — ranked the same way, so award/certification
     #    highlights surface in the feed for viewers with matching skills. ────
     _seen_ach_ids = set(str(i) for i in (_kwargs.get('seen_achievement_ids') or []) if i)
@@ -1540,7 +1645,7 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
         # ignoring everything else so the grid is pure product results.
         _MAX_MARKET_PER_PAGE = page_size
         _job_pool, _event_pool, _post_pool, _pp_pool, people_pool, _ach_pool = [], [], [], [], [], []
-        _pach_pool, _port_pool = [], []
+        _pach_pool, _port_pool, _own_pool = [], [], []
 
     feed_items = []
     # Achievement / profile-achievement / portfolio cards all pull from the
@@ -1564,6 +1669,15 @@ def _get_feed_page(user, following_ids, cursor_dt=None, page_size=None,
             feed_items.append({'type': 'business_post', 'data': _post_pool.pop(0)})
         if i % 6 == 4 and _pp_pool:
             feed_items.append({'type': 'profile_post', 'data': _pp_pool.pop(0)})
+
+        # Viewer's own post — a light touch (once per page, at most) so
+        # people occasionally see their own recent post mixed into their
+        # own feed, tagged "Mine" in the template.
+        if (i % 10 == 9
+                and _own_pool
+                and _own_injected < _MAX_OWN_PER_PAGE):
+            feed_items.append({'type': 'profile_post', 'data': _own_pool.pop(0)})
+            _own_injected += 1
 
         _last_type = feed_items[-1]['type'] if feed_items else None
 
@@ -7775,6 +7889,8 @@ def business_page_detail(request, slug):
             for t, label in BusinessPostVibe.VIBE_CHOICES
         ],
         'is_owner':          is_owner,
+        'is_admin':          page.is_user_admin(request.user),
+        'page_admins':       page.admins.select_related('profile').order_by('username') if is_owner else None,
         'is_follower':       is_follower,
         'follower_count':    page.follower_count,
         'listing_count':     listings.count(),
@@ -7872,12 +7988,9 @@ def _serialize_professional_post(post, viewer=None):
 
 @login_required(login_url='/')
 @require_POST
-def business_post_create(request, slug):
-    """AJAX — owner posts an image / video / text / poll update to their page."""
-    page = get_object_or_404(BusinessPage, slug=slug)
-    if page.owner != request.user:
-        return JsonResponse({'success': False, 'error': 'Not authorised for that business page.'}, status=403)
-
+@page_owner_or_admin_required()
+def business_post_create(request, page):
+    """AJAX — owner or admin posts an image / video / text / poll update to the page."""
     post_type = request.POST.get('post_type', '').strip()
     caption   = request.POST.get('caption', '').strip()
     post_category = request.POST.get('post_category', BusinessPost.CATEGORY_UPDATE).strip()
@@ -7980,11 +8093,12 @@ def business_post_create(request, slug):
 
 @login_required(login_url='/')
 @require_POST
-def business_post_delete(request, post_id):
-    """AJAX — delete a BusinessPost (page owner or profile owner only)."""
-    post = get_object_or_404(BusinessPost, pk=post_id)
-    if post.owner_user != request.user:
-        return JsonResponse({'success': False, 'error': 'Not authorised.'}, status=403)
+@page_owner_or_admin_required(
+    get_page=lambda request, *a, **kw: get_object_or_404(BusinessPost, pk=kw['post_id']).business_page
+)
+def business_post_delete(request, post_id, page):
+    """AJAX — delete a BusinessPost (page owner or admin only)."""
+    post = get_object_or_404(BusinessPost, pk=post_id, business_page=page)
 
     if not settings.USE_CLOUDINARY:
         for img in post.images.all():
@@ -8095,6 +8209,160 @@ def business_page_edit(request, slug):
     })
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Business Page — Admin management & Ownership transfer.
+# Owner-only: unlike the content-management views above, these change who
+# controls the page itself, so they check page.owner directly rather than
+# going through page_owner_or_admin_required (an admin must never be able to
+# add/remove admins or transfer ownership).
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+@require_POST
+def business_page_transfer_ownership(request, slug):
+    """AJAX — current owner transfers ownership to another existing user.
+    Optionally keeps the outgoing owner on as an admin."""
+    page = get_object_or_404(BusinessPage, slug=slug)
+    if page.owner != request.user:
+        return JsonResponse({'success': False, 'error': 'Only the page owner can transfer ownership.'}, status=403)
+
+    new_owner_username = request.POST.get('new_owner', '').strip().lstrip('@')
+    keep_as_admin       = request.POST.get('keep_as_admin') in ('1', 'true', 'on')
+
+    if not new_owner_username:
+        return JsonResponse({'success': False, 'error': 'Please enter the new owner\u2019s username.'}, status=400)
+
+    try:
+        new_owner = User.objects.get(username__iexact=new_owner_username)
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'No user found with that username.'}, status=404)
+
+    if new_owner == request.user:
+        return JsonResponse({'success': False, 'error': 'You already own this page.'}, status=400)
+
+    old_owner = page.owner
+    page.owner = new_owner
+    page.admins.remove(new_owner)  # owner shouldn't also be listed as an admin
+    page.save(update_fields=['owner'])
+
+    if keep_as_admin:
+        page.admins.add(old_owner)
+
+    return JsonResponse({
+        'success': True,
+        'new_owner': new_owner.username,
+        'kept_as_admin': keep_as_admin,
+        'message': f'Ownership transferred to @{new_owner.username}.',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_page_add_admin(request, slug):
+    """AJAX — owner grants admin access to another existing user."""
+    page = get_object_or_404(BusinessPage, slug=slug)
+    if page.owner != request.user:
+        return JsonResponse({'success': False, 'error': 'Only the page owner can add admins.'}, status=403)
+
+    username = request.POST.get('username', '').strip().lstrip('@')
+    if not username:
+        return JsonResponse({'success': False, 'error': 'Please enter a username.'}, status=400)
+
+    try:
+        user = User.objects.get(username__iexact=username)
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'No user found with that username.'}, status=404)
+
+    if user == page.owner:
+        return JsonResponse({'success': False, 'error': 'The owner already has full access.'}, status=400)
+    if page.admins.filter(pk=user.pk).exists():
+        return JsonResponse({'success': False, 'error': f'@{user.username} is already an admin.'}, status=400)
+
+    page.admins.add(user)
+
+    return JsonResponse({
+        'success': True,
+        'admin': {
+            'user_id':   user.pk,
+            'username':  user.username,
+            'full_name': user.get_full_name(),
+            'avatar_url': getattr(getattr(user, 'profile', None), 'get_picture_url', ''),
+        },
+        'message': f'@{user.username} added as an admin.',
+    })
+
+
+@login_required(login_url='/')
+@require_POST
+def business_page_remove_admin(request, slug):
+    """AJAX — owner revokes a user's admin access."""
+    page = get_object_or_404(BusinessPage, slug=slug)
+    if page.owner != request.user:
+        return JsonResponse({'success': False, 'error': 'Only the page owner can remove admins.'}, status=403)
+
+    user_id = request.POST.get('user_id', '').strip()
+    if not user_id:
+        return JsonResponse({'success': False, 'error': 'Missing user.'}, status=400)
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except (User.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': 'User not found.'}, status=404)
+
+    if user == page.owner:
+        return JsonResponse({'success': False, 'error': 'The owner cannot be removed as an admin.'}, status=400)
+    if not page.admins.filter(pk=user.pk).exists():
+        return JsonResponse({'success': False, 'error': f'@{user.username} is not an admin.'}, status=400)
+
+    page.admins.remove(user)
+    return JsonResponse({'success': True, 'message': f'@{user.username} removed as admin.'})
+
+
+@login_required(login_url='/')
+@require_GET
+def business_page_user_suggest(request, slug):
+    """
+    GET /business/<slug>/user-suggest/?q=...&context=admin|transfer
+    Lightweight username/name autocomplete for the Manage Admins and
+    Transfer Ownership modals. Owner-only. `context` trims out users who
+    wouldn't be valid targets anyway: current admins for 'admin' (already
+    added), nothing extra for 'transfer' beyond the owner themself.
+    """
+    page = get_object_or_404(BusinessPage, slug=slug)
+    if page.owner != request.user:
+        return JsonResponse({'results': []}, status=403)
+
+    query = request.GET.get('q', '').strip()[:60]
+    context = request.GET.get('context', '').strip()
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+
+    exclude_ids = {page.owner_id}
+    if context == 'admin':
+        exclude_ids |= set(page.admins.values_list('pk', flat=True))
+
+    users = (
+        User.objects
+        .filter(Q(username__icontains=query) | Q(first_name__icontains=query) | Q(last_name__icontains=query))
+        .exclude(pk__in=exclude_ids)
+        .select_related('profile')
+        .order_by('username')[:6]
+    )
+
+    results = []
+    for u in users:
+        try:
+            avatar_url = u.profile.get_picture_url
+        except Exception:
+            avatar_url = ''
+        results.append({
+            'username':   u.username,
+            'full_name':  u.get_full_name(),
+            'avatar_url': avatar_url,
+        })
+    return JsonResponse({'results': results})
+
+
 @login_required(login_url='/')
 def business_pages_mine(request):
     from social.models import BusinessPage
@@ -8124,16 +8392,15 @@ def business_pages_list(request):
 
 @login_required(login_url='/')
 @require_POST
-def business_product_upload(request, slug):
+@page_owner_or_admin_required()
+def business_product_upload(request, page):
     """
-    Owner posts a new Market listing tagged to their business page.
+    Owner or admin posts a new Market listing tagged to the business page.
     Uses the existing Market + MarketImage models — no separate product model.
     Returns JSON for inline page update; product links to product_detail view.
     """
-    from social.models import BusinessPage
-
-    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
-
+    if not page.is_active:
+        raise Http404
     if not page.sells_products:
         return JsonResponse({
             'success': False,
@@ -8252,15 +8519,15 @@ def business_product_upload(request, slug):
 
 @login_required(login_url='/')
 @require_POST
-def business_job_upload(request, slug):
+@page_owner_or_admin_required()
+def business_job_upload(request, page):
     """
-    Owner posts a new JobVacancy tagged to their business page — the
+    Owner or admin posts a new JobVacancy tagged to the business page — the
     'post a job vacancy from your Page' flow, mirroring Facebook Jobs.
     Uses the existing JobVacancy model via its business_page FK.
     """
-    from social.models import BusinessPage
-
-    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
+    if not page.is_active:
+        raise Http404
 
     can_post, missing = _profile_post_status(request.user)
     if not can_post:
@@ -8356,9 +8623,11 @@ def business_job_upload(request, slug):
 
 @login_required(login_url='/')
 @require_POST
-def business_service_create(request, slug):
-    """Owner adds a Service to their professional page."""
-    page = get_object_or_404(BusinessPage, slug=slug, owner=request.user, is_active=True)
+@page_owner_or_admin_required()
+def business_service_create(request, page):
+    """Owner or admin adds a Service to the professional page."""
+    if not page.is_active:
+        raise Http404
 
     title      = request.POST.get('title', '').strip()
     description = request.POST.get('description', '').strip()
@@ -8400,8 +8669,12 @@ def business_service_create(request, slug):
 
 @login_required(login_url='/')
 @require_POST
-def business_service_delete(request, service_id):
-    service = get_object_or_404(BusinessService, service_id=service_id, business_page__owner=request.user)
+@page_owner_or_admin_required(
+    get_page=lambda request, *a, **kw: get_object_or_404(BusinessService, service_id=kw['service_id']).business_page
+)
+def business_service_delete(request, service_id, page):
+    """Owner or admin removes a Service from the page."""
+    service = get_object_or_404(BusinessService, service_id=service_id, business_page=page)
     service.delete()
     return JsonResponse({'success': True})
 

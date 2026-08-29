@@ -155,6 +155,10 @@ urlpatterns = [
     path('business/<slug:slug>/',                       views.business_page_detail,      name='business_page_detail'),
     path('business/<slug:slug>/edit/',                  views.business_page_edit,        name='business_page_edit'),
     path('business/<slug:slug>/follow/',                views.business_page_follow,      name='business_page_follow'),
+    path('business/<slug:slug>/transfer/',              views.business_page_transfer_ownership, name='business_page_transfer_ownership'),
+    path('business/<slug:slug>/add-admin/',             views.business_page_add_admin,   name='business_page_add_admin'),
+    path('business/<slug:slug>/remove-admin/',          views.business_page_remove_admin, name='business_page_remove_admin'),
+    path('business/<slug:slug>/user-suggest/',          views.business_page_user_suggest, name='business_page_user_suggest'),
     path('business/<slug:slug>/upload/',                views.business_product_upload,   name='business_product_upload'),
     path('business/<slug:slug>/jobs/upload/',           views.business_job_upload,       name='business_job_upload'),
 
