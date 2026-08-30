@@ -7881,10 +7881,16 @@ def business_page_detail(request, slug):
 
     # ── Section visibility — hidden from public visitors when empty, always
     # available to the owner so they can add the page's first item. ────────
+    # Reviews are the one exception: the tab is always visible to everyone
+    # (owner + members), regardless of whether any reviews exist yet.
+    # Products/services/jobs are created by the *owner*, so hiding an empty
+    # tab from visitors makes sense there — but reviews are created by
+    # *visitors*, so hiding an empty Reviews tab from everyone but the
+    # owner would mean no member could ever leave the page's first review.
     show_products_tab = is_owner or listing_count_val > 0
     show_services_tab = is_owner or service_count > 0
     show_jobs_tab     = is_owner or job_count_val > 0
-    show_reviews_tab  = is_owner or review_list_count_val > 0
+    show_reviews_tab  = True
 
     return render(request, 'business_page_detail.html', {
         'page':              page,

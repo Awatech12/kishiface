@@ -2181,6 +2181,9 @@
             padding: 16px; margin-bottom: 18px;
         }
         .kbiz-review-form-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+        /* Review submit button uses the site's primary color, not the shared
+           gold "disabled" tint other modal-submit buttons use. */
+        #kbizReviewSubmitBtn:disabled { background: var(--mfy-primary); opacity: 0.65; cursor: not-allowed; }
         .kbiz-star-picker { display: flex; gap: 6px; margin-bottom: 12px; }
         .kbiz-star-picker i {
             font-size: 26px; color: #d8d8d8; cursor: pointer; transition: color 0.1s ease, transform 0.1s ease;
@@ -2190,7 +2193,8 @@
 
         .kbiz-review-card {
             border-bottom: 1px solid var(--mfy-border);
-            padding: 16px 0;
+            padding: 16px 0 16px 14px;
+            margin-left: 6px;
         }
         .kbiz-review-card:last-child { border-bottom: none; }
         .kbiz-review-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
@@ -2398,7 +2402,7 @@
         <span class="kbiz-payment-item"><i class="fas fa-box-open"></i> Pickup Available</span>
         {% endif %}
         {% for label in payment_methods_display %}
-        <span class="kbiz-payment-item"><i class="fas fa-money-bill-wave"></i> {{ label }}</span>
+        <span class="kbiz-payment-item">{{ label }}</span>
         {% endfor %}
     </div>
     {% endif %}
@@ -2427,7 +2431,7 @@
         {% endif %}
         {% if page.whatsapp %}
         <a href="https://wa.me/{{ page.whatsapp }}" target="_blank" rel="noopener noreferrer" class="kbiz-cta-btn kbiz-cta-whatsapp">
-            <i class="fab fa-whatsapp"></i> Chat on WhatsApp
+            <i class="fab fa-whatsapp"></i> WhatsApp
         </a>
         {% endif %}
         {% if page.phone %}
@@ -2629,7 +2633,7 @@
             {% if page.whatsapp %}
             <a href="https://wa.me/{{ page.whatsapp }}?text=Hi%2C%20I%27m%20interested%20in%20{{ product.product_name|urlencode }}%20(%E2%82%A6{{ product.product_price|floatformat:'0'|intcomma }})"
                target="_blank" rel="noopener noreferrer" class="mfy-jcard-wa-btn">
-                <i class="fab fa-whatsapp"></i> Chat on WhatsApp
+                <i class="fab fa-whatsapp"></i> WhatsApp
             </a>
             {% endif %}
 
@@ -4071,7 +4075,20 @@ function kbizSwitchContentTab(tab, btn) {
     document.querySelectorAll('.kbiz-tab-panel').forEach(p => p.classList.remove('active'));
     const panel = document.getElementById('kbiz-panel-' + tab);
     if (panel) panel.classList.add('active');
+
+    // Remember the tab so a full-page reload (e.g. after posting, adding a
+    // listing/job/service, or submitting a review) lands the user back on
+    // whichever tab they were on instead of resetting to Home.
+    sessionStorage.setItem('kbizActiveTab_' + PAGE_SLUG, tab);
 }
+
+// Restore the last active tab after a reload triggered by a form submission.
+document.addEventListener('DOMContentLoaded', function () {
+    const savedTab = sessionStorage.getItem('kbizActiveTab_' + PAGE_SLUG);
+    if (!savedTab) return;
+    const btn = document.querySelector('.kbiz-content-tab[data-tab="' + savedTab + '"]');
+    if (btn) kbizSwitchContentTab(savedTab, btn);
+});
 
 // ── Right-sidebar Following/Followers tabs (same behavior as profile page) ──
 function mfySwitchTab(tab, btn) {
