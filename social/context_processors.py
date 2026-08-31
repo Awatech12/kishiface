@@ -229,12 +229,22 @@ def viewer_business_page_processor(request):
 
 def business_inbox_processor(request):
     """
-    Unread-message badge count across every business page the user owns or
-    administers, pulled from the dedicated business inbox (BusinessMessage)
-    — kept separate from `unread_count`, which is the personal DM count.
+    Unread-message badge counts for the dedicated business inbox
+    (BusinessMessage) — kept separate from `unread_count`, which is the
+    personal DM count. Two directions, since a person can be both a
+    business admin *and* a customer messaging other businesses:
+
+    - unread_business_message_count: messages from customers, into every
+      page this user owns or administers (the "receiver"/business side).
+    - unread_customer_business_message_count: messages from businesses,
+      addressed to this user as a customer (the "sender"/customer side).
     """
     if not request.user.is_authenticated:
-        return {'unread_business_message_count': 0}
+        return {
+            'unread_business_message_count': 0,
+            'unread_customer_business_message_count': 0,
+            'unread_business_message_total': 0,
+        }
     try:
         pages = BusinessPage.objects.filter(
             Q(owner=request.user) | Q(admins=request.user), is_active=True
@@ -244,4 +254,14 @@ def business_inbox_processor(request):
         ).count()
     except Exception:
         unread_business_message_count = 0
-    return {'unread_business_message_count': unread_business_message_count}
+    try:
+        unread_customer_business_message_count = BusinessMessage.objects.filter(
+            customer=request.user, is_from_business=True, is_read=False
+        ).count()
+    except Exception:
+        unread_customer_business_message_count = 0
+    return {
+        'unread_business_message_count': unread_business_message_count,
+        'unread_customer_business_message_count': unread_customer_business_message_count,
+        'unread_business_message_total': unread_business_message_count + unread_customer_business_message_count,
+    }

@@ -199,6 +199,24 @@
         .mfy-follow-btn:hover{border-color:var(--mfy-primary);color:var(--mfy-primary);}
         .mfy-follow-btn.following{background:var(--mfy-primary);border-color:var(--mfy-primary);color:#fff;}
 
+        /* ===== Unread message badge (owner/admin: from customers · member: from the business) ===== */
+        .mfy-msg-badge-dot{
+            position:absolute;top:10px;right:10px;z-index:3;
+            min-width:22px;height:22px;padding:0 6px;border-radius:999px;
+            background:#ff3b30;color:#fff;font-size:11px;font-weight:800;
+            display:flex;align-items:center;justify-content:center;
+            border:2px solid var(--mfy-white);
+        }
+        .mfy-inbox-btn{flex:1;text-align:center;padding:9px 0;border-radius:22px;border:1.5px solid var(--mfy-primary);
+            color:#fff;font-weight:700;font-size:14px;text-decoration:none;background:var(--mfy-primary);
+            display:flex;align-items:center;justify-content:center;gap:6px;position:relative;}
+        .mfy-inbox-btn:hover{background:var(--mfy-primary-dark);}
+        .mfy-inbox-btn .mfy-inbox-count{
+            background:#fff;color:var(--mfy-primary);border-radius:999px;
+            min-width:18px;height:18px;padding:0 5px;font-size:11px;font-weight:800;
+            display:flex;align-items:center;justify-content:center;
+        }
+
         .mfy-empty{padding:70px 20px;text-align:center;color:var(--mfy-text-light);}
         .mfy-empty i{font-size:42px;margin-bottom:14px;display:block;color:#d3d7de;}
 
@@ -379,6 +397,9 @@
                 <div class="mfy-card-cover">
                     {% if biz.get_cover_url %}<img src="{{ biz.get_cover_url }}" alt="">{% endif %}
                     <span class="mfy-card-cat-chip"><i class="fas fa-tag"></i> {{ biz.get_category_display }}</span>
+                    {% if biz.viewer_unread_message_count %}
+                    <span class="mfy-msg-badge-dot" title="{% if biz.viewer_is_admin %}Unread customer messages{% else %}Unread messages from this business{% endif %}">{{ biz.viewer_unread_message_count }}</span>
+                    {% endif %}
                 </div>
             </a>
             <div class="mfy-card-logo-wrap">
@@ -402,7 +423,14 @@
             </a>
             <div class="mfy-card-footer">
                 <a href="{% url 'business_page_detail' slug=biz.slug %}" class="mfy-view-btn">View Page</a>
-                {% if biz.owner_id != request.user.id %}
+                {% if biz.viewer_is_admin %}
+                <a href="{% url 'business_inbox' slug=biz.slug %}" class="mfy-inbox-btn">
+                    <i class="fas fa-inbox"></i> Inbox
+                    {% if biz.viewer_unread_message_count %}
+                    <span class="mfy-inbox-count">{{ biz.viewer_unread_message_count }}</span>
+                    {% endif %}
+                </a>
+                {% else %}
                 <button type="button"
                         class="mfy-follow-btn{% if biz.page_id in followed_page_ids %} following{% endif %}"
                         data-slug="{{ biz.slug }}"

@@ -7801,6 +7801,16 @@ def business_page_detail(request, slug):
     listings    = Market.objects.filter(business_page=page).order_by('-posted_on').prefetch_related('images')
     is_owner    = request.user == page.owner
     is_follower = page.followers.filter(pk=request.user.pk).exists()
+    is_admin_of_page = page.is_user_admin(request.user)
+
+    # Unread messages *from this business* to the current viewer, so the
+    # "Message" button/link can carry its own badge — mirrors
+    # page.unread_business_message_count, which is the business-side count.
+    customer_unread_business_message_count = 0
+    if request.user.is_authenticated and not is_admin_of_page:
+        customer_unread_business_message_count = BusinessMessage.objects.filter(
+            business_page=page, customer=request.user, is_from_business=True, is_read=False
+        ).count()
 
     # Jobs tagged with this page via JobVacancy.business_page FK — owner sees
     # closed listings too, everyone else only sees open ones.
@@ -7916,7 +7926,7 @@ def business_page_detail(request, slug):
             for t, label in BusinessPostVibe.VIBE_CHOICES
         ],
         'is_owner':          is_owner,
-        'is_admin':          page.is_user_admin(request.user),
+        'is_admin':          is_admin_of_page,
         'page_admins':       page.admins.select_related('profile').order_by('username') if is_owner else None,
         'is_follower':       is_follower,
         'follower_count':    page.follower_count,
@@ -7931,6 +7941,7 @@ def business_page_detail(request, slug):
         'has_verified_contact': page.has_verified_contact,
         'payment_methods_display': page.payment_methods_display,
         'viewer_primary_business_page': viewer_primary_business_page,
+        'customer_unread_business_message_count': customer_unread_business_message_count,
     })
 
 
@@ -8026,7 +8037,7 @@ def business_message(request, slug, username):
 
     # Mark the other side's messages as read now that this side opened the thread.
     BusinessMessage.objects.filter(
-        business_page=page, customer=customer, is_from_business=is_business_side, is_read=False
+        business_page=page, customer=customer, is_from_business=(not is_business_side), is_read=False
     ).update(is_read=True)
 
     conversation_qs = BusinessMessage.objects.filter(
@@ -8661,7 +8672,8 @@ def business_pages_mine(request):
 
 @login_required(login_url='/')
 def business_pages_list(request):
-    from social.models import BusinessPage
+    from social.models import BusinessPage, BusinessMessage
+    from django.db.models import Count
     category = request.GET.get('category', '').strip()
     qs = BusinessPage.objects.filter(is_active=True).order_by('-created_at')
     if category:
@@ -8671,6 +8683,52 @@ def business_pages_list(request):
     followed_page_ids = set(
         BusinessPage.objects.filter(followers=request.user).values_list('page_id', flat=True)
     )
+
+    # ── Unread message badges — two different audiences per card ───────────
+    # Owner/admin of a page: count of unread messages *from customers*.
+    # Everyone else: count of unread messages *from that business*, sent
+    # to them specifically (only meaningful once they've messaged it).
+    visible_pages = list(page_obj.object_list)
+    if request.user.is_authenticated and visible_pages:
+        visible_ids = [p.page_id for p in visible_pages]
+        admin_page_ids = set(
+            BusinessPage.objects.filter(page_id__in=visible_ids)
+            .filter(Q(owner=request.user) | Q(admins=request.user))
+            .values_list('page_id', flat=True)
+        )
+        owner_unread_by_page = {}
+        if admin_page_ids:
+            rows = (
+                BusinessMessage.objects
+                .filter(business_page_id__in=admin_page_ids, is_from_business=False, is_read=False)
+                .values('business_page_id')
+                .annotate(c=Count('id'))
+            )
+            owner_unread_by_page = {r['business_page_id']: r['c'] for r in rows}
+
+        customer_page_ids = set(visible_ids) - admin_page_ids
+        customer_unread_by_page = {}
+        if customer_page_ids:
+            rows = (
+                BusinessMessage.objects
+                .filter(business_page_id__in=customer_page_ids, customer=request.user,
+                        is_from_business=True, is_read=False)
+                .values('business_page_id')
+                .annotate(c=Count('id'))
+            )
+            customer_unread_by_page = {r['business_page_id']: r['c'] for r in rows}
+
+        for biz in visible_pages:
+            biz.viewer_is_admin = biz.page_id in admin_page_ids
+            biz.viewer_unread_message_count = (
+                owner_unread_by_page.get(biz.page_id, 0) if biz.viewer_is_admin
+                else customer_unread_by_page.get(biz.page_id, 0)
+            )
+    else:
+        for biz in visible_pages:
+            biz.viewer_is_admin = False
+            biz.viewer_unread_message_count = 0
+
     return render(request, 'business_pages_list.html', {
         'pages':      page_obj,
         'categories': BusinessPage.CATEGORY_CHOICES,
