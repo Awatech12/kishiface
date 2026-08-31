@@ -3708,6 +3708,121 @@ class BusinessPage(models.Model):
         labels = dict(self.PAYMENT_METHOD_CHOICES)
         return [labels.get(m, m) for m in (self.payment_methods or [])]
 
+    @property
+    def unread_business_message_count(self):
+        return BusinessMessage.objects.filter(
+            business_page=self, is_from_business=False, is_read=False
+        ).count()
+
+
+class BusinessMessage(models.Model):
+    """A message sent through a BusinessPage's dedicated inbox.
+
+    This is intentionally separate from the personal `Message` model:
+    customer <-> business conversations belong to the *page* (shared by the
+    owner and any delegated admins), not to the owner's private DMs. A
+    conversation is identified by the (business_page, customer) pair;
+    `is_from_business` tells us which side of that pair actually sent this
+    particular message, since any admin may reply on the business's behalf.
+    """
+    business_page = models.ForeignKey(
+        'BusinessPage', on_delete=models.CASCADE, related_name='inbox_messages'
+    )
+    # The non-business party in the conversation. Always the same user for a
+    # given thread, regardless of which side sent a given message.
+    customer = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='business_message_threads'
+    )
+    # Whoever actually typed this message — the customer themself, or the
+    # owner/admin who was signed in when replying on behalf of the page.
+    sender = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='sent_business_messages'
+    )
+    is_from_business = models.BooleanField(default=False)
+
+    conversation = models.TextField(blank=True, null=True)
+    reply_to = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies'
+    )
+    file_type = models.CharField(max_length=20, blank=True, null=True)
+    if settings.USE_CLOUDINARY:
+        from cloudinary.models import CloudinaryField
+        file = CloudinaryField(
+            'business_message_file',
+            resource_type='auto',
+            folder='business_message_files',
+            blank=True,
+            null=True,
+        )
+    else:
+        file = models.FileField(upload_to='business_message_files/', blank=True, null=True)
+
+    # ── Optional enquiry context — mirrors Message.linked_product/linked_job ──
+    linked_product = models.ForeignKey(
+        'Market', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='business_enquiry_messages',
+    )
+    linked_product_snapshot = models.JSONField(null=True, blank=True)
+    linked_job = models.ForeignKey(
+        'JobVacancy', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='business_enquiry_messages',
+    )
+    linked_job_snapshot = models.JSONField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    # Read state is tracked from the *recipient's* side: a message from the
+    # customer is unread until an owner/admin opens the thread, and vice
+    # versa.
+    is_read = models.BooleanField(default=False)
+
+    def __str__(self):
+        who = 'business' if self.is_from_business else 'customer'
+        return f"[{self.business_page.name}] {who} ({self.sender}): {(self.conversation or '')[:50]}"
+
+    def clean(self):
+        super().clean()
+        self.conversation = sanitize_text(self.conversation, 'conversation')
+        if self.file and hasattr(self.file, 'name'):
+            validate_file_extension(self.file)
+            validate_file_size(self.file, max_size_mb=50)
+        if self.file_type:
+            self.file_type = sanitize_text(self.file_type)
+            if self.file_type not in ['image', 'video', 'audio', 'document']:
+                self.file_type = None
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            # Thread lookups: all messages for one (page, customer) pair.
+            models.Index(fields=['business_page', 'customer', '-created_at'], name='bizmsg_page_cust_idx'),
+            # Inbox list: latest conversations for a page.
+            models.Index(fields=['business_page', '-created_at'], name='bizmsg_page_created_idx'),
+            # Unread badge queries.
+            models.Index(fields=['business_page', 'is_from_business', 'is_read'], name='bizmsg_page_unread_idx'),
+        ]
+
+    @property
+    def chat_date_label(self):
+        message_date = self.created_at.date()
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        if message_date == today:
+            return "Today"
+        elif message_date == yesterday:
+            return "Yesterday"
+        elif today - message_date < timedelta(days=7):
+            return calendar.day_name[message_date.weekday()]
+        else:
+            return self.created_at.strftime("%B %d, %Y")
+
+    @property
+    def chat_time(self):
+        return self.created_at.strftime("%I:%M %p")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Optional professional-page sections — Services, Portfolio/Projects,

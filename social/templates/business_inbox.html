@@ -1,0 +1,130 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inbox — {{ page.name }} | Marketfy</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        :root {
+            --mfy-primary: #0095f6;
+            --mfy-primary-dark: #0077d4;
+            --mfy-bg: #fafafa;
+            --mfy-white: #ffffff;
+            --mfy-text: #262626;
+            --mfy-text-light: #8e8e8e;
+            --mfy-border: #dbdbdb;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--mfy-bg); color: var(--mfy-text);
+        }
+        .kbinbox-header {
+            position: sticky; top: 0; z-index: 5;
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 16px; background: var(--mfy-white);
+            border-bottom: 1px solid var(--mfy-border);
+        }
+        .kbinbox-back { color: var(--mfy-text); font-size: 18px; text-decoration: none; }
+        .kbinbox-header h1 { font-size: 17px; font-weight: 700; flex: 1; }
+        .kbinbox-header .kbinbox-page-pill {
+            display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mfy-text-light);
+        }
+        .kbinbox-page-pill img {
+            width: 22px; height: 22px; border-radius: 50%; object-fit: cover; border: 1px solid var(--mfy-border);
+        }
+        .kbinbox-list { max-width: 640px; margin: 0 auto; padding: 4px 0 40px; }
+        .kbinbox-row {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 16px; background: var(--mfy-white);
+            text-decoration: none; color: inherit;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .kbinbox-row:active { background: #f5f5f5; }
+        .kbinbox-avatar {
+            width: 48px; height: 48px; border-radius: 50%; object-fit: cover;
+            flex-shrink: 0; background: #eee;
+        }
+        .kbinbox-main { flex: 1; min-width: 0; }
+        .kbinbox-name-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+        .kbinbox-name { font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kbinbox-time { font-size: 12px; color: var(--mfy-text-light); flex-shrink: 0; }
+        .kbinbox-preview {
+            font-size: 13.5px; color: var(--mfy-text-light);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .kbinbox-preview.unread { color: var(--mfy-text); font-weight: 600; }
+        .kbinbox-preview .kbinbox-you { color: var(--mfy-text-light); font-weight: 400; }
+        .kbinbox-badge {
+            min-width: 20px; height: 20px; padding: 0 6px;
+            border-radius: 999px; background: var(--mfy-primary); color: #fff;
+            font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .kbinbox-empty {
+            text-align: center; padding: 80px 24px; color: var(--mfy-text-light);
+        }
+        .kbinbox-empty i { font-size: 40px; margin-bottom: 14px; display: block; color: #dbeafe; }
+        .kbinbox-empty h2 { font-size: 16px; color: var(--mfy-text); margin-bottom: 6px; }
+        .kbinbox-empty p { font-size: 13.5px; max-width: 320px; margin: 0 auto; }
+    </style>
+</head>
+<body>
+
+<div class="kbinbox-header">
+    <a href="{% url 'business_page_detail' slug=page.slug %}" class="kbinbox-back"><i class="fas fa-arrow-left"></i></a>
+    <h1>Inbox</h1>
+    <div class="kbinbox-page-pill">
+        {% if page.get_logo_url %}<img src="{{ page.get_logo_url }}" alt="">{% endif %}
+        {{ page.name }}
+    </div>
+</div>
+
+<div class="kbinbox-list">
+    {% if conversations %}
+        {% for convo in conversations %}
+        <a class="kbinbox-row" href="{% url 'business_message' slug=page.slug username=convo.customer.username %}">
+            {% if convo.customer.profile.picture %}
+                <img class="kbinbox-avatar" src="{{ convo.customer.profile.picture.url }}" alt="">
+            {% else %}
+                <img class="kbinbox-avatar" src="{% static 'male.png' %}" alt="">
+            {% endif %}
+            <div class="kbinbox-main">
+                <div class="kbinbox-name-row">
+                    <span class="kbinbox-name">{{ convo.customer.username }}</span>
+                    {% if convo.last_message %}
+                    <span class="kbinbox-time">{{ convo.last_message.chat_time }}</span>
+                    {% endif %}
+                </div>
+                <div class="kbinbox-preview {% if convo.unread_count %}unread{% endif %}">
+                    {% if convo.last_message %}
+                        {% if convo.last_message.is_from_business %}<span class="kbinbox-you">You: </span>{% endif %}
+                        {% if convo.last_message.conversation %}
+                            {{ convo.last_message.conversation|truncatechars:60 }}
+                        {% elif convo.last_message.file_type %}
+                            📎 {{ convo.last_message.file_type|title }}
+                        {% else %}
+                            &nbsp;
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% if convo.unread_count %}
+            <span class="kbinbox-badge">{{ convo.unread_count }}</span>
+            {% endif %}
+        </a>
+        {% endfor %}
+    {% else %}
+        <div class="kbinbox-empty">
+            <i class="fas fa-inbox"></i>
+            <h2>No messages yet</h2>
+            <p>When someone messages {{ page.name }}, their conversation will show up here — separate from your personal inbox.</p>
+        </div>
+    {% endif %}
+</div>
+
+</body>
+</html>

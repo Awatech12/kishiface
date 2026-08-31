@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, JobApplication, JobApplicationDocument, JOB_DOCUMENT_TYPE_VALUES, JOB_DOCUMENT_TYPE_LABELS
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, BusinessMessage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, JobApplication, JobApplicationDocument, JOB_DOCUMENT_TYPE_VALUES, JOB_DOCUMENT_TYPE_LABELS
 from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES, LOOKING_FOR_SCHEMA, LOOKING_FOR_GENERIC_CHOICES, validate_certificate_extension
 
@@ -7931,6 +7931,268 @@ def business_page_detail(request, slug):
         'has_verified_contact': page.has_verified_contact,
         'payment_methods_display': page.payment_methods_display,
         'viewer_primary_business_page': viewer_primary_business_page,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Business Page — dedicated inbox.
+#
+# Deliberately separate from the personal `message`/`send_message` views:
+# messages sent to a business page belong to the *page* (visible to the owner
+# and every delegated admin), not to a single admin's private DM inbox.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required(login_url='/')
+def business_inbox(request, slug):
+    """Owner/admin view: list every customer conversation for this page,
+    most recently active first."""
+    page = get_object_or_404(BusinessPage, slug=slug, is_active=True)
+    if not page.is_user_admin(request.user):
+        messages.error(request, "You don't have permission to do that.")
+        return redirect('business_page_detail', slug=page.slug)
+
+    latest_per_customer = (
+        BusinessMessage.objects
+        .filter(business_page=page)
+        .values('customer')
+        .annotate(last_created=Max('created_at'))
+    )
+    last_created_by_customer = {
+        row['customer']: row['last_created'] for row in latest_per_customer
+    }
+
+    unread_counts = (
+        BusinessMessage.objects
+        .filter(business_page=page, is_from_business=False, is_read=False)
+        .values('customer')
+        .annotate(count=Count('id'))
+    )
+    unread_by_customer = {row['customer']: row['count'] for row in unread_counts}
+
+    customer_ids = sorted(
+        last_created_by_customer, key=lambda cid: last_created_by_customer[cid], reverse=True
+    )
+    customers = User.objects.filter(pk__in=customer_ids).select_related('profile')
+    customers_by_id = {c.pk: c for c in customers}
+
+    conversations = []
+    for cid in customer_ids:
+        customer = customers_by_id.get(cid)
+        if not customer:
+            continue
+        last_message = (
+            BusinessMessage.objects
+            .filter(business_page=page, customer=customer)
+            .order_by('-created_at')
+            .first()
+        )
+        conversations.append({
+            'customer': customer,
+            'last_message': last_message,
+            'unread_count': unread_by_customer.get(cid, 0),
+        })
+
+    return render(request, 'business_inbox.html', {
+        'page': page,
+        'conversations': conversations,
+    })
+
+
+@login_required(login_url='/')
+def business_message(request, slug, username):
+    """Thread view for one (page, customer) conversation.
+
+    Works both for the owner/admin (talking to a customer, `username` is the
+    customer) and for the customer (talking to the business — in which case
+    `username` is ignored and the viewer is always treated as the customer).
+    """
+    page = get_object_or_404(BusinessPage, slug=slug, is_active=True)
+    is_business_side = page.is_user_admin(request.user)
+
+    if is_business_side:
+        customer = get_object_or_404(User, username=username)
+        if customer == page.owner or page.admins.filter(pk=customer.pk).exists():
+            messages.error(request, 'Invalid conversation.')
+            return redirect('business_inbox', slug=page.slug)
+    else:
+        customer = request.user
+
+    try:
+        if request.user.profile.has_blocked(customer.profile) or customer.profile.has_blocked(request.user.profile):
+            messages.error(request, 'You cannot view this conversation.')
+            return redirect('business_page_detail', slug=page.slug)
+    except Exception:
+        pass
+
+    # Mark the other side's messages as read now that this side opened the thread.
+    BusinessMessage.objects.filter(
+        business_page=page, customer=customer, is_from_business=is_business_side, is_read=False
+    ).update(is_read=True)
+
+    conversation_qs = BusinessMessage.objects.filter(
+        business_page=page, customer=customer
+    ).order_by('created_at')
+
+    grouped_messages = {}
+    for msg in conversation_qs:
+        grouped_messages.setdefault(msg.chat_date_label, []).append(msg)
+
+    return render(request, 'business_message.html', {
+        'page': page,
+        'customer': customer,
+        'is_business_side': is_business_side,
+        'grouped_messages': grouped_messages,
+    })
+
+
+@login_required(login_url='/')
+def send_business_message(request, slug, username=None):
+    """Send a message into a business page's inbox.
+
+    `username` is only meaningful when the sender is an owner/admin replying
+    to a specific customer; when the sender is the customer themself the
+    conversation is simply keyed to `request.user`.
+    """
+    page = get_object_or_404(BusinessPage, slug=slug, is_active=True)
+    is_business_side = page.is_user_admin(request.user)
+
+    if is_business_side:
+        if not username:
+            return JsonResponse({'status': 'error', 'message': 'Missing recipient.'}, status=400)
+        customer = get_object_or_404(User, username=username)
+    else:
+        customer = request.user
+
+    try:
+        if request.user.profile.has_blocked(customer.profile) or customer.profile.has_blocked(request.user.profile):
+            return JsonResponse({'status': 'error', 'message': 'Unable to send message.'}, status=403)
+    except Exception:
+        pass
+
+    if request.method != 'POST':
+        return redirect('business_message', slug=page.slug, username=customer.username)
+
+    if request.content_type == 'application/json':
+        if len(request.body) > 100_000:
+            return JsonResponse({'status': 'error', 'message': 'Request too large.'}, status=413)
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'status': 'error', 'message': 'Invalid JSON.'}, status=400)
+        message_text = str(data.get('message', ''))
+        reply_to_id = data.get('reply_to')
+        job_id_raw = data.get('job_id')
+        product_id_raw = data.get('product_id')
+    else:
+        message_text = request.POST.get('message', '')
+        reply_to_id = request.POST.get('reply_to')
+        job_id_raw = request.POST.get('job_id')
+        product_id_raw = request.POST.get('product_id')
+
+    file_upload = request.FILES.get('file_upload')
+
+    if message_text and len(message_text) > 5000:
+        return JsonResponse({'status': 'error', 'message': 'Message too long. Maximum 5000 characters.'}, status=400)
+
+    if not message_text and not file_upload:
+        return JsonResponse({'status': 'success', 'message': 'No content to send'})
+
+    file_type = None
+    if file_upload:
+        raw_name = os.path.basename((file_upload.name or 'file').replace('\\', '/'))
+        raw_name = re.sub(r'[^\w\s\-\.]', '', raw_name).strip()[:100] or 'file'
+        ext = os.path.splitext(raw_name)[1].lower()
+        ALLOWED_EXTENSIONS = {
+            'image':    {'.jpg', '.jpeg', '.png', '.gif'},
+            'video':    {'.mp4', '.mov', '.avi'},
+            'audio':    {'.mp3', '.wav', '.webm', '.ogg', '.m4a'},
+            'document': {'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'},
+        }
+        file_type = next((t for t, exts in ALLOWED_EXTENSIONS.items() if ext in exts), None)
+        if not file_type:
+            return JsonResponse({'status': 'error', 'message': 'Unsupported file type'}, status=400)
+        if file_upload.size > 50 * 1024 * 1024:
+            return JsonResponse({'status': 'error', 'message': 'File too large. Maximum size is 50MB.'}, status=400)
+
+    reply_to = None
+    if reply_to_id:
+        try:
+            reply_to = BusinessMessage.objects.get(id=reply_to_id, business_page=page, customer=customer)
+        except BusinessMessage.DoesNotExist:
+            reply_to = None
+
+    linked_product_obj = None
+    linked_product_snapshot = None
+    if product_id_raw:
+        try:
+            _pid = uuid_module.UUID(str(product_id_raw))
+            _prod = Market.objects.prefetch_related('images').get(product_id=_pid, business_page=page)
+            linked_product_obj = _prod
+            _first_img = _prod.images.first()
+            linked_product_snapshot = {
+                'product_id':  str(_prod.product_id),
+                'name':        _prod.product_name,
+                'price':       _prod.product_price,
+                'condition':   _prod.product_condition,
+                'category':    _prod.product_category,
+                'location':    _prod.product_location,
+                'image_url':   _first_img.product_image.url if _first_img else '',
+                'detail_url':  f"/product/{_prod.product_id}/",
+            }
+        except Exception:
+            linked_product_obj = None
+            linked_product_snapshot = None
+
+    linked_job_obj = None
+    linked_job_snapshot = None
+    if job_id_raw:
+        try:
+            _jid = uuid_module.UUID(str(job_id_raw))
+            _job = JobVacancy.objects.get(id=_jid, business_page=page)
+            linked_job_obj = _job
+            linked_job_snapshot = {
+                'job_id':         str(_job.id),
+                'title':          _job.title,
+                'company':        _job.company,
+                'category':       _job.category,
+                'category_label': _job.get_category_display(),
+                'location':       _job.location,
+                'salary_range':   _job.salary_range,
+                'is_open':        _job.is_open,
+                'image_url':      _job.cover_image.url if _job.cover_image else '',
+                'detail_url':     f"/jobs/{_job.id}/",
+            }
+        except Exception:
+            linked_job_obj = None
+            linked_job_snapshot = None
+
+    msg_obj = BusinessMessage.objects.create(
+        business_page=page,
+        customer=customer,
+        sender=request.user,
+        is_from_business=is_business_side,
+        conversation=message_text if message_text else '',
+        file_type=file_type,
+        file=file_upload if file_upload else None,
+        reply_to=reply_to,
+        linked_product=linked_product_obj,
+        linked_product_snapshot=linked_product_snapshot,
+        linked_job=linked_job_obj,
+        linked_job_snapshot=linked_job_snapshot,
+    )
+
+    # The reply just sent clears any unread messages from the *other* side.
+    BusinessMessage.objects.filter(
+        business_page=page, customer=customer, is_from_business=(not is_business_side), is_read=False
+    ).update(is_read=True)
+
+    file_url = msg_obj.file.url if msg_obj.file else None
+
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Message sent',
+        'message_id': msg_obj.id,
+        'file_url': file_url,
     })
 
 

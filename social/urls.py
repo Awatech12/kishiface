@@ -162,6 +162,12 @@ urlpatterns = [
     path('business/<slug:slug>/upload/',                views.business_product_upload,   name='business_product_upload'),
     path('business/<slug:slug>/jobs/upload/',           views.business_job_upload,       name='business_job_upload'),
 
+    # ── Business Page — dedicated inbox (separate from personal DMs) ───────────
+    path('business/<slug:slug>/inbox/',                 views.business_inbox,            name='business_inbox'),
+    path('business/<slug:slug>/inbox/<str:username>/',              views.business_message,        name='business_message'),
+    path('business/<slug:slug>/inbox/<str:username>/send/',         views.send_business_message,   name='send_business_message'),
+    path('business/<slug:slug>/inbox-send/',                        views.send_business_message,   name='send_business_message_self'),
+
     # ── Business Page Updates (image / video / text / poll posts) ─────────────
     path('business/<slug:slug>/posts/create/',          views.business_post_create,      name='business_post_create'),
     path('posts/<uuid:post_id>/delete/',                views.business_post_delete,      name='business_post_delete'),

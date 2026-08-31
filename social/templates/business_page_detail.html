@@ -1976,8 +1976,14 @@
         }
         .kbiz-cta-btn:active { transform: scale(0.96); }
         .kbiz-cta-btn i { font-size: 14px; }
-        .kbiz-cta-message  { background: var(--mfy-primary); color: #fff; }
+        .kbiz-cta-message  { background: var(--mfy-primary); color: #fff; position: relative; }
         .kbiz-cta-message:hover  { background: var(--mfy-primary-dark); }
+        .kbiz-inbox-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 18px; height: 18px; padding: 0 5px; margin-left: 4px;
+            border-radius: 999px; background: #ff3b30; color: #fff;
+            font-size: 11px; font-weight: 700; line-height: 1;
+        }
         .kbiz-cta-call     { background: #eef6ff; color: var(--mfy-primary-dark); border: 1px solid #d6ebff; }
         .kbiz-cta-call:hover     { background: #dff0ff; }
         .kbiz-cta-whatsapp { background: #e8fbf1; color: #128a4a; border: 1px solid #c9f3dc; }
@@ -2427,7 +2433,7 @@
 
     <!-- ── Prominent action buttons ── -->
     <div class="kbiz-cta-row">
-        {% if not is_owner %}
+        {% if not is_admin %}
         {% if request.user.is_authenticated %}
         <button type="button" class="kbiz-cta-btn kbiz-cta-message kbiz-cta-dup" onclick="kbizOpenBusinessMessageModal()">
             <i class="fas fa-paper-plane"></i> Message
@@ -2453,9 +2459,18 @@
             {% else %}<i class="fas fa-plus"></i> Follow{% endif %}
         </button>
         {% else %}
+        <!-- Owner AND any delegated admin see the shared business inbox -->
+        <a href="{% url 'business_inbox' slug=page.slug %}" class="kbiz-cta-btn kbiz-cta-message kbiz-cta-dup">
+            <i class="fas fa-inbox"></i> Inbox
+            {% if page.unread_business_message_count %}
+            <span class="kbiz-inbox-badge">{{ page.unread_business_message_count }}</span>
+            {% endif %}
+        </a>
+        {% if is_owner %}
         <a href="{% url 'business_page_edit' slug=page.slug %}" class="kbiz-cta-btn kbiz-cta-message">
             <i class="fas fa-pen"></i> Edit Page
         </a>
+        {% endif %}
         {% endif %}
     </div>
 
@@ -4769,11 +4784,12 @@ function khjCloseDmModal() {
     document.body.style.overflow = '';
 }
 
-// ── "Message" CTA in the header — messages the business page owner directly ──
+// ── "Message" CTA in the header — sends to the business page's own inbox,
+//    not the owner's/admin's personal DMs ──
 function kbizOpenBusinessMessageModal() {
     khjDmJobId      = '';
-    khjDmSendUrl    = "{% if not is_owner %}{% url 'send_message' page.owner.username %}{% endif %}";
-    khjDmSuccessUrl = "{% if not is_owner %}{% url 'message' page.owner.username %}{% endif %}";
+    khjDmSendUrl    = "{% if not is_owner %}{% url 'send_business_message_self' page.slug %}{% endif %}";
+    khjDmSuccessUrl = "{% if not is_owner %}{% url 'business_message' page.slug request.user.username %}{% endif %}";
     if (khjDmText) {
         khjDmText.value = "Hi {{ page.name|escapejs }}! I'd like to know more about your business.";
         khjDmCharCount(khjDmText);
@@ -5495,7 +5511,7 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <!-- ── Mobile sticky contact bar (Message / WhatsApp / Call / Follow) ── -->
-{% if not is_owner %}
+{% if not is_admin %}
 <div class="kbiz-sticky-contact-bar">
     {% if request.user.is_authenticated %}
     <button type="button" class="kbiz-sticky-btn kbiz-sticky-message" onclick="kbizOpenBusinessMessageModal()">
@@ -5521,6 +5537,22 @@ document.addEventListener('DOMContentLoaded', function () {
         {% if is_follower %}<i class="fas fa-check"></i> Following
         {% else %}<i class="fas fa-plus"></i> Follow{% endif %}
     </button>
+</div>
+{% else %}
+<!-- Owner AND any delegated admin see the shared business inbox here too,
+     since the top CTA row's .kbiz-cta-dup buttons are hidden below 768px. -->
+<div class="kbiz-sticky-contact-bar">
+    <a href="{% url 'business_inbox' slug=page.slug %}" class="kbiz-sticky-btn kbiz-sticky-message">
+        <i class="fas fa-inbox"></i> Inbox
+        {% if page.unread_business_message_count %}
+        <span class="kbiz-inbox-badge">{{ page.unread_business_message_count }}</span>
+        {% endif %}
+    </a>
+    {% if is_owner %}
+    <a href="{% url 'business_page_edit' slug=page.slug %}" class="kbiz-sticky-btn kbiz-sticky-call">
+        <i class="fas fa-pen"></i> Edit Page
+    </a>
+    {% endif %}
 </div>
 {% endif %}
 

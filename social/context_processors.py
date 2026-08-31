@@ -1,4 +1,4 @@
-from .models import Message, FollowNotification, ProfilePostNotification, ProfileItemNotification, BusinessNotification, EventNotification, JobApplicationNotification, Channel, BusinessPage
+from .models import Message, FollowNotification, ProfilePostNotification, ProfileItemNotification, BusinessNotification, EventNotification, JobApplicationNotification, Channel, BusinessPage, BusinessMessage
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Count, Max, Q
@@ -225,3 +225,23 @@ def viewer_business_page_processor(request):
     except Exception:
         viewer_primary_business_page = None
     return {'viewer_primary_business_page': viewer_primary_business_page}
+
+
+def business_inbox_processor(request):
+    """
+    Unread-message badge count across every business page the user owns or
+    administers, pulled from the dedicated business inbox (BusinessMessage)
+    — kept separate from `unread_count`, which is the personal DM count.
+    """
+    if not request.user.is_authenticated:
+        return {'unread_business_message_count': 0}
+    try:
+        pages = BusinessPage.objects.filter(
+            Q(owner=request.user) | Q(admins=request.user), is_active=True
+        ).distinct()
+        unread_business_message_count = BusinessMessage.objects.filter(
+            business_page__in=pages, is_from_business=False, is_read=False
+        ).count()
+    except Exception:
+        unread_business_message_count = 0
+    return {'unread_business_message_count': unread_business_message_count}
