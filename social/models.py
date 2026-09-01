@@ -471,14 +471,83 @@ def validate_url(url):
         raise ValidationError('Please enter a valid URL')
 
 
+# SECURITY FIX (upload hardening): extension checks alone only look at the
+# filename, which an attacker fully controls — renaming payload.html to
+# photo.jpg passes an extension-only check. These are the magic-byte
+# signatures for the types we actually accept, so uploads are verified by
+# their real content, not just their name. Pure stdlib — no new dependency.
+_FILE_SIGNATURES = {
+    '.jpg':  [b'\xff\xd8\xff'],
+    '.jpeg': [b'\xff\xd8\xff'],
+    '.png':  [b'\x89PNG\r\n\x1a\n'],
+    '.gif':  [b'GIF87a', b'GIF89a'],
+    '.pdf':  [b'%PDF-'],
+    '.mp4':  [b'ftyp'],  # appears at offset 4, checked specially below
+    '.webm': [b'\x1a\x45\xdf\xa3'],
+    '.mov':  [b'ftyp', b'moov', b'free', b'mdat', b'wide'],
+    '.avi':  [b'RIFF'],
+    '.mp3':  [b'ID3', b'\xff\xfb', b'\xff\xf3', b'\xff\xf2'],
+    '.wav':  [b'RIFF'],
+    # Office/Zip-container formats (docx/xlsx/pptx) and legacy OLE formats
+    # (doc/xls/ppt) share these two container signatures.
+    '.docx': [b'PK\x03\x04'],
+    '.xlsx': [b'PK\x03\x04'],
+    '.pptx': [b'PK\x03\x04'],
+    '.doc':  [b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'],
+    '.xls':  [b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'],
+    '.ppt':  [b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'],
+    # .txt has no reliable magic bytes — content is intentionally unchecked,
+    # but it's also inert (never executed or rendered as HTML) so that's fine.
+}
+
+
+def _sniff_file_signature(value, ext):
+    """Read the first bytes of the upload and check against the signature(s)
+    expected for `ext`. Returns True if the extension has no signature to
+    check (e.g. .txt) or the content matches; False on a mismatch. Restores
+    the file's read position afterwards so downstream code (full_clean,
+    storage backends) still reads from the start. Never raises — callers
+    decide what a mismatch means."""
+    sigs = _FILE_SIGNATURES.get(ext)
+    if not sigs:
+        return True  # nothing to verify for this extension
+    try:
+        pos = value.tell()
+    except Exception:
+        pos = 0
+    try:
+        value.seek(0)
+        header = value.read(16)
+    finally:
+        try:
+            value.seek(pos)
+        except Exception:
+            try:
+                value.seek(0)
+            except Exception:
+                pass
+    if ext == '.mp4':
+        # ftyp box sits at byte offset 4, not the start of the file.
+        return b'ftyp' in header[:12]
+    return any(header.startswith(sig) for sig in sigs)
+
+
 def validate_file_extension(value):
-    """Validate file extensions"""
+    """Validate file extensions AND verify the file's actual content
+    matches what the extension claims (magic-byte check) — an extension
+    check alone can be bypassed by simply renaming a file."""
     if value:
         ext = os.path.splitext(value.name)[1].lower()
         allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.webm', '.mov', '.avi', '.mp3', '.wav', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt']
-        
+
         if ext not in allowed_extensions:
             raise ValidationError(f'File type {ext} is not allowed. Allowed types: {", ".join(allowed_extensions)}')
+
+        if not _sniff_file_signature(value, ext):
+            raise ValidationError(
+                f'This file\u2019s content does not match a valid {ext} file. '
+                'It may be corrupted or mislabeled.'
+            )
 
 
 def validate_file_size(value, max_size_mb=50):
@@ -494,12 +563,19 @@ CV_ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx']
 
 def validate_cv_extension(value):
     """Restrict CV/resume uploads to document formats only (server-side —
-    the accept="" attribute on the file input is only a client-side hint)."""
+    the accept="" attribute on the file input is only a client-side hint).
+    Also verifies file content against its extension (see
+    _sniff_file_signature) so a renamed file can't slip through."""
     if value and hasattr(value, 'name'):
         ext = os.path.splitext(value.name)[1].lower()
         if ext not in CV_ALLOWED_EXTENSIONS:
             raise ValidationError(
                 f'CV must be a {", ".join(CV_ALLOWED_EXTENSIONS)} file, not "{ext}".'
+            )
+        if not _sniff_file_signature(value, ext):
+            raise ValidationError(
+                f'This file\u2019s content does not match a valid {ext} file. '
+                'It may be corrupted or mislabeled.'
             )
 
 
@@ -509,12 +585,18 @@ CERTIFICATE_ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.pn
 def validate_certificate_extension(value):
     """Restrict certificate/result uploads (WAEC, NECO, etc.) to document or
     scanned-image formats — same server-side-vs-client-hint reasoning as
-    validate_cv_extension above."""
+    validate_cv_extension above. Also verifies file content against its
+    extension so a renamed file can't slip through."""
     if value and hasattr(value, 'name'):
         ext = os.path.splitext(value.name)[1].lower()
         if ext not in CERTIFICATE_ALLOWED_EXTENSIONS:
             raise ValidationError(
                 f'Document must be a {", ".join(CERTIFICATE_ALLOWED_EXTENSIONS)} file, not "{ext}".'
+            )
+        if not _sniff_file_signature(value, ext):
+            raise ValidationError(
+                f'This file\u2019s content does not match a valid {ext} file. '
+                'It may be corrupted or mislabeled.'
             )
 
 

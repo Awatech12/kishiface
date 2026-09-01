@@ -16,6 +16,50 @@ from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES, LOOKING_FOR_SCHEMA, LOOKING_FOR_GENERIC_CHOICES, validate_certificate_extension
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Lightweight rate-limit decorator (cache-backed — Redis in production per
+# settings.py, same backend LoginAttempt/sidebar-suggestions caching uses).
+# Not a replacement for django-axes on login; this covers the other
+# spam/abuse-prone POST endpoints (messaging, contact forms) that had no
+# throttling at all.
+# ─────────────────────────────────────────────────────────────────────────────
+def rate_limit(key_prefix, limit, window_seconds):
+    """
+    Per-user sliding-window-ish rate limit. Blocks with a 429 JSON response
+    once `limit` requests have been made within `window_seconds`.
+    Degrades open (never blocks) if the cache backend is unavailable —
+    availability of the feature matters more than the limiter itself.
+    """
+    from functools import wraps
+
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapped(request, *args, **kwargs):
+            from django.core.cache import cache
+            from django.http import JsonResponse
+
+            identity = request.user.id if request.user.is_authenticated else request.META.get('REMOTE_ADDR', 'anon')
+            cache_key = f'ratelimit:{key_prefix}:{identity}'
+            try:
+                current = cache.get(cache_key, 0)
+                if current >= limit:
+                    return JsonResponse(
+                        {'error': 'Too many requests. Please slow down and try again shortly.'},
+                        status=429,
+                    )
+                # incr() is atomic on Redis/memcached; add() seeds the key
+                # with its expiry the first time so it doesn't live forever.
+                try:
+                    cache.incr(cache_key)
+                except ValueError:
+                    cache.add(cache_key, 1, window_seconds)
+            except Exception:
+                pass  # cache backend unavailable — don't block real traffic
+            return view_func(request, *args, **kwargs)
+        return wrapped
+    return decorator
+
+
 def _member_type_edit_schema(profile):
     """
     Builds a version of MEMBER_TYPE_SCHEMA with each field's current saved
@@ -1121,6 +1165,58 @@ def _score_person(viewer_profile, candidate_profile, keywords, location_tokens):
     return score + _recency_score(getattr(candidate_profile, 'created_at', None))
 
 
+# PERF FIX: this scoring loop (~40 candidate users, each scored against the
+# viewer) was previously recomputed from scratch on every request that
+# renders the right sidebar — home, profile, and wishlist pages all hit it.
+# Suggestions don't need to be second-fresh, so cache the result per viewer
+# for a few minutes. Uses Django's configured cache backend (Redis in
+# production, per settings.py), so this is a plain read-through cache with
+# no new dependency here.
+_SIDEBAR_SUGGESTIONS_CACHE_TTL = 600  # 10 minutes
+
+
+def _get_cached_sidebar_suggested_users(user, viewer_profile):
+    """Returns up to 3 suggested User objects for the right-sidebar widget,
+    cached per-user. Falls through to a live computation on a cache miss
+    or if the cache backend is unavailable."""
+    from django.core.cache import cache
+
+    cache_key = f'sidebar_suggested_users:v1:{user.id}'
+    try:
+        cached_ids = cache.get(cache_key)
+    except Exception:
+        cached_ids = None  # cache backend down — degrade to live computation
+
+    if cached_ids is not None:
+        users_by_id = User.objects.filter(id__in=cached_ids).select_related('profile')
+        users_by_id = {u.id: u for u in users_by_id}
+        # Preserve the cached ranking order; drop any user since deleted.
+        return [users_by_id[uid] for uid in cached_ids if uid in users_by_id]
+
+    viewer_following_ids = list(viewer_profile.followings.values_list('user', flat=True))
+    candidates = [
+        u for u in User.objects.exclude(id__in=viewer_following_ids)
+               .exclude(id=user.id)
+               .select_related('profile')
+               .order_by('-id')[:40]
+        if hasattr(u, 'profile')
+    ]
+    viewer_kw, viewer_loc = _profile_feed_signal(user, viewer_profile)
+    scored = [
+        (_score_person(viewer_profile, u.profile, viewer_kw, viewer_loc), u)
+        for u in candidates
+    ]
+    scored.sort(key=lambda t: t[0], reverse=True)
+    top_users = [u for _, u in scored[:3]]
+
+    try:
+        cache.set(cache_key, [u.id for u in top_users], _SIDEBAR_SUGGESTIONS_CACHE_TTL)
+    except Exception:
+        pass  # best-effort — a failed cache write shouldn't break the page
+
+    return top_users
+
+
 def _post_engagement(post):
     """Vibe + comment count, read off already-prefetched related managers
     (no extra query)."""
@@ -2192,23 +2288,9 @@ def profile(request, username):
     # users, following/followers counts) and is always about request.user,
     # regardless of which profile page is currently being viewed.
     viewer_profile          = request.user.profile
-    viewer_following_ids    = list(viewer_profile.followings.values_list('user', flat=True))
     viewer_following_count  = viewer_profile.followings.count()
     viewer_follower_count   = viewer_profile.followers.count()
-    _sidebar_su_candidates = [
-        u for u in User.objects.exclude(id__in=viewer_following_ids)
-               .exclude(id=request.user.id)
-               .select_related('profile')
-               .order_by('-id')[:40]
-        if hasattr(u, 'profile')
-    ]
-    _viewer_kw, _viewer_loc = _profile_feed_signal(request.user, viewer_profile)
-    _scored_su = [
-        (_score_person(viewer_profile, u.profile, _viewer_kw, _viewer_loc), u)
-        for u in _sidebar_su_candidates
-    ]
-    _scored_su.sort(key=lambda t: t[0], reverse=True)
-    sidebar_suggested_users = [u for _, u in _scored_su[:3]]
+    sidebar_suggested_users = _get_cached_sidebar_suggested_users(request.user, viewer_profile)
 
     # ── Viewer's own business page — for the "Grow your business" /
     # "Your business page" sidebar widget (always about request.user).
@@ -3561,12 +3643,14 @@ def search_suggestions_v0(request):
 
 
 @login_required
+@require_POST
 def delete_history(request, history_id):
     SearchHistory.objects.filter(id=history_id, user=request.user).delete()
     return redirect('search')
 
 
 @login_required
+@require_POST
 def clear_history(request):
     SearchHistory.objects.filter(user=request.user).delete()
     return redirect('search')
@@ -3685,6 +3769,7 @@ def message(request, username):
 
 
 @login_required(login_url='/')
+@rate_limit('send_message', limit=30, window_seconds=60)
 def send_message(request, username):
     receiver = get_object_or_404(User, username=username)
     
@@ -5152,6 +5237,7 @@ def manage_member(request, channel_id, user_id):
 
 
 @login_required
+@require_POST
 def toggle_admin(request, channel_id, user_id):
     channel_obj = get_object_or_404(Channel, channel_id=channel_id)
     if request.user != channel_obj.channel_owner:
@@ -5166,6 +5252,7 @@ def toggle_admin(request, channel_id, user_id):
 
 
 @login_required
+@require_POST
 def channelmessage_like(request, channelmessage_id):
     channelmessage = get_object_or_404(ChannelMessage, channelmessage_id=channelmessage_id)
     if request.user not in channelmessage.like.all():
@@ -5507,38 +5594,34 @@ def wishlist_view(request):
     Products the current user has saved for later.
     Reuses the Market model + the shared 'mfy-jcard' product card markup.
     """
-    saved_items = (
+    # PERF FIX: the old code pulled every Wishlist row the user has ever
+    # saved into memory (`saved_items` fully evaluated), then paginated
+    # that Python list. For a user with thousands of saved items that's an
+    # unbounded query on every page load. Paginating the queryset itself
+    # means only the 24 rows for the requested page are ever fetched from
+    # the DB (LIMIT/OFFSET pushed down to Postgres).
+    wishlist_qs = (
         Wishlist.objects.filter(user=request.user)
         .select_related('product')
         .prefetch_related('product__images')
         .order_by('-created_at')
     )
-    products = [item.product for item in saved_items]
-
-    paginator = Paginator(products, 24)
+    paginator = Paginator(wishlist_qs, 24)
     page_obj  = paginator.get_page(request.GET.get('page'))
+    # Page.object_list is now a slice of Wishlist rows (just this page's
+    # 24). Templates only care about the Market product fields, so swap in
+    # the underlying products — has_next/num_pages/etc. are driven by
+    # `paginator.count`, not object_list, so pagination controls keep working.
+    page_obj.object_list = [item.product for item in page_obj.object_list]
+    products = page_obj.object_list
 
     # ── Right-sidebar widget data (same widgets as home.html / profile.html /
     # business_page_detail.html) — always about request.user, regardless of
     # which page is being viewed.
     viewer_profile          = request.user.profile
-    viewer_following_ids    = list(viewer_profile.followings.values_list('user', flat=True))
     viewer_following_count  = viewer_profile.followings.count()
     viewer_follower_count   = viewer_profile.followers.count()
-    _sidebar_su_candidates = [
-        u for u in User.objects.exclude(id__in=viewer_following_ids)
-               .exclude(id=request.user.id)
-               .select_related('profile')
-               .order_by('-id')[:40]
-        if hasattr(u, 'profile')
-    ]
-    _viewer_kw, _viewer_loc = _profile_feed_signal(request.user, viewer_profile)
-    _scored_su = [
-        (_score_person(viewer_profile, u.profile, _viewer_kw, _viewer_loc), u)
-        for u in _sidebar_su_candidates
-    ]
-    _scored_su.sort(key=lambda t: t[0], reverse=True)
-    sidebar_suggested_users = [u for _, u in _scored_su[:3]]
+    sidebar_suggested_users = _get_cached_sidebar_suggested_users(request.user, viewer_profile)
 
     # ── Viewer's own business page — for the "Your business page" /
     # "Grow your business" sidebar widget.
@@ -5564,7 +5647,7 @@ def wishlist_view(request):
 
     return render(request, 'wishlist.html', {
         'products':      page_obj,
-        'wishlist_count': len(products),
+        'wishlist_count': paginator.count,
         'viewer_following_count':  viewer_following_count,
         'viewer_follower_count':   viewer_follower_count,
         'sidebar_suggested_users': sidebar_suggested_users,
@@ -7421,6 +7504,7 @@ def admin_resolve_report(request, report_id):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @staff_member_required
+@require_POST
 def admin_delete_user(request, user_id):
     target = get_object_or_404(User, id=user_id)
     if target.is_staff or target.is_superuser:
@@ -7439,6 +7523,7 @@ def admin_delete_user(request, user_id):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @staff_member_required
+@require_POST
 def admin_delete_channel(request, channel_id):
     ch = get_object_or_404(Channel, channel_id=channel_id)
     name = ch.channel_name  # real field name is channel_name
@@ -7452,6 +7537,7 @@ def admin_delete_channel(request, channel_id):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @staff_member_required
+@require_POST
 def admin_delete_product(request, product_id):
     product = get_object_or_404(Market, product_id=product_id)
     name = product.product_name
@@ -7465,6 +7551,7 @@ def admin_delete_product(request, product_id):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @staff_member_required
+@require_POST
 def admin_delete_event(request, event_id):
     event = get_object_or_404(SocialEvent, id=event_id)
     title = event.title
@@ -7478,6 +7565,7 @@ def admin_delete_event(request, event_id):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @staff_member_required
+@require_POST
 def admin_delete_job(request, job_id):
     # JobVacancy PK is `id` (UUID) — not job_id
     job = get_object_or_404(JobVacancy, id=job_id)
@@ -7873,17 +7961,6 @@ def business_page_detail(request, slug):
     if request.user.is_authenticated and not is_owner and wishlist_ids:
         listings = listings.exclude(product_id__in=wishlist_ids)
 
-    # ── Logged-in viewer's own business page — for the right-sidebar
-    # "My Listings" shortcut (always about request.user, not the page
-    # being viewed). Mirrors the same widget on home.html / profile.html.
-    viewer_primary_business_page = None
-    if request.user.is_authenticated:
-        viewer_primary_business_page = (
-            BusinessPage.objects.filter(owner=request.user, is_active=True)
-            .order_by('-created_at')
-            .first()
-        )
-
     service_count = services.count()
     listing_count_val = listings.count()
     job_count_val = jobs.count()
@@ -7940,7 +8017,6 @@ def business_page_detail(request, slug):
         'review_count':      page.overall_review_count,
         'has_verified_contact': page.has_verified_contact,
         'payment_methods_display': page.payment_methods_display,
-        'viewer_primary_business_page': viewer_primary_business_page,
         'customer_unread_business_message_count': customer_unread_business_message_count,
     })
 
@@ -8057,6 +8133,7 @@ def business_message(request, slug, username):
 
 
 @login_required(login_url='/')
+@rate_limit('send_business_message', limit=30, window_seconds=60)
 def send_business_message(request, slug, username=None):
     """Send a message into a business page's inbox.
 
