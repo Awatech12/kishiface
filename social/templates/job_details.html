@@ -153,7 +153,7 @@
 
     .jbd-gov-note {
       display: flex; align-items: flex-start; gap: 8px;
-      background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+      background: #fffbeb; color: #92400e;
       font-size: 12.5px; line-height: 1.5;
       padding: 10px 12px; border-radius: 8px;
       margin: 10px 0;
@@ -482,6 +482,81 @@
     @media (max-width: 640px) {
       .jbd-wrap { max-width: 100%; }
     }
+
+    /* ═══════════════════════════════════════════════════════════
+       Desktop layout — 3 columns: cover / main info / sidebar
+       Container becomes a grid; existing markup, ids and JS
+       behaviour are untouched.
+       ═══════════════════════════════════════════════════════════ */
+    .jbd-sidebar-col { display: none; }
+
+    @media (min-width: 1024px) {
+      body { padding-bottom: 56px; }
+
+      .jbd-wrap {
+        max-width: 1180px;
+        margin: 28px auto;
+        border-radius: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04);
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 400px 1fr 320px;
+        grid-template-areas:
+          "topbar  topbar  topbar"
+          "gallery main    sidebar";
+        align-items: start;
+        column-gap: 28px;
+        min-height: 0;
+      }
+
+      .jbd-topbar { grid-area: topbar; border-radius: 20px 20px 0 0; }
+
+      .jbd-media-col { grid-area: gallery; padding: 24px 0 24px 24px; }
+      .jbd-media-col .jbd-cover,
+      .jbd-media-col .jbd-cover-placeholder { border-radius: 14px; height: 320px; }
+
+      .jbd-main-col { grid-area: main; min-width: 0; padding: 0 0 24px; }
+      .jbd-tabs { top: 0; }
+      .jbd-body .jbd-actions { display: none; }
+      .jbd-tabpanel .jbd-safe-card { display: none; }
+
+      .jbd-sidebar-col {
+        grid-area: sidebar;
+        display: block;
+        padding: 24px 24px 24px 0;
+        position: sticky;
+        top: 16px;
+        align-self: start;
+      }
+      .jbd-side-card {
+        background: var(--khub-bg);
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 12px;
+      }
+      .jbd-side-card .jbd-primary-btn,
+      .jbd-side-card .jbd-owner-btn { width: 100%; margin-bottom: 8px; }
+      .jbd-side-card .jbd-primary-btn:last-child,
+      .jbd-side-card .jbd-owner-btn:last-child { margin-bottom: 0; }
+      .jbd-side-actions { display: flex; flex-direction: column; }
+
+      .jbd-side-poster {
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: 4px; text-decoration: none; color: var(--khub-text);
+      }
+      .jbd-side-poster img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #eee; flex-shrink: 0; }
+      .jbd-side-poster-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
+      .jbd-side-poster-sub { font-size: 12px; color: var(--khub-text-light); margin-top: 1px; }
+
+      .jbd-side-safe { display: flex; gap: 9px; font-size: 12px; color: #1e3a8a; line-height: 1.5; }
+      .jbd-side-safe i { color: var(--khub-primary); font-size: 14px; margin-top: 1px; flex-shrink: 0; }
+
+      .jbd-body { grid-area: unset; padding: 18px 0 8px; }
+    }
+
+    @media (min-width: 1280px) {
+      .jbd-wrap { grid-template-columns: 440px 1fr 340px; }
+    }
   </style>
 </head>
 <body>
@@ -514,6 +589,9 @@
     </div>
   </div>
 
+  <!-- Gallery column (desktop) -->
+  <div class="jbd-media-col">
+
   <!-- Cover -->
   {% if job.cover_image %}
     <img class="jbd-cover" src="{{ job.cover_image.url }}" alt="{{ job.title }}" onclick="jbdOpenImageModal('{{ job.cover_image.url|escapejs }}')">
@@ -522,6 +600,11 @@
       <i class="fas fa-{% if job.category == 'gig' %}toolbox{% elif job.category == 'apprenticeship' %}graduation-cap{% else %}briefcase{% endif %}"></i>
     </div>
   {% endif %}
+
+  </div><!-- /jbd-media-col -->
+
+  <!-- Main column (desktop) -->
+  <div class="jbd-main-col">
 
   <div class="jbd-body">
     {% if business_page %}
@@ -722,6 +805,80 @@
       <div class="jbd-empty"><i class="fas fa-briefcase"></i>No other vacancies in this category right now.</div>
     {% endif %}
   </div>
+
+  </div><!-- /jbd-main-col -->
+
+  <!-- Sidebar column (desktop only) -->
+  <aside class="jbd-sidebar-col">
+
+    <div class="jbd-side-card">
+      <span class="jbd-status-badge {% if not job.is_open %}closed{% endif %}" style="display:inline-block;margin-bottom:14px;">
+        {% if job.is_open %}Open{% else %}Closed{% endif %}
+      </span>
+      <div class="jbd-side-actions">
+        {% if is_owner %}
+          <button type="button" class="jbd-owner-btn" onclick="jbdOpenEdit()"><i class="fas fa-pen"></i> Edit</button>
+          <button type="button" class="jbd-owner-btn danger" onclick="jbdOpenDelete()"><i class="fas fa-trash-alt"></i> Delete</button>
+          <a href="{% url 'job_applicants' job.id %}" class="jbd-owner-btn">
+            <i class="fas fa-users"></i> Applicants
+            {% if job.applications.count %}<span class="jbd-applicant-count">{{ job.applications.count }}</span>{% endif %}
+          </a>
+        {% else %}
+          {% if job.is_open %}
+            {% if request.user.is_authenticated %}
+              {% if my_application %}
+                {% if my_application.status == 'withdrawn' %}
+                  <button type="button" class="jbd-owner-btn" disabled style="opacity:.6;">
+                    <i class="fas fa-ban"></i> Application withdrawn
+                  </button>
+                {% else %}
+                  <a href="{% url 'my_applications' %}" class="jbd-primary-btn" style="background: {{ my_application.status_color }};">
+                    {{ my_application.status_emoji }} Applied — {{ my_application.get_status_display }}
+                  </a>
+                  <button type="button" class="jbd-owner-btn danger" onclick="japWithdraw('{{ my_application.id }}')">
+                    <i class="fas fa-rotate-left"></i> Withdraw
+                  </button>
+                {% endif %}
+              {% else %}
+                <button type="button" class="jbd-primary-btn" onclick="japOpenApplyModal()">
+                  <i class="fas fa-file-circle-check"></i> Apply Now
+                </button>
+              {% endif %}
+            {% else %}
+              <a href="{% url 'index' %}" class="jbd-primary-btn">
+                <i class="fas fa-right-to-bracket"></i> Log In to Apply
+              </a>
+            {% endif %}
+          {% else %}
+            <div class="jbd-full-badge" style="padding:0;"><i class="fas fa-circle-exclamation"></i> No longer accepting applicants.</div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="jbd-side-card">
+      <a class="jbd-side-poster" href="{% url 'profile' job.posted_by.username %}">
+        <img src="{{ poster.get_picture_url }}" alt="{{ job.posted_by.username }}" onerror="this.src='https://placehold.co/44x44/dbdbdb/8e8e8e?text=U';">
+        <div>
+          <div class="jbd-side-poster-name">
+            {{ job.posted_by.get_full_name|default:job.posted_by.username }}
+            {% if poster.is_verify %}<i class="fas fa-circle-check" style="color: var(--khub-primary); font-size: 12px;"></i>{% endif %}
+          </div>
+          <div class="jbd-side-poster-sub">
+            {% if job.company %}{{ job.company }}{% elif poster.online %}Online now{% else %}Job poster{% endif %}
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="jbd-side-card">
+      <div class="jbd-side-safe">
+        <i class="fas fa-shield-alt"></i>
+        <span>Never pay a fee to "secure" a job. Keep communication on KishiHub and verify the employer before sharing personal documents.</span>
+      </div>
+    </div>
+
+  </aside>
 
 </div>
 

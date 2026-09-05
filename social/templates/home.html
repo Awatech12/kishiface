@@ -34,8 +34,36 @@
       --mfy-border: #dbdbdb;
       --mfy-repost: #0095f6;
       --mfy-repost-bg: #ffffff;
+      --mfy-skel-base: #eef0f2;
+      --mfy-skel-sheen: #f8f9fa;
     }
-    
+
+    /* ===== SKELETON LOADING (shared shimmer system) =====
+       Lightweight, dependency-free shimmer used for: feed skeleton cards,
+       infinite-scroll loader, notification rows, search suggestions, and
+       remote image/media placeholders. Every skeleton element is sized to
+       match its real content so nothing shifts when the real content swaps
+       in, and every shimmer is removed the instant content loads or fails. */
+    @keyframes mfy-shimmer {
+      0%   { background-position: -400px 0; }
+      100% { background-position: 400px 0; }
+    }
+    .mfy-skel-shimmer {
+      background-image: linear-gradient(90deg, var(--mfy-skel-base) 25%, var(--mfy-skel-sheen) 37%, var(--mfy-skel-base) 63%);
+      background-size: 400px 100%;
+      animation: mfy-shimmer 1.4s ease-in-out infinite;
+    }
+    .mfy-skel-line { border-radius: 4px; height: 10px; }
+    .mfy-skel-avatar { border-radius: 50%; flex-shrink: 0; }
+    .mfy-skel-block  { border-radius: 8px; }
+    .mfy-skel-circle { border-radius: 50%; flex-shrink: 0; }
+    .mfy-skel-pill   { border-radius: 20px; }
+    .mfy-skel-btn    { border-radius: 8px; }
+    .mfy-skel-card   { background: var(--mfy-white); border-radius: 8px; overflow: hidden; }
+    @media (prefers-reduced-motion: reduce) {
+      .mfy-skel-shimmer { animation: none; background-image: none; background-color: var(--mfy-skel-base); }
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -175,6 +203,7 @@
       max-width: 860px;
       margin: 0 auto;
       width: 100%;
+      position: relative; /* anchors #mfy-initial-feed-skeleton overlay */
     }
 
     /* Every feed item reads as a normal full-width card, exactly like on
@@ -186,7 +215,8 @@
     .mfy-main-feed > .khj-jcard,
     .mfy-main-feed > .kbiz-post-card,
     .mfy-main-feed > #mfy-feed-sentinel,
-    .mfy-main-feed > #mfy-feed-end {
+    .mfy-main-feed > #mfy-feed-end,
+    .mfy-main-feed > #mfy-feed-loader {
       grid-column: 1 / -1;
       margin-bottom: 0;
     }
@@ -334,7 +364,157 @@
       border-radius: 8px;
       overflow: hidden;
     }
-    
+
+    /* ===== Infinite-scroll skeleton (htmx-indicator shown while the next
+       feed page is loading). Sized to match a real .mfy-post card so the
+       page height barely moves once the real content swaps in. ===== */
+    #mfy-feed-loader.htmx-indicator { flex-direction: column; gap: 12px; width: 100%; }
+    .mfy-skel-post {
+      background: var(--mfy-white);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .mfy-skel-post-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+    }
+    .mfy-skel-post-header .mfy-skel-avatar { width: 32px; height: 32px; }
+    .mfy-skel-post-header-lines { display: flex; flex-direction: column; gap: 6px; }
+    .mfy-skel-post-media { width: 100%; height: 220px; }
+    .mfy-skel-post-body { padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+
+    /* ===== EXTENDED SKELETON CARD LIBRARY =====
+       Same shimmer primitives, one shape per Home feed content type, so
+       whatever is loading — the very first paint, an infinite-scroll page,
+       or an htmx/AJAX-swapped panel — shows a skeleton whose proportions
+       match the real card that will replace it. Nothing here is unique per
+       card: they all reuse .mfy-skel-shimmer/.mfy-skel-line/.mfy-skel-avatar
+       above, so there's a single animation and a single place to tune it. */
+
+    /* -- Business / profile post (kbiz-post-card shape) -- */
+    .mfy-skel-kpost { background: var(--mfy-white); border-bottom: 1px solid var(--mfy-border); padding-bottom: 12px; overflow: hidden; }
+    .mfy-skel-kpost-top { display: flex; align-items: flex-start; justify-content: space-between; padding: 14px 16px 10px; gap: 8px; }
+    .mfy-skel-kpost-author { display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; }
+    .mfy-skel-kpost-author .mfy-skel-avatar { width: 42px; height: 42px; }
+    .mfy-skel-kpost-author-lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; padding-top: 2px; }
+    .mfy-skel-kpost-follow { width: 76px; height: 28px; flex-shrink: 0; }
+    .mfy-skel-kpost-caption { padding: 0 16px 10px; display: flex; flex-direction: column; gap: 7px; }
+    .mfy-skel-kpost-media { width: 100%; height: 260px; }
+    .mfy-skel-kpost-gallery { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; height: 300px; }
+    .mfy-skel-kpost-video { position: relative; width: 100%; height: 300px; background: #000; }
+    .mfy-skel-kpost-video::after {
+      content: ''; position: absolute; top: 50%; left: 50%; width: 56px; height: 56px;
+      border-radius: 50%; background: rgba(255,255,255,0.18); transform: translate(-50%, -50%);
+    }
+    .mfy-skel-kpost-poll { padding: 10px 16px 6px; display: flex; flex-direction: column; gap: 10px; }
+    .mfy-skel-kpost-poll .mfy-skel-line:first-child { width: 65%; height: 13px; }
+    .mfy-skel-kpost-poll-opt { height: 38px; border-radius: 8px; }
+    .mfy-skel-kpost-engage { display: flex; justify-content: space-between; padding: 10px 16px 0; }
+    .mfy-skel-kpost-actions { display: flex; gap: 18px; padding: 12px 16px 0; }
+    .mfy-skel-kpost-actions .mfy-skel-line { width: 60px; height: 12px; }
+
+    /* -- Job card (khj-jcard shape: image on top, body below) -- */
+    .mfy-skel-job { background: var(--mfy-white); border: 1px solid var(--mfy-border); border-radius: 14px; overflow: hidden; }
+    .mfy-skel-job-img { width: 100%; height: 132px; }
+    .mfy-skel-job-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .mfy-skel-job-name { height: 15px; width: 80%; }
+    .mfy-skel-job-seller { display: flex; align-items: center; gap: 8px; }
+    .mfy-skel-job-seller .mfy-skel-avatar { width: 20px; height: 20px; }
+    .mfy-skel-job-pills { display: flex; gap: 6px; }
+    .mfy-skel-job-pills .mfy-skel-pill { width: 76px; height: 22px; }
+    .mfy-skel-job-footer { height: 36px; border-radius: 22px; margin-top: 2px; }
+
+    /* -- Marketplace / product / event card (mfy-market-post shape) -- */
+    .mfy-skel-market { background: var(--mfy-white); border-radius: 8px; overflow: hidden; }
+    .mfy-skel-market-label { height: 26px; width: 100%; }
+    .mfy-skel-market-media { width: 100%; height: 220px; position: relative; }
+    .mfy-skel-market-price { position: absolute; bottom: 10px; left: 10px; width: 74px; height: 24px; border-radius: 20px; background: rgba(0,0,0,0.12); }
+    .mfy-skel-market-body { padding: 12px 16px 8px; display: flex; flex-direction: column; gap: 8px; }
+    .mfy-skel-market-actions { display: flex; gap: 8px; padding: 10px 16px 14px; }
+    .mfy-skel-market-actions .mfy-skel-pill { height: 30px; flex: 1; max-width: 130px; }
+
+    /* -- Suggestion card (mfy-side-card / mfy-sugg-row shape) -- */
+    .mfy-skel-suggestion { background: var(--mfy-white); border-radius: 12px; padding: 16px; border-bottom: 1px solid var(--mfy-border); }
+    .mfy-skel-suggestion-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+    .mfy-skel-suggestion-header .mfy-skel-line:first-child { width: 130px; height: 13px; }
+    .mfy-skel-suggestion-header .mfy-skel-line:last-child { width: 50px; height: 11px; }
+    .mfy-skel-suggestion-row { display: flex; align-items: center; gap: 10px; padding: 8px 2px; }
+    .mfy-skel-suggestion-row .mfy-skel-avatar { width: 40px; height: 40px; }
+    .mfy-skel-suggestion-row-lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .mfy-skel-suggestion-row-btn { width: 62px; height: 26px; flex-shrink: 0; }
+
+    /* -- Generic user/page info row: sidebar rows, follower/following lists -- */
+    .mfy-skel-userrow { display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
+    .mfy-skel-userrow .mfy-skel-avatar { width: 36px; height: 36px; }
+    .mfy-skel-userrow-lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .mfy-conn-skel { display: flex; flex-direction: column; padding: 4px 0; }
+
+    /* -- Initial Home feed skeleton --
+       Shown the instant the page paints, sitting as a fixed-height overlay
+       "curtain" on top of the (already server-rendered) feed underneath.
+       Because it's position:absolute it never participates in the grid's
+       layout flow, so it can't shift the real posts around, and removing it
+       causes zero reflow of the content beneath — the real feed was already
+       fully laid out from the first byte of HTML. This is what covers the
+       "initial Home feed loading" case without needing any change to the
+       Django view or template logic. */
+    #mfy-initial-feed-skeleton {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
+      background: var(--mfy-bg);
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 0.25s ease;
+    }
+    #mfy-initial-feed-skeleton.mfy-skel-done {
+      opacity: 0;
+      visibility: hidden;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #mfy-initial-feed-skeleton { transition: none; }
+    }
+
+    /* -- Video posts: shimmer over the player until metadata is ready (or
+       it errors out), sized so the card doesn't collapse while the browser
+       doesn't yet know the video's intrinsic aspect ratio. -- */
+    .kbiz-video-wrap:not(.mfy-video-ready),
+    .kpp-video-wrap:not(.mfy-video-ready) {
+      min-height: 260px;
+      background-color: var(--mfy-skel-base);
+      background-image: linear-gradient(90deg, var(--mfy-skel-base) 25%, var(--mfy-skel-sheen) 37%, var(--mfy-skel-base) 63%);
+      background-size: 400px 100%;
+      animation: mfy-shimmer 1.4s ease-in-out infinite;
+    }
+    .kbiz-video-wrap.mfy-video-ready,
+    .kpp-video-wrap.mfy-video-ready {
+      animation: none;
+      background-image: none;
+      background-color: #000;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .kbiz-video-wrap:not(.mfy-video-ready), .kpp-video-wrap:not(.mfy-video-ready) { animation: none; background-image: none; }
+    }
+
+    /* -- Post-author avatar: shimmer until the image loads or fails -- */
+    .kbiz-post-author img.mfy-avatar-loading {
+      background-color: var(--mfy-skel-base);
+      background-image: linear-gradient(90deg, var(--mfy-skel-base) 25%, var(--mfy-skel-sheen) 37%, var(--mfy-skel-base) 63%);
+      background-size: 400px 100%;
+      animation: mfy-shimmer 1.4s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .kbiz-post-author img.mfy-avatar-loading { animation: none; background-image: none; }
+    }
+
     .mfy-repost-header {
       display: flex;
       align-items: center;
@@ -432,8 +612,20 @@
       width: 100%;
     }
     .mfy-market-img-slide {
-      background: #f4f4f4;
+      background-color: #f4f4f4;
+      background-image: linear-gradient(90deg, var(--mfy-skel-base) 25%, var(--mfy-skel-sheen) 37%, var(--mfy-skel-base) 63%);
+      background-size: 400px 100%;
+      animation: mfy-shimmer 1.4s ease-in-out infinite;
       position: relative;
+    }
+    /* .mfy-img-loaded is set directly by each image's onload/onerror handler
+       (this.parentElement.classList.add('mfy-img-loaded')) so the shimmer
+       reliably turns off even in browsers without :has() support (older
+       Safari/WebViews); :has() is kept too as a belt-and-braces backup. */
+    .mfy-market-img-slide.mfy-img-loaded,
+    .mfy-market-img-slide:has(img.loaded) {
+      animation: none;
+      background-image: none;
     }
     .mfy-market-img-slide img {
       width: 100%;
@@ -444,6 +636,9 @@
       transition: opacity 0.3s;
     }
     .mfy-market-img-slide img.loaded { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      .mfy-market-img-slide { animation: none; background-image: none; }
+    }
 
     .mfy-market-img-price {
       position: absolute;
@@ -724,6 +919,7 @@
     }
 
     .htmx-indicator { display: none; }
+    .htmx-request.htmx-indicator,
     .htmx-request .htmx-indicator { display: flex; }
 
     .mfy-conn-load-more {
@@ -1907,8 +2103,194 @@
       <!-- Main Feed - Now includes User Suggestions, Jobs, Events -->
       <div class="mfy-feed-col">
 
+        <!-- Initial Home feed skeleton: a visual curtain shown the instant
+             the page paints, covering the feed while fonts/images/CSS
+             finish settling in. Purely decorative — the real feed markup
+             right below it is already fully rendered by Django, so hiding
+             this causes no reflow. Kept for a minimum time so it never
+             flickers on very fast loads, and is force-hidden if JS is off
+             (below) or after a hard safety timeout (in the script) so it
+             can never get stuck on screen. -->
+        <div id="mfy-initial-feed-skeleton" aria-hidden="true">
+          <div class="mfy-skel-kpost">
+            <div class="mfy-skel-kpost-top">
+              <div class="mfy-skel-kpost-author">
+                <div class="mfy-skel-shimmer mfy-skel-avatar"></div>
+                <div class="mfy-skel-kpost-author-lines">
+                  <div class="mfy-skel-shimmer mfy-skel-line" style="width:150px;"></div>
+                  <div class="mfy-skel-shimmer mfy-skel-line" style="width:90px;height:8px;"></div>
+                </div>
+              </div>
+              <div class="mfy-skel-shimmer mfy-skel-kpost-follow"></div>
+            </div>
+            <div class="mfy-skel-kpost-caption">
+              <div class="mfy-skel-shimmer mfy-skel-line" style="width:92%;"></div>
+              <div class="mfy-skel-shimmer mfy-skel-line" style="width:60%;"></div>
+            </div>
+            <div class="mfy-skel-shimmer mfy-skel-kpost-media"></div>
+          </div>
+
+          <div class="mfy-skel-job">
+            <div class="mfy-skel-shimmer mfy-skel-job-img"></div>
+            <div class="mfy-skel-job-body">
+              <div class="mfy-skel-shimmer mfy-skel-job-name"></div>
+              <div class="mfy-skel-job-seller">
+                <div class="mfy-skel-shimmer mfy-skel-avatar"></div>
+                <div class="mfy-skel-shimmer mfy-skel-line" style="width:100px;"></div>
+              </div>
+              <div class="mfy-skel-job-pills">
+                <div class="mfy-skel-shimmer mfy-skel-pill"></div>
+                <div class="mfy-skel-shimmer mfy-skel-pill"></div>
+              </div>
+              <div class="mfy-skel-shimmer mfy-skel-job-footer"></div>
+            </div>
+          </div>
+
+          <div class="mfy-skel-market">
+            <div class="mfy-skel-shimmer mfy-skel-market-label"></div>
+            <div class="mfy-skel-market-media">
+              <div class="mfy-skel-shimmer" style="position:absolute;inset:0;"></div>
+              <div class="mfy-skel-market-price"></div>
+            </div>
+            <div class="mfy-skel-market-body">
+              <div class="mfy-skel-shimmer mfy-skel-line" style="width:75%;height:14px;"></div>
+              <div class="mfy-skel-shimmer mfy-skel-line" style="width:45%;"></div>
+            </div>
+            <div class="mfy-skel-market-actions">
+              <div class="mfy-skel-shimmer mfy-skel-pill"></div>
+              <div class="mfy-skel-shimmer mfy-skel-pill"></div>
+            </div>
+          </div>
+
+          <div class="mfy-skel-suggestion">
+            <div class="mfy-skel-suggestion-header">
+              <div class="mfy-skel-shimmer mfy-skel-line"></div>
+              <div class="mfy-skel-shimmer mfy-skel-line"></div>
+            </div>
+            <div class="mfy-skel-suggestion-row">
+              <div class="mfy-skel-shimmer mfy-skel-avatar"></div>
+              <div class="mfy-skel-suggestion-row-lines">
+                <div class="mfy-skel-shimmer mfy-skel-line" style="width:110px;"></div>
+                <div class="mfy-skel-shimmer mfy-skel-line" style="width:70px;height:8px;"></div>
+              </div>
+              <div class="mfy-skel-shimmer mfy-skel-suggestion-row-btn"></div>
+            </div>
+          </div>
+
+          <div class="mfy-skel-kpost">
+            <div class="mfy-skel-kpost-top">
+              <div class="mfy-skel-kpost-author">
+                <div class="mfy-skel-shimmer mfy-skel-avatar"></div>
+                <div class="mfy-skel-kpost-author-lines">
+                  <div class="mfy-skel-shimmer mfy-skel-line" style="width:120px;"></div>
+                  <div class="mfy-skel-shimmer mfy-skel-line" style="width:80px;height:8px;"></div>
+                </div>
+              </div>
+              <div class="mfy-skel-shimmer mfy-skel-kpost-follow"></div>
+            </div>
+            <div class="mfy-skel-kpost-gallery">
+              <div class="mfy-skel-shimmer"></div>
+              <div class="mfy-skel-shimmer"></div>
+              <div class="mfy-skel-shimmer"></div>
+              <div class="mfy-skel-shimmer"></div>
+            </div>
+          </div>
+        </div>
+
+        <noscript><style>#mfy-initial-feed-skeleton{display:none!important;}</style></noscript>
+        <script>
+          // Reveal the real feed and dismiss the initial skeleton curtain.
+          // Waits for the page to finish loading (images, fonts, etc.) AND a
+          // minimum display time, so the skeleton never flickers on very
+          // fast loads but also never blocks the real content longer than
+          // necessary. A hard safety timeout guarantees it is always removed
+          // even in the unlikely event 'load' never fires.
+          (function () {
+            var skel = document.getElementById('mfy-initial-feed-skeleton');
+            if (!skel) return;
+            var MIN_VISIBLE_MS = 350;
+            var HARD_TIMEOUT_MS = 4000;
+            var started = Date.now();
+            var done = false;
+
+            function dismiss() {
+              if (done) return;
+              done = true;
+              skel.classList.add('mfy-skel-done');
+            }
+
+            function reveal() {
+              var elapsed = Date.now() - started;
+              var wait = Math.max(0, MIN_VISIBLE_MS - elapsed);
+              window.setTimeout(dismiss, wait);
+            }
+
+            if (document.readyState === 'complete') {
+              reveal();
+            } else {
+              window.addEventListener('load', reveal, { once: true });
+            }
+            // Safety net: never let the skeleton get stuck on screen.
+            window.setTimeout(dismiss, HARD_TIMEOUT_MS);
+          })();
+        </script>
+
         <div class="mfy-main-feed" id="mfy-main-feed">
           {% include 'snippet/feed_posts_partial.html' with posts_with_ads=posts_with_ads next_cursor=next_cursor %}
+
+          <!-- Infinite-scroll skeleton: hidden by default (.htmx-indicator),
+               shown automatically by htmx while #mfy-feed-sentinel's request
+               is in flight, hidden again the instant the swap lands. -->
+          <div id="mfy-feed-loader" class="htmx-indicator" aria-hidden="true">
+            <div class="mfy-skel-post">
+              <div class="mfy-skel-post-header">
+                <div class="mfy-skel-shimmer mfy-skel-avatar"></div>
+                <div class="mfy-skel-post-header-lines">
+                  <div class="mfy-skel-shimmer mfy-skel-line" style="width:130px;"></div>
+                  <div class="mfy-skel-shimmer mfy-skel-line" style="width:70px;height:8px;"></div>
+                </div>
+              </div>
+              <div class="mfy-skel-shimmer mfy-skel-post-media"></div>
+              <div class="mfy-skel-post-body">
+                <div class="mfy-skel-shimmer mfy-skel-line" style="width:88%;"></div>
+                <div class="mfy-skel-shimmer mfy-skel-line" style="width:55%;"></div>
+              </div>
+            </div>
+
+            <!-- Job-card-shaped skeleton — infinite scroll can bring back a
+                 mix of posts, jobs, and marketplace/event cards, so the
+                 loader shows a representative sample of each rather than
+                 implying every next item looks like a plain post. -->
+            <div class="mfy-skel-job">
+              <div class="mfy-skel-shimmer mfy-skel-job-img"></div>
+              <div class="mfy-skel-job-body">
+                <div class="mfy-skel-shimmer mfy-skel-job-name"></div>
+                <div class="mfy-skel-job-seller">
+                  <div class="mfy-skel-shimmer mfy-skel-avatar"></div>
+                  <div class="mfy-skel-shimmer mfy-skel-line" style="width:90px;"></div>
+                </div>
+                <div class="mfy-skel-job-pills">
+                  <div class="mfy-skel-shimmer mfy-skel-pill"></div>
+                  <div class="mfy-skel-shimmer mfy-skel-pill"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mfy-skel-post">
+              <div class="mfy-skel-post-header">
+                <div class="mfy-skel-shimmer mfy-skel-avatar"></div>
+                <div class="mfy-skel-post-header-lines">
+                  <div class="mfy-skel-shimmer mfy-skel-line" style="width:100px;"></div>
+                  <div class="mfy-skel-shimmer mfy-skel-line" style="width:70px;height:8px;"></div>
+                </div>
+              </div>
+              <div class="mfy-skel-shimmer mfy-skel-post-media"></div>
+              <div class="mfy-skel-post-body">
+                <div class="mfy-skel-shimmer mfy-skel-line" style="width:70%;"></div>
+                <div class="mfy-skel-shimmer mfy-skel-line" style="width:40%;"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -2154,18 +2536,39 @@
       const container = document.getElementById(cfg.listId);
       if (!container) return;
 
-      container.innerHTML =
-        '<div class="mfy-conn-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>';
+      // Skeleton rows sized like a real .mfy-sidebar-user-row (avatar + two
+      // lines) instead of a bare spinner, using the same shimmer system as
+      // the rest of the Home feed. A minimum display time keeps it from
+      // flickering when the response comes back almost instantly.
+      const skelWidths = [[72, 42], [55, 34], [80, 46], [60, 30]];
+      container.innerHTML = '<div class="mfy-conn-skel">' + skelWidths.map(function (w) {
+        return '<div class="mfy-skel-userrow">' +
+                 '<div class="mfy-skel-shimmer mfy-skel-avatar"></div>' +
+                 '<div class="mfy-skel-userrow-lines">' +
+                   '<div class="mfy-skel-shimmer mfy-skel-line" style="width:' + w[0] + '%;"></div>' +
+                   '<div class="mfy-skel-shimmer mfy-skel-line" style="width:' + w[1] + '%;height:8px;"></div>' +
+                 '</div>' +
+               '</div>';
+      }).join('') + '</div>';
+
+      const MIN_SKEL_MS = 300;
+      const startedAt = Date.now();
+      const swapIn = function (renderFn) {
+        const wait = Math.max(0, MIN_SKEL_MS - (Date.now() - startedAt));
+        window.setTimeout(renderFn, wait);
+      };
 
       fetch(`{% url 'sidebar_connections' %}?type=${cfg.type}&page=1`, {
         credentials: 'same-origin',
         headers: { 'HX-Request': 'true', 'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' }
       })
       .then(r => r.text())
-      .then(html => { container.innerHTML = html; htmx.process(container); })
+      .then(html => { swapIn(function () { container.innerHTML = html; htmx.process(container); }); })
       .catch(() => {
-        container.innerHTML =
-          '<div class="mfy-sidebar-empty"><i class="fas fa-exclamation-circle"></i><p>Could not load.</p></div>';
+        swapIn(function () {
+          container.innerHTML =
+            '<div class="mfy-sidebar-empty"><i class="fas fa-exclamation-circle"></i><p>Could not load.</p></div>';
+        });
       });
     }
 
@@ -2534,10 +2937,38 @@
   <div id="mfy-notif-panel-body"
        style="flex:1;overflow-y:auto;overscroll-behavior:contain;">
 
-    <!-- Loading skeleton shown while fetching -->
-    <div id="mfy-panel-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;gap:12px;">
-      <i class="fas fa-circle-notch fa-spin" style="font-size:28px;color:#0095f6;"></i>
-      <span style="font-size:13px;color:#8e8e8e;">Loading notifications…</span>
+    <!-- Loading skeleton shown while fetching: rows sized to match a real
+         notification row (avatar + two text lines) so nothing jumps when
+         the real list swaps in. Removed immediately on success or failure. -->
+    <div id="mfy-panel-loading" class="mfy-notif-skel">
+      <div class="mfy-notif-skel-row">
+        <div class="mfy-skel-shimmer mfy-skel-avatar mfy-notif-skel-avatar"></div>
+        <div class="mfy-notif-skel-lines">
+          <div class="mfy-skel-shimmer mfy-skel-line" style="width:82%;"></div>
+          <div class="mfy-skel-shimmer mfy-skel-line" style="width:40%;height:8px;"></div>
+        </div>
+      </div>
+      <div class="mfy-notif-skel-row">
+        <div class="mfy-skel-shimmer mfy-skel-avatar mfy-notif-skel-avatar"></div>
+        <div class="mfy-notif-skel-lines">
+          <div class="mfy-skel-shimmer mfy-skel-line" style="width:60%;"></div>
+          <div class="mfy-skel-shimmer mfy-skel-line" style="width:35%;height:8px;"></div>
+        </div>
+      </div>
+      <div class="mfy-notif-skel-row">
+        <div class="mfy-skel-shimmer mfy-skel-avatar mfy-notif-skel-avatar"></div>
+        <div class="mfy-notif-skel-lines">
+          <div class="mfy-skel-shimmer mfy-skel-line" style="width:90%;"></div>
+          <div class="mfy-skel-shimmer mfy-skel-line" style="width:45%;height:8px;"></div>
+        </div>
+      </div>
+      <div class="mfy-notif-skel-row">
+        <div class="mfy-skel-shimmer mfy-skel-avatar mfy-notif-skel-avatar"></div>
+        <div class="mfy-notif-skel-lines">
+          <div class="mfy-skel-shimmer mfy-skel-line" style="width:68%;"></div>
+          <div class="mfy-skel-shimmer mfy-skel-line" style="width:30%;height:8px;"></div>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -2558,6 +2989,14 @@
 </aside>
 
 <style>
+  /* Notification panel loading skeleton — dimensions echo a real
+     notification row (avatar + two lines) so the panel doesn't jump when
+     the fetched list swaps in. */
+  #mfy-notif-panel .mfy-notif-skel { display:flex; flex-direction:column; }
+  #mfy-notif-panel .mfy-notif-skel-row { display:flex; align-items:center; gap:12px; padding:12px 18px; }
+  #mfy-notif-panel .mfy-notif-skel-avatar { width:44px; height:44px; }
+  #mfy-notif-panel .mfy-notif-skel-lines { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+
   #mfy-notif-panel .mfy-notification-wrapper { position:relative; transition:opacity .25s,transform .25s; }
   #mfy-notif-panel .mfy-notification-wrapper:hover { background:#fafafa; }
   #mfy-notif-panel .mfy-remove-btn {
@@ -2630,6 +3069,20 @@
             overflow: hidden;
             background: var(--pill-color, var(--mfy-primary));
         }
+        /* Shimmer only while a real cover image is expected but hasn't loaded
+           yet — the decorative ".placeholder" variant (no cover image at all)
+           is a permanent design, not a loading state, so it's left alone. */
+        .khj-jcard-img-wrap:not(.placeholder) {
+            background-color: var(--pill-color, var(--mfy-primary));
+            background-image: linear-gradient(90deg, var(--mfy-skel-base) 25%, var(--mfy-skel-sheen) 37%, var(--mfy-skel-base) 63%);
+            background-size: 400px 100%;
+            animation: mfy-shimmer 1.4s ease-in-out infinite;
+        }
+        .khj-jcard-img-wrap.mfy-img-loaded,
+        .khj-jcard-img-wrap:not(.placeholder):has(.khj-jcard-img.loaded) {
+            animation: none;
+            background-image: none;
+        }
         .khj-jcard-img-wrap.placeholder {
             background:
                 radial-gradient(circle at 18% 58%, color-mix(in srgb, var(--pill-color) 30%, white) 0 32%, transparent 33%),
@@ -2641,6 +3094,9 @@
             opacity: 0; transition: opacity 0.3s ease;
         }
         .khj-jcard-img.loaded { opacity: 1; }
+        @media (prefers-reduced-motion: reduce) {
+            .khj-jcard-img-wrap:not(.placeholder) { animation: none; background-image: none; }
+        }
 
         .khj-jcard-type-chip {
             position: absolute;
@@ -2873,8 +3329,23 @@
         .kbiz-post-media video { width: 100%; max-height: 520px; object-fit: contain; display: block; background: #000; }
         /* LinkedIn-style media grid: 1 = full width, 2 = side-by-side, 3 = big+stacked pair, 4+ = 2x2 with "+N" on the 4th tile */
         .kbiz-post-media-grid { display: grid; gap: 2px; }
-        .kbiz-post-media-grid .kf-media-tile { position: relative; overflow: hidden; cursor: pointer; background: #f0f0f0; }
-        .kbiz-post-media-grid .kf-media-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .kbiz-post-media-grid .kf-media-tile {
+            position: relative; overflow: hidden; cursor: pointer;
+            background-color: #f0f0f0;
+            background-image: linear-gradient(90deg, var(--mfy-skel-base) 25%, var(--mfy-skel-sheen) 37%, var(--mfy-skel-base) 63%);
+            background-size: 400px 100%;
+            animation: mfy-shimmer 1.4s ease-in-out infinite;
+        }
+        .kbiz-post-media-grid .kf-media-tile.mfy-img-loaded,
+        .kbiz-post-media-grid .kf-media-tile:has(img.loaded) { animation: none; background-image: none; }
+        .kbiz-post-media-grid .kf-media-tile img {
+            width: 100%; height: 100%; object-fit: cover; display: block;
+            opacity: 0; transition: opacity 0.25s ease;
+        }
+        .kbiz-post-media-grid .kf-media-tile img.loaded { opacity: 1; }
+        @media (prefers-reduced-motion: reduce) {
+            .kbiz-post-media-grid .kf-media-tile { animation: none; background-image: none; }
+        }
         .kbiz-post-media-grid.n1 { grid-template-columns: 1fr; }
         .kbiz-post-media-grid.n1 .kf-media-tile { max-height: 520px; }
         .kbiz-post-media-grid.n1 .kf-media-tile img { max-height: 520px; object-fit: contain; background: #000; }
@@ -4006,6 +4477,17 @@ function kbizInitVideoPlayers(scope) {
             video.currentTime = Math.min(Math.max(0, video.currentTime + delta), video.duration);
             updateDurationLabel();
         };
+
+        // Skeleton shimmer on .kbiz-video-wrap/.kpp-video-wrap stays up until
+        // the video reports it's ready to play, or gives up with an error —
+        // whichever comes first — so the placeholder never gets stuck.
+        const clearVideoSkeleton = function () { wrap.classList.add('mfy-video-ready'); };
+        if (video.readyState >= 1) {
+            clearVideoSkeleton();
+        } else {
+            video.addEventListener('loadedmetadata', clearVideoSkeleton, { once: true });
+            video.addEventListener('error', clearVideoSkeleton, { once: true });
+        }
 
         video.addEventListener('play', function () { wrap.classList.add('is-playing'); setPlayIcon(); });
         video.addEventListener('pause', function () { wrap.classList.remove('is-playing'); setPlayIcon(); });

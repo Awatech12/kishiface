@@ -15,321 +15,480 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
+        /* ============================================================
+           Marketfy Messages — visual redesign only.
+           Every selector below targets an existing class/id already
+           used in the markup and JS — nothing was renamed.
+           ============================================================ */
 
         :root {
-            --kishiface-primary: #0095f6;
-            --kishiface-primary-hover: #0080d4;
-            --kishiface-bg: #ffffff;
-            --kishiface-white: #ffffff;
-            --kishiface-border: transparent;
-            --kishiface-text: #262626;
-            --kishiface-text-light: #8e8e8e;
-            --kishiface-sent-bg: #0095f6;
-            --kishiface-received-bg: #efefef;
-            --kishiface-heart: #ed4956;
-            --kishiface-input-bg: #ffffff;
+            /* Marketfy design system — matches home.html exactly */
+            --mfy-primary: #0095f6;
+            --mfy-primary-dark: #0077c8;
+            --mfy-primary-soft: #eaf6ff;
+            --mfy-ink: #262626;         /* == home --mfy-text */
+            --mfy-ink-soft: #8e8e8e;    /* == home --mfy-text-light */
+            --mfy-muted: #8e8e8e;       /* == home --mfy-text-light */
+            --mfy-border: #dbdbdb;      /* == home --mfy-border */
+            --mfy-border-soft: #fafafa; /* == home --mfy-bg, used for hover states */
+            --mfy-bg: #fafafa;          /* == home --mfy-bg */
+            --mfy-surface: #ffffff;     /* == home --mfy-white */
+            --mfy-bubble-received: #efefef;
+            --mfy-bubble-sent: #0095f6;
+            --mfy-danger: #ed4956;
+            --mfy-online: #31c48d;
+            --mfy-radius-lg: 12px;
+            --mfy-radius-md: 8px;
+            --mfy-radius-sm: 6px;
+            --mfy-shadow-sm: none;      /* flat layout — no shadows on bubbles/badges/cards */
+            --mfy-shadow-md: 0 8px 24px rgba(20, 21, 25, 0.10);
+            --mfy-shadow-lg: 0 16px 48px rgba(20, 21, 25, 0.16);
+            --mfy-header-h: 60px;
+            --mfy-composer-h: 64px;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            -webkit-tap-highlight-color: transparent;
+        * { box-sizing: border-box; }
+
+        html, body {
+            height: 100%;
         }
 
         body {
-            background: var(--kishiface-bg);
-            height: 100vh;
-            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: var(--mfy-bg);
+            color: var(--mfy-ink);
             -webkit-font-smoothing: antialiased;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overscroll-behavior-y: none;
+        }
+
+        button { font-family: inherit; }
+
+        /* ---------------------------------------------------------------
+           Top progress bar (file upload)
+        --------------------------------------------------------------- */
+        .kishiface-progress-bar-container {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: transparent;
+            z-index: 9999;
+            display: none;
+        }
+        .kishiface-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--mfy-primary);
+            transition: width 0.2s ease;
+        }
+
+        /* ---------------------------------------------------------------
+           Page shell — a merged two-panel workspace on larger screens
+           (conversation list + open chat side by side), full-bleed
+           single-panel chat on mobile.
+        --------------------------------------------------------------- */
+        .message-workspace {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            margin: 0 auto;
+            background: var(--mfy-surface);
+        }
+
+        @media (min-width: 768px) {
+            body { background: var(--mfy-bg); }
+            .message-workspace {
+                max-width: 1180px;
+                border-left: 1px solid var(--mfy-border);
+                border-right: 1px solid var(--mfy-border);
+            }
         }
 
         .kishiface-messenger-container {
-            height: 100vh;
+            position: relative;
             display: flex;
             flex-direction: column;
-            background: var(--kishiface-bg);
-            position: relative;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            background: var(--mfy-surface);
+            overflow: hidden;
         }
 
-        .kishiface-progress-bar-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: transparent;
-            z-index: 2001;
+        @media (min-width: 768px) {
+            .kishiface-messenger-container {
+                flex: 1;
+                min-width: 0;
+                height: 100%;
+            }
+        }
+
+        /* ---------------- Desktop sidebar: conversation list ---------------- */
+        .message-sidebar {
             display: none;
         }
 
-        .kishiface-progress-bar {
-            height: 100%;
-            background: var(--kishiface-primary);
-            width: 0%;
-            transition: width 0.3s ease;
+        @media (min-width: 768px) {
+            .message-sidebar {
+                display: flex;
+                flex-direction: column;
+                width: 360px;
+                flex-shrink: 0;
+                border-right: 1px solid var(--mfy-border);
+                background: var(--mfy-surface);
+                min-height: 0;
+            }
         }
 
-        .kishiface-chat-header {
-            padding: 8px 16px;
-            background: var(--kishiface-white);
-            border-bottom: none;
+        @media (min-width: 1200px) {
+            .message-sidebar { width: 400px; }
+        }
+
+        .message-sidebar-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            height: 60px;
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--mfy-border);
+            flex-shrink: 0;
+        }
+        .message-sidebar-header h2 {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--mfy-ink);
+        }
+        .message-sidebar-header a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            color: var(--mfy-ink-soft);
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+        .message-sidebar-header a:hover { background: var(--mfy-border-soft); }
+
+        .message-sidebar .search-container { padding: 10px 16px 12px; flex-shrink: 0; }
+        .message-sidebar .search-box {
+            display: flex;
+            align-items: center;
+            background: var(--mfy-bg);
+            border-radius: 100px;
+            padding: 9px 14px;
+            border: 1px solid transparent;
+        }
+        .message-sidebar .search-box:focus-within { border-color: var(--mfy-primary); background: var(--mfy-surface); }
+        .message-sidebar .search-box i { color: var(--mfy-muted); margin-right: 10px; font-size: 0.85rem; }
+        .message-sidebar .search-box input {
+            border: none; outline: none; width: 100%;
+            font-size: 0.9rem; background: transparent; color: var(--mfy-ink);
+        }
+
+        .message-sidebar .message-list {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 0 8px 8px;
+        }
+        .message-sidebar .message-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 8px;
+            border-radius: var(--mfy-radius-md);
+            text-decoration: none;
+            color: inherit;
+            transition: background 0.15s;
+        }
+        .message-sidebar .message-item:hover { background: var(--mfy-border-soft); }
+        .message-sidebar .message-item.active { background: var(--mfy-primary-soft); }
+        .message-sidebar .profile-pic {
+            width: 50px; height: 50px; border-radius: 50%; object-fit: cover;
+            margin-right: 12px; flex-shrink: 0; background: var(--mfy-border-soft);
+        }
+        .message-sidebar .message-content { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+        .message-sidebar .message-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+        .message-sidebar .username { font-weight: 600; font-size: 0.92rem; color: var(--mfy-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .message-sidebar .message-time { font-size: 0.72rem; color: var(--mfy-muted); white-space: nowrap; flex-shrink: 0; }
+        .message-sidebar .message-preview-container { display: flex; align-items: center; min-width: 0; }
+        .message-sidebar .message-preview {
+            font-size: 0.84rem; color: var(--mfy-ink-soft); line-height: 1.2;
+            overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; flex-grow: 1;
+        }
+        .message-sidebar .message-item[data-unread]:not([data-unread="0"]) .message-preview { color: var(--mfy-ink); font-weight: 600; }
+        .message-sidebar .message-item[data-unread]:not([data-unread="0"]) .username { font-weight: 700; }
+        .message-sidebar .message-icon { margin-right: 6px; font-size: 0.8rem; color: var(--mfy-muted); flex-shrink: 0; }
+        .message-sidebar .unread-badge {
+            background: var(--mfy-primary); color: #fff; border-radius: 50%;
+            min-width: 19px; height: 19px; display: flex; align-items: center; justify-content: center;
+            font-size: 0.68rem; font-weight: 700; padding: 0 5px; margin-left: 8px; flex-shrink: 0;
+        }
+        .message-sidebar .empty-message { text-align: center; color: var(--mfy-muted); padding: 60px 24px; margin: auto; }
+
+        /* ---------------------------------------------------------------
+           Chat header
+        --------------------------------------------------------------- */
+        .kishiface-chat-header {
+            flex-shrink: 0;
+            position: relative;
+            height: var(--mfy-header-h);
+            background: var(--mfy-surface);
+            border-bottom: 1px solid var(--mfy-border);
+            z-index: 20;
         }
 
         .kishiface-chat-user-info {
             display: flex;
             align-items: center;
-            gap: 12px;
-            flex: 1;
+            gap: 10px;
+            height: 100%;
+            padding: 0 12px;
         }
 
         .kishiface-back-btn {
-            background: none;
-            border: none;
-            color: var(--kishiface-text);
-            font-size: 24px;
-            cursor: pointer;
-            padding: 8px;
-            margin-right: 4px;
-        }
-
-        .kishiface-chat-header-actions {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .kishiface-header-action-btn {
-            background: none;
-            border: none;
-            color: var(--kishiface-text);
-            font-size: 20px;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.2s;
-            width: 38px;
-            height: 38px;
+            width: 36px;
+            height: 36px;
+            flex-shrink: 0;
+            border: none;
+            background: transparent;
+            color: var(--mfy-ink);
+            font-size: 16px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.15s;
         }
+        .kishiface-back-btn:hover { background: var(--mfy-border-soft); }
 
-        .kishiface-header-action-btn:hover {
-            background: var(--kishiface-bg);
+        @media (min-width: 768px) {
+            .kishiface-back-btn { display: none; }
         }
 
         .kishiface-chat-user-avatar {
-            width: 38px;
-            height: 38px;
+            width: 40px;
+            height: 40px;
+            flex-shrink: 0;
             border-radius: 50%;
             overflow: hidden;
-            flex-shrink: 0;
-            position: relative;
+            background: var(--mfy-border-soft);
         }
-
         .kishiface-chat-user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
-        .kishiface-message-bubble.sent {
-            background: var(--kishiface-sent-bg);
-            color: #ffffff;
-            border-radius: 4px;
-            padding: 10px 16px;
-        }
-
-        .kishiface-message-bubble.received {
-            background: var(--kishiface-received-bg);
-            color: var(--kishiface-text);
-            border-radius: 4px;
-            padding: 10px 16px;
-        }
-
-        .kishiface-message-text {
-            font-size: 14px;
-            font-weight: 400;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            word-break: break-word;
-            display: inline-block;
-            max-width: 100%;
-        }
-
-        .kishiface-send-btn {
-            border: none;
-            background: var(--kishiface-primary);
-            color: #ffffff;
-            font-size: 13px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            flex-shrink: 0;
-            font-weight: 600;
-            padding: 0;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-        }
-
-        /* Emoji Burst Particles */
-        .kishiface-emoji-particle {
-            position: fixed;
-            pointer-events: none;
-            z-index: 99999;
-            font-size: 20px;
-            line-height: 1;
-            user-select: none;
-            will-change: transform, opacity;
-            transform-origin: center center;
-        }
-
-        .kishiface-send-btn:hover:not(:disabled) {
-            background: var(--kishiface-primary-hover);
-            transform: scale(1.05);
-        }
-
-        .kishiface-send-btn:disabled {
-            background: var(--kishiface-bg);
-            color: var(--kishiface-text-light);
-            cursor: not-allowed;
-            transform: none;
-            opacity: 0.6;
-        }
-
-        .kishiface-input-action-btn {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            border: none;
-            background: transparent;
-            color: var(--kishiface-primary);
-            font-size: 18px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            flex-shrink: 0;
-        }
-
-        .kishiface-input-action-btn:hover {
-            background: rgba(0, 149, 246, 0.08);
-            transform: scale(1.1);
-        }
-
-        .kishiface-message-input {
-            flex: 1;
-            padding: 6px 4px;
-            border: none;
-            background: transparent;
-            font-size: 14px;
-            outline: none;
-            min-width: 0;
-            resize: none;
-            max-height: 100px;
-            line-height: 1.4;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            color: var(--kishiface-text);
-        }
-
-        .kishiface-message-input::placeholder {
-            color: var(--kishiface-text-light);
-        }
-
-
-
         .kishiface-chat-user-details {
-            flex: 1;
             min-width: 0;
+            flex: 1;
         }
-
         .kishiface-chat-user-details h3 {
-            font-size: 16px;
+            margin: 0;
+            font-size: 15px;
             font-weight: 600;
-            color: var(--kishiface-text);
-            margin-bottom: 0;
+            color: var(--mfy-ink);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
         .kishiface-chat-user-status {
-            font-size: 12px;
-            color: var(--kishiface-text-light);
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
+            height: 16px;
         }
+        .user-status {
+            font-size: 12.5px;
+            color: var(--mfy-muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .user-status::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--mfy-muted);
+        }
+        .user-status.online { color: var(--mfy-online); }
+        .user-status.online::before { background: var(--mfy-online); }
+        .user-status.offline::before { background: var(--mfy-muted); }
 
-        .kishiface-online-status {
+        .kishiface-header-typing {
             display: none;
+            font-size: 12.5px;
+            color: var(--mfy-primary);
+            font-style: italic;
         }
 
+        .kishiface-header-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: transparent;
+            color: var(--mfy-ink-soft);
+            font-size: 15px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .kishiface-header-action-btn:hover { background: var(--mfy-border-soft); }
+
+        /* Selection action bar — slides in over the header when
+           messages are selected via long-press / double-click */
+        .kvibe-header-action-bar {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            background: var(--mfy-surface);
+            z-index: 5;
+        }
+        .kvibe-header-action-bar.show { display: flex; }
+        .kvibe-header-close-btn {
+            width: 34px; height: 34px;
+            border: none; background: transparent;
+            border-radius: 50%;
+            color: var(--mfy-ink);
+            cursor: pointer;
+        }
+        .kvibe-header-close-btn:hover { background: var(--mfy-border-soft); }
+        .kvibe-header-selected-preview {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--mfy-ink);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .kvibe-header-action-btns { display: flex; align-items: center; gap: 2px; }
+        .kvibe-header-msg-action-btn {
+            width: 36px; height: 36px;
+            border: none; background: transparent;
+            border-radius: 50%;
+            color: var(--mfy-ink-soft);
+            font-size: 15px;
+            cursor: pointer;
+        }
+        .kvibe-header-msg-action-btn:hover { background: var(--mfy-border-soft); }
+        .kvibe-header-msg-action-btn.delete-btn:hover { background: #fdecef; color: var(--mfy-danger); }
+
+        /* ---------------------------------------------------------------
+           Reply preview banner (composer)
+        --------------------------------------------------------------- */
+        .kishiface-reply-preview {
+            display: none;
+            flex-shrink: 0;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 8px 14px;
+            background: var(--mfy-bg);
+            border-bottom: 1px solid var(--mfy-border);
+        }
+        .kishiface-reply-header { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
+        .kishiface-reply-sender { font-size: 12.5px; font-weight: 600; color: var(--mfy-primary); }
+        .kishiface-reply-content {
+            font-size: 13px;
+            color: var(--mfy-ink-soft);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .kishiface-reply-content.media { display: flex; align-items: center; gap: 4px; }
+        .kishiface-reply-close {
+            width: 28px; height: 28px;
+            border: none; background: transparent;
+            border-radius: 50%;
+            color: var(--mfy-muted);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .kishiface-reply-close:hover { background: var(--mfy-border-soft); }
+
+        /* ---------------------------------------------------------------
+           Messages area
+        --------------------------------------------------------------- */
         .kishiface-messages-container {
             flex: 1;
-            padding: 16px 16px 80px 16px;
+            min-height: 0;
             overflow-y: auto;
-            background: var(--kishiface-bg);
+            -webkit-overflow-scrolling: touch;
+            padding: 14px 12px 10px;
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            -webkit-overflow-scrolling: touch;
+            gap: 3px;
+            background: var(--mfy-bg);
         }
+        .kishiface-messages-container::-webkit-scrollbar { width: 6px; }
+        .kishiface-messages-container::-webkit-scrollbar-thumb {
+            background: var(--mfy-border); border-radius: 6px;
+        }
+
+        .kishiface-empty-state {
+            margin: auto;
+            text-align: center;
+            color: var(--mfy-muted);
+            padding: 40px 20px;
+        }
+        .kishiface-empty-state i { font-size: 40px; color: #d5d7dc; margin-bottom: 14px; }
+        .kishiface-empty-state h3 { margin: 0 0 4px; font-size: 16px; color: var(--mfy-ink); font-weight: 600; }
+        .kishiface-empty-state p { margin: 0; font-size: 13.5px; }
 
         .kishiface-date-separator {
-            text-align: center;
-            margin: 16px 0 8px 0;
-            position: relative;
+            display: flex;
+            justify-content: center;
+            margin: 14px 0 10px;
         }
-
         .kishiface-date-separator span {
-            background: transparent;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            color: var(--kishiface-text-light);
+            font-size: 11.5px;
             font-weight: 600;
+            color: var(--mfy-muted);
+            background: var(--mfy-border-soft);
+            padding: 4px 12px;
+            border-radius: 100px;
+            letter-spacing: 0.2px;
         }
 
+        /* ---------------------------------------------------------------
+           Message rows
+        --------------------------------------------------------------- */
         .kishiface-message-row {
             display: flex;
-            flex-direction: column;
-            margin-bottom: 10px;
+            width: 100%;
+            margin: 2px 0;
             position: relative;
-            touch-action: pan-y;
         }
+        .kishiface-message-row.sent { justify-content: flex-end; }
+        .kishiface-message-row.received { justify-content: flex-start; align-items: flex-end; gap: 7px; }
 
-        .kishiface-message-row.sent {
-            align-items: flex-end;
-        }
-
-        .kishiface-message-row.received {
-            align-items: flex-start;
-            flex-direction: row;
-            gap: 8px;
+        .kishiface-message-row.selected {
+            background: rgba(0, 149, 246, 0.06);
+            border-radius: 10px;
         }
 
         .kvibe-receiver-avatar {
-            width: 28px;
-            height: 28px;
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
             object-fit: cover;
             flex-shrink: 0;
-            align-self: flex-end;
             margin-bottom: 2px;
         }
 
@@ -337,2568 +496,1027 @@
             display: flex;
             flex-direction: column;
             align-items: flex-start;
-            max-width: 65%;
+            max-width: 78%;
         }
 
-        .kishiface-message-bubble {
-            max-width: 65%;
-            padding: 9px 14px;
-            border-radius: 22px;
-            position: relative;
-            animation: kishifaceMessageAppear 0.25s ease;
-            word-wrap: break-word;
-            cursor: pointer;
-            transition: filter 0.15s;
-        }
-
-        .kvibe-received-content .kishiface-message-bubble {
-            max-width: 100%;
-        }
-
-        .kishiface-message-bubble:hover {
-            filter: brightness(0.96);
-        }
-
-        @keyframes kishifaceMessageAppear {
-            from {
-                opacity: 0;
-                transform: scale(0.8);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
+        @media (min-width: 768px) {
+            .kishiface-message-row.sent > *,
+            .kvibe-received-content,
+            .kishiface-message-row.received > .kishiface-message-bubble {
+                max-width: 62%;
             }
         }
 
-        .kishiface-message-time {
-            font-size: 11px;
-            opacity: 0.6;
-            white-space: nowrap;
-            color: var(--kishiface-text-light);
-        }
-
-        .kishiface-message-bubble.sent .kishiface-message-time {
-            color: rgba(255, 255, 255, 0.9);
-        }
-
-        .kishiface-message-bubble.received .kishiface-message-time {
-            color: var(--kishiface-text-light);
-        }
-
-        .kishiface-message-check {
-            font-size: 11px;
-            line-height: 1;
-            color: rgba(255, 255, 255, 0.9);
-            display: none;
-        }
-
-        .kishiface-message-check.read {
-            color: #ffffff;
-        }
-
-        .kishiface-message-bubble.has-media,
-        .kishiface-message-bubble.sent.has-media,
-        .kishiface-message-bubble.received.has-media {
-            padding: 0 !important;
-            max-width: 70%;
-            background: transparent !important;
-            background-color: transparent !important;
-            box-shadow: none !important;
-            border: none !important;
-            position: relative;
-        }
-
-        /* Text overlaid on bottom of image/video */
-        .kishiface-message-bubble.has-media .kishiface-message-text {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 24px 10px 8px;
-            display: block;
-            margin: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%);
-            border-radius: 0 0 18px 18px;
-            color: #ffffff !important;
-            font-size: 13px;
-            font-weight: 500;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-            pointer-events: none;
-            z-index: 2;
-        }
-
-        /* Audio caption sits below (can't overlay audio player) */
-        .kishiface-message-bubble.has-media .kishiface-audio-caption {
-            position: static;
-            background: transparent;
-            padding: 4px 2px 0;
-            border-radius: 0;
-            color: var(--kishiface-text) !important;
-            text-shadow: none;
-            font-size: 13px;
-        }
-
-        .kishiface-message-row.sent .kishiface-audio-caption {
-            color: #ffffff !important;
-        }
-
-        .kishiface-image-attachment {
-            border-radius: 18px;
-            overflow: hidden;
-            max-width: 250px;
-            position: relative;
-            cursor: pointer;
-        }
-
-        .kishiface-message-bubble.has-media .kishiface-image-attachment {
-            margin: 0;
-            border-radius: 18px;
-        }
-
-        .kishiface-image-attachment img {
-            width: 100%;
-            height: auto;
-            display: block;
-            border-radius: 18px;
-        }
-
-        .kishiface-message-bubble.has-media .kishiface-image-attachment img {
-            border-radius: 18px;
-        }
-
-        .kishiface-video-player {
-            border-radius: 18px;
-            overflow: hidden;
-            max-width: 250px;
-            position: relative;
-            cursor: pointer;
-        }
-
-        .kishiface-message-bubble.has-media .kishiface-video-player {
-            margin: 0;
-            border-radius: 18px;
-        }
-
-        .kishiface-video-player video {
-            width: 100%;
-            height: auto;
-            display: block;
-            border-radius: 18px;
-        }
-
-        .kishiface-message-bubble.has-media .kishiface-video-player video {
-            border-radius: 18px;
-        }
-
-        .kishiface-video-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.3);
+        .kishiface-replied-indicator {
             display: flex;
             align-items: center;
-            justify-content: center;
-            opacity: 1;
-            transition: opacity 0.3s;
-            pointer-events: none;
-        }
-
-        .kishiface-video-play-icon {
-            width: 48px;
-            height: 48px;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #333;
-            font-size: 18px;
-        }
-
-        .kishiface-audio-player {
-            border-radius: 22px;
-            max-width: 250px;
-            position: relative;
-            cursor: pointer;
-        }
-
-        .kishiface-audio-content {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 14px;
-            border-radius: 22px;
-        }
-
-        .kishiface-message-row.sent .kishiface-audio-content {
-            background: var(--kishiface-sent-bg);
-            margin-left: auto;
-            margin-right: 0;
-        }
-
-        .kishiface-message-row.received .kishiface-audio-content {
-            background: var(--kishiface-received-bg);
-            margin-right: auto;
-            margin-left: 0;
-        }
-
-        .kishiface-audio-play-btn {
-            border: none;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            flex-shrink: 0;
-            z-index: 2;
-        }
-
-        .kishiface-message-row.sent .kishiface-audio-play-btn {
-            background: rgba(255, 255, 255, 0.3);
-            color: #ffffff;
-        }
-
-        .kishiface-message-row.received .kishiface-audio-play-btn {
-            background: rgba(0, 0, 0, 0.1);
-            color: var(--kishiface-text);
-        }
-
-        .kishiface-audio-info {
-            flex: 1;
-            min-width: 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .kishiface-audio-waveform {
-            flex: 1;
-            height: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            position: relative;
-            overflow: hidden;
-            cursor: pointer;
-        }
-
-        .kishiface-wave-container {
-            display: flex;
-            align-items: center;
-            gap: 2px;
-            height: 100%;
-            width: 100%;
-        }
-
-        .kishiface-wave-bar {
-            width: 3px;
-            border-radius: 2px;
-            flex-shrink: 0;
-            transition: background 0.1s, opacity 0.1s;
-        }
-
-        .kishiface-message-row.sent .kishiface-wave-bar {
-            background: rgba(255, 255, 255, 0.45);
-            opacity: 1;
-        }
-
-        .kishiface-message-row.received .kishiface-wave-bar {
-            background: rgba(0, 0, 0, 0.25);
-            opacity: 1;
-        }
-
-        .kishiface-message-row.sent .kishiface-wave-bar.played {
-            background: rgba(255, 255, 255, 1);
-        }
-
-        .kishiface-message-row.received .kishiface-wave-bar.played {
-            background: rgba(0, 149, 246, 0.85);
-        }
-
-        .kishiface-wave-bar.current {
-            animation: kvWavePulse 0.5s ease-in-out infinite alternate;
-        }
-
-        @keyframes kvWavePulse {
-            from { transform: scaleY(0.85); }
-            to   { transform: scaleY(1.15); }
-        }
-
-        .kishiface-audio-duration {
-            font-size: 12px;
-            min-width: 35px;
-            text-align: right;
-            font-weight: 400;
-        }
-
-        .kishiface-message-row.sent .kishiface-audio-duration {
-            color: rgba(255, 255, 255, 0.9);
-        }
-
-        .kishiface-message-row.received .kishiface-audio-duration {
-            color: var(--kishiface-text-light);
-        }
-
-        .kishiface-media-modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: #000;
-            z-index: 2000;
-            flex-direction: column;
-            animation: kvModalIn 0.22s ease;
-        }
-
-        @keyframes kvModalIn {
-            from { opacity: 0; }
-            to   { opacity: 1; }
-        }
-
-        .kv-modal-header {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 16px;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
-            transition: opacity 0.3s;
-        }
-
-        .kv-modal-header-left {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .kv-modal-sender-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid rgba(255,255,255,0.3);
-            flex-shrink: 0;
-        }
-
-        .kv-modal-sender-info {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .kv-modal-sender-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #fff;
-            line-height: 1.2;
-        }
-
-        .kv-modal-send-time {
-            font-size: 11px;
-            color: rgba(255,255,255,0.65);
-            margin-top: 1px;
-        }
-
-        .kv-modal-header-actions {
-            display: flex;
-            gap: 6px;
-        }
-
-        .kv-modal-icon-btn {
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            border: none;
-            background: rgba(255,255,255,0.15);
-            color: #fff;
-            font-size: 15px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(4px);
-            transition: background 0.2s, transform 0.15s;
-            -webkit-backdrop-filter: blur(4px);
-        }
-
-        .kv-modal-icon-btn:hover { background: rgba(255,255,255,0.28); }
-        .kv-modal-icon-btn:active { transform: scale(0.92); }
-
-        .kv-modal-close-btn {
-            background: rgba(255,255,255,0.18);
-        }
-
-        .kv-modal-body {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
-            width: 100%;
-            height: 100%;
-            cursor: zoom-in;
-        }
-
-        .kv-modal-body.zoomed { cursor: zoom-out; }
-
-        #kishifaceModalImage {
-            max-width: 100%;
-            max-height: 100%;
-            width: auto;
-            height: auto;
-            object-fit: contain;
-            display: block;
-            border-radius: 0;
-            transition: transform 0.25s ease;
-            transform-origin: center center;
-            user-select: none;
-            -webkit-user-drag: none;
-            touch-action: none;
-        }
-
-        #kishifaceModalVideo {
-            max-width: 100%;
-            max-height: 100%;
-            width: auto;
-            height: auto;
-            display: block;
-            border-radius: 0;
-            background: #000;
-        }
-
-        .kv-modal-footer {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 16px 20px calc(env(safe-area-inset-bottom, 0px) + 16px);
-            background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%);
-            transition: opacity 0.3s;
-        }
-
-        .kv-modal-caption {
-            font-size: 14px;
-            color: rgba(255,255,255,0.92);
-            line-height: 1.4;
-            margin-bottom: 4px;
-            word-break: break-word;
-        }
-
-        .kv-modal-footer-time {
-            font-size: 11px;
-            color: rgba(255,255,255,0.5);
-        }
-
-        .kv-modal-ui-hidden .kv-modal-header,
-        .kv-modal-ui-hidden .kv-modal-footer {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .kishiface-modal-audio {
-            background: rgba(255,255,255,0.08);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-radius: 20px;
-            padding: 28px 24px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-            width: min(320px, 90vw);
-            border: 1px solid rgba(255,255,255,0.12);
-        }
-
-        .kv-audio-icon {
-            width: 72px;
-            height: 72px;
-            border-radius: 50%;
-            background: rgba(0,149,246,0.2);
-            border: 2px solid rgba(0,149,246,0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            color: var(--kishiface-primary);
-        }
-
-        .kishiface-modal-audio-info {
-            color: white;
-            text-align: center;
-        }
-
-        .kishiface-modal-audio-title {
-            font-size: 15px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .kishiface-modal-audio-time {
-            font-size: 13px;
-            color: rgba(255,255,255,0.6);
-        }
-
-        .kishiface-modal-audio-controls {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-        }
-
-        .kv-audio-skip-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: none;
-            background: rgba(255,255,255,0.12);
-            color: #fff;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.2s;
-        }
-
-        .kv-audio-skip-btn:hover { background: rgba(255,255,255,0.22); }
-
-        .kishiface-modal-audio-play {
-            background: var(--kishiface-primary);
-            border: none;
-            width: 58px;
-            height: 58px;
-            border-radius: 50%;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 20px;
-            transition: transform 0.15s, background 0.2s;
-            box-shadow: 0 4px 16px rgba(0,149,246,0.4);
-        }
-
-        .kishiface-modal-audio-play:active { transform: scale(0.92); }
-
-        .kishiface-modal-progress {
-            width: 100%;
-            height: 4px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 2px;
-            overflow: hidden;
-            cursor: pointer;
-            position: relative;
-        }
-
-        .kishiface-modal-progress-filled {
-            height: 100%;
-            background: var(--kishiface-primary);
-            width: 0%;
-            transition: width 0.1s linear;
-            border-radius: 2px;
-        }
-
-        .kishiface-recording-overlay {
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
-            padding: 16px 20px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            z-index: 1000;
-            min-width: 200px;
-            display: none;
-            animation: kishifaceSlideUp 0.3s ease;
-        }
-
-        @keyframes kishifaceSlideUp {
-            from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-        }
-
-        .kishiface-recording-wave {
-            width: 60px;
-            height: 30px;
-            background: transparent;
-        }
-
-        .kishiface-recording-info {
-            display: flex;
-            flex-direction: column;
             gap: 4px;
-        }
-
-        .kishiface-recording-text {
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .kishiface-recording-timer {
-            font-size: 13px;
-            color: var(--kishiface-heart);
-            font-weight: 600;
-        }
-
-        .kishiface-cancel-text {
-            font-size: 12px;
-            opacity: 0.9;
-            margin-top: 2px;
-        }
-
-
-        @keyframes kishifaceTyping {
-            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-            30% { transform: translateY(-4px); opacity: 1; }
-        }
-
-        .kishiface-input-container {
-            padding: 8px 16px 16px;
-            background: var(--kishiface-white);
-            border-top: none;
-            position: sticky;
-            bottom: 0;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .kishiface-input-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: #fafafa;
-            border: none;
-            border-radius: 24px;
-            padding: 8px 14px;
-            min-height: 46px;
-            transition: background 0.2s ease;
-        }
-
-        .kishiface-input-wrapper:focus-within {
-            background: #f0f0f0;
-        }
-
-        .kishiface-input-actions {
-            display: flex;
-            gap: 4px;
-        }
-
-        .kishiface-empty-state {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: var(--kishiface-text-light);
-            padding: 40px 20px;
-            text-align: center;
-        }
-
-        .kishiface-empty-state i {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        .kishiface-messages-container::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .kishiface-messages-container::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .kishiface-messages-container::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 3px;
-        }
-
-        .kishiface-messages-container::-webkit-scrollbar-thumb:hover {
-            background: rgba(0, 0, 0, 0.3);
-        }
-
-        .kishiface-video-player video::-webkit-media-controls {
-            display: none !important;
-        }
-        
-        .kishiface-video-player video::-webkit-media-controls-enclosure {
-            display: none !important;
-        }
-        
-        .kishiface-audio-player audio {
-            display: none !important;
-        }
-
-        .kishiface-recording-pulse {
-            animation: pulse 1.5s infinite;
-            color: var(--kishiface-heart) !important;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-
-        .kishiface-emoji-picker-container {
-            position: absolute;
-            bottom: 70px;
-            left: 0;
-            right: 0;
-            z-index: 1001;
-            display: none;
-            border: none;
-            border-radius: 20px 20px 0 0;
-            background: var(--kishiface-white);
-            overflow: hidden;
-            max-height: 340px;
-            display: none;
-            flex-direction: column;
-        }
-
-        .kvibe-emoji-tabs {
-            display: flex;
-            overflow-x: auto;
-            gap: 0;
-            padding: 10px 10px 0;
-            background: var(--kishiface-white);
-            scrollbar-width: none;
-            flex-shrink: 0;
-            border-bottom: 1.5px solid #f0f0f0;
-        }
-        .kvibe-emoji-tabs::-webkit-scrollbar { display: none; }
-
-        .kvibe-emoji-tab {
-            flex-shrink: 0;
-            padding: 6px 10px 8px;
-            font-size: 20px;
-            cursor: pointer;
-            border-bottom: 2.5px solid transparent;
-            transition: border-color 0.2s;
-            line-height: 1;
-        }
-        .kvibe-emoji-tab.active {
-            border-bottom-color: var(--kishiface-primary);
-        }
-
-        .kvibe-emoji-search {
-            padding: 8px 12px 4px;
-            flex-shrink: 0;
-        }
-        .kvibe-emoji-search input {
-            width: 100%;
-            background: #f3f3f3;
-            border: none;
-            border-radius: 10px;
-            padding: 7px 12px;
-            font-size: 13px;
-            outline: none;
-            color: var(--kishiface-text);
-        }
-        .kvibe-emoji-search input::placeholder { color: var(--kishiface-text-light); }
-
-        .kvibe-emoji-scroll-area {
-            flex: 1;
-            overflow-y: auto;
-            padding: 6px 10px 10px;
-            scrollbar-width: thin;
-            scrollbar-color: #e0e0e0 transparent;
-        }
-        .kvibe-emoji-scroll-area::-webkit-scrollbar { width: 4px; }
-        .kvibe-emoji-scroll-area::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 2px; }
-
-        .kishiface-emoji-grid {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 4px;
-        }
-
-        .kishiface-emoji-item {
-            font-size: 24px;
-            width: 38px;
-            height: 38px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: background 0.15s;
-            user-select: none;
-        }
-
-        .kishiface-emoji-item:hover {
-            background: #f0f0f0;
-        }
-
-        .kishiface-emoji-btn {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            border: none;
-            background: transparent;
-            color: var(--kishiface-text);
-            font-size: 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            flex-shrink: 0;
-        }
-
-        .kishiface-emoji-btn:hover {
-            transform: scale(1.1);
-        }
-
-        .kishiface-emoji-btn.active {
-            color: var(--kishiface-primary);
-        }
-
-        .kishiface-context-menu {
-            position: fixed;
-            background: var(--kishiface-white);
-            border-radius: 14px;
-            box-shadow: none;
-            z-index: 1002;
-            display: none;
-            flex-direction: column;
-            overflow: hidden;
-            min-width: 160px;
-            border: none;
-            background: #f5f5f5;
-        }
-
-        .kishiface-context-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            cursor: pointer;
-            transition: background 0.2s;
-            border-bottom: none;
-            font-size: 14px;
-            color: var(--kishiface-text);
-        }
-
-        .kishiface-context-item:last-child {
-            border-bottom: none;
-        }
-
-        .kishiface-context-item:hover {
-            background: #e8e8e8;
-        }
-
-        .kishiface-context-item i {
-            width: 16px;
-            text-align: center;
-            color: var(--kishiface-text-light);
-        }
-
-        .kishiface-context-item.delete {
-            color: var(--kishiface-heart);
-        }
-
-        .kishiface-context-item.delete i {
-            color: var(--kishiface-heart);
-        }
-
-        .kishiface-reply-preview {
-            background: var(--kishiface-bg);
-            border-radius: 10px;
-            padding: 10px 12px;
-            margin: 0 16px 10px 16px;
-            display: none;
-            position: relative;
-            border-left: 3px solid var(--kishiface-primary);
-        }
-
-        .kishiface-reply-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 4px;
-        }
-
-        .kishiface-reply-sender {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--kishiface-text);
-            margin-right: auto;
-        }
-
-        .kishiface-reply-close {
-            background: none;
-            border: none;
-            color: var(--kishiface-text-light);
-            cursor: pointer;
-            font-size: 14px;
-            padding: 0;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-        }
-
-        .kishiface-reply-close:hover {
-            background: rgba(0,0,0,0.1);
-        }
-
-        .kishiface-reply-content {
-            font-size: 13px;
-            color: var(--kishiface-text-light);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            line-height: 1.4;
-            max-height: 36px;
-        }
-
-        .kishiface-reply-content.media {
-            display: flex;
-            align-items: center;
-            gap: 6px;
+            font-size: 11.5px;
+            color: var(--mfy-muted);
+            margin: 0 2px 2px;
         }
 
         .kishiface-reply-indicator {
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            margin-bottom: 6px;
+            gap: 2px;
+            padding: 6px 10px;
+            margin-bottom: 2px;
+            background: var(--mfy-border-soft);
+            border-radius: 10px;
             cursor: pointer;
-            max-width: 90%;
+            max-width: 100%;
         }
-
-        .kishiface-reply-indicator:hover .kvibe-reply-quote {
-            background: #d8d8d8;
-        }
-
-        .kvibe-reply-label {
-            font-size: 12px;
-            color: var(--kishiface-text-light);
-            font-weight: 400;
-            padding-left: 2px;
-        }
-
-        .kvibe-reply-quote {
-            display: flex;
-            align-items: stretch;
-            background: #e0e0e0;
-            border-radius: 6px;
-            overflow: hidden;
-            transition: background 0.15s;
-        }
-
-        .kvibe-reply-bar {
-            width: 3px;
-            background: #8e8e8e;
-            flex-shrink: 0;
-        }
-
+        .kvibe-reply-label { font-size: 11px; font-weight: 600; color: var(--mfy-primary); }
+        .kvibe-reply-quote { display: flex; align-items: stretch; gap: 6px; }
+        .kvibe-reply-bar { width: 3px; border-radius: 2px; background: var(--mfy-primary); flex-shrink: 0; }
         .kvibe-reply-quote-text {
-            font-size: 13px;
-            color: #555;
-            padding: 6px 10px;
-            line-height: 1.3;
-            white-space: nowrap;
+            font-size: 12.5px;
+            color: var(--mfy-ink-soft);
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 240px;
+            white-space: nowrap;
         }
+        .kvibe-reply-avatar { width: 20px; height: 20px; border-radius: 50%; }
+        .kvibe-reply-text-wrap { display: flex; align-items: center; gap: 4px; min-width: 0; }
 
-        .kvibe-reply-avatar { display: none; }
-        .kvibe-reply-text-wrap { display: contents; }
-
-        .kishiface-message-row.sent .kishiface-reply-indicator {
-            align-self: flex-end;
-        }
-
-        .kishiface-message-row.received .kishiface-reply-indicator {
-            align-self: flex-start;
-        }
-
-        .kishiface-copy-toast {
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-            z-index: 1003;
-            display: none;
-            animation: kishifaceSlideUp 0.3s ease;
-        }
-
-        .kishiface-delete-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 2001;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .kishiface-delete-content {
-            background: var(--kishiface-white);
-            border-radius: 16px;
-            padding: 24px 20px;
-            max-width: 300px;
-            width: 90%;
-            text-align: center;
-            border: none;
-        }
-
-        .kishiface-delete-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--kishiface-text);
-        }
-
-        .kishiface-delete-message {
-            font-size: 14px;
-            color: var(--kishiface-text-light);
-            margin-bottom: 20px;
+        /* ---------------------------------------------------------------
+           Message bubble
+        --------------------------------------------------------------- */
+        .kishiface-message-bubble {
+            position: relative;
+            padding: 9px 12px 7px;
+            border-radius: var(--mfy-radius-lg);
+            font-size: 14.5px;
             line-height: 1.4;
+            word-break: break-word;
+            box-shadow: var(--mfy-shadow-sm);
         }
-
-        .kishiface-delete-buttons {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
+        .kishiface-message-bubble.received {
+            background: var(--mfy-bubble-received);
+            color: var(--mfy-ink);
+            border-bottom-left-radius: 4px;
         }
-
-        .kishiface-delete-btn {
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            border: none;
-            flex: 1;
+        .kishiface-message-bubble.sent {
+            background: var(--mfy-bubble-sent);
+            color: #fff;
+            border-bottom-right-radius: 4px;
         }
-
-        .kishiface-delete-cancel {
-            background: var(--kishiface-bg);
-            color: var(--kishiface-text);
-        }
-
-        .kishiface-delete-confirm {
-            background: var(--kishiface-heart);
-            color: white;
-        }
-
-        .kishiface-message-bubble.selected {
-            background: rgba(0, 149, 246, 0.1) !important;
-        }
-
-        .kishiface-message-bubble.long-press {
-            background: rgba(0, 149, 246, 0.1) !important;
-        }
-        
-
-        .kishiface-selection-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+        .kishiface-message-bubble.has-media {
+            padding: 4px;
             background: transparent;
-            z-index: 1001;
-            display: none;
+            box-shadow: none;
         }
+        .kishiface-message-bubble.selected { outline: 2px solid var(--mfy-primary); outline-offset: 2px; }
 
-        .kishiface-message-status {
-            display: inline-flex;
-            align-items: center;
-            margin-left: 4px;
+        .kishiface-message-text {
+            white-space: pre-wrap;
+            word-break: break-word;
         }
+        .kishiface-message-text a,
+        .kf-url-link, .kf-mention-link, .kf-hashtag {
+            color: inherit;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .kishiface-message-bubble.received .kf-mention-link,
+        .kishiface-message-bubble.received .kf-hashtag { color: var(--mfy-primary); text-decoration: none; font-weight: 600; }
 
-        .kishiface-replied-indicator {
-            font-size: 11px;
-            color: var(--kishiface-text-light);
-            margin-bottom: 4px;
+        .kishiface-message-meta {
             display: flex;
             align-items: center;
+            justify-content: flex-end;
             gap: 4px;
-            align-self: flex-end;
+            margin-top: 3px;
         }
-
-        .kishiface-replied-indicator i {
-            font-size: 10px;
+        .kishiface-message-time {
+            font-size: 10.5px;
+            opacity: 0.7;
         }
+        .kishiface-message-check i { font-size: 11px; opacity: 0.7; }
+        .kishiface-message-check i.read { opacity: 1; color: #b9e6ff; }
 
-        .user-status {
-            font-size: 12px;
-            font-weight: 400;
-            transition: color 0.3s ease;
-        }
+        .kishiface-audio-caption { padding: 6px 10px 0; }
 
-        .user-status.online {
-            color: #0095f6;
-            font-weight: 600;
-        }
-
-        .user-status.offline {
-            color: #8e8e8e;
-        }
-
-        .user-status.online::before {
-            content: '●';
-            margin-right: 4px;
-            font-size: 8px;
-            vertical-align: middle;
-        }
-
-        .kishiface-header-typing {
-            display: none;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--kishiface-primary);
-            animation: kishifaceTypingPulse 1.2s ease-in-out infinite;
-        }
-
-        /* ── Header selection action bar ───────────────────────────────────── */
-        .kvibe-header-action-bar {
-            position: absolute;
-            inset: 0;
-            background: var(--kishiface-white);
-            display: flex;
-            align-items: center;
-            padding: 0 8px 0 4px;
-            gap: 4px;
-            z-index: 200;
-            transform: translateY(-100%);
-            transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-            pointer-events: none;
-        }
-
-        .kvibe-header-action-bar.active {
-            transform: translateY(0);
-            pointer-events: all;
-        }
-
-        .kvibe-header-close-btn {
-            background: none;
-            border: none;
-            color: var(--kishiface-text);
-            font-size: 20px;
-            cursor: pointer;
-            padding: 8px;
-            margin-right: 4px;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .kvibe-header-selected-preview {
-            flex: 1;
-            font-size: 13px;
-            color: var(--kishiface-text-light);
+        /* ---------------------------------------------------------------
+           Image / video attachments
+        --------------------------------------------------------------- */
+        .kishiface-image-attachment {
+            position: relative;
+            max-width: 260px;
+            border-radius: 10px;
             overflow: hidden;
-            white-space: nowrap;
-            text-overflow: ellipsis;
-            min-width: 0;
-        }
-
-        .kvibe-header-action-btns {
-            display: flex;
-            align-items: center;
-            gap: 0;
-            flex-shrink: 0;
-        }
-
-        .kvibe-header-msg-action-btn {
-            background: none;
-            border: none;
-            color: var(--kishiface-text);
-            font-size: 19px;
             cursor: pointer;
+            line-height: 0;
+        }
+        .kishiface-image-attachment img {
+            width: 100%;
+            max-height: 320px;
+            object-fit: cover;
+            display: block;
+        }
+        .kishiface-image-attachment .kishiface-message-text {
+            line-height: 1.4;
             padding: 8px 10px;
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+        }
+
+        .kishiface-video-player {
+            position: relative;
+            max-width: 260px;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            background: #000;
+            line-height: 0;
+        }
+        .kishiface-video-player video { width: 100%; max-height: 320px; display: block; object-fit: cover; }
+        .kishiface-video-overlay {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.15);
+        }
+        .kishiface-video-play-icon {
+            width: 52px; height: 52px;
             border-radius: 50%;
+            background: rgba(255,255,255,0.9);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--mfy-ink);
+            font-size: 18px;
+        }
+        .kishiface-video-player .kishiface-message-text {
+            padding: 8px 10px;
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+        }
+
+        /* ---------------------------------------------------------------
+           Audio message player + waveform
+        --------------------------------------------------------------- */
+        .kishiface-audio-player {
             display: flex;
             align-items: center;
-            justify-content: center;
-            transition: background 0.15s;
-            width: 40px;
-            height: 40px;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: var(--mfy-radius-lg);
+            background: var(--mfy-bubble-received);
+            box-shadow: var(--mfy-shadow-sm);
+            min-width: 210px;
+            cursor: pointer;
         }
-
-        .kvibe-header-msg-action-btn:hover {
-            background: rgba(0,0,0,0.06);
+        .kishiface-message-row.sent .kishiface-audio-player {
+            background: var(--mfy-bubble-sent);
+            color: #fff;
         }
-
-        .kvibe-header-msg-action-btn.delete-btn {
-            color: var(--kishiface-heart);
+        .kishiface-audio-content { display: flex; align-items: center; gap: 10px; width: 100%; }
+        .kishiface-audio-play-btn {
+            width: 34px; height: 34px;
+            flex-shrink: 0;
+            border: none;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.08);
+            color: inherit;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
         }
-        /* ─────────────────────────────────────────────────────────────────── */
-
-        @keyframes kishifaceTypingPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        /* ── Message Reactions ───────────────────────────────────────────── */
-        .kvibe-reaction-picker {
-            position: fixed;
-            background: #ffffff;
-            border-radius: 30px;
-            padding: 6px 10px;
+        .kishiface-message-row.sent .kishiface-audio-play-btn { background: rgba(255,255,255,0.25); }
+        .kishiface-audio-info { flex: 1; min-width: 0; }
+        .kishiface-audio-waveform {
             display: flex;
             align-items: center;
             gap: 2px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.15), 0 1px 6px rgba(0,0,0,0.08);
-            z-index: 1050;
-            transform-origin: bottom center;
-            animation: kvReactionPickerIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-
-        @keyframes kvReactionPickerIn {
-            from { opacity: 0; transform: scale(0.6) translateY(8px); }
-            to   { opacity: 1; transform: scale(1) translateY(0); }
-        }
-
-        .kvibe-reaction-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: none;
-            background: transparent;
-            font-size: 24px;
+            height: 24px;
             cursor: pointer;
+        }
+        .kishiface-wave-container { display: flex; align-items: center; gap: 2px; width: 100%; height: 100%; }
+        .kishiface-wave-bar {
+            width: 3px;
+            border-radius: 2px;
+            background: rgba(0,0,0,0.25);
+            transition: background 0.15s;
+        }
+        .kishiface-message-row.sent .kishiface-wave-bar { background: rgba(255,255,255,0.4); }
+        .kishiface-wave-bar.played { background: var(--mfy-primary); }
+        .kishiface-message-row.sent .kishiface-wave-bar.played { background: #fff; }
+        .kishiface-audio-duration { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+        /* ---------------------------------------------------------------
+           Document card
+        --------------------------------------------------------------- */
+        .kv-doc-card, .kv-doc-bubble {
             display: flex;
             align-items: center;
-            justify-content: center;
-            transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s;
-            -webkit-tap-highlight-color: transparent;
-            line-height: 1;
-            padding: 0;
+            gap: 10px;
+            padding: 10px;
+            margin-top: 4px;
+            border-radius: var(--mfy-radius-md);
+            background: rgba(0,0,0,0.04);
+            cursor: pointer;
+        }
+        .kishiface-message-row.sent .kv-doc-card,
+        .kishiface-message-row.sent .kv-doc-bubble { background: rgba(255,255,255,0.16); }
+        .kv-doc-card-icon, .kv-doc-icon {
+            width: 38px; height: 38px;
+            flex-shrink: 0;
+            border-radius: 10px;
+            background: var(--mfy-surface);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--mfy-primary);
+            font-size: 16px;
+        }
+        .kv-doc-card-info, .kv-doc-info { flex: 1; min-width: 0; }
+        .kv-doc-card-name, .kv-doc-name {
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .kv-doc-card-type, .kv-doc-meta, .kv-doc-ext-tag { font-size: 11px; opacity: 0.7; }
+        .kv-doc-card-dl, .kv-doc-action-btn {
+            width: 32px; height: 32px;
+            flex-shrink: 0;
+            border: none;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.06);
+            color: inherit;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+        }
+        .kishiface-message-row.sent .kv-doc-card-dl,
+        .kishiface-message-row.sent .kv-doc-action-btn { background: rgba(255,255,255,0.2); }
+        .kv-doc-actions { display: flex; gap: 6px; }
+
+        .kv-doc-modal {
+            position: fixed; inset: 0; z-index: 2000;
+            display: none;
+            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.55);
+        }
+        .kv-doc-modal.show, .kv-doc-modal.open { display: flex; }
+        .kv-doc-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--mfy-border); }
+        .kv-doc-modal-title { font-weight: 600; font-size: 14px; }
+        .kv-doc-modal-body { padding: 20px; text-align: center; color: var(--mfy-ink-soft); }
+        .kv-doc-modal-actions { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--mfy-border); }
+        .kv-doc-modal-btn {
+            flex: 1; padding: 10px; border-radius: var(--mfy-radius-sm);
+            border: 1px solid var(--mfy-border); background: var(--mfy-surface);
+            font-weight: 600; cursor: pointer;
+        }
+        .kv-doc-no-preview { color: var(--mfy-muted); font-size: 13.5px; }
+
+        /* ---------------------------------------------------------------
+           Link preview card
+        --------------------------------------------------------------- */
+        .kvibe-link-preview {
+            display: block;
+            margin-top: 6px;
+            border-radius: var(--mfy-radius-md);
+            overflow: hidden;
+            background: var(--mfy-surface);
+            border: 1px solid rgba(0,0,0,0.08);
+            text-decoration: none;
+            color: inherit;
+        }
+        .kvibe-lp-image { width: 100%; max-height: 150px; object-fit: cover; display: block; }
+        .kvibe-lp-body { padding: 8px 10px; }
+        .kvibe-lp-domain { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--mfy-muted); margin-bottom: 2px; }
+        .kvibe-lp-title { font-size: 13px; font-weight: 600; color: var(--mfy-ink); line-height: 1.3; }
+        .kvibe-lp-desc { font-size: 12px; color: var(--mfy-ink-soft); margin-top: 2px; line-height: 1.35; }
+        .kv-lp-highlight { color: var(--mfy-primary); text-decoration: underline; }
+
+        /* ---------------------------------------------------------------
+           Product / job enquiry cards inside a bubble
+        --------------------------------------------------------------- */
+        .kvibe-product-enquiry-card, .kvibe-job-enquiry-card {
+            display: flex;
+            gap: 10px;
+            padding: 8px;
+            margin-bottom: 6px;
+            border-radius: var(--mfy-radius-md);
+            background: var(--mfy-surface);
+            border: 1px solid rgba(0,0,0,0.08);
+            text-decoration: none;
+            color: var(--mfy-ink);
+        }
+        .kvibe-peq-img, .kvibe-jeq-img {
+            width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+        }
+        .kvibe-peq-img-placeholder, .kvibe-jeq-img-placeholder {
+            width: 56px; height: 56px; border-radius: 10px; flex-shrink: 0;
+            background: var(--mfy-border-soft);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+        }
+        .kvibe-peq-body, .kvibe-jeq-body { min-width: 0; flex: 1; }
+        .kvibe-peq-label, .kvibe-jeq-label { font-size: 10.5px; font-weight: 600; color: var(--mfy-primary); text-transform: uppercase; letter-spacing: 0.3px; }
+        .kvibe-peq-name, .kvibe-jeq-name {
+            font-size: 13px; font-weight: 600;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .kvibe-peq-price { font-size: 13px; font-weight: 700; color: var(--mfy-ink); }
+        .kvibe-jeq-sub { font-size: 11.5px; color: var(--mfy-ink-soft); }
+        .kvibe-peq-meta, .kvibe-jeq-meta { font-size: 11px; color: var(--mfy-muted); }
+        .kvibe-peq-tap-hint, .kvibe-jeq-tap-hint { font-size: 10.5px; color: var(--mfy-primary); margin-top: 2px; }
+        .kvibe-jeq-closed {
+            display: inline-block; font-size: 10px; font-weight: 600;
+            color: var(--mfy-danger); background: #fdecef;
+            padding: 1px 6px; border-radius: 6px; margin-top: 2px;
         }
 
-        .kvibe-reaction-btn:hover,
-        .kvibe-reaction-btn:focus {
-            transform: scale(1.45) translateY(-4px);
-            background: #f5f5f5;
-            outline: none;
-        }
-
-        .kvibe-reaction-btn.active {
-            background: rgba(0,149,246,0.1);
-        }
-
+        /* ---------------------------------------------------------------
+           Reaction strip on a message + reaction picker
+        --------------------------------------------------------------- */
         .kvibe-reaction-strip {
             display: flex;
             flex-wrap: wrap;
             gap: 4px;
-            margin-top: -6px;
-            max-width: 220px;
-            z-index: 100;
+            margin-top: 3px;
         }
-
-        .kishiface-message-row.sent .kvibe-reaction-strip {
-            justify-content: flex-end;
-            align-self: flex-end;
-        }
-
-        .kishiface-message-row.received .kvibe-reaction-strip,
-        .kvibe-received-content .kvibe-reaction-strip {
-            justify-content: flex-start;
-            align-self: flex-start;
-        }
-
+        .kvibe-reaction-strip:empty { display: none; margin: 0; }
         .kvibe-reaction-badge {
             display: inline-flex;
             align-items: center;
             gap: 3px;
-            padding: 3px 3px;
-            border-radius: 50%;
-            background: transparent;
-            border: none;
-            font-size: 13px;
+            padding: 2px 7px;
+            border-radius: 100px;
+            border: 1px solid var(--mfy-border);
+            background: var(--mfy-surface);
+            font-size: 11.5px;
             cursor: pointer;
-            transition: all 0.15s;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
+            box-shadow: var(--mfy-shadow-sm);
         }
+        .kvibe-reaction-badge.mine { border-color: var(--mfy-primary); background: var(--mfy-primary-soft); }
+        .badge-emoji { font-size: 12px; }
+        .badge-count { color: var(--mfy-ink-soft); font-weight: 600; }
 
-      
-
-      
-
-        .kvibe-reaction-badge .badge-emoji {
-            font-size: 15px;
-            line-height: 1;
-        }
-
-        .kvibe-reaction-badge .badge-count {
-            display: none;
-        }
-
-        /* Reaction picker overlay backdrop */
         .kvibe-reaction-backdrop {
+            position: fixed; inset: 0; z-index: 1200; background: transparent;
+        }
+        .kvibe-reaction-picker {
             position: fixed;
-            inset: 0;
-            z-index: 1049;
-            background: transparent;
-        }
-
-        /* ── Desktop hover reaction button ──────────────────────────────────── */
-        /* Sent/received rows keep a positioning context for the reaction strip */
-        .kishiface-message-row.sent,
-        .kishiface-message-row.received {
-            position: relative;
-        }
-
-        /* ── Long-press highlight (mobile) ──────────────────────────────────── */
-        .kishiface-message-row.kv-lp-highlight .kishiface-message-bubble {
-            filter: brightness(0.88);
-            transition: filter 0.1s;
-        }
-
-        /* Reaction picker — wider touch targets on mobile */
-        @media (hover: none) {
-            .kvibe-reaction-btn {
-                width: 46px;
-                height: 46px;
-                font-size: 28px;
-            }
-            .kvibe-reaction-picker {
-                padding: 8px 12px;
-                gap: 4px;
-                border-radius: 34px;
-            }
-        }
-        /* ─────────────────────────────────────────────────────────────────── */
-
-        /* ── "+" attachment / action menu ─────────────────────────────────── */
-        .kvibe-plus-btn {
-            color: var(--kishiface-primary);
-            font-size: 16px;
-        }
-
-        .kvibe-plus-btn.active {
-            background: rgba(0, 149, 246, 0.12);
-            transform: rotate(45deg);
-        }
-
-        .kvibe-attach-backdrop {
-            position: fixed;
-            inset: 0;
-            z-index: 1001;
-            background: transparent;
+            z-index: 1201;
             display: none;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 8px;
+            background: var(--mfy-surface);
+            border-radius: 100px;
+            box-shadow: var(--mfy-shadow-lg);
         }
+        .kvibe-reaction-btn {
+            width: 36px; height: 36px;
+            border: none; background: transparent;
+            font-size: 20px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+        .kvibe-reaction-btn:hover { transform: scale(1.25); background: var(--mfy-border-soft); }
 
-        .kvibe-attach-menu {
-            position: absolute;
-            left: 16px;
-            bottom: 70px;
-            z-index: 1002;
+        /* ---------------------------------------------------------------
+           Emoji picker
+        --------------------------------------------------------------- */
+        .kishiface-emoji-picker-container {
             display: none;
             flex-direction: column;
-            min-width: 210px;
-            background: var(--kishiface-white);
-            border-radius: 16px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.15);
-            overflow: hidden;
-            padding: 6px;
+            flex-shrink: 0;
+            height: 280px;
+            background: var(--mfy-surface);
+            border-top: 1px solid var(--mfy-border);
+        }
+        .kishiface-emoji-picker-container.show { display: flex; }
+        .kvibe-emoji-tabs {
+            display: flex;
+            gap: 2px;
+            padding: 8px 10px 0;
+            overflow-x: auto;
+            flex-shrink: 0;
+        }
+        .kvibe-emoji-tab {
+            flex-shrink: 0;
+            width: 34px; height: 34px;
+            border: none; background: transparent;
+            border-radius: 8px;
+            font-size: 17px;
+            cursor: pointer;
+        }
+        .kvibe-emoji-tab.active { background: var(--mfy-primary-soft); }
+        .kvibe-emoji-search { padding: 8px 12px; flex-shrink: 0; }
+        .kvibe-emoji-search input {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 100px;
+            border: 1px solid var(--mfy-border);
+            background: var(--mfy-bg);
+            font-size: 13.5px;
+            outline: none;
+        }
+        .kvibe-emoji-scroll-area { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+        .kishiface-emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+        }
+        .kishiface-emoji-item {
+            display: flex; align-items: center; justify-content: center;
+            font-size: 21px;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            cursor: pointer;
+            position: relative;
+        }
+        .kishiface-emoji-item:hover { background: var(--mfy-border-soft); }
+        .kishiface-emoji-particle { position: absolute; pointer-events: none; }
+
+        /* ---------------------------------------------------------------
+           Composer
+        --------------------------------------------------------------- */
+        .kishiface-input-container {
+            flex-shrink: 0;
+            background: var(--mfy-surface);
+            border-top: 1px solid var(--mfy-border);
+            padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
         }
 
+        .kvibe-input-link-preview {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            margin-bottom: 6px;
+            border-radius: var(--mfy-radius-md);
+            background: var(--mfy-bg);
+            position: relative;
+        }
+        .kvibe-input-link-preview.show { display: flex; }
+        .kvibe-input-lp-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+        .kvibe-input-lp-text { flex: 1; min-width: 0; }
+        .kvibe-input-lp-domain { font-size: 10px; color: var(--mfy-muted); text-transform: uppercase; }
+        .kvibe-input-lp-title { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kvibe-input-lp-desc { font-size: 11.5px; color: var(--mfy-ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kvibe-input-lp-dismiss {
+            border: none; background: rgba(0,0,0,0.08);
+            width: 22px; height: 22px; border-radius: 50%;
+            color: var(--mfy-ink-soft); cursor: pointer; flex-shrink: 0;
+        }
+
+        #kvibe-product-composer-banner, #kvibe-job-composer-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            margin-bottom: 6px;
+            border-radius: var(--mfy-radius-md);
+            background: var(--mfy-primary-soft);
+            position: relative;
+        }
+        #kvibe-product-composer-banner img,
+        #kvibe-job-composer-banner img,
+        .kvibe-pcb-placeholder, .kvibe-jcb-placeholder {
+            width: 42px; height: 42px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+        }
+        .kvibe-pcb-placeholder, .kvibe-jcb-placeholder {
+            display: flex; align-items: center; justify-content: center;
+            background: var(--mfy-surface); font-size: 18px;
+        }
+        .kvibe-pcb-body, .kvibe-jcb-body { flex: 1; min-width: 0; }
+        .kvibe-pcb-label, .kvibe-jcb-label { font-size: 10.5px; font-weight: 600; color: var(--mfy-primary-dark); }
+        .kvibe-pcb-name, .kvibe-jcb-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kvibe-pcb-price { font-size: 12.5px; font-weight: 700; }
+        .kvibe-jcb-sub { font-size: 11.5px; color: var(--mfy-ink-soft); }
+        .kvibe-pcb-dismiss, .kvibe-jcb-dismiss {
+            border: none; background: rgba(0,0,0,0.08);
+            width: 24px; height: 24px; border-radius: 50%;
+            cursor: pointer; flex-shrink: 0;
+        }
+
+        .kishiface-input-wrapper {
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+        }
+        .kishiface-input-actions { display: flex; align-items: center; gap: 2px; }
+
+        .kishiface-input-action-btn, .kvibe-plus-btn {
+            width: 38px; height: 38px;
+            flex-shrink: 0;
+            border: none;
+            background: transparent;
+            color: var(--mfy-ink-soft);
+            border-radius: 50%;
+            font-size: 17px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .kishiface-input-action-btn:hover, .kvibe-plus-btn:hover { background: var(--mfy-border-soft); }
+
+        .kishiface-message-input {
+            flex: 1;
+            min-height: 38px;
+            max-height: 100px;
+            padding: 9px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--mfy-border);
+            background: var(--mfy-bg);
+            font-size: 14.5px;
+            line-height: 1.35;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+        }
+        .kishiface-message-input:focus { border-color: var(--mfy-primary); background: var(--mfy-surface); }
+
+        .kishiface-send-btn {
+            width: 38px; height: 38px;
+            flex-shrink: 0;
+            border: none;
+            border-radius: 50%;
+            background: var(--mfy-primary);
+            color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+        }
+        .kishiface-send-btn:hover { background: var(--mfy-primary-dark); }
+
+        #kishifaceMicBtn { display: flex; }
+        #kishifaceMicBtn.recording { background: #fdecef; color: var(--mfy-danger); }
+
+        /* ---------------------------------------------------------------
+           Attach ("+") menu
+        --------------------------------------------------------------- */
+        .kvibe-attach-backdrop {
+            position: fixed; inset: 0; z-index: 900;
+            background: rgba(0,0,0,0.25);
+        }
+        .kvibe-attach-menu {
+            position: fixed;
+            left: 10px;
+            bottom: calc(var(--mfy-composer-h) + 10px);
+            z-index: 901;
+            background: var(--mfy-surface);
+            border-radius: var(--mfy-radius-md);
+            box-shadow: var(--mfy-shadow-lg);
+            padding: 6px;
+            min-width: 200px;
+        }
         .kvibe-attach-item {
             display: flex;
             align-items: center;
             gap: 12px;
             width: 100%;
+            padding: 10px 12px;
             border: none;
-            background: none;
-            text-align: left;
-            padding: 10px 8px;
+            background: transparent;
+            border-radius: var(--mfy-radius-sm);
             font-size: 14px;
             font-weight: 500;
-            color: var(--kishiface-text);
+            color: var(--mfy-ink);
             cursor: pointer;
-            border-radius: 10px;
+            text-align: left;
         }
-
-        .kvibe-attach-item:hover {
-            background: #f5f5f5;
-        }
-
-        .kvibe-attach-item:active {
-            background: #ececec;
-        }
-
+        .kvibe-attach-item:hover { background: var(--mfy-border-soft); }
         .kvibe-attach-icon {
-            width: 34px;
-            height: 34px;
+            width: 32px; height: 32px;
             border-radius: 50%;
-            background: #f0f0f0;
-            color: var(--kishiface-primary);
-            font-size: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        /* ───────────────────────────────────────────────────────────────────── */
-
-        /* ── format_message_text link & BB code styles ───────────────────── */
-        .kf-mention-link,
-        .kf-hashtag,
-        .kf-url-link {
-            text-decoration: none;
-            font-weight: 600;
-            word-break: break-all;
-        }
-        .kishiface-message-bubble.sent .kf-mention-link,
-        .kishiface-message-bubble.sent .kf-hashtag,
-        .kishiface-message-bubble.sent .kf-url-link {
-            color: rgba(255, 255, 255, 0.92);
-            text-decoration: underline;
-            text-decoration-color: rgba(255, 255, 255, 0.5);
-            text-underline-offset: 2px;
-        }
-        .kishiface-message-bubble.sent .kf-mention-link:hover,
-        .kishiface-message-bubble.sent .kf-hashtag:hover,
-        .kishiface-message-bubble.sent .kf-url-link:hover { color: #ffffff; }
-        .kishiface-message-bubble.received .kf-mention-link,
-        .kishiface-message-bubble.received .kf-hashtag,
-        .kishiface-message-bubble.received .kf-url-link {
-            color: var(--kishiface-primary);
-            text-decoration: underline;
-            text-underline-offset: 2px;
-        }
-        .kishiface-message-bubble.received .kf-mention-link:hover,
-        .kishiface-message-bubble.received .kf-hashtag:hover,
-        .kishiface-message-bubble.received .kf-url-link:hover { opacity: 0.8; }
-        .kishiface-message-text strong { font-weight: 700; }
-        .kishiface-message-text em     { font-style: italic; }
-        .kishiface-message-text u      { text-decoration: underline; }
-        /* ── Link Preview Card (in bubble) ──────────────────────────────── */
-        /* ── Product Enquiry Card ─────────────────────────────────────── */
-        .kvibe-product-enquiry-card {
-            display: flex;
-            gap: 10px;
-            align-items: flex-start;
-            background: rgba(0,0,0,0.18);
-            border: 1.5px solid rgba(255,255,255,0.18);
-            border-radius: 12px;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-            text-decoration: none;
-            color: inherit;
-            transition: background 0.15s;
-        }
-        .kvibe-product-enquiry-card:hover {
-            background: rgba(0,0,0,0.28);
-        }
-        .kishiface-message-bubble.received .kvibe-product-enquiry-card {
-            background: #f4f4f8;
-            border-color: #e0e0e0;
-            color: #111;
-        }
-        .kishiface-message-bubble.received .kvibe-product-enquiry-card:hover {
-            background: #ececf2;
-        }
-        .kvibe-peq-img {
-            width: 62px;
-            height: 62px;
-            object-fit: cover;
-            border-radius: 8px;
-            flex-shrink: 0;
-            background: #ccc;
-        }
-        .kvibe-peq-img-placeholder {
-            width: 62px;
-            height: 62px;
-            border-radius: 8px;
-            flex-shrink: 0;
-            background: linear-gradient(135deg, #2d2d3a, #1a1a2e);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-        }
-        .kvibe-peq-body {
-            flex: 1;
-            min-width: 0;
-        }
-        .kvibe-peq-label {
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            opacity: 0.55;
-            margin-bottom: 3px;
-        }
-        .kvibe-peq-name {
-            font-weight: 700;
-            font-size: 13.5px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            margin-bottom: 2px;
-        }
-        .kvibe-peq-price {
+            background: var(--mfy-primary-soft);
+            color: var(--mfy-primary);
+            display: flex; align-items: center; justify-content: center;
             font-size: 14px;
-            font-weight: 800;
-            color: var(--kvibe-primary, #6c47ff);
-        }
-        .kishiface-message-bubble.received .kvibe-peq-price {
-            color: var(--kvibe-primary, #6c47ff);
-        }
-        .kvibe-peq-meta {
-            font-size: 11px;
-            opacity: 0.6;
-            margin-top: 3px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .kvibe-peq-tap-hint {
-            font-size: 10px;
-            opacity: 0.5;
-            margin-top: 5px;
-        }
-
-        /* ── Job Enquiry Card ─────────────────────────────────────────── */
-        .kvibe-job-enquiry-card {
-            display: flex;
-            gap: 10px;
-            align-items: flex-start;
-            background: rgba(0,0,0,0.18);
-            border: 1.5px solid rgba(255,255,255,0.18);
-            border-radius: 12px;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-            text-decoration: none;
-            color: inherit;
-            transition: background 0.15s;
-        }
-        .kvibe-job-enquiry-card:hover {
-            background: rgba(0,0,0,0.28);
-        }
-        .kishiface-message-bubble.received .kvibe-job-enquiry-card {
-            background: #f4f4f8;
-            border-color: #e0e0e0;
-            color: #111;
-        }
-        .kishiface-message-bubble.received .kvibe-job-enquiry-card:hover {
-            background: #ececf2;
-        }
-        .kvibe-jeq-img {
-            width: 62px;
-            height: 62px;
-            object-fit: cover;
-            border-radius: 8px;
-            flex-shrink: 0;
-            background: #ccc;
-        }
-        .kvibe-jeq-img-placeholder {
-            width: 62px;
-            height: 62px;
-            border-radius: 8px;
-            flex-shrink: 0;
-            background: linear-gradient(135deg, #0077cc, #0095f6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-        }
-        .kvibe-jeq-body {
-            flex: 1;
-            min-width: 0;
-        }
-        .kvibe-jeq-label {
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            opacity: 0.55;
-            margin-bottom: 3px;
-        }
-        .kvibe-jeq-name {
-            font-weight: 700;
-            font-size: 13.5px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            margin-bottom: 2px;
-        }
-        .kvibe-jeq-sub {
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--kvibe-primary, #6c47ff);
-        }
-        .kishiface-message-bubble.received .kvibe-jeq-sub {
-            color: var(--kvibe-primary, #6c47ff);
-        }
-        .kvibe-jeq-meta {
-            font-size: 11px;
-            opacity: 0.6;
-            margin-top: 3px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .kvibe-jeq-closed {
-            display: inline-block;
-            font-size: 10px;
-            font-weight: 700;
-            color: #ef4444;
-            margin-top: 3px;
-        }
-        .kvibe-jeq-tap-hint {
-            font-size: 10px;
-            opacity: 0.5;
-            margin-top: 5px;
-        }
-
-        /* ── Product Enquiry Composer Banner ──────────────────────────── */
-        #kvibe-product-composer-banner {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 14px;
-            background: linear-gradient(90deg, rgba(108,71,255,0.13), rgba(108,71,255,0.06));
-            border-top: 2px solid var(--kvibe-primary, #6c47ff);
-            border-bottom: 1px solid rgba(108,71,255,0.15);
-            position: relative;
-        }
-        #kvibe-product-composer-banner img {
-            width: 48px;
-            height: 48px;
-            object-fit: cover;
-            border-radius: 8px;
             flex-shrink: 0;
         }
-        .kvibe-pcb-placeholder {
-            width: 48px;
-            height: 48px;
-            border-radius: 8px;
-            flex-shrink: 0;
-            background: linear-gradient(135deg, #2d2d3a, #1a1a2e);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-        }
-        .kvibe-pcb-body { flex: 1; min-width: 0; }
-        .kvibe-pcb-label {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: var(--kvibe-primary, #6c47ff);
-            margin-bottom: 2px;
-        }
-        .kvibe-pcb-name {
-            font-weight: 700;
-            font-size: 13px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .kvibe-pcb-price {
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--kvibe-primary, #6c47ff);
-        }
-        .kvibe-pcb-dismiss {
-            background: none;
-            border: none;
-            cursor: pointer;
-            opacity: 0.55;
-            font-size: 16px;
-            padding: 4px 6px;
-            color: inherit;
-            flex-shrink: 0;
-        }
-        .kvibe-pcb-dismiss:hover { opacity: 1; }
 
-        /* ── Job Enquiry Composer Banner ──────────────────────────────── */
-        #kvibe-job-composer-banner {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 14px;
-            background: linear-gradient(90deg, rgba(0,149,246,0.13), rgba(0,149,246,0.06));
-            border-top: 2px solid var(--kvibe-primary, #6c47ff);
-            border-bottom: 1px solid rgba(0,149,246,0.15);
-            position: relative;
-        }
-        #kvibe-job-composer-banner img {
-            width: 48px;
-            height: 48px;
-            object-fit: cover;
-            border-radius: 8px;
-            flex-shrink: 0;
-        }
-        .kvibe-jcb-placeholder {
-            width: 48px;
-            height: 48px;
-            border-radius: 8px;
-            flex-shrink: 0;
-            background: linear-gradient(135deg, #0077cc, #0095f6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-        }
-        .kvibe-jcb-body { flex: 1; min-width: 0; }
-        .kvibe-jcb-label {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: #0095f6;
-            margin-bottom: 2px;
-        }
-        .kvibe-jcb-name {
-            font-weight: 700;
-            font-size: 13px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .kvibe-jcb-sub {
-            font-size: 12px;
-            font-weight: 700;
-            color: #0095f6;
-        }
-        .kvibe-jcb-dismiss {
-            background: none;
-            border: none;
-            cursor: pointer;
-            opacity: 0.55;
-            font-size: 16px;
-            padding: 4px 6px;
-            color: inherit;
-            flex-shrink: 0;
-        }
-        .kvibe-jcb-dismiss:hover { opacity: 1; }
-
-        .kvibe-link-preview {
-            border-radius: 10px;
-            overflow: hidden;
-            margin-top: 7px;
-            max-width: 100%;
-            cursor: pointer;
-            text-decoration: none;
-            display: block;
-            transition: opacity 0.15s;
-        }
-        .kvibe-link-preview:hover { opacity: 0.88; }
-
-        .kishiface-message-bubble.sent .kvibe-link-preview {
-            background: rgba(255,255,255,0.15);
-            border: 1px solid rgba(255,255,255,0.22);
-        }
-        .kishiface-message-bubble.received .kvibe-link-preview {
-            background: #ffffff;
-            border: 1px solid #e2e2e2;
-        }
-
-        .kvibe-lp-image {
-            width: 100%;
-            max-height: 150px;
-            object-fit: cover;
-            display: block;
-        }
-
-        .kvibe-lp-body { padding: 7px 10px 8px; }
-
-        .kvibe-lp-domain {
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 2px;
-            opacity: 0.6;
-        }
-        .kishiface-message-bubble.sent .kvibe-lp-domain  { color: #fff; }
-        .kishiface-message-bubble.received .kvibe-lp-domain { color: var(--kishiface-text-light); }
-
-        .kvibe-lp-title {
-            font-size: 13px;
-            font-weight: 600;
-            line-height: 1.3;
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-        }
-        .kishiface-message-bubble.sent .kvibe-lp-title    { color: #fff; }
-        .kishiface-message-bubble.received .kvibe-lp-title { color: var(--kishiface-text); }
-
-        .kvibe-lp-desc {
-            font-size: 12px;
-            margin-top: 2px;
-            opacity: 0.75;
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            line-height: 1.35;
-        }
-        .kishiface-message-bubble.sent .kvibe-lp-desc    { color: rgba(255,255,255,0.9); }
-        .kishiface-message-bubble.received .kvibe-lp-desc { color: var(--kishiface-text-light); }
-
-        /* ── Input link preview banner (above input bar) ─────────────────── */
-        .kvibe-input-link-preview {
+        /* ---------------------------------------------------------------
+           Recording overlay
+        --------------------------------------------------------------- */
+        .kishiface-recording-overlay {
             display: none;
-            align-items: flex-start;
-            gap: 10px;
-            padding: 8px 12px;
-            margin: 0 8px 6px;
-            background: #f0f7ff;
-            border-left: 3px solid var(--kishiface-primary);
-            border-radius: 8px;
-            position: relative;
-            animation: kvLpBannerIn 0.2s ease;
-        }
-        @keyframes kvLpBannerIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        .kvibe-input-lp-thumb {
-            width: 46px;
-            height: 46px;
-            object-fit: cover;
-            border-radius: 6px;
-            flex-shrink: 0;
-            display: none;
-        }
-        .kvibe-input-lp-text  { flex: 1; min-width: 0; }
-        .kvibe-input-lp-domain {
-            font-size: 10px;
-            color: var(--kishiface-text-light);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 1px;
-        }
-        .kvibe-input-lp-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--kishiface-text);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .kvibe-input-lp-desc {
-            font-size: 12px;
-            color: var(--kishiface-text-light);
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 1;
-            -webkit-box-orient: vertical;
-        }
-        .kvibe-input-lp-dismiss {
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: var(--kishiface-text-light);
-            font-size: 18px;
-            padding: 0;
-            line-height: 1;
-            flex-shrink: 0;
-            align-self: center;
-            transition: color 0.15s;
-        }
-        .kvibe-input-lp-dismiss:hover { color: var(--kishiface-text); }
-        /* ─────────────────────────────────────────────────────────────────── */
-
-        /* ── Document / File Bubble ──────────────────────────────────────── */
-        .kv-doc-bubble {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 14px;
-            border-radius: 16px;
-            max-width: 260px;
-            cursor: pointer;
-            transition: filter 0.15s;
-            position: relative;
-        }
-        .kishiface-message-row.sent .kv-doc-bubble {
-            background: var(--kishiface-sent-bg);
-        }
-        .kishiface-message-row.received .kv-doc-bubble {
-            background: var(--kishiface-received-bg);
-        }
-        .kv-doc-bubble:hover { filter: brightness(0.95); }
-
-        .kv-doc-icon {
-            width: 40px;
-            height: 48px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            flex-shrink: 0;
-            position: relative;
-        }
-        .kishiface-message-row.sent .kv-doc-icon {
-            background: rgba(255,255,255,0.18);
-            color: #fff;
-        }
-        .kishiface-message-row.received .kv-doc-icon {
-            background: rgba(0,149,246,0.1);
-            color: var(--kishiface-primary);
-        }
-        .kv-doc-ext-tag {
             position: absolute;
-            bottom: 3px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 7px;
-            font-weight: 800;
-            letter-spacing: 0.3px;
-            text-transform: uppercase;
-            padding: 1px 3px;
-            border-radius: 2px;
-            line-height: 1.2;
-            white-space: nowrap;
-        }
-        .kishiface-message-row.sent .kv-doc-ext-tag {
-            background: rgba(255,255,255,0.3);
-            color: #fff;
-        }
-        .kishiface-message-row.received .kv-doc-ext-tag {
-            background: rgba(0,149,246,0.15);
-            color: var(--kishiface-primary);
-        }
-
-        .kv-doc-info { flex: 1; min-width: 0; }
-        .kv-doc-name {
-            font-size: 13px;
-            font-weight: 600;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            line-height: 1.3;
-        }
-        .kishiface-message-row.sent .kv-doc-name { color: #fff; }
-        .kishiface-message-row.received .kv-doc-name { color: var(--kishiface-text); }
-
-        .kv-doc-meta {
-            font-size: 11px;
-            margin-top: 2px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .kishiface-message-row.sent .kv-doc-meta { color: rgba(255,255,255,0.75); }
-        .kishiface-message-row.received .kv-doc-meta { color: var(--kishiface-text-light); }
-
-        .kv-doc-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            flex-shrink: 0;
-        }
-        .kv-doc-action-btn {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            transition: transform 0.15s, background 0.15s;
-        }
-        .kv-doc-action-btn:active { transform: scale(0.88); }
-        .kishiface-message-row.sent .kv-doc-action-btn {
-            background: rgba(255,255,255,0.22);
-            color: #fff;
-        }
-        .kishiface-message-row.received .kv-doc-action-btn {
-            background: rgba(0,149,246,0.12);
-            color: var(--kishiface-primary);
-        }
-
-        /* ── PDF / Doc Preview Modal ─────────────────────────────────────── */
-        .kv-doc-modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            z-index: 2100;
-            background: #1a1a1a;
-            flex-direction: column;
-            animation: kvModalIn 0.22s ease;
-        }
-        .kv-doc-modal.open { display: flex; }
-
-        .kv-doc-modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 16px;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            flex-shrink: 0;
-            gap: 10px;
-        }
-        .kv-doc-modal-title {
-            flex: 1;
-            min-width: 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: #fff;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .kv-doc-modal-actions { display: flex; gap: 8px; flex-shrink: 0; }
-        .kv-doc-modal-btn {
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            border: none;
-            background: rgba(255,255,255,0.15);
-            color: #fff;
-            font-size: 15px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            transition: background 0.2s;
-            text-decoration: none;
-        }
-        .kv-doc-modal-btn:hover { background: rgba(255,255,255,0.28); }
-
-        .kv-doc-modal-body {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .kv-doc-modal-body iframe {
-            flex: 1;
-            width: 100%;
-            border: none;
-            background: #fff;
-        }
-
-        /* Non-previewable fallback */
-        .kv-doc-no-preview {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-            color: rgba(255,255,255,0.7);
-            padding: 32px;
-            text-align: center;
-        }
-        .kv-doc-no-preview i { font-size: 56px; opacity: 0.4; }
-        .kv-doc-no-preview p { font-size: 14px; line-height: 1.5; }
-        .kv-doc-no-preview a {
-            padding: 12px 28px;
-            background: var(--kishiface-primary);
-            color: #fff;
-            border-radius: 24px;
-            font-size: 14px;
-            font-weight: 600;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: opacity 0.15s;
-        }
-        .kv-doc-no-preview a:hover { opacity: 0.88; }
-
-        /* Gallery file list */
-        .kv-gallery-file-row {
-            display: flex;
+            left: 10px; right: 10px; bottom: 8px;
+            z-index: 30;
             align-items: center;
             gap: 12px;
-            padding: 10px 12px;
-            background: #f8f8f8;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: background 0.15s;
+            padding: 10px 14px;
+            border-radius: 100px;
+            background: var(--mfy-ink);
+            color: #fff;
         }
-        .kv-gallery-file-row:active { background: #efefef; }
-        .kv-gallery-file-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            background: rgba(0,149,246,0.1);
-            color: var(--kishiface-primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            flex-shrink: 0;
+        .kishiface-recording-wave { flex-shrink: 0; }
+        .kishiface-recording-info { display: flex; align-items: center; gap: 10px; flex: 1; }
+        .kishiface-recording-text { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+        .kishiface-recording-text::before {
+            content: '';
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--mfy-danger);
+            animation: kishifaceRecordPulse 1s infinite;
         }
-        .kv-gallery-file-info { flex: 1; min-width: 0; }
-        .kv-gallery-file-name {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--kishiface-text);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .kv-gallery-file-meta {
-            font-size: 11px;
-            color: var(--kishiface-text-light);
-            margin-top: 1px;
-        }
-        .kv-gallery-file-dl {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: rgba(0,149,246,0.1);
-            color: var(--kishiface-primary);
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            cursor: pointer;
-            flex-shrink: 0;
-            text-decoration: none;
-            transition: background 0.15s;
-        }
-        .kv-gallery-file-dl:hover { background: rgba(0,149,246,0.2); }
-        /* ─────────────────────────────────────────────────────────────────── */
+        @keyframes kishifaceRecordPulse { 50% { opacity: 0.3; } }
+        .kishiface-recording-timer { font-size: 13px; font-variant-numeric: tabular-nums; }
+        .kishiface-cancel-text { font-size: 12px; opacity: 0.7; margin-left: auto; }
+        .kishiface-recording-pulse { animation: kishifaceRecordPulse 1s infinite; }
 
-        /* ── Shared Media Gallery ────────────────────────────────────────── */
-        .kv-gallery-backdrop {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.45);
-            z-index: 900;
-            backdrop-filter: blur(2px);
-            -webkit-backdrop-filter: blur(2px);
+        /* ---------------------------------------------------------------
+           Meeting request bottom sheet
+        --------------------------------------------------------------- */
+        .kv-meeting-backdrop, .kv-gallery-backdrop {
+            position: fixed; inset: 0; z-index: 1000;
+            background: rgba(0,0,0,0.4);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s;
         }
-        .kv-gallery-backdrop.open { display: block; }
+        .kv-meeting-backdrop.open, .kv-gallery-backdrop.open { opacity: 1; pointer-events: auto; }
 
-        .kv-gallery-sheet {
+        .kv-meeting-sheet, .kv-gallery-sheet {
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 901;
-            background: var(--kishiface-white);
-            border-radius: 20px 20px 0 0;
+            left: 0; right: 0; bottom: 0;
+            z-index: 1001;
+            background: var(--mfy-surface);
+            border-radius: 12px 12px 0 0;
+            box-shadow: var(--mfy-shadow-lg);
+            max-height: 85vh;
             display: flex;
             flex-direction: column;
-            max-height: 82vh;
             transform: translateY(100%);
-            transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
-            will-change: transform;
-            overflow: hidden;
+            transition: transform 0.25s ease;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 480px;
         }
-        .kv-gallery-sheet.open {
-            transform: translateY(0);
-        }
+        .kv-meeting-sheet.open, .kv-gallery-sheet.open { transform: translateY(0); }
 
-        .kv-gallery-handle {
-            width: 36px;
-            height: 4px;
-            background: #ddd;
-            border-radius: 2px;
-            margin: 10px auto 0;
+        .kv-meeting-handle, .kv-gallery-handle {
+            width: 40px; height: 4px;
+            border-radius: 4px;
+            background: var(--mfy-border);
+            margin: 10px auto 4px;
             flex-shrink: 0;
         }
-
-        .kv-gallery-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 16px 8px;
+        .kv-meeting-header, .kv-gallery-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 16px 12px;
+            border-bottom: 1px solid var(--mfy-border);
             flex-shrink: 0;
         }
-
-        .kv-gallery-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--kishiface-text);
+        .kv-meeting-title, .kv-gallery-title { font-size: 15.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .kv-gallery-count { font-size: 12.5px; color: var(--mfy-muted); margin-left: 6px; }
+        .kv-meeting-close, .kv-gallery-close {
+            width: 32px; height: 32px; border: none; background: var(--mfy-border-soft);
+            border-radius: 50%; cursor: pointer; color: var(--mfy-ink-soft);
         }
-
-        .kv-gallery-count {
-            font-size: 12px;
-            color: var(--kishiface-text-light);
-            margin-left: 6px;
-            font-weight: 400;
-        }
-
-        .kv-gallery-close {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            border: none;
-            background: #f0f0f0;
-            color: var(--kishiface-text);
+        .kv-meeting-body { padding: 16px; overflow-y: auto; }
+        .kv-meeting-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+        .kv-meeting-field label { font-size: 12.5px; font-weight: 600; color: var(--mfy-ink-soft); }
+        .kv-meeting-field input, .kv-meeting-field textarea {
+            padding: 10px 12px;
+            border-radius: var(--mfy-radius-sm);
+            border: 1px solid var(--mfy-border);
             font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            font-family: inherit;
+            outline: none;
         }
+        .kv-meeting-field input:focus, .kv-meeting-field textarea:focus { border-color: var(--mfy-primary); }
+        .kv-meeting-field textarea { min-height: 70px; resize: vertical; }
+        .kv-meeting-row { display: flex; gap: 10px; }
+        .kv-meeting-row .kv-meeting-field { flex: 1; }
+        .kv-meeting-error { display: none; font-size: 12px; color: var(--mfy-danger); margin: -8px 0 12px; }
+        .kv-meeting-error.show { display: block; }
+        .kv-meeting-submit {
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: var(--mfy-radius-sm);
+            background: var(--mfy-primary);
+            color: #fff;
+            font-size: 14.5px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .kv-meeting-submit:hover { background: var(--mfy-primary-dark); }
 
+        /* ---------------------------------------------------------------
+           Shared media gallery sheet
+        --------------------------------------------------------------- */
         .kv-gallery-tabs {
             display: flex;
-            gap: 0;
-            padding: 0 16px;
-            border-bottom: 1.5px solid #f0f0f0;
+            gap: 4px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--mfy-border);
             flex-shrink: 0;
             overflow-x: auto;
-            -ms-overflow-style: none;
-            scrollbar-width: none;
         }
-        .kv-gallery-tabs::-webkit-scrollbar { display: none; }
-
         .kv-gallery-tab {
-            padding: 8px 14px;
+            flex-shrink: 0;
+            padding: 7px 13px;
+            border: none;
+            border-radius: 100px;
+            background: var(--mfy-border-soft);
+            color: var(--mfy-ink-soft);
             font-size: 13px;
             font-weight: 600;
-            color: var(--kishiface-text-light);
-            border: none;
-            background: none;
             cursor: pointer;
-            border-bottom: 2.5px solid transparent;
-            margin-bottom: -1.5px;
-            white-space: nowrap;
-            transition: color 0.15s, border-color 0.15s;
-            display: flex;
-            align-items: center;
-            gap: 5px;
         }
-        .kv-gallery-tab.active {
-            color: var(--kishiface-primary);
-            border-bottom-color: var(--kishiface-primary);
-        }
-        .kv-gallery-tab-badge {
-            background: #f0f0f0;
-            color: var(--kishiface-text-light);
-            border-radius: 8px;
-            font-size: 10px;
-            font-weight: 700;
-            padding: 1px 5px;
-            min-width: 16px;
-            text-align: center;
-        }
-        .kv-gallery-tab.active .kv-gallery-tab-badge {
-            background: rgba(0,149,246,0.12);
-            color: var(--kishiface-primary);
-        }
+        .kv-gallery-tab.active { background: var(--mfy-primary); color: #fff; }
+        .kv-gallery-tab-badge { opacity: 0.75; font-weight: 600; margin-left: 3px; }
+        .kv-gallery-body { flex: 1; overflow-y: auto; padding: 12px; }
 
-        .kv-gallery-body {
-            flex: 1;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
-        }
-
-        /* Photo/video grid */
         .kv-gallery-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 3px;
+            gap: 4px;
         }
-
         .kv-gallery-grid-item {
+            position: relative;
             aspect-ratio: 1;
             border-radius: 8px;
             overflow: hidden;
             cursor: pointer;
-            position: relative;
-            background: #f0f0f0;
+            background: var(--mfy-border-soft);
         }
-        .kv-gallery-grid-item img,
-        .kv-gallery-grid-item video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            transition: transform 0.2s;
+        .kv-gallery-grid-item img, .kv-gallery-grid-item video {
+            width: 100%; height: 100%; object-fit: cover;
+            transition: transform 0.15s;
         }
-        .kv-gallery-grid-item:active img,
-        .kv-gallery-grid-item:active video { transform: scale(0.96); }
-
+        .kv-gallery-grid-item:active img, .kv-gallery-grid-item:active video { transform: scale(0.96); }
         .kv-gallery-grid-item .kv-gallery-type-badge {
-            position: absolute;
-            bottom: 5px;
-            right: 6px;
+            position: absolute; top: 5px; right: 5px;
             background: rgba(0,0,0,0.55);
-            color: #fff;
-            border-radius: 4px;
-            font-size: 10px;
-            padding: 1px 5px;
-            font-weight: 600;
+            color: #fff; font-size: 10px;
+            padding: 2px 5px; border-radius: 5px;
         }
-
         .kv-gallery-grid-item .kv-gallery-play-icon {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            pointer-events: none;
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
         }
         .kv-gallery-grid-item .kv-gallery-play-icon i {
-            width: 32px;
-            height: 32px;
-            background: rgba(255,255,255,0.85);
+            width: 32px; height: 32px;
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            color: #333;
+            background: rgba(255,255,255,0.9);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px;
+            color: var(--mfy-ink);
         }
 
-        /* Audio list */
         .kv-gallery-list { display: flex; flex-direction: column; gap: 8px; }
-
-        .kv-gallery-audio-row {
+        .kv-gallery-audio-row, .kv-gallery-file-row {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 10px 12px;
-            background: #f8f8f8;
-            border-radius: 12px;
-            transition: background 0.15s;
+            gap: 10px;
+            padding: 10px;
+            border-radius: var(--mfy-radius-md);
+            background: var(--mfy-bg);
         }
-        .kv-gallery-audio-play {
-            width: 38px;
-            height: 38px;
+        .kv-gallery-audio-play, .kv-gallery-file-icon {
+            width: 36px; height: 36px;
             border-radius: 50%;
-            background: var(--kishiface-primary);
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            border: none;
+            background: var(--mfy-primary-soft);
+            color: var(--mfy-primary);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            cursor: pointer;
             font-size: 14px;
-            flex-shrink: 0;
-            border: none;
-            cursor: pointer;
-            transition: transform 0.15s, background 0.15s;
         }
-        .kv-gallery-audio-play:active { transform: scale(0.9); }
-        .kv-gallery-audio-info { flex: 1; min-width: 0; }
-        .kv-gallery-audio-name {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--kishiface-text);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .kv-gallery-audio-info, .kv-gallery-file-info { flex: 1; min-width: 0; }
+        .kv-gallery-audio-name, .kv-gallery-file-name {
+            font-size: 13.5px; font-weight: 600;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .kv-gallery-audio-meta {
-            font-size: 11px;
-            color: var(--kishiface-text-light);
-            margin-top: 1px;
-        }
-        .kv-gallery-audio-dl {
-            width: 32px;
-            height: 32px;
+        .kv-gallery-audio-meta, .kv-gallery-file-meta { font-size: 11.5px; color: var(--mfy-muted); }
+        .kv-gallery-audio-dl, .kv-gallery-file-dl {
+            width: 32px; height: 32px;
+            border: none; background: transparent;
             border-radius: 50%;
-            background: rgba(0,149,246,0.1);
-            color: var(--kishiface-primary);
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
+            color: var(--mfy-ink-soft);
             cursor: pointer;
             flex-shrink: 0;
-            text-decoration: none;
-            transition: background 0.15s;
         }
-        .kv-gallery-audio-dl:hover { background: rgba(0,149,246,0.2); }
+        .kv-gallery-audio-dl:hover, .kv-gallery-file-dl:hover { background: var(--mfy-border-soft); }
 
-        /* Empty state */
         .kv-gallery-empty {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 48px 16px;
             gap: 10px;
-            color: var(--kishiface-text-light);
+            padding: 60px 20px;
+            color: var(--mfy-muted);
         }
         .kv-gallery-empty i { font-size: 36px; opacity: 0.3; }
-        .kv-gallery-empty p { font-size: 14px; font-weight: 500; }
-        /* ─────────────────────────────────────────────────────────────────── */
+        .kv-gallery-empty p { font-size: 14px; font-weight: 500; margin: 0; }
 
-        /* ── Meeting Request Form ────────────────────────────────────────── */
-        .kv-meeting-backdrop {
+        /* ---------------------------------------------------------------
+           Selection overlay, context menu, toast, delete modal
+        --------------------------------------------------------------- */
+        .kishiface-selection-overlay {
+            display: none;
+            position: fixed; inset: 0; z-index: 1099;
+            background: rgba(0,0,0,0.25);
+        }
+
+        .kishiface-context-menu {
             display: none;
             position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.45);
-            z-index: 950;
-            backdrop-filter: blur(2px);
-            -webkit-backdrop-filter: blur(2px);
+            z-index: 1100;
+            background: var(--mfy-surface);
+            border-radius: var(--mfy-radius-md);
+            box-shadow: var(--mfy-shadow-lg);
+            padding: 6px;
+            min-width: 170px;
         }
-        .kv-meeting-backdrop.open { display: block; }
-
-        .kv-meeting-sheet {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 951;
-            background: var(--kishiface-white);
-            border-radius: 20px 20px 0 0;
+        .kishiface-context-item {
             display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: var(--mfy-radius-sm);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            color: var(--mfy-ink);
+        }
+        .kishiface-context-item i { width: 16px; text-align: center; color: var(--mfy-ink-soft); }
+        .kishiface-context-item:hover { background: var(--mfy-border-soft); }
+        .kishiface-context-item.delete { color: var(--mfy-danger); }
+        .kishiface-context-item.delete i { color: var(--mfy-danger); }
+
+        .kishiface-copy-toast {
+            display: none;
+            position: fixed;
+            left: 50%;
+            bottom: 90px;
+            transform: translateX(-50%);
+            z-index: 1300;
+            background: var(--mfy-ink);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 10px 18px;
+            border-radius: 100px;
+            box-shadow: var(--mfy-shadow-md);
+        }
+
+        .kishiface-delete-modal {
+            display: none;
+            position: fixed; inset: 0; z-index: 1400;
+            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.45);
+            padding: 20px;
+        }
+        .kishiface-delete-content {
+            width: 100%;
+            max-width: 320px;
+            background: var(--mfy-surface);
+            border-radius: var(--mfy-radius-lg);
+            padding: 20px;
+            text-align: center;
+        }
+        .kishiface-delete-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+        .kishiface-delete-message { font-size: 13.5px; color: var(--mfy-ink-soft); line-height: 1.4; margin-bottom: 18px; }
+        .kishiface-delete-buttons { display: flex; gap: 10px; }
+        .kishiface-delete-btn {
+            flex: 1;
+            padding: 11px;
+            border-radius: var(--mfy-radius-sm);
+            border: none;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .kishiface-delete-cancel { background: var(--mfy-border-soft); color: var(--mfy-ink); }
+        .kishiface-delete-cancel:hover { background: var(--mfy-border); }
+        .kishiface-delete-confirm { background: var(--mfy-danger); color: #fff; }
+        .kishiface-delete-confirm:hover { background: #c11f52; }
+
+        /* ---------------------------------------------------------------
+           Media viewer modal (image / video / audio)
+        --------------------------------------------------------------- */
+        .kishiface-media-modal {
+            display: none;
+            position: fixed; inset: 0; z-index: 1500;
             flex-direction: column;
-            max-height: 88vh;
-            transform: translateY(100%);
-            transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
-            will-change: transform;
-            overflow: hidden;
+            background: rgba(0,0,0,0.92);
         }
-        .kv-meeting-sheet.open { transform: translateY(0); }
-
-        .kv-meeting-handle {
-            width: 36px;
-            height: 4px;
-            background: #ddd;
-            border-radius: 2px;
-            margin: 10px auto 0;
-            flex-shrink: 0;
-        }
-
-        .kv-meeting-header {
+        .kv-modal-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 14px 16px 8px;
+            padding: 12px 14px;
             flex-shrink: 0;
+            transition: opacity 0.2s;
         }
+        .kv-modal-header.kv-modal-ui-hidden { opacity: 0; pointer-events: none; }
+        .kv-modal-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .kv-modal-sender-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .kv-modal-sender-info { display: flex; flex-direction: column; min-width: 0; }
+        .kv-modal-sender-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kv-modal-send-time { font-size: 11.5px; color: rgba(255,255,255,0.65); }
+        .kv-modal-header-actions { display: flex; gap: 4px; flex-shrink: 0; }
+        .kv-modal-icon-btn {
+            width: 38px; height: 38px;
+            border: none; background: rgba(255,255,255,0.12);
+            border-radius: 50%;
+            color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+        }
+        .kv-modal-icon-btn:hover { background: rgba(255,255,255,0.22); }
 
-        .kv-meeting-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--kishiface-text);
+        .kv-modal-body {
+            flex: 1;
+            min-height: 0;
             display: flex;
             align-items: center;
-            gap: 8px;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+        .kv-modal-body img, .kv-modal-body video {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transition: transform 0.15s;
         }
 
-        .kv-meeting-close {
-            background: none;
-            border: none;
-            font-size: 20px;
-            color: var(--kishiface-text-light);
-            cursor: pointer;
-            padding: 6px;
-        }
-
-        .kv-meeting-body {
-            padding: 8px 16px 20px;
-            overflow-y: auto;
-        }
-
-        .kv-meeting-field {
-            margin-bottom: 14px;
-        }
-
-        .kv-meeting-field label {
-            display: block;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--kishiface-text-light);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-
-        .kv-meeting-field input,
-        .kv-meeting-field textarea {
-            width: 100%;
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            padding: 10px 12px;
-            font-size: 14px;
-            color: var(--kishiface-text);
-            background: var(--kishiface-input-bg);
-            outline: none;
-        }
-
-        .kv-meeting-field input:focus,
-        .kv-meeting-field textarea:focus {
-            border-color: var(--kishiface-primary);
-        }
-
-        .kv-meeting-field textarea {
-            resize: none;
-            min-height: 60px;
-            font-family: inherit;
-        }
-
-        .kv-meeting-row {
-            display: flex;
-            gap: 10px;
-        }
-        .kv-meeting-row .kv-meeting-field { flex: 1; }
-
-        .kv-meeting-submit {
-            width: 100%;
-            background: var(--kishiface-primary);
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            padding: 13px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 4px;
-        }
-        .kv-meeting-submit:hover { background: var(--kishiface-primary-hover); }
-        .kv-meeting-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .kv-meeting-error {
-            color: var(--kishiface-heart);
-            font-size: 12px;
-            margin-top: -8px;
-            margin-bottom: 12px;
+        .kishiface-modal-audio {
             display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            color: #fff;
+            width: 100%;
+            max-width: 340px;
+            padding: 0 24px;
         }
-        .kv-meeting-error.show { display: block; }
-        /* ─────────────────────────────────────────────────────────────────── */
+        .kv-audio-icon {
+            width: 88px; height: 88px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 32px;
+        }
+        .kishiface-modal-audio-info { text-align: center; }
+        .kishiface-modal-audio-title { font-size: 15px; font-weight: 600; }
+        .kishiface-modal-audio-time { font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 3px; }
+        .kishiface-modal-audio-controls { display: flex; align-items: center; gap: 22px; }
+        .kv-audio-skip-btn {
+            border: none; background: transparent; color: #fff;
+            font-size: 17px; cursor: pointer;
+        }
+        .kishiface-modal-audio-play {
+            width: 58px; height: 58px;
+            border-radius: 50%;
+            border: none;
+            background: #fff;
+            color: var(--mfy-ink);
+            font-size: 19px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+        }
+        .kishiface-modal-progress {
+            width: 100%;
+            height: 4px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.2);
+            cursor: pointer;
+        }
+        .kishiface-modal-progress-filled { height: 100%; border-radius: 4px; background: #fff; width: 0%; }
 
+        .kv-modal-footer {
+            flex-shrink: 0;
+            padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+            transition: opacity 0.2s;
+        }
+        .kv-modal-footer.kv-modal-ui-hidden { opacity: 0; pointer-events: none; }
+        .kv-modal-caption { color: #fff; font-size: 14px; line-height: 1.4; }
+        .kv-modal-footer-time { color: rgba(255,255,255,0.55); font-size: 11.5px; margin-top: 4px; }
+
+        /* ---------------------------------------------------------------
+           Small helpers
+        --------------------------------------------------------------- */
+        .kishiface-online-status { color: var(--mfy-online); }
+        .zoomed { cursor: zoom-out !important; }
+        .long-press { background: rgba(0,0,0,0.06); }
+
+        /* ---------------------------------------------------------------
+           Responsive adjustments
+        --------------------------------------------------------------- */
+        @media (max-width: 767px) {
+            .kishiface-messenger-container { max-width: 100%; }
+            .kv-meeting-sheet, .kv-gallery-sheet { max-width: 100%; }
+            .kv-gallery-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        @media (min-width: 768px) {
+            .kvibe-attach-menu { left: 60px; }
+            .kv-gallery-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        @media (max-width: 380px) {
+            .kishiface-image-attachment, .kishiface-video-player { max-width: 220px; }
+            .kvibe-receiver-avatar { width: 24px; height: 24px; }
+        }
     </style>
 </head>
 <body>
@@ -2906,6 +1524,72 @@
         <div class="kishiface-progress-bar" id="kishifaceProgressBarFill"></div>
     </div>
 
+    <div class="message-workspace">
+    <aside class="message-sidebar">
+        <div class="message-sidebar-header">
+            <h2>Messages</h2>
+            <a href="/inbox" title="Back to inbox"><i class="fa-solid fa-list"></i></a>
+        </div>
+        <div class="search-container">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="messageSidebarSearch" placeholder="Search messages...">
+            </div>
+        </div>
+        <div class="message-list">
+            {% for other_user, conversation_data in conversations.items %}
+                {% with message=conversation_data.last_message unread_count=conversation_data.unread_count %}
+                <a href="{% url 'message' other_user.username %}"
+                   class="message-item {% if other_user.username == receiver.username %}active{% endif %}"
+                   data-username="{{ other_user.username }}"
+                   data-unread="{{ unread_count }}">
+                    <img src="{% if other_user.profile.picture %}{{ other_user.profile.picture.url }}{% else %}https://placehold.co/40x40/0084ff/FFFFFF?text={{ other_user.username|slice:':1'|upper }}{% endif %}"
+                         alt="{{ other_user.username }}" class="profile-pic">
+                    <div class="message-content">
+                        <div class="message-header">
+                            <span class="username">{{ other_user.username }}</span>
+                            <span class="message-time">{{ message.created_at|insta_timesince }}</span>
+                        </div>
+                        <div class="message-preview-container">
+                            {% if message.file_type == 'image' %}
+                                <div style="display:flex;align-items:center;">
+                                    <i class="fas fa-image message-icon"></i>
+                                    <span class="message-preview">Photo</span>
+                                </div>
+                            {% elif message.file_type == 'audio' %}
+                                <div style="display:flex;align-items:center;">
+                                    <i class="fas fa-microphone message-icon"></i>
+                                    <span class="message-preview">Audio</span>
+                                </div>
+                            {% elif message.file_type == 'video' %}
+                                <div style="display:flex;align-items:center;">
+                                    <i class="fas fa-video message-icon"></i>
+                                    <span class="message-preview">Video</span>
+                                </div>
+                            {% else %}
+                                <span class="message-preview">
+                                    {% if message.sender == user %}
+                                        You: {{ message.conversation|truncatechars:25 }}
+                                    {% else %}
+                                        {{ message.conversation|truncatechars:25 }}
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                            {% if unread_count > 0 and other_user.username != receiver.username %}
+                                <span class="unread-badge">{% if unread_count > 9 %}9+{% else %}{{ unread_count }}{% endif %}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+                {% endwith %}
+            {% empty %}
+                <div class="empty-message">
+                    <i class="fas fa-comments" style="font-size:2.4rem;color:#ddd;margin-bottom:16px;"></i>
+                    <h3>No messages yet</h3>
+                </div>
+            {% endfor %}
+        </div>
+    </aside>
     <div class="kishiface-messenger-container">
         <div class="kishiface-chat-header" style="overflow:hidden;">
             <div class="kishiface-chat-user-info">
@@ -3344,6 +2028,7 @@
             </div>
         </div>
     </div>
+    </div><!-- /.message-workspace -->
 
     <!-- ── Meeting Request Bottom Sheet ─────────────────────────────── -->
     <div class="kv-meeting-backdrop" id="kvMeetingBackdrop" onclick="kvCloseMeetingForm()"></div>
@@ -6125,6 +4810,153 @@
     // ────────────────────────────────────────────────────────────────────────
     </script>
 
+    <!-- Sidebar search — desktop merged-workspace conversation list only.
+         Purely additive; does not touch the chat itself. -->
+    <script>
+        (function () {
+            const sidebarSearch = document.getElementById('messageSidebarSearch');
+            if (!sidebarSearch) return;
+            sidebarSearch.addEventListener('input', function () {
+                const term = this.value.toLowerCase().trim();
+                document.querySelectorAll('.message-sidebar .message-item').forEach(item => {
+                    const uname = item.querySelector('.username') ? item.querySelector('.username').textContent.toLowerCase() : '';
+                    const preview = item.querySelector('.message-preview') ? item.querySelector('.message-preview').textContent.toLowerCase() : '';
+                    item.style.display = (!term || uname.includes(term) || preview.includes(term)) ? 'flex' : 'none';
+                });
+            });
+        })();
+    </script>
+
+    <!-- Sidebar live updates — reuses the same /ws/inbox/ endpoint the
+         inbox page connects to, so the conversation list next to an open
+         chat reorders / updates in real time too. Entirely separate from
+         the chat's own WebSocket (`sender`/`receiver` above are reused
+         read-only; nothing here touches the chat socket, message send/
+         receive, or any existing element). No-ops on mobile, where the
+         sidebar is hidden, so it doesn't open a second socket needlessly. -->
+    <script>
+        (function () {
+            const sidebarList = document.querySelector('.message-sidebar .message-list');
+            if (!sidebarList) return;
+            if (!window.matchMedia('(min-width: 768px)').matches) return;
+
+            function sidebarPreviewHTML(fileType, message, msgSender) {
+                if (fileType === 'image') return '<i class="fas fa-image message-icon"></i><span class="message-preview">Photo</span>';
+                if (fileType === 'audio') return '<i class="fas fa-microphone message-icon"></i><span class="message-preview">Audio</span>';
+                if (fileType === 'video') return '<i class="fas fa-video message-icon"></i><span class="message-preview">Video</span>';
+                const text = (message || '').substring(0, 25) + ((message || '').length > 25 ? '…' : '');
+                const prefix = (msgSender === sender) ? 'You: ' : '';
+                return `<span class="message-preview">${prefix}${text}</span>`;
+            }
+
+            function connectSidebarSocket() {
+                const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+                const socket = new WebSocket(`${protocol}://${location.host}/ws/inbox/`);
+                let reconnectDelay = 1000;
+
+                socket.onopen = () => { reconnectDelay = 1000; };
+
+                socket.onclose = () => {
+                    setTimeout(() => {
+                        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+                        connectSidebarSocket();
+                    }, reconnectDelay);
+                };
+
+                socket.onerror = () => socket.close();
+
+                socket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'inbox_update') handleSidebarUpdate(data);
+                    } catch (e) {}
+                };
+            }
+
+            function handleSidebarUpdate(data) {
+                const otherUsername = (data.sender === sender) ? data.receiver : data.sender;
+                const isSentByMe = (data.sender === sender);
+                const isActiveConversation = (otherUsername === receiver);
+
+                const emptyState = sidebarList.querySelector('.empty-message');
+                if (emptyState) emptyState.remove();
+
+                let existing = sidebarList.querySelector(`.message-item[data-username="${otherUsername}"]`);
+
+                if (existing) {
+                    const previewContainer = existing.querySelector('.message-preview-container');
+                    let unreadCount = parseInt(existing.dataset.unread || '0');
+
+                    if (!isSentByMe && !isActiveConversation) {
+                        unreadCount += 1;
+                        existing.dataset.unread = unreadCount;
+                    }
+
+                    previewContainer.innerHTML = sidebarPreviewHTML(data.file_type, data.message, data.sender);
+
+                    if (!isSentByMe && !isActiveConversation && unreadCount > 0) {
+                        const badge = document.createElement('span');
+                        badge.className = 'unread-badge';
+                        badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+                        previewContainer.appendChild(badge);
+                    }
+
+                    const timeEl = existing.querySelector('.message-time');
+                    if (timeEl) timeEl.textContent = data.time || 'just now';
+
+                    sidebarList.prepend(existing);
+
+                    existing.classList.remove('inbox-new-flash');
+                    void existing.offsetWidth;
+                    existing.classList.add('inbox-new-flash');
+
+                } else {
+                    const avatarUrl = isSentByMe
+                        ? (data.receiver_avatar || `https://placehold.co/40x40/0084ff/FFFFFF?text=${otherUsername.charAt(0).toUpperCase()}`)
+                        : (data.sender_avatar || `https://placehold.co/40x40/0084ff/FFFFFF?text=${otherUsername.charAt(0).toUpperCase()}`);
+
+                    const a = document.createElement('a');
+                    a.href = `/message/${otherUsername}/`;
+                    a.className = 'message-item inbox-new-flash' + (isActiveConversation ? ' active' : '');
+                    a.dataset.username = otherUsername;
+                    a.dataset.unread = (!isSentByMe && !isActiveConversation) ? '1' : '0';
+
+                    const unreadBadge = (!isSentByMe && !isActiveConversation) ? `<span class="unread-badge">1</span>` : '';
+
+                    a.innerHTML = `
+                        <img src="${avatarUrl}" alt="${otherUsername}" class="profile-pic"
+                             onerror="this.src='https://placehold.co/40x40/0084ff/FFFFFF?text=${otherUsername.charAt(0).toUpperCase()}'">
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="username">${otherUsername}</span>
+                                <span class="message-time">${data.time || 'just now'}</span>
+                            </div>
+                            <div class="message-preview-container">
+                                ${sidebarPreviewHTML(data.file_type, data.message, data.sender)}
+                                ${unreadBadge}
+                            </div>
+                        </div>`;
+
+                    sidebarList.prepend(a);
+                }
+            }
+
+            // Flash animation reuses the same keyframes defined for the
+            // standalone inbox page; define locally too in case this page
+            // is ever served without inbox.html's stylesheet.
+            if (!document.getElementById('sidebarFlashKeyframes')) {
+                const styleTag = document.createElement('style');
+                styleTag.id = 'sidebarFlashKeyframes';
+                styleTag.textContent = `
+                    @keyframes inboxFlash { 0% { background-color: var(--mfy-primary-soft); } 100% { background-color: transparent; } }
+                    .message-sidebar .message-item.inbox-new-flash { animation: inboxFlash 1.1s ease forwards; }
+                `;
+                document.head.appendChild(styleTag);
+            }
+
+            connectSidebarSocket();
+        })();
+    </script>
 </body>
 </html>
  

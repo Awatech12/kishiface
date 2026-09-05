@@ -8,24 +8,78 @@
     <title>{{user.username}} Inbox | Direct</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #fafafa;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
+        :root {
+            /* Marketfy design system — matches home.html exactly */
+            --mfy-primary: #0095f6;
+            --mfy-primary-dark: #0077c8;
+            --mfy-primary-soft: #eaf6ff;
+            --mfy-ink: #262626;         /* == home --mfy-text */
+            --mfy-ink-soft: #8e8e8e;    /* == home --mfy-text-light */
+            --mfy-muted: #8e8e8e;       /* == home --mfy-text-light */
+            --mfy-border: #dbdbdb;      /* == home --mfy-border */
+            --mfy-border-soft: #fafafa; /* == home --mfy-bg, used for hover states */
+            --mfy-bg: #fafafa;          /* == home --mfy-bg */
+            --mfy-surface: #ffffff;     /* == home --mfy-white */
+            --mfy-radius-lg: 12px;
+            --mfy-radius-md: 8px;
+            --mfy-shadow-sm: none;      /* flat layout — no shadows on cards/icons */
+            --mfy-shadow-md: 0 8px 24px rgba(20, 21, 25, 0.10);
         }
 
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--mfy-bg);
+            margin: 0;
+            padding: 0;
+            color: var(--mfy-ink);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ==========================================================
+           Workspace shell — single column on mobile, two-panel from
+           tablet up. The right panel is a static preview area; opening
+           a conversation still navigates to the full message page.
+           ========================================================== */
+        .inbox-workspace {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            margin: 0 auto;
+            background: var(--mfy-surface);
+        }
+
+        @media (min-width: 768px) {
+            .inbox-workspace {
+                max-width: 1180px;
+                height: 100vh;
+                height: 100dvh;
+                border-left: 1px solid var(--mfy-border);
+                border-right: 1px solid var(--mfy-border);
+            }
+        }
+
+        /* ---------------- Left panel: conversation list ---------------- */
         .inbox-container {
             width: 100%;
-            max-width: 500px;
-            background-color: #fff;
-            border: 1px solid #dbdbdb;
-            border-radius: 3px;
-            min-height: 100vh;
+            background-color: var(--mfy-surface);
             display: flex;
             flex-direction: column;
+            min-width: 0;
+        }
+
+        @media (min-width: 768px) {
+            .inbox-container {
+                width: 360px;
+                flex-shrink: 0;
+                border-right: 1px solid var(--mfy-border);
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .inbox-container { width: 400px; }
         }
 
         /* Header */
@@ -33,40 +87,58 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
-            border-bottom: 1px solid #dbdbdb;
-            position: sticky;
-            top: 0;
-            background-color: #fff;
-            z-index: 10;
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--mfy-border);
+            flex-shrink: 0;
         }
 
         .inbox-header h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
+            font-size: 1.15rem;
+            font-weight: 700;
             margin: 0;
-            color: #262626;
+            color: var(--mfy-ink);
+            display: flex;
+            align-items: center;
         }
+
+        .header-icons a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            color: var(--mfy-ink-soft);
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+        .header-icons a:hover { background: var(--mfy-border-soft); }
 
         /* Search Bar */
         .search-container {
-            padding: 12px 16px;
-            background-color: #fafafa;
-            border-bottom: 1px solid #dbdbdb;
+            padding: 10px 16px 14px;
+            flex-shrink: 0;
         }
 
         .search-box {
             display: flex;
             align-items: center;
-            background-color: white;
-            border-radius: 8px;
-            padding: 8px 12px;
-            border: 1px solid #dbdbdb;
+            background-color: var(--mfy-bg);
+            border-radius: 100px;
+            padding: 9px 14px;
+            border: 1px solid transparent;
+            transition: border-color 0.15s, background 0.15s;
+        }
+
+        .search-box:focus-within {
+            border-color: var(--mfy-primary);
+            background: var(--mfy-surface);
         }
 
         .search-box i {
-            color: #8e8e8e;
-            margin-right: 12px;
+            color: var(--mfy-muted);
+            margin-right: 10px;
+            font-size: 0.85rem;
         }
 
         .search-box input {
@@ -75,20 +147,24 @@
             width: 100%;
             font-size: 0.9rem;
             background: transparent;
-            color: #262626;
+            color: var(--mfy-ink);
         }
 
         /* Message List */
         .message-list {
             display: flex;
             flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 0 8px 8px;
         }
 
         .message-item {
             display: flex;
             align-items: center;
-            padding: 12px 16px;
-            border-bottom: 1px solid #efefef;
+            padding: 10px 8px;
+            border-radius: var(--mfy-radius-md);
             text-decoration: none;
             color: inherit;
             position: relative;
@@ -96,26 +172,31 @@
         }
 
         .message-item:hover {
-            background-color: #fafafa;
+            background-color: var(--mfy-border-soft);
+        }
+
+        .message-item.active {
+            background-color: var(--mfy-primary-soft);
         }
 
         /* Flash animation when a new message bumps a conversation to top */
         @keyframes inboxFlash {
-            0%   { background-color: #e8f4ff; }
+            0%   { background-color: var(--mfy-primary-soft); }
             100% { background-color: transparent; }
         }
 
         .message-item.inbox-new-flash {
-            animation: inboxFlash 1s ease forwards;
+            animation: inboxFlash 1.1s ease forwards;
         }
 
         .profile-pic {
-            width: 56px;
-            height: 56px;
+            width: 52px;
+            height: 52px;
             border-radius: 50%;
             object-fit: cover;
             margin-right: 12px;
             flex-shrink: 0;
+            background: var(--mfy-border-soft);
         }
 
         .message-content {
@@ -129,21 +210,26 @@
         .message-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 2px;
         }
 
         .username {
             font-weight: 600;
-            font-size: 0.95rem;
-            color: #262626;
+            font-size: 0.92rem;
+            color: var(--mfy-ink);
             text-decoration: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .message-time {
-            font-size: 0.75rem;
-            color: #8e8e8e;
+            font-size: 0.72rem;
+            color: var(--mfy-muted);
             white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .message-preview-container {
@@ -153,8 +239,8 @@
         }
 
         .message-preview {
-            font-size: 0.85rem;
-            color: #8e8e8e;
+            font-size: 0.84rem;
+            color: var(--mfy-ink-soft);
             line-height: 1.2;
             overflow: hidden;
             white-space: nowrap;
@@ -163,41 +249,52 @@
             flex-grow: 1;
         }
 
+        .message-item[data-unread]:not([data-unread="0"]) .message-preview {
+            color: var(--mfy-ink);
+            font-weight: 600;
+        }
+        .message-item[data-unread]:not([data-unread="0"]) .username {
+            font-weight: 700;
+        }
+
         .message-icon {
             margin-right: 6px;
-            font-size: 0.85rem;
-            color: #8e8e8e;
+            font-size: 0.8rem;
+            color: var(--mfy-muted);
             flex-shrink: 0;
         }
 
         /* Unread indicator */
         .unread-badge {
-            background-color: #0095f6;
+            background-color: var(--mfy-primary);
             color: white;
             border-radius: 50%;
-            min-width: 20px;
-            height: 20px;
+            min-width: 19px;
+            height: 19px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.7rem;
-            font-weight: 600;
-            padding: 0 6px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 0 5px;
             margin-left: 8px;
             flex-shrink: 0;
         }
 
         .empty-message {
             text-align: center;
-            color: #8e8e8e;
-            padding: 50px 20px;
+            color: var(--mfy-muted);
+            padding: 60px 24px;
             font-size: 1rem;
+            margin: auto;
         }
+        .empty-message h3 { color: var(--mfy-ink); font-size: 1rem; margin: 0 0 6px; }
+        .empty-message p { margin: 0; font-size: 0.85rem; }
 
         /* Live dot indicator in header */
         .inbox-live-dot {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
             background: #ccc;
             display: inline-block;
@@ -205,15 +302,52 @@
             transition: background 0.3s;
         }
         .inbox-live-dot.connected {
-            background: #4caf50;
+            background: #31c48d;
         }
 
-        @media (max-width: 600px) {
-            .inbox-container {
-                border: none;
-                border-radius: 0;
-            }
+        /* ---------------- Right panel: desktop preview area ---------------- */
+        .inbox-preview-panel {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--mfy-bg);
+            text-align: center;
+            padding: 40px;
+        }
 
+        @media (min-width: 768px) {
+            .inbox-preview-panel { display: flex; }
+        }
+
+        .inbox-preview-icon {
+            width: 88px;
+            height: 88px;
+            border-radius: 50%;
+            background: var(--mfy-surface);
+            border: 1px solid var(--mfy-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+            color: var(--mfy-primary);
+            margin-bottom: 20px;
+        }
+        .inbox-preview-panel h3 {
+            margin: 0 0 6px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--mfy-ink);
+        }
+        .inbox-preview-panel p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--mfy-muted);
+            max-width: 280px;
+        }
+
+        @media (max-width: 767px) {
             .profile-pic {
                 width: 50px;
                 height: 50px;
@@ -222,78 +356,87 @@
     </style>
 </head>
 <body>
-    <div class="inbox-container">
-        <header class="inbox-header">
-            <h2>{{user.username}} <span class="inbox-live-dot" id="inboxLiveDot" title="Real-time connection"></span></h2>
-            <div class="header-icons">
-               <a href="/inbox"><i class="fa-solid fa-rotate-right"></i></a>
-            </div>
-        </header>
+    <div class="inbox-workspace">
+        <div class="inbox-container">
+            <header class="inbox-header">
+                <h2>Messages <span class="inbox-live-dot" id="inboxLiveDot" title="Real-time connection"></span></h2>
+                <div class="header-icons">
+                   <a href="/inbox" title="Refresh"><i class="fa-solid fa-rotate-right"></i></a>
+                </div>
+            </header>
 
-        <!-- Search Bar -->
-        <div class="search-container">
-            <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" id="inboxSearchInput" placeholder="Search messages...">
+            <!-- Search Bar -->
+            <div class="search-container">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="inboxSearchInput" placeholder="Search messages...">
+                </div>
+            </div>
+
+            <!-- Message List -->
+            <div class="message-list" id="inboxMessageList">
+                {% for other_user, conversation_data in conversations.items %}
+                    {% with message=conversation_data.last_message unread_count=conversation_data.unread_count %}
+                    <a href="{% url 'message' other_user.username %}"
+                       class="message-item"
+                       data-username="{{ other_user.username }}"
+                       data-avatar="{% if other_user.profile.picture %}{{ other_user.profile.picture.url }}{% else %}https://placehold.co/40x40/0084ff/FFFFFF?text={{ other_user.username|slice:':1'|upper }}{% endif %}"
+                       data-unread="{{ unread_count }}">
+                        <img src="{% if other_user.profile.picture %}{{ other_user.profile.picture.url }}{% else %}https://placehold.co/40x40/0084ff/FFFFFF?text={{ other_user.username|slice:':1'|upper }}{% endif %}"
+                             alt="{{ other_user.username }}" class="profile-pic">
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="username">{{ other_user.username }}</span>
+                                <span class="message-time">{{ message.created_at|insta_timesince }}</span>
+                            </div>
+                            <div class="message-preview-container">
+                                {% if message.file_type == 'image' %}
+                                    <div style="display:flex;align-items:center;">
+                                        <i class="fas fa-image message-icon"></i>
+                                        <span class="message-preview">Photo</span>
+                                    </div>
+                                {% elif message.file_type == 'audio' %}
+                                    <div style="display:flex;align-items:center;">
+                                        <i class="fas fa-microphone message-icon"></i>
+                                        <span class="message-preview">Audio</span>
+                                    </div>
+                                {% elif message.file_type == 'video' %}
+                                    <div style="display:flex;align-items:center;">
+                                        <i class="fas fa-video message-icon"></i>
+                                        <span class="message-preview">Video</span>
+                                    </div>
+                                {% else %}
+                                    <span class="message-preview">
+                                        {% if message.sender == user %}
+                                            You: {{ message.conversation|truncatechars:25 }}
+                                        {% else %}
+                                            {{ message.conversation|truncatechars:25 }}
+                                        {% endif %}
+                                    </span>
+                                {% endif %}
+
+                                {% if unread_count > 0 %}
+                                    <span class="unread-badge">{% if unread_count > 9 %}9+{% else %}{{ unread_count }}{% endif %}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </a>
+                    {% endwith %}
+                {% empty %}
+                    <div class="empty-message" id="inboxEmptyState">
+                        <i class="fas fa-comments" style="font-size:3rem;color:#ddd;margin-bottom:20px;"></i>
+                        <h3>No messages yet</h3>
+                        <p>Start a conversation by messaging a friend</p>
+                    </div>
+                {% endfor %}
             </div>
         </div>
 
-        <!-- Message List -->
-        <div class="message-list" id="inboxMessageList">
-            {% for other_user, conversation_data in conversations.items %}
-                {% with message=conversation_data.last_message unread_count=conversation_data.unread_count %}
-                <a href="{% url 'message' other_user.username %}"
-                   class="message-item"
-                   data-username="{{ other_user.username }}"
-                   data-avatar="{% if other_user.profile.picture %}{{ other_user.profile.picture.url }}{% else %}https://placehold.co/40x40/0084ff/FFFFFF?text={{ other_user.username|slice:':1'|upper }}{% endif %}"
-                   data-unread="{{ unread_count }}">
-                    <img src="{% if other_user.profile.picture %}{{ other_user.profile.picture.url }}{% else %}https://placehold.co/40x40/0084ff/FFFFFF?text={{ other_user.username|slice:':1'|upper }}{% endif %}"
-                         alt="{{ other_user.username }}" class="profile-pic">
-                    <div class="message-content">
-                        <div class="message-header">
-                            <span class="username">{{ other_user.username }}</span>
-                            <span class="message-time">{{ message.created_at|insta_timesince }}</span>
-                        </div>
-                        <div class="message-preview-container">
-                            {% if message.file_type == 'image' %}
-                                <div style="display:flex;align-items:center;">
-                                    <i class="fas fa-image message-icon"></i>
-                                    <span class="message-preview">Photo</span>
-                                </div>
-                            {% elif message.file_type == 'audio' %}
-                                <div style="display:flex;align-items:center;">
-                                    <i class="fas fa-microphone message-icon"></i>
-                                    <span class="message-preview">Audio</span>
-                                </div>
-                            {% elif message.file_type == 'video' %}
-                                <div style="display:flex;align-items:center;">
-                                    <i class="fas fa-video message-icon"></i>
-                                    <span class="message-preview">Video</span>
-                                </div>
-                            {% else %}
-                                <span class="message-preview">
-                                    {% if message.sender == user %}
-                                        You: {{ message.conversation|truncatechars:25 }}
-                                    {% else %}
-                                        {{ message.conversation|truncatechars:25 }}
-                                    {% endif %}
-                                </span>
-                            {% endif %}
-
-                            {% if unread_count > 0 %}
-                                <span class="unread-badge">{% if unread_count > 9 %}9+{% else %}{{ unread_count }}{% endif %}</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                </a>
-                {% endwith %}
-            {% empty %}
-                <div class="empty-message" id="inboxEmptyState">
-                    <i class="fas fa-comments" style="font-size:3rem;color:#ddd;margin-bottom:20px;"></i>
-                    <h3>No messages yet</h3>
-                    <p>Start a conversation by messaging a friend</p>
-                </div>
-            {% endfor %}
+        <!-- Desktop-only preview panel; navigation still goes to message.html -->
+        <div class="inbox-preview-panel">
+            <div class="inbox-preview-icon"><i class="far fa-comments"></i></div>
+            <h3>Your Messages</h3>
+            <p>Select a conversation from the list to start messaging.</p>
         </div>
     </div>
 

@@ -3759,11 +3759,19 @@ def message(request, username):
         except Exception:
             job_context = None
 
+    # ── Sidebar conversation list (merged desktop workspace) ───────────────
+    # Same data the inbox page renders, reused here so the message page can
+    # show the conversation list alongside the open chat on wider screens.
+    # On mobile this context is simply unused by the template (chat stays
+    # full-screen), so this adds no behavior change there.
+    sidebar_conversations = _build_inbox_conversations(request.user)
+
     context = {
         'grouped_messages': grouped_messages,
         'receiver': receiver,
         'product_context': product_context,
         'job_context': job_context,
+        'conversations': sidebar_conversations,
     }
     return render(request, 'message.html', context)
 
@@ -4670,8 +4678,13 @@ def mark_all_notifications_read(request):
 # Inbox
 # ─────────────────────────────────────────────────────────────────────────────
 
-@login_required(login_url='/')
-def inbox(request):
+def _build_inbox_conversations(user):
+    """Shared conversation-list builder used by both the inbox page and the
+    message page (so the message page can render the same sidebar for the
+    merged desktop workspace layout). Behavior/queries unchanged from the
+    original inbox() implementation — just factored out so both views stay
+    in sync instead of duplicating the query logic.
+    """
     # PREVIOUS BEHAVIOR (critical bottleneck): loaded every message this user
     # has ever sent/received into Python just to discover conversation
     # partners (unbounded — grows without limit for active users), then ran
@@ -4685,13 +4698,13 @@ def inbox(request):
     # the user has ever exchanged (vs. 1 unbounded scan + 2-per-partner
     # before).
     other_user_expr = Case(
-        When(sender=request.user, then=F('receiver_id')),
+        When(sender=user, then=F('receiver_id')),
         default=F('sender_id'),
         output_field=IntegerField(),
     )
     base_qs = (
         Message.objects
-        .filter(Q(sender=request.user) | Q(receiver=request.user))
+        .filter(Q(sender=user) | Q(receiver=user))
         .annotate(other_user_id=other_user_expr)
     )
 
@@ -4711,7 +4724,7 @@ def inbox(request):
 
     unread_counts = dict(
         Message.objects
-        .filter(receiver=request.user, is_read=False)
+        .filter(receiver=user, is_read=False)
         .values('sender_id')
         .annotate(n=Count('id'))
         .values_list('sender_id', 'n')
@@ -4719,7 +4732,7 @@ def inbox(request):
 
     conversations = {}
     for msg in last_messages_qs:
-        partner = msg.sender if msg.sender_id != request.user.id else msg.receiver
+        partner = msg.sender if msg.sender_id != user.id else msg.receiver
         # Guards against the rare tie where two partners' latest messages
         # land on the exact same timestamp and both match one Q clause.
         if partner in conversations and conversations[partner]['last_message'].id > msg.id:
@@ -4734,10 +4747,15 @@ def inbox(request):
         key=lambda x: x[1]['last_message'].created_at,
         reverse=True
     )
+    return dict(sorted_conversations)
 
+
+@login_required(login_url='/')
+def inbox(request):
+    conversations = _build_inbox_conversations(request.user)
     contacts = set(conversations.keys())
     return render(request, 'inbox.html', {
-        'conversations': dict(sorted_conversations),
+        'conversations': conversations,
         'contacts': contacts,
         'user': request.user
     })
