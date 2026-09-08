@@ -2821,21 +2821,28 @@ def update_profile(request, username):
                     profile_dirty = True
 
             # ── Professional sections (Services, Portfolio, Projects,
-            # Achievements, Jobs) + "sells products" toggle. Only touched when
-            # explicitly submitted (the "Manage professional sections" panel
-            # on the profile page), so the main profile-edit form is unaffected.
+            # Achievements, Jobs). Only touched when explicitly submitted (the
+            # "Manage professional sections" panel on the profile page), so
+            # the main profile-edit form is unaffected.
             if 'sections_submitted' in request.POST:
                 profile.enabled_sections = [
                     s for s in request.POST.getlist('sections')
                     if s in Profile.VALID_PROFESSIONAL_SECTIONS
                 ]
-                profile.sells_products = request.POST.get('sells_products') in ('1', 'true', 'on')
                 profile_dirty = True
             elif member_type_submitted and member_type in {k for k, _ in MEMBER_TYPE_CHOICES} and not profile.enabled_sections:
                 # First time a member type is chosen — seed sensible defaults
                 # (the owner can still fine-tune them from "Manage sections").
                 profile.enabled_sections = Profile.default_sections_for(member_type)
                 profile.sells_products = member_type in Profile.MEMBER_TYPES_SELLING_BY_DEFAULT
+                profile_dirty = True
+
+            # "Sell products" toggle lives on its own independent flag
+            # (sells_products_submitted) so it can be saved from either the
+            # main Edit Profile form or the "Manage professional sections"
+            # panel without either one clobbering enabled_sections.
+            if 'sells_products_submitted' in request.POST:
+                profile.sells_products = request.POST.get('sells_products') in ('1', 'true', 'on')
                 profile_dirty = True
 
             if profile_dirty:

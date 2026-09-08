@@ -1101,6 +1101,29 @@
             margin-top: 6px; font-family: inherit;
         }
 
+        /* ── Full-image viewer modal (cover / logo) ── */
+        .kbiz-image-overlay {
+            align-items: center !important; justify-content: center !important;
+            background: rgba(0,0,0,.9) !important; z-index: 300 !important; padding: 20px;
+        }
+        .kbiz-image-modal {
+            background: transparent; border-radius: 0; padding: 0; margin: 0;
+            width: auto; max-width: 94vw; max-height: 90vh;
+            display: flex; align-items: center; justify-content: center;
+            animation: none; box-shadow: none;
+        }
+        .kbiz-image-modal img {
+            max-width: 94vw; max-height: 90vh; object-fit: contain;
+            border-radius: 8px; display: block;
+        }
+        .kbiz-image-modal-close {
+            position: fixed; top: 18px; right: 18px; width: 40px; height: 40px;
+            border-radius: 50%; background: rgba(255,255,255,.15); color: #fff;
+            border: none; font-size: 24px; line-height: 1; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; z-index: 301;
+        }
+        .kbiz-image-modal-close:hover { background: rgba(255,255,255,.28); }
+
         /* ── Toast ── */
         .kbiz-toast {
             position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
@@ -1479,6 +1502,21 @@
             font-size: 12px; font-weight: 700; cursor: pointer; padding: 0;
         }
 
+        /* ── Collapsible ("dropdown") review reply ── */
+        .kbiz-reply-dropdown-toggle {
+            margin-top: 8px; margin-left: 20px; background: none; border: none;
+            color: var(--mfy-text-light); font-size: 12.5px; font-weight: 700;
+            cursor: pointer; padding: 4px 0; display: flex; align-items: center; gap: 6px;
+        }
+        .kbiz-reply-dropdown-toggle:hover { color: var(--mfy-primary); }
+        .kbiz-reply-dropdown-toggle .kbiz-reply-dropdown-line { width: 20px; height: 1px; background: var(--mfy-border); display: inline-block; }
+        .kbiz-reply-dropdown-toggle i.fa-chevron-down { font-size: 10px; transition: transform .2s ease; }
+        .kbiz-reply-dropdown-toggle.open i.fa-chevron-down { transform: rotate(180deg); }
+        .kbiz-owner-reply.kbiz-reply-dropdown-body {
+            display: none; margin-top: 8px;
+        }
+        .kbiz-owner-reply.kbiz-reply-dropdown-body.open { display: block; }
+
         /* ── Mobile sticky contact bar ─────────────────────────────────── */
         .kbiz-sticky-contact-bar {
             display: none;
@@ -1598,7 +1636,7 @@
 <!-- Cover -->
 <div class="kbiz-cover">
     {% if page.get_cover_url %}
-    <img src="{{ page.get_cover_url }}" alt="Cover photo">
+    <img src="{{ page.get_cover_url }}" alt="Cover photo" style="cursor:pointer;" onclick="kbizOpenImageModal('{{ page.get_cover_url }}', 'Cover photo')">
     {% else %}
     <div class="kbiz-cover-ph"><i class="fas fa-store" style="font-size:34px;margin-right:10px;"></i></div>
     {% endif %}
@@ -1610,7 +1648,7 @@
         <div class="kbiz-header-left">
             <div class="kbiz-logo">
                 {% if page.get_logo_url %}
-                <img src="{{ page.get_logo_url }}" alt="{{ page.name }} logo">
+                <img src="{{ page.get_logo_url }}" alt="{{ page.name }} logo" style="cursor:pointer;" onclick="kbizOpenImageModal('{{ page.get_logo_url }}', '{{ page.name|escapejs }} logo')">
                 {% else %}
                 <div class="kbiz-logo-ph"><i class="fas fa-store"></i></div>
                 {% endif %}
@@ -2339,7 +2377,10 @@
             {% endif %}
 
             {% if review.has_owner_reply %}
-            <div class="kbiz-owner-reply">
+            <button type="button" class="kbiz-reply-dropdown-toggle" id="kbizReplyToggle-{{ review.review_id }}" data-page-name="{{ page.name|escapejs }}" onclick="kbizToggleReplyDropdown('{{ review.review_id }}')" aria-expanded="false">
+                <span class="kbiz-reply-dropdown-line"></span> View reply from {{ page.name }} <i class="fas fa-chevron-down"></i>
+            </button>
+            <div class="kbiz-owner-reply kbiz-reply-dropdown-body" id="kbizReplyBody-{{ review.review_id }}">
                 <div class="kbiz-owner-reply-label"><i class="fas fa-store"></i> Reply from {{ page.name }}</div>
                 <div class="kbiz-owner-reply-text">{{ review.owner_reply }}</div>
             </div>
@@ -2440,6 +2481,14 @@
 </div>
 </div>
 <!-- /About Tab Panel -->
+
+<!-- ── Full-image viewer modal (cover / logo) ── -->
+<div class="kbiz-overlay kbiz-image-overlay" id="kbizImageModalOverlay" onclick="kbizCloseImageModal(event)">
+    <button type="button" class="kbiz-image-modal-close" onclick="kbizCloseImageModal()" aria-label="Close">&times;</button>
+    <div class="kbiz-image-modal" onclick="event.stopPropagation()">
+        <img id="kbizImageModalImg" src="" alt="">
+    </div>
+</div>
 
 <!-- ── Manage Admins modal (owner only) ── -->
 {% if is_owner %}
@@ -4025,6 +4074,25 @@ async function deleteBusinessService(serviceId) {
     }
 }
 
+// ── Full-image viewer (cover / logo) ──
+function kbizOpenImageModal(src, alt) {
+    if (!src) return;
+    const overlay = document.getElementById('kbizImageModalOverlay');
+    const img = document.getElementById('kbizImageModalImg');
+    if (!overlay || !img) return;
+    img.src = src;
+    img.alt = alt || '';
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function kbizCloseImageModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const overlay = document.getElementById('kbizImageModalOverlay');
+    if (overlay) overlay.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
 // ── Reviews & Ratings ──
 let kbizSelectedStar = {{ viewer_review.rating|default:0 }};
 
@@ -4095,6 +4163,18 @@ async function kbizDeleteReview(reviewId) {
     } catch (_) {
         toast('Network error. Please try again.');
     }
+}
+
+function kbizToggleReplyDropdown(reviewId) {
+    const body = document.getElementById(`kbizReplyBody-${reviewId}`);
+    const toggle = document.getElementById(`kbizReplyToggle-${reviewId}`);
+    if (!body || !toggle) return;
+    const isOpen = body.classList.toggle('open');
+    toggle.classList.toggle('open', isOpen);
+    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    toggle.innerHTML = isOpen
+        ? '<span class="kbiz-reply-dropdown-line"></span> Hide reply <i class="fas fa-chevron-down"></i>'
+        : `<span class="kbiz-reply-dropdown-line"></span> View reply from ${toggle.dataset.pageName} <i class="fas fa-chevron-down"></i>`;
 }
 
 function kbizToggleReplyForm(reviewId) {
