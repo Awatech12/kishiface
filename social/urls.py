@@ -120,6 +120,8 @@ urlpatterns = [
     # ── Job vacancy reactions ──────────────────────────────────────────────────
     path('jobs/<uuid:job_id>/vibe/',           views.job_vibe,        name='job_vibe'),
     path('jobs/<uuid:job_id>/comments/',       views.job_comments,    name='job_comments'),
+    path('jobs/<uuid:job_id>/comments/<uuid:comment_id>/replies/', views.job_comment_replies, name='job_comment_replies'),
+    path('jobs/<uuid:job_id>/comments/<uuid:comment_id>/like/',    views.job_comment_like,    name='job_comment_like'),
 
     # ── Job Applications — job seeker ───────────────────────────────────────
     path('jobs/<uuid:job_id>/apply/',                  views.job_application_create,         name='job_application_create'),
@@ -135,6 +137,8 @@ urlpatterns = [
     # ── Social event reactions ─────────────────────────────────────────────────
     path('events/<int:event_id>/vibe/',        views.event_vibe,      name='event_vibe'),
     path('events/<int:event_id>/comments/',    views.event_comments,  name='event_comments'),
+    path('events/<int:event_id>/comments/<uuid:comment_id>/replies/', views.event_comment_replies, name='event_comment_replies'),
+    path('events/<int:event_id>/comments/<uuid:comment_id>/like/',    views.event_comment_like,    name='event_comment_like'),
 
     # ══════════════════════════════════════════════════════════════════════════
     # ADMIN DASHBOARD  (staff only — guarded in views via @staff_member_required)
@@ -174,6 +178,8 @@ urlpatterns = [
     path('posts/<uuid:post_id>/vote/',                  views.business_post_poll_vote,   name='business_post_poll_vote'),
     path('posts/<uuid:post_id>/vibe/',                  views.business_post_vibe,        name='business_post_vibe'),
     path('posts/<uuid:post_id>/comments/',              views.business_post_comments,    name='business_post_comments'),
+    path('posts/<uuid:post_id>/comments/<uuid:comment_id>/replies/', views.business_post_comment_replies, name='business_post_comment_replies'),
+    path('posts/<uuid:post_id>/comments/<uuid:comment_id>/like/',    views.business_post_comment_like,    name='business_post_comment_like'),
 
     # ── Business Page — Services ────────────────────────────────────────────
     path('business/<slug:slug>/services/create/',       views.business_service_create,     name='business_service_create'),
@@ -198,13 +204,29 @@ urlpatterns = [
     path('profile/portfolio/<uuid:item_id>/delete/',      views.profile_portfolio_delete,    name='profile_portfolio_delete'),
     path('profile/portfolio/<uuid:item_id>/vibe/',        views.profile_portfolio_vibe,       name='profile_portfolio_vibe'),
     path('profile/portfolio/<uuid:item_id>/comments/',    views.profile_portfolio_comments,   name='profile_portfolio_comments'),
+    path('profile/portfolio/<uuid:item_id>/comments/<uuid:comment_id>/replies/', views.profile_portfolio_comment_replies, name='profile_portfolio_comment_replies'),
+    path('profile/portfolio/<uuid:item_id>/comments/<uuid:comment_id>/like/',    views.profile_portfolio_comment_like,    name='profile_portfolio_comment_like'),
     path('profile/achievements/create/',                  views.profile_achievement_create,  name='profile_achievement_create'),
     path('profile/achievements/<uuid:achievement_id>/delete/', views.profile_achievement_delete, name='profile_achievement_delete'),
+    path('profile/achievements/<uuid:achievement_id>/comments/', views.profile_achievement_comments, name='profile_achievement_comments'),
+    path('profile/achievements/<uuid:achievement_id>/comments/<uuid:comment_id>/replies/', views.profile_achievement_comment_replies, name='profile_achievement_comment_replies'),
+    path('profile/achievements/<uuid:achievement_id>/comments/<uuid:comment_id>/like/',    views.profile_achievement_comment_like,    name='profile_achievement_comment_like'),
+    path('profile/experience/<uuid:experience_id>/comments/', views.profile_experience_comments, name='profile_experience_comments'),
+    path('profile/experience/<uuid:experience_id>/comments/<uuid:comment_id>/replies/', views.profile_experience_comment_replies, name='profile_experience_comment_replies'),
+    path('profile/experience/<uuid:experience_id>/comments/<uuid:comment_id>/like/',    views.profile_experience_comment_like,    name='profile_experience_comment_like'),
+    path('profile/education/<uuid:education_id>/comments/', views.profile_education_comments, name='profile_education_comments'),
+    path('profile/education/<uuid:education_id>/comments/<uuid:comment_id>/replies/', views.profile_education_comment_replies, name='profile_education_comment_replies'),
+    path('profile/education/<uuid:education_id>/comments/<uuid:comment_id>/like/',    views.profile_education_comment_like,    name='profile_education_comment_like'),
+    path('profile/service/<uuid:service_id>/comments/', views.profile_service_comments, name='profile_service_comments'),
+    path('profile/service/<uuid:service_id>/comments/<uuid:comment_id>/replies/', views.profile_service_comment_replies, name='profile_service_comment_replies'),
+    path('profile/service/<uuid:service_id>/comments/<uuid:comment_id>/like/',    views.profile_service_comment_like,    name='profile_service_comment_like'),
     path('profile/posts/create/',                         views.profile_post_create,         name='profile_post_create'),
     path('profile/posts/<uuid:post_id>/delete/',          views.profile_post_delete,         name='profile_post_delete'),
     path('profile/posts/<uuid:post_id>/vote/',            views.profile_post_poll_vote,      name='profile_post_poll_vote'),
     path('profile/posts/<uuid:post_id>/vibe/',            views.profile_post_vibe,           name='profile_post_vibe'),
     path('profile/posts/<uuid:post_id>/comments/',        views.profile_post_comments,       name='profile_post_comments'),
+    path('profile/posts/<uuid:post_id>/comments/<uuid:comment_id>/replies/', views.profile_post_comment_replies, name='profile_post_comment_replies'),
+    path('profile/posts/<uuid:post_id>/comments/<uuid:comment_id>/like/',    views.profile_post_comment_like,    name='profile_post_comment_like'),
     path('profile/products/upload/',                      views.profile_product_upload,      name='profile_product_upload'),
 
     # ── Profiles (catch-alls — must stay at the bottom) ───────────────────────

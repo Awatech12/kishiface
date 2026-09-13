@@ -3137,6 +3137,8 @@ class JobComment(models.Model):
     job        = models.ForeignKey(JobVacancy, on_delete=models.CASCADE, related_name='comments')
     author     = models.ForeignKey(User,       on_delete=models.CASCADE, related_name='job_comments')
     text       = models.TextField()
+    parent     = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    likes      = models.ManyToManyField(User, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -3457,6 +3459,8 @@ class EventComment(models.Model):
     event      = models.ForeignKey(SocialEvent, on_delete=models.CASCADE, related_name='comments')
     author     = models.ForeignKey(User,        on_delete=models.CASCADE, related_name='event_comments')
     text       = models.TextField()
+    parent     = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    likes      = models.ManyToManyField(User, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -5053,6 +5057,8 @@ class BusinessPostComment(models.Model):
     post       = models.ForeignKey(BusinessPost, on_delete=models.CASCADE, related_name='comments')
     author     = models.ForeignKey(User,         on_delete=models.CASCADE, related_name='business_post_comments')
     text       = models.TextField()
+    parent     = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    likes      = models.ManyToManyField(User, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -5440,6 +5446,8 @@ class ProfilePostComment(models.Model):
     post       = models.ForeignKey(ProfilePost, on_delete=models.CASCADE, related_name='comments')
     author     = models.ForeignKey(User,        on_delete=models.CASCADE, related_name='profile_post_comments')
     text       = models.TextField()
+    parent     = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    likes      = models.ManyToManyField(User, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -5469,15 +5477,21 @@ class ProfilePostNotification(models.Model):
     Notifications tied to a ProfilePost (a personal profile update):
       - 'new_vibe'    → sent to the post owner when someone reacts to their post.
       - 'new_comment' → sent to the post owner when someone comments on their post.
+      - 'new_reply'   → sent to a comment's author when someone replies to it.
+      - 'mention'     → sent to each user @mentioned in a comment.
     A single actor can only have one active 'new_vibe' row per post (their
     reaction is refreshed in place if they change/re-apply it); comments
     always create a fresh row since each comment is a distinct event.
     """
     NEW_VIBE    = 'new_vibe'
     NEW_COMMENT = 'new_comment'
+    NEW_REPLY   = 'new_reply'
+    MENTION     = 'mention'
     NOTIF_TYPE_CHOICES = [
         (NEW_VIBE,    'New reaction'),
         (NEW_COMMENT, 'New comment'),
+        (NEW_REPLY,   'New reply'),
+        (MENTION,     'Mention'),
     ]
 
     notif_type = models.CharField(max_length=20, choices=NOTIF_TYPE_CHOICES, db_index=True)
@@ -5515,6 +5529,10 @@ class ProfilePostNotification(models.Model):
     def __str__(self):
         if self.notif_type == self.NEW_VIBE:
             return f"{self.actor.username} vibed {self.vibe_type} on post {self.post_id}"
+        if self.notif_type == self.NEW_REPLY:
+            return f"{self.actor.username} replied to a comment on post {self.post_id}"
+        if self.notif_type == self.MENTION:
+            return f"{self.actor.username} mentioned {self.to_user.username} on post {self.post_id}"
         return f"{self.actor.username} commented on post {self.post_id}"
 
 
@@ -5547,6 +5565,8 @@ class ProfilePortfolioItemComment(models.Model):
     item       = models.ForeignKey(ProfilePortfolioItem, on_delete=models.CASCADE, related_name='comments')
     author     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_portfolio_comments')
     text       = models.TextField()
+    parent     = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    likes      = models.ManyToManyField(User, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -5587,6 +5607,8 @@ class ProfileAchievementComment(models.Model):
     achievement = models.ForeignKey(ProfileAchievement, on_delete=models.CASCADE, related_name='comments')
     author      = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_achievement_comments')
     text        = models.TextField()
+    parent      = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    likes       = models.ManyToManyField(User, blank=True, related_name='+')
     created_at  = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -5627,6 +5649,8 @@ class ProfileExperienceComment(models.Model):
     experience = models.ForeignKey(ProfileExperience, on_delete=models.CASCADE, related_name='comments')
     author     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_experience_comments')
     text       = models.TextField()
+    parent     = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    likes      = models.ManyToManyField(User, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -5667,6 +5691,8 @@ class ProfileEducationComment(models.Model):
     education  = models.ForeignKey(ProfileEducation, on_delete=models.CASCADE, related_name='comments')
     author     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_education_comments')
     text       = models.TextField()
+    parent     = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    likes      = models.ManyToManyField(User, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -5707,6 +5733,8 @@ class ProfileServiceComment(models.Model):
     service    = models.ForeignKey(ProfileService, on_delete=models.CASCADE, related_name='comments')
     author     = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_service_comments')
     text       = models.TextField()
+    parent     = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    likes      = models.ManyToManyField(User, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -5739,15 +5767,21 @@ class ProfileItemNotification(models.Model):
     Notifications tied to one of a profile's "extra" sections:
       - 'new_vibe'    → sent to the item owner when someone reacts to it.
       - 'new_comment' → sent to the item owner when someone comments on it.
+      - 'new_reply'   → sent to a comment's author when someone replies to it.
+      - 'mention'     → sent to each user @mentioned in a comment.
     A single actor can only have one active 'new_vibe' row per item (their
     reaction is refreshed in place if they change/re-apply it); comments
     always create a fresh row since each comment is a distinct event.
     """
     NEW_VIBE    = 'new_vibe'
     NEW_COMMENT = 'new_comment'
+    NEW_REPLY   = 'new_reply'
+    MENTION     = 'mention'
     NOTIF_TYPE_CHOICES = [
         (NEW_VIBE,    'New reaction'),
         (NEW_COMMENT, 'New comment'),
+        (NEW_REPLY,   'New reply'),
+        (MENTION,     'Mention'),
     ]
 
     PORTFOLIO   = 'portfolio'
@@ -5830,8 +5864,13 @@ class ProfileItemNotification(models.Model):
         ]
 
     def __str__(self):
-        verb = 'vibed' if self.notif_type == self.NEW_VIBE else 'commented on'
-        return f"{self.actor.username} {verb} {self.get_section_display()} {self.target_id}"
+        if self.notif_type == self.NEW_VIBE:
+            return f"{self.actor.username} vibed {self.get_section_display()} {self.target_id}"
+        if self.notif_type == self.NEW_REPLY:
+            return f"{self.actor.username} replied to a comment on {self.get_section_display()} {self.target_id}"
+        if self.notif_type == self.MENTION:
+            return f"{self.actor.username} mentioned {self.to_user.username} on {self.get_section_display()} {self.target_id}"
+        return f"{self.actor.username} commented on {self.get_section_display()} {self.target_id}"
 
     @property
     def target(self):

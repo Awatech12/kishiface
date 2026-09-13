@@ -69,43 +69,69 @@ def format_post_text(text):
 
 @register.filter
 def format_comment_text(text):
-    """Simpler version for comments"""
+    """
+    Formatting for comment text — kept in sync with format_caption_text and
+    the client-side kfFormatCommentText() in home.html (used for comments
+    rendered live via JSON) so a comment reads identically wherever it's
+    shown: BB codes, @mentions (including dotted usernames like
+    'jane.doe'), #hashtags, URLs (with trailing sentence punctuation like
+    the period in "check this out." left outside the link), line breaks.
+    """
     if not text:
         return ""
-    
-    # Convert line breaks
-    text = text.replace('\n', '<br>')
-    
-    # Process URLs (using the improved regex)
-    url_pattern = r'(https?://[^\s<>"\']+|www\.[^\s<>"\']+)(?=[^.,?!:\s]|$)'
-    
+
+    # 1. Normalise line endings
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+    # 2. BB codes
+    text = re.sub(r'\[b\](.*?)\[/b\]', r'<strong>\1</strong>', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'\[i\](.*?)\[/i\]', r'<em>\1</em>',         text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'\[u\](.*?)\[/u\]', r'<u>\1</u>',           text, flags=re.IGNORECASE | re.DOTALL)
+
+    # 3. URLs (before mentions/hashtags so # and @ inside URLs are untouched).
+    #    Peels off trailing sentence punctuation (. , ! ? : ;) instead of
+    #    relying on a lookahead, which can't reject whitespace as a valid
+    #    stopping point without also cutting the last real character.
+    url_pattern = r'(https?://[^\s<>"\']+|www\.[^\s<>"\']+)'
     def replace_url(match):
         url = match.group(0)
-        display_url = url
-        if not url.startswith(('http://', 'https://')):
-            url = 'http://' + url
-        return f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="kf-url-link">{display_url}</a>'
-    
+        trailing = ''
+        while url and url[-1] in '.,!?:;':
+            trailing = url[-1] + trailing
+            url = url[:-1]
+        if not url:
+            return match.group(0)
+        href = url if url.startswith(('http://', 'https://')) else 'http://' + url
+        return f'<a href="{href}" target="_blank" rel="noopener noreferrer" class="kf-url-link">{url}</a>' + trailing
     text = re.sub(url_pattern, replace_url, text)
-    
-    # Process @mentions
-    mention_pattern = r'@(\w+)'
+
+    # 4. @mentions — Django usernames allow letters/digits/underscore plus
+    #    . @ + -, so grab the whole run of those characters, then peel off
+    #    trailing punctuation that isn't actually part of the username
+    #    (e.g. "thanks @jane." should link "jane", not "jane.").
     def replace_mention(match):
-        username = match.group(1)
-        if User.objects.filter(username=username).exists():
-            return f'<a href="/{username}/" class="kf-mention-link">@{username}</a>'
+        candidate = match.group(1)
+        trailing = ''
+        while candidate:
+            if User.objects.filter(username=candidate).exists():
+                return f'<a href="/{candidate}/" class="kf-mention-link">@{candidate}</a>' + trailing
+            if candidate[-1] in '.@+-':
+                trailing = candidate[-1] + trailing
+                candidate = candidate[:-1]
+                continue
+            break
         return match.group(0)
-    
-    text = re.sub(mention_pattern, replace_mention, text)
-    
-    # Process #hashtags (for comments too)
-    hashtag_pattern = r'#(\w+)'
+    text = re.sub(r'@([\w.@+-]+)', replace_mention, text)
+
+    # 5. #hashtags
     def replace_hashtag(match):
         tag = match.group(1)
         return f'<a href="/hashtag/{tag}/" class="kf-hashtag">#{tag}</a>'
-    
-    text = re.sub(hashtag_pattern, replace_hashtag, text)
-    
+    text = re.sub(r'#(\w+)', replace_hashtag, text)
+
+    # 6. Line breaks
+    text = text.replace('\n', '<br>')
+
     return mark_safe(text)
 
 @register.filter

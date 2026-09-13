@@ -11,7 +11,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, BusinessMessage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileExperience, ProfileEducation, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, JobApplication, JobApplicationDocument, JOB_DOCUMENT_TYPE_VALUES, JOB_DOCUMENT_TYPE_LABELS
+from social.models import Profile, UserReport, BlockedUser, ChannelUserLastSeen, Message, ChannelMessage, Channel, Market, MarketImage, SearchHistory, SocialEvent, JobVacancy, JobVibe, JobComment, EventVibe, EventComment, BusinessPage, BusinessMessage, Wishlist, ProductReview, EventFollow, EventNotification, BusinessPost, BusinessPostImage, BusinessPostPoll, BusinessPostPollOption, BusinessPostPollVote, BusinessPostVibe, BusinessPostComment, BusinessService, BusinessPortfolioItem, BusinessPortfolioImage, BusinessAchievement, BusinessReview, ProfilePost, ProfilePostImage, ProfilePostPoll, ProfilePostPollOption, ProfilePostPollVote, ProfilePostVibe, ProfilePostComment, ProfileService, ProfilePortfolioItem, ProfileAchievement, ProfileAchievementComment, ProfileExperience, ProfileExperienceComment, ProfileEducation, ProfileEducationComment, ProfileServiceComment, ProfilePortfolioItemVibe, ProfilePortfolioItemComment, JobApplication, JobApplicationDocument, JOB_DOCUMENT_TYPE_VALUES, JOB_DOCUMENT_TYPE_LABELS
 from social.models import validate_url
 from social.models import MEMBER_TYPE_SCHEMA, MEMBER_TYPE_CHOICES, sanitize_member_type_data, validate_file_size, DAY_CHOICES, HOUR_CHOICES, LOOKING_FOR_SCHEMA, LOOKING_FOR_GENERIC_CHOICES, validate_certificate_extension
 
@@ -146,6 +146,14 @@ from django.contrib.contenttypes.models import ContentType
 from django.views.decorators.http import require_POST, require_GET
 from django.core.cache import cache
 import cloudinary
+try:
+    # Same filter templates use for every other timestamp in the app
+    # ({{ post.created_at|insta_timesince }}) — imported directly here so
+    # comment timestamps use the exact same "7h" / "2d" logic instead of a
+    # second, potentially-drifting implementation.
+    from .templatetags.time import insta_timesince as _insta_timesince
+except ImportError:
+    _insta_timesince = None
 from functools import wraps
 
 
@@ -4283,6 +4291,15 @@ def fetch_link_preview(request):
 # Notification Views (FollowNotification + BusinessNotification)
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Maps a ProfilePostNotification/ProfileItemNotification `notif_type` to the
+# 'type' string snippet/kvibe_notif_row.html switches its badge/icon/copy on.
+_NOTIF_FEED_TYPE_MAP = {
+    'new_vibe':    'like',
+    'new_comment': 'comment',
+    'new_reply':   'reply',
+    'mention':     'mention',
+}
+
 
 def _build_activity_notification_entries(user):
     """
@@ -4336,7 +4353,7 @@ def _build_activity_notification_entries(user):
     post_notif_qs = (
         ProfilePostNotification.objects
         .filter(to_user=user)
-        .select_related('actor', 'actor__profile', 'post')
+        .select_related('actor', 'actor__profile', 'post', 'post__profile', 'post__profile__user')
         .order_by('-created_at')[:100]
     )
 
@@ -4347,12 +4364,17 @@ def _build_activity_notification_entries(user):
         if key not in grouped:
             grouped[key] = {
                 'group_id': f'profilepost-{pn.notif_type}-{pn.post_id}',
-                'type': 'like' if pn.notif_type == ProfilePostNotification.NEW_VIBE else 'comment',
+                'type': _NOTIF_FEED_TYPE_MAP.get(pn.notif_type, 'comment'),
                 'latest_actor': pn.actor,
                 'post': pn.post,
                 'item': None,
                 'item_section': '',
                 'anchor_id': f'kpp-post-{pn.post_id}',
+                # The profile page the anchor actually lives on — the post
+                # owner, NOT necessarily this notification's recipient: a
+                # 'new_reply'/'mention' can land on someone else's post
+                # (e.g. you commented on a stranger's post and got a reply).
+                'owner_username': pn.post.profile.user.username,
                 'subtab': 'posts',
                 'section_label': 'post',
                 'follow_id': None,
@@ -4387,12 +4409,15 @@ def _build_activity_notification_entries(user):
         if key not in grouped:
             grouped[key] = {
                 'group_id': f'profileitem-{inx.section}-{inx.notif_type}-{inx.target_id}',
-                'type': 'like' if inx.notif_type == ProfileItemNotification.NEW_VIBE else 'comment',
+                'type': _NOTIF_FEED_TYPE_MAP.get(inx.notif_type, 'comment'),
                 'latest_actor': inx.actor,
                 'post': None,
                 'item': inx.target,
                 'item_section': inx.section,
                 'anchor_id': inx.anchor_id,
+                # Same reasoning as post notifications above — the item's
+                # owner, not necessarily this notification's recipient.
+                'owner_username': inx.target.owner_user.username if inx.target else user.username,
                 'subtab': inx.subtab,
                 'section_label': inx.section_label,
                 'follow_id': None,
@@ -4609,8 +4634,10 @@ def delete_notification_group(request):
     notification_type = data.get('notification_type')
     if post_id and notification_type:
         model_notif_type = {
-            'like': ProfilePostNotification.NEW_VIBE,
+            'like':    ProfilePostNotification.NEW_VIBE,
             'comment': ProfilePostNotification.NEW_COMMENT,
+            'reply':   ProfilePostNotification.NEW_REPLY,
+            'mention': ProfilePostNotification.MENTION,
         }.get(notification_type)
 
         if not model_notif_type:
@@ -4632,8 +4659,10 @@ def delete_notification_group(request):
     item_id = data.get('item_id')
     if item_section and item_id and notification_type:
         model_notif_type = {
-            'like': ProfileItemNotification.NEW_VIBE,
+            'like':    ProfileItemNotification.NEW_VIBE,
             'comment': ProfileItemNotification.NEW_COMMENT,
+            'reply':   ProfileItemNotification.NEW_REPLY,
+            'mention': ProfileItemNotification.MENTION,
         }.get(notification_type)
 
         valid_sections = dict(ProfileItemNotification.SECTION_CHOICES)
@@ -6817,47 +6846,241 @@ def _card_vibe_get(request, obj, VibeCls, fk_field):
     return JsonResponse({'user_vibe': user_vibe, 'summary': summary, 'total': total, 'recent_reactors': recent_reactors})
 
 
-def _card_comments_get(request, obj, CommentCls, fk_field):
-    """GET latest 50 comments for a card."""
-    qs = (
-        CommentCls.objects.filter(**{fk_field: obj})
+def _relative_time(dt):
+    """LinkedIn-style short relative timestamp: 'now', '7h', '2d', '3w', '4mo', '1y'.
+    Delegates to the same insta_timesince filter every other timestamp in
+    the app already uses, just lower-cased to match comments' styling."""
+    if _insta_timesince is not None:
+        return _insta_timesince(dt).lower()
+    # Fallback if templatetags.time isn't importable in this environment.
+    seconds = (timezone.now() - dt).total_seconds()
+    if seconds < 60:
+        return 'now'
+    minutes = seconds / 60
+    if minutes < 60:
+        return f"{int(minutes)}m"
+    hours = minutes / 60
+    if hours < 24:
+        return f"{int(hours)}h"
+    days = hours / 24
+    if days < 7:
+        return f"{int(days)}d"
+    weeks = days / 7
+    if weeks < 4:
+        return f"{int(weeks)}w"
+    months = days / 30
+    if months < 12:
+        return f"{int(months)}mo"
+    return f"{int(days / 365)}y"
+
+
+_MENTION_RE = re.compile(r'@([\w.@+-]+)')
+
+
+def _extract_mentioned_users(text, exclude_user=None):
+    """Registered users @mentioned in `text`, deduped and in first-appearance
+    order, excluding `exclude_user` (typically the comment's own author).
+    Mirrors format_caption_text's dotted-username handling: Django usernames
+    can contain letters/digits/underscore plus . @ + -, so a mention like
+    '@jane.doe' or a plain '@jane' followed by a sentence-ending period both
+    need the trailing-character peeling below to resolve correctly."""
+    if not text:
+        return []
+    candidates = _MENTION_RE.findall(text)
+    if not candidates:
+        return []
+
+    resolved_usernames = []
+    seen = set()
+    for raw in candidates:
+        candidate = raw
+        while candidate:
+            if candidate in seen:
+                break
+            if User.objects.filter(username=candidate).exists():
+                seen.add(candidate)
+                resolved_usernames.append(candidate)
+                break
+            if candidate[-1] in '.@+-':
+                candidate = candidate[:-1]
+                continue
+            break
+
+    if not resolved_usernames:
+        return []
+
+    users = list(User.objects.filter(username__in=resolved_usernames))
+    if exclude_user is not None:
+        users = [u for u in users if u.id != exclude_user.id]
+    return users
+
+
+def _serialize_comment(c, request_user, owner_user, following_profile_ids):
+    """Shape one comment/reply for the front end: commenter identity + headline,
+    'Author' badge (did the post/item owner write this?), follow state for the
+    commenter, and this user's like state. Reply nesting/counts are filled in
+    by the caller since that requires the sibling set."""
+    author  = c.author
+    profile = getattr(author, 'profile', None)
+    liked_ids = getattr(c, '_prefetched_like_ids', None)
+    if liked_ids is not None:
+        like_count  = len(liked_ids)
+        liked_by_me = request_user.is_authenticated and request_user.id in liked_ids
+    else:
+        like_count  = c.likes.count()
+        liked_by_me = request_user.is_authenticated and c.likes.filter(pk=request_user.id).exists()
+    return {
+        'id':           str(c.id),
+        'parent_id':    str(c.parent_id) if c.parent_id else None,
+        'text':         c.text,
+        'author':       author.username,
+        'author_name':  f"{author.first_name} {author.last_name}".strip() or author.username,
+        'avatar':       profile.get_picture_url if profile else '',
+        'headline':     (profile.kishihub_use_headline if profile else '') or '',
+        'is_author':    bool(owner_user) and author.id == owner_user.id,
+        'is_self':      request_user.is_authenticated and author.id == request_user.id,
+        'is_following': bool(profile) and profile.pk in following_profile_ids,
+        'like_count':   like_count,
+        'liked_by_me':  liked_by_me,
+        'time':         _relative_time(c.created_at),
+        'reply_count':  0,
+        'replies':      [],
+        'has_more_replies': False,
+    }
+
+
+def _card_comments_get(request, obj, CommentCls, fk_field, owner_user=None):
+    """GET up to 50 top-level comments for a card, each with up to 3 inline
+    replies (plus a 'has_more_replies' flag so the client can offer
+    'See N more replies', LinkedIn-style)."""
+    base_qs = CommentCls.objects.filter(**{fk_field: obj})
+
+    top_comments = list(
+        base_qs.filter(parent__isnull=True)
         .select_related('author', 'author__profile')
+        .prefetch_related('likes')
         .order_by('created_at')[:50]
     )
-    data = [{
-        'id':          str(c.id),
-        'text':        c.text,
-        'author':      c.author.username,
-        'author_name': f"{c.author.first_name} {c.author.last_name}".strip() or c.author.username,
-        'avatar':      c.author.profile.get_picture_url,
-        'time':        c.created_at.strftime('%b %d'),
-    } for c in qs]
-    return JsonResponse({'comments': data, 'count': CommentCls.objects.filter(**{fk_field: obj}).count()})
+
+    replies_by_parent = {}
+    if top_comments:
+        reply_qs = (
+            base_qs.filter(parent_id__in=[c.id for c in top_comments])
+            .select_related('author', 'author__profile')
+            .prefetch_related('likes')
+            .order_by('created_at')
+        )
+        for r in reply_qs:
+            replies_by_parent.setdefault(r.parent_id, []).append(r)
+
+    # One query for every author's like-id-set and one for follow state,
+    # instead of two queries per comment.
+    all_comments = list(top_comments)
+    for reps in replies_by_parent.values():
+        all_comments.extend(reps)
+    for c in all_comments:
+        c._prefetched_like_ids = {u.id for u in c.likes.all()}
+
+    following_profile_ids = set()
+    if request.user.is_authenticated:
+        profile_ids = {c.author.profile.pk for c in all_comments if hasattr(c.author, 'profile')}
+        if profile_ids:
+            following_profile_ids = set(
+                request.user.profile.followings.filter(pk__in=profile_ids).values_list('pk', flat=True)
+            )
+
+    data = []
+    for c in top_comments:
+        item = _serialize_comment(c, request.user, owner_user, following_profile_ids)
+        all_replies = replies_by_parent.get(c.id, [])
+        item['reply_count']       = len(all_replies)
+        item['has_more_replies']  = len(all_replies) > 3
+        item['replies']           = [
+            _serialize_comment(r, request.user, owner_user, following_profile_ids)
+            for r in all_replies[:3]
+        ]
+        data.append(item)
+
+    return JsonResponse({'comments': data, 'count': base_qs.count()})
 
 
-def _card_comments_post(request, obj, CommentCls, fk_field):
-    """POST a new comment on a card."""
+def _card_comments_more_replies(request, obj, CommentCls, fk_field, comment_id, owner_user=None):
+    """GET the remaining replies under one top-level comment (used by 'See N
+    more replies')."""
+    parent = get_object_or_404(CommentCls, pk=comment_id, parent__isnull=True, **{fk_field: obj})
+    replies = list(
+        CommentCls.objects.filter(**{fk_field: obj}, parent=parent)
+        .select_related('author', 'author__profile')
+        .prefetch_related('likes')
+        .order_by('created_at')
+    )
+    for r in replies:
+        r._prefetched_like_ids = {u.id for u in r.likes.all()}
+
+    following_profile_ids = set()
+    if request.user.is_authenticated:
+        profile_ids = {r.author.profile.pk for r in replies if hasattr(r.author, 'profile')}
+        if profile_ids:
+            following_profile_ids = set(
+                request.user.profile.followings.filter(pk__in=profile_ids).values_list('pk', flat=True)
+            )
+
+    data = [_serialize_comment(r, request.user, owner_user, following_profile_ids) for r in replies]
+    return JsonResponse({'replies': data})
+
+
+def _card_comments_post(request, obj, CommentCls, fk_field, owner_user=None):
+    """POST a new top-level comment, or a reply when 'parent_id' is given."""
     try:
         body = json.loads(request.body)
         text = body.get('text', '').strip()
+        parent_id = (body.get('parent_id') or '').strip() or None
     except (json.JSONDecodeError, AttributeError):
         text = request.POST.get('text', '').strip()
+        parent_id = request.POST.get('parent_id', '').strip() or None
 
     if not text:
         return JsonResponse({'error': 'comment cannot be empty'}, status=400)
     if len(text) > 5000:
         return JsonResponse({'error': 'comment too long'}, status=400)
 
-    comment = CommentCls.objects.create(**{fk_field: obj, 'author': request.user, 'text': text})
-    return JsonResponse({
-        'id':          str(comment.id),
-        'text':        comment.text,
-        'author':      request.user.username,
-        'author_name': f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username,
-        'avatar':      request.user.profile.get_picture_url,
-        'time':        comment.created_at.strftime('%b %d'),
-        'count':       CommentCls.objects.filter(**{fk_field: obj}).count(),
-    })
+    parent = None
+    if parent_id:
+        # Replies only ever nest one level deep — replying to a reply attaches
+        # to that reply's parent, so threads stay flat like LinkedIn's.
+        parent = CommentCls.objects.filter(**{fk_field: obj}, pk=parent_id).first()
+        if not parent:
+            return JsonResponse({'error': 'original comment not found'}, status=404)
+        if parent.parent_id:
+            parent = parent.parent
+
+    comment = CommentCls.objects.create(
+        **{fk_field: obj, 'author': request.user, 'text': text, 'parent': parent},
+    )
+    comment = CommentCls.objects.select_related('author', 'author__profile').get(pk=comment.pk)
+
+    following_profile_ids = set()
+    author_profile = getattr(comment.author, 'profile', None)
+    author_profile_id = author_profile.pk if author_profile else None
+    if request.user.is_authenticated and author_profile_id and author_profile_id != request.user.profile.pk:
+        if request.user.profile.followings.filter(pk=author_profile_id).exists():
+            following_profile_ids = {author_profile_id}
+
+    data = _serialize_comment(comment, request.user, owner_user, following_profile_ids)
+    data['count'] = CommentCls.objects.filter(**{fk_field: obj}).count()
+    return JsonResponse(data)
+
+
+def _card_comment_like_toggle(request, obj, CommentCls, fk_field, comment_id):
+    """POST — toggle the current user's like on one comment or reply."""
+    comment = get_object_or_404(CommentCls, pk=comment_id, **{fk_field: obj})
+    if comment.likes.filter(pk=request.user.id).exists():
+        comment.likes.remove(request.user)
+        liked = False
+    else:
+        comment.likes.add(request.user)
+        liked = True
+    return JsonResponse({'liked': liked, 'like_count': comment.likes.count()})
 
 
 def _notify_profile_item_vibe(request, item, section, notif_fk_field, response):
@@ -6905,13 +7128,60 @@ def _notify_profile_item_vibe(request, item, section, notif_fk_field, response):
         )
 
 
-def _notify_profile_item_comment(request, item, section, notif_fk_field, response):
+def _notify_profile_item_comment(request, item, section, notif_fk_field, response, CommentCls):
     """Generic comment-notification creation counterpart to
-    _notify_profile_item_vibe — notifies the item owner unless they
-    commented on their own item."""
+    _notify_profile_item_vibe. Sends up to three kinds of notification off
+    one comment/reply:
+      - 'new_reply'   → the parent comment's author (replies only).
+      - 'mention'     → every user @mentioned in the text.
+      - 'new_comment' → the item owner, same as before (skipped if they're
+                         the one who just commented).
+    """
     if response.status_code != 200:
         return
+    try:
+        data = json.loads(response.content)
+    except (ValueError, TypeError):
+        return
+
     owner = item.owner_user
+    comment_text = data.get('text', '')
+    parent_id = data.get('parent_id')
+
+    if parent_id:
+        try:
+            parent = CommentCls.objects.select_related('author').get(pk=parent_id)
+            if parent.author_id != request.user.id and parent.author_id != owner.id:
+                ProfileItemNotification.objects.create(
+                    notif_type=ProfileItemNotification.NEW_REPLY,
+                    section=section,
+                    actor=request.user,
+                    to_user=parent.author,
+                    **{notif_fk_field: item},
+                )
+        except CommentCls.DoesNotExist:
+            pass
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'Failed to create reply notification for %s %s', section, getattr(item, 'pk', None)
+            )
+
+    for mentioned in _extract_mentioned_users(comment_text, exclude_user=request.user):
+        try:
+            ProfileItemNotification.objects.create(
+                notif_type=ProfileItemNotification.MENTION,
+                section=section,
+                actor=request.user,
+                to_user=mentioned,
+                **{notif_fk_field: item},
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'Failed to create mention notification for %s %s', section, getattr(item, 'pk', None)
+            )
+
     if owner == request.user:
         return
     try:
@@ -6943,8 +7213,21 @@ def job_vibe(request, job_id):
 def job_comments(request, job_id):
     job = get_object_or_404(JobVacancy, id=job_id)
     if request.method == 'POST':
-        return _card_comments_post(request, job, JobComment, 'job')
-    return _card_comments_get(request, job, JobComment, 'job')
+        return _card_comments_post(request, job, JobComment, 'job', owner_user=job.posted_by)
+    return _card_comments_get(request, job, JobComment, 'job', owner_user=job.posted_by)
+
+
+@login_required(login_url='/')
+def job_comment_replies(request, job_id, comment_id):
+    job = get_object_or_404(JobVacancy, id=job_id)
+    return _card_comments_more_replies(request, job, JobComment, 'job', comment_id, owner_user=job.posted_by)
+
+
+@login_required(login_url='/')
+@require_POST
+def job_comment_like(request, job_id, comment_id):
+    job = get_object_or_404(JobVacancy, id=job_id)
+    return _card_comment_like_toggle(request, job, JobComment, 'job', comment_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -7304,11 +7587,24 @@ def event_vibe(request, event_id):
 def event_comments(request, event_id):
     event = get_object_or_404(SocialEvent, id=event_id)
     if request.method == 'POST':
-        response = _card_comments_post(request, event, EventComment, 'event')
+        response = _card_comments_post(request, event, EventComment, 'event', owner_user=event.created_by)
         if response.status_code == 200:
             _notify_event_followers(event, request.user, EventNotification.NEW_COMMENT)
         return response
-    return _card_comments_get(request, event, EventComment, 'event')
+    return _card_comments_get(request, event, EventComment, 'event', owner_user=event.created_by)
+
+
+@login_required(login_url='/')
+def event_comment_replies(request, event_id, comment_id):
+    event = get_object_or_404(SocialEvent, id=event_id)
+    return _card_comments_more_replies(request, event, EventComment, 'event', comment_id, owner_user=event.created_by)
+
+
+@login_required(login_url='/')
+@require_POST
+def event_comment_like(request, event_id, comment_id):
+    event = get_object_or_404(SocialEvent, id=event_id)
+    return _card_comment_like_toggle(request, event, EventComment, 'event', comment_id)
 
 
 # ── Business page post reactions & comments ────────────────────────────────
@@ -7362,7 +7658,7 @@ def business_post_vibe(request, post_id):
 def business_post_comments(request, post_id):
     post = get_object_or_404(BusinessPost, pk=post_id)
     if request.method == 'POST':
-        response = _card_comments_post(request, post, BusinessPostComment, 'post')
+        response = _card_comments_post(request, post, BusinessPostComment, 'post', owner_user=post.business_page.owner)
         if response.status_code == 200:
             # Notify the page owner someone commented, unless they commented
             # on their own post.
@@ -7381,7 +7677,20 @@ def business_post_comments(request, post_id):
                     'Failed to create comment notification for post %s', post.pk
                 )
         return response
-    return _card_comments_get(request, post, BusinessPostComment, 'post')
+    return _card_comments_get(request, post, BusinessPostComment, 'post', owner_user=post.business_page.owner)
+
+
+@login_required(login_url='/')
+def business_post_comment_replies(request, post_id, comment_id):
+    post = get_object_or_404(BusinessPost, pk=post_id)
+    return _card_comments_more_replies(request, post, BusinessPostComment, 'post', comment_id, owner_user=post.business_page.owner)
+
+
+@login_required(login_url='/')
+@require_POST
+def business_post_comment_like(request, post_id, comment_id):
+    post = get_object_or_404(BusinessPost, pk=post_id)
+    return _card_comment_like_toggle(request, post, BusinessPostComment, 'post', comment_id)
 
 
 # ── Profile — Portfolio / Project reactions & comments ─────────────────────
@@ -7400,10 +7709,123 @@ def profile_portfolio_vibe(request, item_id):
 def profile_portfolio_comments(request, item_id):
     item = get_object_or_404(ProfilePortfolioItem, item_id=item_id)
     if request.method == 'POST':
-        response = _card_comments_post(request, item, ProfilePortfolioItemComment, 'item')
-        _notify_profile_item_comment(request, item, ProfileItemNotification.PORTFOLIO, 'portfolio_item', response)
+        response = _card_comments_post(request, item, ProfilePortfolioItemComment, 'item', owner_user=item.owner_user)
+        _notify_profile_item_comment(request, item, ProfileItemNotification.PORTFOLIO, 'portfolio_item', response, ProfilePortfolioItemComment)
         return response
-    return _card_comments_get(request, item, ProfilePortfolioItemComment, 'item')
+    return _card_comments_get(request, item, ProfilePortfolioItemComment, 'item', owner_user=item.owner_user)
+
+
+@login_required(login_url='/')
+def profile_portfolio_comment_replies(request, item_id, comment_id):
+    item = get_object_or_404(ProfilePortfolioItem, item_id=item_id)
+    return _card_comments_more_replies(request, item, ProfilePortfolioItemComment, 'item', comment_id, owner_user=item.owner_user)
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_portfolio_comment_like(request, item_id, comment_id):
+    item = get_object_or_404(ProfilePortfolioItem, item_id=item_id)
+    return _card_comment_like_toggle(request, item, ProfilePortfolioItemComment, 'item', comment_id)
+
+
+# ── Profile — Achievement comments (like Portfolio, but for ProfileAchievement) ──
+
+@login_required(login_url='/')
+def profile_achievement_comments(request, achievement_id):
+    achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id)
+    if request.method == 'POST':
+        response = _card_comments_post(request, achievement, ProfileAchievementComment, 'achievement', owner_user=achievement.owner_user)
+        _notify_profile_item_comment(request, achievement, ProfileItemNotification.ACHIEVEMENT, 'achievement', response, ProfileAchievementComment)
+        return response
+    return _card_comments_get(request, achievement, ProfileAchievementComment, 'achievement', owner_user=achievement.owner_user)
+
+
+@login_required(login_url='/')
+def profile_achievement_comment_replies(request, achievement_id, comment_id):
+    achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id)
+    return _card_comments_more_replies(request, achievement, ProfileAchievementComment, 'achievement', comment_id, owner_user=achievement.owner_user)
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_achievement_comment_like(request, achievement_id, comment_id):
+    achievement = get_object_or_404(ProfileAchievement, achievement_id=achievement_id)
+    return _card_comment_like_toggle(request, achievement, ProfileAchievementComment, 'achievement', comment_id)
+
+
+# ── Profile — Experience comments ───────────────────────────────────────────
+
+@login_required(login_url='/')
+def profile_experience_comments(request, experience_id):
+    experience = get_object_or_404(ProfileExperience, experience_id=experience_id)
+    if request.method == 'POST':
+        response = _card_comments_post(request, experience, ProfileExperienceComment, 'experience', owner_user=experience.owner_user)
+        _notify_profile_item_comment(request, experience, ProfileItemNotification.EXPERIENCE, 'experience', response, ProfileExperienceComment)
+        return response
+    return _card_comments_get(request, experience, ProfileExperienceComment, 'experience', owner_user=experience.owner_user)
+
+
+@login_required(login_url='/')
+def profile_experience_comment_replies(request, experience_id, comment_id):
+    experience = get_object_or_404(ProfileExperience, experience_id=experience_id)
+    return _card_comments_more_replies(request, experience, ProfileExperienceComment, 'experience', comment_id, owner_user=experience.owner_user)
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_experience_comment_like(request, experience_id, comment_id):
+    experience = get_object_or_404(ProfileExperience, experience_id=experience_id)
+    return _card_comment_like_toggle(request, experience, ProfileExperienceComment, 'experience', comment_id)
+
+
+# ── Profile — Education comments ────────────────────────────────────────────
+
+@login_required(login_url='/')
+def profile_education_comments(request, education_id):
+    education = get_object_or_404(ProfileEducation, education_id=education_id)
+    if request.method == 'POST':
+        response = _card_comments_post(request, education, ProfileEducationComment, 'education', owner_user=education.owner_user)
+        _notify_profile_item_comment(request, education, ProfileItemNotification.EDUCATION, 'education', response, ProfileEducationComment)
+        return response
+    return _card_comments_get(request, education, ProfileEducationComment, 'education', owner_user=education.owner_user)
+
+
+@login_required(login_url='/')
+def profile_education_comment_replies(request, education_id, comment_id):
+    education = get_object_or_404(ProfileEducation, education_id=education_id)
+    return _card_comments_more_replies(request, education, ProfileEducationComment, 'education', comment_id, owner_user=education.owner_user)
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_education_comment_like(request, education_id, comment_id):
+    education = get_object_or_404(ProfileEducation, education_id=education_id)
+    return _card_comment_like_toggle(request, education, ProfileEducationComment, 'education', comment_id)
+
+
+# ── Profile — Service comments ──────────────────────────────────────────────
+
+@login_required(login_url='/')
+def profile_service_comments(request, service_id):
+    service = get_object_or_404(ProfileService, service_id=service_id)
+    if request.method == 'POST':
+        response = _card_comments_post(request, service, ProfileServiceComment, 'service', owner_user=service.owner_user)
+        _notify_profile_item_comment(request, service, ProfileItemNotification.SERVICE, 'service', response, ProfileServiceComment)
+        return response
+    return _card_comments_get(request, service, ProfileServiceComment, 'service', owner_user=service.owner_user)
+
+
+@login_required(login_url='/')
+def profile_service_comment_replies(request, service_id, comment_id):
+    service = get_object_or_404(ProfileService, service_id=service_id)
+    return _card_comments_more_replies(request, service, ProfileServiceComment, 'service', comment_id, owner_user=service.owner_user)
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_service_comment_like(request, service_id, comment_id):
+    service = get_object_or_404(ProfileService, service_id=service_id)
+    return _card_comment_like_toggle(request, service, ProfileServiceComment, 'service', comment_id)
 
 
 # =============================================================================
@@ -9829,24 +10251,82 @@ def profile_post_vibe(request, post_id):
 def profile_post_comments(request, post_id):
     post = get_object_or_404(ProfilePost, pk=post_id)
     if request.method == 'POST':
-        response = _card_comments_post(request, post, ProfilePostComment, 'post')
-        if response.status_code == 200 and post.profile.user != request.user:
+        response = _card_comments_post(request, post, ProfilePostComment, 'post', owner_user=post.profile.user)
+        if response.status_code == 200:
             try:
-                comment = ProfilePostComment.objects.filter(post=post, author=request.user).latest('created_at')
-                ProfilePostNotification.objects.create(
-                    notif_type=ProfilePostNotification.NEW_COMMENT,
-                    post=post,
-                    actor=request.user,
-                    to_user=post.profile.user,
-                    comment=comment,
-                )
-            except Exception:
-                import logging
-                logging.getLogger(__name__).exception(
-                    'Failed to create comment notification for post %s', post.pk
-                )
+                data = json.loads(response.content)
+            except (ValueError, TypeError):
+                data = {}
+            comment_id  = data.get('id')
+            comment_text = data.get('text', '')
+            parent_id   = data.get('parent_id')
+
+            # Reply → the parent comment's author (skip self-replies and the
+            # post owner, who gets their own 'new_comment' notification below).
+            if parent_id:
+                try:
+                    parent = ProfilePostComment.objects.select_related('author').get(pk=parent_id)
+                    if parent.author_id != request.user.id and parent.author_id != post.profile.user_id:
+                        ProfilePostNotification.objects.create(
+                            notif_type=ProfilePostNotification.NEW_REPLY,
+                            post=post,
+                            actor=request.user,
+                            to_user=parent.author,
+                            comment_id=comment_id,
+                        )
+                except ProfilePostComment.DoesNotExist:
+                    pass
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception(
+                        'Failed to create reply notification for post %s', post.pk
+                    )
+
+            # @mentions → every valid mentioned user except the commenter.
+            for mentioned in _extract_mentioned_users(comment_text, exclude_user=request.user):
+                try:
+                    ProfilePostNotification.objects.create(
+                        notif_type=ProfilePostNotification.MENTION,
+                        post=post,
+                        actor=request.user,
+                        to_user=mentioned,
+                        comment_id=comment_id,
+                    )
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception(
+                        'Failed to create mention notification for post %s', post.pk
+                    )
+
+            if post.profile.user != request.user:
+                try:
+                    ProfilePostNotification.objects.create(
+                        notif_type=ProfilePostNotification.NEW_COMMENT,
+                        post=post,
+                        actor=request.user,
+                        to_user=post.profile.user,
+                        comment_id=comment_id,
+                    )
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception(
+                        'Failed to create comment notification for post %s', post.pk
+                    )
         return response
-    return _card_comments_get(request, post, ProfilePostComment, 'post')
+    return _card_comments_get(request, post, ProfilePostComment, 'post', owner_user=post.profile.user)
+
+
+@login_required(login_url='/')
+def profile_post_comment_replies(request, post_id, comment_id):
+    post = get_object_or_404(ProfilePost, pk=post_id)
+    return _card_comments_more_replies(request, post, ProfilePostComment, 'post', comment_id, owner_user=post.profile.user)
+
+
+@login_required(login_url='/')
+@require_POST
+def profile_post_comment_like(request, post_id, comment_id):
+    post = get_object_or_404(ProfilePost, pk=post_id)
+    return _card_comment_like_toggle(request, post, ProfilePostComment, 'post', comment_id)
 
 
 @login_required(login_url='/')

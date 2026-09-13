@@ -3553,13 +3553,64 @@
         }
         .kbiz-comments-close:hover { background: var(--mfy-bg); color: var(--mfy-text); }
         .kbiz-comments-body { flex: 1; overflow-y: auto; padding: 14px 16px; -webkit-overflow-scrolling: touch; }
-        .kbiz-comment-list { display: flex; flex-direction: column; gap: 14px; }
+        .kbiz-comment-list { display: flex; flex-direction: column; gap: 16px; }
+        .kbiz-comment-thread { display: flex; flex-direction: column; gap: 8px; }
         .kbiz-comment-row { display: flex; gap: 9px; }
-        .kbiz-comment-row img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-        .kbiz-comment-bubble { background: var(--mfy-bg); border-radius: 14px; padding: 8px 12px; flex: 1; }
+        .kbiz-comment-row img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .kbiz-comment-row.is-reply img { width: 28px; height: 28px; }
+        .kbiz-comment-main { flex: 1; min-width: 0; }
+        .kbiz-comment-bubble { background: var(--mfy-bg); border-radius: 14px; padding: 8px 12px; }
+        .kbiz-comment-headrow { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
         .kbiz-comment-author { font-size: 12.5px; font-weight: 700; color: var(--mfy-text); }
-        .kbiz-comment-text { font-size: 13px; color: var(--mfy-text); line-height: 1.4; white-space: pre-wrap; }
-        .kbiz-comment-time { font-size: 10.5px; color: var(--mfy-text-light); margin-top: 3px; margin-left: 2px; }
+        .kbiz-comment-author-badge {
+            font-size: 10px; font-weight: 700; color: var(--mfy-text-light);
+            background: var(--mfy-border); border-radius: 4px; padding: 1px 6px;
+        }
+        .kbiz-comment-follow {
+            font-size: 12px; font-weight: 700; color: var(--mfy-primary);
+            background: none; border: none; cursor: pointer; padding: 0; margin-left: 2px;
+        }
+        .kbiz-comment-follow:hover { text-decoration: underline; }
+        .kbiz-comment-follow[data-following="1"] { color: var(--mfy-text-light); }
+        .kbiz-comment-headline {
+            font-size: 11px; color: var(--mfy-text-light); line-height: 1.3;
+            margin-top: 1px; overflow: hidden; text-overflow: ellipsis;
+            display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+        }
+        .kbiz-comment-text { font-size: 13px; color: var(--mfy-text); line-height: 1.4; white-space: pre-wrap; margin-top: 3px; }
+        .kbiz-comment-meta { display: flex; align-items: center; gap: 12px; margin: 4px 0 0 2px; }
+        .kbiz-comment-time { font-size: 10.5px; color: var(--mfy-text-light); }
+        .kbiz-comment-action {
+            font-size: 11.5px; font-weight: 700; color: var(--mfy-text-light);
+            background: none; border: none; cursor: pointer; padding: 0;
+        }
+        .kbiz-comment-action:hover { color: var(--mfy-text); }
+        .kbiz-comment-action.liked { color: var(--mfy-primary); }
+        .kbiz-comment-action .count { font-weight: 700; margin-left: 3px; }
+        .kbiz-comment-replies { display: flex; flex-direction: column; gap: 8px; margin-left: 32px; margin-top: 2px; }
+        .kbiz-comment-more-replies {
+            font-size: 11.5px; font-weight: 700; color: var(--mfy-text-light);
+            background: none; border: none; cursor: pointer; padding: 0; margin-left: 32px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .kbiz-comment-more-replies:hover { color: var(--mfy-text); }
+        .kbiz-comment-more-replies::before {
+            content: ''; display: inline-block; width: 20px; height: 1px; background: var(--mfy-border);
+        }
+        /* Shown above the single comment box at the bottom of the panel when
+           'Reply' is tapped — arms that box to post as a reply instead of a
+           new top-level comment. See showReplyBox()/cancelReply() in JS. */
+        .kbiz-reply-indicator {
+            display: none; align-items: center; justify-content: space-between;
+            gap: 8px; padding: 6px 14px; font-size: 12px; color: var(--mfy-text-light);
+            background: var(--mfy-bg-alt, #f5f5f5); border-top: 1px solid var(--mfy-border);
+        }
+        .kbiz-reply-indicator b { color: var(--mfy-text); font-weight: 600; }
+        .kbiz-reply-indicator button {
+            background: none; border: none; cursor: pointer; color: var(--mfy-text-light);
+            font-size: 12px; padding: 4px; line-height: 1;
+        }
+        .kbiz-reply-indicator button:hover { color: var(--mfy-text); }
         .kbiz-comment-empty { font-size: 12.5px; color: var(--mfy-text-light); text-align: center; padding: 30px 0; }
         .kbiz-comments-footer {
             display: flex; gap: 9px; align-items: center; flex-shrink: 0;
@@ -3578,6 +3629,7 @@
             background: var(--mfy-primary); color: #fff; cursor: pointer; font-size: 13px;
         }
         .kbiz-comment-send:disabled { background: #bcdff5; cursor: not-allowed; }
+
 
 </style>
 
@@ -3726,6 +3778,7 @@
 // ── Ported 1:1 from business_page_detail.html so feed post cards (react,
 // comment, poll-vote) behave identically to the business page's own feed. ──
 const CSRF_TOKEN = getCsrfFromMeta();
+const CURRENT_USER_AVATAR = "{{ request.user.profile.get_picture_url|default:''|escapejs }}";
 function toast(msg) { showToast(msg); }
 
 async function voteBusinessPoll(postId, optionId, btnEl) {
@@ -3914,22 +3967,242 @@ function kfFormatCommentText(str) {
     return html;
 }
 
-function renderComment(c) {
-    return `<div class="kbiz-comment-row">
+// ── Generic comment engine ──────────────────────────────────────────────
+// One implementation drives every comment surface (business posts, profile
+// posts, and profile "extra section" feed items — portfolio, achievement,
+// experience, education, service). Each surface is identified by a `scope`
+// string; `commentDomIds` maps a scope + item id to that surface's existing
+// DOM id conventions, and `COMMENT_ENDPOINTS` maps it to its REST paths.
+const COMMENT_ENDPOINTS = {
+    business_post: id => `/posts/${id}/comments/`,
+    profile_post:  id => `/profile/posts/${id}/comments/`,
+    job:           id => `/jobs/${id}/comments/`,
+    event:         id => `/events/${id}/comments/`,
+    portfolio:     id => `/profile/portfolio/${id}/comments/`,
+    achievement:   id => `/profile/achievements/${id}/comments/`,
+    experience:    id => `/profile/experience/${id}/comments/`,
+    education:     id => `/profile/education/${id}/comments/`,
+    service:       id => `/profile/service/${id}/comments/`,
+};
+function commentsUrl(scope, itemId) { return COMMENT_ENDPOINTS[scope](itemId); }
+function commentLikeUrl(scope, itemId, commentId) { return `${commentsUrl(scope, itemId)}${commentId}/like/`; }
+function commentRepliesUrl(scope, itemId, commentId) { return `${commentsUrl(scope, itemId)}${commentId}/replies/`; }
+
+function commentDomIds(scope, itemId) {
+    // Business/profile posts predate the generic-feed-item convention and
+    // use bare `commentsOverlay-{id}` (no scope prefix) — kept as-is so
+    // existing template ids never need to change.
+    if (scope === 'business_post' || scope === 'profile_post') {
+        return {
+            overlay: `commentsOverlay-${itemId}`,
+            panel:   `comments-${itemId}`,
+            list:    `commentList-${itemId}`,
+            input:   `commentInput-${itemId}`,
+            replyIndicator: `replyIndicator-${itemId}`,
+            cardSel: `#kbiz-post-${itemId}`,
+        };
+    }
+    return {
+        overlay: `commentsOverlay-${scope}-${itemId}`,
+        panel:   `comments-${scope}-${itemId}`,
+        list:    `commentList-${scope}-${itemId}`,
+        input:   `commentInput-${scope}-${itemId}`,
+        replyIndicator: `replyIndicator-${scope}-${itemId}`,
+        cardSel: `#${feedItemCardId(scope, itemId)}`,
+    };
+}
+
+function updateCommentTotal(scope, itemId, count) {
+    const ids = commentDomIds(scope, itemId);
+    const totalSlot = document.querySelector(`${ids.cardSel} [data-comment-total]`);
+    if (totalSlot) totalSlot.textContent = `${count} comment${count === 1 ? '' : 's'}`;
+    const headerLabel = document.querySelector(`#${ids.overlay} [data-comment-total-label]`);
+    if (headerLabel) headerLabel.textContent = `${count} Comment${count === 1 ? '' : 's'}`;
+}
+
+// One comment or reply row: avatar, name, 'Author' badge (if they own the
+// post/item being commented on), a Follow shortcut for people the viewer
+// doesn't already follow, their headline, the text, and a Like/Reply action
+// row — the same shape LinkedIn comments use.
+function renderCommentBody(c, scope, itemId, isReply) {
+    const authorBadge = c.is_author
+        ? `<span class="kbiz-comment-author-badge">Author</span>` : '';
+    const followBtn = (!c.is_self && !c.is_following)
+        ? `<button type="button" class="kbiz-comment-follow" data-following="0"
+                   onclick="toggleCommentAuthorFollow('${c.author}', this)">· Follow</button>`
+        : '';
+    const headline = c.headline
+        ? `<div class="kbiz-comment-headline">${escapeHtml(c.headline)}</div>` : '';
+    const likeCount = c.like_count > 0 ? `<span class="count">${c.like_count}</span>` : '';
+    const replyBtn = !isReply
+        ? `<button type="button" class="kbiz-comment-action" data-author-name="${escapeHtml(c.author_name)}"
+                   onclick="showReplyBox('${scope}','${itemId}','${c.id}', this)">Reply</button>`
+        : '';
+    return `<div class="kbiz-comment-row${isReply ? ' is-reply' : ''}" data-comment-id="${c.id}">
         <img src="${c.avatar}" alt="" onerror="this.onerror=null;this.src='https://placehold.co/56x56/dbdbdb/888?text=%20';">
-        <div class="kbiz-comment-bubble">
-            <div class="kbiz-comment-author">${escapeHtml(c.author_name)}</div>
-            <div class="kbiz-comment-text">${kfFormatCommentText(c.text)}</div>
-            <div class="kbiz-comment-time">${c.time}</div>
+        <div class="kbiz-comment-main">
+            <div class="kbiz-comment-bubble">
+                <div class="kbiz-comment-headrow">
+                    <span class="kbiz-comment-author">${escapeHtml(c.author_name)}</span>
+                    ${authorBadge}
+                    ${followBtn}
+                </div>
+                ${headline}
+                <div class="kbiz-comment-text">${kfFormatCommentText(c.text)}</div>
+            </div>
+            <div class="kbiz-comment-meta">
+                <span class="kbiz-comment-time">${c.time}</span>
+                <button type="button" class="kbiz-comment-action${c.liked_by_me ? ' liked' : ''}" data-like-btn
+                        onclick="toggleCommentLike('${scope}','${itemId}','${c.id}', this)">${c.liked_by_me ? 'Liked' : 'Like'}${likeCount}</button>
+                ${replyBtn}
+            </div>
         </div>
     </div>`;
 }
 
-async function toggleCommentsPanel(postId) {
-    const overlay = document.getElementById(`commentsOverlay-${postId}`);
-    const panel = document.getElementById(`comments-${postId}`);
+// A full thread: the top-level comment, up to 3 inline replies, a
+// 'See N more replies' expander if there are more, and a hidden reply box.
+function renderComment(c, scope, itemId) {
+    const replies = c.replies || [];
+    const repliesHtml = replies.map(r => renderCommentBody(r, scope, itemId, true)).join('');
+    const remaining = (c.reply_count || 0) - replies.length;
+    const moreRepliesBtn = c.has_more_replies
+        ? `<button type="button" class="kbiz-comment-more-replies" data-more-replies-btn
+                    onclick="loadMoreReplies('${scope}','${itemId}','${c.id}', this)">See ${remaining} more repl${remaining === 1 ? 'y' : 'ies'}</button>`
+        : '';
+    return `<div class="kbiz-comment-thread" data-thread-id="${c.id}">
+        ${renderCommentBody(c, scope, itemId, false)}
+        <div class="kbiz-comment-replies" data-replies-for="${c.id}">${repliesHtml}</div>
+        ${moreRepliesBtn}
+    </div>`;
+}
+
+async function toggleCommentLike(scope, itemId, commentId, btn) {
+    btn.disabled = true;
+    try {
+        const res = await fetch(commentLikeUrl(scope, itemId, commentId), {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error); return; }
+        btn.classList.toggle('liked', data.liked);
+        btn.innerHTML = `${data.liked ? 'Liked' : 'Like'}${data.like_count > 0 ? `<span class="count">${data.like_count}</span>` : ''}`;
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// Reply now reuses the single comment box at the bottom of the panel
+// instead of opening a separate input under the comment — tapping 'Reply'
+// just arms that box with a parent id and shows a small 'Replying to X'
+// tag above it (LinkedIn/Instagram-style), and submitComment() below
+// checks for that armed state.
+function showReplyBox(scope, itemId, commentId, btn) {
+    const ids = commentDomIds(scope, itemId);
+    const input = document.getElementById(ids.input);
+    if (!input) return;
+
+    // Tapping Reply again on the same comment disarms it.
+    if (input.dataset.replyParentId === String(commentId)) {
+        cancelReply(scope, itemId);
+        return;
+    }
+
+    input.dataset.replyParentId = commentId;
+    input.dataset.replyAuthorName = (btn && btn.dataset.authorName) || '';
+    input.placeholder = input.dataset.replyAuthorName
+        ? `Reply to ${input.dataset.replyAuthorName}…`
+        : 'Write a reply…';
+    renderReplyIndicator(scope, itemId);
+    input.focus();
+}
+
+function cancelReply(scope, itemId) {
+    const ids = commentDomIds(scope, itemId);
+    const input = document.getElementById(ids.input);
+    if (!input) return;
+    delete input.dataset.replyParentId;
+    delete input.dataset.replyAuthorName;
+    input.placeholder = 'Write a comment…';
+    renderReplyIndicator(scope, itemId);
+}
+
+function renderReplyIndicator(scope, itemId) {
+    const ids = commentDomIds(scope, itemId);
+    const input = document.getElementById(ids.input);
+    const indicator = document.getElementById(ids.replyIndicator);
+    if (!input || !indicator) return;
+
+    const parentId = input.dataset.replyParentId;
+    if (!parentId) {
+        indicator.style.display = 'none';
+        indicator.innerHTML = '';
+        return;
+    }
+    const authorName = input.dataset.replyAuthorName;
+    indicator.style.display = 'flex';
+    indicator.innerHTML = `
+        <span>Replying to <b>${escapeHtml(authorName || 'comment')}</b></span>
+        <button type="button" onclick="cancelReply('${scope}','${itemId}')" aria-label="Cancel reply">
+            <i class="fas fa-xmark"></i>
+        </button>`;
+}
+
+async function loadMoreReplies(scope, itemId, commentId, btn) {
+    const originalLabel = btn.textContent;
+    btn.textContent = 'Loading…';
+    btn.disabled = true;
+    try {
+        const res = await fetch(commentRepliesUrl(scope, itemId, commentId), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        const repliesList = document.querySelector(`[data-replies-for="${commentId}"]`);
+        if (repliesList && data.replies) {
+            // Server returns the complete reply set for this comment, so
+            // replacing (not appending) avoids duplicating the first 3.
+            repliesList.innerHTML = data.replies.map(r => renderCommentBody(r, scope, itemId, true)).join('');
+        }
+        btn.remove();
+    } catch (_) {
+        toast('Network error. Please try again.');
+        btn.textContent = originalLabel;
+        btn.disabled = false;
+    }
+}
+
+async function toggleCommentAuthorFollow(username, btn) {
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/follow/${username}`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await res.json();
+        if (!data.success) { toast(data.error || 'Could not follow.'); return; }
+        if (data.action === 'followed') {
+            btn.textContent = '· Following';
+            btn.setAttribute('data-following', '1');
+        } else {
+            btn.textContent = '· Follow';
+            btn.setAttribute('data-following', '0');
+        }
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function openComments(scope, itemId) {
+    const ids = commentDomIds(scope, itemId);
+    const overlay = document.getElementById(ids.overlay);
+    const panel = document.getElementById(ids.panel);
     if (!overlay || !panel) return;
-    if (overlay.classList.contains('open')) { closeCommentsPanel(postId); return; }
+    if (overlay.classList.contains('open')) { closeComments(scope, itemId); return; }
 
     document.querySelectorAll('.kbiz-comments-overlay.open').forEach(el => el.classList.remove('open'));
     overlay.classList.add('open');
@@ -3938,36 +4211,89 @@ async function toggleCommentsPanel(postId) {
     if (panel.dataset.loaded !== '1') {
         panel.dataset.loaded = '1';
         try {
-            const res = await fetch(`/posts/${postId}/comments/`, {
+            const res = await fetch(commentsUrl(scope, itemId), {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
             const data = await res.json();
-            const list = document.getElementById(`commentList-${postId}`);
+            const list = document.getElementById(ids.list);
             if (!data.comments || !data.comments.length) {
                 list.innerHTML = '<div class="kbiz-comment-empty">No comments yet — be the first!</div>';
             } else {
-                list.innerHTML = data.comments.map(renderComment).join('');
+                list.innerHTML = data.comments.map(c => renderComment(c, scope, itemId)).join('');
                 list.scrollTop = list.scrollHeight;
             }
         } catch (_) {
-            const list = document.getElementById(`commentList-${postId}`);
+            const list = document.getElementById(ids.list);
             if (list) list.innerHTML = '<div class="kbiz-comment-empty">Could not load comments.</div>';
         }
     }
 
     // Focus the input shortly after the sheet finishes animating in.
     setTimeout(() => {
-        const input = document.getElementById(`commentInput-${postId}`);
+        const input = document.getElementById(ids.input);
         if (input && window.innerWidth >= 640) input.focus();
     }, 200);
 }
 
-function closeCommentsPanel(postId) {
-    const overlay = document.getElementById(`commentsOverlay-${postId}`);
+function closeComments(scope, itemId) {
+    const overlay = document.getElementById(commentDomIds(scope, itemId).overlay);
     if (!overlay) return;
     overlay.classList.remove('open');
     document.body.style.overflow = '';
 }
+
+async function submitComment(scope, itemId) {
+    const ids = commentDomIds(scope, itemId);
+    const input = document.getElementById(ids.input);
+    const text = input.value.trim();
+    if (!text) return;
+    const parentId = input.dataset.replyParentId || null;
+    input.disabled = true;
+    try {
+        const body = parentId ? { text, parent_id: parentId } : { text };
+        const res = await fetch(commentsUrl(scope, itemId), {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.error) { toast(data.error); return; }
+
+        if (parentId) {
+            // Reply — drop it into that comment's thread, not the top-level list.
+            const repliesList = document.querySelector(`[data-replies-for="${parentId}"]`);
+            if (repliesList) repliesList.insertAdjacentHTML('beforeend', renderCommentBody(data, scope, itemId, true));
+        } else {
+            const list = document.getElementById(ids.list);
+            const empty = list.querySelector('.kbiz-comment-empty');
+            if (empty) empty.remove();
+            list.insertAdjacentHTML('beforeend', renderComment(data, scope, itemId));
+            list.scrollTop = list.scrollHeight;
+        }
+        input.value = '';
+        cancelReply(scope, itemId);
+
+        updateCommentTotal(scope, itemId, data.count);
+    } catch (_) {
+        toast('Network error. Please try again.');
+    } finally {
+        input.disabled = false;
+        input.focus();
+    }
+}
+
+// ── Backward-compatible wrappers — template onclick= handlers call these
+// exact names, so the generic engine above stays a drop-in swap. ──────────
+function toggleCommentsPanel(postId)  { return openComments('business_post', postId); }
+function closeCommentsPanel(postId)   { return closeComments('business_post', postId); }
+function submitBusinessComment(postId) { return submitComment('business_post', postId); }
+
+function toggleProfilePostCommentsPanel(postId)  { return openComments('profile_post', postId); }
+function submitProfilePostCommentCard(postId)    { return submitComment('profile_post', postId); }
+
+function toggleFeedItemComments(kind, itemId) { return openComments(kind, itemId); }
+function closeFeedItemComments(kind, itemId)  { return closeComments(kind, itemId); }
+function submitFeedItemComment(kind, itemId)  { return submitComment(kind, itemId); }
 
 // Close comments sheet/modal on Escape, and any open post kebab menu.
 document.addEventListener('keydown', function(e) {
@@ -4004,38 +4330,6 @@ function togglePostMenu(btn) {
     if (!wasOpen) menu.classList.add('open');
 }
 
-async function submitBusinessComment(postId) {
-    const input = document.getElementById(`commentInput-${postId}`);
-    const text = input.value.trim();
-    if (!text) return;
-    input.disabled = true;
-    try {
-        const res = await fetch(`/posts/${postId}/comments/`, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
-        });
-        const data = await res.json();
-        if (data.error) { toast(data.error); return; }
-
-        const list = document.getElementById(`commentList-${postId}`);
-        const empty = list.querySelector('.kbiz-comment-empty');
-        if (empty) empty.remove();
-        list.insertAdjacentHTML('beforeend', renderComment(data));
-        list.scrollTop = list.scrollHeight;
-        input.value = '';
-
-        const totalSlot = document.querySelector(`#kbiz-post-${postId} [data-comment-total]`);
-        if (totalSlot) totalSlot.textContent = `${data.count} comment${data.count === 1 ? '' : 's'}`;
-        const headerLabel = document.querySelector(`#commentsOverlay-${postId} [data-comment-total-label]`);
-        if (headerLabel) headerLabel.textContent = `${data.count} Comment${data.count === 1 ? '' : 's'}`;
-    } catch (_) {
-        toast('Network error. Please try again.');
-    } finally {
-        input.disabled = false;
-        input.focus();
-    }
-}
 
 // ── Profile post cards in the feed — same .kbiz-post-card markup/behavior
 // as business posts above, wired to the /profile/posts/... endpoints so a
@@ -4177,75 +4471,6 @@ async function reactToProfilePostCard(postId, vibeType, optBtn) {
     }
 }
 
-async function toggleProfilePostCommentsPanel(postId) {
-    const overlay = document.getElementById(`commentsOverlay-${postId}`);
-    const panel = document.getElementById(`comments-${postId}`);
-    if (!overlay || !panel) return;
-    if (overlay.classList.contains('open')) { closeCommentsPanel(postId); return; }
-
-    document.querySelectorAll('.kbiz-comments-overlay.open').forEach(el => el.classList.remove('open'));
-    overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
-
-    if (panel.dataset.loaded !== '1') {
-        panel.dataset.loaded = '1';
-        try {
-            const res = await fetch(`/profile/posts/${postId}/comments/`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            const data = await res.json();
-            const list = document.getElementById(`commentList-${postId}`);
-            if (!data.comments || !data.comments.length) {
-                list.innerHTML = '<div class="kbiz-comment-empty">No comments yet — be the first!</div>';
-            } else {
-                list.innerHTML = data.comments.map(renderComment).join('');
-                list.scrollTop = list.scrollHeight;
-            }
-        } catch (_) {
-            const list = document.getElementById(`commentList-${postId}`);
-            if (list) list.innerHTML = '<div class="kbiz-comment-empty">Could not load comments.</div>';
-        }
-    }
-
-    setTimeout(() => {
-        const input = document.getElementById(`commentInput-${postId}`);
-        if (input && window.innerWidth >= 640) input.focus();
-    }, 200);
-}
-
-async function submitProfilePostCommentCard(postId) {
-    const input = document.getElementById(`commentInput-${postId}`);
-    const text = input.value.trim();
-    if (!text) return;
-    input.disabled = true;
-    try {
-        const res = await fetch(`/profile/posts/${postId}/comments/`, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
-        });
-        const data = await res.json();
-        if (data.error) { toast(data.error); return; }
-
-        const list = document.getElementById(`commentList-${postId}`);
-        const empty = list.querySelector('.kbiz-comment-empty');
-        if (empty) empty.remove();
-        list.insertAdjacentHTML('beforeend', renderComment(data));
-        list.scrollTop = list.scrollHeight;
-        input.value = '';
-
-        const totalSlot = document.querySelector(`#kbiz-post-${postId} [data-comment-total]`);
-        if (totalSlot) totalSlot.textContent = `${data.count} comment${data.count === 1 ? '' : 's'}`;
-        const headerLabel = document.querySelector(`#commentsOverlay-${postId} [data-comment-total-label]`);
-        if (headerLabel) headerLabel.textContent = `${data.count} Comment${data.count === 1 ? '' : 's'}`;
-    } catch (_) {
-        toast('Network error. Please try again.');
-    } finally {
-        input.disabled = false;
-        input.focus();
-    }
-}
-
 // ── Achievement / Portfolio / Project cards in the feed — same
 // .kbiz-post-card markup & behavior as profile posts above, keyed by "kind"
 // and wired to that item's own reaction/comment endpoints so an achievement
@@ -4254,6 +4479,13 @@ async function submitProfilePostCommentCard(postId) {
 const FEED_ITEM_URL_MAP = {
     achievement: { vibe: id => `/profile/achievements/${id}/vibe/`, comments: id => `/profile/achievements/${id}/comments/` },
     portfolio:   { vibe: id => `/profile/portfolio/${id}/vibe/`,    comments: id => `/profile/portfolio/${id}/comments/` },
+    // No feed card exists yet for these three, but their comment backend is
+    // ready — add a card using the same markup as achievement/portfolio
+    // above (plus a matching `vibe` entry, once that endpoint exists) and
+    // comments will work immediately.
+    experience:  { comments: id => `/profile/experience/${id}/comments/` },
+    education:   { comments: id => `/profile/education/${id}/comments/` },
+    service:     { comments: id => `/profile/service/${id}/comments/` },
 };
 
 function feedItemCardId(kind, itemId) {
@@ -4306,82 +4538,6 @@ async function reactToFeedItem(kind, itemId, vibeType, optBtn) {
         }
     } catch (_) {
         toast('Network error. Please try again.');
-    }
-}
-
-async function toggleFeedItemComments(kind, itemId) {
-    const overlay = document.getElementById(`commentsOverlay-${kind}-${itemId}`);
-    const panel = document.getElementById(`comments-${kind}-${itemId}`);
-    if (!overlay || !panel) return;
-    if (overlay.classList.contains('open')) { closeFeedItemComments(kind, itemId); return; }
-
-    document.querySelectorAll('.kbiz-comments-overlay.open').forEach(el => el.classList.remove('open'));
-    overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
-
-    if (panel.dataset.loaded !== '1') {
-        panel.dataset.loaded = '1';
-        try {
-            const res = await fetch(FEED_ITEM_URL_MAP[kind].comments(itemId), {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            const data = await res.json();
-            const list = document.getElementById(`commentList-${kind}-${itemId}`);
-            if (!data.comments || !data.comments.length) {
-                list.innerHTML = '<div class="kbiz-comment-empty">No comments yet — be the first!</div>';
-            } else {
-                list.innerHTML = data.comments.map(renderComment).join('');
-                list.scrollTop = list.scrollHeight;
-            }
-        } catch (_) {
-            const list = document.getElementById(`commentList-${kind}-${itemId}`);
-            if (list) list.innerHTML = '<div class="kbiz-comment-empty">Could not load comments.</div>';
-        }
-    }
-
-    setTimeout(() => {
-        const input = document.getElementById(`commentInput-${kind}-${itemId}`);
-        if (input && window.innerWidth >= 640) input.focus();
-    }, 200);
-}
-
-function closeFeedItemComments(kind, itemId) {
-    const overlay = document.getElementById(`commentsOverlay-${kind}-${itemId}`);
-    if (!overlay) return;
-    overlay.classList.remove('open');
-    document.body.style.overflow = '';
-}
-
-async function submitFeedItemComment(kind, itemId) {
-    const input = document.getElementById(`commentInput-${kind}-${itemId}`);
-    const text = input.value.trim();
-    if (!text) return;
-    input.disabled = true;
-    try {
-        const res = await fetch(FEED_ITEM_URL_MAP[kind].comments(itemId), {
-            method: 'POST',
-            headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
-        });
-        const data = await res.json();
-        if (data.error) { toast(data.error); return; }
-
-        const list = document.getElementById(`commentList-${kind}-${itemId}`);
-        const empty = list.querySelector('.kbiz-comment-empty');
-        if (empty) empty.remove();
-        list.insertAdjacentHTML('beforeend', renderComment(data));
-        list.scrollTop = list.scrollHeight;
-        input.value = '';
-
-        const totalSlot = document.querySelector(`#${feedItemCardId(kind, itemId)} [data-comment-total]`);
-        if (totalSlot) totalSlot.textContent = `${data.count} comment${data.count === 1 ? '' : 's'}`;
-        const headerLabel = document.querySelector(`#commentsOverlay-${kind}-${itemId} [data-comment-total-label]`);
-        if (headerLabel) headerLabel.textContent = `${data.count} Comment${data.count === 1 ? '' : 's'}`;
-    } catch (_) {
-        toast('Network error. Please try again.');
-    } finally {
-        input.disabled = false;
-        input.focus();
     }
 }
 
