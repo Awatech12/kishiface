@@ -110,6 +110,15 @@
 }
 .kvc-no-vibes{color:var(--kvibe-text-light,#8e8e8e);font-size:13px}
 
+/* ── Reactor avatar stack (last 3–4 people who reacted) ─────────────── */
+.kvc-reactors{display:inline-flex;align-items:center;margin-right:4px;flex-shrink:0}
+.kvc-reactor-avatar{
+  width:20px;height:20px;border-radius:50%;object-fit:cover;
+  border:1.5px solid var(--kvibe-white,#fff);background:var(--kvibe-border,#eee);
+  margin-left:-7px;display:block;
+}
+.kvc-reactor-avatar:first-child{margin-left:0}
+
 /* ── Card Comment Bottom Sheet ──────────────────────────────────────── */
 /* Reuses the exact same classes as home.html comment sheet             */
 .kvc-sheet-overlay{
@@ -388,29 +397,35 @@
       .then(d => {
         if (!d) return;
         s.userVibe = d.user_vibe || null;
-        kvcRender(ckey, d.summary || {}, s.userVibe, d.total || 0);
+        kvcRender(ckey, d.summary || {}, s.userVibe, d.total || 0, d.recent_reactors || []);
         kvcFace(ckey, s.userVibe);
       }).catch(() => {});
   }
 
   /* ── Render summary pills ───────────────────────────────────────────── */
-  function kvcRender(ckey, summary, userVibe, total) {
+  function kvcRender(ckey, summary, userVibe, total, reactors) {
     const box     = document.getElementById('kvc-summary-' + ckey);
     const countEl = document.getElementById('kvc-vcount-' + ckey);
     if (countEl) countEl.textContent = total > 0 ? total.toLocaleString() : '0';
     if (!box) return;
+    const avatarsHtml = (reactors && reactors.length)
+      ? '<span class="kvc-reactors">' + reactors.map((r, i) =>
+          `<img src="${_esc(r.avatar)}" alt="${_esc(r.name)}" title="${_esc(r.name)}" class="kvc-reactor-avatar" style="z-index:${reactors.length - i};" loading="lazy" onerror="this.src='https://placehold.co/20x20/dbdbdb/8e8e8e?text=U'">`
+        ).join('') + '</span>'
+      : '';
     const entries = Object.entries(summary).filter(([, v]) => v > 0);
     if (!entries.length) {
-      box.innerHTML = '<span class="kvc-no-vibes">Be the first to vibe this ✨</span>';
+      box.innerHTML = avatarsHtml + '<span class="kvc-no-vibes">Be the first to vibe this ✨</span>';
       return;
     }
     entries.sort((a, b) => b[1] - a[1]);
-    box.innerHTML = entries.map(([vt, count]) => {
+    const pillsHtml = entries.map(([vt, count]) => {
       const mine  = userVibe === vt;
       const color = KVC_COLORS[vt] || '#666';
       const style = mine ? `style="--pill-bg:${color}22;--pill-fg:${color};--pill-border:${color}55"` : '';
       return `<span class="kvc-pill${mine ? ' mine' : ''}" ${style}>${KVC_EMOJIS[vt] || '✨'} <b>${count}</b></span>`;
     }).join('');
+    box.innerHTML = avatarsHtml + pillsHtml;
   }
 
   /* ── Sync button face ───────────────────────────────────────────────── */
@@ -443,7 +458,7 @@
     .then(d => {
       if (!d) return;
       s.userVibe = d.user_vibe || null;
-      kvcRender(ckey, d.summary || {}, s.userVibe, d.total || 0);
+      kvcRender(ckey, d.summary || {}, s.userVibe, d.total || 0, d.recent_reactors || []);
       kvcFace(ckey, s.userVibe);
     }).catch(() => {});
   };

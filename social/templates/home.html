@@ -3479,6 +3479,15 @@
             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
         .kbiz-post-engage-summary .vibes .vibe-icon i { font-size: 9px; color: #fff; }
+        .kbiz-post-engage-summary .vibes .vibe-reactors {
+            display: flex; align-items: center; margin-right: 3px; flex-shrink: 0;
+        }
+        .kbiz-post-engage-summary .vibes .vibe-reactor-avatar {
+            width: 18px; height: 18px; border-radius: 50%; object-fit: cover;
+            border: 1.5px solid var(--mfy-white, #fff); background: var(--mfy-border, #eee);
+            margin-left: -7px; display: block;
+        }
+        .kbiz-post-engage-summary .vibes .vibe-reactor-avatar:first-child { margin-left: 0; }
         .kbiz-post-engage-summary .vibes span.emoji { font-size: 13px; }
         .kbiz-post-engage-summary .comment-link { cursor: pointer; }
         .kbiz-post-engage-summary .comment-link:hover { text-decoration: underline; }
@@ -3776,6 +3785,32 @@ function toggleVibePopover(btn) {
     if (!wasOpen) pop.classList.add('open');
 }
 
+// Redraws the small stack of overlapping profile pictures (last 3–4
+// reactors) next to a card's vibe count/emoji after a react/un-react.
+// `reactors` is the `recent_reactors` array from the vibe toggle response:
+// [{ username, name, avatar }, ...], most recent first.
+function renderVibeReactors(card, reactors) {
+    const vibesWrap = card.querySelector('.kbiz-post-engage-summary .vibes');
+    if (!vibesWrap) return;
+    let wrap = vibesWrap.querySelector('[data-vibe-reactors]');
+    if (reactors && reactors.length) {
+        const html = reactors.map((r, i) => {
+            const name = escapeHtml(r.name || r.username || '');
+            const avatar = escapeHtml(r.avatar || '');
+            return `<img src="${avatar}" alt="${name}" title="${name}" class="vibe-reactor-avatar" style="z-index:${reactors.length - i};" loading="lazy">`;
+        }).join('');
+        if (!wrap) {
+            wrap = document.createElement('span');
+            wrap.className = 'vibe-reactors';
+            wrap.setAttribute('data-vibe-reactors', '');
+            vibesWrap.prepend(wrap);
+        }
+        wrap.innerHTML = html;
+    } else if (wrap) {
+        wrap.remove();
+    }
+}
+
 async function reactToBusinessPost(postId, vibeType, optBtn) {
     const pop = optBtn.closest('.kbiz-vibe-popover');
     pop.classList.remove('open');
@@ -3802,6 +3837,7 @@ async function reactToBusinessPost(postId, vibeType, optBtn) {
             emojiSlot.innerHTML = '<i class="far fa-heart"></i>';
         }
         if (totalSlot) totalSlot.textContent = data.total;
+        renderVibeReactors(card, data.recent_reactors);
 
         const topType = Object.entries(data.summary).sort((a, b) => b[1] - a[1])[0];
         const summaryEmojiEl = card.querySelector('.kbiz-post-engage-summary .vibes .emoji');
@@ -4119,6 +4155,7 @@ async function reactToProfilePostCard(postId, vibeType, optBtn) {
             emojiSlot.innerHTML = '<i class="far fa-heart"></i>';
         }
         if (totalSlot) totalSlot.textContent = data.total;
+        renderVibeReactors(card, data.recent_reactors);
 
         const topType = Object.entries(data.summary).sort((a, b) => b[1] - a[1])[0];
         const summaryEmojiEl = card.querySelector('.kbiz-post-engage-summary .vibes .emoji');
@@ -4250,6 +4287,7 @@ async function reactToFeedItem(kind, itemId, vibeType, optBtn) {
             emojiSlot.innerHTML = '<i class="far fa-heart"></i>';
         }
         if (totalSlot) totalSlot.textContent = data.total;
+        renderVibeReactors(card, data.recent_reactors);
 
         const topType = Object.entries(data.summary).sort((a, b) => b[1] - a[1])[0];
         const summaryEmojiEl = card.querySelector('.kbiz-post-engage-summary .vibes .emoji');
@@ -4265,17 +4303,6 @@ async function reactToFeedItem(kind, itemId, vibeType, optBtn) {
             }
         } else if (summaryEmojiEl) {
             summaryEmojiEl.remove();
-        }
-
-        const vibesWrap = card.querySelector('.kbiz-post-engage-summary .vibes');
-        const vibeIcon = vibesWrap?.querySelector('.vibe-icon');
-        if (data.total > 0 && !vibeIcon && vibesWrap) {
-            const span = document.createElement('span');
-            span.className = 'vibe-icon';
-            span.innerHTML = '<i class="fas fa-heart"></i>';
-            vibesWrap.prepend(span);
-        } else if (data.total == 0 && vibeIcon) {
-            vibeIcon.remove();
         }
     } catch (_) {
         toast('Network error. Please try again.');

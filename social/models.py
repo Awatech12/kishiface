@@ -389,6 +389,28 @@ def sanitize_member_type_data(member_type, raw_data):
     return cleaned
 
 
+def recent_reactor_avatars(vibe_queryset, limit=4):
+    """
+    Shared helper for the feed's reaction face-pile: given a Vibe queryset
+    (BusinessPostVibe / ProfilePostVibe / ProfilePortfolioItemVibe /
+    ProfileAchievementVibe / JobVibe / EventVibe, etc.), return the most
+    recent distinct reactors as a list of dicts (most recent first) for
+    rendering a small stack of overlapping profile pictures next to the
+    vibe count. `unique_together = (item, user)` on these models already
+    guarantees one row per user, so no extra de-duping is needed.
+    """
+    reactors = []
+    qs = vibe_queryset.select_related('user', 'user__profile').order_by('-created_at')[:limit]
+    for v in qs:
+        user = v.user
+        reactors.append({
+            'username': user.username,
+            'name': f"{user.first_name} {user.last_name}".strip() or user.username,
+            'avatar': user.profile.get_picture_url,
+        })
+    return reactors
+
+
 def sanitize_text(text, field_name=None):
     """
     Sanitize text input by removing HTML/JS and limiting length.
@@ -4270,6 +4292,12 @@ class ProfilePortfolioItem(models.Model):
         row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
         return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
 
+    @property
+    def recent_reactors(self):
+        """Last 3–4 people who reacted, most recent first — for the
+        overlapping profile-picture stack shown next to the vibe count."""
+        return recent_reactor_avatars(self.vibes)
+
 
 class ProfileExperience(models.Model):
     """A single work-history entry (role at a company) shown on a user's own
@@ -4631,6 +4659,25 @@ class ProfileAchievement(models.Model):
     def owner_name(self):
         return self.profile.full_name or self.profile.user.username
 
+    @property
+    def vibe_count(self):
+        return self.vibes.count()
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+    @property
+    def top_vibe_emoji(self):
+        row = self.vibes.values('vibe_type').annotate(cnt=models.Count('id')).order_by('-cnt').first()
+        return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '') if row else ''
+
+    @property
+    def recent_reactors(self):
+        """Last 3–4 people who reacted, most recent first — for the
+        overlapping profile-picture stack shown next to the vibe count."""
+        return recent_reactor_avatars(self.vibes)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Business page updates — image / video / text / poll posts
@@ -4777,6 +4824,12 @@ class BusinessPost(models.Model):
         if not row:
             return ''
         return BusinessPostVibe.VIBE_EMOJIS.get(row['vibe_type'], '')
+
+    @property
+    def recent_reactors(self):
+        """Last 3–4 people who reacted, most recent first — for the
+        overlapping profile-picture stack shown next to the vibe count."""
+        return recent_reactor_avatars(self.vibes)
 
     @property
     def time_posted(self):
@@ -5158,6 +5211,12 @@ class ProfilePost(models.Model):
         if not row:
             return ''
         return ProfilePostVibe.VIBE_EMOJIS.get(row['vibe_type'], '')
+
+    @property
+    def recent_reactors(self):
+        """Last 3–4 people who reacted, most recent first — for the
+        overlapping profile-picture stack shown next to the vibe count."""
+        return recent_reactor_avatars(self.vibes)
 
     @property
     def time_posted(self):

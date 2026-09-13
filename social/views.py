@@ -6772,8 +6772,28 @@ def _card_vibe_toggle(request, obj, VibeCls, fk_field):
     )
     summary = {r['vibe_type']: r['cnt'] for r in rows}
     total = sum(summary.values())
+    recent_reactors = _recent_reactors_for_card(obj, VibeCls, fk_field)
 
-    return JsonResponse({'user_vibe': user_vibe, 'summary': summary, 'total': total})
+    return JsonResponse({'user_vibe': user_vibe, 'summary': summary, 'total': total, 'recent_reactors': recent_reactors})
+
+
+def _recent_reactors_for_card(obj, VibeCls, fk_field, limit=4):
+    """
+    Last 3–4 people who reacted to a card, most recent first — used to
+    render the small stack of overlapping profile pictures next to the
+    vibe count. `unique_together = (fk_field, user)` on every Vibe model
+    guarantees one row per user already, so no extra de-duping is needed.
+    """
+    qs = (
+        VibeCls.objects.filter(**{fk_field: obj})
+        .select_related('user', 'user__profile')
+        .order_by('-created_at')[:limit]
+    )
+    return [{
+        'username': v.user.username,
+        'name': f"{v.user.first_name} {v.user.last_name}".strip() or v.user.username,
+        'avatar': v.user.profile.get_picture_url,
+    } for v in qs]
 
 
 def _card_vibe_get(request, obj, VibeCls, fk_field):
@@ -6792,7 +6812,9 @@ def _card_vibe_get(request, obj, VibeCls, fk_field):
         if v:
             user_vibe = v.vibe_type
 
-    return JsonResponse({'user_vibe': user_vibe, 'summary': summary, 'total': total})
+    recent_reactors = _recent_reactors_for_card(obj, VibeCls, fk_field)
+
+    return JsonResponse({'user_vibe': user_vibe, 'summary': summary, 'total': total, 'recent_reactors': recent_reactors})
 
 
 def _card_comments_get(request, obj, CommentCls, fk_field):
@@ -8359,6 +8381,7 @@ def _serialize_professional_post(post, viewer=None):
         'poll':       None,
         'vibe_count':    post.vibe_count,
         'comment_count': post.comment_count,
+        'recent_reactors': post.recent_reactors,
     }
     if post.post_type == 'image':
         data['images'] = [img.get_image_url for img in post.images.all()]
