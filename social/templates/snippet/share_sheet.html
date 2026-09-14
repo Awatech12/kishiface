@@ -1,0 +1,438 @@
+{% comment %}
+  snippet/share_sheet.html
+  ────────────────────────────────────────────────────────────────────────────
+  Global "Send as message" bottom sheet — LinkedIn/Instagram-style share UI.
+  Include ONCE per page (e.g. in home.html, product/job/event detail pages,
+  profile.html, business page detail) — it's a single overlay reused by every
+  card on the page via the global window.mfyOpenShareSheet(opts) API.
+
+  USAGE (from any card's share button):
+    <button onclick="mfyOpenShareSheet({
+        url:   '{{ request.scheme }}://{{ request.get_host }}{% url "product_detail" item.data.product_id %}',
+        title: '{{ item.data.product_name|escapejs }}',
+        image: '{{ item.data.images.first.product_image.url|default:"" }}',
+        productId: '{{ item.data.product_id }}'   {# optional, for rich DM preview #}
+    })">
+      <i class="fa-regular fa-paper-plane"></i>
+    </button>
+
+  opts:
+    url          (required) absolute or relative URL to share
+    title        (optional) headline shown in the sheet + used as the DM/WhatsApp/etc text
+    image        (optional) thumbnail shown in the sheet header — may safely be a
+                 fallback image (page logo, profile picture) when the item has none of
+                 its own; it is ONLY used for the header preview.
+    attachImage  (optional) the item's OWN image, no fallback. When the item has no
+                 real image, pass '' explicitly (or omit it and don't pass `image`
+                 with a fallback either) — otherwise it defaults to `image`, so if
+                 `image` was given a fallback, pass attachImage separately or the
+                 fallback graphic will get sent as a file attachment.
+    productId    (optional) uuid — attaches a rich product card to the DM
+    jobId        (optional) uuid — attaches a rich job card to the DM
+  ────────────────────────────────────────────────────────────────────────────
+{% endcomment %}
+
+<script>
+(function(){
+  if (document.getElementById('mfy-share-styles')) return;
+  var s = document.createElement('style');
+  s.id = 'mfy-share-styles';
+  s.textContent = `
+.mfy-share-overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.5);z-index:7000;
+  display:none;align-items:flex-end;
+}
+.mfy-share-overlay.active{display:flex}
+.mfy-share-sheet{
+  background:#fff;width:100%;max-height:82vh;
+  border-radius:20px 20px 0 0;display:flex;flex-direction:column;
+  position:relative;animation:mfyShareSlideUp .3s ease-out;
+  max-width:600px;margin:0 auto;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+@keyframes mfyShareSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.mfy-share-handle{
+  width:36px;height:4px;border-radius:99px;background:#dbdbdb;
+  margin:10px auto 2px;flex-shrink:0;
+}
+.mfy-share-header{
+  padding:12px 16px;text-align:center;font-weight:600;font-size:16px;
+  color:#262626;flex-shrink:0;position:relative;
+}
+.mfy-share-close{
+  position:absolute;right:14px;top:10px;font-size:18px;
+  cursor:pointer;color:#8e8e8e;background:none;border:none;
+  width:30px;height:30px;border-radius:50%;
+}
+.mfy-share-close:hover{color:#262626;background:rgba(0,0,0,.05)}
+
+.mfy-share-target{
+  display:flex;align-items:center;gap:10px;padding:0 16px 10px;flex-shrink:0;
+}
+.mfy-share-target img{width:38px;height:38px;border-radius:8px;object-fit:cover;background:#f0f0f0;flex-shrink:0;}
+.mfy-share-target-title{font-size:13px;font-weight:600;color:#262626;line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+
+.mfy-share-search-wrap{padding:0 16px 10px;flex-shrink:0;}
+.mfy-share-search{
+  width:100%;background:#f0f2f5;border:none;border-radius:20px;
+  padding:9px 14px 9px 36px;font-size:14px;outline:none;box-sizing:border-box;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%238e8e8e' viewBox='0 0 16 16'><path d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/></svg>");
+  background-repeat:no-repeat;background-position:12px center;
+}
+.mfy-share-search:focus{background-color:#e8eaed}
+
+.mfy-share-contacts{
+  display:flex;flex-wrap:wrap;gap:14px 4px;padding:4px 12px 14px;
+  overflow-y:auto;flex-shrink:1;min-height:0;
+}
+.mfy-share-contact{
+  width:74px;display:flex;flex-direction:column;align-items:center;gap:5px;
+  background:none;border:none;cursor:pointer;padding:6px 2px;border-radius:12px;
+  font-family:inherit;transition:background .15s;
+}
+.mfy-share-contact:hover{background:rgba(0,0,0,.04)}
+.mfy-share-contact-avatar-wrap{position:relative;width:52px;height:52px;flex-shrink:0;}
+.mfy-share-contact-avatar{
+  width:52px;height:52px;border-radius:50%;object-fit:cover;
+  background:#e4e6eb;display:block;
+}
+.mfy-share-contact-sent{
+  position:absolute;inset:0;border-radius:50%;background:rgba(16,185,129,.92);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;
+  opacity:0;transform:scale(.6);transition:opacity .2s,transform .2s cubic-bezier(.34,1.56,.64,1);
+}
+.mfy-share-contact.sent .mfy-share-contact-sent{opacity:1;transform:scale(1)}
+.mfy-share-contact.sent .mfy-share-contact-avatar{opacity:.5}
+.mfy-share-contact-name{
+  font-size:12px;color:#262626;text-align:center;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;width:100%;
+}
+.mfy-share-contact:disabled{cursor:default}
+.mfy-share-empty,.mfy-share-loading{
+  width:100%;text-align:center;padding:24px 16px;color:#8e8e8e;font-size:13px;
+}
+.mfy-share-loading i{font-size:20px;display:block;margin-bottom:8px}
+
+.mfy-share-divider{height:1px;background:#efefef;margin:0 0 4px;flex-shrink:0;}
+
+.mfy-share-options{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:16px 4px;
+  padding:14px 16px 24px;flex-shrink:0;
+}
+.mfy-share-opt{
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+  background:none;border:none;cursor:pointer;font-family:inherit;padding:2px;
+}
+.mfy-share-opt-icon{
+  width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:19px;color:#fff;transition:transform .15s;
+}
+.mfy-share-opt:hover .mfy-share-opt-icon{transform:scale(1.06)}
+.mfy-share-opt:active .mfy-share-opt-icon{transform:scale(.95)}
+.mfy-share-opt-label{font-size:11.5px;color:#262626;text-align:center;font-weight:500;}
+
+.mfy-share-toast{
+  position:absolute;top:8px;left:50%;transform:translateX(-50%) translateY(-8px);
+  background:#262626;color:#fff;font-size:12.5px;padding:6px 14px;border-radius:20px;
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;white-space:nowrap;z-index:2;
+}
+.mfy-share-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(max-width:767px){
+  .mfy-share-options{grid-template-columns:repeat(4,1fr);}
+  .mfy-share-contact{width:66px}
+}
+  `;
+  document.head.appendChild(s);
+})();
+</script>
+
+<div class="mfy-share-overlay" id="mfy-share-overlay" onclick="if(event.target===this) mfyCloseShareSheet();">
+  <div class="mfy-share-sheet">
+    <div class="mfy-share-handle"></div>
+    <div class="mfy-share-header">
+      Send as message
+      <button class="mfy-share-close" onclick="mfyCloseShareSheet()" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="mfy-share-toast" id="mfy-share-toast"></div>
+    </div>
+
+    <div class="mfy-share-target" id="mfy-share-target" style="display:none;">
+      <img id="mfy-share-target-img" src="" alt="" onerror="this.style.display='none'">
+      <div class="mfy-share-target-title" id="mfy-share-target-title"></div>
+    </div>
+
+    {% if request.user.is_authenticated %}
+    <div class="mfy-share-search-wrap">
+      <input type="text" class="mfy-share-search" id="mfy-share-search"
+             placeholder="Search" oninput="mfyFilterShareContacts(this.value)">
+    </div>
+    <div class="mfy-share-contacts" id="mfy-share-contacts">
+      <div class="mfy-share-loading"><i class="fa-solid fa-spinner fa-spin"></i>Loading contacts…</div>
+    </div>
+    <div class="mfy-share-divider"></div>
+    {% endif %}
+
+    <div class="mfy-share-options">
+      <button class="mfy-share-opt" onclick="mfyShareVia('native')">
+        <span class="mfy-share-opt-icon" style="background:#6b7280;"><i class="fa-solid fa-share-nodes"></i></span>
+        <span class="mfy-share-opt-label">Share via</span>
+      </button>
+      <button class="mfy-share-opt" onclick="mfyShareVia('copy')">
+        <span class="mfy-share-opt-icon" style="background:#0095f6;"><i class="fa-solid fa-link"></i></span>
+        <span class="mfy-share-opt-label">Copy link</span>
+      </button>
+      <button class="mfy-share-opt" onclick="mfyShareVia('whatsapp')">
+        <span class="mfy-share-opt-icon" style="background:#25D366;"><i class="fa-brands fa-whatsapp"></i></span>
+        <span class="mfy-share-opt-label">WhatsApp</span>
+      </button>
+      <button class="mfy-share-opt" onclick="mfyShareVia('email')">
+        <span class="mfy-share-opt-icon" style="background:#8e8e8e;"><i class="fa-solid fa-envelope"></i></span>
+        <span class="mfy-share-opt-label">Email</span>
+      </button>
+      <button class="mfy-share-opt" onclick="mfyShareVia('twitter')">
+        <span class="mfy-share-opt-icon" style="background:#000000;"><i class="fa-brands fa-x-twitter"></i></span>
+        <span class="mfy-share-opt-label">X</span>
+      </button>
+      <button class="mfy-share-opt" onclick="mfyShareVia('facebook')">
+        <span class="mfy-share-opt-icon" style="background:#1877F2;"><i class="fa-brands fa-facebook-f"></i></span>
+        <span class="mfy-share-opt-label">Facebook</span>
+      </button>
+      <button class="mfy-share-opt" onclick="mfyShareVia('telegram')">
+        <span class="mfy-share-opt-icon" style="background:#26A5E4;"><i class="fa-brands fa-telegram"></i></span>
+        <span class="mfy-share-opt-label">Telegram</span>
+      </button>
+      <button class="mfy-share-opt" onclick="mfyShareVia('sms')">
+        <span class="mfy-share-opt-icon" style="background:#34C759;"><i class="fa-solid fa-comment-sms"></i></span>
+        <span class="mfy-share-opt-label">Messages</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  if (window._mfyShareInit) return;
+  window._mfyShareInit = true;
+
+  const CONTACTS_URL = "{% if request.user.is_authenticated %}{% url 'share_contacts' %}{% endif %}";
+  const SEND_URL_TPL = "{% if request.user.is_authenticated %}{% url 'send_message' 'USERNAME_PLACEHOLDER' %}{% endif %}";
+
+  let state = { url: '', title: '', image: '', attachImage: '', productId: null, jobId: null };
+  let contactsCache = null;   // fetched once, reused across every open
+  let toastTimer = null;
+
+  function csrf() {
+    return document.querySelector('meta[name="csrf-token"]')?.content
+        || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  }
+  function _esc(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function absUrl(u) {
+    try { return new URL(u, window.location.origin).href; } catch (e) { return u; }
+  }
+
+  /* ── Open / close ──────────────────────────────────────────────────── */
+  window.mfyOpenShareSheet = function(opts) {
+    opts = opts || {};
+    state = {
+      url:       absUrl(opts.url || window.location.href),
+      title:     opts.title || document.title || '',
+      image:     opts.image || '',
+      // Callers may pass `image` with a fallback (e.g. page logo / profile
+      // picture) purely for the header thumbnail below. Only attach a real
+      // file when the shared item actually has its own image — an explicit
+      // `attachImage` wins; if the caller never distinguished the two,
+      // `image` had no fallback to begin with, so it's safe to reuse.
+      attachImage: opts.attachImage !== undefined ? (opts.attachImage || '') : (opts.image || ''),
+      productId: opts.productId || null,
+      jobId:     opts.jobId || null,
+    };
+
+    const overlay = document.getElementById('mfy-share-overlay');
+    if (!overlay) return;
+
+    const targetBox = document.getElementById('mfy-share-target');
+    if (state.title || state.image) {
+      targetBox.style.display = 'flex';
+      document.getElementById('mfy-share-target-title').textContent = state.title;
+      const img = document.getElementById('mfy-share-target-img');
+      if (state.image) { img.src = state.image; img.style.display = ''; }
+      else img.style.display = 'none';
+    } else {
+      targetBox.style.display = 'none';
+    }
+
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    if (CONTACTS_URL) mfyLoadShareContacts();
+  };
+
+  window.mfyCloseShareSheet = function() {
+    const overlay = document.getElementById('mfy-share-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+    const search = document.getElementById('mfy-share-search');
+    if (search) { search.value = ''; }
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      const overlay = document.getElementById('mfy-share-overlay');
+      if (overlay && overlay.classList.contains('active')) window.mfyCloseShareSheet();
+    }
+  });
+
+  /* ── Toast ─────────────────────────────────────────────────────────── */
+  function mfyShareToast(msg) {
+    const t = document.getElementById('mfy-share-toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  /* ── Contacts (recent DMs + following) ────────────────────────────── */
+  function mfyLoadShareContacts() {
+    const box = document.getElementById('mfy-share-contacts');
+    if (!box) return;
+
+    if (contactsCache) { mfyRenderShareContacts(contactsCache); return; }
+
+    fetch(CONTACTS_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        contactsCache = (d && d.contacts) || [];
+        mfyRenderShareContacts(contactsCache);
+      })
+      .catch(() => {
+        box.innerHTML = '<div class="mfy-share-empty">Could not load contacts.</div>';
+      });
+  }
+
+  function mfyRenderShareContacts(contacts) {
+    const box = document.getElementById('mfy-share-contacts');
+    if (!box) return;
+    if (!contacts.length) {
+      box.innerHTML = '<div class="mfy-share-empty">No recent contacts yet — try the options below.</div>';
+      return;
+    }
+    box.innerHTML = contacts.map(c => `
+      <button class="mfy-share-contact" data-username="${_esc(c.username)}" data-name="${_esc(c.name.toLowerCase())}"
+              onclick="mfySendToContact(this,'${_esc(c.username)}')">
+        <span class="mfy-share-contact-avatar-wrap">
+          <img class="mfy-share-contact-avatar" src="${_esc(c.avatar)}" alt=""
+               onerror="this.src='https://placehold.co/52x52/dbdbdb/8e8e8e?text=U'">
+          <span class="mfy-share-contact-sent"><i class="fa-solid fa-check"></i></span>
+        </span>
+        <span class="mfy-share-contact-name">${_esc(c.name)}</span>
+      </button>`).join('');
+  }
+
+  window.mfyFilterShareContacts = function(q) {
+    q = (q || '').trim().toLowerCase();
+    document.querySelectorAll('#mfy-share-contacts .mfy-share-contact').forEach(btn => {
+      const match = !q || btn.dataset.name.includes(q) || btn.dataset.username.toLowerCase().includes(q);
+      btn.style.display = match ? '' : 'none';
+    });
+  };
+
+  /* ── Send directly to a contact via DM ────────────────────────────────
+     Products/jobs already get a proper rich card server-side (product_id /
+     job_id), so those keep the "title + link" text. Everything else (posts,
+     achievements, portfolio items) has no such card, so instead of pasting
+     a raw link into the message we send the original text as-is and — if
+     the shared item has an image — re-attach that image as a real file,
+     so the recipient gets the actual post content, not a link to scrape.
+  ──────────────────────────────────────────────────────────────────── */
+  window.mfySendToContact = async function(btn, username) {
+    if (btn.classList.contains('sent') || btn.disabled) return;
+    btn.disabled = true;
+
+    const sendUrl = SEND_URL_TPL.replace('USERNAME_PLACEHOLDER', encodeURIComponent(username));
+    const hasRichCard = !!(state.productId || state.jobId);
+
+    try {
+      let resp;
+      if (!hasRichCard && state.attachImage) {
+        // Re-attach the original image as a real message file.
+        const form = new FormData();
+        form.append('message', state.title || '');
+        try {
+          const imgResp = await fetch(state.attachImage);
+          if (imgResp.ok) {
+            const blob = await imgResp.blob();
+            const ext = (blob.type.split('/')[1] || 'jpg').split('+')[0].split(';')[0];
+            form.append('file_upload', blob, 'shared-image.' + ext);
+          }
+        } catch (e) { /* image couldn't be fetched (CORS/network) — send text only */ }
+        resp = await fetch(sendUrl, { method: 'POST', headers: { 'X-CSRFToken': csrf() }, body: form });
+      } else {
+        const payload = { message: hasRichCard ? (state.title ? state.title + '\n' + state.url : state.url) : (state.title || state.url) };
+        if (state.productId) payload.product_id = state.productId;
+        if (state.jobId)     payload.job_id     = state.jobId;
+        resp = await fetch(sendUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const d = resp.ok ? await resp.json() : null;
+      if (d && d.status === 'error') { btn.disabled = false; mfyShareToast(d.message || 'Could not send.'); return; }
+      btn.classList.add('sent');
+      mfyShareToast('Sent!');
+    } catch (e) {
+      btn.disabled = false;
+      mfyShareToast('Could not send. Try again.');
+    }
+  };
+
+  /* ── External share options ───────────────────────────────────────── */
+  window.mfyShareVia = function(kind) {
+    const url = state.url, title = state.title || '';
+    const text = title ? title + ' — ' + url : url;
+
+    switch (kind) {
+      case 'native':
+        if (navigator.share) {
+          navigator.share({ title, url }).catch(() => {});
+        } else {
+          mfyShareVia('copy');
+        }
+        break;
+      case 'copy':
+        navigator.clipboard?.writeText(url).then(() => mfyShareToast('Link copied!'))
+          .catch(() => mfyShareToast('Could not copy link.'));
+        break;
+      case 'whatsapp':
+        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+        break;
+      case 'telegram':
+        window.open('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(title), '_blank', 'noopener');
+        break;
+      case 'twitter':
+        window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(title) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
+        break;
+      case 'facebook':
+        window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url), '_blank', 'noopener');
+        break;
+      case 'email':
+        window.location.href = 'mailto:?subject=' + encodeURIComponent(title || 'Check this out') + '&body=' + encodeURIComponent(text);
+        break;
+      case 'sms':
+        window.location.href = 'sms:?&body=' + encodeURIComponent(text);
+        break;
+    }
+  };
+
+})();
+</script>

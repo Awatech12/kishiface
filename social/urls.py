@@ -55,6 +55,7 @@ urlpatterns = [
     path('inbox/conversation/',                 views.dm_conversation,   name='dm_conversation'),
     path('private/<str:username>',              views.message,           name='message'),
     path('send_message/<str:username>/',        views.send_message,      name='send_message'),
+    path('share/contacts/',                     views.share_contacts,    name='share_contacts'),
     path('delete_message/<int:message_id>/',    views.delete_message,    name='delete_message'),
     path('react_message/<int:message_id>/',     views.react_to_message,  name='react_to_message'),
 

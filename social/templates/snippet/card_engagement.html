@@ -257,7 +257,8 @@
   </button>
 
   <!-- Share button -->
-  <button class="kvc-btn" onclick="kvcShare('{{ ckey }}','{{ card_type }}','{{ card_id }}')">
+  <button class="kvc-btn" data-ckey="{{ ckey }}"
+          onclick="kvcShare('{{ ckey }}','{{ card_type }}','{{ card_id }}','{{ card_title|default:card_type|striptags|escapejs }}')">
     <i class="fa-regular fa-paper-plane kvc-icon"></i>
   </button>
 
@@ -609,22 +610,30 @@
   };
 
   /* ══════════════════════════════════════════════════════════════════════
-     Share — Web Share API with clipboard fallback
+     Share — opens the "Send as message" bottom sheet (snippet/share_sheet.html)
+     when it's present on the page; falls back to the native Web Share API /
+     clipboard so this still works on pages that don't include the sheet.
   ══════════════════════════════════════════════════════════════════════ */
-  window.kvcShare = function(ckey, ct, cid) {
+  window.kvcShare = function(ckey, ct, cid, title) {
     let path;
     if (ct === 'market')     path = '/product/' + cid + '/';
-    else if (ct === 'jobs')  path = '/jobs/';
-    else                     path = '/events/';
+    else if (ct === 'jobs')  path = '/jobs/' + cid + '/';
+    else                     path = '/events/' + cid + '/';
     const url = location.origin + path;
 
+    if (typeof window.mfyOpenShareSheet === 'function') {
+      const opts = { url, title: title || '' };
+      if (ct === 'market') opts.productId = cid;
+      if (ct === 'jobs')   opts.jobId = cid;
+      window.mfyOpenShareSheet(opts);
+      return;
+    }
+
     if (navigator.share) {
-      navigator.share({ url }).catch(() => {});
+      navigator.share({ url, title: title || '' }).catch(() => {});
     } else {
       navigator.clipboard?.writeText(url).then(() => {
-        // Flash the icon green briefly
-        const btn = document.querySelector('[data-ckey="' + ckey + '"] .fa-paper-plane')
-                    ?.closest('.kvc-btn');
+        const btn = document.querySelector('.kvc-btn[data-ckey="' + ckey + '"]');
         if (btn) {
           const icon = btn.querySelector('i');
           if (icon) {

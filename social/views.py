@@ -3673,6 +3673,65 @@ def clear_history(request):
 
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Share sheet — contact list
+# GET /share/contacts/
+# Powers the "Send as message" bottom sheet (card_engagement.html /
+# snippet/share_sheet.html): recent DM partners first, then people the
+# viewer follows, deduped, capped at 25. Small/cheap enough to fetch in
+# full and filter client-side rather than round-tripping on every keystroke.
+# ─────────────────────────────────────────────────────────────────────────────
+@login_required(login_url='/')
+@require_GET
+def share_contacts(request):
+    me = request.user
+
+    recent_qs = (
+        Message.objects
+        .filter(Q(sender=me) | Q(receiver=me))
+        .values('sender', 'receiver')
+        .annotate(latest=Max('created_at'))
+        .order_by('-latest')[:60]
+    )
+    seen, ordered_ids = set(), []
+    for row in recent_qs:
+        other_id = row['receiver'] if row['sender'] == me.id else row['sender']
+        if other_id != me.id and other_id not in seen:
+            seen.add(other_id)
+            ordered_ids.append(other_id)
+        if len(ordered_ids) >= 25:
+            break
+
+    if len(ordered_ids) < 25:
+        try:
+            following_ids = list(
+                me.profile.followings.exclude(user=me)
+                .values_list('user_id', flat=True)[:50]
+            )
+        except Exception:
+            following_ids = []
+        for uid in following_ids:
+            if uid not in seen:
+                seen.add(uid)
+                ordered_ids.append(uid)
+            if len(ordered_ids) >= 25:
+                break
+
+    order = {uid: i for i, uid in enumerate(ordered_ids)}
+    users = sorted(
+        User.objects.filter(id__in=ordered_ids).select_related('profile'),
+        key=lambda u: order.get(u.id, 999)
+    )
+
+    contacts = [{
+        'username': u.username,
+        'name':     u.profile.full_name if getattr(u, 'profile', None) and u.profile.full_name else u.username,
+        'avatar':   u.profile.get_picture_url if getattr(u, 'profile', None) else '',
+    } for u in users]
+
+    return JsonResponse({'contacts': contacts})
+
+
 @login_required(login_url='/')
 def message(request, username):
     receiver = get_object_or_404(User, username=username)
